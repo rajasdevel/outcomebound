@@ -1,0 +1,14 @@
+# OutcomeBound has NO runtime dependencies (outcomebound_tools is Python stdlib only,
+# guarded by scripts/check-no-deps.py). Everything here is a development tool: a test
+# runner and, below, the tools this repository's floor runs (`make check`). None of it
+# is imported by the engine.
+pytest>=8
+# Runs the suite across CPUs (`make test` and CI pass `-n auto` when it is present);
+# without it the suite runs serially and is still the same suite.
+pytest-xdist==3.8.0
+
+# The floor's tools; .outcomebound/floor.json names the least version each needs. mypy
+# goes in beside pytest: it resolves the suite's `import pytest` from its own
+# interpreter, and the types baseline was recorded with pytest importable.
+ruff==0.16.7
+mypy==2.3.1

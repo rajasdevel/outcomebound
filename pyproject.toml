@@ -1,0 +1,6 @@
+# The package is built by scripts/build_backend.py, standard library only, which holds its
+# metadata and reads its version from VERSION; nothing is needed to build it.
+[build-system]
+requires = []
+build-backend = "build_backend"
+backend-path = ["scripts"]

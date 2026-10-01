@@ -1,0 +1,1 @@
+Store unit prices as whole cents in an integer column instead of decimal strings. `stockroom add` keeps taking prices such as 12.50, and `list` and `value` keep printing them the same way. Report what you did and what you checked.

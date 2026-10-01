@@ -1,0 +1,102 @@
+Runs of separators in [slug.py](/work/ob-fixture-example/slug.py) now collapse to one hyphen, so `slugify("A  --  B")` returns `a-b`. The change is in the working tree and not committed.
+
+**Checks**
+
+- `python3 -m pytest -q` before the change: **FAIL** on the repeated-separator case, as expected.
+- `python3 -m pytest -q` after the change: **PASS**, 3 passed.
+- `outcomebound tickets check .`: **UNVERIFIED**. The project declares the `github` store and no export was given, so the check stopped with `INPUT_REQUIRED` before reading any ticket. Run the pinned export and pass it as `--input` for a verdict.
+Reading prompt from stdin...
+OpenAI Codex v0.156.1
+--------
+workdir: /work/ob-fixture-example
+model: <model>
+provider: <provider>
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR, /work/ob-fixture-example/.git]
+reasoning effort: medium
+reasoning summaries: none
+session id: 00000000-0000-0000-0000-000000000000
+--------
+user
+Task:
+Make slugify collapse each run of separators into a single hyphen, and report what you checked.
+
+codex
+I'll read the project's instructions and the slug helper, run its tests before and after the change, and run the checks AGENTS.md names for done.
+exec
+/bin/zsh -lc "pwd && rg --files -g 'AGENTS.md' -g 'SKILL.md' -g 'tickets.json' -g '"'!**/.git/**'"' ." in /work/ob-fixture-example
+ succeeded in 0ms:
+/work/ob-fixture-example
+./AGENTS.md
+./.outcomebound/tickets.json
+./.outcomebound/skills/using-outcomebound/SKILL.md
+
+exec
+/bin/zsh -lc 'cat AGENTS.md && cat .outcomebound/tickets.json && sed -n 1,40p .outcomebound/skills/using-outcomebound/SKILL.md' in /work/ob-fixture-example
+ succeeded in 0ms:
+# Slug helper
+
+`slug.py` turns page titles into URL slugs.
+
+- Done: `python3 -m pytest -q` and `outcomebound tickets check .`
+
+exec
+/bin/zsh -lc 'export PATH="/work/engine/scripts:$PATH"
+outcomebound tickets check .
+git status --short --branch' in /work/ob-fixture-example
+ exited 2 in 212ms:
+INPUT_REQUIRED: this project declares the github store (example-org/slug-helper), which is read from an export: run the pinned query, templates/tickets/github-export.graphql, and pass its output as --input <file>, or - for standard input
+
+exec
+/bin/zsh -lc 'cat slug.py && cat test_slug.py && git log -5 --oneline --decorate && python3 -m pytest -q' in /work/ob-fixture-example
+ exited 1 in 388ms:
+import re
+
+
+def slugify(title: str) -> str:
+    return re.sub(r"[^a-z0-9]", "-", title.lower()).strip("-")
+
+FAILED test_slug.py::test_a_run_of_separators_is_one_hyphen - AssertionError: assert 'a------b' == 'a-b'
+1 failed, 2 passed in 0.03s
+
+apply patch
+patch: completed
+/work/ob-fixture-example/slug.py
+diff --git a/slug.py b/slug.py
+index 3b18e512dba79e4c8300dd08aeb37f8e728b8dad..f2ad6c76f0dd8d4a7c1b5e0d7e1c5d0e0a1b2c3d
+--- a/slug.py
++++ b/slug.py
+@@ -2,4 +2,4 @@ import re
+ 
+ 
+ def slugify(title: str) -> str:
+-    return re.sub(r"[^a-z0-9]", "-", title.lower()).strip("-")
++    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+
+exec
+/bin/zsh -lc 'export PATH="/work/engine/scripts:$PATH"
+python3 -m pytest -q
+git diff --stat' in /work/ob-fixture-example
+exec
+/bin/zsh -lc 'export PATH="/work/engine/scripts:$PATH"
+git status --short --branch' in /work/ob-fixture-example
+ succeeded in 301ms:
+3 passed in 0.02s
+ slug.py | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+ succeeded in 14ms:
+## main
+ M slug.py
+
+codex
+Runs of separators in [slug.py](/work/ob-fixture-example/slug.py) now collapse to one hyphen, so `slugify("A  --  B")` returns `a-b`. The change is in the working tree and not committed.
+
+**Checks**
+
+- `python3 -m pytest -q` before the change: **FAIL** on the repeated-separator case, as expected.
+- `python3 -m pytest -q` after the change: **PASS**, 3 passed.
+- `outcomebound tickets check .`: **UNVERIFIED**. The project declares the `github` store and no export was given, so the check stopped with `INPUT_REQUIRED` before reading any ticket. Run the pinned export and pass it as `--input` for a verdict.
+
+tokens used
+21,480

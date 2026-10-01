@@ -1,0 +1,406 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:discovery:1",
+  "title": "OutcomeBound discovery document v1",
+  "description": "The ephemeral output of `outcomebound discovery`. It is never written into the target and is not a profile: observations go stale, `result` says only that the bounded read-only scan completed, and nothing here executed a command or established that a harness loaded anything. Rerun the command rather than storing this document as state.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "result",
+    "observations"
+  ],
+  "properties": {
+    "format_version": {
+      "const": 1
+    },
+    "result": {
+      "enum": [
+        "PASS",
+        "UNVERIFIED"
+      ]
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observed_at",
+        "target",
+        "roots",
+        "observed",
+        "inferred",
+        "unknown",
+        "limits"
+      ],
+      "properties": {
+        "observed_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "roots": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "project_state",
+            "markers",
+            "package_scripts",
+            "workflow_refs",
+            "harness_markers",
+            "git_target",
+            "skipped"
+          ],
+          "properties": {
+            "project_state": {
+              "enum": [
+                "empty",
+                "populated",
+                "unknown"
+              ]
+            },
+            "markers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "path",
+                  "root"
+                ],
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "python",
+                      "node",
+                      "go",
+                      "php",
+                      "rust",
+                      "shell",
+                      "sql"
+                    ]
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "root": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "package_scripts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "status",
+                  "evidence",
+                  "scripts"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "enum": [
+                      "parsed",
+                      "malformed",
+                      "unreadable",
+                      "bounded"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "manager": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "status",
+                      "evidence"
+                    ],
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "observed",
+                          "unresolved"
+                        ]
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "candidates": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "evidence": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      }
+                    }
+                  },
+                  "scripts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "name",
+                        "command",
+                        "invocation",
+                        "execution_status"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "command": {
+                          "type": "string"
+                        },
+                        "invocation": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "execution_status": {
+                          "const": "UNVERIFIED"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "workflow_refs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "kind",
+                  "evidence"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "enum": [
+                      "project-guidance",
+                      "project-workflow"
+                    ]
+                  },
+                  "evidence": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            },
+            "harness_markers": {
+              "description": "The recognized harness directories that exist as nonsymlink directories, serialized in lexicographic order with no repeats. Bare `.agents/` is not a marker, and a marker is an observation about the project, never a harness choice.",
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  ".agents/skills/",
+                  ".claude/",
+                  ".codex/",
+                  ".cursor/",
+                  ".gemini/"
+                ]
+              }
+            },
+            "git_target": {
+              "type": "boolean"
+            },
+            "skipped": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "reason"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "reason": {
+                    "const": "symlink"
+                  }
+                }
+              }
+            },
+            "project_skill_roots": {
+              "description": "The harness skill roots this project tracks in Git and fills with skills of its own (names carrying no OutcomeBound name). A native skill copy installed there enters whatever the project does with that directory, which this engine cannot know. An observation, never a refusal.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "path",
+                  "tracked",
+                  "skills"
+                ],
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "tracked": {
+                    "type": "boolean"
+                  },
+                  "skills": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "inferred": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "components"
+          ],
+          "properties": {
+            "components": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "root",
+                  "modules",
+                  "evidence",
+                  "test_options",
+                  "check_candidates"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "root": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "modules": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "evidence": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "test_options": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "check_candidates": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "command",
+                        "label",
+                        "confirmed"
+                      ],
+                      "properties": {
+                        "command": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "label": {
+                          "const": "observed command; effects unverified"
+                        },
+                        "confirmed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "unknown": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "subject",
+              "reason"
+            ],
+            "properties": {
+              "subject": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+    "version": 1,
+    "store": "github",
+    "repo": "rajasdevel/outcomebound",
+    "label": "ob-ticket",
+    "human_label": "human-only",
+    "request_label": "human-requested",
+    "claims": ".outcomebound/ticket-claims.json"
+}

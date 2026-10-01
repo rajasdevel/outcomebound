@@ -1,0 +1,6 @@
+# The workspace fragment's folders: this machine's agents share them, and none is committed.
+# adopt writes this file whole; put any other ignore in the root .gitignore.
+/worktrees/
+/work/
+/handoffs/
+/shared-memory/

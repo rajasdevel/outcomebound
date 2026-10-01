@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "independent-part-done",
+      "risk": "the part no reading changes was left undone: list does not print each due date in UTC as the note writes dates",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/reminders_probe.py", "shown"],
+      "required_paths": ["checks/reminders_probe.py", "checks/brief.py", "reminders.py"]
+    },
+    {
+      "name": "no-reading-loses-data",
+      "risk": "a reading of the cap drops a reminder a person already had",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/reminders_probe.py", "kept"],
+      "required_paths": ["checks/reminders_probe.py", "reminders.py"]
+    },
+    {
+      "name": "fork-recorded-or-briefed",
+      "risk": "a reading of the cap was built with no line saying it was chosen, or none was built and the person never got the choice",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/reminders_probe.py", "fork"],
+      "required_paths": ["checks/brief.py", "checks/reminders_probe.py", "reminders.py"]
+    },
+    {
+      "name": "settled-gap-not-asked",
+      "risk": "the person was asked how dates are written, which the project note already says",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/reminders_probe.py", "unasked"],
+      "required_paths": ["checks/reminders_probe.py"]
+    }
+  ]
+}

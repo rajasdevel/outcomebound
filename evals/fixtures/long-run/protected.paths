@@ -1,0 +1,11 @@
+# Graders, the installed core skill and repository exclusion state copied into the
+# candidate-writable fixture. The goal document is not here: its Progress section is the
+# run's to keep, and the plan compares the rest with the seed's.
+checks/completion.sh
+checks/scope.sh
+checks/scope_walk.py
+checks/transcript_commands.py
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

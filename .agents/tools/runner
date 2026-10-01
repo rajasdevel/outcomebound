@@ -1,0 +1,25 @@
+#!/bin/sh
+# Run a command with this checkout's engine: `.agents/tools/runner <command> [argument ...]`.
+#
+# `outcomebound` on PATH runs whichever checkout its link points into, usually the main one; in a
+# worktree that is not the engine under change. This sets OUTCOMEBOUND_HOME to the checkout this
+# script sits in, puts that checkout's scripts/ first on PATH, and runs the command there, so
+# `outcomebound`, `$(outcomebound home)` and anything reading OUTCOMEBOUND_HOME name this tree.
+set -eu
+
+usage="usage: .agents/tools/runner <command> [argument ...]"
+case "${1-}" in
+"")
+	printf '%s\n' "$usage" >&2
+	exit 2
+	;;
+-h | --help)
+	printf '%s\n' "$usage" "Runs the command with OUTCOMEBOUND_HOME set to this checkout and its launcher first on PATH."
+	exit 0
+	;;
+esac
+self=$(python3 -I -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")
+OUTCOMEBOUND_HOME=$(dirname "$(dirname "$(dirname "$self")")")
+PATH="$OUTCOMEBOUND_HOME/scripts:$PATH"
+export OUTCOMEBOUND_HOME PATH
+exec "$@"

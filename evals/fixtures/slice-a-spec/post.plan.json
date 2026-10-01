@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "drafts-pass-the-ticket-lint",
+      "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "lint"],
+      "required_paths": ["checks/drafts.py", ".outcomebound/tickets.json"]
+    },
+    {
+      "name": "draft-count-within-the-sizing-rule",
+      "risk": "the design, one outcome with no edge, no decision between and one implementer, was cut into more than one ticket or into none",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "count", "1", "1"],
+      "required_paths": ["checks/drafts.py"]
+    },
+    {
+      "name": "draft-bounds-exist",
+      "risk": "a draft grants no path, or names a path the repository does not hold",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "bounds"],
+      "required_paths": ["checks/drafts.py"]
+    }
+  ]
+}

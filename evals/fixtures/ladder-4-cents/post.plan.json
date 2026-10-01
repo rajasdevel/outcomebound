@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "cents-on-a-new-database",
+      "risk": "a new database does not keep prices as integer cents, or add, list or value changed what they take or print",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "python3 -B checks/footprint.py; exec python3 -B checks/probe_cents.py new"
+      ],
+      "required_paths": [
+        "checks/footprint.py",
+        "checks/probe_cents.py",
+        "checks/cli_probe.py"
+      ]
+    },
+    {
+      "name": "existing-stock-survives",
+      "risk": "the stock recorded before the change is lost, misread or left in the old form once migrations run",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_cents.py",
+        "existing"
+      ],
+      "required_paths": [
+        "checks/probe_cents.py",
+        "checks/cli_probe.py",
+        "checks/stock-before.db"
+      ]
+    }
+  ]
+}

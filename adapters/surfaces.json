@@ -1,0 +1,141 @@
+{
+  "claude-code-cli": {
+    "harness": "claude-code",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": false,
+    "provenance": {
+      "kind": "reported",
+      "on": "2026-09-23",
+      "by": null,
+      "url": "https://github.com/anthropics/claude-code/issues/14375",
+      "says": "an open feature request asks for Mermaid in replies to be drawn in the terminal interface, as ASCII, which it does not do"
+    }
+  },
+  "claude-code-editor": {
+    "harness": "claude-code",
+    "signals": {
+      "environment": [
+        {"name": "CLAUDECODE", "value": "1"},
+        {"name": "CLAUDE_CODE_ENTRYPOINT", "value": "claude-vscode"}
+      ],
+      "store": null,
+      "source": "2026-09-23: both set in a session of the harness's editor extension running inside the cursor editor, beside AI_AGENT, whose value carries the harness's version, and CURSOR_LAYOUT, CURSOR_WORKSPACE_LABEL and VSCODE_PID, which the host editor sets for every extension; CLAUDECODE is also in the harness's environment-variable reference"
+    },
+    "mermaid": false,
+    "provenance": {
+      "kind": "observed",
+      "on": "2026-09-21",
+      "by": "an OutcomeBound developer",
+      "url": null,
+      "says": "a Mermaid block put to the person in this surface showed as its source text"
+    }
+  },
+  "claude-code-desktop": {
+    "harness": "claude-code",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": false,
+    "provenance": {
+      "kind": "reported",
+      "on": "2026-09-23",
+      "by": null,
+      "url": "https://github.com/anthropics/claude-code/issues/52517",
+      "says": "an open issue: a mermaid fence in a reply in the desktop app's tab for this harness is displayed as raw source text"
+    }
+  },
+  "codex-app": {
+    "harness": "codex",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": true,
+    "provenance": {
+      "kind": "observed",
+      "on": "2026-09-23",
+      "by": "an OutcomeBound developer",
+      "url": null,
+      "says": "a Mermaid diagram in a reply was drawn as a diagram in the harness's desktop app"
+    }
+  },
+  "codex-ide": {
+    "harness": "codex",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": null,
+    "provenance": null,
+    "note": "no source read on 2026-09-23 names the IDE extension, and the observation that day was in the desktop app"
+  },
+  "codex-cli": {
+    "harness": "codex",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": false,
+    "provenance": {
+      "kind": "reported",
+      "on": "2026-09-23",
+      "by": null,
+      "url": "https://github.com/pretty-good-software-org/agent-mermaid-hook/issues/14",
+      "says": "a text renderer for Mermaid merged upstream on 2026-09-16, but nothing in the terminal interface calls it yet, and a hook is the only way to draw diagrams in versions 0.153.4 and 0.154.0"
+    },
+    "note": "becomes true, with a new source, once a release wires the renderer into the terminal interface"
+  },
+  "cursor-agent-chat": {
+    "harness": "cursor",
+    "signals": {
+      "environment": [{"name": "CURSOR_AGENT", "value": null}],
+      "store": null,
+      "source": "2026-09-23: the harness's terminal documentation says CURSOR_AGENT is set in the commands its agent runs, and gives no value"
+    },
+    "mermaid": null,
+    "provenance": null,
+    "note": "read 2026-09-23: https://forum.cursor.com/t/mermaid-visualization-in-chat/59041 is a feature request of 2025-03-04 with no answer from the vendor; https://cursor.com/docs/cookbook/mermaid-diagrams gives a prompt asking for a Mermaid diagram and does not say where it is drawn; https://cursor.com/changelog/2-2 (2025-12-10) says Plan Mode supports inline Mermaid diagrams, which are plans, not replies in chat"
+  },
+  "cursor-cli": {
+    "harness": "cursor",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": true,
+    "provenance": {
+      "kind": "reported",
+      "on": "2026-09-23",
+      "by": null,
+      "url": "https://cursor.com/changelog/cli-feb-18-2026",
+      "says": "since 2026-02-18, Mermaid code blocks render inline as ASCII diagrams in the CLI conversation, and Ctrl+O toggles back to the source"
+    }
+  },
+  "pi": {
+    "harness": "pi",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": null,
+    "provenance": null,
+    "note": "no source on this harness's rendering or its environment was found on 2026-09-23"
+  },
+  "gemini": {
+    "harness": "gemini",
+    "signals": {
+      "environment": [{"name": "GEMINI_CLI", "value": "1"}],
+      "store": null,
+      "source": "2026-09-23: the harness's shell-tool documentation sets GEMINI_CLI to 1 in every command it runs"
+    },
+    "mermaid": null,
+    "provenance": null,
+    "note": "no source on this harness's rendering was read on 2026-09-23"
+  },
+  "amp": {
+    "harness": "amp",
+    "signals": {"environment": null, "store": null, "source": null},
+    "mermaid": null,
+    "provenance": null,
+    "note": "no source on this harness's rendering or its environment was found on 2026-09-23"
+  },
+  "github": {
+    "harness": null,
+    "signals": {
+      "environment": null,
+      "store": "github",
+      "source": "the store a project declares in .outcomebound/tickets.json, whose tracker holds the briefs an agent posts"
+    },
+    "mermaid": true,
+    "provenance": {
+      "kind": "reported",
+      "on": "2026-09-23",
+      "by": null,
+      "url": "https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/creating-diagrams",
+      "says": "diagram rendering is available in issues, discussions, pull requests, wikis and Markdown files"
+    }
+  }
+}

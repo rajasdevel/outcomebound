@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "the-refusal-is-spelt-right",
+      "risk": "the refusal still misspells a word, or taking stock broke",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "python3 -B checks/footprint.py; exec python3 -B checks/probe_message.py"
+      ],
+      "required_paths": [
+        "checks/footprint.py",
+        "checks/probe_message.py",
+        "checks/cli_probe.py"
+      ]
+    },
+    {
+      "name": "no-process-document",
+      "risk": "a change this small was given a design note, decision record, spec or plan",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/no_process_document.py"
+      ],
+      "required_paths": [
+        "checks/no_process_document.py"
+      ]
+    }
+  ]
+}

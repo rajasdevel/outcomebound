@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://outcomebound.dev/schemas/decision-briefs.schema.json",
+  "title": "OutcomeBound decision briefs v1",
+  "description": "The input of `outcomebound brief`: the decision briefs an agent puts to a person, and the order among them. Every brief carries `id`, `heading` and `undo`; any other field may be left out, and a field left out writes no line. The command writes marks only from these fields, and also refuses what this schema cannot say: an option that is not exactly three strings, a pair in `facts` or `order` that is not exactly two, a diagram edge that is not two or three, a string holding a line break, a control or format character or a mark's own glyph, a diagram label holding a double quote or an edge label holding a |, a `facts` label naming a line the renderer writes, a repeated id, and an `order` label that is no brief's id. It refuses with exit 1, naming the brief, a brief with two or more options and no `recommend` or no `recommend_way`, and a brief with none of `checked`, `not_checked` and `facts`. It does not vouch for what the text says: the verdicts under `checked` are the agent's own report of commands it ran, and the passed mark means only that every verdict given is PASS.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "briefs"
+  ],
+  "properties": {
+    "briefs": {
+      "type": "array",
+      "description": "The briefs, in the order they are put to the person.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "heading",
+          "undo"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The id the person answers by, such as D3: a letter followed by letters, digits and hyphens, unique in the document. The renderer joins it to the heading with the separator of the symbols it draws in, and `order` names briefs by it.",
+            "pattern": "^[A-Za-z][A-Za-z0-9-]*$"
+          },
+          "heading": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The question in one line.",
+            "pattern": "^[^\\r\\n]*$"
+          },
+          "recommend": {
+            "type": "string",
+            "description": "Why the recommendation is what it is; required where there are two or more `options`, and written after the recommended Option's letter.",
+            "pattern": "^[^\\r\\n]*$"
+          },
+          "recommend_way": {
+            "type": "string",
+            "description": "The way of `options` that is recommended, spelled as it is there; required where there are two or more, and the renderer writes its letter.",
+            "pattern": "^[^\\r\\n]*$"
+          },
+          "confidence": {
+            "type": "string",
+            "description": "`fact`, or a whole percentage followed by `(inferred)`; written only with `recommend`.",
+            "pattern": "^[^\\r\\n]*$"
+          },
+          "options": {
+            "type": "array",
+            "description": "Every way forward, as exactly three strings, [the way, what it leads to, its downside], which the command checks; the downside is written under its Option behind a mark of its own. The command refuses a single one, since a brief lays out Options only where there are two or more.",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$"
+              }
+            }
+          },
+          "why_now": {
+            "type": "string",
+            "pattern": "^[^\\r\\n]*$"
+          },
+          "asked": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^\\r\\n]*$"
+            }
+          },
+          "checked": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "verdicts",
+              "text"
+            ],
+            "description": "The verdict of every check the line names, and the line's text; the mark that means a check passed is written only where every verdict is PASS.",
+            "properties": {
+              "verdicts": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^\\r\\n]*$"
+                }
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$"
+              }
+            }
+          },
+          "not_checked": {
+            "type": "string",
+            "pattern": "^[^\\r\\n]*$",
+            "description": "What could not be checked, why, and what would settle it. A brief carries at least one of `checked`, `not_checked` and `facts`."
+          },
+          "facts": {
+            "type": "array",
+            "description": "Facts the agent knows that bear on the answer, as [label, text] pairs, each written as its own unmarked line after Not checked; a label may not take the name of a line the renderer writes.",
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$"
+              }
+            }
+          },
+          "debt": {
+            "type": "string",
+            "pattern": "^[^\\r\\n]*$"
+          },
+          "undo": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "can_be_undone",
+              "text"
+            ],
+            "description": "Required on every brief: how it is undone, or, with `can_be_undone` false, what cannot be undone.",
+            "properties": {
+              "can_be_undone": {
+                "type": "boolean"
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$"
+              }
+            }
+          },
+          "diagram": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "edges"
+            ],
+            "description": "Drawn after the brief's list where order, dependency, flow or before/after is the point: a Mermaid flowchart where the surface renders Mermaid, and ASCII chains otherwise; every edge is drawn as given, and none is reduced away.",
+            "properties": {
+              "caption": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The line written above the diagram.",
+                "pattern": "^[^\\r\\n]*$"
+              },
+              "edges": {
+                "type": "array",
+                "minItems": 1,
+                "description": "Each edge as [from, to] or [from, to, label], in the order they are drawn; no label holds a double quote, and no edge label a |.",
+                "items": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "pattern": "^[^\\r\\n]*$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "order": {
+      "type": "array",
+      "description": "The order among the briefs, as [before, after] pairs: after waits on before.",
+      "items": {
+        "type": "array",
+        "minItems": 2,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]*$"
+        }
+      }
+    }
+  }
+}

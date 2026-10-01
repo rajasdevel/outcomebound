@@ -1,0 +1,422 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://outcomebound.dev/schemas/harness-table.schema.json",
+  "title": "OutcomeBound harness table row v1",
+  "description": "One row of adapters/harnesses.json. The table itself is an object whose keys are harness names and whose values each validate against this schema; the supported schema subset has no per-key keyword, so callers validate row by row (tests/test_harness_table.py). Absent evidence is null and is never promoted to a verified claim: verified describes the install path only, nested_instructions null means unverified, and loading_evidence names the channel a tier-H capture would come from, never a capture. The loading fields (reads, nested, overrides, config, recheck_on) are what the instruction audit reads; a row unverified or past recheck_on reads UNVERIFIED wherever they are used.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "skill_install_path",
+    "pointer_mechanism",
+    "instruction_file",
+    "reads_agents_md",
+    "nested_instructions",
+    "rules_path",
+    "native_skills",
+    "verified",
+    "verified_on",
+    "source",
+    "doc_byte_cap",
+    "loading_evidence",
+    "reads",
+    "nested",
+    "overrides",
+    "config",
+    "finish_hook",
+    "recheck_on"
+  ],
+  "properties": {
+    "skill_install_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target-relative directory a native skill copy is installed into, with a trailing slash.",
+      "pattern": "^[^/~][^:\\\\]*/(?![\\s\\S])"
+    },
+    "pointer_mechanism": {
+      "type": "string",
+      "minLength": 1,
+      "description": "FILE@REF means file FILE must contain the import directive @REF; a bare filename is a direct instruction-file route; native means the harness declares no pointer file. Import syntax appears only here."
+    },
+    "instruction_file": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "FILE for FILE@REF, the filename for a direct instruction-file route, null for a route without an instruction file. Never carries import syntax."
+    },
+    "reads_agents_md": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "unless",
+        "since"
+      ],
+      "properties": {
+        "unless": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "since": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "For a FILE@REF row: the target-root files whose presence makes the harness read them in place of AGENTS.md, and the first harness version that reads AGENTS.md itself in every session when none is present. null when the row records no such rule."
+    },
+    "nested_instructions": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Whether the harness merges nested per-directory instruction files. null means unverified."
+    },
+    "rules_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Harness-native per-path rules directory, or null when the harness declares none or none is recorded."
+    },
+    "native_skills": {
+      "type": "boolean"
+    },
+    "verified": {
+      "type": "boolean",
+      "description": "Whether the install path itself is operator-verified. It says nothing about loading."
+    },
+    "verified_on": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 4,
+      "description": "Date of the recorded install-path verification, or null when unverified."
+    },
+    "source": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "description": "Where that verification is written down."
+    },
+    "doc_byte_cap": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Documented project-document byte cap, or null when the harness declares none."
+    },
+    "loading_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instruction",
+        "skill"
+      ],
+      "description": "Dated descriptions of the channel a tier-H loading capture would come from. A description is not a capture; null means no channel is recorded.",
+      "properties": {
+        "instruction": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "skill": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
+      }
+    },
+    "reads": {
+      "type": "array",
+      "description": "The target-root instruction files the harness reads, in order. Loading data, read by the instruction audit.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "hides_agents_md",
+          "import",
+          "source"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/~][^:\\\\]*(?![\\s\\S])"
+          },
+          "hides_agents_md": {
+            "type": "boolean",
+            "description": "Whether this file's presence makes the harness read it in place of AGENTS.md."
+          },
+          "import": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^@[^\\s]+(?![\\s\\S])",
+            "description": "The import directive through which this file loads AGENTS.md, or null."
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "Where this fact is written down, dated where it was read from documentation; null where no source settles it."
+          }
+        }
+      }
+    },
+    "nested": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "loads",
+        "globs",
+        "source"
+      ],
+      "description": "Whether nested and path-scoped instruction files load, and the target-relative globs they match.",
+      "properties": {
+        "loads": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "null means no source settles it."
+        },
+        "globs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Where this fact is written down, dated where it was read from documentation; null where no source settles it."
+        }
+      }
+    },
+    "overrides": {
+      "type": "array",
+      "description": "Override files the harness documents. A person-owned file is named only so the audit leaves it unopened.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "owner",
+          "source"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/~][^:\\\\]*(?![\\s\\S])"
+          },
+          "owner": {
+            "type": "string",
+            "enum": [
+              "project",
+              "person"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "Where this fact is written down, dated where it was read from documentation; null where no source settles it."
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paths",
+        "keys",
+        "docs",
+        "source"
+      ],
+      "description": "Project-level configuration the harness reads, read by the audit and never written. A key list is dotted, `*` matching any one key; an empty list means the source names no such key, null that no source settles it.",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^/~][^:\\\\]*(?![\\s\\S])"
+          }
+        },
+        "keys": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hooks",
+            "tool_servers",
+            "enable_all",
+            "endpoints",
+            "bypass",
+            "deny"
+          ],
+          "properties": {
+            "hooks": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Keys holding commands the harness runs."
+            },
+            "tool_servers": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Keys declaring tool servers."
+            },
+            "enable_all": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Keys enabling every declared tool server."
+            },
+            "endpoints": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Keys overriding an endpoint or base URL."
+            },
+            "bypass": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Keys bypassing permission prompts."
+            },
+            "deny": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "Keys holding deny rules."
+            }
+          }
+        },
+        "docs": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "The harness's own permissions and hooks documentation."
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Where this fact is written down, dated where it was read from documentation; null where no source settles it."
+        }
+      }
+    },
+    "finish_hook": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "event",
+        "file",
+        "guard",
+        "accept",
+        "source"
+      ],
+      "description": "The hook that runs when the agent ends a turn, as `outcomebound adopt --finish-check` writes it and `outcomebound finish-check` reads its input; null where the finish check is not available for this harness yet. Every value is read from the harness's own documentation, named in source.",
+      "properties": {
+        "event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The event key the entry goes under, inside the document's top-level hooks object."
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/~][^:\\\\]*(?![\\s\\S])",
+          "description": "The target-relative settings document adopt writes the entry into; one of config.paths, so the instruction audit reads it."
+        },
+        "guard": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The stdin field that is true when the turn was already continued by this hook."
+        },
+        "accept": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The one-time act by which a person lets the harness run a committed entry, as the install report names it."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where these facts are written down, with the day they were read."
+        }
+      }
+    },
+    "recheck_on": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}(?![\\s\\S])",
+      "description": "The date by which the loading fields are checked again; a row past it reads UNVERIFIED wherever its loading facts are used."
+    },
+    "note": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

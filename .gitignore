@@ -1,0 +1,45 @@
+# OS / editor
+.DS_Store
+
+# Node
+node_modules/
+
+# Logs
+*.log
+
+# Validation-runner check logs, written beside the plan file
+.outcomebound-checks/
+
+# Raw model-eval transcripts: retained locally for audit, never committed
+evals/results/raw/
+
+# Disposable local test state
+sandbox/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Claude Code's local state and private instructions; the skills adopt installs for this
+# repository's own harness are tracked
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/using-outcomebound/
+!.claude/skills/decision-brief/
+!.claude/skills/gather-requirements/
+!.claude/skills/tests-worth-keeping/
+CLAUDE.local.md
