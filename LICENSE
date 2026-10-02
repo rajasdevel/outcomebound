@@ -200,3 +200,11 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+
+---- OutcomeBound Exception to the Apache License 2.0 ----
+
+As an exception, the text that the `outcomebound` engine writes into a project (its managed blocks
+in AGENTS.md and other instruction files, and the fragment files and skills it installs) may be
+used, modified and redistributed as part of that project without complying with Sections 4(a),
+4(b) and 4(d) of the License.

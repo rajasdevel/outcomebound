@@ -164,4 +164,6 @@ required.
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability privately
 - [CHANGELOG.md](CHANGELOG.md)
 
-Apache-2.0. The OutcomeBound name and mark are not licensed with the code; a fork ships under its own name.
+Apache-2.0, with one exception: the text `adopt` writes into your repository carries no licence-copy
+or NOTICE duty (see [LICENSE](LICENSE)). The OutcomeBound name and mark are not licensed with the
+code: saying a project uses OutcomeBound is fine; a fork ships under its own name.

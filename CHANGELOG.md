@@ -11,6 +11,13 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+### Changed
+
+- [LICENSE](LICENSE) adds an exception to Apache-2.0: the text `adopt` writes into a project
+  (managed blocks, fragment files, skills) may be used, modified and redistributed as part of that
+  project without the licence-copy, changed-file notice and NOTICE duties of Sections 4(a), 4(b)
+  and 4(d).
+
 ## [1.0.0] - 2026-10-01
 
 The operating contract for coding agents, and the engine that installs it into a repository and
