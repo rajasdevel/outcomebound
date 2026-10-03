@@ -16,7 +16,8 @@ grades another.
   the PATH codex and the model's commands get. Every install carries `using-outcomebound`,
   `decision-brief`, `gather-requirements` and `tests-worth-keeping`. A fixture whose
   `fragments` file names fragments, one id a line, installs as adopt does with those selected,
-  so it carries their skills too: the `tickets` fragment adds `slice-tickets`. The fixture's
+  so it carries their skills too: the `tickets` fragment adds `slice-tickets` and
+  `hand-off-tickets`. The fixture's
   `AGENTS.md` carries the project facts and the guidance pointers adopt writes, each skill's
   pointer with its condition, in place of the note's own line sending the model to the core
   skill.

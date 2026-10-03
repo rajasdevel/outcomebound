@@ -248,10 +248,11 @@ def test_a_fragment_names_the_skills_its_selection_adds_after_the_core_ones():
     named = parse_fragment(GOOD.replace("version: 1", 'skills: ["a-b", "c"]\nversion: 1'), "x.md")
     assert named.skills == ("a-b", "c")
     catalog = load_all(ROOT)
-    assert catalog["tickets"].skills == ("slice-tickets",)
+    assert catalog["tickets"].skills == ("slice-tickets", "hand-off-tickets")
     assert carried([catalog["tickets"], named, catalog["tickets"]]) == (
         *SKILLS,
         "slice-tickets",
+        "hand-off-tickets",
         "a-b",
         "c",
     )

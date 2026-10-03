@@ -122,9 +122,10 @@ judge. It runs nothing it reads and writes nothing.
 ## Optional: a ticket layer
 
 For work too large for one acceptance: tickets as GitHub issues with a small block of fields,
-cut by the `slice-tickets` skill and linted by `outcomebound tickets check`. How each is built,
-and which tests prove it along the way, stays with its implementer; the project's own gate
-decides done where the work lands. See [docs/tickets.md](docs/tickets.md).
+cut by the `slice-tickets` skill and linted by `outcomebound tickets check`. The
+`hand-off-tickets` skill hands each ticket to its implementer: a capable model gets the ticket
+alone and decides how it is built, while a small one gets steps with failing tests and stubs
+written for it. The project's own gate decides done where the work lands. See [docs/tickets.md](docs/tickets.md).
 
 ## What is measured
 

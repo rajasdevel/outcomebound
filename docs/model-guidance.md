@@ -3,7 +3,7 @@
 What one model family's maker, or one harness's own documentation, advises for that model or
 harness alone.
 
-- **Checked:** 2026-09-25 to 2026-10-01; each note's Checked line gives the day its own source was
+- **Checked:** 2026-09-25 to 2026-10-03; each note's Checked line gives the day its own source was
   read.
 - **Volatility:** volatile: defaults, API controls and model behaviour change with each release.
 - **Re-check when:** a model or harness a note names ships a new version or changes its guide, and
@@ -52,6 +52,45 @@ Of the configurations that meet the completion bar for that workload, choose the
 least total spend of time, tokens and money together. Raise effort, use a more capable model, or
 add a separate role only where the comparison shows a material gain. Run the same comparison again
 after a model, the harness, the tool surface or the prompt changes.
+
+## Implementer tiers
+
+Checked: 2026-10-03. The placement table the `hand-off-tickets` skill reads: OutcomeBound's own
+placement of a model, at an effort, in one of the three tiers the tickets design defines (outcome,
+design, spec), named by what the implementer is trusted to decide. Unlike the notes below, it is not
+one maker's advice, and no source has yet compared the tiers on any model: each row is inferred from
+measured capability and recorded behaviour, and holds until the hand-off comparison or a new
+release says otherwise. It moves to the research repository when that repository ships.
+
+How a row is matched:
+
+- A row naming no effort covers every effort; "and above" covers the efforts above the one named.
+- An effort below the lowest a model's rows name takes the next tier down from that row.
+- A model the table lacks, and any quantisation below 4-bit, takes the spec tier.
+- A row holds in any harness unless its basis names one.
+
+| Model, effort | Tier | Basis | Notes that change a package |
+| --- | --- | --- | --- |
+| Claude Opus 5.5, medium and above | outcome | Medium about 2.5 points below high on SWE-Bench Pro (Anthropic); Opus 5 98.0 on Scale's SWE-Bench Pro V2 in Claude Code | A scope block and a cap on subagents; stop conditions; completion claims checked against tool output |
+| Claude Opus 5.5, low | design (low confidence) | About 8 points below high (Anthropic); inferred: the drop would fall on the design decisions the outcome tier delegates; no independent run | Set effort explicitly |
+| Claude Fable 5.1 | outcome | 92.2 on Scale's SWE-Bench Pro V2 at high | Say it runs autonomously; say what not to do, since it adds unrequested fixes and tests |
+| GPT-6 Astra, high and above | outcome | 90.2 on Scale's SWE-Bench Pro V2 in Codex | Say it may proceed without asking, and that the `done-when` claims are the completion bar; no lines asking it to run tests |
+| Claude Sonnet 5.5 | design | Sonnet 5 88.2 on Scale and the largest clean landing recorded (3,960 lines, Sonnet 5); Anthropic places 5.5 for well-scoped tasks; the first candidate for outcome once measured | State each instruction's scope; say not to add tests or documents beyond the package |
+| GPT-6 Sol; GPT-6.1 Sol (provisional) | design | Sol: Coding Agent Index 57 at max (Artificial Analysis); 6.1 Sol: "near-Astra", vendor only | Name what a deliverable must keep rather than asking for brevity; say to stop at a barrier, not work around it |
+| Kimi K3; GLM-5.3, max | design (low confidence) | 88.2 and 84.3 on Scale, run under mini-swe-agent | K3: pass back its full reasoning history. GLM-5.3: state hard bounds (no new dependencies, no commits) |
+| GPT-6 Luna, xhigh | spec | All measured at max: Coding Agent Index 41 against Sol's 57; stopped on a contradiction in 2 of 3 runs; the one recorded landing, 47 lines, is GPT-5.6 Luna's | The package must hold no contradiction; name the required elements |
+| Claude Haiku 4.5 (until Haiku 5.5 is placed) | spec | 25.5 on Scale against Sonnet 5's 88.2; Anthropic places it for high-volume work with checkable outputs | Check every output with a deterministic test |
+| Qwen 3.8 27B, 4-bit or higher, local | spec | The base model's agentic scores and instruction capacity; 4-bit read near full precision on Terminal-Bench 2.1 (Quesma, from a chart, trials unstated); in a study of other open models (Qwen 27B not confirmed among them), 4-bit amplified tool-call failures | Set effort explicitly; keep each package within the context the machine runs; add a line on repairing a wrong tool name; check the chat template and tool parser |
+| Gemini 3.8 Flash; DeepSeek V4.1; Devstral 2; gpt-oss | spec | Gemini 3.8 Flash 58.8 on Scale; the rest have no independent agentic measurement | Explicit output formats |
+
+Sources, read 2026-10-03: <https://labs.scale.com/leaderboard/swe_bench_pro_public_v2>;
+<https://platform.claude.com/docs/en/about-claude/models/optimizing-for-cost-and-intelligence>;
+<https://artificialanalysis.ai/articles/gpt-6-sol-and-luna-push-the-cost-efficiency-frontier>;
+<https://quesma.com/blog/qwen38-27b-quantizations-benchmarked/>; <https://arxiv.org/abs/2607.27275>;
+the landings in `docs/research/practices/work-breakdown.md` §4 and E13 in
+`docs/research/practices/evaluations.md`. Re-check a row when its model ships a new version, and
+record each hand-off's tier, model and effort with its landing, so the largest clean landing becomes
+one per tier.
 
 ## Models
 

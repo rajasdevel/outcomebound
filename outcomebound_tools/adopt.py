@@ -72,6 +72,7 @@ CONDITIONS = {
     ),
     "tests-worth-keeping": "when writing, changing or judging a test",
     "slice-tickets": "when breaking work into tickets",
+    "hand-off-tickets": "when handing an accepted ticket to the agent or model that will build it",
 }
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
 # adopt's, so `--check` reads its files stale and the next install removes them.

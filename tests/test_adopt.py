@@ -997,7 +997,7 @@ def test_a_skill_the_engine_retired_reads_stale_and_an_upgrade_removes_it(
     fragment = older / "fragments/setup/tickets.md"
     text = fragment.read_text(encoding="utf-8")
     fragment.write_text(
-        text.replace('skills: ["slice-tickets"]', 'skills: ["slice-tickets", "old-skill"]'),
+        text.replace('"hand-off-tickets"]', '"hand-off-tickets", "old-skill"]'),
         encoding="utf-8",
     )
     target = repo(tmp_path / "t", {"README.md": "# T\n"})

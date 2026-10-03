@@ -15,8 +15,10 @@ it is done. The engine reads the issues from an export you produce and prints on
   nothing. Every report is about the export it was given, and says that export's age.
 - **It runs nothing.** A `done-when` item names a claim of the committed claims plan, and the
   project's own gate runs it where the work lands.
-- **It leaves the work to the implementer.** Which tests to write, when to run them and how to
-  carry the work are the implementer's. The handover, the pull request or a closing comment,
+- **It shapes the hand-off to the implementer.** A ticket is the same whoever builds it. A
+  capable implementer decides which tests to write, when to run them and how to carry the work;
+  a less capable one is handed more of those decisions already made, down to failing tests and
+  stubs for a small model (the `hand-off-tickets` skill). The handover, the pull request or a closing comment,
   says what changed, each check's verdict, what was decided beyond the ticket, and the
   follow-ups found.
 

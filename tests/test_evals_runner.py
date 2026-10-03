@@ -271,12 +271,12 @@ def test_a_fixtures_fragments_add_their_skills_to_the_current_arm_only() -> None
     table = json.loads((ROOT / "adapters" / "harnesses.json").read_text(encoding="utf-8"))
     skills = table["codex"]["skill_install_path"].rstrip("/")
     tickets = fragments.load_all(ROOT)["tickets"].skills
-    assert tickets == ("slice-tickets",)
+    assert tickets == ("slice-tickets", "hand-off-tickets")
     selected = RUN.load_arm("current", ("tickets",))
     fragment = ".outcomebound/fragments/tickets.md"
     assert set(selected.files) - {fragment} == set(_folders(skills, (*adopt.SKILLS, *tickets)))
     assert selected.files[fragment] == adopt._fragment_bytes(fragments.load_all(ROOT)["tickets"])
-    assert {f"{skills}/{name}/references/github.md" for name in tickets} <= set(selected.files)
+    assert f"{skills}/slice-tickets/references/github.md" in selected.files
     assert (selected.kernel, selected.launcher) == (RUN.kernel("current"), ROOT / LAUNCHER)
     for arm in (RUN.EARLIER, RUN.NONE):
         assert RUN.load_arm(arm, ("tickets",)).files == {}

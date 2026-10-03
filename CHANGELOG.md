@@ -18,6 +18,14 @@ The bump comes from what an adopter must do, not from the commit type; see
   style of ASD-STE100 Simplified Technical English, with no length limit, every fact kept and the
   project's own terms unchanged. Text a model reads is out of scope. The standard is named, not
   quoted. `--human-style ''` removes the fact; omitted, the recorded choice stays.
+- `hand-off-tickets`, a skill the `tickets` fragment installs: an accepted ticket is handed to its
+  implementer with a package shaped by the implementer's tier. At the outcome tier the package is
+  the ticket alone. At the design tier it adds the approach, signatures, invariants, an edge-case
+  table and milestones. At the spec tier the ticket is cut into steps, each with failing tests and
+  stubs written first and reviewed before the next. The tier comes from the person, or from
+  "Implementer tiers" in `docs/model-guidance.md`. Pending a comparison on request, what it does
+  for an adopter is `UNVERIFIED`. The `tickets` fragment is now version 6: run `adopt` again to
+  install the skill.
 
 ### Changed
 
@@ -25,6 +33,8 @@ The bump comes from what an adopter must do, not from the commit type; see
   (managed blocks, fragment files, skills) may be used, modified and redistributed as part of that
   project without the licence-copy, changed-file notice and NOTICE duties of Sections 4(a), 4(b)
   and 4(d).
+- `slice-tickets` asks which implementer will build the work before slicing, unless the person
+  has named one. The tickets are the same whatever the answer.
 
 ## [1.0.0] - 2026-10-01
 

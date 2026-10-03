@@ -18,13 +18,18 @@ accept in one reading; the engine lints their form and links, and the cut is you
    `writes` grant, its commands are printed for a person and the breakdown is reported as
    waiting on them.
 
-**Bounds.** Drafting, linting and compiling proceed without asking. Four things go to the user:
-the breakdown, for their acceptance; an intent gap; the choice of store; and a person's own act.
+**Bounds.** Drafting, linting and compiling proceed without asking. Five things go to the user:
+the breakdown, for their acceptance; an intent gap; the choice of store; a person's own act; and
+which implementer will build the work, which nothing waits on.
 Publish nothing they have not seen. `references/github.md` holds the store brief, whose yes is
 the one grant of tracker writes, and the publishing commands.
 
 ## Before the first draft
 
+- At the start, ask which implementer will build the work, a model with its effort or a tier,
+  unless the person has named one. The drafts do not wait on the answer, since the tickets are the
+  same whatever it is; `hand-off-tickets` shapes what each implementer is given, and reads the
+  answer from a comment on each ticket, which publishing adds.
 - The verbs are `outcomebound tickets <verb>`, and `<verb> --help` lists the flags. Each refuses
   with `DECLARATION_MISSING` until `.outcomebound/tickets.json` declares a store, and with
   `CLAIMS_UNREADABLE` while the validation plan the declaration's `claims` names is missing.
@@ -140,13 +145,14 @@ together.
 Lint the whole breakdown in one run, `check --draft <file>...` with every draft, so relations
 and cycles are judged across them. Then show the user the breakdown as one page: for each ticket
 its outcome sentence, its `Accepting this decides:` line, the boundary that separates it from
-its neighbours; then the relations. Compile any ticket they open with
+its neighbours; then the relations, and the implementer the work is for. Compile any ticket they open with
 `brief <id> --draft <file>...`, given every draft.
 
 ## Publish
 
 Publish in two passes, as `references/github.md` says: create each accepted ticket carrying the
-ticket label, then set parent and blocking relations. What you find that is not this
+ticket label, then set parent and blocking relations, and comment on each ticket with the
+implementer it is for, where one was named. What you find that is not this
 breakdown's work is a follow-up for the next one, or, where it is a slice by the rules above, a
 draft with `discovered-from` naming the ticket whose work surfaced it. A person's own act with
 no implementer work in it, a tag push or a grant commit, is not a ticket: it goes to the person

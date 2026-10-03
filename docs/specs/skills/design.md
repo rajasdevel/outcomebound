@@ -24,6 +24,7 @@ skill sets are in the [skills research](../../research/practices/skills.md).
 | `gather-requirements` | an unclear outcome: guessing, or asking too much too late | every install |
 | `tests-worth-keeping` | tests that cannot fail for the reason they name; a project that starts red | every install |
 | `slice-tickets` | work cut to the wrong size | with the `tickets` fragment |
+| `hand-off-tickets` | one ticket shape for every implementer: detail that narrows a capable model, too little for a small one. It says what an implementer is given, never how it works the ticket | with the `tickets` fragment |
 | `adopt-outcomebound` | installing OutcomeBound | never: an agent asked to adopt reads it from the engine checkout |
 
 ## Decisions

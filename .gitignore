@@ -43,3 +43,7 @@ env/
 !.claude/skills/gather-requirements/
 !.claude/skills/tests-worth-keeping/
 CLAUDE.local.md
+
+# Local tool state, not part of the project
+uv.lock
+.playwright-mcp/
