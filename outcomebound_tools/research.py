@@ -24,7 +24,7 @@ import shlex
 import subprocess
 import sys
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
@@ -42,18 +42,18 @@ INBOX = ".outcomebound/research-inbox"
 SUBCOMMANDS = ("clone", "pull", "ingest")
 KINDS = ("fact", "correction")
 FORMAT_VERSION = 1
-SUBJECT_MAX, CLAIM_MAX, QUOTE_WORDS, FINDING_MAX = 120, 600, 25, 16 * 1024
-QUOTE_MAX, CORRECTS_MAX, LINK_MAX = 300, 200, 8000
+SUBJECT_MAX, CLAIM_MAX, URL_MAX, QUOTE_WORDS = 200, 2000, 2000, 25
+QUOTE_MAX, CORRECTS_MAX, LINK_MAX, FINDING_MAX = 300, 200, 8000, 16 * 1024
+FIELDS = ("kind", "subject", "claim", "url", "quote", "observed_on", "corrects")
+REQUIRED = ("kind", "subject", "claim", "url", "observed_on")
 GIT_SECONDS = 600.0
 TAIL = 2000
 SMALL = 1 << 20
 HEX = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 REF = re.compile(r"refs/[A-Za-z0-9._/-]+")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
-LINE_BREAKS = "\x85\u2028\u2029"
-# Bidirectional controls, which can hide text from the person who reads a finding.
-BIDI = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
-# What Git inherits from a hook or a caller would point it at another repository.
+# What Git inherits from a hook or a caller would point it at another repository, or add
+# configuration (`url.*.insteadOf` among it) that the person never wrote.
 GIT_UNSET = (
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -62,9 +62,24 @@ GIT_UNSET = (
     "GIT_OBJECT_DIRECTORY",
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
     "GIT_CEILING_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
 )
-# Git, asked so that no hook and no fsmonitor of the clone runs.
-GIT_CONFIGURATION = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false")
+GIT_UNSET_PREFIXES = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
+# The user's and the system's Git configuration, which could rewrite the source with `insteadOf`.
+GIT_CONFIG_OFF = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+# Git, asked so that no hook and no fsmonitor of the clone runs, and only https is spoken.
+GIT_CONFIGURATION = (
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "protocol.allow=never",
+    "-c",
+    "protocol.https.allow=always",
+)
 UNREADABLE = (OSError, RuntimeError, ValueError)
 
 
@@ -224,8 +239,9 @@ def _moved_on(git_dir: Path) -> str | None:
     return stamp.date().isoformat()
 
 
-def version(root: Path) -> str:
-    """`<12 hex of the commit> (<YYYY-MM-DD>)`, each `unknown` where the `.git` files lack it."""
+def _commit_and_day(root: Path) -> tuple[str, str]:
+    """The commit's first 12 hex and the day `HEAD` last moved, each `unknown` where the `.git`
+    files lack it."""
 
     try:
         git_dir = _git_dir(root)
@@ -233,7 +249,14 @@ def version(root: Path) -> str:
         day = _moved_on(git_dir) if git_dir else None
     except UNREADABLE:
         commit = day = None
-    return f"{commit[:12] if commit else 'unknown'} ({day or 'unknown'})"
+    return (commit[:12] if commit else "unknown", day or "unknown")
+
+
+def version(root: Path) -> str:
+    """`<12 hex of the commit> (<YYYY-MM-DD>)`, each `unknown` where the `.git` files lack it."""
+
+    commit, day = _commit_and_day(root)
+    return f"{commit} ({day})"
 
 
 # --- Print -------------------------------------------------------------------------------------
@@ -247,8 +270,16 @@ def show(path: str) -> int:
         data = paths.read_bounded(root, path)
     except paths.PathError as error:
         raise Refusal(f"{path}: {_why_not(root, path, str(error))}") from error
-    sys.stdout.write(f"research: {path} @ {version(root)}\n")
-    sys.stdout.write(data.decode("utf-8", "replace"))
+    text = data.decode("utf-8", "replace")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    commit, day = _commit_and_day(root)
+    # The bytes are the working tree's, which Git was not asked to compare with the commit.
+    sys.stdout.write(
+        f"research: {path} (working tree of the clone at {commit}, HEAD moved {day}; "
+        f"sha256 {digest} of the text below)\n"
+    )
+    sys.stdout.write(text)
+    sys.stdout.flush()
     return 0
 
 
@@ -266,18 +297,26 @@ def _why_not(root: Path, path: str, message: str) -> str:
 # --- Clone and pull: the networked acts --------------------------------------------------------
 
 
+def child_environment(inherited: Mapping[str, str] | None = None) -> dict[str, str]:
+    """What Git runs under: the caller's environment without the variables that would point it
+    at another repository or add configuration, the user's and system configuration off, no
+    prompt."""
+
+    kept = {
+        key: value
+        for key, value in (os.environ if inherited is None else inherited).items()
+        if key not in GIT_UNSET and not key.startswith(GIT_UNSET_PREFIXES)
+    }
+    return {**kept, **GIT_CONFIG_OFF, "GIT_TERMINAL_PROMPT": "0"}
+
+
 def _run_git(arguments: list[str]) -> str | None:
     """Run Git as an argument list, never through a shell; None on success, else why not."""
 
     try:
         done = subprocess.run(
             ["git", *arguments],
-            env=git_environment(
-                {
-                    **{key: value for key, value in os.environ.items() if key not in GIT_UNSET},
-                    "GIT_TERMINAL_PROMPT": "0",
-                }
-            ),
+            env=git_environment(child_environment()),
             capture_output=True,
             text=True,
             check=False,
@@ -370,63 +409,63 @@ def pull(accept: bool) -> int:
 # --- Ingest: a finding goes back ---------------------------------------------------------------
 
 
-def _one_line(name: str, value: str) -> str:
-    value = value.strip()
-    if any(
-        paths.is_control(char)
-        or char in LINE_BREAKS
-        or char in BIDI
-        or unicodedata.category(char) == "Cc"
-        for char in value
-    ):
-        raise Refusal(f"ingest: {name} holds a line break or a control character")
+def _text(name: str, value: object) -> str:
+    """One line of valid UTF-8 with no control (`Cc`) or format (`Cf`) character: the format
+    characters are the zero-width, bidirectional and tag characters that hide text."""
+
+    if not isinstance(value, str):
+        raise Refusal(f"ingest: {name} is not text")
     try:
         value.encode("utf-8")
     except UnicodeEncodeError:
         raise Refusal(f"ingest: {name} is not valid UTF-8") from None
+    if any(unicodedata.category(char) in ("Cc", "Cf") for char in value):
+        raise Refusal(
+            f"ingest: {name} holds a line break, a control character or an invisible character"
+        )
     return value
 
 
-def _bounded(name: str, value: str, longest: int) -> str:
-    value = _one_line(name, value)
-    if not value or len(value) > longest:
+def _bounded(name: str, value: object, longest: int) -> str:
+    value = _text(name, value)
+    if not value.strip() or len(value) > longest:
         raise Refusal(f"ingest: {name} must be 1 to {longest} characters")
     return value
 
 
-def _checked_url(value: str) -> str:
-    value = _one_line("url", value)
+def _checked_url(value: object) -> str:
+    value = _text("url", value)
+    refusal = Refusal(
+        "ingest: url must be http or https, with a host, no userinfo, no space, and at most "
+        f"{URL_MAX} characters"
+    )
+    if not value or len(value) > URL_MAX or any(char.isspace() for char in value):
+        raise refusal
     try:
         parts = urlsplit(value)
-        host = parts.hostname
+        host, _ = parts.hostname, parts.port
     except ValueError:
-        parts, host = None, None
-    if (
-        parts is None
-        or not host
-        or parts.scheme not in ("http", "https")
-        or any(char.isspace() for char in value)
-    ):
-        raise Refusal("ingest: url must be http or https, with a host and no space")
+        raise refusal from None
+    if parts.scheme not in ("http", "https") or not host or "@" in parts.netloc:
+        raise refusal
     return value
 
 
-def _checked_date(value: str | None) -> str:
-    today = datetime.date.today()
-    if value is None:
-        return today.isoformat()
-    value = _one_line("observed-on", value)
+def _checked_date(value: object, today: datetime.date) -> str:
+    value = _text("observed-on", value)
     try:
         day = datetime.date.fromisoformat(value) if DATE.fullmatch(value) else None
     except ValueError:
         day = None
-    if day is None or day > today:
-        raise Refusal("ingest: observed-on must be a real date, YYYY-MM-DD, not after today")
+    if day is None or day > today + datetime.timedelta(days=1):
+        raise Refusal(
+            "ingest: observed-on must be a real date, YYYY-MM-DD, at most one day after today"
+        )
     return day.isoformat()
 
 
-def _checked_quote(value: str | None) -> str:
-    quoted = _one_line("quote", value or "")
+def _checked_quote(value: object) -> str:
+    quoted = _text("quote", value)
     if len(quoted.split()) > QUOTE_WORDS or len(quoted) > QUOTE_MAX:
         raise Refusal(
             f"ingest: quote must be at most {QUOTE_WORDS} words and {QUOTE_MAX} characters"
@@ -434,32 +473,73 @@ def _checked_quote(value: str | None) -> str:
     return quoted
 
 
-def finding(options: argparse.Namespace) -> dict[str, str]:
-    """The finding `options` give, every field checked; each failure is one `Refusal`."""
+def checked_fields(
+    data: Mapping[str, object], today: datetime.date | None = None
+) -> dict[str, str]:
+    """The finding in `data`, every field checked; each failure is one `Refusal`. A value that is
+    absent, `None` or empty is not given; `observed_on` defaults to today."""
 
-    kind = _one_line("kind", options.kind)
+    today = today or datetime.date.today()
+    given = {name: data.get(name) for name in FIELDS if data.get(name) not in (None, "")}
+    kind = _text("kind", given.get("kind", ""))
     if kind not in KINDS:
         raise Refusal(f"ingest: kind must be one of {', '.join(KINDS)}")
     fields = {
         "kind": kind,
-        "subject": _bounded("subject", options.subject, SUBJECT_MAX),
-        "claim": _bounded("claim", options.claim, CLAIM_MAX),
-        "url": _checked_url(options.url),
-        "quote": _checked_quote(options.quote),
-        "observed_on": _checked_date(options.observed_on),
-        "corrects": _one_line("corrects", options.corrects or ""),
+        "subject": _bounded("subject", given.get("subject", ""), SUBJECT_MAX),
+        "claim": _bounded("claim", given.get("claim", ""), CLAIM_MAX),
+        "url": _checked_url(given.get("url", "")),
+        "observed_on": _checked_date(given.get("observed_on", today.isoformat()), today),
     }
-    if len(fields["corrects"]) > CORRECTS_MAX:
-        raise Refusal(f"ingest: corrects must be at most {CORRECTS_MAX} characters")
-    if kind == "correction" and not fields["corrects"]:
+    if "quote" in given:
+        fields["quote"] = _checked_quote(given["quote"])
+    if "corrects" in given:
+        fields["corrects"] = _text("corrects", given["corrects"])
+        if len(fields["corrects"]) > CORRECTS_MAX:
+            raise Refusal(f"ingest: corrects must be at most {CORRECTS_MAX} characters")
+    if kind == "correction" and "corrects" not in fields:
         raise Refusal("ingest: a correction needs --corrects: the path or evidence id it corrects")
-    given = {name: value for name, value in fields.items() if value}
-    if len(issue_link(given)) > LINK_MAX:
+    return fields
+
+
+def checked_document(data: object, today: datetime.date | None = None) -> dict[str, str]:
+    """The finding in an inbox file's decoded JSON, or a `Refusal`: an object of `version` 1 and
+    the finding's fields, no other key."""
+
+    if not isinstance(data, dict):
+        raise Refusal("ingest: not a JSON object")
+    unknown = sorted(set(data) - {"version", *FIELDS})
+    if unknown:
+        raise Refusal(f"ingest: unknown key: {', '.join(unknown)}")
+    missing = [name for name in REQUIRED if name not in data]
+    if missing:
+        raise Refusal(f"ingest: missing key: {', '.join(missing)}")
+    version_value = data.get("version")
+    if version_value != FORMAT_VERSION or isinstance(version_value, bool):
+        raise Refusal(f"ingest: version is not {FORMAT_VERSION}")
+    return checked_fields(data, today)
+
+
+def finding(options: argparse.Namespace) -> dict[str, str]:
+    """The finding `options` give, every field checked, and its issue link within bounds."""
+
+    given = {
+        "kind": options.kind,
+        "subject": options.subject,
+        "claim": options.claim,
+        "url": options.url,
+        "quote": options.quote,
+        "observed_on": options.observed_on,
+        "corrects": options.corrects,
+    }
+    stripped = {name: value.strip() for name, value in given.items() if isinstance(value, str)}
+    fields = checked_fields(stripped)
+    if len(issue_link(fields)) > LINK_MAX:
         raise Refusal(
             f"ingest: the issue link would pass {LINK_MAX} characters, which GitHub may refuse; "
             "shorten the claim, quote or url"
         )
-    return given
+    return fields
 
 
 def finding_bytes(fields: dict[str, str]) -> bytes:
@@ -472,7 +552,7 @@ def finding_bytes(fields: dict[str, str]) -> bytes:
 
 def inbox_name(fields: dict[str, str]) -> str:
     digest = hashlib.sha256((fields["claim"] + fields["url"]).encode("utf-8")).hexdigest()
-    return f"{fields['observed_on'].replace('-', '')}-{digest[:8]}.json"
+    return f"{fields['observed_on'].replace('-', '')}-{digest}.json"
 
 
 def issue_link(fields: dict[str, str]) -> str:
@@ -515,8 +595,9 @@ def ingest(options: argparse.Namespace) -> int:
     print(f"issue: {issue_link(fields)}")
     print(f"{'unchanged' if present is not None else 'wrote'}: {project / relative}")
     print(
-        "the issue link sends the finding now; the file, once your project commits it, waits "
-        "for the research maintainer's collect pass"
+        "open the issue link in a browser to send the finding: that, or a pull request, is how it "
+        "reaches the research repository; the file is a local record, which the research "
+        "maintainer's collect pass reads only in projects they have checked out"
     )
     return 0
 
@@ -526,15 +607,15 @@ def ingest(options: argparse.Namespace) -> int:
 DESCRIPTION = f"""\
 Read the research repository, and send a finding back to it.
 
-  outcomebound research [PATH]     print PATH (default {INDEX}) from the clone, its first line
-                                   `research: PATH @ <commit> (<date>)`; with no clone
-                                   configured, name the public link and exit 3
+  outcomebound research [PATH]     print PATH (default {INDEX}) from the clone's working tree,
+                                   its first line the clone's commit and the sha256 of the
+                                   text; with no clone configured, name the public link, exit 3
   outcomebound research clone DESTINATION [--accept]
                                    git clone it into DESTINATION, outside any project, and
                                    link {LINK_TEXT} to it
   outcomebound research pull [--accept]
                                    git pull --ff-only in the clone, from the public repository,
-                                   with the clone's hooks and fsmonitor off
+                                   with hooks, fsmonitor and your Git configuration off
   outcomebound research ingest ... write a finding under {INBOX}/
                                    and print the prefilled issue link (ingest --help)
 
@@ -544,15 +625,18 @@ change nothing without --accept.
 Exit 0: done or previewed; 1: refused, or Git failed; 2: usage; 3: no clone configured."""
 INGEST_DESCRIPTION = f"""\
 Write one finding under {INBOX}/ in the project, and print the link that opens the research
-repository's finding issue form with it filled in. The engine opens no connection: open the
-link to send the finding now; the file waits for the research maintainer's collect pass.
+repository's finding issue form with it filled in. The engine opens no connection. The link,
+opened in a browser, or a pull request is how a finding reaches the research repository; the file
+is a local record that the research maintainer's collect pass reads only in projects they have
+checked out.
 
 Write the claim in your own words; name no project, client or person. A finding is refused
-when a value holds a line break, a control character or a bidirectional control, the subject is
-not 1 to {SUBJECT_MAX} characters, the claim not 1 to {CLAIM_MAX}, the url not http or https, the
-quote more than {QUOTE_WORDS} words or {QUOTE_MAX} characters, corrects more than {CORRECTS_MAX}
-characters, the date not real or after today, a correction names nothing it corrects, or the
-issue link would pass {LINK_MAX} characters."""
+when a value holds a line break, a control character or an invisible one (zero-width, bidirectional
+or tag), the subject is not 1 to {SUBJECT_MAX} characters, the claim not 1 to {CLAIM_MAX}, the url
+not http or https with a host, no userinfo and at most {URL_MAX} characters, the quote more than
+{QUOTE_WORDS} words or {QUOTE_MAX} characters, corrects more than {CORRECTS_MAX} characters, the
+date not real or more than a day after today, a correction names nothing it corrects, or the issue
+link would pass {LINK_MAX} characters."""
 
 
 def _print_parser() -> argparse.ArgumentParser:
@@ -607,6 +691,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Refusal as problem:
         print(f"research: {problem}", file=sys.stderr)
         return 1
+    except BrokenPipeError:
+        # The reader closed the pipe (`| head`): stop quietly, not with Python's flush complaint.
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
 
 
 if __name__ == "__main__":

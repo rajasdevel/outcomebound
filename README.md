@@ -140,17 +140,21 @@ outcomebound research clone ~/research/outcomebound-research           # preview
 outcomebound research clone ~/research/outcomebound-research --accept
 ```
 
-`outcomebound research` then prints its index and `outcomebound research <path>` one document,
-headed by the commit it came from; `outcomebound research pull --accept` updates it. With
+`outcomebound research` then prints its index and `outcomebound research <path>` one document
+from the clone's working tree, headed by the clone's commit and the sha256 of the text; cite a
+document by its path, that commit and that digest, since an edited clone prints the same commit.
+`outcomebound research pull --accept` updates it. With
 `floor provision`, these are the only commands that reach the network, and only with `--accept`.
 Without a clone, the skills read the public pages, or ask you for an implementer's tier.
 
 To contribute a dated, sourced fact or a correction, open a
 [finding issue](https://github.com/rajasdevel/outcomebound-research/issues/new?template=finding.yml)
-there. Offline, or from an agent, `outcomebound research ingest` prints the same issue prefilled
-and writes the finding to `.outcomebound/research-inbox/` in your project for the research
-maintainer to collect. Larger changes go as a pull request under its
-[CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md).
+there; from an agent, `outcomebound research ingest` prints the same issue prefilled, to open in a
+browser. That link, or a pull request under its
+[CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md),
+is how a finding reaches the research repository. `ingest` also writes the finding to
+`.outcomebound/research-inbox/` in your project: a local record, which the research maintainer
+collects only from projects they have checked out.
 Write the claim in your own words, quote at most 25 words, and name no project, client or person.
 
 ## What is measured

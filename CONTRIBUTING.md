@@ -146,9 +146,11 @@ CC BY 4.0 and its code under Apache-2.0. To contribute to it:
   [finding issue](https://github.com/rajasdevel/outcomebound-research/issues/new?template=finding.yml)
   there, with what it is about, the claim in your own words, the source's URL, the day you read
   it, and, if one helps, a quote of at most 25 words.
-- Offline, or from an agent in your project: `outcomebound research ingest` takes the same fields,
-  prints that issue prefilled, and writes the finding under `.outcomebound/research-inbox/`, which
-  your project may commit for the research maintainer to collect.
+- From an agent in your project: `outcomebound research ingest` takes the same fields and prints
+  that issue prefilled, to open in a browser. It also writes the finding under
+  `.outcomebound/research-inbox/`, a local record: the research maintainer collects it only from
+  projects they have checked out, so a finding reaches the research repository by the issue link
+  or a pull request.
 - Anything larger: a pull request to outcomebound-research, signed off, under its
   [CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md).
 

@@ -43,9 +43,17 @@ A report that shows one of these broken is a vulnerability:
   clone holds, Git included: it reads the clone's commit from its `.git` files; `research ingest`
   writes one file, under `.outcomebound/research-inbox/` in the project, never through a symlink
   or into `.git`;
-- `research pull --accept` runs Git in the clone with the clone's hooks and fsmonitor turned off,
-  without the repository variables it inherited, and fetches from the public repository named in
-  its preview; Git still reads the rest of the clone's configuration;
+- `research clone --accept` and `research pull --accept` run Git with your user and system Git
+  configuration switched off (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`), the
+  configuration and repository variables it inherited removed, and, for `pull`, the clone's hooks
+  and fsmonitor off and only https allowed, so a `url.*.insteadOf` rewrite in your own
+  configuration cannot send either to another repository. The clone's own `.git/config` is still
+  read, and it can do what any Git configuration does: rewrite the source URL with `insteadOf`, or
+  name programs (a credential helper, a filter driver, a proxy command). Whoever can write that file
+  can already run commands as you, so pull only in a clone that you made and that only you can write;
+- the first line of printed research names the clone's working tree, its commit and the sha256 of
+  the text: the engine does not run Git to compare the text with the commit, so a modified file
+  prints under the same commit with another digest;
 - the engine opens no network connection; `floor provision --accept` runs pip, and
   `research clone --accept` and `research pull --accept` run Git, which do.
 

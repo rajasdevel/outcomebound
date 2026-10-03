@@ -27,7 +27,7 @@
         ".outcomebound/floor.json": "88a078faaf0b10c02fed4d7d98d38d6234c6ed144578ac2572ba172b8655aa0e",
         ".outcomebound/fragments/local.md": "7211d9fc3cb62a52b3180d2ad23828a487b492898888ce23fe6dda9f8fa90ac7",
         ".outcomebound/fragments/multi-agent.md": "85c97f860da9b047176f66934e3c983de14f0eb8717a5da0e5e509d86b475758",
-        ".outcomebound/fragments/research.md": "e1a7fb4856784de3de7d2660f4c1d03327ef1c1cb5060ab93cd2279d6d37a739",
+        ".outcomebound/fragments/research.md": "b03d945a924436dc0925fa8a0bddb27926073e070a2d9c7a1550be45b967d418",
         ".outcomebound/fragments/workspace.md": "fc64040f7f22efeed2b10f428427cfb7e4691725e9ae597b40704ea388cddd28"
       },
       "style": [
@@ -57,7 +57,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/research.md",
       "id": "research",
-      "sha256": "e1a7fb4856784de3de7d2660f4c1d03327ef1c1cb5060ab93cd2279d6d37a739"
+      "sha256": "b03d945a924436dc0925fa8a0bddb27926073e070a2d9c7a1550be45b967d418"
     },
     {
       "kind": "ignore",
@@ -99,7 +99,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "8d63e5970f31b30c2e7b5941d6f3e097019c3612e87bd16b8ac3f5fa80ec1a11"
+      "sha256": "85b99f5bebc9c2d6a38dc68f9bb6fca13d2c8224d70a7d279e92df0f98052b9b"
     }
   ]
 }
