@@ -38,16 +38,16 @@ research](https://github.com/rajasdevel/outcomebound-research/blob/main/practice
 | What the person asks for outranks a skill's default: a request to be interviewed grants the questions, whichever skill runs the interview | a skill that holds to ask-once against the person's request | agent | decided |
 | A skill states only what the kernel, the core skill, the decision-brief skill and the fragment that installs it do not | restating the kernel for emphasis | agent | decided |
 | Every install carries the four default skills; a fragment's `skills:` adds the ones its setup needs; nothing else installs a skill | every shipped skill in every install; skills no install reaches | user | decided |
-| Each skill has one eval fixture whose post-checks read the behaviour the skill exists for. Until requested runs of its fixture pass, what a skill does for an adopter is `UNVERIFIED` wherever it is claimed | shipping on reading alone | user | decided |
+| Each skill has one eval fixture whose post-checks read the behavior the skill exists for. Until runs of its fixture pass, what a skill does for an adopter is `UNVERIFIED` wherever it is claimed | shipping on reading alone | user | decided |
 | A project's required process binds; what its documents only suggest is sized like any mechanism, and the project facts, the contract and the core skill say so; the kernel stays within its 300 words. The ladder's rungs 2 and 3 measure it, in a project whose documents suggest a design note, a record, the full suite and a second reader for every change | leaving a project's suggestions to outrank the sizing the kernel asks for | agent | decided |
 | The kernel keeps its sizing paragraph. On the ladder, the install without it matched the full install within one run on every rung, on one model at three runs a cell, which cannot show its effect absent; and it states the rule the rest of the text applies | cutting it on three runs a cell | agent | decided |
-| A skill whose fixture shows no difference between the current and kernel-off arms, over requested runs, is rewritten or cut | keeping a skill because it reads well | agent | decided |
+| A skill whose fixture shows no difference between the current and kernel-off arms, over repeated runs, is rewritten or cut | keeping a skill because it reads well | agent | decided |
 | Frontmatter holds `name` and `description` only, and the description is the trigger, its key use case in the first 250 characters | harness-specific keys, which one harness reads and another rejects | agent | decided |
 
 ## Edges
 
 A new skill, or a change to what one tells a model to do, is reviewed once before it ships (the
-`review` mechanism, as for the core skill), since a fixture runs only on request.
+`review` mechanism, as for the core skill), since no fixture runs in CI.
 Removing a shipped skill removes it from adopters' installs on their next upgrade.
 
 ## Validation

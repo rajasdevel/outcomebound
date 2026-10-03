@@ -99,7 +99,7 @@ These are the first-party skills pages as they stood when the rows were verified
 
 - [Claude Code skills](https://code.claude.com/docs/en/skills)
 - [Codex skills](https://developers.openai.com/codex/skills)
-- [Cursor Agent Skills](https://prod.cursor.com/docs/skills)
+- [Cursor Agent Skills](https://cursor.com/docs/skills)
 - [Gemini CLI Agent Skills](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/using-agent-skills.md)
 - [Amp manual: Agent Skills](https://ampcode.com/manual)
 

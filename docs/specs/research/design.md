@@ -17,19 +17,19 @@ exists. Any project can send a finding back. How: `outcomebound_tools/research.p
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
-| Research is its own repository; OutcomeBound points agents at one clone of it, never vendors it (D52) | a submodule or a copy in each project, whose `AGENTS.md` a harness would load | user | decided |
-| A fact about a model, harness, provider or general practice moves, with one guidance file per model under `models/`, tier table `applications/implementer-tiers.md` (D69); what OutcomeBound measured of its own text stays (`docs/evaluations.md`, `docs/prompt-standard.md`, `adapters/harnesses.json`) | splitting the files that mix both now | user | decided |
+| Research is its own repository; OutcomeBound points agents at one clone of it, never vendors it | a submodule or a copy in each project, whose `AGENTS.md` a harness would load | user | decided |
+| A fact about a model, harness, provider or general practice moves, with one guidance file per model under `models/`, tier table `applications/implementer-tiers.md`; what OutcomeBound measured of its own text stays (`docs/evaluations.md`, `docs/prompt-standard.md`, `adapters/harnesses.json`) | splitting the files that mix both now | user | decided |
 | A citation of a moved file is `https://github.com/rajasdevel/outcomebound-research/blob/main/<path>` (`tree/main/` for a folder); an evidence id stays, resolved in that repository's `_evidence/*.jsonl` | relative links that break | user | decided |
 | The core skill reads `models/README.md`, then the model's file, or the public link with no clone; `hand-off-tickets` reads `applications/implementer-tiers.md` likewise, or asks the person | no route without a clone; a default tier | user | decided |
-| One clone per machine: `OUTCOMEBOUND_RESEARCH` when set and not empty, else `~/.outcomebound/research`, a symlink `clone` makes (D59) | a clone per project | user | decided |
+| One clone per machine: `OUTCOMEBOUND_RESEARCH` when set and not empty, else `~/.outcomebound/research`, a symlink `clone` makes | a clone per project | user | decided |
 | A folder is a clone when it holds `INDEX.md` | requiring `.git`, which an exported copy lacks | agent | assumed |
 | Printing never executes: nothing the clone holds runs, and Git does not; the commit is read from `.git` files | running Git, which reads the clone's configuration | user | decided |
 | Clone and pull preview, and act only with `--accept`, as `floor provision` does; `adopt` stays offline | an `adopt` option, breaking its promise to open no connection | user | decided |
 | A project opts in with the `research` fragment (`detect: []`) | detection | agent | assumed |
-| Ingest writes one file in the project and prints the prefilled issue link; it needs no clone (D60) | writing into the clone; opening the issue itself, an external write | user | decided |
-| A README section and `CONTRIBUTING.md` say a finding reaches the research repository by the issue link (`ingest` prints it) or a pull request; the inbox file serves the maintainer's own projects, which `collect --root` reads | calling the inbox file a way to send | user | decided |
+| Ingest writes one file in the project and prints the prefilled issue link; it needs no clone | writing into the clone; opening the issue itself, an external write | user | decided |
+| A README section and `CONTRIBUTING.md` say a finding reaches the research repository by the issue link (`ingest` prints it) or a pull request; the inbox file is a local record that nothing reads or sends | calling the inbox file a way to send | user | decided |
 | Exit 0 done or previewed; 1 refused, or Git failed; 2 usage; 3 no clone configured | one failure code, which a fallback cannot tell apart | agent | assumed |
-| The header says the text is the clone's working tree, with the commit and the sha256 of the text; its day is the UTC day `HEAD` last moved, from `.git/logs/HEAD`; each `unknown` without it | labelling working-tree text as the commit's, or running Git to compare | agent | assumed |
+| The header says the text is the clone's working tree, with the commit and the sha256 of the text; its day is the UTC day `HEAD` last moved, from `.git/logs/HEAD`; each `unknown` without it | labeling working-tree text as the commit's, or running Git to compare | agent | assumed |
 | `clone`, `pull`, `ingest` as the first argument are subcommands; a root file so named cannot be printed | a `show` subcommand | agent | assumed |
 
 ## The verb
@@ -56,7 +56,7 @@ would sit inside a Git work tree, where a harness would load the clone's `AGENTS
 exists and is not a symlink. The preview:
 
 ```text
-would run: git clone https://github.com/rajasdevel/outcomebound-research.git <DESTINATION>
+would run: git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.allow=never -c protocol.https.allow=always clone https://github.com/rajasdevel/outcomebound-research.git <DESTINATION>
 would link: ~/.outcomebound/research -> <DESTINATION>
 nothing cloned: pass --accept
 ```
@@ -64,7 +64,7 @@ nothing cloned: pass --accept
 and, when `OUTCOMEBOUND_RESEARCH` is set, a line that it overrides the link. With `--accept` it
 prints `runs: …`, runs Git as an argument list, no shell, under `gitenv` with
 `GIT_TERMINAL_PROMPT=0`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1` and without the
-repository and `GIT_CONFIG*` variables it inherited, replaces the link atomically and prints
+repository, `GIT_CONFIG*`, `GIT_TEMPLATE_DIR` and `GIT_EXEC_PATH` variables it inherited, replaces the link atomically and prints
 `linked: …`. No Git, or a Git failure, prints the cause and the tail of Git's output, exit 1, the
 link as it was; a destination Git left behind is named. Previews quote arguments.
 
@@ -101,8 +101,8 @@ symlink on the way, is refused before the first line. The outputs, in order:
 1. `issue: https://github.com/rajasdevel/outcomebound-research/issues/new?template=finding.yml&…`,
    the fields percent-encoded in the order of the table, empty ones left out;
 2. `wrote: <path>`, or `unchanged: <path>` where the same bytes are there;
-3. a line that the link or a pull request sends the finding; the file is a local record that the
-   maintainer's collect pass reads only in projects they have checked out.
+3. a line that the link or a pull request sends the finding; the file is a local record that
+   nothing reads or sends.
 
 ## Edges
 

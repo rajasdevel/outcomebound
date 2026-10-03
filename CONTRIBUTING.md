@@ -189,9 +189,8 @@ CC BY 4.0, and its code is under Apache-2.0. You can contribute in three ways:
   you read it. If it helps, add a quote of at most 25 words.
 - **From an agent in your project.** `outcomebound research ingest` takes the same fields and
   prints that issue, prefilled, for you to open in a browser. It also writes the finding under
-  `.outcomebound/research-inbox/`. That file is a local record. The research maintainer reads that
-  folder only in projects that they have checked out. So a finding reaches the research repository
-  by the issue link or by a pull request.
+  `.outcomebound/research-inbox/`. That file is a local record. Nothing reads or sends it. A finding reaches
+  the research repository only by the issue link or by a pull request.
 - **Anything larger.** Open a signed-off pull request to outcomebound-research. Its
   [CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md)
   says how.
@@ -202,9 +201,10 @@ text of OutcomeBound did in an evaluation, in [docs/evaluations.md](docs/evaluat
 ## Agents and releases
 
 Coding agents also work in this repository, under the contract that its own `AGENTS.md` installs.
-Their changes land the same way as anyone's changes. An agent's commits carry the same sign-off,
-and no attribution lines. An agent pushes to `main` only where a goal envelope that a maintainer
-wrote allows it and the checks above pass. Otherwise, the agent asks.
+Their changes land the same way as anyone's changes. A person directs the agent, reviews its
+commits and signs them off under the DCO; the sign-off is that person's certification. An agent
+pushes to `main` only where a goal envelope that a maintainer wrote allows it and the checks above
+pass. Otherwise, the agent asks.
 
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)

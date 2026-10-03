@@ -56,23 +56,26 @@ a fix.
 | Ran focused tests instead of the slow full suite | 5 of 6 | 0 of 6 |
 | **Right-sized, by the task's own bar** | **6 of 6** | **0 of 6** |
 
-Same correctness, less ceremony, and a report you can trust: on the fix, every run with
-OutcomeBound named the skipped suite as `UNVERIFIED` and gave the reason. The model was
-`gpt-6.1-sol` through Codex, 2026-09-30. Every result, its method and its limits are in the
-[evaluation record](docs/evaluations.md).
+Same correctness and less ceremony. On the fix, every run with OutcomeBound named the skipped
+suite as `UNVERIFIED` and gave the reason. The model was `gpt-6.1-sol` through Codex, 2026-09-30.
+An earlier pass on `gpt-6-sol`, with an earlier install that had no project-facts line about
+suggested process, did not stop that process on these two tasks. The rerun changed the model and
+the install together ([E7 and E10](docs/evaluations.md)). The run records are not published, and
+in these passes models sometimes read the graders (E12): rerun the fixtures to check. Every
+result, its method and its limits are in the [evaluation record](docs/evaluations.md).
 
 ## Where it stands
 
-| | Today | Planned |
+| | Today | Not yet measured |
 | --- | --- | --- |
 | **Right-sized work** | Shown on the over-engineering side: process a change does not need stops | The under-engineering side: a shortcut that breaks something. No task separates the arms there yet |
 | **Honest reports** | Shown: a skipped check is named `UNVERIFIED`, with the reason | More harnesses and surfaces |
-| **Autonomy in your bounds** | In the contract and the skills; no run in any arm interrupted the person | Measure it on long, multi-session work |
-| **Efficiency** | A test-first hand-off took a smaller model from 6 to 9 passes of 9 on three small tasks | Cost per finished task. The install adds text, and text costs tokens: about 27% more per run today. The bet is fewer rounds, and that bet is not yet measured |
+| **Autonomy in your bounds** | In the contract and the skills. No ladder run put a question to the person. Runs in other passes did, and unnecessary questions are not yet measured | Measure it on long, multi-session work |
+| **Efficiency** | A test-first hand-off took a smaller model from 6 to 9 passes of 9 on three small tasks | Cost per finished task. The install adds text, and text costs tokens: about 27% more per run in one pass (`gpt-6-sol`, skill fixtures); the ladder rerun went both ways. The bet is fewer rounds, and that bet is not yet measured |
 | **Models** | OpenAI models through Codex, three runs a cell | Claude, Gemini and open-weight models; more runs |
 
 Two things hold by design. OutcomeBound sizes only process that a project suggests: what your
-project requires stays required. And its checks inform you; they are not an authority boundary.
+project requires stays required (no fixture yet tests a project whose process is required). And its checks inform you; they are not an authority boundary.
 The instruction check is lexical, and you judge what it finds. The quality floor makes a
 loosening visible, and your branch protection is what prevents one.
 
@@ -93,7 +96,8 @@ outcomebound adopt . --detect
 not, because `outcomebound` runs Python isolated (`-I`), which ignores the user site.
 
 `--detect` writes nothing. It prints the install command that your files suggest, for example
-`outcomebound adopt . --harness claude-code --fragments python --done 'pytest -q'`. Run it, read
+`outcomebound adopt <your-repo> --harness claude-code --fragments python,commands --done 'python3 -m pytest'`
+(it prints the absolute path of the repository). Run it, read
 the diff, and commit. Your agent's next session reads the contract. The install writes:
 
 ```text
@@ -199,18 +203,21 @@ The tier comes from you, or from the research library's placement table. In 63 r
 package raised `gpt-6-luna` at `xhigh` from 6 to 9 passes of 9, and `gpt-6-astra` at `high`
 passed 9 of 9 with it or without it. The whole gain was one requirement on one of three small
 tasks, and the design package's effect did not show. Each tier had one model, all from one maker,
-through one harness.
+through one harness. The comparison measured hand-written packages, not the `hand-off-tickets`
+skill. `--detail full` alone scored 6 of 9, the same as the ticket alone, and by the rules written
+before the runs it would be cut. The project keeps it as the default brief of the spec tier, to be
+judged on longer work.
 
 ### A quality floor for a project with history
 
 Most projects already carry lint and type debt. Fixing all of it first blocks real work, and
 ignoring it lets it grow. The floor records the findings you have today, and fails only what is
-new. This repository runs on its own floor: 28 old lint findings and 46 old type findings are in
+new. This repository runs on its own floor: 26 old lint findings and 46 old type findings are in
 a baseline, and every change since has added none. When a change adds new ones, the check names
 them:
 
 ```text
-FAIL python.lint (2 new, 28 baselined)
+FAIL python.lint (2 new, 26 baselined)
   +1 outcomebound_tools/tickets.py:F401:`os` imported but unused  at 260:12
   +1 outcomebound_tools/tickets.py:S307:Use of possibly insecure function; consider using `ast.literal_eval`  at 261:12
 FAIL python.types (1 new, 46 baselined)
@@ -249,14 +256,18 @@ a loosening visible; your branch protection is what holds it to a person's decis
   is a separate, neutral library about models, providers, harnesses and practices. From a clone
   (`outcomebound research clone <folder> --accept`), `outcomebound research <path>` prints a file
   headed by the clone's commit and the sha256 of its text. An agent cites the file by its path,
-  that commit and that digest.
+  that commit and that digest. A finding goes back with `outcomebound research ingest`, which
+  prints a prefilled issue link.
 
-## Contributing and licence
+## Contributing and license
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) (DCO sign-off, no CLA) and [SECURITY.md](SECURITY.md).
 Apache-2.0, with one exception: the text that `adopt` writes into your repository carries no
-licence-copy or NOTICE duty ([LICENSE](LICENSE)). The OutcomeBound name and mark are not licensed
-with the code: you can say that a project uses OutcomeBound, and a fork ships under its own name.
+license-copy, changed-file notice or NOTICE duty (Sections 4(a), 4(b) and 4(d); see
+[LICENSE](LICENSE)). The license grants no right to use the OutcomeBound name (Apache-2.0
+Section 6). You can say that a project uses OutcomeBound, and a fork ships under its own name.
+Claude Code, Codex, Cursor, Gemini CLI, Amp and other product names belong to their owners;
+OutcomeBound is not affiliated with them.
 
 ## Acknowledgements
 

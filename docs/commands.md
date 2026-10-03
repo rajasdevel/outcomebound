@@ -5,10 +5,13 @@ An agent runs commands and reads their output. Two problems occur:
 - A command can stop and wait for a person. A pager, an editor or a password prompt waits for a
   key that does not come. This occurs when the harness gives the command a terminal.
 - A command can print too much. All the output goes into the agent's context. Long input makes
-  the model less accurate, and the harness cuts long output.
+  the model less accurate
+  ([research](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/long-context-and-compaction.md)),
+  and the harness cuts long output.
 
-The `commands` fragment tells the agent to use the habits below. They work in Claude Code, Codex,
-Cursor, Gemini CLI and Amp. Where a harness already prevents a problem, the habit has no effect
+The `commands` fragment tells the agent to use the habits below. They are plain shell options.
+They were tested in a macOS shell on 2026-10-03, not inside each harness (Claude Code, Codex,
+Cursor, Gemini CLI, Amp). Where a harness already prevents a problem, the habit has no effect
 and does no harm. No habit hides an error. No habit disables a security check.
 
 Use the `commands` fragment in any repository where an agent runs commands.
@@ -33,7 +36,8 @@ the agent reads the fragment only when it runs a command.
   remote. Use `sudo -n`.
   - Fixes: Git asks for a user name, and `sudo` asks for a password. The command now stops with
     an error that gives the reason ("terminal prompts disabled", "a password is required").
-  - Source: Git manual (`GIT_TERMINAL_PROMPT`); Claude Code issue 44878 (a session stopped on
+  - Source: Git manual (`GIT_TERMINAL_PROMPT`); Claude Code issue
+    <https://github.com/anthropics/claude-code/issues/44878> (a session stopped on
     this prompt). Test on 2026-10-03 with a local server that returns 401.
 - **SSH.** Use `ssh -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR`. Use the same
   options for `scp`, `rsync -e ssh` and Git over SSH.
@@ -55,15 +59,16 @@ the agent reads the fragment only when it runs a command.
     harnesses the input does not close.
   - Example: `codex exec "<prompt>" < /dev/null`. Without it, Codex shows "Reading additional
     input from stdin" and waits.
-  - Source: this project's record of `codex exec`; Claude Code issue 67234 (the 120-second
+  - Source: the message that `codex exec` prints, seen on 2026-10-03; Claude Code issue
+    <https://github.com/anthropics/claude-code/issues/67234> (the 120-second
     timeout did not stop a command that waited on standard input).
 - **Commands that do not end.** Do not run `tail -f`, `journalctl -f`, `docker logs -f`,
   `watch`, a development server or a test runner in watch mode in the foreground. Use a
   bounded form (`tail -n 50`, `docker logs --tail 100`), or the harness's background mode. Run
   tests one time (`vitest run`).
   - Fixes: the harness stops the command after 2 to 5 minutes, and the output is lost.
-  - Source: harness documentation (Claude Code, Codex, Gemini CLI timeouts); Codex issue 3951
-    (Vitest watch mode).
+  - Source: harness documentation (Claude Code, Codex, Gemini CLI timeouts); Codex issue
+    <https://github.com/openai/codex/issues/3951> (Vitest watch mode).
 
 ## Habits that keep output small
 
@@ -106,7 +111,7 @@ give them to your agents, add them to your `local` fragment.
     lines with these options. `apt-get` was not tested.
 - **Colour codes**, when the output shows them: set `NO_COLOR=1` or use the tool's
   `--color=never`. For Git, use `git -c color.ui=never`, because Git does not read `NO_COLOR`.
-  - Source: no-color.org. Test on 2026-10-03: with `NO_COLOR=1`, `git diff` kept its colour
+  - Source: no-color.org. Test on 2026-10-03: with `NO_COLOR=1`, `git diff` kept its color
     codes; with `git -c color.ui=never`, the codes were removed.
 - **Test runners**, when the project uses them: `pytest -q --tb=short`,
   `node --test --test-reporter=dot`. These keep the failure text. Do not use `--tb=no`.

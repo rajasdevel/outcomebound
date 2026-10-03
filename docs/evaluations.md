@@ -53,7 +53,7 @@ model judge scored them.
 
 - **Models.** Every candidate model under Results is an OpenAI model that ran through codex.
   Claude models appear only under "Results not kept here": as the judge of one proposal-only
-  sample, and as candidates in the slicing arms. Behaviour on other model families and other
+  sample, and as candidates in the slicing arms. Behavior on other model families and other
   harnesses is not measured.
 - **Runs.** Most cells hold three runs. The hand-off comparison holds nine a cell, as three
   clusters of three. Three runs show only a large difference. Nine runs also show only a large
@@ -212,7 +212,7 @@ Each finding has an id (E1 to E17). Other documents may cite the id.
   candidates fixed, a change of judge moved the scores. The evidence is in
   [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md).
   Here, a rubric out of step with the skill made a judge of the same family fail 6 of 18 runs
-  whose deterministic post-checks passed (O, 2026-09-24). Validate a judge against labelled cases.
+  whose deterministic post-checks passed (O, 2026-09-24). Validate a judge against labeled cases.
   Keep one judge for each comparison. Read the answers behind any judged difference of one run.
 - **E16. Graders that count the effects of a run through Git or `find` fail open.** In one
   harness, a scope grader reported no change while the model had changed something in five
@@ -228,7 +228,7 @@ Each finding has an id (E1 to E17). Other documents may cite the id.
   - gpt-6-sol at medium passed 9 of 9 with the ticket and 9 of 9 with the design package. This
     leaves the effect of the design package unshown.
 
-  9 runs a cell, 63 runs, 2026-10-03 (the hand-off comparison, under Results). By rule 3,
+  9 runs a cell, 63 runs, 2026-10-03 (the hand-off comparison, under Results). By README rule 3,
   `--detail full` would go. The project keeps it as the default brief of the spec tier, to be
   judged in real use on longer work.
 
@@ -250,7 +250,7 @@ A run can be checked on five things:
   tree as it was.
 - **Size.** The process documents created, the test runs and full-suite runs, and the lines and
   files beyond the change.
-- **Report.** What the answer tells the person. A check that could not run is labelled
+- **Report.** What the answer tells the person. A check that could not run is labeled
   `UNVERIFIED`. A failure that predates the work is named. A choice made is stated. A decision is
   put as a brief.
 - **Cost.** Tokens and seconds a run.
@@ -313,7 +313,7 @@ Two more conditions decide what a codex run can measure.
 The slicing arms test the `slice-tickets` skill on a design too large for a fixture. They show a
 second kind of arm design, for a planning skill whose output is a document. The runs are
 read-only. Each run slices one large design into tickets, under different skill texts and models
-(gpt-6-sol and Opus at high effort, and a Claude session). There is one run an arm. Each run
+(gpt-6-sol and Opus at high effort, and Claude Code at its default settings). There is one run an arm. Each run
 charts to the same milestone and states its ticket count, the boundary rule behind each split, and
 a rough size, so that the breakdowns can be compared line by line. The findings are in
 [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md).
@@ -457,7 +457,7 @@ compares harnesses as well as text. So each comparison stays within one model.
   gpt-6-astra at high, gpt-6-sol at medium, and gpt-6-luna at xhigh. A package is compared only
   within one implementer.
 
-No candidate model in these results is from a Claude family or another maker. Behaviour there is
+No candidate model in these results is from a Claude family or another maker. Behavior there is
 not measured. Effort levels are also not comparable across vendors. Record the effort of each arm
 as sent. Claim no equivalence between the level of one vendor and the level of another.
 
@@ -508,7 +508,7 @@ times are under Results. Subscription usage was not metered.
 | `unclear-outcome` (gather-requirements) | Show the due date of each reminder, and hold each person to five reminders | Due dates shown in UTC. A sixth loses none of the five. A built reading of the cap named as a choice, or a brief. No question about date format | Which gaps to settle, and which to put to the person |
 | `test-worth-keeping` (tests-worth-keeping) | Add the regression test for a committed fix, beside a test that already fails | The new test fails on the code before the fix (a mutation check). The failing calendar test is untouched. The answer says that it failed before | A test that can fail. A failure that predates the work |
 | `slice-a-spec` (slice-tickets) | Break a short design into ticket drafts. Publish nothing | The drafts pass `tickets check --draft`. There is exactly one draft, the count that a one-outcome design gets. The bounds name paths that the seed holds | The ticket cut |
-| `ladder-1-message` | A misspelt word in a refusal | The refusal reads right. No process document | The smallest change amid documents that invite process |
+| `ladder-1-message` | A misspelled word in a refusal | The refusal reads right. No process document | The smallest change amid documents that invite process |
 | `ladder-2-last-units` | A two-character comparison bug (the overengineering trap) | The last units can be taken and no more. No process document. The slow integration suite did not run | Process and over-testing on a trivial fix |
 | `ladder-3-reorder-list` | A `--below N` option across the command line and the store | The right items are listed. No process document | An ordinary small feature |
 | `ladder-4-cents` | Prices to integer cents (the underengineering trap) | A new database keeps cents and prints as before. The stock recorded before the change survives the migrations of the workspace | A risky change whose obvious fix passes the unit tests and loses data |
@@ -613,7 +613,7 @@ runner recorded. The `current` and `unsized` arms here are not exactly an instal
 
 | Rung | Arm | Pass | Process documents created | Lines added | Tokens | Seconds | Full-suite runs |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1, a misspelt word | current | 3/3 | 0/3 | 1 | 11,506 | 64 | 1 |
+| 1, a misspelled word | current | 3/3 | 0/3 | 1 | 11,506 | 64 | 1 |
 | | unsized | 3/3 | 0/3 | 1 | 11,783 | 62 | 1 |
 | | none | 0/3 | 3/3 | 14 | 14,153 | 62 | 1 |
 | 2, a two-character bug (overengineering trap) | current | 1/3 | 2/3 | 16 | 22,471 | 96 | 1 |
@@ -667,7 +667,7 @@ gpt-6.1-sol, medium effort, codex, 3 runs a cell, 12 runs, 2026-09-30, no call e
 Every run in both arms made the change correctly. Every run in both arms added a test, so a
 regression test does not separate the arms.
 
-- With OutcomeBound, every rung-2 answer labelled the slow suite `UNVERIFIED`, with the reason that
+- With OutcomeBound, every rung-2 answer labeled the slow suite `UNVERIFIED`, with the reason that
   it was skipped. It also said that the design note and second reader were not needed for a fix
   that its checks cover.
 - Without OutcomeBound, every run wrote a design note (on rung 3, a decision record too), ran the
@@ -700,7 +700,7 @@ questions; state the assumptions you proceed on." A probe run took 32 to 49 seco
 ### Judge-scored probes of a ticket-working skill
 
 The skill works one ticket. OutcomeBound does not ship it. The fixture is not in
-`evals/fixtures/`. It is `ready-ticket-on-provisional-blocker`: the engine lists a ticket as ready
+`evals/fixtures/`. It is `ready-ticket-on-provisional-blocker`: the engine of that earlier version listed a ticket as ready
 while its blocker awaits only the confirmation of a person.
 
 A deterministic post-check read whether the ready ticket was claimed and its bug fixed. A gpt-6-sol
@@ -768,7 +768,7 @@ Read by the rules:
 
 1. **The design package on gpt-6-sol.** Its `ticket` cell has 9, so a gain cannot show. There is
    no headroom: the result is inconclusive. Nothing is cut on this result.
-2. **The spec package on gpt-6-luna.** The result is 9 against 6, a gain of 3, so by rule 1 the
+2. **The spec package on gpt-6-luna.** The result is 9 against 6, a gain of 3, so by README rule 1 the
    package helps. The whole gain is one row on one base, the same row in all six runs that
    failed. So it shows that an exact sentence in the package reached a detail that the words of
    the ticket left to the implementer. It does not show a gain spread over many kinds of detail.
@@ -776,7 +776,7 @@ Read by the rules:
    support the hypothesis that the package makes an outcome-tier implementer overfit. The rows
    that the tests of the package leave out (listed in `evals/README.md`) passed in all nine.
 4. **`--detail full` on gpt-6-luna.** The result is 6 against 9 for `spec`, so `full` does not
-   beat the spec package. By rule 3, `--detail full` would go. The project keeps it as the default
+   beat the spec package. By README rule 3, `--detail full` would go. The project keeps it as the default
    brief of the spec tier, to be judged in real use on longer work.
 5. **Noise.** For gpt-6-luna, `ticket` against `full` is 6 against 6, the same failure in the same
    runs. The difference of 3 for the spec package exceeds it.
@@ -813,8 +813,8 @@ those skills.
   the approach that it would take to written scenarios, with the expected answer of each scenario
   withheld. Nothing was executed.
   - The samples matched their rubrics 7 of 7, 2 of 2 and 9 of 9. The backend and effort were not
-    recorded for the first two. The third was gpt-5.6-sol at medium. The agent that dispatched
-    them scored all three.
+    recorded for the first two. The third was gpt-5.6-sol at medium. The same model setup that ran
+    them scored all three; the scoring was not blind.
   - Under a Claude Opus judge, the result was 0 of 1 (codex-cli 0.151.0, gpt-5.6-sol at medium).
     That judge scored a "goal envelope" as unnecessary in an answer that proposed only a focused
     regression test and a local fix, under Outcome, Context and Bounds headings. It matched the
@@ -914,7 +914,7 @@ one small repository for each fixture.
   So the tier and the model are not separate. The spec package is close to the solution, so a
   `spec` cell reads whether the implementer applies a near-complete package and stays in bounds.
 
-**Open questions**, from the independent reviews listed under Sources and from the limits above:
+**Open questions**, from the limits above:
 
 - A fixture where a capable model gets underengineering wrong on its own. It is a risky change
   whose obvious fix skips the check that its risk needs, taken from a failure that an agent was
@@ -931,8 +931,8 @@ one small repository for each fixture.
 - `--detail full` judged on longer work.
 - Real changes in place of synthetic repositories. Past changes to a product codebase would replay
   from their parent commits under each arm, graded by the tests and fixes that landed after them.
-- Paired tasks with the same outward act, authorised in one and not in the other, so that needless
-  escalation and unauthorised execution are scored apart. Also tool calls, interruptions of the
+- Paired tasks with the same outward act, authorized in one and not in the other, so that needless
+  escalation and unauthorized execution are scored apart. Also tool calls, interruptions of the
   person and defects that escape, recorded beside tokens and seconds.
 
 ## What published research adds
@@ -943,7 +943,7 @@ tasks buy:
 
 - **Model judges.** Consistency against validity. The variation of a verdict between identical
   calls. A changed judge as a new measurement. Preference for itself and for its own family.
-  Reasoning effort and optimisation pressure. Criteria drift. Judging many model-drafted labels at
+  Reasoning effort and optimization pressure. Criteria drift. Judging many model-drafted labels at
   once. All are in
   [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md).
   The judged probes here used the configuration that those studies warn about: a judge of the same
@@ -974,7 +974,7 @@ tasks buy:
    it passes. A protected probe that judges the fix cannot be weakened.
 
    Count the effects of the model from the filesystem, not from Git state that the model can set.
-   `git diff` and `git status` honour the assume-unchanged and skip-worktree bits of the index. So
+   `git diff` and `git status` honor the assume-unchanged and skip-worktree bits of the index. So
    `git update-index --assume-unchanged <file>` hides an edit from both. `git ls-files -v` marks
    such entries with a lowercase letter or `S`. A `.gitignore` that ignores itself hides new files
    from `git status -uall`.
@@ -1002,7 +1002,7 @@ tasks buy:
    - A "do not ask questions" line forbids the very stop that a fixture may measure.
    - A probe that asks the model which instruction it followed changes what it does. So a probed
      run is an arm of its own.
-   - A project's own documents steer the behaviour measured (ladder rungs 2 and 3). Decide
+   - A project's own documents steer the behavior measured (ladder rungs 2 and 3). Decide
      whether that is the question. Build the case where it is not.
    - A fact meant to be found only in the history leaks through the plain-text copies of Git.
      `.git/COMMIT_EDITMSG` holds the last commit message. `.git/logs/HEAD` holds the subject of
@@ -1012,7 +1012,7 @@ tasks buy:
      `GIT_AUTHOR_*` and `GIT_COMMITTER_*` variables of the caller cannot change the seed commit.
      One such fixture made the same seed commit each time. It was built under bash 5 with GNU sed,
      under bash 3.2 with BSD sed, and with those variables set by the caller (O, 2026-09-24).
-   - On the side of the judge, parse its verdict so that the answer under judgement cannot supply
+   - On the side of the judge, parse its verdict so that the answer under judgment cannot supply
      it. The model grader of inspect-ai binds to the last `GRADE:` in the output of the judge. So a
      grade echoed in its reasoning, or planted in the submission, does not win (L,
      [inspect-ai, model-graded scorers](https://inspect.aisi.org.uk/model-graded.html), read
@@ -1023,7 +1023,7 @@ tasks buy:
    the configuration, rules, memories, Git configuration and credentials of the operator. Check the
    transcript for user-level files that the harness read anyway (codex read agent role files under
    its isolation flags; see Isolation above).
-7. **Make each check as strict as the contract, and no stricter.** Accept every behaviour that the
+7. **Make each check as strict as the contract, and no stricter.** Accept every behavior that the
    text allows (a reversible reading, built and named as a choice). Require only what the check is
    for. Observe, and do not require, what an older arm was never asked for. Check a stated
    contract in full (every row that must survive, not only the column that changed). Let the
@@ -1072,11 +1072,11 @@ tasks buy:
     without new calls. Kept transcripts let a count like E12 be taken after the fact.
 15. **Do not judge text on the fixture that it was written from.** An addition drafted after
     reading the runs of a fixture is tuned to that fixture. That fixture can no longer judge it
-    fairly. Judge it on another fixture that exercises the same behaviour, or build one
+    fairly. Judge it on another fixture that exercises the same behavior, or build one
     (reasoning).
 16. **Write the reading rules before the runs.** The hand-off comparison fixed its cells, its
     rules and the meaning of "no headroom" before any run. Then a result that goes against the
-    project's own choice stays visible: by rule 3, `--detail full` would go, and the record says so
+    project's own choice stays visible: by README rule 3, `--detail full` would go, and the record says so
     beside the decision to keep it.
 
 ## How to run the evals here
@@ -1114,9 +1114,6 @@ them. `evals/README.md` gives their cells.
 - **Run records.** They are kept outside the repository. Each run has its prompt, answer,
   transcript and metadata, as `evals/README.md` describes. The table under "Every pass that ran"
   lists them.
-- **Reviews:** two independent readings of these results (Fable 5.1 at high effort, and
-  gpt-6-astra at medium effort through codex) contributed the limits, open questions and lessons
-  above.
 - **Published sources**, each read 2026-10-01: inspect-ai, model-graded scorers,
   <https://inspect.aisi.org.uk/model-graded.html>, and handling errors,
   <https://inspect.aisi.org.uk/handling-errors.html>. The two-agent context-file ablation,

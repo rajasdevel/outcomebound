@@ -24,11 +24,11 @@ SHA256_COMMIT = "a" * 64
 BLOB = "https://github.com/rajasdevel/outcomebound-research/blob/main/"
 CLONE_URL = "https://github.com/rajasdevel/outcomebound-research.git"
 ROOT = Path(__file__).resolve().parent.parent
-PULL_ARGUMENTS = (
+GIT_HARDENING = (
     "-c core.hooksPath=/dev/null -c core.fsmonitor=false -c protocol.allow=never "
-    "-c protocol.https.allow=always -C {clone} pull --ff-only "
-    f"{CLONE_URL} main"
+    "-c protocol.https.allow=always"
 )
+PULL_ARGUMENTS = GIT_HARDENING + " -C {clone} pull --ff-only " + f"{CLONE_URL} main"
 FIXTURES = ROOT / "tests" / "fixtures" / "research-findings"
 STAMP = "1700000000"  # 2023-11-14T22:13:20Z
 REFLOG = f"{'0' * 40} {COMMIT} A <a@example.org> {STAMP} +0200\tclone: from {CLONE_URL}\n"
@@ -334,7 +334,7 @@ def test_clone_previews_and_runs_nothing_without_accept(
     status, out, err = run(capsys, "clone", str(destination))
     assert (status, err) == (0, "")
     assert out == (
-        f"would run: git clone {CLONE_URL} {destination}\n"
+        f"would run: git {GIT_HARDENING} clone {CLONE_URL} {destination}\n"
         f"would link: ~/.outcomebound/research -> {destination}\n"
         "nothing cloned: pass --accept\n"
     )
@@ -363,11 +363,11 @@ def test_clone_with_accept_runs_git_as_an_argument_list_and_links(
     destination = tmp_path / "research"
     status, out, err = run(capsys, "clone", str(destination), "--accept")
     assert (status, err) == (0, "")
-    assert git.calls == [["git", "clone", CLONE_URL, str(destination)]]
+    assert git.calls == [["git", *GIT_HARDENING.split(), "clone", CLONE_URL, str(destination)]]
     assert git.environments[0]["GIT_TERMINAL_PROMPT"] == "0"
     assert git.environments[0]["LC_ALL"] == "C"
     assert out.splitlines() == [
-        f"runs: git clone {CLONE_URL} {destination}",
+        f"runs: git {GIT_HARDENING} clone {CLONE_URL} {destination}",
         f"linked: ~/.outcomebound/research -> {destination}",
     ]
     assert (home / ".outcomebound" / "research").readlink() == destination
@@ -393,7 +393,7 @@ def test_a_failed_git_leaves_the_link_as_it_was(
     assert status == 1
     assert "fatal: unable to access" in err and "git exited 128" in err
     assert (home / ".outcomebound" / "research").readlink() == tmp_path / "old"
-    assert out.startswith("runs: git clone")
+    assert out.startswith(f"runs: git {GIT_HARDENING} clone")
 
 
 def test_a_missing_git_is_named(
@@ -443,7 +443,7 @@ def test_clone_accepts_an_empty_folder_and_expands_a_tilde(
     monkeypatch.setattr(research.subprocess, "run", git)
     (home / "empty").mkdir()
     assert run(capsys, "clone", "~/empty", "--accept")[0] == 0
-    assert git.calls[0][3] == str(home / "empty")
+    assert git.calls[0][-1] == str(home / "empty")
 
 
 # --- Pull ----------------------------------------------------------------------------------------
@@ -859,6 +859,8 @@ MUST_NOT_REACH_GIT = (
     "GIT_CONFIG",
     "GIT_CONFIG_COUNT",
     "GIT_CONFIG_PARAMETERS",
+    "GIT_TEMPLATE_DIR",
+    "GIT_EXEC_PATH",
     "GIT_CONFIG_KEY_0",
     "GIT_CONFIG_VALUE_0",
     "GIT_CONFIG_KEY_17",
@@ -960,7 +962,9 @@ def test_the_previews_quote_a_destination_that_a_shell_would_split(
 ) -> None:
     destination = tmp_path / "a b" / "research"
     out = run(capsys, "clone", str(destination))[1]
-    assert out.splitlines()[0] == f"would run: git clone {CLONE_URL} '{destination}'"
+    assert out.splitlines()[0] == (
+        f"would run: git {GIT_HARDENING} clone {CLONE_URL} '{destination}'"
+    )
 
 
 def test_a_failed_clone_names_the_partial_folder_to_remove(

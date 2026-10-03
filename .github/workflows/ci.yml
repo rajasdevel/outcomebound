@@ -33,6 +33,8 @@ jobs:
           # The floor's loosening check reads the commits since its base, so the
           # clone holds the whole history.
           fetch-depth: 0
+          # Later steps run code from the pull request; they do not keep the token.
+          persist-credentials: false
 
       # A tag run checks the tag against the release commit: annotated, v<VERSION>, on this
       # commit, and the changelog and CI template agreeing with it (scripts/release-check.py).

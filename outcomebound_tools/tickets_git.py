@@ -18,7 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools.gitenv import git_environment
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 from outcomebound_tools.tickets_report import EngineError
 
 __all__ = [
@@ -65,7 +65,7 @@ def git(target: Path | str, *arguments: str) -> GitResult:
         # constants and the caller's refs and paths; `git` is resolved from
         # PATH, as every adapter in this engine resolves it.
         completed = subprocess.run(
-            ["git", *arguments],
+            ["git", *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             capture_output=True,
             check=False,

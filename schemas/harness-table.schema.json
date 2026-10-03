@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://outcomebound.dev/schemas/harness-table.schema.json",
+  "$id": "urn:outcomebound:schema:harness-table:1",
   "title": "OutcomeBound harness table row v1",
   "description": "One row of adapters/harnesses.json. The table itself is an object whose keys are harness names and whose values each validate against this schema; the supported schema subset has no per-key keyword, so callers validate row by row (tests/test_harness_table.py). Absent evidence is null and is never promoted to a verified claim: verified describes the install path only, nested_instructions null means unverified, and loading_evidence names the channel a tier-H capture would come from, never a capture. The loading fields (reads, nested, overrides, config, recheck_on) are what the instruction audit reads; a row unverified or past recheck_on reads UNVERIFIED wherever they are used.",
   "type": "object",

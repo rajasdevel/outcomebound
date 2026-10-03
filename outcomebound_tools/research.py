@@ -65,6 +65,8 @@ GIT_UNSET = (
     "GIT_CONFIG",
     "GIT_CONFIG_COUNT",
     "GIT_CONFIG_PARAMETERS",
+    "GIT_TEMPLATE_DIR",
+    "GIT_EXEC_PATH",
 )
 GIT_UNSET_PREFIXES = ("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")
 # The user's and the system's Git configuration, which could rewrite the source with `insteadOf`.
@@ -366,7 +368,7 @@ def _point_link(destination: Path) -> None:
 def clone(destination_text: str, accept: bool) -> int:
     destination = Path(os.path.abspath(os.path.expanduser(destination_text)))
     _check_destination(destination)
-    arguments = ["clone", CLONE_URL, str(destination)]
+    arguments = [*GIT_CONFIGURATION, "clone", CLONE_URL, str(destination)]
     print(f"{'runs' if accept else 'would run'}: {shlex.join(['git', *arguments])}")
     if not accept:
         print(f"would link: {LINK_TEXT} -> {destination}")
@@ -599,8 +601,8 @@ def ingest(options: argparse.Namespace) -> int:
     print(f"{'unchanged' if present is not None else 'wrote'}: {project / relative}")
     print(
         "open the issue link in a browser to send the finding: that, or a pull request, is how it "
-        "reaches the research repository; the file is a local record, which the research "
-        "maintainer's collect pass reads only in projects they have checked out"
+        "reaches the research repository; the file is a local record, which "
+        "nothing reads or sends"
     )
     return 0
 
@@ -630,8 +632,7 @@ INGEST_DESCRIPTION = f"""\
 Write one finding under {INBOX}/ in the project, and print the link that opens the research
 repository's finding issue form with it filled in. The engine opens no connection. The link,
 opened in a browser, or a pull request is how a finding reaches the research repository; the file
-is a local record that the research maintainer's collect pass reads only in projects they have
-checked out.
+is a local record that nothing reads or sends.
 
 Write the claim in your own words; name no project, client or person. A finding is refused
 when a value holds a line break, a control character or an invisible one (zero-width, bidirectional

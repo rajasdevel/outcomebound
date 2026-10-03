@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import IO, Any, NoReturn
 
 from outcomebound_tools import adapters
-from outcomebound_tools.gitenv import git_environment
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ID = "finish-check"
 # What every entry's command starts with, looked for before a settings document is parsed.
@@ -184,7 +184,7 @@ def _git(target: Path, *arguments: str, deadline: float | None = None) -> bytes 
         return None
     try:
         done = subprocess.run(
-            ["git", "-C", str(target), *arguments],
+            ["git", *GIT_READ_CONFIGURATION, "-C", str(target), *arguments],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,

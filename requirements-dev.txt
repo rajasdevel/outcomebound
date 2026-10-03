@@ -2,7 +2,7 @@
 # guarded by scripts/check-no-deps.py). Everything here is a development tool: a test
 # runner and, below, the tools this repository's floor runs (`make check`). None of it
 # is imported by the engine.
-pytest>=8
+pytest==9.1.1
 # Runs the suite across CPUs (`make test` and CI pass `-n auto` when it is present);
 # without it the suite runs serially and is still the same suite.
 pytest-xdist==3.8.0

@@ -135,7 +135,7 @@ Four fixtures test the kernel and the core skill:
 - `decision`, set out the decision of the person. Nothing changed. The compatibility document and
   the history were read. The answer is a decision brief.
 
-Each skill has one fixture whose checks read the behaviour that the skill is for:
+Each skill has one fixture whose checks read the behavior that the skill is for:
 
 - `unclear-outcome`, for `gather-requirements`. The task is to show the due date of each reminder,
   and to hold each person to five reminders. A cap can refuse a sixth or drop the oldest. The due
@@ -164,7 +164,7 @@ with numbered migrations, unit tests, a copy of the stock of the shop, and a `CO
 change. Each rung plants one task. A probe that the model cannot edit judges it through the command
 line, against a database of its own:
 
-- `ladder-1-message`: a misspelt word in a refusal. The refusal reads right. No process document is
+- `ladder-1-message`: a misspelled word in a refusal. The refusal reads right. No process document is
   created.
 - `ladder-2-last-units`, the overengineering trap: a two-character comparison bug. The last units
   can be taken and no more. No process document is created, and the slow integration suite does not
@@ -297,8 +297,8 @@ python3 evals/run.py --summary evals/results/raw/handoff
 PASS the verdict and each claim, the median tokens and seconds, and the calls that failed. A cell
 is the three blocks of its variant for one implementer, nine runs. A failed call is not counted,
 so count it beside the cell. Read the cells by these rules, written before any run. They are
-quoted as written. In them, "the maintainer" is the project's maintainer. "The maintainer's
-brief" is a decision brief that is not in the repository, and rule 4 gives what it says.
+quoted as written, except that three phrases that pointed at a private decision brief are
+reworded (rules 2 and 4); rule 4 gives what that brief said.
 
 A cell's score is its verdict PASS count of 9. Each rule is read on the cells' totals, and
 the per-base counts (duration, invoice, tags: three runs each) are reported beside them, since
@@ -311,15 +311,16 @@ the nine runs are three clusters of three.
    inconclusive. For `gpt-6-astra`, `ticket` is its tier's package, so it has no such
    comparison.
 2. Does the spec package make a result worse on an outcome-tier implementer? For `gpt-6-astra`,
-   `spec` against `ticket`. A drop of 3 or more of 9 supports the maintainer's hypothesis of
-   overfitting. A smaller drop is inconclusive, and no drop does not support it.
+   `spec` against `ticket`. A drop of 3 or more of 9 supports the hypothesis that the spec package
+   makes an outcome-tier implementer overfit. A smaller drop is inconclusive, and no drop does not
+   support it.
 3. Does `--detail full` beat the spec package? For `gpt-6-luna`, `full` against `spec`. It beats
    it only when its cell has at least 3 more verdict PASSes than `spec`'s, the same margin as in
    rule 1. Thus `--detail full` stays only then, as the tickets design says.
 4. No headroom. Where the cell that a rule uses as its baseline has 7 or more of 9 (`ticket` in
    rules 1 and 2, `spec` in rule 3), a difference of 3 cannot show. The result is "no headroom:
-   inconclusive", never "does not help", and no brief to cut a part follows from it. In rule 3
-   `--detail full` cannot stay on such a result; the maintainer's brief says that this is a
+   inconclusive", never "does not help", and no part is cut on it. In rule 3
+   `--detail full` cannot stay on such a result; such a result is a
    ceiling, not a finding. A drop of 3 or more in rule 2 is still a drop.
 5. Noise. Report `gpt-6-luna` `ticket` against `full` as well. `full` adds only generic steps
    to the ticket's own text, so the difference between them is the nearest thing to a repeat

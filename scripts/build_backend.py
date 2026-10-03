@@ -138,7 +138,7 @@ def _metadata(root: Path) -> str:
         f"Version: {_version(root)}\n"
         f"Summary: {SUMMARY}\n"
         "Author: Rajas Abhyankar\n"
-        "License: Apache-2.0\n"
+        "License: Apache-2.0, with an exception (see LICENSE)\n"
         f"Project-URL: Repository, {URL}\n"
         f"Requires-Python: {REQUIRES_PYTHON}\n"
         "Classifier: License :: OSI Approved :: Apache Software License\n"

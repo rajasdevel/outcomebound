@@ -30,7 +30,7 @@ from typing import Any
 
 from outcomebound_tools import home, schemacheck
 
-PASS = "PASS"
+PASSED = "PASS"
 FAIL = "FAIL"
 UNVERIFIED = "UNVERIFIED"
 
@@ -313,7 +313,7 @@ def run_claim(claim: Claim, cwd: Path, log_dir: Path | None) -> Result:
         detail = f"timeout after {claim.timeout_seconds:g} seconds"
         return Result(claim, UNVERIFIED, detail, log_path)
     if status == 0:
-        return Result(claim, PASS, "declared check exited 0", log_path)
+        return Result(claim, PASSED, "declared check exited 0", log_path)
     return Result(claim, FAIL, f"declared check exit {status}", log_path)
 
 
@@ -339,11 +339,11 @@ def verdict(results: tuple[Result, ...]) -> str:
         return FAIL
     if any(result.status == UNVERIFIED for result in required):
         return UNVERIFIED
-    return PASS
+    return PASSED
 
 
 def exit_code(status: str) -> int:
-    return {PASS: 0, FAIL: 1, UNVERIFIED: 2}[status]
+    return {PASSED: 0, FAIL: 1, UNVERIFIED: 2}[status]
 
 
 def _main(argv: Sequence[str] | None = None) -> int:
@@ -381,13 +381,13 @@ def _main(argv: Sequence[str] | None = None) -> int:
             f"{result.status} {result.claim.name} [{result.claim.kind}, {requirement}] — "
             f"{result.detail}; addresses: {result.claim.risk}\n"
         )
-        excerpt = "" if result.status == PASS else tail(result.log_path)
+        excerpt = "" if result.status == PASSED else tail(result.log_path)
         if excerpt and result.log_path is not None:
             sys.stdout.write(f"  last {LOG_TAIL_LINES} lines of {result.log_path.name}:\n")
             for line in excerpt.splitlines():
                 sys.stdout.write(f"  | {line}\n")
     status = verdict(results)
-    suffix = "" if status != PASS else " (all required declared checks passed)"
+    suffix = "" if status != PASSED else " (all required declared checks passed)"
     sys.stdout.write(f"VERDICT: {status}{suffix}\n")
     return exit_code(status)
 

@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from outcomebound_tools import fileplan, validation
-from outcomebound_tools.gitenv import git_environment
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 FLOOR_PATH = ".outcomebound/floor.json"
 BASELINE_DIR = ".outcomebound/floor"
@@ -371,7 +371,9 @@ def _git(root: Path, *arguments: str) -> bytes:
     }
     environment = git_environment({**inherited, "GIT_OPTIONAL_LOCKS": "0"})
     try:
-        status, output, _ = validation._execute(["git", *arguments], root, GIT_SECONDS, environment)
+        status, output, _ = validation._execute(
+            ["git", *GIT_READ_CONFIGURATION, *arguments], root, GIT_SECONDS, environment
+        )
     except OSError as error:
         raise FloorError(f"git could not run: {error}") from error
     if status != 0:
@@ -1371,7 +1373,9 @@ def _pip_install(root: Path, packages: list[str], accept: bool) -> int:
         wanted = " ".join(packages)
         print(f"no python3 on PATH to install into; install {wanted} where PATH finds them")
         return 1 if accept else 0
-    argv = [python, "-m", "pip", "install", *packages]
+    # `-I` keeps the target, which is the working directory, off `sys.path`: a `pip/` package
+    # committed there would otherwise run in place of pip.
+    argv = [python, "-I", "-m", "pip", "install", *packages]
     print(f"{'runs' if accept else 'would run'}: {' '.join(argv)}")
     if not accept:
         print("nothing installed: pass --accept")

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://outcomebound.dev/schemas/instruction-audit-report.schema.json",
+  "$id": "urn:outcomebound:schema:instruction-audit-report:1",
   "title": "OutcomeBound instruction audit report v2",
   "description": "What `outcomebound instructions check --json` prints (docs/specs/instructions/design.md). `result` is the top-level verdict. Every finding is the engine's reading of an untrusted file: a fact, the prompt standard's rule it answers to with that rule's severity, and a next step for a person or an agent to take, never an applied edit and never a score.",
   "type": "object",

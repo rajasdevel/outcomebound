@@ -18,7 +18,7 @@ import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 
-from outcomebound_tools.gitenv import git_environment
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 __all__ = ["ENGINE_NAME", "ProjectSkillRoot", "project_skill_roots"]
 
@@ -34,7 +34,7 @@ def _tracked(target: Path, relative: str) -> bool:
 
     try:
         listed = subprocess.run(
-            ["git", "-C", str(target), "ls-files", "--", relative],
+            ["git", *GIT_READ_CONFIGURATION, "-C", str(target), "ls-files", "--", relative],
             capture_output=True,
             text=True,
             check=False,

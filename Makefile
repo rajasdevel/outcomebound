@@ -3,6 +3,7 @@
 #   make test PYTHON=/path/to/python3
 PYTHON ?= python3
 # The parallel runner the uv fallback brings, pinned as in requirements-dev.txt.
+PYTEST_VERSION ?= 9.1.1
 XDIST_VERSION ?= 3.8.0
 
 # The ref the floor's loosening check reads the change against: what it replaces.
@@ -15,7 +16,7 @@ test:
 		else $(PYTHON) -m pytest; fi; \
 	elif command -v uv >/dev/null 2>&1; then \
 		echo "pytest missing for $(PYTHON) (PEP 668 managed env) — falling back to uv"; \
-		uv run --no-project --with pytest --with pytest-xdist==$(XDIST_VERSION) python -m pytest -n auto; \
+		uv run --no-project --with pytest==$(PYTEST_VERSION) --with pytest-xdist==$(XDIST_VERSION) python -m pytest -n auto; \
 	else \
 		echo "ERROR: no pytest for $(PYTHON) and no uv on PATH (see requirements-dev.txt)"; \
 		exit 1; \

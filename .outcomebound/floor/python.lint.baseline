@@ -3,7 +3,6 @@ evals/graders/scope_walk.py:C416:Unnecessary set comprehension (rewrite using `s
 evals/graders/scope_walk.py:C901:`observe` is too complex
 evals/graders/scope_walk.py:PLR0912:Too many branches
 evals/graders/scope_walk.py:PLR0915:Too many statements
-evals/graders/scope_walk.py:S324:Probable use of insecure hash functions in `hashlib`: `sha1`
 outcomebound_tools/discovery.py:C901:`discover` is too complex
 outcomebound_tools/discovery.py:PLR0912:Too many branches
 outcomebound_tools/discovery.py:PLR0915:Too many statements
@@ -19,7 +18,6 @@ outcomebound_tools/schemacheck.py:PLR0912:Too many branches
 outcomebound_tools/schemacheck.py:SIM102:Use a single `if` statement instead of nested `if` statements
 outcomebound_tools/schemacheck.py:SIM102:Use a single `if` statement instead of nested `if` statements
 outcomebound_tools/validation.py:C901:`parse_plan` is too complex
-outcomebound_tools/validation.py:S105:Possible hardcoded password assigned to: "PASS"
 scripts/check-no-deps.py:PERF401:Use `list.extend` to create a transformed list
 tests/test_exec_bits.py:RUF005:Consider iterable unpacking instead of concatenation
 tests/test_fragments.py:RUF005:Consider `[*lines[:7], lines[8], lines[7], *lines[9:]]` instead of concatenation

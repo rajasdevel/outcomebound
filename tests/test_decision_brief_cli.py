@@ -653,7 +653,7 @@ LINE_BREAKS = [chr(c) for c in range(0x110000) if len(f"a{chr(c)}b".splitlines()
 
 @pytest.mark.parametrize(
     "brief_id",
-    ['x"] --> y["', "D 1", "1D", "D1​", "D1‮", "-D1", "D_1", ""],
+    ['x"] --> y["', "D 1", "1D", "D1\u200b", "D1\u202e", "-D1", "D_1", ""],
 )
 def test_an_id_is_a_letter_then_letters_digits_and_hyphens(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], brief_id: str
@@ -671,12 +671,12 @@ def test_an_id_is_a_letter_then_letters_digits_and_hyphens(
         "\x00",
         "\x1b",
         "\x7f",
-        "​",
-        "‎",
-        "‮",
-        "⁦",
-        "﻿",
-        "­",
+        "\u200b",
+        "\u200e",
+        "\u202e",
+        "\u2066",
+        "\ufeff",
+        "\u00ad",
     ],
     ids=lambda character: f"U+{ord(character):04X}",
 )

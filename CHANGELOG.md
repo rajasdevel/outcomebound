@@ -46,7 +46,10 @@ The bump comes from what an adopter must do, not from the commit type; see
   of 9 to 9 of 9, and it left gpt-6-astra at high at 9 of 9. The effect of the design package did
   not show, because gpt-6-sol at medium passed 9 of 9 with the ticket alone. All six failures
   were one sentence of one ticket. Each tier had one model, all from one maker, through one
-  harness, with 9 runs a cell ([docs/evaluations.md](docs/evaluations.md), E17). The `tickets`
+  harness, with 9 runs a cell ([docs/evaluations.md](docs/evaluations.md), E17). The comparison
+  measured hand-written packages, not the `hand-off-tickets` skill. `--detail full` alone scored
+  6 of 9, the same as the ticket alone. By the rules written before the runs, it would be cut. The
+  project keeps it as the default brief of the spec tier, to be judged on longer work. The `tickets`
   fragment is now version 6. Run `adopt` again to install the skill.
 - A guide to the agent workspace: [docs/workspace.md](docs/workspace.md). It says how to select the
   `workspace` fragment, what `adopt` writes and removes, what Git keeps and ignores, what a handoff
@@ -74,10 +77,20 @@ The bump comes from what an adopter must do, not from the commit type; see
   to the first file. Run `adopt` again to install the changed skill.
 - [LICENSE](LICENSE) adds an exception to Apache-2.0. You may use, modify and redistribute the text
   that `adopt` writes into your project (managed blocks, fragment files and skills) as part of
-  that project. You do not need the licence copy, the changed-file notice or the NOTICE file that
+  that project. You do not need the license copy, the changed-file notice or the NOTICE file that
   Sections 4(a), 4(b) and 4(d) require.
 - `slice-tickets` now asks which implementer will build the work before it slices, unless you have
   named one. The tickets are the same whatever the answer.
+- Every Git read of a target now runs with no pager, no fsmonitor, no untracked cache and no
+  external diff (`adopt --detect`, `discovery`, `tickets brief`, `floor` and `finish-check`). A
+  `core.fsmonitor` setting in the target's `.git/config` no longer runs a program.
+  `research clone --accept` now runs Git with the same options as `research pull --accept`, and
+  both remove `GIT_TEMPLATE_DIR` and `GIT_EXEC_PATH` from the environment.
+- `floor provision --accept` runs pip isolated (`python -I -m pip`), so a `pip` package committed
+  in the target does not run in place of pip.
+- The wheel's `License` field says that the license has an exception.
+- `research ingest` and the help of `research` now say that the inbox file is a local record that
+  nothing reads or sends.
 
 ### Removed
 

@@ -16,7 +16,7 @@
     "native_skills": true,
     "verified": true,
     "verified_on": "2026-08",
-    "source": "references/portability.md",
+    "source": "the dated sources on each field of this row",
     "doc_byte_cap": null,
     "loading_evidence": {
       "instruction": "unverified here; a session transcript or hook output shows what it loaded",
@@ -125,7 +125,7 @@
     "native_skills": true,
     "verified": true,
     "verified_on": "2026-09",
-    "source": "references/portability.md",
+    "source": "the dated sources on each field of this row",
     "doc_byte_cap": 32768,
     "loading_evidence": {
       "instruction": null,
@@ -194,7 +194,7 @@
     "native_skills": true,
     "verified": true,
     "verified_on": "2026-08",
-    "source": "references/portability.md",
+    "source": "the dated sources on each field of this row",
     "doc_byte_cap": null,
     "loading_evidence": {
       "instruction": null,
@@ -267,7 +267,7 @@
     "native_skills": true,
     "verified": true,
     "verified_on": "2026-08-23",
-    "source": "references/portability.md",
+    "source": "the dated sources on each field of this row",
     "doc_byte_cap": null,
     "loading_evidence": {
       "instruction": "unverified here; /memory show lists what it loaded",
@@ -328,7 +328,7 @@
     "native_skills": true,
     "verified": true,
     "verified_on": "2026-08-23",
-    "source": "references/portability.md",
+    "source": "the dated sources on each field of this row",
     "doc_byte_cap": null,
     "loading_evidence": {
       "instruction": null,
@@ -394,7 +394,7 @@
     "native_skills": true,
     "verified": false,
     "verified_on": null,
-    "source": "references/portability.md",
+    "source": "the dated sources on each field of this row",
     "doc_byte_cap": null,
     "loading_evidence": {
       "instruction": null,

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://outcomebound.dev/schemas/decision-briefs.schema.json",
+  "$id": "urn:outcomebound:schema:decision-briefs:1",
   "title": "OutcomeBound decision briefs v1",
   "description": "The input of `outcomebound brief`: the decision briefs an agent puts to a person, and the order among them. Every brief carries `id`, `heading` and `undo`; any other field may be left out, and a field left out writes no line. The command writes marks only from these fields, and also refuses what this schema cannot say: an option that is not exactly three strings, a pair in `facts` or `order` that is not exactly two, a diagram edge that is not two or three, a string holding a line break, a control or format character or a mark's own glyph, a diagram label holding a double quote or an edge label holding a |, a `facts` label naming a line the renderer writes, a repeated id, and an `order` label that is no brief's id. It refuses with exit 1, naming the brief, a brief with two or more options and no `recommend` or no `recommend_way`, and a brief with none of `checked`, `not_checked` and `facts`. It does not vouch for what the text says: the verdicts under `checked` are the agent's own report of commands it ran, and the passed mark means only that every verdict given is PASS.",
   "type": "object",

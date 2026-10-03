@@ -83,7 +83,7 @@
     },
     "mermaid": null,
     "provenance": null,
-    "note": "read 2026-09-23: https://forum.cursor.com/t/mermaid-visualization-in-chat/59041 is a feature request of 2025-03-04 with no answer from the vendor; https://cursor.com/docs/cookbook/mermaid-diagrams gives a prompt asking for a Mermaid diagram and does not say where it is drawn; https://cursor.com/changelog/2-2 (2025-12-10) says Plan Mode supports inline Mermaid diagrams, which are plans, not replies in chat"
+    "note": "read 2026-09-23: https://forum.cursor.com/t/mermaid-visualization-in-chat/59041 is a feature request of 2025-03-04 with no vendor reply in the thread as read on 2026-09-23; https://cursor.com/docs/cookbook/mermaid-diagrams gives a prompt asking for a Mermaid diagram and does not say where it is drawn; https://cursor.com/changelog/2-2 (2025-12-10) says Plan Mode supports inline Mermaid diagrams, which are plans, not replies in chat"
   },
   "cursor-cli": {
     "harness": "cursor",

@@ -6,6 +6,7 @@ import datetime
 import json
 import os
 import shutil
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
@@ -1200,7 +1201,40 @@ def test_provision_installs_into_the_python3_on_path(
     status, _, output = run(capsys, "provision", str(root))
 
     assert status == 0
-    assert f"would run: {python} -m pip install ruff==" in output
+    assert f"would run: {python} -I -m pip install ruff==" in output
+
+
+def test_provision_runs_pip_isolated_so_a_pip_package_in_the_target_does_not_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`python -m pip` runs with the target as its working directory, and puts that directory
+    first on `sys.path`; `-I` drops it."""
+
+    root = repository(tmp_path, {"a.py": "x = 1\n"})
+    install(root, shipped("python.lint"))
+    marker = tmp_path / "hostile-ran"
+    (root / "pip").mkdir()
+    (root / "pip" / "__main__.py").write_text(
+        f"import pathlib\npathlib.Path({str(marker)!r}).write_text('ran')\n", encoding="utf-8"
+    )
+    bin_dir = tmp_path / "project-env" / "bin"
+    bin_dir.mkdir(parents=True)
+    (bin_dir / "python3").symlink_to(sys.executable)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    seen: list[list[str]] = []
+
+    def fake_execute(argv: list[str], *_: Any) -> tuple[int, bytes, bytes]:
+        seen.append(argv)
+        # The engine's own argv up to `install`, asked for a version in place of an install.
+        done = subprocess.run([*argv[:4], "--version"], cwd=root, capture_output=True, check=False)
+        return done.returncode, done.stdout, done.stderr
+
+    monkeypatch.setattr(floor.validation, "_execute", fake_execute)
+
+    run(capsys, "provision", str(root), "--accept")
+
+    assert seen and seen[0][:4] == [str(bin_dir / "python3"), "-I", "-m", "pip"], seen
+    assert not marker.exists()
 
 
 # --- The adoption record: additive to floor.json, and what moving it loosens ---------------------

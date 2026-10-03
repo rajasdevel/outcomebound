@@ -119,7 +119,9 @@ def blob_digest(path: bytes) -> str | None:
             payload = handle.read()
     except OSError:
         return None
-    return hashlib.sha1(b"blob %d\0" % len(payload) + payload).hexdigest()
+    return hashlib.sha1(  # the Git blob id, not a security digest
+        b"blob %d\0" % len(payload) + payload, usedforsecurity=False
+    ).hexdigest()
 
 
 def sha256_digest(path: bytes) -> str | None:

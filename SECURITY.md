@@ -7,7 +7,7 @@ report a vulnerability privately, what OutcomeBound promises, and what is not a 
 
 Report it privately through GitHub. On the **Security** tab of the repository, choose **Report a
 vulnerability**: <https://github.com/rajasdevel/outcomebound/security/advisories/new>. Your
-report, and the work on a fix, stay between you and the maintainers until an advisory is
+report, and the work on a fix, stay between you and the maintainer until an advisory is
 published.
 
 Do not open an issue, a pull request or a discussion about a vulnerability. Do not publish a
@@ -54,8 +54,8 @@ A report that shows one of these promises broken is a vulnerability.
   never writes through a symlink, and never into `.git`.
 - `research clone --accept` and `research pull --accept` run Git with your user and system Git
   configuration switched off (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`). They
-  remove the configuration and repository variables that they inherited. For `pull`, the hooks and
-  fsmonitor of the clone are off, and only https is allowed. So a `url.*.insteadOf` rewrite in
+  remove the configuration, repository, template and exec-path variables that they inherited. For
+  both, hooks and fsmonitor are off, and only https is allowed. So a `url.*.insteadOf` rewrite in
   your own configuration cannot send either command to another repository.
 - The first line of printed research names the working tree of the clone, its commit and the
   sha256 of the text.
@@ -87,9 +87,19 @@ design.
   driver, a proxy command. Whoever can write that file can already run commands as you. So pull
   only in a clone that you made and that only you can write.
 - **Your commands run with your privileges.** The Done commands and the tools of the floor run as
-  your own commands would.
+  your own commands would. The floor (the argv in `floor.json`), validation plans and ticket
+  claims run commands that committed files list, so a change to those files is a change to code
+  that runs. In CI, run them with a read-only token and no secrets
+  ([floor design](docs/specs/floor/design.md)).
 - **The hook is one more committed file.** A pull request can change the recorded Done commands
   and the hook entry together. A review must read the hook, and `outcomebound instructions check`
   reports it on every run ([finish-check design](docs/specs/finish-check/design.md#edges)).
+- **A write can race a local writer.** The promise that `adopt` and `research ingest` never write
+  through a symlink holds against the files in the target. It does not hold against another local
+  process that swaps a directory for a symlink between the check and the write.
+- **Research text is printed as it is.** `outcomebound research PATH` does not remove terminal
+  escape sequences, control characters or bidirectional characters from the file. `ingest` refuses
+  them on the way in, but a file in the clone can hold them. Read untrusted text in a viewer that
+  shows them.
 - **A clean `instructions check` is not proof of safety.** It claims only the classes of content
   that it lists. It does not rule out an injection.

@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from outcomebound_tools import adapters
-from outcomebound_tools.gitenv import git_environment
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 __all__ = [
     "CHECKS",
@@ -140,17 +140,8 @@ _NEXT = {
     "unopened": "see by hand where the path leads; this command opens only a regular file "
     "inside the target that is no person's",
 }
-# Git, asked so that nothing the repository configures runs: no pager, no fsmonitor, no
-# untracked cache, no external diff, no textconv; a tree-to-tree diff never reads the index.
-_GIT_CONFIGURATION = (
-    "--no-pager",
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.untrackedCache=false",
-    "-c",
-    "diff.external=",
-)
+# Git runs under `GIT_READ_CONFIGURATION`; these flags add no textconv, and a tree-to-tree
+# diff never reads the index.
 _SAFE_DIFF = ("--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--no-renames")
 _GIT_UNSET = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_EXTERNAL_DIFF", "GIT_PAGER")
 
@@ -798,7 +789,7 @@ def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     inherited["GIT_OPTIONAL_LOCKS"] = "0"
     try:
         completed = subprocess.run(
-            ["git", *_GIT_CONFIGURATION, *arguments],
+            ["git", *GIT_READ_CONFIGURATION, *arguments],
             cwd=root,
             env=git_environment(inherited),
             stdin=subprocess.DEVNULL,

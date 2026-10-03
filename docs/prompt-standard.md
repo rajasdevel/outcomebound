@@ -1,7 +1,5 @@
 # The prompt standard
 
-The rules OutcomeBound's model-facing text follows, with the evidence behind each.
-
 - **Checked:** 2026-09-27, each rule's key records read as fact-checked; the corrections to those
   records' readings made on 2026-10-01 left every rule's confidence, tiers and direction as
   stated.
@@ -76,7 +74,7 @@ Checks: none
 
 **S14** Make every path, command, flag, id, version and rule named agree with its source; check
 agreement first; hold it with a test\
-Evidence: `repo-readiness-audits-25` (M), `repo-readiness-audits-19` (A), `practice §10 SR14` (O)\
+Evidence: `repo-readiness-audits-25` (M), `repo-readiness-audits-19` (A), `practice §8 step 1` (O)\
 Tiers: frontier\
 Confidence: high; direction: rising\
 Checks: none
@@ -259,11 +257,11 @@ them, and a reviewer weighs them rather than applying them.
 
 A revision follows the research: a refresh of the research repository's references, whose
 [CONVENTIONS.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONVENTIONS.md) says
-when one is due. Each rule the refreshed records bear on is reviewed as §10 of
-the research repository's
-[`practices/writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md)
-reviews it, rule by rule against the records as fact-checked,
-and that section's date moves with the review. A rule changes only on an independent measurement,
+when one is due. Each rule the refreshed records bear on is reviewed against the records as fact-checked, by the
+method in §8 of the research repository's
+[`practices/writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md),
+and the **Checked** date at the top of this page moves with the review. S1 to S19 are practices
+of that repository; S20 to S22 are OutcomeBound's own additions. A rule changes only on an independent measurement,
 guidance from two or more independent groups, or a recorded run of OutcomeBound's own; one lab's
 advice for one model becomes a note in the research repository's
 [`models/README.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/models/README.md)

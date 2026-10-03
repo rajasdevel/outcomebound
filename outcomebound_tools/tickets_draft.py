@@ -51,7 +51,7 @@ _TICKET_ID = re.compile(r"(?:[A-Za-z0-9._-]+/[A-Za-z0-9._-]+)?#[0-9]+")
 
 # A byte-order mark is a filesystem artefact and not content: one leading U+FEFF
 # is dropped so a marked draft reads as the draft it is.
-_BOM = "﻿"
+_BOM = "\ufeff"
 
 _RELATION_KEYS: tuple[str, str] = ("blocked-by", "parent")
 # The remedy for a heading that is an id.

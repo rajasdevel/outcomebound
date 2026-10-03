@@ -30,7 +30,7 @@ GARBAGE = (
     '{"format_version": 1, "artifacts": "not-a-list"}',
     '{"version": 1, "claims": []}',
     '{"version": 1, "boundaries": []}',
-    "﻿{}",
+    "\ufeff{}",
     "0" * 4096,
 )
 
