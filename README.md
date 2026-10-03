@@ -239,8 +239,9 @@ a loosening visible; your branch protection is what holds it to a person's decis
   people in the style of ASD-STE100 Simplified Technical English.
 - **Workspace** (the `workspace` fragment): where several agents share one machine's checkout, four
   folders under `.agents/` hold each task's worktree, working files, hand-off page and shared
-  notes, and Git ignores them. The [workspace guide](docs/workspace.md) says what it gives you and
-  what it does not.
+  notes, and Git ignores them. The same fragment gives agents command habits that stop a pager,
+  editor or prompt from hanging a run and keep long output out of context. The
+  [workspace guide](docs/workspace.md) says what it gives you and what it does not.
 - **Research** (the `research` fragment): [outcomebound-research](https://github.com/rajasdevel/outcomebound-research)
   is a separate, neutral library about models, providers, harnesses and practices. From a clone
   (`outcomebound research clone <folder> --accept`), `outcomebound research <path>` prints a file

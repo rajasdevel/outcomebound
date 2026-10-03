@@ -51,6 +51,12 @@ The bump comes from what an adopter must do, not from the commit type; see
 - A guide to the agent workspace: [docs/workspace.md](docs/workspace.md). It says how to select the
   `workspace` fragment, what `adopt` writes and removes, what Git keeps and ignores, what a handoff
   holds, and what the fragment does not give you.
+- The `workspace` fragment gives agents command habits: no pager, editor, credential prompt or
+  open stdin can hang a run (`git --no-pager`, `git commit -m`, `GIT_TERMINAL_PROMPT=0`,
+  `ssh -o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR`, `sudo -n`, `< /dev/null`), and
+  output stays small without hiding an error (bound it at its source, write long output to a file
+  and read its tail and exit code, `curl -fsS`). The guide's "Command habits" section gives each
+  habit's reason and source.
 - `adopt --detect` now proposes the `workspace` fragment when `.agents/worktrees`, `.agents/work`,
   `.agents/handoffs` or `.agents/shared-memory` exists. A folder that holds only `.agents/skills/`
   does not trigger it. The `workspace` fragment is now version 3. Run `adopt` again to update the

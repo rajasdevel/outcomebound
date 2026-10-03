@@ -1,8 +1,8 @@
 ---
 id: workspace
 family: setup
-applies: repositories where several agents work in one machine's checkout
-condition: when creating a worktree or working file, resuming or handing off work, or keeping a fact for later sessions
+applies: repositories where agents run commands in one machine's checkout, and several agents or sessions share it
+condition: when creating a worktree or working file, running a command whose output you read, resuming or handing off work, or keeping a fact for later sessions
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
 version: 3
 ---
@@ -13,7 +13,16 @@ repository. A temporary or session directory can be cleared without warning. Cod
 sandbox keeps `.agents/` and `.git` read-only: where a write there is refused, say so and name what
 the person starts Codex with (`--add-dir <repository>/.agents`, and `/.git` to commit), never write
 the work elsewhere. A handoff or a
-memory is a claim; the source it cites is the evidence.
+memory is a claim; the source it cites is the evidence. Commands: a harness may give a command a terminal, and all it prints is context spent; take
+quiet from a tool's own flags, never from hiding an error or a check. A pager waits for a key:
+`git --no-pager`, a tool's `--no-pager`, else `PAGER=cat`. An editor waits: `git commit -m`,
+`--no-edit`, `GIT_EDITOR=true git rebase --continue`. A prompt must fail with its reason:
+`GIT_TERMINAL_PROMPT=0` for git remotes, `ssh -o BatchMode=yes -o ConnectTimeout=10 -o
+LogLevel=ERROR` (never `-q`), `sudo -n`. Stdin may never close: `< /dev/null` where no input is
+meant (`codex exec`, `ssh` in a loop). Follow, watch and server commands never exit: bound them or
+run them in the background; tests run once. Bound output at its source (`-n`, `--stat`, `rg -m`);
+send long output to `work/<task>/`, then read its tail and exit code (`| tail` reports tail's);
+`curl -fsS`, never `-s` alone.
 **Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
 worktrees are preserved state: work in a worktree you created, and remove it once its work is
 committed.
