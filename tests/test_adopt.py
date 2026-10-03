@@ -1069,6 +1069,27 @@ def test_the_workspace_fragment_keeps_its_four_folders_out_of_git(
     assert snapshot(target) == before
 
 
+def test_the_research_fragment_installs_the_same_bytes_in_any_directory(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The fragment names no machine path, so two checkouts differ in nothing but their place."""
+
+    first = repo(tmp_path / "a", {"README.md": "# T\n"})
+    second = repo(tmp_path / "elsewhere" / "deeper" / "b", {"README.md": "# T\n"})
+    for target in (first, second):
+        arguments = (str(target), "--harness", "claude-code", "--fragments", "research")
+        assert run(capsys, *arguments)[0] == 0
+        code, out, _ = run(capsys, str(target), "--check")
+        assert code == 0, out
+
+    shipped = ".outcomebound/fragments/research.md"
+    assert (first / shipped).read_bytes() == (ROOT / "fragments/setup/research.md").read_bytes()
+    assert snapshot(first) == snapshot(second)
+    guidance = (first / "AGENTS.md").read_text(encoding="utf-8")
+    assert f"read {shipped}" in guidance
+    assert "pushing to the research repository" in guidance
+
+
 def test_detect_proposes_the_floors_runner_then_the_projects_test_command(
     tmp_path: Path, capsys: Capture
 ) -> None:

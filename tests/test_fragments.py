@@ -193,6 +193,7 @@ def test_every_shipped_fragment_parses_and_names_only_registry_mechanisms():
         "team",
         "tickets",
         "workspace",
+        "research",
     }
     for fragment in catalog.values():
         assert fragment.family in ("stack", "setup")

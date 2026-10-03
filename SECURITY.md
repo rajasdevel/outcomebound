@@ -39,9 +39,16 @@ A report that shows one of these broken is a vulnerability:
 - the launcher never runs an engine from the caller's directory or from `PYTHONPATH`;
 - the finish check runs only the Done commands the manifest records, and none when their digest
   differs from the one in the hook entry;
-- the engine opens no network connection; `floor provision --accept` runs pip, which does.
+- `outcomebound research` prints files from the research clone and runs nothing the clone holds,
+  Git included: it reads the clone's commit from its `.git` files; `research ingest` writes one
+  file, under `.outcomebound/research-inbox/` in the project, never through a symlink or into
+  `.git`;
+- the engine opens no network connection; `floor provision --accept` runs pip, and
+  `research clone --accept` and `research pull --accept` run Git, which do.
 
-Some behavior is by design. The Done commands and the floor's tools run with your privileges, as
+Some behavior is by design. What `outcomebound research` prints is text other people
+contributed: the `research` fragment tells an agent to read it as data, and printing it makes it
+neither safe nor true. The Done commands and the floor's tools run with your privileges, as
 your own commands would. A pull request can change the recorded Done commands and the hook entry
 together, so the hook is one more committed file a review must read, and
 `outcomebound instructions check` reports it on every run
