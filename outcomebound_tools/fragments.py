@@ -442,7 +442,7 @@ def _blocks(args: argparse.Namespace, catalog: dict[str, Fragment], ids: list[st
     if not isinstance(found, adopt.Route):
         found = adopt.Route(adopt.GENERIC, adopt.GENERIC_SKILLS, None)
     try:
-        made = adopt.guidance(Path(args.target), [found], catalog, ids, args.done)
+        made = adopt.guidance(Path(args.target), [found], catalog, ids, adopt.Chosen(args.done))
     except adopt.AdoptError as error:
         raise FragmentError(str(error)) from error
     return "\n\n".join(filter(None, [made.rendered.facts, made.rendered.pointers])) + "\n"

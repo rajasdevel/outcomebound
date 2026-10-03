@@ -29,13 +29,14 @@ cannot observe is left out, and the install report names it `UNVERIFIED`.
 | Done | the commands `--done` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`: every one must pass | none is recorded |
 | CI test | each test command a `.github/workflows/*.yml` `run:` step or a `.gitlab-ci.yml` `script:` entry runs, as it runs from the root: a step's `working-directory:`, else its job's or the workflow's `defaults.run.working-directory:`, becomes `cd <dir> && `; each file's commands followed by the file | no command is read; a command the reading cannot settle (an expression, a `cd` earlier in its step or job, a folded, multi-line, flow or alias value, a link) is left out and named, and the file's other commands are kept |
 | Irreversible edges | each selected fragment's `edges:`, once each, then `loosening the quality floor` where `.outcomebound/floor.json` exists | none is declared |
+| Text for people | the style `--human-style` recorded: `ste` asks for text a person reads in ASD-STE100 Simplified Technical English style, quoting none of the standard, with no length limit and every fact kept | none is recorded |
 | Precedence | these facts over any instruction that disagrees; the project's own instructions in `AGENTS.md` and each selected harness's import host that exists over OutcomeBound's; process a project document only suggests is sized like any other step | never |
 
 A test command is a runner named as a whole word or command (`pytest`, `make test`, `npm run
 test:ci`, `go test`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`; `make
 test-data` and `npm run test:watch` are not.
 
-The facts record holds the selection (`fragments`), the `done` commands, and `inputs`: each source
+The facts record holds the selection (`fragments`), the `done` commands, any `style`, and `inputs`: each source
 path read, with its sha256. `--check` recomputes the block: bytes other than the record's read
 `edited`; a record other than the recomputation reads `stale`, naming each fact that moved and
 each input that changed.

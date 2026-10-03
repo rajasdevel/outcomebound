@@ -58,7 +58,9 @@ That command writes:
 - the operating contract, as a managed block at the top of `AGENTS.md`;
 - below it, a block of project facts, one line each: the commands that settle done (`--done`),
   the test command your CI runs, read from its workflow files without running anything, the
-  irreversible edges your fragments declare, and which instructions win a conflict; a fact it
+  irreversible edges your fragments declare, which instructions win a conflict, and, if you
+  choose `--human-style ste`, that text an agent writes for a person follows ASD-STE100
+  Simplified Technical English style, with no length limit and every fact kept; a fact it
   cannot observe is left out and reported `UNVERIFIED`;
 - a block of pointers, one line each, saying when to read each piece of guidance: every
   fragment in `--fragments`, copied under `.outcomebound/fragments/` (facts about your stack and

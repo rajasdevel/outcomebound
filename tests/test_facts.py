@@ -320,7 +320,8 @@ def test_a_fact_it_cannot_observe_is_left_out_and_named_unverified(
     written = {line[2:].split(":", 1)[0] for line in rendered.facts.splitlines()[1:-1]}
     named = {note.split(":", 1)[0] for note in rendered.unverified}
     assert named == left_out
-    assert written == set(facts.LABELS) - left_out
+    # Text for people is chosen with --human-style, not observed: absent, it is not unverified.
+    assert written == set(facts.LABELS) - left_out - {"Text for people"}
     assert "Precedence" in written
 
 

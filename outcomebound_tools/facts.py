@@ -1,9 +1,10 @@
 """The project facts and the guidance pointers an install writes into AGENTS.md.
 
 What this module decides: the lines of the `project-facts` block, each a label and the fact
-verbatim (Done, CI test, Irreversible edges, Precedence), a fact it cannot observe left out
-and named UNVERIFIED; the `guidance-pointers` block, the project's own `local` fragment inline
-and then one `- <condition>: read <path>` line per selected fragment and per installed skill;
+verbatim (Done, CI test, Irreversible edges, Text for people, Precedence), a fact it cannot
+observe left out and named UNVERIFIED; the `guidance-pointers` block, the project's own `local`
+fragment inline and then one `- <condition>: read <path>` line per selected fragment and per
+installed skill;
 and how the test command a project's CI runs is read: lexically, from GitHub Actions `run:`
 steps, each from its working directory, and GitLab CI `script:` entries, running nothing and
 following no symlink, and leaving out, named, each command the reading cannot settle.
@@ -33,7 +34,17 @@ LOCAL = "local"
 FRAGMENT_DIR = ".outcomebound/fragments"
 FLOOR = ".outcomebound/floor.json"
 FLOOR_EDGE = "loosening the quality floor"
-LABELS = ("Done", "CI test", "Irreversible edges", "Precedence")
+LABELS = ("Done", "CI test", "Irreversible edges", "Text for people", "Precedence")
+# The styles `adopt --human-style` can record for text an agent writes for a person, and the
+# fact each renders. The standard is named, never quoted.
+STYLES = {
+    "ste": (
+        "reports, decision briefs, handovers, pull request descriptions, commit messages and "
+        "documents a person reads are written in the style of ASD-STE100 Simplified Technical "
+        "English, with no length limit; every fact, number and caveat is kept, and this "
+        "project's own terms stay as they are; text a model reads is not"
+    ),
+}
 
 WORKFLOWS = ".github/workflows"
 GITLAB = ".gitlab-ci.yml"
@@ -401,12 +412,14 @@ def render(
     done: Sequence[str],
     files: Sequence[str],
     skills: Sequence[tuple[str, str]],
+    style: Sequence[str] = (),
 ) -> Rendered:
     """The facts and pointers blocks for `target`.
 
     `selected` holds the selected fragments in order, `local` among them when chosen; `done`
     the recorded Done commands in run order; `files` the co-loaded instruction files, AGENTS.md
-    first; `skills` a (condition, path) pair per installed skill.
+    first; `skills` a (condition, path) pair per installed skill; `style` the recorded style
+    for text a person reads, a key of `STYLES`, or none.
     """
 
     lines: list[str] = []
@@ -433,6 +446,7 @@ def render(
         lines.append(f"- Irreversible edges: {'; '.join(dict.fromkeys(edges))}")
     else:
         unverified.append("Irreversible edges: no selected fragment declares one, and no floor")
+    lines.extend(f"- Text for people: {STYLES[name]}" for name in style)
     own = " or ".join(dict.fromkeys(files))
     lines.append(
         "- Precedence: these facts over any instruction that disagrees with them; "

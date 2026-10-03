@@ -1390,3 +1390,41 @@ def test_the_writer_stages_exclusively_keeps_modes_and_prunes_what_it_empties(
 
     fileplan.write(tmp_path, {"a/b/c.sh": None}, {"a/b/c.sh": b"two\n"})
     assert not (tmp_path / "a").exists() and tmp_path.is_dir()
+
+
+def test_a_human_style_is_recorded_kept_on_upgrade_and_cleared_by_an_empty_one(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the style line is not rendered from the record, is lost on a re-run that names
+    no style, survives `--human-style ''`, quotes more than the standard's name, or leaves
+    `--check` reading the install stale."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    code, _, err = run(capsys, str(target), "--harness", "codex", "--human-style", "ste")
+
+    assert code == 0, err
+    lines = facts_lines(target)
+    assert list(lines)[-2:] == ["Text for people", "Precedence"]
+    assert "ASD-STE100 Simplified Technical English" in lines["Text for people"]
+    assert "no length limit" in lines["Text for people"]
+    assert "every fact, number and caveat is kept" in lines["Text for people"]
+    assert manifest(target)["artifacts"][1]["style"] == ["ste"]
+    assert run(capsys, str(target), "--check")[0] == 0
+
+    assert run(capsys, str(target), "--done", "make test")[0] == 0
+    assert "Text for people" in facts_lines(target)
+
+    assert run(capsys, str(target), "--human-style", "")[0] == 0
+    assert "Text for people" not in facts_lines(target)
+    assert "style" not in manifest(target)["artifacts"][1]
+    assert run(capsys, str(target), "--check")[0] == 0
+
+
+def test_an_unknown_human_style_is_refused_and_check_takes_none(tmp_path: Path) -> None:
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    with pytest.raises(SystemExit):
+        adopt.main([str(target), "--human-style", "plain"])
+    with pytest.raises(SystemExit):
+        adopt.main([str(target), "--check", "--human-style", "ste"])

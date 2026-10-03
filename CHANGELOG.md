@@ -11,6 +11,14 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+### Added
+
+- `adopt --human-style ste` adds one project fact: text an agent writes for a person (reports,
+  decision briefs, handovers, pull request descriptions, commit messages, documents) follows the
+  style of ASD-STE100 Simplified Technical English, with no length limit, every fact kept and the
+  project's own terms unchanged. Text a model reads is out of scope. The standard is named, not
+  quoted. `--human-style ''` removes the fact; omitted, the recorded choice stays.
+
 ## [1.0.0] - 2026-10-01
 
 The operating contract for coding agents, and the engine that installs it into a repository and

@@ -37,7 +37,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from outcomebound_tools import (
     adapters,
@@ -199,12 +199,20 @@ class Guidance:
     skills: tuple[str, ...]
 
 
+class Chosen(NamedTuple):
+    """What the adopter chose for the facts block: the Done commands, in run order, and the
+    style for text a person reads, a key of `facts.STYLES`, or none."""
+
+    done: Sequence[str]
+    style: Sequence[str] = ()
+
+
 def guidance(
     target: Path,
     found: Sequence[Route],
     found_fragments: dict[str, fragments.Fragment],
     ids: Sequence[str],
-    done: Sequence[str],
+    chosen: Chosen,
     importing: Sequence[str] = (),
 ) -> Guidance:
     """The facts and pointers for these harnesses, fragments and Done commands.
@@ -231,7 +239,8 @@ def guidance(
     ]
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
-    rendered = facts.render(target, selected, done, hosts, skills if root else [])
+    skills = skills if root else []
+    rendered = facts.render(target, selected, chosen.done, hosts, skills, chosen.style)
     return Guidance(rendered, files, names)
 
 
@@ -615,7 +624,7 @@ def _check_record(record: Record) -> None:
         isinstance(digest, str) and len(digest) == 64 and set(digest) <= set("0123456789abcdef")
     ):
         raise AdoptError(f"{MANIFEST} records no sha256 for {path}")
-    for name in ("harnesses", "fragments", "done"):
+    for name in ("harnesses", "fragments", "done", "style"):
         value = record.get(name, [])
         if not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
             raise AdoptError(f"{MANIFEST}: the {name} recorded for {path} are not a list of names")
@@ -708,6 +717,12 @@ def recorded_fragments(own: Sequence[Record]) -> list[str]:
 
 def recorded_done(own: Sequence[Record]) -> list[str]:
     return _recorded(own, "done")
+
+
+def recorded_style(own: Sequence[Record]) -> list[str]:
+    """The recorded style for text a person reads; one this engine no longer knows reads none."""
+
+    return [name for name in _recorded(own, "style") if name in facts.STYLES]
 
 
 # --- One run, planned before anything is written --------------------------------
@@ -940,7 +955,12 @@ def _unneeded(run: Run, host: str, sharing: Sequence[Route]) -> str | None:
 
 
 def desired(
-    run: Run, source: Path, found: Sequence[Route], ids: Sequence[str], done: Sequence[str]
+    run: Run,
+    source: Path,
+    found: Sequence[Route],
+    ids: Sequence[str],
+    done: Sequence[str],
+    style: Sequence[str] = (),
 ) -> list[Want]:
     """What this engine installs for these harnesses, fragments and Done commands, in record
     order: the kernel, the facts, the pointers, the fragment files and the workspace's
@@ -954,8 +974,11 @@ def desired(
     wants = [Want("block", AGENTS, KERNEL, kernel_block(source).encode("utf-8"))]
     imports = _imports_needed(run, found)
     written = [want.path for want in imports]
-    made = guidance(run.target, found, catalog(source, run.target, ids), ids, done, written)
+    found_fragments = catalog(source, run.target, ids)
+    made = guidance(run.target, found, found_fragments, ids, Chosen(done, style), written)
     extra = {"fragments": list(ids), "done": list(done), "inputs": made.rendered.inputs}
+    if style:
+        extra["style"] = list(style)
     wants.append(Want("block", AGENTS, FACTS, made.rendered.facts.encode("utf-8"), extra))
     if made.rendered.pointers is not None:
         wants.append(Want("block", AGENTS, POINTERS, made.rendered.pointers.encode("utf-8")))
@@ -1108,6 +1131,7 @@ class Selection:
     fragments: list[str] | None = None
     done: list[str] | None = None
     finish_check: bool | None = None
+    style: list[str] | None = None
 
 
 def install(
@@ -1122,8 +1146,9 @@ def install(
     found = routes(source, names or [GENERIC])
     ids = recorded_fragments(own) if selection.fragments is None else selection.fragments
     done = recorded_done(own) if selection.done is None else selection.done
+    style = recorded_style(own) if selection.style is None else selection.style
     run = Run(target, force)
-    wants = desired(run, source, found, ids, done)
+    wants = desired(run, source, found, ids, done, style)
     hooked = any(record["kind"] == HOOK for record in own)
     table = harness_table(source)
     wants += finish_hooks(run, table, found, done, selection.finish_check, hooked)
@@ -1167,7 +1192,8 @@ def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
 
     ids = recorded_fragments(own)
     found = routes(source, recorded_harnesses(own) or [GENERIC])
-    return guidance(target, found, catalog(source, target, ids), ids, recorded_done(own))
+    chosen = Chosen(recorded_done(own), recorded_style(own))
+    return guidance(target, found, catalog(source, target, ids), ids, chosen)
 
 
 def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record]) -> bytes:
@@ -1333,7 +1359,8 @@ def detect(target: Path, source: Path) -> int:
 # --- Command line ---------------------------------------------------------------
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
-                            [--finish-check | --no-finish-check] [--dry-run] [--force]
+                            [--human-style ste] [--finish-check | --no-finish-check]
+                            [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
@@ -1341,20 +1368,21 @@ Install or upgrade OutcomeBound in <target>, inside a Git work tree. AGENTS.md g
 blocks: the operating contract; the project facts (Done: the --done commands; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
 edges: those the selected fragments declare, and a floor loosening where a floor is installed;
-Precedence); and the guidance pointers: the local fragment inline, then one line per fragment
-in --fragments, copied under .outcomebound/fragments/, and per skill: the core skills, and those
-a selected fragment names, such as the tickets fragment's slice-tickets. The workspace fragment
-also gets .agents/.gitignore, which keeps its four folders out of Git. A fact it cannot
-observe is left out, and the install report names it UNVERIFIED. Each harness gets the skills,
-and an @AGENTS.md import block in each harness file that needs one: none where the harness reads
-AGENTS.md itself, as Claude Code 2.1.281 and later does where the target has no CLAUDE.md,
-.claude/CLAUDE.md or CLAUDE.local.md. generic, the default where no harness is named, serves a
-harness the table does not list: its skills go under .outcomebound/skills/, and any other unlisted
-name is refused. What it writes is recorded in .outcomebound/manifest.json; re-running it
-upgrades. An install prints the words an agent always loads, skill descriptions included, and
-no size refuses one. It refuses a harness that cannot be made to load AGENTS.md and, without
---force, to replace or remove a block or file whose bytes are not what it recorded. A refusal
-writes nothing.
+Text for people: with --human-style ste, text an agent writes for a person in the style of
+ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers: the local
+fragment inline, then one line per fragment in --fragments, copied under
+.outcomebound/fragments/, and per skill: the core skills, and those a selected fragment names,
+such as the tickets fragment's slice-tickets. The workspace fragment also gets
+.agents/.gitignore, which keeps its four folders out of Git. A fact it cannot observe is left
+out, and the install report names it UNVERIFIED. Each harness gets the skills, and an @AGENTS.md
+import block in each harness file that needs one: none where the harness reads AGENTS.md itself,
+as Claude Code 2.1.281 and later does where the target has no CLAUDE.md, .claude/CLAUDE.md or
+CLAUDE.local.md. generic, the default where no harness is named, serves a harness the table does
+not list: its skills go under .outcomebound/skills/, and any other unlisted name is refused.
+What it writes is recorded in .outcomebound/manifest.json; re-running it upgrades. An install
+prints the words an agent always loads, skill descriptions included, and no size refuses one. It
+refuses a harness that cannot be made to load AGENTS.md and, without --force, to replace or
+remove a block or file whose bytes are not what it recorded. A refusal writes nothing.
 
 --finish-check adds one entry to the settings of each selected harness that has a finish hook,
 claude-code (.claude/settings.json) and codex (.codex/hooks.json): when that harness's agent
@@ -1425,6 +1453,13 @@ def _parser() -> argparse.ArgumentParser:
         "omitted keeps the recorded ones",
     )
     parser.add_argument(
+        "--human-style",
+        choices=(*facts.STYLES, ""),
+        metavar="STYLE",
+        help="a style for text an agent writes for a person: 'ste' (ASD-STE100 Simplified "
+        "Technical English); '' for none; omitted keeps the recorded one",
+    )
+    parser.add_argument(
         "--dry-run", action="store_true", help="print what would change; write nothing"
     )
     parser.add_argument(
@@ -1479,6 +1514,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             None if args.fragments is None else _names([args.fragments]),
             None if args.done is None else _commands(args.done),
             args.finish_check,
+            None if args.human_style is None else [args.human_style] if args.human_style else [],
         )
         planned, edited, notes = install(target, source, selection, args.force)
     if args.dry_run:
@@ -1502,8 +1538,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
     if (args.detect or args.check) and (args.dry_run or args.force):
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
+    chosen = chosen or args.human_style is not None
     if (args.detect or args.check or args.remove) and (chosen or args.finish_check is not None):
-        parser.error("--harness, --fragments, --done and --finish-check apply to an install")
+        parser.error(
+            "--harness, --fragments, --done, --human-style and --finish-check apply to an install"
+        )
     target = Path(args.target).resolve()
     try:
         if not target.is_dir():
