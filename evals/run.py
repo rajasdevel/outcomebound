@@ -104,7 +104,7 @@ ANSWER_ENV = "OUTCOMEBOUND_EVAL_ANSWER"
 # `$CODEX_HOME/config.toml` (its personality, rules and writable roots), reads and writes the
 # operator's memories, and keeps the session. Auth still comes from `CODEX_HOME`. They do not keep
 # out agent role files under `$CODEX_HOME/agents/`, which codex read in every recorded run
-# (codex-cli 0.158.0 and 0.159.0); docs/research/practices/evaluations.md states it as a limit.
+# (codex-cli 0.158.0 and 0.159.0); docs/evaluations.md states it as a limit.
 CODEX_ISOLATION = (
     "--ephemeral",
     "--ignore-user-config",

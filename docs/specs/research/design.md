@@ -1,11 +1,9 @@
 ---
 name: research
-status: draft
+status: ratified
 ---
 
 # Research — design
-
-Landing this draft takes the change it describes, with the gate green; it then reads `ratified`.
 
 ## Outcome
 
@@ -21,9 +19,9 @@ finding back, with or without a clone. How: `outcomebound_tools/research.py`,
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
 | Research is its own repository; OutcomeBound optionally points agents at one clone of it and never vendors it (D52) | a submodule or a copy inside each project, whose `AGENTS.md` a harness loads into that project's sessions, and which every worktree carries | user | decided |
-| A fact about a model, harness, provider or general practice moves; what OutcomeBound measured of its own text stays. All of `docs/research/` moves but `practices/evaluations.md`, now `docs/evaluations.md`; `docs/prompt-standard.md` and `adapters/harnesses.json` stay | splitting the files that mix both now | user | decided |
+| A fact about a model, harness, provider or general practice moves; what OutcomeBound measured of its own text stays. All of the former research folder moves but `practices/evaluations.md`, now `docs/evaluations.md`; `docs/prompt-standard.md` and `adapters/harnesses.json` stay | splitting the files that mix both now | user | decided |
 | A citation of a moved file becomes `https://github.com/rajasdevel/outcomebound-research/blob/main/<path>` (a folder: `tree/main/<path>`); an evidence id stays, and a line says it resolves in that repository's `_evidence/*.jsonl` | relative links that break | user | decided |
-| `docs/model-guidance.md` moves there as `models/guidance.md`, its tier table as `models/tiers.md`, and the wheel stops shipping it (D69) | a dated copy in every release | user | decided |
+| The model guidance moves there as `models/guidance.md`, its tier table as `models/tiers.md`, and the wheel stops shipping it (D69) | a dated copy in every release | user | decided |
 | The core skill reads model, effort, harness and prompting advice with `outcomebound research models/guidance.md`; where that reports no clone, or `outcomebound` is not on PATH, it reads the public link | no route without a clone | user | decided |
 | `hand-off-tickets` finds the implementer's tier in `outcomebound research models/tiers.md`; with no clone it asks the person which tier, outcome, design or spec | a default tier | user | decided |
 | One clone per machine: `OUTCOMEBOUND_RESEARCH` when set and not empty, else `~/.outcomebound/research`, a symlink `clone` points at the destination the person names (D59) | a clone per project | user | decided |
@@ -125,5 +123,5 @@ links do not resolve and `clone` fails at Git.
 date, `unknown`), each refusal, the variable over the link, exit 3, no subprocess when printing or
 previewing, the exact Git argument lists with Git mocked, the link's creation and repointing, and
 ingest's file, issue link and refusals. An install selecting `research` is byte-identical in two
-directories. `git grep -n "docs/research\|model-guidance"` finds nothing outside released changelog
-sections. The skills and fragment changed get one `review` before landing.
+directories. A search of the tree for the moved paths finds only the changelog's Removed entry.
+The skills and fragment changed get one `review` before landing.

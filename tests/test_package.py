@@ -147,7 +147,7 @@ def test_the_installed_command_adopts_exactly_as_the_checkout_does(
 
 def test_home_holds_every_file_the_shipped_skills_name(installed: Path, tmp_path: Path) -> None:
     home = Path(run(installed, "home", cwd=tmp_path).stdout.strip())
-    named = {"OutcomeBound.md", "docs/model-guidance.md"}
+    named = {"OutcomeBound.md"}
     for skill in (ROOT / "skills").rglob("*.md"):
         named |= set(HOME_MENTION.findall(skill.read_text(encoding="utf-8")))
 

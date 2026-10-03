@@ -42,6 +42,9 @@ the shape each decision goes as.
 
 `outcomebound home` prints the folder holding OutcomeBound's own files. Its
 `OutcomeBound.md` is the full contract: read it for a mechanism's skip condition or what a spec,
-a goal envelope or a delegation holds. Read its `docs/model-guidance.md` only for a model,
-effort, harness or prompting decision. Without `outcomebound` on PATH, the managed block in
-`AGENTS.md` and the installed skills are the whole contract you have.
+a goal envelope or a delegation holds. For a model, effort, harness or prompting decision, and
+only then, read the advice `outcomebound research models/guidance.md` prints; where it reports no
+clone, or `outcomebound` is not on PATH, read
+<https://github.com/rajasdevel/outcomebound-research/blob/main/models/guidance.md>. Without
+`outcomebound` on PATH, the managed block in `AGENTS.md` and the installed skills are the whole
+contract you have.

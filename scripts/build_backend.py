@@ -45,7 +45,6 @@ HOME = (
     "LICENSE",
     "NOTICE",
     "adapters",
-    "docs/model-guidance.md",
     "fragments",
     "schemas",
     "scripts/new-spec.sh",

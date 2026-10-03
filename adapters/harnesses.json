@@ -27,19 +27,19 @@
         "path": "CLAUDE.md",
         "hides_agents_md": true,
         "import": "@AGENTS.md",
-        "source": "docs/research/_evidence/2026-09-25.jsonl [claude-harness]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [claude-harness]"
       },
       {
         "path": ".claude/CLAUDE.md",
         "hides_agents_md": true,
         "import": null,
-        "source": "docs/research/_evidence/2026-09-25.jsonl [claude-harness]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [claude-harness]"
       },
       {
         "path": "AGENTS.md",
         "hides_agents_md": false,
         "import": null,
-        "source": "docs/research/_evidence/2026-09-25.jsonl [claude-harness, harness-loading-coverage-3]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [claude-harness, harness-loading-coverage-3]"
       }
     ],
     "nested": {
@@ -48,13 +48,13 @@
         "**/CLAUDE.md",
         ".claude/rules/**/*.md"
       ],
-      "source": "docs/research/_evidence/2026-09-25.jsonl [claude-harness]: subdirectory files on demand; .claude/rules/*.md scoped by paths:"
+      "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [claude-harness]: subdirectory files on demand; .claude/rules/*.md scoped by paths:"
     },
     "overrides": [
       {
         "path": "CLAUDE.local.md",
         "owner": "person",
-        "source": "docs/research/_evidence/2026-09-25.jsonl [claude-harness]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [claude-harness]"
       },
       {
         "path": ".claude/settings.local.json",
@@ -110,7 +110,7 @@
       "file": ".claude/settings.json",
       "guard": "stop_hook_active",
       "accept": "workspace trust in an interactive session; nothing under -p, where committed hooks run untrusted",
-      "source": "https://code.claude.com/docs/en/hooks, read 2026-09-29: Stop; decision block with reason holds the finish; stop_hook_active and an 8-continuation cap; background_tasks; the input's cwd follows the agent into a worktree while CLAUDE_PROJECT_DIR stays where the session started; systemMessage to the user; timeout in seconds, default 600; docs/research/harnesses/claude-code.md §7"
+      "source": "https://code.claude.com/docs/en/hooks, read 2026-09-29: Stop; decision block with reason holds the finish; stop_hook_active and an 8-continuation cap; background_tasks; the input's cwd follows the agent into a worktree while CLAUDE_PROJECT_DIR stays where the session started; systemMessage to the user; timeout in seconds, default 600; https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/claude-code.md §7"
     },
     "recheck_on": "2026-12-27",
     "note": "reads_agents_md per Claude Code's memory page (read 2026-09-25, 2026-09-29 and 2026-10-01): with none of these files in the working directory or above it, Claude Code reads AGENTS.md itself from 2.1.277; before 2.1.281 some sessions (Bedrock, telemetry off) read CLAUDE.md files only, so since records 2.1.281, the version from which every session reads it"
@@ -136,7 +136,7 @@
         "path": "AGENTS.md",
         "hides_agents_md": false,
         "import": null,
-        "source": "docs/research/_evidence/2026-09-25.jsonl [openai-harness, harness-loading-coverage-19]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [openai-harness, harness-loading-coverage-19]"
       }
     ],
     "nested": {
@@ -145,13 +145,13 @@
         "**/AGENTS.md",
         "**/AGENTS.override.md"
       ],
-      "source": "docs/research/_evidence/2026-09-25.jsonl [openai-harness]: one file per directory from the git root down to the working directory"
+      "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [openai-harness]: one file per directory from the git root down to the working directory"
     },
     "overrides": [
       {
         "path": "AGENTS.override.md",
         "owner": "project",
-        "source": "docs/research/_evidence/2026-09-25.jsonl [openai-harness]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [openai-harness]"
       }
     ],
     "config": {
@@ -179,7 +179,7 @@
       "file": ".codex/hooks.json",
       "guard": "stop_hook_active",
       "accept": "trusting the entry in /hooks, again after each change to it",
-      "source": "https://learn.chatgpt.com/docs/hooks, read 2026-09-29: Stop reads JSON on stdout; decision block with reason becomes a new prompt; stop_hook_active; systemMessage to the user; timeout in seconds, default 600; hooks run in the session's working directory, which the input's cwd names; per-hook trust in /hooks; https://github.com/openai/codex/issues/17532, open on 2026-09-29; docs/research/harnesses/codex.md §7"
+      "source": "https://learn.chatgpt.com/docs/hooks, read 2026-09-29: Stop reads JSON on stdout; decision block with reason becomes a new prompt; stop_hook_active; systemMessage to the user; timeout in seconds, default 600; hooks run in the session's working directory, which the input's cwd names; per-hook trust in /hooks; https://github.com/openai/codex/issues/17532, open on 2026-09-29; https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/codex.md §7"
     },
     "recheck_on": "2026-12-27",
     "note": "doc_byte_cap is the documented Codex project_doc_max_bytes default per Codex docs, 2026-08 (re-verify the cap before relying on it); skill path per the Codex skills docs, 2026-09: repository skills under .agents/skills/"
@@ -278,7 +278,7 @@
         "path": "GEMINI.md",
         "hides_agents_md": false,
         "import": "@AGENTS.md",
-        "source": "docs/research/_evidence/2026-09-25.jsonl [gemini-harness]: AGENTS.md only through context.fileName or an import"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [gemini-harness]: AGENTS.md only through context.fileName or an import"
       }
     ],
     "nested": {
@@ -286,7 +286,7 @@
       "globs": [
         "**/GEMINI.md"
       ],
-      "source": "docs/research/_evidence/2026-09-25.jsonl [gemini-harness]: subdirectory files just in time"
+      "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [gemini-harness]: subdirectory files just in time"
     },
     "overrides": [],
     "config": {
@@ -339,7 +339,7 @@
         "path": "AGENTS.md",
         "hides_agents_md": false,
         "import": null,
-        "source": "docs/research/_evidence/2026-09-25.jsonl [grok-f1, harness-loading-coverage-17]"
+        "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [grok-f1, harness-loading-coverage-17]"
       },
       {
         "path": "CLAUDE.md",
@@ -354,7 +354,7 @@
         "**/AGENTS.md",
         ".cursor/rules/**/*.mdc"
       ],
-      "source": "docs/research/_evidence/2026-09-25.jsonl [grok-f1, harness-loading-coverage-17]: AGENTS.md at root and nested; .cursor/rules/*.mdc"
+      "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [grok-f1, harness-loading-coverage-17]: AGENTS.md at root and nested; .cursor/rules/*.mdc"
     },
     "overrides": [],
     "config": {

@@ -13,7 +13,7 @@ done at every tier.
 **Done when** all four hold:
 
 1. The hand-off names the implementer's tier and where it came from: the person, or the placement
-   table.
+   table at the commit its first line names.
 2. The package carries what its tier's section below lists. Every existing path, symbol and command
    it names is in the tree as it stands when the package is written, and every one the work adds
    is marked as added.
@@ -31,10 +31,11 @@ decides nothing the ticket left to them.
 ## Find the tier
 
 Use the implementer the person names now, or the one the slicing recorded in a comment on the
-ticket; where neither exists, ask. Find its model and effort in "Implementer tiers" in
-`$(outcomebound home)/docs/model-guidance.md`, which says how an unlisted model or effort is
-placed, and carry the notes its row gives into the package. A tier the person names directly
-stands.
+ticket; where neither exists, ask. Find its model and effort in the placement table
+`outcomebound research models/tiers.md` prints, which says how an unlisted model or effort is
+placed, and carry the notes its row gives into the package. Where that reports no clone, or
+`outcomebound` is not on PATH, ask the person which tier the implementer is: outcome, design or
+spec. A tier the person names directly stands.
 
 ## Outcome tier
 

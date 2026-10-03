@@ -13,6 +13,13 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ### Added
 
+- `outcomebound research` prints a file from a clone of
+  [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), the research
+  repository, headed by the clone's commit, or names the public link where no clone is configured.
+  `research clone` and `research pull` preview, and run Git only with `--accept`; `research ingest`
+  writes a finding to `.outcomebound/research-inbox/` and prints a prefilled issue link. The clone
+  is found at `OUTCOMEBOUND_RESEARCH`, else `~/.outcomebound/research`.
+- The `research` fragment, selected with `--fragments`, points a project's agents at it.
 - `adopt --human-style ste` adds one project fact: text an agent writes for a person (reports,
   decision briefs, handovers, pull request descriptions, commit messages, documents) follows the
   style of ASD-STE100 Simplified Technical English, with no length limit, every fact kept and the
@@ -22,19 +29,28 @@ The bump comes from what an adopter must do, not from the commit type; see
   implementer with a package shaped by the implementer's tier. At the outcome tier the package is
   the ticket alone. At the design tier it adds the approach, signatures, invariants, an edge-case
   table and milestones. At the spec tier the ticket is cut into steps, each with failing tests and
-  stubs written first and reviewed before the next. The tier comes from the person, or from
-  "Implementer tiers" in `docs/model-guidance.md`. Pending a comparison on request, what it does
+  stubs written first and reviewed before the next. The tier comes from the person, or from the research
+  repository's tier table, read with `outcomebound research models/tiers.md`. Pending a comparison on request, what it does
   for an adopter is `UNVERIFIED`. The `tickets` fragment is now version 6: run `adopt` again to
   install the skill.
 
 ### Changed
 
+- The core skill reads per-model advice with `outcomebound research models/guidance.md`, or its
+  public link without a clone; `hand-off-tickets` reads the tiers from `models/tiers.md`, and asks
+  the person without a clone. Run `adopt` again to install the changed skills.
 - [LICENSE](LICENSE) adds an exception to Apache-2.0: the text `adopt` writes into a project
   (managed blocks, fragment files, skills) may be used, modified and redistributed as part of that
   project without the licence-copy, changed-file notice and NOTICE duties of Sections 4(a), 4(b)
   and 4(d).
 - `slice-tickets` asks which implementer will build the work before slicing, unless the person
-  has named one. The tickets are the same whatever the answer.
+    has named one. The tickets are the same whatever the answer.
+
+### Removed
+
+- `docs/research/` and `docs/model-guidance.md`: the research moved to outcomebound-research, and
+  the wheel no longer ships `docs/model-guidance.md`. OutcomeBound's own evaluation record is now
+  `docs/evaluations.md`.
 
 ## [1.0.0] - 2026-10-01
 

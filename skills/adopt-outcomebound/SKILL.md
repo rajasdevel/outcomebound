@@ -37,9 +37,14 @@ as one brief (`outcomebound brief --help`).
 ## Offer; each changes CI or tooling, so act only on the person's yes
 
 - A quality floor: `outcomebound floor --help` gives its steps. Its tools install only through
-  its `provision` step, the one command here that reaches the network: it pip-installs ruff and
+  its `provision` step, one of the commands here that reach the network: it pip-installs ruff and
   mypy into the `python3` on PATH, where the floor finds its tools, and prints gitleaks' and
   shellcheck's install commands.
+- Research: add `research` to `--fragments`, so the project's agents read the research repository
+  through `outcomebound research`. Its clone is one per machine, in a folder outside any project:
+  `outcomebound research clone <destination>` previews it, and with `--accept` runs `git clone` and
+  links `~/.outcomebound/research` to it; `outcomebound research pull --accept` updates it. Both
+  reach the network.
 - A CI line that fails when the install drifts: `outcomebound adopt . --check` (`templates/ci/`
   has snippets). Never change CI, hooks, credentials or harness settings without the yes.
 - A finish check, for `claude-code` and `codex` only: `outcomebound adopt <target> --finish-check`

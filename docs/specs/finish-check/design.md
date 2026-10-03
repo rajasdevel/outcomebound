@@ -5,7 +5,7 @@ status: ratified
 
 # Finish check — design
 
-For `claude-code` and `codex`; the evidence is in `docs/research/harnesses/`.
+For `claude-code` and `codex`; the evidence is in [research/harnesses](https://github.com/rajasdevel/outcomebound-research/tree/main/harnesses).
 
 ## Outcome
 

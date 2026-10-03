@@ -127,6 +127,32 @@ cut by the `slice-tickets` skill and linted by `outcomebound tickets check`. The
 alone and decides how it is built, while a small one gets steps with failing tests and stubs
 written for it. The project's own gate decides done where the work lands. See [docs/tickets.md](docs/tickets.md).
 
+## Optional: research
+
+The research behind OutcomeBound lives in its own repository,
+[outcomebound-research](https://github.com/rajasdevel/outcomebound-research): one prompting
+document per model family and per coding harness, practices, providers, per-model advice and the
+implementer tiers. To let a project's agents read it, add `research` to the fragments your install
+selects, and clone it once per machine into a folder outside any project:
+
+```bash
+outcomebound research clone ~/research/outcomebound-research           # preview
+outcomebound research clone ~/research/outcomebound-research --accept
+```
+
+`outcomebound research` then prints its index and `outcomebound research <path>` one document,
+headed by the commit it came from; `outcomebound research pull --accept` updates it. With
+`floor provision`, these are the only commands that reach the network, and only with `--accept`.
+Without a clone, the skills read the public pages, or ask you for an implementer's tier.
+
+To contribute a dated, sourced fact or a correction, open a
+[finding issue](https://github.com/rajasdevel/outcomebound-research/issues/new?template=finding.yml)
+there. Offline, or from an agent, `outcomebound research ingest` prints the same issue prefilled
+and writes the finding to `.outcomebound/research-inbox/` in your project for the research
+maintainer to collect. Larger changes go as a pull request under its
+[CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md).
+Write the claim in your own words, quote at most 25 words, and name no project, client or person.
+
 ## What is measured
 
 The test suite checks the engine's mechanics, not what a model does. What the contract changes
@@ -144,7 +170,7 @@ one model, gpt-6.1-sol; E10). An earlier pass on another model, gpt-6-sol, whose
 carried no project-facts block and so not its line on suggested process, stopped process
 documents only on the smallest task (36 runs; E7). No fixture yet separates the arms on
 underengineering. Method, every result and its limits:
-[docs/research/practices/evaluations.md](docs/research/practices/evaluations.md).
+[docs/evaluations.md](docs/evaluations.md).
 
 A project's own instructions outrank OutcomeBound's, so process a project requires stays
 required.
@@ -153,9 +179,11 @@ required.
 
 - [OutcomeBound.md](OutcomeBound.md) — the full contract
 - [docs/specs/](docs/specs/) — one current design per area
-- [docs/research/](docs/research/) — the research behind it: one prompting document per model,
-  one file per coding harness, practices (writing for models, task sizing, review, quality floors,
-  evaluations and more) and providers
+- [docs/evaluations.md](docs/evaluations.md) — what OutcomeBound's own evaluations measured, with
+  each result's scope
+- [outcomebound-research](https://github.com/rajasdevel/outcomebound-research) — the research
+  behind it, in its own repository: one prompting document per model, one file per coding harness,
+  practices, providers, per-model advice and the implementer tiers
 - [templates/](templates/) — files to copy into a project yourself, also under
   `outcomebound home`: CI jobs ([templates/ci/](templates/ci/README.md)), Make targets for the
   floor and a validation plan (`outcomebound.mk`), a goal envelope for autonomous or

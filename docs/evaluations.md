@@ -19,10 +19,10 @@ operating contract, a skill, a block of project facts) changes in the work the a
 what OutcomeBound's own evaluations of its text measured, with every result's scope. **For**
 anyone who writes or cuts such text and wants evidence rather than a reading, anyone judging
 what OutcomeBound changes, and anyone designing the next evaluation here. How to run the evals is
-in [`evals/README.md`](../../../evals/README.md); the general method, with the published evidence
-behind it, is in [`writing-for-models.md`](writing-for-models.md) §9; what published studies
-add on model judges is in [llm-as-judge.md](llm-as-judge.md), and on statistics, task selection,
-error analysis and evaluation tools in [agent-evals.md](agent-evals.md).
+in [`evals/README.md`](../evals/README.md); the general method, with the published evidence
+behind it, is in [`writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md) §9; what published studies
+add on model judges is in [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md), and on statistics, task selection,
+error analysis and evaluation tools in [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
 
 Every count from OutcomeBound's runs was re-derived on 2026-10-01 from the kept run records and
 result files. Every result under Results is class O, this repository's own runs: codex driving one
@@ -33,7 +33,7 @@ show only a large difference.
 **Evidence classes.** (M) measured; (L) a lab's or vendor's documentation or guidance; (S) a
 standard; (P) practitioner consensus; (A) an anecdote or one uncontrolled report; (F) a forecast;
 (O) OutcomeBound's own runs and records, scoped as stated. **Citations.** Bracketed ids resolve by
-`id` in [`_evidence/2026-09-25.jsonl`](../_evidence/2026-09-25.jsonl); papers and pages are listed
+`id` in the research repository's ledger [`_evidence/2026-09-25.jsonl`](https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl); papers and pages are listed
 under Sources with the day they were read.
 
 ## Key findings
@@ -129,7 +129,7 @@ Each finding carries an id (E1–E16) that other documents may cite.
   measurement.** Two production judges repeated their own verdicts more than 95% of the time
   while showing position bias above 0.10; two judges' pairwise preferences flipped on average
   13.6% of the time between repeated calls; and with the candidates fixed, changing the judge
-  moved the scores (M, published studies; the evidence is in [llm-as-judge.md](llm-as-judge.md)).
+  moved the scores (M, published studies; the evidence is in [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md)).
   Here, a rubric out of step with
   the skill made a same-family judge fail 6 of 18 runs whose deterministic post-checks passed
   (O, 2026-09-24). Validate a judge against labelled cases, keep one judge per comparison, and
@@ -207,7 +207,7 @@ slice one large design into tickets under different skill texts and models (gpt-
 at high effort, and a Claude session), one run an arm, each charting to the same milestone and
 stating its ticket count, the boundary rule behind each split and a rough size, so the
 breakdowns can be compared line by line. What they found is in
-[`work-breakdown.md`](work-breakdown.md).
+[`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md).
 
 ### Fixtures
 
@@ -264,7 +264,7 @@ Each result named the digest of the rubric it was judged against, and a supersed
 dated. A result's wording comes from what the run recorded. Agreement between that judge and a
 person was never measured on any of the 46 judged runs; the protocol's planned sample of 9
 hand-scored items was smaller than the 30–50 passes and 30–50 fails a calibration split needs
-([`writing-for-models.md`](writing-for-models.md) §9.1 item 9). A person checking a judge scores
+([`writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md) §9.1 item 9). A person checking a judge scores
 every answer before reading the judge's verdicts; a score written after reading them is a review of
 the judge.
 
@@ -272,7 +272,7 @@ the judge.
 
 Three runs a cell. A claim that moves from 0 of 3 to 3 of 3 is worth a closer look; anything
 smaller is not shown. The detection-power table in
-[`writing-for-models.md`](writing-for-models.md) §9 puts numbers on it: at three
+[`writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md) §9 puts numbers on it: at three
 runs, a before-and-after comparison calls an unchanged item worse 10.9% of the time at a base
 rate of 0.5, and even five runs a side reliably catch only drops of 40 to 60 points. Interval
 arithmetic is stricter still: a two-sided 95% Wilson interval is [0, 0.56] for 0 of 3 and
@@ -559,7 +559,7 @@ both.
   headings: it matched a mechanism's words, not its presence. They show which mechanisms a model
   names when asked, not the diff, the bounds or the cost (lesson 13).
 - **The slicing arms' breakdowns**: their sizing findings are in
-  [`work-breakdown.md`](work-breakdown.md).
+  [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md).
 
 ## What the results support, and what they do not
 
@@ -655,14 +655,14 @@ tasks buy:
 - **Model judges** — consistency against validity, a verdict's variation between identical calls,
   a changed judge as a new measurement, self- and family preference, reasoning effort and
   optimisation pressure, criteria drift, and judging many model-drafted labels at once: in
-  [llm-as-judge.md](llm-as-judge.md). The judged probes here used the configuration those studies
+  [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md). The judged probes here used the configuration those studies
   warn about, a judge of the candidate's own family (E15; lesson 12).
 - **Statistics, power and task selection** — pass^k, standard errors and paired comparisons,
   infrastructure and time-of-day noise, choosing tasks that can move, and references or single
-  database states that are wrong: in [agent-evals.md](agent-evals.md). The power figures for this
+  database states that are wrong: in [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md). The power figures for this
   suite's own design are under Runs per cell and power above.
 - **Error analysis** and **what other evaluation tools ship**: in
-  [agent-evals.md](agent-evals.md).
+  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
 
 ## Lessons on eval design
 
@@ -767,7 +767,7 @@ tasks buy:
 
 ## How to run the evals here
 
-[`evals/README.md`](../../../evals/README.md) is the reference: prerequisites (a codex ChatGPT
+[`evals/README.md`](../evals/README.md) is the reference: prerequisites (a codex ChatGPT
 login, a clean checkout), the arms, each fixture's claims, and reading a
 result. In short:
 
@@ -787,10 +787,10 @@ within one fixture and one model.
 
 ## Sources
 
-- **Fixtures:** [`evals/fixtures/`](../../../evals/fixtures/): `small-fix`, `dirty-review`,
+- **Fixtures:** [`evals/fixtures/`](../evals/fixtures/): `small-fix`, `dirty-review`,
   `long-run`, `decision`, `unclear-outcome`, `test-worth-keeping`, `slice-a-spec`, the four
   `ladder-*` rungs and their shared `ladder/` (`base.sh`, `footprint.py`,
-  `no_process_document.py`, `cli_probe.py`). Runner: [`evals/run.py`](../../../evals/run.py).
+  `no_process_document.py`, `cli_probe.py`). Runner: [`evals/run.py`](../evals/run.py).
 - **Run records**, kept outside the repository, each run's prompt, answer, transcript and
   metadata as `evals/README.md` describes:
 
@@ -820,11 +820,11 @@ within one fixture and one model.
   <https://inspect.aisi.org.uk/handling-errors.html>; the two-agent context-file ablation,
   <https://arxiv.org/html/2607.27250>; Codex authentication, <https://learn.chatgpt.com/docs/auth>;
   Codex agent approvals and security, <https://learn.chatgpt.com/docs/agent-approvals-security>.
-  The studies on judges are listed in [llm-as-judge.md](llm-as-judge.md#sources), those on
-  statistics, task selection, error analysis and tools in [agent-evals.md](agent-evals.md#sources).
-- **Related records:** [`writing-for-models.md`](writing-for-models.md) §9 (how to
+  The studies on judges are listed in [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md#sources), those on
+  statistics, task selection, error analysis and tools in [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md#sources).
+- **Related records:** [`writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md) §9 (how to
   measure a change to model-facing text, with detection power);
-  [`prompt-standard.md`](../../prompt-standard.md) S11 (remove one group of lines at a time and
-  re-run); [`harnesses.md`](../harnesses/cross-harness.md#131-one-practitioners-account-t1t7) §13.1, T1 (instruction files
-  shrink; a skill should be tested by eval); [`work-breakdown.md`](work-breakdown.md) (the slicing
+  [`prompt-standard.md`](prompt-standard.md) S11 (remove one group of lines at a time and
+  re-run); [`harnesses.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/cross-harness.md#131-one-practitioners-account-t1t7) §13.1, T1 (instruction files
+  shrink; a skill should be tested by eval); [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md) (the slicing
   arms).

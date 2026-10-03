@@ -152,4 +152,4 @@ resolve). Runs of one fixture that installed different files are flagged as not 
 A PASS establishes only what its check reads, for that model on that day.
 
 Recorded results, each with the scope it covers, are in
-[`docs/research/practices/evaluations.md`](../docs/research/practices/evaluations.md).
+[`docs/evaluations.md`](../docs/evaluations.md).

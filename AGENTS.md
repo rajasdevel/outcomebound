@@ -35,7 +35,7 @@ Project guidance, when present, follows below.
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
 - Done: `make check` and `make test`
-- Irreversible edges: pushing a release tag; loosening the quality floor
+- Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; text a model reads is not
 - Precedence: these facts over any instruction that disagrees with them; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
 <!-- outcomebound:end id=project-facts -->
@@ -61,6 +61,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
 - when creating a worktree or working file, resuming or handing off work, or keeping a fact for later sessions: read .outcomebound/fragments/workspace.md
+- when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
 - when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md
@@ -77,8 +78,9 @@ standard library only.
 | Source | Role |
 | --- | --- |
 | `OutcomeBound.md` | the operating contract |
-| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision brief, instructions, finish check |
-| `docs/prompt-standard.md`, `docs/model-guidance.md`, `docs/research/` | dated references and the research behind them; read only when a task needs them |
+| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision brief, instructions, finish check, research |
+| `docs/prompt-standard.md`, `docs/evaluations.md` | the prompt standard and this project's own evaluation record; read only when a task needs them |
+| [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, per-model advice (`models/guidance.md`) and implementer tiers (`models/tiers.md`); read only when a task needs them |
 | Released `CHANGELOG.md` sections | history |
 
 ## Commands
@@ -89,7 +91,7 @@ standard library only.
 | `make check` | `make gate`, then this repository's quality floor against `OB_BASE` (default `origin/main`) |
 | `make test` | the suite, spread across CPUs |
 | `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: `VERSION`, changelog, README and CI templates agree (and the tag, once named), the install is current, and gate, floor and suite pass |
-| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `home` |
+| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `home` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |
 | `bash scripts/new-spec.sh <slug> [--with-plan]` | scaffold a design under `docs/specs/<slug>/` from `templates/spec/design.md`, and with `--with-plan` a plan from `templates/spec/plan.md` |
 | `python3 scripts/build_backend.py [--sdist]` | build the package adopters install, into `dist/` |

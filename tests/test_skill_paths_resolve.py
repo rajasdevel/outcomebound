@@ -18,7 +18,7 @@ CORE = "using-outcomebound"
 
 # skill name -> paths that exist only in the OutcomeBound checkout
 CHECKOUT_ONLY = {
-    CORE: ("OutcomeBound.md", "docs/model-guidance.md"),
+    CORE: ("OutcomeBound.md",),
     "adopt-outcomebound": ("scripts/outcomebound", "templates/ci/", "adapters/harnesses.json"),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),
@@ -27,7 +27,7 @@ CHECKOUT_ONLY = {
         "templates/tickets/github-export.graphql",
     ),
     "tests-worth-keeping": (),
-    "hand-off-tickets": ("docs/model-guidance.md",),
+    "hand-off-tickets": (),
 }
 
 # skill name -> further files shipped beside its entrypoint

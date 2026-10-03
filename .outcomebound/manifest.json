@@ -15,7 +15,8 @@
       "fragments": [
         "multi-agent",
         "local",
-        "workspace"
+        "workspace",
+        "research"
       ],
       "done": [
         "make check",
@@ -26,18 +27,19 @@
         ".outcomebound/floor.json": "88a078faaf0b10c02fed4d7d98d38d6234c6ed144578ac2572ba172b8655aa0e",
         ".outcomebound/fragments/local.md": "7211d9fc3cb62a52b3180d2ad23828a487b492898888ce23fe6dda9f8fa90ac7",
         ".outcomebound/fragments/multi-agent.md": "85c97f860da9b047176f66934e3c983de14f0eb8717a5da0e5e509d86b475758",
+        ".outcomebound/fragments/research.md": "8f70e8cdf23d11fb5f965a7f3cc0bd614b1fc87b00ad7cd6a5a84fc409ae87f9",
         ".outcomebound/fragments/workspace.md": "fc64040f7f22efeed2b10f428427cfb7e4691725e9ae597b40704ea388cddd28"
       },
       "style": [
         "ste"
       ],
-      "sha256": "20203513fb34424c3c301551e90efbb8df4806fc0855d2b729f71b1fa5051c67"
+      "sha256": "786489bf5106c77c7e3ec58e572038a24394207014c142170e276d2321118b9f"
     },
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "sha256": "da194719290416eac90c94c3d42de378c9d99c18d11772e336a13134f4a4c8c1"
+      "sha256": "fc15c560e264ccb313e1db3e6bce613c482c24fcbf120843bb45302fa1ae5992"
     },
     {
       "kind": "fragment",
@@ -50,6 +52,12 @@
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
       "sha256": "fc64040f7f22efeed2b10f428427cfb7e4691725e9ae597b40704ea388cddd28"
+    },
+    {
+      "kind": "fragment",
+      "path": ".outcomebound/fragments/research.md",
+      "id": "research",
+      "sha256": "8f70e8cdf23d11fb5f965a7f3cc0bd614b1fc87b00ad7cd6a5a84fc409ae87f9"
     },
     {
       "kind": "ignore",
@@ -91,7 +99,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "394051f0246a5f5dc0a3a00a46393b67885683292371bef64ab931dd37920031"
+      "sha256": "8d63e5970f31b30c2e7b5941d6f3e097019c3612e87bd16b8ac3f5fa80ec1a11"
     }
   ]
 }

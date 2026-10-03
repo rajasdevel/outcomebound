@@ -123,8 +123,7 @@ A lesson from an adopting project reaches here as a proposal (above) when its de
 repeats across projects, or the project's operator wants it generalized; a one-off incident stays
 local. Before proposing:
 
-- Separate the durable rule from model-, vendor-, repository- and date-specific detail. A
-  model-specific note belongs in `docs/model-guidance.md`, dated and sourced, not in the contract.
+- Separate the durable rule from model-, vendor-, repository- and date-specific detail. A model-specific note belongs in the research repository's `models/guidance.md`, dated and sourced, not in the contract ([Contributing research](#contributing-research)).
 - Look for conflicting evidence and for guidance that already covers it; one anecdote is not an
   invariant.
 - Change the smallest shared artifact whose decision improves. Adding instructions is not by
@@ -134,6 +133,25 @@ local. Before proposing:
   `tests/fixtures/floor/` holds them, not a hand-written one.
 - Draft in your fork, never in the files `outcomebound home` prints: those are the engine your
   `outcomebound` runs.
+
+## Contributing research
+
+Research on models, harnesses, providers and agent practice is not in this repository: it is in
+[outcomebound-research](https://github.com/rajasdevel/outcomebound-research), its text under
+CC BY 4.0 and its code under Apache-2.0. To contribute to it:
+
+- A fact or a correction: open a
+  [finding issue](https://github.com/rajasdevel/outcomebound-research/issues/new?template=finding.yml)
+  there, with what it is about, the claim in your own words, the source's URL, the day you read
+  it, and, if one helps, a quote of at most 25 words.
+- Offline, or from an agent in your project: `outcomebound research ingest` takes the same fields,
+  prints that issue prefilled, and writes the finding under `.outcomebound/research-inbox/`, which
+  your project may commit for the research maintainer to collect.
+- Anything larger: a pull request to outcomebound-research, signed off, under its
+  [CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md).
+
+Keep project, client and person names out of a finding. What OutcomeBound's own text did in an
+evaluation is recorded here, in [docs/evaluations.md](docs/evaluations.md).
 
 ## Agents and releases
 

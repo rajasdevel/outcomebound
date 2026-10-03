@@ -6,8 +6,7 @@ The rules OutcomeBound's model-facing text follows, with the evidence behind eac
   records' readings made on 2026-10-01 left every rule's confidence, tiers and direction as
   stated.
 - **Volatility:** monitor: a rule moves when its evidence does, most often at a model generation.
-- **Re-check when:** the references under `docs/research/` are refreshed (their README says when),
-  or a key record a rule cites is corrected.
+- **Re-check when:** the research repository's references are refreshed (its [CONVENTIONS.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONVENTIONS.md) says when), or a key record a rule cites is corrected.
 
 The rules OutcomeBound's model-facing text follows, S1 to S22, each with the evidence behind it, the
 evidence's class, the reader tiers that evidence covers, its confidence and direction, and the
@@ -16,9 +15,7 @@ S7's `load-resolution`, and a rule reading `Checks: none` is held by review or b
 OutcomeBound's own text. It is dated evidence, checked 2026-09-27, and revised as "Revising the
 standard" says; it names no model, vendor or harness. Classes: M measured, L lab or vendor guidance,
 S standards body, P practitioner consensus, A anecdote, F forecast, O OutcomeBound's own recorded
-result. An id resolves under `docs/research/_evidence/`, `practice §`, `models` and `harnesses §` name
-sections and rows of `docs/research/practices/writing-for-models.md` and the files under
-`docs/research/models/` and `docs/research/harnesses/`, and an O cite names this project's own recorded result there.
+result. An id resolves in the research repository's ledgers, [`_evidence/*.jsonl`](https://github.com/rajasdevel/outcomebound-research/tree/main/_evidence); `practice §`, `models` and `harnesses §` name sections and rows of its [`practices/writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md) and the files under its [`models/`](https://github.com/rajasdevel/outcomebound-research/tree/main/models) and [`harnesses/`](https://github.com/rajasdevel/outcomebound-research/tree/main/harnesses); an O cite names this project's own recorded result there or in [`docs/evaluations.md`](evaluations.md).
 
 ## The rules by layer
 
@@ -251,14 +248,12 @@ them, and a reviewer weighs them rather than applying them.
 
 ## Revising the standard
 
-A revision follows the research: a refresh of the references under `docs/research/`, whose README
-says when one is due. Each rule the refreshed records bear on is reviewed as §10 of
-`docs/research/practices/writing-for-models.md` reviews it, rule by rule against the records as fact-checked,
+A revision follows the research: a refresh of the research repository's references, whose [CONVENTIONS.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONVENTIONS.md) says when one is due. Each rule the refreshed records bear on is reviewed as §10 of
+the research repository's [`practices/writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md) reviews it, rule by rule against the records as fact-checked,
 and that section's date moves with the review. A rule changes only on an independent measurement,
 guidance from two or more independent groups, or a recorded run of OutcomeBound's own; one lab's
-advice for one model becomes a note in `docs/model-guidance.md` instead. A rule resting on a
+advice for one model becomes a note in the research repository's [`models/guidance.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/models/guidance.md) instead. A rule resting on a
 falsified forecast, or whose direction reversed, is reopened. The revision moves the checked date
 and each changed rule's evidence, tiers, confidence and direction, names each check it adds or
-retires, and says in the changelog what changed for a reader. Changing a rule, deciding on the lines
-`docs/model-guidance.md` holds for the next revision, and requesting an eval run for a revision are
+retires, and says in the changelog what changed for a reader. Changing a rule, deciding on the lines that `models/guidance.md` holds for the next revision, and requesting an eval run for a revision are
 decisions for the project's maintainers.

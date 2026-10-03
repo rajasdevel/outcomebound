@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
 import pytest
@@ -264,9 +265,9 @@ class FakeGit:
         self.environments: list[dict[str, str]] = []
         self.returncode, self.stderr = returncode, stderr
 
-    def __call__(self, argv: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+    def __call__(self, argv: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
         self.calls.append(argv)
-        self.environments.append(dict(options["env"]))  # type: ignore[call-overload]
+        self.environments.append(dict(options["env"]))
         assert options.get("shell") is None
         return subprocess.CompletedProcess(argv, self.returncode, "", self.stderr)
 
