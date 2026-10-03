@@ -45,8 +45,8 @@ Read the diff, then commit it. `adopt` writes:
 
 `.agents/.gitignore` belongs to `adopt` as a whole file, and `adopt` keeps it current. Put
 any other ignore rule in the root `.gitignore`. If you edit the file, or if a file by that name
-already exists that `adopt` did not write, `adopt` refuses to replace it unless you pass
-`--force`. `outcomebound adopt . --check` reports whether the file, the copy of the fragment and
+already exists that `adopt` did not write, `adopt` stops and writes nothing. This is also true for
+`--remove`. Restore the file, or pass `--force` to replace it. `outcomebound adopt . --check` reports whether the file, the copy of the fragment and
 the pointer are current.
 
 `outcomebound adopt . --remove` takes out the pointer, the copy of the fragment and
@@ -142,8 +142,9 @@ goes in the ticket or the pull request.
 Notes are text that the next session reads, as it reads your instruction files. A note that
 someone planted can steer that session. Git ignores the notes, so a check that only reads tracked
 files would miss them. For this reason `outcomebound instructions check .` reads every file in
-`.agents/handoffs/` and `.agents/shared-memory/`, together with your instruction files. It reads
-nothing else that Git ignores. In particular, it does not read `work/` or `worktrees/`.
+`.agents/handoffs/` and `.agents/shared-memory/`, together with your instruction files. Of the
+other files that Git ignores, it reads only a file that a harness loads by its exact path, such as
+`CLAUDE.md`. It does not read `work/` or `worktrees/`.
 
 The check is lexical. It reports hidden characters, phrases that override earlier instructions and
 risky harness settings, and it quotes each line it finds. It writes nothing and runs nothing that a
