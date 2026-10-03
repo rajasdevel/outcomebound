@@ -104,6 +104,100 @@ does not ask for them.
 The runner hashes each fixture's graders, and reads its seed commit, before the model runs;
 a changed grader fails the run unexecuted.
 
+## The hand-off fixtures
+
+These twelve fixtures do the comparison that `docs/specs/tickets/design.md` requires before a
+release carries `hand-off-tickets`. They measure the hand-off package on one implementer, not
+the kernel. Thus they run only under `current`, and only when `--fixtures` names them.
+
+Three bases share one repository, `evals/fixtures/handoff/base.sh`. It is `timelog`, a small
+command line that records time on projects in a tab-separated log and reports it. It also has
+`invoice.py`, which reads the report as JSON, unit tests, two format documents and a declared
+ticket store. Each base has one accepted ticket, `<base>/ticket.md`:
+
+- `duration`, ticket #7, one module: `timelog add` reads `1h30m`, `2h` and `45m`.
+- `invoice`, ticket #8, two files and a contract with a third: `timelog report --json` prints
+  the shape that `invoice.py` reads.
+- `tags`, ticket #9, four files, a log format and its reader: tags on entries, a fifth field in
+  the log that older logs do not have, and `report --tag`.
+
+Each base has four variants, `handoff-<base>-<variant>`. The variant sets what follows the brief
+in the message:
+
+- `ticket`: the brief alone.
+- `design`: the brief, then the design package, `<base>/design.md`.
+- `spec`: the brief, then the spec package, `<base>/spec.md`. Its fixed tests and its stubs
+  are in the seed, and they fail there for the reasons the package gives (`<base>/spec.sh`).
+- `full`: the brief rendered with `--detail full`.
+
+Each fixture has a `task.sh` in place of `prompt.md`. The runner runs it after the build, when
+the seed is final. Thus the brief in the message is the engine's own output for that
+workspace: `outcomebound tickets brief`, from this checkout, reads the ticket from a tracker
+export that `evals/fixtures/handoff/export.py` writes outside the workspace. Every message ends
+with the same hand-over, `evals/fixtures/handoff/handover.md`. No message names a tier or a
+model, so one package text goes to each implementer it runs on.
+
+The post-checks are the same for each variant of a base, so the variants can be compared:
+
+- `within-bounds`: every path that is different from the seed is in the ticket's `bounds`. A
+  scratch `timelog.tsv` is not counted.
+- `acceptance`: the hidden acceptance tests of the base, `<base>/accept.py`, pass.
+- `project-tests-pass`: `python3 -B -m unittest discover -s tests` passes.
+- `package-tests-unchanged` (only `spec`): the package's tests are the same, byte for byte, as
+  in the seed.
+- `eval-files-unread`: no command in the transcript names `evals/fixtures` or `evals/graders`.
+
+The acceptance tests and the graders (`evals/fixtures/handoff/grade.py`) are never in the
+workspace. The runner gives the post-checks this checkout's `evals/` in
+`OUTCOMEBOUND_EVAL_DIR`, and the plan runs them from there. A model can read files outside its
+workspace, so `eval-files-unread` shows a run that did. Each `<base>/reference.sh` is a
+reference solution. `tests/test_eval_handoff.py` shows that each variant's post-checks fail on
+its seed and pass on the reference. It also shows that each spec package test fails on its seed
+for the reason that the package gives.
+
+The comparison is seven cells. Each cell is one implementer and one variant, on the three bases,
+for three repetitions: 63 runs. `gpt-6-astra` at `high` (the outcome tier) runs `ticket` and
+`spec`. `gpt-6-sol` at `medium` (the design tier) runs `ticket` and `design`. `gpt-6-luna` at
+`xhigh` (the spec tier) runs `ticket`, `spec` and `full`.
+
+```bash
+cell() {  # cell MODEL EFFORT VARIANT
+  for base in duration invoice tags; do
+    for repetition in 1 2 3; do
+      python3 evals/run.py --arm current --model "$1" --effort "$2" \
+        --fixtures "handoff-$base-$3" --repetition "$repetition" \
+        --out "evals/results/raw/handoff/$1-$3-$base-$repetition"
+    done
+  done
+}
+cell gpt-6-astra high ticket; cell gpt-6-astra high spec
+cell gpt-6-sol medium ticket; cell gpt-6-sol medium design
+cell gpt-6-luna xhigh ticket; cell gpt-6-luna xhigh spec; cell gpt-6-luna xhigh full
+python3 evals/run.py --summary evals/results/raw/handoff
+```
+
+`--summary` gives one block for each fixture and implementer: the count of runs that PASS the
+verdict and each claim, the median tokens and seconds, and the calls that failed. A cell is the
+three blocks of its variant for one implementer, nine runs. A failed call is not counted, so
+count it beside the cell. Read the cells by these rules, written before any run:
+
+1. Does the tier's package help its implementer? For `gpt-6-sol`, `design` against `ticket`. For
+   `gpt-6-luna`, `spec` against `ticket`. A package helps when its cell has at least 3 more
+   verdict PASSes of 9. It does not help when the difference is 1 or less, or the package's cell
+   is lower. Between these, the result is inconclusive. For `gpt-6-astra`, `ticket` is its tier's
+   package, so it has no such comparison.
+2. Does the spec package make a result worse on an outcome-tier implementer? For `gpt-6-astra`,
+   `spec` against `ticket`. A drop of 3 or more of 9 supports the maintainer's hypothesis of
+   overfitting. A smaller drop is inconclusive, and no drop does not support it.
+3. Does `--detail full` beat the spec package? For `gpt-6-luna`, `full` against `spec`. It beats
+   it only when its cell has more verdict PASSes. Thus `--detail full` stays only then, as the
+   tickets design says.
+
+Read `acceptance` beside the verdict: a run can build the ticket and fail only `within-bounds`
+or `package-tests-unchanged`. Read tokens and seconds beside the counts. Nine runs a cell can
+show only a large effect, and a PASS shows only what its check reads, for that model on that
+day.
+
 ## Running the runs
 
 The model is always named: a run without `--model` is refused before anything is built, and
@@ -120,8 +214,8 @@ for repetition in 1 2 3; do
 done
 ```
 
-Each invocation runs the eleven fixtures, one codex call each: 66 runs for the two arms above,
-and 33 more for each other arm. The ladder's measurement is its four fixtures under
+With no `--fixtures`, each invocation runs the eleven fixtures that are not hand-off fixtures,
+one codex call each: 66 runs for the two arms above, and 33 more for each other arm. The ladder's measurement is its four fixtures under
 `current`, `unsized` and `none`, three repetitions each: 36 runs. `--fixtures` narrows it, `--effort` sets codex's reasoning
 effort (default `medium`), and `--out` names the run directory (default
 `evals/results/raw/<id>/`, git-ignored). Fixture repositories are kept in

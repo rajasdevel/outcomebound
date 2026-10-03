@@ -46,6 +46,12 @@ if str(REPO) not in sys.path:  # the current arm is rendered by the engine's own
 FIXTURES = REPO / "evals" / "fixtures"
 # A fixture's own file naming the fragments its install selects, one id a line.
 FRAGMENTS_FILE = "fragments"
+# A fixture's own script printing its task for the built workspace, in place of a fixed
+# prompt.md: what it prints can name the seed commit, which exists only once the build is done.
+TASK_SCRIPT = "task.sh"
+# The hand-off fixtures measure a hand-off package on a named implementer, not the kernel, so
+# they run only when --fixtures names them.
+NAMED_ONLY = "handoff-"
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
@@ -99,6 +105,9 @@ HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 # once, before the model runs, and hands that commit to the checks.
 SEED_SHA_ENV = "OUTCOMEBOUND_SEED_SHA"
 TRANSCRIPT_ENV = "OUTCOMEBOUND_EVAL_TRANSCRIPT"
+# Where a post-check finds what stays outside the workspace: this checkout's evals/, holding
+# graders and acceptance tests the model never has in its workspace.
+EVAL_DIR_ENV = "OUTCOMEBOUND_EVAL_DIR"
 ANSWER_ENV = "OUTCOMEBOUND_EVAL_ANSWER"
 # These keep most of the operator's own codex setup out of every arm: without them a call loads
 # `$CODEX_HOME/config.toml` (its personality, rules and writable roots), reads and writes the
@@ -121,6 +130,12 @@ OBSERVED = "observed: "
 
 def fixture_names() -> list[str]:
     return sorted(path.name for path in FIXTURES.iterdir() if (path / "setup.sh").is_file())
+
+
+def default_fixtures() -> list[str]:
+    """The fixtures a run takes when --fixtures names none: all but the named-only ones."""
+
+    return [name for name in fixture_names() if not name.startswith(NAMED_ONLY)]
 
 
 def selected_fragments(name: str) -> tuple[str, ...]:
@@ -327,6 +342,29 @@ def call_path(arm: Arm, root: str | None) -> str:
     return f"{directory}{os.pathsep}{path}"
 
 
+def task_text(name: str, workdir: Path) -> str:
+    """A fixture's task: its prompt.md, or what its task.sh prints for the built `workdir`.
+
+    The script runs after the seed is final, with the build's environment; it may read the
+    workspace and writes nothing there. A script that fails, or prints nothing, is a fixture
+    error, never a task.
+    """
+
+    fixture = FIXTURES / name
+    if not (fixture / TASK_SCRIPT).is_file():
+        return (fixture / "prompt.md").read_text(encoding="utf-8")
+    done = subprocess.run(
+        ["bash", str(fixture / TASK_SCRIPT), str(workdir)],
+        capture_output=True,
+        text=True,
+        env={**child_env(), **HERMETIC_GIT},
+        timeout=SETUP_TIMEOUT,
+    )
+    if done.returncode != 0 or not done.stdout.strip():
+        raise ValueError(f"{TASK_SCRIPT} exited {done.returncode}: {done.stderr.strip()[:600]}")
+    return done.stdout
+
+
 def build_prompt(kernel_text: str, task: str) -> str:
     """The kernel, then the fixture's task verbatim: nothing else reaches the model from here."""
 
@@ -505,6 +543,7 @@ def post_check(
         **child_env(),
         **HERMETIC_GIT,
         "PYTHONPATH": str(REPO),
+        EVAL_DIR_ENV: str(REPO / "evals"),
         TRANSCRIPT_ENV: str(grading / "transcript.txt"),
         ANSWER_ENV: str(grading / "answer.md"),
     }
@@ -536,14 +575,15 @@ def observations(log_dir: Path | None) -> list[str]:
 
 
 def run_fixture(
-    name: str, prompt: str, model: str, effort: str, arm: Arm, path: str
+    name: str, model: str, effort: str, arm: Arm, path: str
 ) -> tuple[str, str, int | None, dict[str, Any]]:
-    """Install the arm's files, build the fixture, let the model act in it, then judge what
-    it left.
+    """Install the arm's files, build the fixture, write its prompt (the arm's kernel, then
+    the fixture's task), let the model act in it, then judge what it left.
 
     Returns the answer, the report (codex's output, then the post-checks'), codex's exit
-    status (None where no call finished) and what the run's record keeps. A post-check FAIL
-    is the measurement; only a fixture that cannot be built, or a call that fails, is an error.
+    status (None where no call finished) and what the run's record keeps, the prompt among
+    it. A post-check FAIL is the measurement; only a fixture that cannot be built, or a call
+    that fails, is an error.
     """
 
     fixture = FIXTURES / name
@@ -574,6 +614,12 @@ def run_fixture(
         extra["error"] = f"protected fixture setup failed: {problem}"
         return "", built.stdout + built.stderr, None, extra
     seed = seed_commit(workdir)
+    try:
+        prompt = build_prompt(arm.kernel, task_text(name, workdir))
+    except (OSError, ValueError, subprocess.SubprocessError) as problem:
+        extra["error"] = f"the fixture's task could not be written: {problem}"
+        return "", built.stdout + built.stderr, None, extra
+    extra["prompt"] = prompt
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
@@ -625,12 +671,10 @@ def _write(path: Path, document: dict[str, Any]) -> None:
 def run_one(out: Path, status: dict[str, Any], name: str, arm: Arm, path: str) -> bool:
     """One fixture under the run's arm, recorded in `out`; True where its call failed."""
 
-    task = (FIXTURES / name / "prompt.md").read_text(encoding="utf-8")
-    prompt = build_prompt(arm.kernel, task)
-    (out / f"{name}.prompt.md").write_text(prompt, encoding="utf-8")
     answer, report, returncode, extra = run_fixture(
-        name, prompt, status["model"], status["effort"], arm, path
+        name, status["model"], status["effort"], arm, path
     )
+    (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
     error = call_error(returncode, answer, extra, status["model"])
     extra.pop("error", None)
     (out / f"{name}.answer.md").write_text(answer, encoding="utf-8")
@@ -763,8 +807,9 @@ def _parser() -> argparse.ArgumentParser:
             f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher. "
             "The model is always named and passed to codex with -m, so codex's configured "
             "default never runs. Each arm's measurement is "
-            f"{len(fixture_names())} fixtures x 3 repetitions: "
-            f"{len(fixture_names()) * len(REPETITIONS)} runs."
+            f"{len(default_fixtures())} fixtures x 3 repetitions: "
+            f"{len(default_fixtures()) * len(REPETITIONS)} runs; the {NAMED_ONLY}* "
+            "fixtures run only when --fixtures names them."
         ),
     )
     parser.add_argument(
@@ -785,7 +830,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--fixtures",
-        default=",".join(fixture_names()),
+        default=",".join(default_fixtures()),
         help="comma-separated fixtures to run (default: %(default)s)",
     )
     parser.add_argument(

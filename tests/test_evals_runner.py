@@ -288,7 +288,9 @@ def test_the_ticket_fixtures_select_the_tickets_fragment_and_the_others_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     selecting = {name for name in RUN.fixture_names() if RUN.selected_fragments(name)}
-    assert selecting == {"slice-a-spec"}
+    handoff = {name for name in RUN.fixture_names() if name.startswith("handoff-")}
+    assert len(handoff) == 12
+    assert selecting == {"slice-a-spec", *handoff}
     for name in selecting:
         assert RUN.selected_fragments(name) == ("tickets",)
     fixtures = tmp_path / "fixtures"
@@ -527,6 +529,81 @@ def test_NEGATIVE_CONTROL_a_forged_grader_or_moved_seed_cannot_pass_the_fixture(
         env={**os.environ, **HERMETIC_GIT},
     ).stdout.strip()
     assert (tag != meta["seed_sha"]) == forgery.endswith("seed-moved")
+
+
+# --- the hand-off fixtures -----------------------------------------------------------------
+
+
+def test_the_hand_off_fixtures_run_only_when_named() -> None:
+    """A run naming no fixture takes the kernel's and the skills' fixtures, never the hand-off
+    ones, which measure a package on a named implementer."""
+
+    handoff = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
+    assert len(handoff) == 12
+    assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in handoff]
+    assert len(RUN.default_fixtures()) == 11
+    assert RUN._parser().parse_args([]).fixtures.split(",") == RUN.default_fixtures()
+
+
+def test_a_task_script_writes_the_task_for_the_built_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a task.sh is not run against the workspace it is given, if a fixed prompt.md
+    stops being read, or if a failing or silent script is taken as a task."""
+
+    fixtures = tmp_path / "fixtures"
+    for name, body in (
+        ("scripted", 'printf "task for %s\\n" "$(basename "$1")"\n'),
+        ("failing", "echo broken >&2; exit 3\n"),
+        ("silent", ":\n"),
+    ):
+        (fixtures / name).mkdir(parents=True)
+        (fixtures / name / "task.sh").write_text(body, encoding="utf-8")
+    (fixtures / "fixed").mkdir()
+    (fixtures / "fixed" / "prompt.md").write_text("the fixed task\n", encoding="utf-8")
+    monkeypatch.setattr(RUN, "FIXTURES", fixtures)
+    workdir = tmp_path / "ob-fixture-x"
+    workdir.mkdir()
+    assert RUN.task_text("scripted", workdir) == "task for ob-fixture-x\n"
+    assert RUN.task_text("fixed", workdir) == "the fixed task\n"
+    with pytest.raises(ValueError, match=r"task\.sh exited 3: broken"):
+        RUN.task_text("failing", workdir)
+    with pytest.raises(ValueError, match=r"task\.sh exited 0"):
+        RUN.task_text("silent", workdir)
+
+
+@pytest.mark.parametrize("act", ["nothing", "reference"])
+def test_a_hand_off_run_briefs_the_seed_and_grades_with_tests_kept_outside_the_workspace(
+    tmp_path: Path, act: str
+) -> None:
+    """End to end on handoff-invoice-spec: the prompt is the engine's brief of the workspace at
+    its final seed, then the package; the hidden acceptance tests never enter the workspace,
+    and reach the post-check through OUTCOMEBOUND_EVAL_DIR; doing nothing fails the ticket and
+    the reference solution passes every claim."""
+
+    name = "handoff-invoice-spec"
+    reference = ROOT / "evals/fixtures/handoff/invoice/reference.sh"
+    action = f"bash {reference}\n" if act == "reference" else ":"
+    arguments = ("--arm", "current", "--model", "gpt-6-sol", "--fixtures", name)
+    done, out = _invoke(tmp_path, arguments, action=action)
+    meta = _meta(out, name)
+    assert meta["error"] == "", (meta, done.stderr)
+    prompt = (out / f"{name}.prompt.md").read_text(encoding="utf-8")
+    assert prompt == (tmp_path / "prompt.txt").read_text(encoding="utf-8")
+    assert f"compiled-at: {meta['seed_sha']} (clean)" in prompt
+    assert "# Brief — #8 " in prompt and "# Package — #8, one step" in prompt
+    assert prompt.rstrip().endswith("ticket.")
+    workspace = Path(meta["fixture_repo"])
+    assert not list(workspace.rglob("accept*.py")) and not (workspace / "checks").exists()
+    expected = {
+        "within-bounds": "PASS",
+        "acceptance": "PASS" if act == "reference" else "FAIL",
+        "project-tests-pass": "PASS" if act == "reference" else "FAIL",
+        "package-tests-unchanged": "PASS",
+        "eval-files-unread": "PASS",
+    }
+    assert meta["claims"] == expected, meta
+    assert meta["verdict"] == ("PASS" if act == "reference" else "FAIL")
 
 
 # --- reading the results ------------------------------------------------------------------
