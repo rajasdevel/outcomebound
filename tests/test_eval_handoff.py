@@ -19,6 +19,7 @@ import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -140,7 +141,9 @@ def _grade(target: Path, name: str, *commands: str) -> dict[str, str]:
         for found in re.finditer(r"(?m)^(PASS|FAIL|UNVERIFIED) (\S+) \[", done.stdout)
     }
     verdicts["_output"] = done.stdout + done.stderr
-    verdicts["_verdict"] = re.search(r"(?m)^VERDICT: (\w+)", done.stdout).group(1)  # type: ignore[union-attr]
+    verdict = re.search(r"(?m)^VERDICT: (\w+)", done.stdout)
+    assert verdict is not None, done.stdout + done.stderr
+    verdicts["_verdict"] = verdict.group(1)
     logs = grading / ".outcomebound-checks"
     if logs.is_dir():
         verdicts["_output"] += "".join(log.read_text("utf-8") for log in sorted(logs.iterdir()))
@@ -271,7 +274,7 @@ def test_the_tools_a_careful_run_checks_with_leave_the_bounds_claim_alone(
     assert _grade(target, name)["within-bounds"] == "FAIL"
 
 
-def _grader() -> object:
+def _grader() -> Any:
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("grade", HANDOFF / "grade.py")
@@ -289,9 +292,9 @@ def test_a_test_run_is_a_command_that_runs_a_runner_not_one_that_reads_a_test_fi
         "python3 tests/test_cli.py",
     ]
     reads = ["cat tests/test_cli.py", "sed -n 1,40p tests/test_store.py", "rg -n x tests/test_a.py"]
-    assert all(grade.TEST_RUN.search(command) for command in runs)  # type: ignore[attr-defined]
-    assert not any(grade.TEST_RUN.search(command) for command in reads)  # type: ignore[attr-defined]
-    assert grade.GUIDANCE.search("cat skills/hand-off-tickets/SKILL.md")  # type: ignore[attr-defined]
+    assert all(grade.TEST_RUN.search(command) for command in runs)
+    assert not any(grade.TEST_RUN.search(command) for command in reads)
+    assert grade.GUIDANCE.search("cat skills/hand-off-tickets/SKILL.md")
 
 
 def test_the_package_claim_does_not_read_the_index_where_no_seed_is_known(
