@@ -11,6 +11,22 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+### Added
+
+- `hand-off-tickets`, a skill the `tickets` fragment installs: an accepted ticket is handed to its
+  implementer with a package shaped by the implementer's tier. At the outcome tier the package is
+  the ticket alone. At the design tier it adds the approach, signatures, invariants, an edge-case
+  table and milestones. At the spec tier the ticket is cut into steps, each with failing tests and
+  stubs written first and reviewed before the next. The tier comes from the person, or from
+  "Implementer tiers" in `docs/model-guidance.md`. Pending a comparison on request, what it does
+  for an adopter is `UNVERIFIED`. The `tickets` fragment is now version 6: run `adopt` again to
+  install the skill.
+
+### Changed
+
+- `slice-tickets` asks which implementer will build the work before slicing, unless the person
+  has named one. The tickets are the same whatever the answer.
+
 ## [1.0.0] - 2026-10-01
 
 The operating contract for coding agents, and the engine that installs it into a repository and

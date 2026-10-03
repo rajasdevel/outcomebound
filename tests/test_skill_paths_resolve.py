@@ -27,6 +27,7 @@ CHECKOUT_ONLY = {
         "templates/tickets/github-export.graphql",
     ),
     "tests-worth-keeping": (),
+    "hand-off-tickets": ("docs/model-guidance.md",),
 }
 
 # skill name -> further files shipped beside its entrypoint
