@@ -13,7 +13,8 @@ nothing the co-loaded text already says, and is true of the engine it names. Thi
 which skills OutcomeBound ships, what a skill must earn to ship and to stay, and how one reaches a
 project. The rules for the text are `docs/prompt-standard.md`'s; how a skill is written into a
 project is the [install design](../install/design.md)'s. The pains and the comparison with public
-skill sets are in the [skills research](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
+skill sets are in the [skills
+research](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
 
 ## The set
 

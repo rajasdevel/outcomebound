@@ -3,7 +3,7 @@
 Price metaphors (cost, budget, cheap, minimal, efficient) can read to a model as token thrift and
 pull it toward under-delivery, while the contract asks for complete satisfaction over the
 lifespan. This is a design choice no evaluation has measured; a reference that quotes a source's
-own wording, such as docs/prompt-standard.md, is not held to it.
+own wording, such as docs/evaluations.md, is not held to it.
 """
 
 import re

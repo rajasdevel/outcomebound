@@ -7,6 +7,7 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,11 @@ OTHER = "fedcba9876543210fedcba9876543210fedcba98"
 SHA256_COMMIT = "a" * 64
 BLOB = "https://github.com/rajasdevel/outcomebound-research/blob/main/"
 CLONE_URL = "https://github.com/rajasdevel/outcomebound-research.git"
+ROOT = Path(__file__).resolve().parent.parent
+PULL_ARGUMENTS = (
+    "-c core.hooksPath=/dev/null -c core.fsmonitor=false -C {clone} pull --ff-only "
+    f"{CLONE_URL} main"
+)
 STAMP = "1700000000"  # 2023-11-14T22:13:20Z
 REFLOG = f"{'0' * 40} {COMMIT} A <a@example.org> {STAMP} +0200\tclone: from {CLONE_URL}\n"
 
@@ -402,15 +408,16 @@ def test_pull_previews_then_runs_with_accept(
     monkeypatch.setattr(research.subprocess, "run", pytest.fail)
     status, out, err = run(capsys, "pull")
     assert (status, err) == (0, "")
-    assert out == f"would run: git -C {clone} pull --ff-only\nnothing pulled: pass --accept\n"
+    would = f"would run: git {PULL_ARGUMENTS.format(clone=clone)}"
+    assert out == f"{would}\nnothing pulled: pass --accept\n"
 
     git = FakeGit()
     monkeypatch.setattr(research.subprocess, "run", git)
     status, out, _ = run(capsys, "pull", "--accept")
     assert status == 0
-    assert git.calls == [["git", "-C", str(clone), "pull", "--ff-only"]]
+    assert git.calls == [["git", *PULL_ARGUMENTS.format(clone=clone).split()]]
     assert out.splitlines() == [
-        f"runs: git -C {clone} pull --ff-only",
+        f"runs: git {PULL_ARGUMENTS.format(clone=clone)}",
         "research: now at 0123456789ab (2023-11-14)",
     ]
 
@@ -603,6 +610,13 @@ def test_the_default_day_is_today(
         ("--observed-on", "20261001", "real date"),
         ("--observed-on", "2999-01-01", "not after today"),
         ("--corrects", "a\nb", "line break"),
+        ("--claim", "csi\x9bhere", "control character"),
+        ("--claim", "hidden\u202etext", "control character"),
+        ("--claim", "isolate\u2066here", "control character"),
+        ("--claim", "bad\udc80bytes", "not valid UTF-8"),
+        ("--quote", "q" * 301, "300 characters"),
+        ("--corrects", "c" * 201, "at most 200 characters"),
+        ("--url", "https://example.org/" + "u" * 8000, "issue link would pass 8000"),
     ],
 )
 def test_each_refusal_names_the_field_and_writes_nothing(
@@ -649,12 +663,21 @@ def test_a_missing_required_field_is_a_usage_error(
     capsys.readouterr()
 
 
-def test_a_finding_over_sixteen_kib_is_refused(
+def test_a_finding_over_sixteen_kib_is_refused() -> None:
+    with pytest.raises(research.Refusal, match="16 KiB"):
+        research.finding_bytes({"claim": "x" * 17000})
+
+
+def test_a_link_that_percent_encoding_makes_too_long_is_refused_and_writes_nothing(
     project: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
 ) -> None:
-    status, out, err = run(capsys, *GOOD, "--corrects", "x" * 17000)
+    kana = "\u3042"
+    arguments = replaced(tuple(replaced(GOOD, "--claim", kana * 600)), "--subject", kana * 120)
+    status, out, err = run(capsys, *arguments, "--quote", kana * 300)
     assert (status, out) == (1, "")
-    assert "16 KiB" in err
+    assert "issue link would pass 8000" in err
+    assert inbox(project) == []
+    assert run(capsys, *replaced(GOOD, "--claim", kana * 600))[0] == 0
 
 
 def test_ingest_refuses_a_symlinked_inbox_path(
@@ -705,3 +728,157 @@ def test_the_verb_is_in_the_launcher_table_and_help_answers_without_a_clone(
     with pytest.raises(SystemExit):
         research.main(["ingest", "--help"])
     assert "collect pass" in capsys.readouterr().out
+
+
+# --- Hardening -----------------------------------------------------------------------------------
+
+
+def test_git_runs_without_the_repository_variables_it_inherited(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git = FakeGit()
+    monkeypatch.setattr(research.subprocess, "run", git)
+    for name in research.GIT_UNSET:
+        monkeypatch.setenv(name, "/elsewhere")
+    link_to(home, make_clone(tmp_path / "clone"))
+    assert run(capsys, "pull", "--accept")[0] == 0
+    assert run(capsys, "clone", str(tmp_path / "new"), "--accept")[0] == 0
+    assert len(git.environments) == 2
+    for environment in git.environments:
+        assert not set(research.GIT_UNSET) & set(environment)
+        assert environment["GIT_TERMINAL_PROMPT"] == "0"
+
+
+def test_the_previews_quote_a_destination_that_a_shell_would_split(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    destination = tmp_path / "a b" / "research"
+    out = run(capsys, "clone", str(destination))[1]
+    assert out.splitlines()[0] == f"would run: git clone {CLONE_URL} '{destination}'"
+
+
+def test_a_failed_clone_names_the_partial_folder_to_remove(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    destination = tmp_path / "new"
+
+    def partial(argv: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
+        destination.mkdir()
+        (destination / "half").write_text("x", encoding="utf-8")
+        return subprocess.CompletedProcess(argv, 128, "", "fatal: early EOF")
+
+    monkeypatch.setattr(research.subprocess, "run", partial)
+    status, _, err = run(capsys, "clone", str(destination), "--accept")
+    assert status == 1
+    assert f"{destination} may hold part of a clone: remove it" in err
+
+
+@pytest.mark.parametrize("kind", ["fifo", "zero"])
+def test_a_reflog_that_is_not_a_regular_file_is_not_read(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None, kind: str
+) -> None:
+    clone = make_clone(tmp_path / "clone")
+    reflog = clone / ".git" / "logs" / "HEAD"
+    reflog.unlink()
+    if kind == "fifo":
+        os.mkfifo(reflog)
+    else:
+        reflog.symlink_to("/dev/zero")
+    link_to(home, clone)
+    assert run(capsys)[1].startswith("research: INDEX.md @ 0123456789ab (unknown)")
+
+
+def test_a_reflog_is_read_only_at_its_tail(tmp_path: Path) -> None:
+    reflog = tmp_path / "HEAD"
+    reflog.write_bytes(b"x" * 100_000 + b"\nlast\n")
+    assert research._last_line(reflog) == "last"
+
+
+def test_a_bad_path_is_refused_before_the_clone_is_looked_for(
+    home: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    status, out, err = run(capsys, "../../../../other/repo/blob/main/x.md")
+    assert (status, out) == (1, "")
+    assert "not a bounded relative path" in err
+
+
+def test_a_variable_without_an_index_reports_no_clone_configured(
+    home: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    no_subprocess: None,
+) -> None:
+    monkeypatch.setenv(research.ENVIRONMENT, str(tmp_path))
+    err = run(capsys)[2]
+    assert err.startswith(f"research: no clone configured: {research.ENVIRONMENT} names ")
+
+
+def test_a_clone_that_cannot_be_read_is_no_clone_and_exits_three(
+    home: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for error in (RuntimeError("loop"), PermissionError("denied"), ValueError("nul")):
+
+        def broken(self: Path, strict: bool = False, error: Exception = error) -> Path:
+            raise error
+
+        monkeypatch.setattr(Path, "resolve", broken)
+        (home / ".outcomebound").mkdir(exist_ok=True)
+        link = home / ".outcomebound" / "research"
+        link.unlink(missing_ok=True)
+        link.symlink_to(home)
+        status, out, err = run(capsys)
+        assert (status, out) == (3, "")
+        assert f"read it at {BLOB}INDEX.md" in err
+
+
+def test_a_git_file_that_cannot_be_followed_gives_unknown_not_a_traceback(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    tree = tmp_path / "tree"
+    tree.mkdir()
+    (tree / "INDEX.md").write_text("# Tree\n", encoding="utf-8")
+    (tree / ".git").write_bytes(b"gitdir: a\x00b\n")
+    link_to(home, tree)
+    assert run(capsys)[1] == "research: INDEX.md @ unknown (unknown)\n# Tree\n"
+    status, _, err = run(capsys, "pull", "--accept")
+    assert status == 1 and "no .git" in err
+
+
+def test_ingest_refuses_a_project_inside_dot_git(
+    project: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    status, out, err = run(capsys, *GOOD, "--project", str(project / ".git"))
+    assert (status, out) == (1, "")
+    assert ".git" in err
+    assert list((project / ".git").iterdir()) == []
+
+
+def test_ingest_run_inside_dot_git_writes_at_the_work_tree_root(
+    project: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(project / ".git")
+    assert run(capsys, *GOOD)[0] == 0
+    assert len(inbox(project)) == 1
+    assert not (project / ".git" / ".outcomebound").exists()
+
+
+def test_an_argument_that_is_not_utf8_is_refused_not_a_traceback(
+    project: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    given = os.fsdecode(b"bad\xffbyte")  # as the operating system hands an argument over
+    status, out, err = run(capsys, *replaced(GOOD, "--subject", given))
+    assert (status, out) == (1, "")
+    assert "not valid UTF-8" in err
+
+
+def test_the_skills_and_the_fragment_name_what_the_code_does() -> None:
+    def words(path: str) -> str:
+        return " ".join((ROOT / path).read_text(encoding="utf-8").split())
+
+    core = words("skills/using-outcomebound/SKILL.md")
+    assert "`outcomebound research models/guidance.md`" in core
+    assert research.BLOB + "models/guidance.md" in core
+    assert "`outcomebound research models/tiers.md`" in words("skills/hand-off-tickets/SKILL.md")
+    named = set(re.findall(r"outcomebound research (\w+)", words("fragments/setup/research.md")))
+    assert named == set(research.SUBCOMMANDS)

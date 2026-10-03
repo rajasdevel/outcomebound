@@ -39,10 +39,13 @@ A report that shows one of these broken is a vulnerability:
 - the launcher never runs an engine from the caller's directory or from `PYTHONPATH`;
 - the finish check runs only the Done commands the manifest records, and none when their digest
   differs from the one in the hook entry;
-- `outcomebound research` prints files from the research clone and runs nothing the clone holds,
-  Git included: it reads the clone's commit from its `.git` files; `research ingest` writes one
-  file, under `.outcomebound/research-inbox/` in the project, never through a symlink or into
-  `.git`;
+- printing with `outcomebound research` reads files from the research clone and runs nothing the
+  clone holds, Git included: it reads the clone's commit from its `.git` files; `research ingest`
+  writes one file, under `.outcomebound/research-inbox/` in the project, never through a symlink
+  or into `.git`;
+- `research pull --accept` runs Git in the clone with the clone's hooks and fsmonitor turned off,
+  without the repository variables it inherited, and fetches from the public repository named in
+  its preview; Git still reads the rest of the clone's configuration;
 - the engine opens no network connection; `floor provision --accept` runs pip, and
   `research clone --accept` and `research pull --accept` run Git, which do.
 

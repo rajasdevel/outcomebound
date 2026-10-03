@@ -40,7 +40,8 @@ row is checked again.
 These are the first-party skills pages as they stood when the rows were verified, in 2026-08
 and 2026-09; a page may have moved since. The pages behind each row's other facts are cited in
 the row itself, with the day each was read, and in
-the research repository's [harnesses/cross-harness.md](https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/cross-harness.md#sources).
+the research repository's
+[harnesses/cross-harness.md](https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/cross-harness.md#sources).
 
 - [Claude Code skills](https://code.claude.com/docs/en/skills)
 - [Codex skills](https://developers.openai.com/codex/skills)

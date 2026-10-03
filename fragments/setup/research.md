@@ -18,7 +18,8 @@ only on the person's yes.
 **Mechanisms** — `runtime-check` when a claim is about a tool at hand: observe the tool before
 relying on the claim.
 **Completion bar** — a decision that rests on a research claim cites `<path> @ <commit>` from the
-printed first line. A dated, sourced observation about a model, harness, provider or practice that
-the work turned up goes back with `outcomebound research ingest` (its `--help` gives the fields),
-in your own words, with no project, client or person name.
+printed first line, or, where you read the public link, that link and the day you read it. A dated,
+sourced observation about a model, harness, provider or practice that the work turned up goes back
+with `outcomebound research ingest` (its `--help` gives the fields), in your own words, with no
+project, client or person name.
 **Distinguish** — the research records it ≠ the maker documents it today ≠ observed here.

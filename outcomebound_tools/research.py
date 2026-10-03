@@ -20,8 +20,10 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
+import unicodedata
 from collections.abc import Sequence
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
@@ -41,6 +43,7 @@ SUBCOMMANDS = ("clone", "pull", "ingest")
 KINDS = ("fact", "correction")
 FORMAT_VERSION = 1
 SUBJECT_MAX, CLAIM_MAX, QUOTE_WORDS, FINDING_MAX = 120, 600, 25, 16 * 1024
+QUOTE_MAX, CORRECTS_MAX, LINK_MAX = 300, 200, 8000
 GIT_SECONDS = 600.0
 TAIL = 2000
 SMALL = 1 << 20
@@ -48,6 +51,21 @@ HEX = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 REF = re.compile(r"refs/[A-Za-z0-9._/-]+")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 LINE_BREAKS = "\x85\u2028\u2029"
+# Bidirectional controls, which can hide text from the person who reads a finding.
+BIDI = "\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
+# What Git inherits from a hook or a caller would point it at another repository.
+GIT_UNSET = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES",
+)
+# Git, asked so that no hook and no fsmonitor of the clone runs.
+GIT_CONFIGURATION = ("-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false")
+UNREADABLE = (OSError, RuntimeError, ValueError)
 
 
 class Refusal(Exception):
@@ -82,11 +100,22 @@ def _not_configured(first: str, path: str) -> NoClone:
 def clone_root(path: str = INDEX) -> Path:
     """The folder research is read from, or `NoClone` saying why there is none."""
 
+    try:
+        return _clone_root(path)
+    except UNREADABLE as error:
+        raise _not_configured(
+            f"no clone configured: the clone cannot be read ({type(error).__name__})", path
+        ) from error
+
+
+def _clone_root(path: str) -> Path:
     override = _overridden()
     if override:
         root = Path(os.path.expanduser(override)).resolve()
         if not (root / INDEX).is_file():
-            raise _not_configured(f"{ENVIRONMENT} names {root}, which holds no {INDEX}", path)
+            raise _not_configured(
+                f"no clone configured: {ENVIRONMENT} names {root}, which holds no {INDEX}", path
+            )
         return root
     link = _link()
     if not os.path.lexists(link):
@@ -119,15 +148,18 @@ def _small_text(path: Path) -> str | None:
 def _git_dir(root: Path) -> Path | None:
     """The folder `.git` is, or the one its `gitdir:` line names (a worktree)."""
 
-    dot = root / ".git"
-    if dot.is_symlink():
+    try:
+        dot = root / ".git"
+        if dot.is_symlink():
+            return None
+        if dot.is_dir():
+            return dot
+        first = (_small_text(dot) or "").strip().splitlines()[:1]
+        if first and first[0].startswith("gitdir:"):
+            target = (root / first[0][len("gitdir:") :].strip()).resolve()
+            return target if target.is_dir() else None
+    except UNREADABLE:
         return None
-    if dot.is_dir():
-        return dot
-    first = (_small_text(dot) or "").strip().splitlines()[:1]
-    if first and first[0].startswith("gitdir:"):
-        target = (root / first[0][len("gitdir:") :].strip()).resolve()
-        return target if target.is_dir() else None
     return None
 
 
@@ -167,10 +199,12 @@ def _commit(git_dir: Path) -> str | None:
 
 def _last_line(path: Path) -> str | None:
     try:
+        if not path.is_file():
+            return None
         with path.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
             handle.seek(max(0, handle.tell() - 8192))
-            lines = handle.read().decode("utf-8", "replace").splitlines()
+            lines = handle.read(8192).decode("utf-8", "replace").splitlines()
     except OSError:
         return None
     return next((line for line in reversed(lines) if line.strip()), None)
@@ -193,9 +227,12 @@ def _moved_on(git_dir: Path) -> str | None:
 def version(root: Path) -> str:
     """`<12 hex of the commit> (<YYYY-MM-DD>)`, each `unknown` where the `.git` files lack it."""
 
-    git_dir = _git_dir(root)
-    commit = _commit(git_dir) if git_dir else None
-    day = _moved_on(git_dir) if git_dir else None
+    try:
+        git_dir = _git_dir(root)
+        commit = _commit(git_dir) if git_dir else None
+        day = _moved_on(git_dir) if git_dir else None
+    except UNREADABLE:
+        commit = day = None
     return f"{commit[:12] if commit else 'unknown'} ({day or 'unknown'})"
 
 
@@ -203,6 +240,8 @@ def version(root: Path) -> str:
 
 
 def show(path: str) -> int:
+    if not paths.admits(path):
+        raise Refusal(f"{path}: not a bounded relative path")
     root = clone_root(path)
     try:
         data = paths.read_bounded(root, path)
@@ -233,7 +272,12 @@ def _run_git(arguments: list[str]) -> str | None:
     try:
         done = subprocess.run(
             ["git", *arguments],
-            env=git_environment({**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
+            env=git_environment(
+                {
+                    **{key: value for key, value in os.environ.items() if key not in GIT_UNSET},
+                    "GIT_TERMINAL_PROMPT": "0",
+                }
+            ),
             capture_output=True,
             text=True,
             check=False,
@@ -284,8 +328,7 @@ def clone(destination_text: str, accept: bool) -> int:
     destination = Path(os.path.abspath(os.path.expanduser(destination_text)))
     _check_destination(destination)
     arguments = ["clone", CLONE_URL, str(destination)]
-    command = f"git {' '.join(arguments)}"
-    print(f"{'runs' if accept else 'would run'}: {command}")
+    print(f"{'runs' if accept else 'would run'}: {shlex.join(['git', *arguments])}")
     if not accept:
         print(f"would link: {LINK_TEXT} -> {destination}")
         if _overridden():
@@ -294,7 +337,12 @@ def clone(destination_text: str, accept: bool) -> int:
         return 0
     failure = _run_git(arguments)
     if failure is not None:
-        raise Refusal(f"clone: {failure}\nthe link is left as it was")
+        left = (
+            f"\n{destination} may hold part of a clone: remove it before you try again"
+            if os.path.lexists(destination)
+            else ""
+        )
+        raise Refusal(f"clone: {failure}\nthe link is left as it was{left}")
     try:
         _point_link(destination)
     except OSError as error:
@@ -307,8 +355,8 @@ def pull(accept: bool) -> int:
     root = clone_root()
     if _git_dir(root) is None:
         raise Refusal(f"pull: {root} has no .git, so it is not a Git clone")
-    arguments = ["-C", str(root), "pull", "--ff-only"]
-    print(f"{'runs' if accept else 'would run'}: git {' '.join(arguments)}")
+    arguments = [*GIT_CONFIGURATION, "-C", str(root), "pull", "--ff-only", CLONE_URL, "main"]
+    print(f"{'runs' if accept else 'would run'}: {shlex.join(['git', *arguments])}")
     if not accept:
         print("nothing pulled: pass --accept")
         return 0
@@ -324,8 +372,18 @@ def pull(accept: bool) -> int:
 
 def _one_line(name: str, value: str) -> str:
     value = value.strip()
-    if any(paths.is_control(char) or char in LINE_BREAKS for char in value):
+    if any(
+        paths.is_control(char)
+        or char in LINE_BREAKS
+        or char in BIDI
+        or unicodedata.category(char) == "Cc"
+        for char in value
+    ):
         raise Refusal(f"ingest: {name} holds a line break or a control character")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        raise Refusal(f"ingest: {name} is not valid UTF-8") from None
     return value
 
 
@@ -369,8 +427,10 @@ def _checked_date(value: str | None) -> str:
 
 def _checked_quote(value: str | None) -> str:
     quoted = _one_line("quote", value or "")
-    if len(quoted.split()) > QUOTE_WORDS:
-        raise Refusal(f"ingest: quote must be at most {QUOTE_WORDS} words")
+    if len(quoted.split()) > QUOTE_WORDS or len(quoted) > QUOTE_MAX:
+        raise Refusal(
+            f"ingest: quote must be at most {QUOTE_WORDS} words and {QUOTE_MAX} characters"
+        )
     return quoted
 
 
@@ -389,9 +449,17 @@ def finding(options: argparse.Namespace) -> dict[str, str]:
         "observed_on": _checked_date(options.observed_on),
         "corrects": _one_line("corrects", options.corrects or ""),
     }
+    if len(fields["corrects"]) > CORRECTS_MAX:
+        raise Refusal(f"ingest: corrects must be at most {CORRECTS_MAX} characters")
     if kind == "correction" and not fields["corrects"]:
         raise Refusal("ingest: a correction needs --corrects: the path or evidence id it corrects")
-    return {name: value for name, value in fields.items() if value}
+    given = {name: value for name, value in fields.items() if value}
+    if len(issue_link(given)) > LINK_MAX:
+        raise Refusal(
+            f"ingest: the issue link would pass {LINK_MAX} characters, which GitHub may refuse; "
+            "shorten the claim, quote or url"
+        )
+    return given
 
 
 def finding_bytes(fields: dict[str, str]) -> bytes:
@@ -417,12 +485,18 @@ def _project(given: Path | None) -> Path:
     if given is not None:
         if not given.is_dir():
             raise Refusal(f"ingest: {given} is not a directory")
-        return given.resolve()
+        return _outside_git(given.resolve())
     here = Path.cwd().resolve()
     for folder in (here, *here.parents):
         if (folder / ".git").exists():
-            return folder
+            return _outside_git(folder)
     raise Refusal("ingest: not inside a Git work tree; name the project with --project DIR")
+
+
+def _outside_git(project: Path) -> Path:
+    if any(paths.names_git(part) for part in project.parts):
+        raise Refusal(f"ingest: {project} is inside a .git folder; name the project itself")
+    return project
 
 
 def ingest(options: argparse.Namespace) -> int:
@@ -459,7 +533,8 @@ Read the research repository, and send a finding back to it.
                                    git clone it into DESTINATION, outside any project, and
                                    link {LINK_TEXT} to it
   outcomebound research pull [--accept]
-                                   git pull --ff-only in the clone
+                                   git pull --ff-only in the clone, from the public repository,
+                                   with the clone's hooks and fsmonitor off
   outcomebound research ingest ... write a finding under {INBOX}/
                                    and print the prefilled issue link (ingest --help)
 
@@ -473,10 +548,11 @@ repository's finding issue form with it filled in. The engine opens no connectio
 link to send the finding now; the file waits for the research maintainer's collect pass.
 
 Write the claim in your own words; name no project, client or person. A finding is refused
-when a value holds a line break or a control character, the subject is not 1 to {SUBJECT_MAX}
-characters, the claim not 1 to {CLAIM_MAX}, the url not http or https, the quote more than
-{QUOTE_WORDS} words, the date not real or after today, or a correction names nothing it
-corrects."""
+when a value holds a line break, a control character or a bidirectional control, the subject is
+not 1 to {SUBJECT_MAX} characters, the claim not 1 to {CLAIM_MAX}, the url not http or https, the
+quote more than {QUOTE_WORDS} words or {QUOTE_MAX} characters, corrects more than {CORRECTS_MAX}
+characters, the date not real or after today, a correction names nothing it corrects, or the
+issue link would pass {LINK_MAX} characters."""
 
 
 def _print_parser() -> argparse.ArgumentParser:

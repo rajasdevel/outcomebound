@@ -123,7 +123,9 @@ A lesson from an adopting project reaches here as a proposal (above) when its de
 repeats across projects, or the project's operator wants it generalized; a one-off incident stays
 local. Before proposing:
 
-- Separate the durable rule from model-, vendor-, repository- and date-specific detail. A model-specific note belongs in the research repository's `models/guidance.md`, dated and sourced, not in the contract ([Contributing research](#contributing-research)).
+- Separate the durable rule from model-, vendor-, repository- and date-specific detail. A
+  model-specific note belongs in the research repository's `models/guidance.md`, dated and sourced,
+  not in the contract ([Contributing research](#contributing-research)).
 - Look for conflicting evidence and for guidance that already covers it; one anecdote is not an
   invariant.
 - Change the smallest shared artifact whose decision improves. Adding instructions is not by

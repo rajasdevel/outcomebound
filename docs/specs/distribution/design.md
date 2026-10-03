@@ -19,7 +19,8 @@ whose `scripts/outcomebound` runs that checkout. How: `pyproject.toml`,
 
 The wheel holds `outcomebound_tools/`; the engine's own files under `outcomebound_tools/_home/`,
 laid out as a checkout lays them out (`OutcomeBound.md`, `VERSION`, `LICENSE`, `NOTICE`,
-`templates/`, `skills/`, `fragments/`, `schemas/`, `adapters/` and `scripts/new-spec.sh`); and `scripts/outcomebound` as its one command, installed from the wheel's
+`templates/`, `skills/`, `fragments/`, `schemas/`, `adapters/` and `scripts/new-spec.sh`); and
+`scripts/outcomebound` as its one command, installed from the wheel's
 scripts. `outcomebound_tools.home.ROOT` is the checkout's root where the package sits beside
 `OutcomeBound.md`, and `_home/` otherwise, so every module reads the engine's files from one
 place, `outcomebound home` prints it, and a skill's `$(outcomebound home)/…` path resolves either

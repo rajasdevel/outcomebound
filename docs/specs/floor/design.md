@@ -72,7 +72,7 @@ that a person looked.
 
 The loosening check makes a loosening visible; it cannot prevent one, because the agent that
 loosens can also edit the check. Prevention needs branch protection on the server, which the
-floor does not set. `provision` is the one networked verb: it pip-installs ruff and mypy into the
+floor does not set. `provision` is the floor's one networked step: it pip-installs ruff and mypy into the
 `python3` on `PATH`, the project's environment, where `check` finds its tools, not into the
 environment an installed engine keeps to itself.
 
