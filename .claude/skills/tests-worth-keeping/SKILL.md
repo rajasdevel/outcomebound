@@ -6,7 +6,8 @@ description: Use when writing, changing or judging a test, or when the project's
 # Tests worth keeping
 
 A test is worth keeping when some change to the code it covers would make it fail. Which tests
-to write, and when to run them, is yours; this is the bar a test you keep meets, and what your
+to write, and when to run them, is yours, except the tests a hand-off package fixes, which stay
+as written; this is the bar a test you keep meets, and what your
 report keeps apart.
 
 ## In a project that already fails
