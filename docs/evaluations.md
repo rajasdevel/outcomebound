@@ -145,7 +145,7 @@ Each finding carries an id (E1–E17) that other documents may cite.
   ticket, which the package stated exactly. gpt-6-astra at high passed 9 of 9 with the ticket and
   9 of 9 with the spec package; gpt-6-sol at medium passed 9 of 9 with the ticket and with the
   design package, which leaves the design package's effect unshown. 9 runs a cell, 2026-10-03
-  (the hand-off comparison, under Results).
+  (the hand-off comparison, under Results). By rule 3 `--detail full` would go; the maintainer kept it as the spec tier's default, to be judged in real use on longer work.
 
 ## The question evals answer
 
@@ -586,7 +586,8 @@ Read by the rules:
    that the package makes an outcome-tier implementer overfit. The rows the package's tests leave
    out (listed in `evals/README.md`) passed in all nine.
 4. `--detail full` on gpt-6-luna: 6 against `spec`'s 9, so it does not beat the spec package.
-   `--detail full` and its three fixtures were removed, as the tickets design says.
+   By rule 3 `--detail full` would go. The maintainer kept it as the spec tier's default brief,
+   to be judged in real use on longer work.
 5. Noise: gpt-6-luna `ticket` against `full` is 6 against 6, the same failure in the same runs.
    The spec package's difference of 3 exceeds it.
 

@@ -69,6 +69,7 @@ _TICKET = "## Ticket"
 _READ = "## Read"
 _CHECKS = "## Checks"
 _BOUNDS = "## Bounds"
+_STEPS = "## Steps"
 _LANDS = "## How work lands"
 _USING = "## Using this brief"
 
@@ -100,6 +101,10 @@ _USING_BODY = (
 _PLANNED = "planned: the plan does not define it yet; this ticket's work adds it"
 _UNRUNNABLE = "the plan defines it with no command this engine could run"
 _COMMAND_LINE = "`{command}` in `{cwd}`, timeout {timeout}s"
+
+# `--detail full` adds `## Steps` after `## Bounds`;
+# `plain`, the default, is the document without it, byte for byte.
+_FULL = "full"
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,14 +453,47 @@ def _bounds(ticket: Ticket) -> str:
     return _part(_BOUNDS, written if written else _NO_BOUNDS)
 
 
-def _render(compiled: _Compiled, size: str) -> str:
+def _steps(compiled: _Compiled) -> str:
+    """`## Steps`: the brief's own facts as numbered steps, in the order an implementer
+    meets them.
+
+    Read the cited sections, keep to the bounds, run each check as `## Checks`
+    renders it, report. Every section, bound, check and command named here is one the
+    document already carries, and none it carries is left out, so the step form adds
+    no fact and drops none. A ticket citing nothing still has the last three.
+    """
+
+    ticket = compiled.ticket
+    steps = []
+    if compiled.sections:
+        read = ", ".join(f"`{found.path}#{found.anchor}`" for found in compiled.sections)
+        steps.append(f"Read the sections named above: {read}.")
+    if ticket.bounds:
+        paths = ", ".join(f"`{entry}`" for entry in ticket.bounds)
+        steps.append(f"Keep every change inside the bounds: {paths}.")
+    else:
+        steps.append(f"Keep to the bounds: {_NO_BOUNDS}")
+    checks = "".join(
+        f"\n   - `{item.claim}` — {_check_body(item, compiled)}" for item in ticket.done_when
+    )
+    steps.append(f"Run each check:{checks}")
+    steps.append(
+        "Report what changed, each check's verdict, what you decided beyond the ticket, "
+        "and the follow-ups you found."
+    )
+    return _part(_STEPS, "\n".join(f"{number}. {step}" for number, step in enumerate(steps, 1)))
+
+
+def _render(compiled: _Compiled, size: str, detail: str = "plain") -> str:
     """The whole document: the brief's sections, one blank line between them.
 
     `size` is given rather than taken here because the line has to exist while
     the lines are counted; `_document` counts this same rendering and re-renders
-    it with only the digits changed.
+    it with only the digits changed. `detail` full adds `## Steps` after
+    `## Bounds`; plain leaves every other byte as it is.
     """
 
+    steps = (_steps(compiled),) if detail == _FULL else ()
     sections = (
         _title(compiled.ticket),
         _header(compiled, size),
@@ -463,13 +501,14 @@ def _render(compiled: _Compiled, size: str) -> str:
         _read(compiled),
         _checks(compiled),
         _bounds(compiled.ticket),
+        *steps,
         _part(_LANDS, _WORKFLOW if compiled.workflow else _NO_WORKFLOW),
         _part(_USING, _USING_BODY),
     )
     return "\n".join(sections)
 
 
-def _document(compiled: _Compiled) -> str:
+def _document(compiled: _Compiled, detail: str = "plain") -> str:
     """The document with its own size in it.
 
     A line is a line feed and the document ends with one, so the count is the
@@ -479,8 +518,8 @@ def _document(compiled: _Compiled) -> str:
     applies no cutoff, here or anywhere.
     """
 
-    counted = _render(compiled, _SIZE.format(lines=0))
-    return _render(compiled, _SIZE.format(lines=counted.count("\n")))
+    counted = _render(compiled, _SIZE.format(lines=0), detail)
+    return _render(compiled, _SIZE.format(lines=counted.count("\n")), detail)
 
 
 # --- the seam ----------------------------------------------------------------------
@@ -513,4 +552,5 @@ def brief(target: Path, declaration: Declaration, options: argparse.Namespace) -
     _refuse_closed(subject.ticket)
     plan = load_claims(root, declaration)
     _refuse_findings(root, declaration, options, subject, plan)
-    return _document(_compile(root, declaration, subject, plan))
+    detail = getattr(options, "detail", None) or "plain"
+    return _document(_compile(root, declaration, subject, plan), detail)

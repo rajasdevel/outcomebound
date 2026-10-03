@@ -74,7 +74,7 @@ def _check_usage(options: argparse.Namespace) -> str:
 
 
 def _brief_options(command: argparse.ArgumentParser) -> None:
-    """`brief <ticket> [--draft <file>]`.
+    """`brief <ticket> [--draft <file>] [--detail plain|full]`.
 
     One file, where `check` takes many: a brief is one document about one
     ticket. The id is named beside it, because a draft's id is its file name
@@ -90,6 +90,13 @@ def _brief_options(command: argparse.ArgumentParser) -> None:
         action="extend",
         help="compile the draft among these local files whose name is the ticket named, "
         "instead of reading the declared store; the others are the breakdown it belongs to",
+    )
+    command.add_argument(
+        "--detail",
+        choices=("plain", "full"),
+        default="plain",
+        help="full adds `## Steps` after `## Bounds`: the same facts as numbered steps, "
+        "each with its exact command",
     )
 
 

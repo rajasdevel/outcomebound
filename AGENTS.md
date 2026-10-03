@@ -80,7 +80,7 @@ standard library only.
 | `OutcomeBound.md` | the operating contract |
 | `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision brief, instructions, finish check, research |
 | `docs/prompt-standard.md`, `docs/evaluations.md` | the prompt standard and this project's own evaluation record; read only when a task needs them |
-| [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, per-model advice (`models/guidance.md`) and implementer tiers (`models/tiers.md`); read only when a task needs them |
+| [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, one advice file per model (`models/`) and implementer tiers (`applications/implementer-tiers.md`); read only when a task needs them |
 | Released `CHANGELOG.md` sections | history |
 
 ## Commands
@@ -112,7 +112,7 @@ adapters/             harnesses.json, the harness table adopt routes by; surface
 schemas/              wire formats
 docs/                 designs, references, guides
 references/           portability.md, the harness matrix as adapters/harnesses.json records it
-evals/                eleven kernel and skill fixtures under four arms (earlier, current, unsized, none), and nine
+evals/                eleven kernel and skill fixtures under four arms (earlier, current, unsized, none), and twelve
                       hand-off fixtures that run only when named; evals/README.md says how to run them
 tests/                the engine's behavior
 .agents/tools/        tools for agents working in this repository

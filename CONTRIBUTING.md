@@ -3,8 +3,7 @@
 Bug reports, proposals, fragments and fixes are welcome, as GitHub issues and pull requests. A
 report made from a real project reaches here in neutral form (see
 [Proposals and reports](#proposals-and-reports)). A security vulnerability goes privately, as
-[SECURITY.md](SECURITY.md) describes, never in a public issue. Everyone who takes part follows the
-[code of conduct](CODE_OF_CONDUCT.md).
+[SECURITY.md](SECURITY.md) describes, never in a public issue.
 
 ## Your first pull request
 
@@ -125,7 +124,7 @@ repeats across projects, or the project's operator wants it generalized; a one-o
 local. Before proposing:
 
 - Separate the durable rule from model-, vendor-, repository- and date-specific detail. A
-  model-specific note belongs in the research repository's `models/guidance.md`, dated and sourced,
+  model-specific note belongs in that model's file under `models/` in the research repository, dated and sourced,
   not in the contract ([Contributing research](#contributing-research)).
 - Look for conflicting evidence and for guidance that already covers it; one anecdote is not an
   invariant.

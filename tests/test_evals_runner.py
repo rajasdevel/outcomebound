@@ -537,7 +537,7 @@ def test_the_hand_off_fixtures_run_only_when_named() -> None:
     ones, which measure a package on a named implementer."""
 
     handoff = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
-    assert len(handoff) == 9
+    assert len(handoff) == 12
     assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in handoff]
     assert len(RUN.default_fixtures()) == 11
     assert RUN._parser().parse_args([]).fixtures.split(",") == RUN.default_fixtures()

@@ -266,10 +266,10 @@ reviews it, rule by rule against the records as fact-checked,
 and that section's date moves with the review. A rule changes only on an independent measurement,
 guidance from two or more independent groups, or a recorded run of OutcomeBound's own; one lab's
 advice for one model becomes a note in the research repository's
-[`models/guidance.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/models/guidance.md)
+[`models/README.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/models/README.md)
 instead. A rule resting on a
 falsified forecast, or whose direction reversed, is reopened. The revision moves the checked date
 and each changed rule's evidence, tiers, confidence and direction, names each check it adds or
 retires, and says in the changelog what changed for a reader. Changing a rule, deciding on the lines
-that `models/guidance.md` holds for the next revision, and requesting an eval run for a revision are
+that the research repository's model files hold for the next revision, and requesting an eval run for a revision are
 decisions for the project's maintainers.

@@ -15,7 +15,7 @@ base="${1:?usage: build.sh <base> <variant> <target>}"
 variant="${2:?usage: build.sh <base> <variant> <target>}"
 target="${3:?usage: build.sh <base> <variant> <target>}"
 case "$variant" in
-  ticket | design | spec) ;;
+  ticket | design | spec | full) ;;
   *) echo "build.sh: no variant $variant" >&2; exit 2 ;;
 esac
 [ -f "$here/$base/ticket.md" ] || { echo "build.sh: no base $base" >&2; exit 2; }

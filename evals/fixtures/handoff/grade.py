@@ -59,7 +59,7 @@ EVAL_TEXT = ("Hidden acceptance for ticket", "The reference solution for ticket"
 TEST_RUN = re.compile(r"\b(?:unittest|pytest)\b|\bpython3?\b[^|;&]*\btest[\w-]*\.py\b")
 # A command that reads what the implementer's own handover does not hand it: the skills about
 # handing a ticket over, and the guidance that places a model in a tier.
-GUIDANCE = re.compile(r"hand-off-tickets|slice-tickets|model-guidance")
+GUIDANCE = re.compile(r"hand-off-tickets|slice-tickets|model-guidance|implementer-tiers")
 
 
 def _load(name: str, path: Path) -> ModuleType:

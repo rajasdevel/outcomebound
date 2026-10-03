@@ -908,3 +908,96 @@ def test_tests_import_only_public_names() -> None:
             reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
     assert reached == 6, "this file imports exactly the seam it tests"
+
+
+# --- `--detail full` ---------------------------------------------------------------
+
+
+def _without_steps(document: str) -> str:
+    """The document with `## Steps` and the blank line after it cut, and `size:` zeroed."""
+
+    head, found, rest = document.partition("\n## Steps\n")
+    assert found, "the document has no ## Steps section"
+    _, lands, tail = rest.partition("\n## How work lands\n")
+    assert lands, "## Steps is not followed by ## How work lands"
+    return re.sub(r"(?m)^size: \d+ lines$", "size: 0 lines", head + lands + tail)
+
+
+def _steps_of(document: str) -> list[str]:
+    lines = document.splitlines()
+    start = lines.index("## Steps") + 1
+    stop = lines.index("## How work lands", start)
+    return [line for line in lines[start:stop] if line]
+
+
+def test_the_full_detail_brief_has_the_same_facts_as_the_plain_one(tmp_path: Path) -> None:
+    """The step form adds no fact and drops none: cut `## Steps` out and the plain document
+    is what is left, and every section, bound and check the plain document carries is
+    named in a step, each check as `## Checks` renders it."""
+
+    plan = plan_document(
+        [{"name": CLAIM, "command": ["true"]}, {"name": "second-claim", "command": ["false"]}]
+    )
+    document = ticket_document(
+        reads=[*READS, f"{CONTRACTS}#32-the-block"],
+        done_when=[CLAIM, "second-claim"],
+    )
+    root = store(tmp_path, document, plan=plan)
+
+    plain = compiled(root)
+    full = compiled(root, TICKET, "--detail", "full")
+
+    assert _without_steps(full) == re.sub(r"(?m)^size: \d+ lines$", "size: 0 lines", plain)
+    steps = "\n".join(_steps_of(full))
+    for anchor in ("11-reports", "32-the-block"):
+        assert f"`{CONTRACTS}#{anchor}`" in steps
+    for entry in BOUNDS:
+        assert f"`{entry}`" in steps
+    for line in under(plain, "## Checks"):
+        assert f"   {line}" in _steps_of(full), line
+    assert "verify" not in steps, "the engine records no run: the gate decides done"
+    assert header(full)["size"] == f"{full.count(chr(10))} lines"
+
+
+def test_the_plain_brief_is_the_same_with_or_without_the_detail_flag(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`brief` without the flag, and with `--detail plain`, is the plain document."""
+
+    root = store(tmp_path)
+    golden = GOLDEN.format(
+        commit=_git(root, "rev-parse", "HEAD"), content=header(compiled(root))["content"]
+    )
+
+    assert compiled(root, TICKET, "--detail", "plain") == golden
+    code, out, err = run(root, TICKET, capsys=capsys)
+    assert (code, out, err) == (0, golden, "")
+    assert "## Steps" not in golden
+
+
+def test_steps_follow_bounds_in_the_order_an_implementer_meets_them(tmp_path: Path) -> None:
+    """Read, keep to the bounds, run each check, report; `## Steps` right after
+    `## Bounds`. A ticket citing nothing still has the last three."""
+
+    full = compiled(store(tmp_path), TICKET, "--detail", "full")
+    lines = full.splitlines()
+    assert lines.index("## Steps") > lines.index("## Bounds")
+    assert lines.index("## Steps") < lines.index("## How work lands")
+    steps = [line for line in _steps_of(full) if re.match(r"^\d+\. ", line)]
+    assert [line.split(" ", 2)[1] for line in steps] == ["Read", "Keep", "Run", "Report"]
+    assert [line.split(".", 1)[0] for line in steps] == ["1", "2", "3", "4"]
+    assert steps[-1] == (
+        "4. Report what changed, each check's verdict, what you decided beyond the ticket, "
+        "and the follow-ups you found."
+    )
+    assert "`example-claim` — `true` in `.`, timeout 120s" in full.split("## Steps", 1)[1]
+
+    bare = store(tmp_path, ticket_document(reads=[]), name="bare")
+    steps = [
+        line for line in _steps_of(compiled(bare, TICKET, "--detail", "full")) if line[0].isdigit()
+    ]
+    assert [line.split(" ", 2)[1] for line in steps] == ["Keep", "Run", "Report"]
+
+    unbounded = store(tmp_path, ticket_document(bounds=[]), name="unbounded")
+    keep = _steps_of(compiled(unbounded, TICKET, "--detail", "full"))
+    assert any("This ticket grants no path" in line for line in keep)

@@ -18,9 +18,9 @@ exists. Any project can send a finding back. How: `outcomebound_tools/research.p
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
 | Research is its own repository; OutcomeBound points agents at one clone of it, never vendors it (D52) | a submodule or a copy in each project, whose `AGENTS.md` a harness would load | user | decided |
-| A fact about a model, harness, provider or general practice moves, with the guidance as `models/guidance.md` and its tier table as `models/tiers.md` (D69); what OutcomeBound measured of its own text stays (`docs/evaluations.md`, `docs/prompt-standard.md`, `adapters/harnesses.json`) | splitting the files that mix both now | user | decided |
+| A fact about a model, harness, provider or general practice moves, with one guidance file per model under `models/`, tier table `applications/implementer-tiers.md` (D69); what OutcomeBound measured of its own text stays (`docs/evaluations.md`, `docs/prompt-standard.md`, `adapters/harnesses.json`) | splitting the files that mix both now | user | decided |
 | A citation of a moved file is `https://github.com/rajasdevel/outcomebound-research/blob/main/<path>` (`tree/main/` for a folder); an evidence id stays, resolved in that repository's `_evidence/*.jsonl` | relative links that break | user | decided |
-| The core skill reads advice with `outcomebound research models/guidance.md`, or the public link with no clone; `hand-off-tickets` reads `models/tiers.md` the same way, or asks the person | no route without a clone; a default tier | user | decided |
+| The core skill reads `models/README.md`, then the model's file, or the public link with no clone; `hand-off-tickets` reads `applications/implementer-tiers.md` likewise, or asks the person | no route without a clone; a default tier | user | decided |
 | One clone per machine: `OUTCOMEBOUND_RESEARCH` when set and not empty, else `~/.outcomebound/research`, a symlink `clone` makes (D59) | a clone per project | user | decided |
 | A folder is a clone when it holds `INDEX.md` | requiring `.git`, which an exported copy lacks | agent | assumed |
 | Printing never executes: nothing the clone holds runs, and Git does not; the commit is read from `.git` files | running Git, which reads the clone's configuration | user | decided |

@@ -57,7 +57,7 @@ def make_clone(root: Path, *, head: str = "ref: refs/heads/main", ref: str | Non
     root.mkdir(parents=True)
     (root / "INDEX.md").write_text("# Index\n", encoding="utf-8")
     (root / "models").mkdir()
-    (root / "models" / "guidance.md").write_text("advice\n", encoding="utf-8")
+    (root / "models" / "README.md").write_text("advice\n", encoding="utf-8")
     git = root / ".git"
     (git / "refs" / "heads").mkdir(parents=True)
     (git / "logs").mkdir()
@@ -99,8 +99,8 @@ def test_print_defaults_to_the_index_and_heads_it_with_the_commit_and_day(
     status, out, err = run(capsys)
     assert (status, err) == (0, "")
     assert out == header("INDEX.md", "# Index\n")
-    status, out, _ = run(capsys, "models/guidance.md")
-    assert out == header("models/guidance.md", "advice\n")
+    status, out, _ = run(capsys, "models/README.md")
+    assert out == header("models/README.md", "advice\n")
 
 
 def test_the_header_says_working_tree_and_a_modified_file_changes_the_digest(
@@ -108,12 +108,12 @@ def test_the_header_says_working_tree_and_a_modified_file_changes_the_digest(
 ) -> None:
     clone = make_clone(tmp_path / "clone")
     link_to(home, clone)
-    first = run(capsys, "models/guidance.md")[1].splitlines()[0]
-    (clone / "models" / "guidance.md").write_text("advice, edited\n", encoding="utf-8")
+    first = run(capsys, "models/README.md")[1].splitlines()[0]
+    (clone / "models" / "README.md").write_text("advice, edited\n", encoding="utf-8")
     (clone / "models" / "untracked.md").write_text("never committed\n", encoding="utf-8")
-    edited = run(capsys, "models/guidance.md")[1]
+    edited = run(capsys, "models/README.md")[1]
     untracked = run(capsys, "models/untracked.md")[1]
-    assert edited == header("models/guidance.md", "advice, edited\n")
+    assert edited == header("models/README.md", "advice, edited\n")
     assert untracked == header("models/untracked.md", "never committed\n")
     assert "working tree of the clone at 0123456789ab" in first
     assert edited.splitlines()[0] != first
@@ -124,9 +124,9 @@ def test_the_digest_is_of_the_text_as_printed_where_the_file_is_not_utf8(
     home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
 ) -> None:
     clone = make_clone(tmp_path / "clone")
-    (clone / "models" / "guidance.md").write_bytes(b"caf\xe9\n")
+    (clone / "models" / "README.md").write_bytes(b"caf\xe9\n")
     link_to(home, clone)
-    assert run(capsys, "models/guidance.md")[1] == header("models/guidance.md", "caf\ufffd\n")
+    assert run(capsys, "models/README.md")[1] == header("models/README.md", "caf\ufffd\n")
 
 
 def test_the_commit_is_read_from_a_packed_ref(
@@ -289,12 +289,12 @@ def test_a_variable_naming_a_folder_without_an_index_is_not_a_clone(
 def test_no_clone_exits_three_naming_the_public_link(
     home: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
 ) -> None:
-    status, out, err = run(capsys, "models/guidance.md")
+    status, out, err = run(capsys, "models/README.md")
     assert (status, out) == (3, "")
     assert err == (
         "research: no clone configured: OUTCOMEBOUND_RESEARCH is unset and "
         "~/.outcomebound/research does not exist\n"
-        f"read it at {BLOB}models/guidance.md\n"
+        f"read it at {BLOB}models/README.md\n"
         "clone it once per machine, with the person's yes: outcomebound research clone "
         "<destination>\n"
     )
@@ -588,7 +588,7 @@ def test_ingest_prints_every_field_that_was_given(
         "--quote",
         "one two three",
         "--corrects",
-        "models/guidance.md",
+        "models/README.md",
     )
     assert status == 0
     names = [name for name, _ in parse_qsl(urlsplit(out.splitlines()[0]).query)]
@@ -603,7 +603,7 @@ def test_ingest_prints_every_field_that_was_given(
         "corrects",
     ]
     saved = json.loads(inbox(project)[0].read_text(encoding="utf-8"))
-    assert saved["quote"] == "one two three" and saved["corrects"] == "models/guidance.md"
+    assert saved["quote"] == "one two three" and saved["corrects"] == "models/README.md"
     assert saved["version"] == 1
 
 
@@ -1082,11 +1082,11 @@ def test_an_argument_that_is_not_utf8_is_refused_not_a_traceback(
 
 def test_a_closed_pipe_ends_quietly(home: Path, tmp_path: Path) -> None:
     clone = make_clone(tmp_path / "clone")
-    (clone / "models" / "guidance.md").write_text("line\n" * 400_000, encoding="utf-8")
+    (clone / "models" / "README.md").write_text("line\n" * 400_000, encoding="utf-8")
     environment = {**os.environ, "HOME": str(home), research.ENVIRONMENT: str(clone)}
     environment["PYTHONPATH"] = str(ROOT)
     child = subprocess.Popen(
-        [sys.executable, "-m", "outcomebound_tools", "research", "models/guidance.md"],
+        [sys.executable, "-m", "outcomebound_tools", "research", "models/README.md"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=environment,
@@ -1106,9 +1106,12 @@ def test_the_skills_and_the_fragment_name_what_the_code_does() -> None:
         return " ".join((ROOT / path).read_text(encoding="utf-8").split())
 
     core = words("skills/using-outcomebound/SKILL.md")
-    assert "`outcomebound research models/guidance.md`" in core
-    assert research.BLOB + "models/guidance.md" in core
-    assert "`outcomebound research models/tiers.md`" in words("skills/hand-off-tickets/SKILL.md")
+    assert "`outcomebound research models/README.md`" in core
+    assert "`outcomebound research models/<maker>/<model-id>.md`" in core
+    assert research.BLOB + "models/README.md" in core
+    assert "`outcomebound research applications/implementer-tiers.md`" in words(
+        "skills/hand-off-tickets/SKILL.md"
+    )
     named = set(re.findall(r"outcomebound research (\w+)", words("fragments/setup/research.md")))
     assert named == set(research.SUBCOMMANDS)
 

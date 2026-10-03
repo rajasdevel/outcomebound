@@ -197,7 +197,6 @@ required.
   and how each reaches `AGENTS.md`
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to propose and land a change
 - [SECURITY.md](SECURITY.md) — how to report a vulnerability privately
-- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — the Contributor Covenant 2.1, and how to report a breach
 - [CHANGELOG.md](CHANGELOG.md)
 
 Apache-2.0, with one exception: the text `adopt` writes into your repository carries no licence-copy
