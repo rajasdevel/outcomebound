@@ -25,37 +25,39 @@ A second aim is the same quality for less: no ceremony that a change does not ne
 hand-offs that let a smaller, lower-priced model build what a strong model planned
 ([below](#hand-off-to-a-smaller-model)). This is an aim, not yet a measured result.
 
-## What changed when we measured it
+## What it changes, measured
 
-We gave one model two tasks, with and without OutcomeBound: a two-character bug fix, and a new
-option across two modules. The project's `CONTRIBUTING.md` suggested a design note, a decision
-record, the full suite and a second reader for every change.
+The test project suggested a design note, a decision record, the full slow suite and a second
+reader for every change. The task was a two-character bug fix, then a small new option. Without
+OutcomeBound, every run treated the fix like a feature. With it, every run treated the fix like
+a fix.
 
-| Three runs of each task | With OutcomeBound | Without |
+| Three runs of each task, one model | With OutcomeBound | Without |
 | --- | --- | --- |
-| Made the change correctly | 6 of 6 | 6 of 6 |
-| Wrote a design note or a decision record | 0 of 6 | 6 of 6 |
-| Ran the slow full suite | 1 of 6 | 6 of 6 |
-| **Passed:** a regression test, no process document, no slow suite for the two-character fix | **6 of 6** | **0 of 6** |
+| Made the change correctly, with a regression test | 6 of 6 | 6 of 6 |
+| Skipped the design note and decision record the change did not need | 6 of 6 | 0 of 6 |
+| Ran focused tests instead of the slow full suite | 5 of 6 | 0 of 6 |
+| **Right-sized, by the task's own bar** | **6 of 6** | **0 of 6** |
 
-With OutcomeBound, every answer on the two-character fix reported the skipped suite as
-`UNVERIFIED`, with the reason. The model was `gpt-6.1-sol` through Codex, on 2026-09-30.
+Same correctness, less ceremony, and a report you can trust: on the fix, every run with
+OutcomeBound named the skipped suite as `UNVERIFIED` and gave the reason. The model was
+`gpt-6.1-sol` through Codex, 2026-09-30. Every result, its method and its limits are in the
+[evaluation record](docs/evaluations.md).
 
-What this does not show yet, from [the evaluation record](docs/evaluations.md):
+## Where it stands
 
-- **Underengineering.** No eval task yet separates the arms on a shortcut that breaks something.
-- **More correct work.** On the four core tasks, runs without OutcomeBound did the work too. The
-  difference was in the report.
-- **Other models.** Every behaviour run used OpenAI models through Codex. No Claude or Gemini
-  model has run yet.
-- **Effect size.** Three runs a cell shows only a large effect, not its size.
-- **Lower cost.** On the skill tasks, runs with the install used about 27% more tokens and 18%
-  more time.
+| | Today | Planned |
+| --- | --- | --- |
+| **Right-sized work** | Shown on the over-engineering side: process a change does not need stops | The under-engineering side: a shortcut that breaks something. No task separates the arms there yet |
+| **Honest reports** | Shown: a skipped check is named `UNVERIFIED`, with the reason | More harnesses and surfaces |
+| **Autonomy in your bounds** | In the contract and the skills; no run in any arm interrupted the person | Measure it on long, multi-session work |
+| **Efficiency** | A test-first hand-off took a smaller model from 6 to 9 passes of 9 on three small tasks | Cost per finished task. The install adds text, and text costs tokens: about 27% more per run today. The bet is fewer rounds, and that bet is not yet measured |
+| **Models** | OpenAI models through Codex, three runs a cell | Claude, Gemini and open-weight models; more runs |
 
-By design, OutcomeBound sizes only process that a project suggests: process that your project
-requires stays required. And its checks are not an authority boundary. The instruction check is
-lexical, and you judge what it finds. The quality floor makes a loosening visible, but
-it cannot prevent one: only your branch protection can.
+Two things hold by design. OutcomeBound sizes only process that a project suggests: what your
+project requires stays required. And its checks inform you; they are not an authority boundary.
+The instruction check is lexical, and you judge what it finds. The quality floor makes a
+loosening visible, and your branch protection is what prevents one.
 
 ## Try it
 
