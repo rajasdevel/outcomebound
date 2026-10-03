@@ -3,8 +3,8 @@ id: workspace
 family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating a worktree or working file, resuming or handing off work, or keeping a fact for later sessions
-detect: []
-version: 2
+detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
+version: 3
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on
 this machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and

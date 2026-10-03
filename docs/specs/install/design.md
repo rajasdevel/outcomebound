@@ -11,9 +11,8 @@ An adopter runs one command, `outcomebound adopt`, and every harness they use lo
 operating contract, the facts that settle work in this project, and a pointer to each piece of
 guidance with the condition that calls for it. Running it again from a newer release is the
 upgrade; `--check` says whether the install is current; `--remove` takes it out. How:
-`outcomebound_tools/adopt.py`, `outcomebound_tools/facts.py` and `outcomebound_tools/fragments.py`,
-each opening with what it decides; how `outcomebound` is installed and launched is the
-[distribution design](../distribution/design.md).
+`outcomebound_tools/adopt.py`, `outcomebound_tools/facts.py` and `outcomebound_tools/fragments.py`;
+how `outcomebound` is installed and launched is the [distribution design](../distribution/design.md).
 
 ## What AGENTS.md carries
 
@@ -33,7 +32,7 @@ cannot observe is left out, and the install report names it `UNVERIFIED`.
 | Precedence | these facts over any instruction that disagrees; the project's own instructions in `AGENTS.md` and each selected harness's import host that exists over OutcomeBound's; process a project document only suggests is sized like any other step | never |
 
 A test command is a runner named as a whole word or command (`pytest`, `make test`, `npm run
-test:ci`, `go test`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`; `make
+test:ci`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`; `make
 test-data` and `npm run test:watch` are not.
 
 The facts record holds the selection (`fragments`), the `done` commands, any `style`, and `inputs`: each source
@@ -57,21 +56,21 @@ an install would carry and the fragment bodies, for a delegate's role prompt.
 | --- | --- | --- | --- |
 | One route, `outcomebound adopt` | a second, modular install route beside it | user | decided |
 | Re-running is the upgrade, and Git is the undo | three-way merges against copies of every release | user | decided |
-| No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records, whose shape would sit beside format 2's for the same paths | user | decided |
+| No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records, whose shape would sit beside format 2's | user | decided |
 | The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last | per-artifact base caches, source receipts and bundle digests | agent | decided |
 | An owned block or file whose bytes differ from its record is refused without `--force` | overwriting it, or merging | agent | decided |
 | `--check` ends, when a record is not current, with the command that makes it current | one `doctor` verb over every layer, recording each choice declined | agent | decided |
 | A harness that cannot be made to load `AGENTS.md` is refused before any write | a reminder and exit 0, which leaves an install nothing loads | agent | decided |
-| A harness's host file gets an `@AGENTS.md` import block, except where the harness table's row records `reads_agents_md` and none of the files it lists is in the target: that harness reads `AGENTS.md` itself, and no host file is written | creating the host file on every install for that harness | user | decided |
+| A harness's host file gets an `@AGENTS.md` import block, except where the harness table's row records `reads_agents_md` and none of the files it lists is in the target: that harness reads `AGENTS.md` itself | creating the host file on every install for that harness | user | decided |
 | An install prints the words an agent always loads, its blocks and each skill's description a harness lists, and no size refuses it | a size ceiling that refuses an install | user | decided |
 | One native copy per harness of each skill an install carries | a canonical `.outcomebound/skills/` copy beside the native ones | agent | decided |
-| An install carries the four default skills and each skill a selected fragment's `skills:` names, as `tickets` names `slice-tickets`; the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove`, or deselecting its fragment, removes it | every shipped skill in every install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
+| An install carries the four default skills and each skill a selected fragment's `skills:` names; the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove`, or deselecting its fragment, removes it | every shipped skill in every install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
 | Fragment bodies live in their pointer targets, and `AGENTS.md` carries one pointer per fragment | fragment bodies composed into one block every session loads | user | decided |
-| Done is what `--done` records, in run order; `--detect` proposes the floor's runner, `outcomebound floor check . --base origin/main`, where a floor is installed, then the first test command the CI test fact reads, or, where CI names none, discovery's first check command for the root. Like the install, `--detect` refuses a target outside a Git work tree | Done read from a profile; discovery's candidate ahead of the command CI already runs | agent | decided |
+| Done is what `--done` records, in run order; `--detect` proposes the floor's runner, `outcomebound floor check . --base origin/main`, where a floor is installed, then the first test command the CI test fact reads, or, where CI names none, discovery's first check command for the root. `--detect` too refuses a target outside a Git work tree | Done read from a profile; discovery's candidate ahead of the command CI already runs | agent | decided |
 | The CI test fact is adopt's reading; discovery's document is unchanged | a field in discovery's document | agent | decided |
 | Precedence never names a file a harness documents as one person's | naming every file a harness may load, so an untracked file could make a checkout stale | agent | decided |
 | `generic` serves a harness the table does not list: named as `--harness generic`, the default where none is named or recorded, and what `--detect` proposes where no harness file is found. Each skill goes once under `.outcomebound/skills/`, which the pointers name even beside native copies, and the install report reads `UNVERIFIED` that the harness reads `AGENTS.md`. Any other name the table does not list is refused | no route for such a harness; the kernel alone, with no skill and no pointer | agent | decided |
-| Selecting the `workspace` fragment also installs `.agents/.gitignore` from `templates/workspace.gitignore`, keeping its four folders out of Git, as its own record of kind `ignore`, owned whole; its first line sends any other ignore to the root `.gitignore` | lines in the root `.gitignore`, whose `#` comments the managed-block markers do not fit; asking the adopter to ignore them by hand | user | decided |
+| Selecting the `workspace` fragment also installs `.agents/.gitignore` from `templates/workspace.gitignore`, keeping its four folders out of Git, as its own record of kind `ignore`, owned whole; its first line sends any other ignore to the root `.gitignore`. `--detect` proposes the fragment where one of those folders exists, not for `.agents/skills/`, which a Codex or Amp install writes | lines in the root `.gitignore`, whose `#` comments the managed-block markers do not fit; asking the adopter to ignore them by hand; a proposal for any `.agents/` folder | user | decided |
 | `--finish-check` writes a `hook` entry for `claude-code` and `codex`: the [finish-check design](../finish-check/design.md) | every harness | user | decided |
 
 ## Edges

@@ -811,6 +811,37 @@ def test_detect_without_a_harness_sign_proposes_generic(tmp_path: Path, capsys: 
     assert (target / GENERIC_SKILL).is_file()
 
 
+@pytest.mark.parametrize("folder", ["worktrees", "work", "handoffs", "shared-memory"])
+def test_detect_proposes_the_workspace_where_a_workspace_folder_exists(
+    tmp_path: Path, capsys: Capture, folder: str
+) -> None:
+    """Git ignores these folders, so detection reads the disk, and the proposal installs."""
+
+    target = repo(tmp_path / "t", {f".agents/{folder}/note.md": "# note\n"})
+    (target / ".gitignore").write_text(f".agents/{folder}/\n", encoding="utf-8")
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    words = shlex.split(out, comments=True)
+    assert code == 0 and words[words.index("--fragments") + 1] == "workspace"
+    assert run(capsys, *words[2:])[0] == 0
+    assert (target / ".agents/.gitignore").is_file()
+
+
+def test_detect_does_not_propose_the_workspace_for_skills_alone(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Codex and Amp read skills under .agents/skills/, which adopt itself writes."""
+
+    target = repo(tmp_path / "t", {".codex/config.toml": "", "README.md": "# T\n"})
+    assert run(capsys, str(target), "--harness", "codex")[0] == 0
+    assert (target / ".agents/skills").is_dir()
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and "workspace" not in out
+
+
 # --- facts and pointers -----------------------------------------------------------
 
 WORKFLOW = """\

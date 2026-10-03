@@ -48,6 +48,13 @@ The bump comes from what an adopter must do, not from the commit type; see
   were one sentence of one ticket. Each tier had one model, all from one maker, through one
   harness, with 9 runs a cell ([docs/evaluations.md](docs/evaluations.md), E17). The `tickets`
   fragment is now version 6. Run `adopt` again to install the skill.
+- A guide to the agent workspace: [docs/workspace.md](docs/workspace.md). It says how to select the
+  `workspace` fragment, what `adopt` writes and removes, what Git keeps and ignores, what a handoff
+  holds, and what the fragment does not give you.
+- `adopt --detect` now proposes the `workspace` fragment when `.agents/worktrees`, `.agents/work`,
+  `.agents/handoffs` or `.agents/shared-memory` exists. A folder that holds only `.agents/skills/`
+  does not trigger it. The `workspace` fragment is now version 3. Run `adopt` again to update the
+  copy.
 - Dependabot now proposes updates for the pinned GitHub Actions. The new-issue page now links to
   a private vulnerability report and to the research repository.
 

@@ -237,6 +237,10 @@ a loosening visible; your branch protection is what holds it to a person's decis
   phrases and risky harness settings in the files your agents load. It writes nothing.
 - **Text for people** (`adopt --human-style ste`): agents write reports and commit messages for
   people in the style of ASD-STE100 Simplified Technical English.
+- **Workspace** (the `workspace` fragment): where several agents share one machine's checkout, four
+  folders under `.agents/` hold each task's worktree, working files, hand-off page and shared
+  notes, and Git ignores them. The [workspace guide](docs/workspace.md) says what it gives you and
+  what it does not.
 - **Research** (the `research` fragment): [outcomebound-research](https://github.com/rajasdevel/outcomebound-research)
   is a separate, neutral library about models, providers, harnesses and practices. From a clone
   (`outcomebound research clone <folder> --accept`), `outcomebound research <path>` prints a file
