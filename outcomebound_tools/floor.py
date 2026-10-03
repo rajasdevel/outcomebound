@@ -884,6 +884,10 @@ DIRECTIVE = re.compile(
     r"|\bgitleaks:allo[w]\b",
     re.IGNORECASE,
 )
+# Files no linter or type checker reads. A suppression comment quoted in one changes no finding,
+# except gitleaks', since gitleaks scans every file.
+DOCUMENT_SUFFIXES = frozenset({".md", ".markdown", ".rst", ".txt", ".adoc"})
+GITLEAKS_ONLY = re.compile(r"\bgitleaks:allo[w]\b", re.IGNORECASE)
 TRAILER = re.compile(
     r"^Floor-Loosening:[ \t]*(?P<what>[^\n]*?[^;\s])[ \t]*;[ \t]*ruled[ \t]+(?P<ruling>\S+)[ \t]*$",
     re.MULTILINE,
@@ -1015,7 +1019,8 @@ def _directive_counts(patch: str) -> dict[str, Counter[str]]:
                 path = line[6:]
             hunk = line.startswith("@@")
         elif line.startswith(("+", "-")):
-            found = Counter(" ".join(match.split()).lower() for match in DIRECTIVE.findall(line))
+            pattern = GITLEAKS_ONLY if Path(path).suffix.lower() in DOCUMENT_SUFFIXES else DIRECTIVE
+            found = Counter(" ".join(match.split()).lower() for match in pattern.findall(line))
             counts = net.setdefault(path, Counter())
             if line.startswith("+"):
                 counts.update(found)
@@ -1446,7 +1451,8 @@ and a loosening since the merge base with REF fails: an added baseline line; a c
 floor.json drops or changes, a move from gate to baseline included; an adoption record it
 changes or removes; a change to ruff.toml, .ruff.toml, mypy.ini, .mypy.ini, .gitleaks.toml,
 .gitleaksignore, .shellcheckrc, shellcheckrc or the [tool.ruff], [tool.mypy] and [mypy]
-settings; an added noqa, type ignore, mypy, shellcheck-disable or gitleaks-allow comment.
+settings; an added noqa, type ignore, mypy, shellcheck-disable or gitleaks-allow comment
+(in a document, only gitleaks-allow).
 None of these loosens: a claim floor.json adds, with its first baseline; a claim's move
 from baseline to gate; an adoption record where there was none.
 A commit in REF..HEAD whose message has the line

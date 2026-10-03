@@ -446,6 +446,9 @@ LOOSENINGS = {
         "src/b.py": "token = 1  " + comment("gitleaks" + ":allow") + "\n"
     },
     "a .shellcheckrc appears": {".shellcheckrc": "disable=SC2086\n"},
+    "a document adds a gitleaks allow": {
+        "docs/notes.md": "token = 1  " + comment("gitleaks" + ":allow") + "\n"
+    },
 }
 TIGHTENINGS = {
     "nothing changes": {},
@@ -458,6 +461,13 @@ TIGHTENINGS = {
     "a line keeps its noqa": {"src/app.py": "import os, sys  " + comment("noqa: F401") + "\n"},
     "a noqa is removed": {"src/app.py": "import os\n"},
     "a file with a noqa is renamed": {"src/app.py": "", "src/moved.py": BEFORE["src/app.py"]},
+    "a document quotes suppression comments": {
+        "docs/floor.md": "The check prints: adds "
+        + comment("noqa: S307")
+        + "\nand "
+        + comment("type: ignore")
+        + "\n"
+    },
 }
 
 

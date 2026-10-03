@@ -43,7 +43,8 @@ which opens with what it decides, and `outcomebound floor --help`.
 - an adoption record changed or removed;
 - a change to a tool config the floor runs under, `.gitleaksignore` included (`check --help` lists
   them);
-- an added suppression comment for a tool the floor runs (`check --help` names each kind).
+- an added suppression comment for a tool the floor runs (`check --help` names each kind); in a
+  document (`.md`, `.rst`, `.txt`), which only gitleaks reads, only gitleaks' allow comment counts.
 
 So fitting a floor that is already committed, such as a strict one, loosens and needs its
 `Floor-Loosening` line; before the floor's first commit lands, every baseline is a first one.
