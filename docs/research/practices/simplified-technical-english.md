@@ -106,14 +106,18 @@ neural (M, Marzouk 2019). The owner calls writing STE "a demanding task" needing
 
 ## How to apply
 
-1. Do not adopt STE as a rule, a dictionary, a conformance claim or an engine check, for text
-   OutcomeBound installs or for an adopting project's documents.
-2. Keep its two transferable ideas where small readers are: one instruction per sentence and one
-   term per meaning, in spec-tier hand-off packages. Both are plain-writing advice and need no
-   licence.
-3. Do not name "ASD-STE100" in a prompt as a style instruction (finding 4).
-4. Whether STE-style wording adds anything to a spec-tier package beyond those two ideas is
-   measurable only by an arm of the hand-off comparison, on the least capable reader.
+1. Use STE for what it was built for, human readers, and nowhere else: text a model writes for a
+   person (reports, decision briefs, handovers, pull request descriptions, questions, documents
+   written for people). Text a model reads (instructions, skills, tickets' implementer sections,
+   hand-off packages) is out of scope.
+2. Refer to the standard by name and copy none of its text: no rules restated, no dictionary, no
+   claim of conformance. Naming it is enough for a capable model to write in its manner; ASD warns
+   that such text can look like STE without applying its rules, which matters only for a
+   conformance claim.
+3. No length limit: STE's sentence limits are not adopted as a rule or a check.
+4. Guard the facts: the one direct test found (finding 4) lost about half of a code explanation's
+   facts when the prompt named "ASD-STE100". Say that every fact, number and caveat is kept and
+   that the project's own terms stay as they are, and read the first outputs for loss.
 
 ## Limits
 
