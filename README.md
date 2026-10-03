@@ -201,10 +201,38 @@ passed 9 of 9 with it or without it. The whole gain was one requirement on one o
 tasks, and the design package's effect did not show. Each tier had one model, all from one maker,
 through one harness.
 
+### A quality floor for a project with history
+
+Most projects already carry lint and type debt. Fixing all of it first blocks real work, and
+ignoring it lets it grow. The floor records the findings you have today, and fails only what is
+new. This repository runs on its own floor: 28 old lint findings and 46 old type findings are in
+a baseline, and every change since has added none. When a change adds new ones, the check names
+them:
+
+```text
+FAIL python.lint (2 new, 28 baselined)
+  +1 outcomebound_tools/tickets.py:F401:`os` imported but unused  at 260:12
+  +1 outcomebound_tools/tickets.py:S307:Use of possibly insecure function; consider using `ast.literal_eval`  at 261:12
+FAIL python.types (1 new, 46 baselined)
+  +1 outcomebound_tools/tickets.py:no-untyped-def:Function is missing a type annotation  at 259:0
+```
+
+An agent that hides a finding instead of fixing it fails too. A new suppression comment, a
+baseline that grows or a changed tool config is a loosening, and it passes only when a commit
+names the decision that allowed it:
+
+```text
+FAIL loosening (1 in origin/main..HEAD; no commit carries Floor-Loosening: <what>; ruled <id>)
+  outcomebound_tools/tickets.py adds # noqa: s307
+```
+
+`outcomebound floor propose . > floor.json` prints the claims for your stack (Python and shell),
+and `outcomebound floor apply . --floor floor.json --accept` fits them to the findings you have
+today. It runs your own ruff, mypy, gitleaks and shellcheck with your own configs. The floor makes
+a loosening visible; your branch protection is what holds it to a person's decision.
+
 ### Also optional
 
-- **Quality floor** (`outcomebound floor`): blocks new format, lint, type, secret and shell
-  findings with your own tools, for Python and shell. Old findings go into a baseline.
 - **Instruction check** (`outcomebound instructions check .`): reports hidden characters, override
   phrases and risky harness settings in the files your agents load. It writes nothing.
 - **Text for people** (`adopt --human-style ste`): agents write reports and commit messages for
