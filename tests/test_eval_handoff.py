@@ -27,7 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "evals" / "fixtures"
 HANDOFF = FIXTURES / "handoff"
 BASES = ("duration", "invoice", "tags")
-VARIANTS = ("ticket", "design", "spec", "full")
+VARIANTS = ("ticket", "design", "spec")
 NAMES = tuple(f"handoff-{base}-{variant}" for base in BASES for variant in VARIANTS)
 NUMBERS = {"duration": 7, "invoice": 8, "tags": 9}
 PACKAGE_TESTS = {
@@ -456,7 +456,7 @@ def test_the_message_is_the_brief_of_the_seed_then_the_variant_s_package(
     message = done.stdout
     assert f"# Brief — #{NUMBERS[base]} " in message
     assert f"compiled-at: {_seed(target)} (clean)" in message
-    assert ("## Steps" in message) is (variant == "full")
+    assert "## Steps" not in message
     packages = {"design": f"# Package — #{NUMBERS[base]}, design", "spec": "one step"}
     assert ("# Package" in message) is (variant in packages)
     if variant in packages:

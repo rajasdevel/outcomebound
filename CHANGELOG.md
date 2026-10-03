@@ -23,9 +23,10 @@ The bump comes from what an adopter must do, not from the commit type; see
   the ticket alone. At the design tier it adds the approach, signatures, invariants, an edge-case
   table and milestones. At the spec tier the ticket is cut into steps, each with failing tests and
   stubs written first and reviewed before the next. The tier comes from the person, or from
-  "Implementer tiers" in `docs/model-guidance.md`. Pending a comparison on request, what it does
-  for an adopter is `UNVERIFIED`. The `tickets` fragment is now version 6: run `adopt` again to
-  install the skill.
+  "Implementer tiers" in `docs/model-guidance.md`. In a comparison of 63 runs (2026-10-03), the
+  spec-tier package raised gpt-6-luna at xhigh from 6 to 9 of 9 and left gpt-6-astra at high at 9
+  of 9; the design package's effect did not show, since gpt-6-sol at medium passed 9 of 9 with the
+  ticket alone. The `tickets` fragment is now version 6: run `adopt` again to install the skill.
 
 ### Changed
 
@@ -35,6 +36,12 @@ The bump comes from what an adopter must do, not from the commit type; see
   and 4(d).
 - `slice-tickets` asks which implementer will build the work before slicing, unless the person
   has named one. The tickets are the same whatever the answer.
+
+### Removed
+
+- `tickets brief --detail full`. The hand-off comparison found the step form no better than the
+  plain brief (6 of 9 against 6 of 9) and below the spec-tier package (9 of 9), so `brief`
+  renders one document.
 
 ## [1.0.0] - 2026-10-01
 

@@ -109,7 +109,7 @@ provenance each run records.
 
 ## The hand-off fixtures
 
-These twelve fixtures do the comparison that `docs/specs/tickets/design.md` requires before a
+These nine fixtures did the comparison that `docs/specs/tickets/design.md` requires before a
 release carries `hand-off-tickets`. They measure the hand-off package on one implementer, not
 the kernel. Thus they are measured under `current` only, and run only when `--fixtures` names
 them. The runner does not enforce the arm: another arm runs, and its result is not this
@@ -126,14 +126,18 @@ ticket store. Each base has one accepted ticket, `<base>/ticket.md`:
 - `tags`, ticket #9, four files, a log format and its reader: tags on entries, a fifth field in
   the log that older logs do not have, and `report --tag`.
 
-Each base has four variants, `handoff-<base>-<variant>`. The variant sets what follows the brief
+Each base has three variants, `handoff-<base>-<variant>`. The variant sets what follows the brief
 in the message:
 
 - `ticket`: the brief alone.
 - `design`: the brief, then the design package, `<base>/design.md`.
 - `spec`: the brief, then the spec package, `<base>/spec.md`. Its fixed tests and its stubs
   are in the seed, and they fail there for the reasons the package gives (`<base>/spec.sh`).
-- `full`: the brief rendered with `--detail full`.
+
+The comparison of 2026-10-03 had a fourth variant, `full`: the brief rendered with
+`--detail full`. That arm did not beat `spec` (rule 3 below), so `--detail full` and the three
+`full` fixtures were removed, as the tickets design says. The rules below are kept as they were
+written before the runs. The results are in `docs/evaluations.md`.
 
 Each fixture has a `task.sh` in place of `prompt.md`. The runner runs it after the build, when
 the seed is final. Thus the brief in the message is the engine's own output for that

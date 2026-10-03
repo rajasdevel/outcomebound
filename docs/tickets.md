@@ -69,9 +69,9 @@ together, relations included, and reads no store.
 
 ### `brief`
 
-`brief <ticket> [--draft <file>…] [--detail full]` prints the document an implementer is handed:
+`brief <ticket> [--draft <file>…]` prints the document an implementer is handed:
 the ticket, each section its `reads` cites named by path and heading, its checks and its bounds.
-It quotes no section and writes nothing. `--detail full` adds the same facts as numbered steps.
+It quotes no section and writes nothing.
 
 ## Producing the export for the `github` store
 
