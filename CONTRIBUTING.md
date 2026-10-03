@@ -3,7 +3,8 @@
 Bug reports, proposals, fragments and fixes are welcome, as GitHub issues and pull requests. A
 report made from a real project reaches here in neutral form (see
 [Proposals and reports](#proposals-and-reports)). A security vulnerability goes privately, as
-[SECURITY.md](SECURITY.md) describes, never in a public issue.
+[SECURITY.md](SECURITY.md) describes, never in a public issue. Everyone who takes part follows the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 ## Your first pull request
 

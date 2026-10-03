@@ -35,6 +35,9 @@ The bump comes from what an adopter must do, not from the commit type; see
   raised gpt-6-luna at xhigh from 6 to 9 of 9 and left gpt-6-astra at high at 9 of 9; the design
   package's effect did not show, since gpt-6-sol at medium passed 9 of 9 with the ticket alone.
   The `tickets` fragment is now version 6: run `adopt` again to install the skill.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (Contributor Covenant 2.1), Dependabot updates for the
+  pinned GitHub Actions, and issue-form links to private vulnerability reports and to the research
+  repository.
 
 ### Changed
 

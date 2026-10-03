@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/rajasdevel/outcomebound/security/advisories/new
+    about: Report it privately. Do not open a public issue.
+  - name: Contribute research about models, harnesses or practices
+    url: https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md
+    about: Research lives in outcomebound-research, with its own finding form.
