@@ -2,20 +2,43 @@
 
 [![CI](https://github.com/rajasdevel/outcomebound/actions/workflows/ci.yml/badge.svg)](https://github.com/rajasdevel/outcomebound/actions/workflows/ci.yml)
 
-**Hand a coding agent an outcome. Get back work sized to it, a true report of what was checked,
-and only the decisions that are yours.**
+**Toward trustworthy delegation to coding agents.**
+
+Hand over the outcome. Get back work sized to it, an honest report of every check, and only the
+decisions that are yours.
 
 OutcomeBound is a short operating contract for coding agents, and a small engine that puts it
 into your repository and keeps it current. The contract goes into your `AGENTS.md`. The engine
 is Python standard library only. It does not run your agent, and it is not a framework.
 
-> **Our goal is trustworthy delegation. We are not there yet.** Today the evidence shows two
-> things, on a small number of runs: agents with OutcomeBound stop process that a change does
-> not need, and they keep the checks that the change does need. It does not yet show that the
-> work itself is more correct. [Evidence](#evidence) and [Limits](#limits) say exactly what is
-> measured.
+```mermaid
+flowchart LR
+    T(["A one-line bug fix"]) --> U["<b>Underengineered</b><br/>no test, and a report<br/>that says 'pushed'"]
+    T --> O["<b>Overengineered</b><br/>design note, decision record,<br/>the full slow suite"]
+    T --> R["<b>Right-sized</b><br/>the fix, a regression test,<br/>a report of what ran and what did not"]
+    classDef bad fill:#fdecea,stroke:#c0392b,color:#7b241c
+    classDef good fill:#e8f6ee,stroke:#1e8449,color:#145a32
+    class U,O bad
+    class R good
+```
 
-## What it asks of an agent
+Coding agents miss in both directions, often on the same day. OutcomeBound asks them for the
+third path, every time, and for a report you can believe.
+
+## How delegation works with it
+
+```mermaid
+flowchart LR
+    Y(["You"]) -- "the outcome<br/>and your bounds" --> A["Coding agent<br/>+ OutcomeBound"]
+    A --> W["The change,<br/>sized to the outcome"]
+    A --> C["Each check:<br/>PASS · FAIL · UNVERIFIED"]
+    A --> B["Decision briefs:<br/>only what is yours to decide"]
+    W --> Y2(["You review"])
+    C --> Y2
+    B --> Y2
+    classDef you fill:#eaf2fb,stroke:#2e86c1,color:#1b4f72
+    class Y,Y2 you
+```
 
 | | The agent… | So that… |
 | --- | --- | --- |
@@ -26,9 +49,14 @@ is Python standard library only. It does not run your agent, and it is not a fra
 Each decision that is yours comes back as a short **decision brief**: the question, the
 options with their downsides, a recommendation, and whether it can be undone.
 
-A second aim is **cost efficiency**: let a strong model plan the work and a cheaper model build
-it, with as little loss of quality as we can measure. See [Hand off to a cheaper
-model](#hand-off-to-a-cheaper-model).
+**Efficient by intent.** The aim is the same quality for less: no ceremony that a change does
+not need, and plans detailed enough for a smaller, lower-priced model to build. See [Hand off to
+a smaller model](#hand-off-to-a-smaller-model).
+
+**Measured so far:** on a project that suggests heavy process for every change, agents with
+OutcomeBound made small changes with a regression test and no process documents, and agents
+without it did not (6 of 6 against 0 of 6). [Evidence](#evidence) gives the scope, and [What is
+not measured yet](#what-is-not-measured-yet) the rest.
 
 ## Try it
 
@@ -182,9 +210,9 @@ flowchart TD
 The check runs only the Done commands that the manifest records. The hook entry holds their
 digest, so a changed command list runs nothing until you run `adopt` again.
 
-## Hand off to a cheaper model
+## Hand off to a smaller model
 
-For ticket work, a strong model can plan and slice, and a cheaper model can build. The
+For ticket work, a strong model can plan and slice, and a smaller, lower-priced model can build. The
 `hand-off-tickets` skill shapes what the implementer gets by its tier:
 
 ```mermaid
@@ -201,8 +229,8 @@ flowchart LR
 The tier comes from you, or from the placement table in the research library. In a comparison
 of 63 runs, the spec package raised `gpt-6-luna` at `xhigh` from 6 to 9 passes of 9, and the
 same package did not lower `gpt-6-astra` at `high` (9 of 9 either way). The whole gain came from
-one requirement on one of three small tasks, and the design package's effect did not show. This
-is a direction we are measuring, not a result we generalise.
+one requirement on one of three small tasks, and the design package's effect did not show. We
+continue to measure this on longer work and more models.
 
 ## Evidence
 
@@ -219,23 +247,24 @@ reader. Both arms made correct changes. This is two tasks, on one model (`gpt-6.
 Codex), twelve runs. Every result, its method and its limits are in
 [docs/evaluations.md](docs/evaluations.md).
 
-## Limits
+## What is not measured yet
 
-- **Underengineering is not measured yet.** No fixture yet separates the arms on a shortcut that
-  breaks something.
-- **The work was not more correct.** On the core fixtures, runs without OutcomeBound did the same
-  work; the difference was in how they reported it.
-- **One model family.** Every behaviour run used OpenAI models through Codex. No Claude, Gemini or
-  open-weight model has been measured.
-- **Small samples.** Three runs a cell shows only a large effect, never its size.
-- **It costs tokens.** On the skill fixtures, runs with the install used about 27% more tokens and
-  18% more time.
-- **It sizes suggested process only.** Process that your project requires stays required: a
-  project's own instructions outrank OutcomeBound's.
-- **The checks are not an authority boundary.** The instruction check is lexical and you judge
-  what it finds. A floor loosening is allowed by a commit line, which branch protection, not the
-  floor, holds to a person's decision.
-- **Few adopters so far.** It has been used in this repository and one outside project.
+These are known for certain, from the evaluation record:
+
+- **Underengineering.** No fixture yet separates the arms on a shortcut that breaks something.
+- **Correctness.** On the core fixtures, runs without OutcomeBound did the same work; the
+  difference was in how they reported it.
+- **Other model families.** Every behaviour run used OpenAI models through Codex. Claude, Gemini
+  and open-weight models are not measured yet.
+- **Effect size.** Three runs a cell shows a large effect, not its size.
+- **Token use.** On the skill fixtures, runs with the install used about 27% more tokens and 18%
+  more time.
+
+Two limits are by design. OutcomeBound sizes only process that a project suggests: process your
+project requires stays required, because a project's own instructions outrank OutcomeBound's.
+And its checks are not an authority boundary: the instruction check is lexical and you judge
+what it finds, and a floor loosening needs a commit line that branch protection, not the floor,
+holds to a person's decision.
 
 ## Works with
 
@@ -277,22 +306,16 @@ own name.
 
 ## Acknowledgements
 
-OutcomeBound's text is its own, but many of its ideas come from others. We name them for
-credit; none of them is affiliated with this project or endorses it.
+The text here is OutcomeBound's own. Many of the ideas behind it come from these projects and
+standards, named for credit; none is affiliated with OutcomeBound or endorses it.
 
-- [AGENTS.md](https://agents.md/) — the shared instruction file that the contract lives in.
-- [Agent Skills](https://agentskills.io/specification) — the skill format the skills follow.
-- [superpowers](https://github.com/obra/superpowers) by Jesse Vincent and
-  [Matt Pocock's skills](https://github.com/mattpocock/skills) — ideas on tests that are worth
-  keeping, on separating what a person said from what was assumed, and on when a run should stop.
-- Kent Beck's *Test Desiderata*, DeMillo, Lipton and Sayward's work on mutation testing (1978),
-  and the Google Testing Blog — the testing ideas behind `tests-worth-keeping`.
-- [Inspect](https://inspect.aisi.org.uk/) by the UK AI Security Institute — ideas on scoring and
-  handling errors in the eval fixtures.
-- [ASD-STE100 Simplified Technical English](https://www.asd-ste100.org/) — the style that
-  `--human-style ste` names. The standard is named, not copied.
-- The documentation of Claude Code, Codex, Cursor, Gemini CLI and Amp, which the harness table
-  cites row by row.
+- [agents.md](https://agents.md/)
+- [agentskills/agentskills](https://github.com/agentskills/agentskills)
+- [obra/superpowers](https://github.com/obra/superpowers)
+- [mattpocock/skills](https://github.com/mattpocock/skills)
+- [anthropics/skills](https://github.com/anthropics/skills)
+- [UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai)
+- [ASD-STE100](https://www.asd-ste100.org/)
 
-Each idea, and the exact source it came from, is listed in the research library's
+Each idea, with the exact source it came from, is listed in the research library's
 [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
