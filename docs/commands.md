@@ -74,8 +74,9 @@ the agent reads the fragment only when it runs a command.
   - Fixes: large output in the context. In a test, `git diff` printed 10,005 lines and
     `git diff --stat` printed 2 lines. One minified line of 400 KB became 261 bytes.
   - Source: Anthropic, "Writing tools for agents"; test on 2026-10-03.
-- **Send long output to a file.** Write the output to a file. Use a task folder such as `.agents/work/<task>/` when the repository has one. Else use a temporary file. Then
-  read the end of the file and the exit code:
+- **Send long output to a file.** Write the output to a file. Use a task folder such as
+  `.agents/work/<task>/` when the repository has one. Else use a temporary file. Then read the
+  end of the file and the exit code:
   `make check > .agents/work/<task>/check.log 2>&1; rc=$?; tail -n 40 .agents/work/<task>/check.log; echo "exit=$rc"`.
   - Fixes: in Claude Code, the output of a failed command is cut to about 10,000 characters
     from the start and the end. The first error is often in the middle. Search the file for it.
@@ -91,20 +92,33 @@ the agent reads the fragment only when it runs a command.
 
 ## Habits for a specified case
 
+The fragment does not name these habits. They help only in the case that each one states. To
+give them to your agents, add them to your `local` fragment.
+
 - **Package managers**, when the project uses them:
   `DEBIAN_FRONTEND=noninteractive apt-get -y -q` (run `apt-get -s` first when packages can be
   removed; do not use `-qq`); `pip install -q --no-input --disable-pip-version-check` (do not
   use `-qqq`); `uv ... --no-progress`; `npm install --no-fund --no-progress`. Do not use
   `npm --no-audit`, because it skips the vulnerability report. Do not use `npx --yes`, because
   it runs code from the registry without a review.
+  - Source: apt-get manual (`-qq` sets `-y`, and the manual warns against it); pip, uv and npm
+    documentation. Test on 2026-10-03: a failed `npm`, `pip` or `uv` install kept its error
+    lines with these options. `apt-get` was not tested.
 - **Colour codes**, when the output shows them: set `NO_COLOR=1` or use the tool's
   `--color=never`. For Git, use `git -c color.ui=never`, because Git does not read `NO_COLOR`.
+  - Source: no-color.org. Test on 2026-10-03: with `NO_COLOR=1`, `git diff` kept its colour
+    codes; with `git -c color.ui=never`, the codes were removed.
 - **Test runners**, when the project uses them: `pytest -q --tb=short`,
   `node --test --test-reporter=dot`. These keep the failure text. Do not use `--tb=no`.
+  - Source: pytest documentation, "Managing pytest's output". Test on 2026-10-03:
+    `node --test --test-reporter=dot` made 92 lines into 26 lines, and the failure text stayed.
+    `pytest` was not tested.
 - **Timeouts**, when `timeout` is installed (macOS does not have it; Homebrew coreutils gives
   `gtimeout`): `timeout 120 <command>` for network commands and unknown commands. Exit code
   124 means that the command was stopped. Report that result as UNVERIFIED. Do not use a
   timeout on `git` or `npm install`, because a stopped command can leave a lock file.
+  - Source: test on 2026-10-03. `timeout 3 sleep 10` stopped with exit code 124 after 3
+    seconds. Stock macOS has no `timeout` command.
 
 ## Set it up
 
