@@ -21,6 +21,23 @@ without a test, or with a report that says "done" when nothing was pushed. The c
   stops only before an act you did not grant. Your decisions come back as short **decision
   briefs**, each with the options, a recommendation, and whether the choice can be undone.
 
+Here is one, as an agent puts it to you. `outcomebound brief` draws it from the agent's JSON, and
+the words follow the plain style of `--human-style ste`:
+
+> #### D1 · The fix needs a migration that rewrites the orders table. When do we run it?
+> - 👉 Recommend: C — It stops the bug today and keeps the table rewrite in the window your team already uses · confidence 75% (inferred)
+> - Options:
+>   - A Run it on Sunday in the maintenance window — No customer sees a slow checkout
+>     - 🔻 Downside: The bug stays in production for four more days
+>   - B Run it online now, in batches of 10,000 rows — The bug is fixed today
+>     - 🔻 Downside: Checkout is slower for about 40 minutes while it runs
+>   - C Ship a code-only workaround now, and run the migration on Sunday — The bug stops today, and no one sees a slow checkout
+>     - 🔻 Downside: Two changes to review, and the workaround must come out after Sunday
+> - Why now: The workaround can ship today only if you choose it before the 16:00 deploy
+> - ✅ Checked: The fix and the workaround pass the unit tests, and the migration ran on a copy of staging in 38 minutes
+> - ⚠️ Not checked: Load on production during an online run; only a run under real traffic would settle it
+> - ⛔ Undo: The migration rewrites 4.2 million rows; going back needs a restore from backup
+
 A second aim is the same quality for less: no ceremony that a change does not need, and
 hand-offs that let a smaller, lower-priced model build what a strong model planned
 ([below](#hand-off-to-a-smaller-model)). This is an aim, not yet a measured result.
