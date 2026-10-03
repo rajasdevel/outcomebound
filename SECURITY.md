@@ -47,7 +47,10 @@ A report that shows one of these broken is a vulnerability:
   configuration switched off (`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`), the
   configuration and repository variables it inherited removed, and, for `pull`, the clone's hooks
   and fsmonitor off and only https allowed, so a `url.*.insteadOf` rewrite in your own
-  configuration cannot send either to another repository. The clone's own `.git/config` is still
+  configuration cannot send either to another repository. Git older than 2.32 ignores
+  `GIT_CONFIG_GLOBAL` and still reads your `~/.gitconfig`. With your configuration off, a proxy,
+  certificate or credential set only there is not used: set `https_proxy` in the environment, or
+  clone with Git yourself and name the clone in `OUTCOMEBOUND_RESEARCH`. The clone's own `.git/config` is still
   read, and it can do what any Git configuration does: rewrite the source URL with `insteadOf`, or
   name programs (a credential helper, a filter driver, a proxy command). Whoever can write that file
   can already run commands as you, so pull only in a clone that you made and that only you can write;
