@@ -194,6 +194,7 @@ def test_every_shipped_fragment_parses_and_names_only_registry_mechanisms():
         "tickets",
         "workspace",
         "research",
+        "commands",
     }
     for fragment in catalog.values():
         assert fragment.family in ("stack", "setup")
@@ -308,6 +309,15 @@ def test_detect_proposes_and_never_writes(tmp_path, source):
     assert "python" in proposed
     assert "node-typescript" not in proposed, "node_modules must not drive detection"
     assert sorted(p.name for p in tmp_path.iterdir()) == before
+
+
+def test_the_pattern_dot_matches_every_target_without_a_file_to_find(tmp_path, monkeypatch):
+    """A glob walk finds nothing here, so only the pattern itself can make the match."""
+
+    always = parse_fragment(GOOD.replace('["sample.toml"]', '["."]'), "x.md")
+    other = parse_fragment(GOOD.replace("id: sample", "id: other"), "y.md")
+    monkeypatch.setattr(Path, "rglob", lambda self, pattern: iter(()))
+    assert detect(tmp_path, {"sample": always, "other": other}) == ["sample"]
 
 
 def test_detect_skips_hidden_directories_a_pattern_does_not_name(tmp_path, source):

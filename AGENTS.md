@@ -60,8 +60,9 @@ at a release, `make release-check` passes on the release commit.
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when creating a worktree or working file, running a command whose output you read, resuming or handing off work, or keeping a fact for later sessions: read .outcomebound/fragments/workspace.md
+- when creating a worktree or working file, resuming or handing off work, or keeping a fact for later sessions: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
+- when running a command whose output you read: read .outcomebound/fragments/commands.md
 - when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
 - when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md

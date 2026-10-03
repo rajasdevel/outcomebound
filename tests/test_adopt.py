@@ -769,7 +769,7 @@ def test_detect_prints_one_command_that_installs(tmp_path: Path, capsys: Capture
     words = shlex.split(out)
     assert words[:3] == ["outcomebound", "adopt", str(target.resolve())]
     assert words[words.index("--harness") + 1] == "claude-code"
-    assert words[words.index("--fragments") + 1] == "python"
+    assert words[words.index("--fragments") + 1] == "python,commands"
     assert run(capsys, *words[2:])[0] == 0
     assert (target / "AGENTS.md").is_file()
 
@@ -823,7 +823,7 @@ def test_detect_proposes_the_workspace_where_a_workspace_folder_exists(
     code, out, _ = run(capsys, str(target), "--detect")
 
     words = shlex.split(out, comments=True)
-    assert code == 0 and words[words.index("--fragments") + 1] == "workspace"
+    assert code == 0 and words[words.index("--fragments") + 1] == "commands,workspace"
     assert run(capsys, *words[2:])[0] == 0
     assert (target / ".agents/.gitignore").is_file()
 
@@ -840,6 +840,39 @@ def test_detect_does_not_propose_the_workspace_for_skills_alone(
     code, out, _ = run(capsys, str(target), "--detect")
 
     assert code == 0 and "workspace" not in out
+
+
+def test_detect_proposes_the_commands_fragment_for_an_empty_repository(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The habits are positive in any repository, so no file is needed to propose them."""
+
+    target = repo(tmp_path / "t")
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    words = shlex.split(out, comments=True)
+    assert code == 0 and words[words.index("--fragments") + 1] == "commands"
+    assert run(capsys, *words[2:])[0] == 0
+    assert (target / ".outcomebound/fragments/commands.md").is_file()
+
+
+def test_the_commands_fragment_installs_a_pointer_and_a_copy_and_removes_both(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    before = snapshot(target)
+
+    assert run(capsys, str(target), "--fragments", "commands")[0] == 0
+
+    copy = target / ".outcomebound/fragments/commands.md"
+    assert copy.read_bytes() == (ROOT / "fragments/setup/commands.md").read_bytes()
+    pointer = (
+        "when running a command whose output you read: read .outcomebound/fragments/commands.md"
+    )
+    assert pointer in (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert run(capsys, str(target), "--remove")[0] == 0
+    assert snapshot(target) == before
 
 
 # --- facts and pointers -----------------------------------------------------------

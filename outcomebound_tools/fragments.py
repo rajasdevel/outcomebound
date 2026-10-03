@@ -43,6 +43,9 @@ OPTIONAL_KEYS = ("condition", "edges", "skills")
 ID_RE = re.compile(r"\A[a-z0-9][a-z0-9-]*\Z")
 SLOT_RE = re.compile(r"^\*\*(?P<slot>[^*]+)\*\* — ", re.MULTILINE)
 BACKTICKED = re.compile(r"`([^`]+)`")
+# A detect pattern that names the target itself: it matches in every target, so a fragment that
+# is positive in any repository is proposed for each.
+ALWAYS = "."
 EXCLUDED_DIRS = frozenset({".git", "node_modules", ".venv", "venv", "__pycache__", ".outcomebound"})
 # The skills every install carries, the core skill first; a selected fragment's `skills:` adds
 # its own (`carried`). adopt installs each for every harness, and `inline` emits each after the
@@ -350,6 +353,8 @@ def _matches(root: Path, pattern: str) -> bool:
     into someone's ``.cache``.
     """
 
+    if pattern == ALWAYS:
+        return root.is_dir()
     resolved = root.resolve()
     named = set(PurePosixPath(pattern).parts)
     try:
@@ -377,7 +382,8 @@ def detect(target, catalog: dict[str, Fragment]) -> list[str]:
     """Propose fragment ids whose detect globs match under ``target``.
 
     Detection proposes; it never applies. Setup fragments usually ship an empty
-    ``detect`` because their signals are weak and belong to a human on adopt.
+    ``detect`` because their signals are weak and belong to a human on adopt. The
+    pattern ``"."`` (``ALWAYS``) matches every target, for a fragment positive anywhere.
     """
 
     root = Path(target)

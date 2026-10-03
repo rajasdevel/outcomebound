@@ -48,7 +48,7 @@ frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped 
 edges only where its text names an act irreversible, in words the fragments share so the union
 names each act once; and `skills:`, a JSON list of the engine skills its selection installs.
 `fragments compose` renders both blocks for a selection; `--inline` emits the kernel, the skills
-an install would carry and the fragment bodies, for a delegate's role prompt.
+an install carries and the fragment bodies, for a delegate's role prompt.
 
 ## Decisions
 
@@ -56,21 +56,22 @@ an install would carry and the fragment bodies, for a delegate's role prompt.
 | --- | --- | --- | --- |
 | One route, `outcomebound adopt` | a second, modular install route beside it | user | decided |
 | Re-running is the upgrade, and Git is the undo | three-way merges against copies of every release | user | decided |
-| No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records, whose shape would sit beside format 2's | user | decided |
+| No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records | user | decided |
 | The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last | per-artifact base caches, source receipts and bundle digests | agent | decided |
 | An owned block or file whose bytes differ from its record is refused without `--force` | overwriting it, or merging | agent | decided |
 | `--check` ends, when a record is not current, with the command that makes it current | one `doctor` verb over every layer, recording each choice declined | agent | decided |
-| A harness that cannot be made to load `AGENTS.md` is refused before any write | a reminder and exit 0, which leaves an install nothing loads | agent | decided |
-| A harness's host file gets an `@AGENTS.md` import block, except where the harness table's row records `reads_agents_md` and none of the files it lists is in the target: that harness reads `AGENTS.md` itself | creating the host file on every install for that harness | user | decided |
-| An install prints the words an agent always loads, its blocks and each skill's description a harness lists, and no size refuses it | a size ceiling that refuses an install | user | decided |
+| A harness that cannot be made to load `AGENTS.md` is refused before any write | a reminder and exit 0, leaving an install nothing loads | agent | decided |
+| A harness's host file gets an `@AGENTS.md` import block, except where the harness table's row records `reads_agents_md` and none of the files it lists is in the target: that harness reads `AGENTS.md` itself | creating the host file for that harness | user | decided |
+| An install prints the words an agent always loads, its blocks and each skill's description a harness lists, and no size refuses it | a size ceiling | user | decided |
 | One native copy per harness of each skill an install carries | a canonical `.outcomebound/skills/` copy beside the native ones | agent | decided |
 | An install carries the four default skills and each skill a selected fragment's `skills:` names; the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove`, or deselecting its fragment, removes it | every shipped skill in every install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
 | Fragment bodies live in their pointer targets, and `AGENTS.md` carries one pointer per fragment | fragment bodies composed into one block every session loads | user | decided |
 | Done is what `--done` records, in run order; `--detect` proposes the floor's runner, `outcomebound floor check . --base origin/main`, where a floor is installed, then the first test command the CI test fact reads, or, where CI names none, discovery's first check command for the root. `--detect` too refuses a target outside a Git work tree | Done read from a profile; discovery's candidate ahead of the command CI already runs | agent | decided |
 | The CI test fact is adopt's reading; discovery's document is unchanged | a field in discovery's document | agent | decided |
 | Precedence never names a file a harness documents as one person's | naming every file a harness may load, so an untracked file could make a checkout stale | agent | decided |
-| `generic` serves a harness the table does not list: named as `--harness generic`, the default where none is named or recorded, and what `--detect` proposes where no harness file is found. Each skill goes once under `.outcomebound/skills/`, which the pointers name even beside native copies, and the install report reads `UNVERIFIED` that the harness reads `AGENTS.md`. Any other name the table does not list is refused | no route for such a harness; the kernel alone, with no skill and no pointer | agent | decided |
-| Selecting the `workspace` fragment also installs `.agents/.gitignore` from `templates/workspace.gitignore`, keeping its four folders out of Git, as its own record of kind `ignore`, owned whole; its first line sends any other ignore to the root `.gitignore`. `--detect` proposes the fragment where one of those folders exists, not for `.agents/skills/`, which a Codex or Amp install writes | lines in the root `.gitignore`, whose `#` comments the managed-block markers do not fit; asking the adopter to ignore them by hand; a proposal for any `.agents/` folder | user | decided |
+| `generic` serves a harness the table does not list: named as `--harness generic`, the default where none is named or recorded, and what `--detect` proposes where no harness file is found. Each skill goes once under `.outcomebound/skills/`, which the pointers name even beside native copies, and the install report reads `UNVERIFIED` that the harness reads `AGENTS.md`. Any other unlisted name is refused | no route for such a harness; the kernel alone, with no skill and no pointer | agent | decided |
+| Selecting the `workspace` fragment also installs `.agents/.gitignore` from `templates/workspace.gitignore`, keeping its four folders out of Git, as its own record of kind `ignore`, owned whole; its first line sends any other ignore to the root `.gitignore`. `--detect` proposes it where one of those folders exists, not for `.agents/skills/`, which a Codex or Amp install writes | lines in the root `.gitignore`, which the managed-block markers do not fit; asking the adopter to ignore them by hand; a proposal for any `.agents/` folder | user | decided |
+| `--detect` proposes `commands` in every repository: its `detect:` is `"."`, matched in every target | a signal file | agent | decided |
 | `--finish-check` writes a `hook` entry for `claude-code` and `codex`: the [finish-check design](../finish-check/design.md) | every harness | user | decided |
 
 ## Edges
