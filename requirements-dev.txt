@@ -10,5 +10,5 @@ pytest-xdist==3.8.0
 # The floor's tools; .outcomebound/floor.json names the least version each needs. mypy
 # goes in beside pytest: it resolves the suite's `import pytest` from its own
 # interpreter, and the types baseline was recorded with pytest importable.
-ruff==0.16.7
+ruff==0.16.9
 mypy==2.3.1
