@@ -2,203 +2,297 @@
 
 [![CI](https://github.com/rajasdevel/outcomebound/actions/workflows/ci.yml/badge.svg)](https://github.com/rajasdevel/outcomebound/actions/workflows/ci.yml)
 
-**Neither underengineer nor overengineer: exactly the engineering the outcome requires.**
+**Hand a coding agent an outcome. Get back work sized to it, a true report of what was checked,
+and only the decisions that are yours.**
 
-OutcomeBound is a short operating contract for coding agents, and a small engine that installs
-it into a repository and keeps it current. The contract goes into your `AGENTS.md` as about
-thirty lines. Around it the engine offers optional parts: a quality floor, a ticket layer, a
-finish check that runs your Done commands when an agent ends its turn, and a reader that checks
-the instruction files your agents load for hidden or risky content.
+OutcomeBound is a short operating contract for coding agents, and a small engine that puts it
+into your repository and keeps it current. The contract goes into your `AGENTS.md`. The engine
+is Python standard library only. It does not run your agent, and it is not a framework.
 
-## Why
+> **Our goal is trustworthy delegation. We are not there yet.** Today the evidence shows two
+> things, on a small number of runs: agents with OutcomeBound stop process that a change does
+> not need, and they keep the checks that the change does need. It does not yet show that the
+> work itself is more correct. [Evidence](#evidence) and [Limits](#limits) say exactly what is
+> measured.
 
-Coding agents fail in two directions, often on the same afternoon: they skip the test and report
-a push that never happened, then write a spec and a review plan for a one-line fix. Both are the
-same mistake — the amount of engineering was not chosen against the outcome.
+## What it asks of an agent
 
-Rules files try to fix this with more rules, which grow, contradict each other, and get ignored.
-OutcomeBound bets the other way. Frame every task by four inputs:
+| | The agent… | So that… |
+| --- | --- | --- |
+| **Right-sized** | does exactly the engineering the outcome needs, in code and in process: no design document for a typo, no skipped test where failure matters | you do not pay for ceremony, and you do not clean up after shortcuts |
+| **Honest** | reports each check as `PASS`, `FAIL` or `UNVERIFIED`, and never reports a test as a push, or a push as a deployment | you know what is done and what is only claimed |
+| **Autonomous within your bounds** | decides what it can, and stops only before an act you did not grant | your attention goes only to the decisions that are yours |
 
-| Input | The question it answers |
-| --- | --- |
-| **Outcome** | What becomes observably true, and for whom? |
-| **Context** | What do the code, runtime and evidence show; how complex is it, who uses it, how long must it last? |
-| **Bounds** | What is in scope, what must be preserved, what authority is granted, what cannot be undone? |
-| **Completion bar** | What observable success, and which checks sized to the changed risk, settle done? |
+Each decision that is yours comes back as a short **decision brief**: the question, the
+options with their downsides, a recommendation, and whether it can be undone.
 
-Satisfy all four completely with the simplest approach that holds for the lifespan, size the
-whole plan and not only each step, and report every check as `PASS`, `FAIL` or `UNVERIFIED`, so
-a passing test never stands in for a deployment. Specs, reviews, goal envelopes and broad suites
-are used when their condition holds, never by default. The full contract is
-[OutcomeBound.md](OutcomeBound.md).
+A second aim is **cost efficiency**: let a strong model plan the work and a cheaper model build
+it, with as little loss of quality as we can measure. See [Hand off to a cheaper
+model](#hand-off-to-a-cheaper-model).
 
-## Install
+## Try it
+
+You need Python 3.10 or later, a POSIX `sh` and Git. Your repository must be a Git work tree:
+Git is the undo.
 
 ```sh
 uv tool install git+https://github.com/rajasdevel/outcomebound@v1.0.0
-outcomebound adopt path/to/your-repo --detect
+cd your-repo
+outcomebound adopt . --detect      # prints the install command your files suggest; writes nothing
 ```
 
-`uv tool install` puts `outcomebound` on your `PATH` in an environment of its own;
-`pipx install` of the same URL does too, and so does `pip install` of it into a virtual
-environment. `pip install --user` is not supported: `outcomebound` runs Python isolated (`-I`),
-so that nothing in your directory or on `PYTHONPATH` can shadow the engine, and an isolated
-Python does not read the user site where that install puts it. Pin the release you adopt from,
-so a team and its CI run one version. OutcomeBound needs Python 3.10 or later, a POSIX `sh` and
-Git, and nothing else: the engine is Python standard library only. Native Windows is untested. To
-work on OutcomeBound itself, clone this repository and put its `scripts/outcomebound` on
-`PATH`; it runs that checkout's engine ([CONTRIBUTING.md](CONTRIBUTING.md)).
+Read the command that `--detect` prints, run it, look at the diff, and commit it. The next
+agent session in that repository reads the contract.
 
-`--detect` prints the one install command your repository's files suggest: the fragments and
-harnesses it found, and Done commands, which are the first test command your CI runs, or a check
-command inferred from your files where CI runs none, after the floor's check where a floor is
-installed. Review it and run it; your repository must be a Git work tree, since Git is the undo.
-That command writes:
+<details>
+<summary>Other ways to install</summary>
 
-- the operating contract, as a managed block at the top of `AGENTS.md`;
-- below it, a block of project facts, one line each: the commands that settle done (`--done`),
-  the test command your CI runs, read from its workflow files without running anything, the
-  irreversible edges your fragments declare, which instructions win a conflict, and, if you
-  choose `--human-style ste`, that text an agent writes for a person follows ASD-STE100
-  Simplified Technical English style, with no length limit and every fact kept; a fact it
-  cannot observe is left out and reported `UNVERIFIED`;
-- a block of pointers, one line each, saying when to read each piece of guidance: every
-  fragment in `--fragments`, copied under `.outcomebound/fragments/` (facts about your stack and
-  setup, such as how a Python project's tests prove anything; `outcomebound fragments --help`),
-  and each skill; your own `local` fragment is written out in full ahead of them;
-- one copy of the default skills, and of those each fragment you select names, for each harness
-  you use, or under `.outcomebound/skills/` for a harness `adopt` does not know (`--harness
-  generic`); the [skills design](docs/specs/skills/design.md) lists them;
-- an `@AGENTS.md` import in a harness file, such as `CLAUDE.md`, where that harness would not
-  load `AGENTS.md` otherwise; a harness that cannot be made to load it is refused;
-- `.outcomebound/manifest.json`, recording what it wrote.
+`pipx install` of the same URL works too, and so does `pip install` of it into a virtual
+environment. `pip install --user` does not work: `outcomebound` runs Python isolated (`-I`), so
+that nothing in your directory or on `PYTHONPATH` can replace the engine, and isolated Python
+does not read the user site. Pin the release you adopt, so that your team and your CI run one
+version. Native Windows is not tested. To work on OutcomeBound itself, clone this repository and
+put its `scripts/outcomebound` on your `PATH` ([CONTRIBUTING.md](CONTRIBUTING.md)).
 
-Everything else in your files stays as it was. The one exception is `--finish-check`, which
-writes its entry into a harness settings file: that file keeps its keys, their order and its
-indentation, not every byte of its spacing. Review the diff and commit it your usual way.
+</details>
+
+## What adopt changes in your repository
+
+```mermaid
+flowchart LR
+    A["outcomebound adopt"] --> B["AGENTS.md"]
+    B --> B1["the contract<br/>(managed block)"]
+    B --> B2["project facts: Done commands,<br/>CI test, irreversible edges"]
+    B --> B3["pointers: when to read<br/>each fragment and skill"]
+    A --> C["skills, one copy per harness<br/>e.g. .claude/skills/, .agents/skills/"]
+    A --> D[".outcomebound/<br/>fragments + manifest.json"]
+    A --> E["CLAUDE.md or GEMINI.md import,<br/>only where the harness<br/>does not read AGENTS.md"]
+    A -.->|"opt-in: --finish-check"| F["a stop-hook entry in<br/>the harness settings"]
+    classDef opt stroke-dasharray: 5 5
+    class F opt
+```
+
+Your code and your own text outside the managed blocks stay as they are. Every file and block
+that `adopt` writes is recorded in `.outcomebound/manifest.json`, so it can check and remove
+exactly what it wrote.
+
+<details>
+<summary>The contract, in full (about thirty lines)</summary>
+
+This is the block that goes at the top of your `AGENTS.md`. Its source is
+[templates/managed-block.agents.md.tmpl](templates/managed-block.agents.md.tmpl); the longer
+form is [OutcomeBound.md](OutcomeBound.md).
+
+```markdown
+**OutcomeBound** — neither underengineer nor overengineer: exactly the engineering the
+outcome requires.
+
+Frame every task by four inputs. **Outcome**: what becomes observably true, and for whom.
+**Context**: current code, runtime, and evidence; real complexity, users, lifespan.
+**Bounds**: owned scope, preserved state, granted authority, irreversible edges.
+**Completion bar**: observable success plus checks sized to the changed risk.
+
+Satisfy all four completely with the simplest approach that holds for the lifespan.
+Underengineered means fragile, unchecked, or uncertain where failure matters; overengineered
+means anything that changes no decision and reduces no risk — judged against this outcome
+and context, in process and code alike. Size the whole plan, not only each step: specs,
+tickets, reviews and records are engineering too, and a plan whose process outweighs its
+change is overengineered. Smallest complete, not least work.
+
+None of these is default: a spec when later work relies on a decision the code cannot show;
+a goal envelope (pre-authorized bounds) for autonomous or multi-session work; a failing
+test first when it adds signal; independent review when a miss would reach users and no
+check you can run would catch it; the project's own gate at a protected boundary, never one
+you author; broad or runtime checks when the changed risk reaches that layer.
+
+Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
+Decide what you can and proceed on stated assumptions; batch the user's decisions for
+handoff as decision briefs (the `decision-brief` skill). Stop only before expanding authority
+or crossing an ungranted irreversible edge.
+Delegates receive the same four inputs and bounds.
+
+Report each named check as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
+`UNVERIFIED`, never success. Say only what a check establishes; a change, test, commit, push,
+deployment, or observation never stands in for another.
+```
+
+</details>
+
+**Installed by default:** the contract, the project facts, the pointers, and four skills:
+`using-outcomebound` (how much design, testing and review a task needs), `decision-brief`,
+`gather-requirements` and `tests-worth-keeping`. Everything else is opt-in.
+
+## Why a tool, and not a paste
+
+You can paste the contract into `AGENTS.md` by hand. You then lose what the engine does:
+
+- It reads your Done commands and your CI's test command from your files, without running them.
+- It knows how each harness loads instructions, and adds an import only where one is needed.
+- It refuses to overwrite a block or a file that you edited, unless you pass `--force`.
+- `adopt --check` finds drift in one CI line, and `adopt --remove` takes everything out.
 
 ## Keeping it current
 
-Install the newer release the same way (`uv tool install --force` with its tag), then run the
-same adopt command again: that is the upgrade. A block or file you edited is refused unless you
-pass `--force`, and Git is the undo.
-`outcomebound adopt . --check` says whether each installed piece is current, edited, stale or
-missing (a stale facts block names the fact that moved), and exits non-zero when one is not —
-one line for your CI. `outcomebound adopt . --remove` takes it all out.
-
-## Optional: a finish check
-
-`outcomebound adopt . --finish-check` writes a stop-hook entry for Claude Code or Codex: when
-the agent ends its turn on a changed tree, your Done commands run, and a failure goes back to the
-agent as the reason to keep working. It has been observed end to end in Claude Code; under Codex
-it is built to the same hook contract and not yet observed.
-
-## Optional: a quality floor
-
-`outcomebound floor` blocks regressions in format, lint, types, secrets and shell scripts, using
-your own tool configs. `floor propose . > floor.json` prints the claims for your stack, and
-`floor apply --floor floor.json --accept .` fits them to the project you have: findings you
-already have go into a plain-text baseline you can read and shrink, and only new ones fail; a
-secret already committed is listed once for you to rotate or allowlist, never recorded;
-`--strict` fits nothing. A change that loosens the floor — a baseline that grew, a changed tool
-config, a new suppression comment — fails the check unless a commit names the decision that
-allowed it, in a line `Floor-Loosening: <what>; ruled <decision id>`, where the id is whatever
-names the decision in your project, in one word: an issue or pull request (`#123`), a decision
-record, or a link. The check reads that line and cannot tell who wrote it: review or branch
-protection is what holds a loosening to the person's decision. The floor runs the tools it finds
-on your `PATH`; `floor provision . --accept`, with your project's virtual environment active,
-pip-installs the pinned ruff and mypy into the `python3` on your `PATH`, and prints the install commands for
-gitleaks and shellcheck. `outcomebound floor --help` gives the steps; Python and shell are
-supported.
-
-## Checking instruction files
-
-`outcomebound instructions check .` reads the instruction files and harness settings your
-harnesses load (what Git tracks or does not ignore, each settings path a harness names even when
-ignored, and the agents' notes under `.agents/handoffs` and `.agents/shared-memory`), and reports
-hidden characters, concealed content, override phrases and risky harness settings for you to
-judge. It runs nothing it reads and writes nothing.
-
-## Optional: a ticket layer
-
-For work too large for one acceptance: tickets as GitHub issues with a small block of fields,
-cut by the `slice-tickets` skill and linted by `outcomebound tickets check`. The
-`hand-off-tickets` skill hands each ticket to its implementer: a capable model gets the ticket
-alone and decides how it is built, while a small one gets steps with failing tests and stubs
-written for it. The project's own gate decides done where the work lands. See [docs/tickets.md](docs/tickets.md).
-
-## Optional: research
-
-The research behind OutcomeBound lives in its own repository,
-[outcomebound-research](https://github.com/rajasdevel/outcomebound-research): one prompting
-document per model family and per coding harness, practices, providers, per-model advice and the
-implementer tiers. To let a project's agents read it, add `research` to the fragments your install
-selects, and clone it once per machine into a folder outside any project:
-
-```bash
-outcomebound research clone ~/research/outcomebound-research           # preview
-outcomebound research clone ~/research/outcomebound-research --accept
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> current: adopt
+    current --> stale: new release or a fact moved
+    current --> edited: you edit a managed block
+    stale --> current: adopt
+    edited --> current: adopt --force
+    current --> [*]: adopt --remove
+    note right of stale
+        adopt --check exits non-zero
+        while a record is stale,
+        edited or missing
+    end note
 ```
 
-`outcomebound research` then prints its index and `outcomebound research <path>` one document
-from the clone's working tree, headed by the clone's commit and the sha256 of the text; cite a
-document by its path, that commit and that digest, since an edited clone prints the same commit.
-`outcomebound research pull --accept` updates it. With
-`floor provision`, these are the only commands that reach the network, and only with `--accept`.
-Without a clone, the skills read the public pages, or ask you for an implementer's tier.
+To upgrade, install the newer release the same way (`uv tool install --force` with its tag),
+then run the same `adopt` command again. `adopt --check` names each piece that is not current
+and the command that makes it current.
 
-To contribute a dated, sourced fact or a correction, open a
-[finding issue](https://github.com/rajasdevel/outcomebound-research/issues/new?template=finding.yml)
-there; from an agent, `outcomebound research ingest` prints the same issue prefilled, to open in a
-browser. That link, or a pull request under its
-[CONTRIBUTING.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONTRIBUTING.md),
-is how a finding reaches the research repository. `ingest` also writes the finding to
-`.outcomebound/research-inbox/` in your project: a local record, which the research maintainer
-collects only from projects they have checked out.
-Write the claim in your own words, quote at most 25 words, and name no project, client or person.
+## Optional parts
 
-## What is measured
+| Part | What it does | Status |
+| --- | --- | --- |
+| **Finish check** (`adopt --finish-check`) | When the agent ends its turn on a changed tree, your Done commands run; a failure goes back to the agent once | observed in Claude Code; built for Codex, not yet observed |
+| **Quality floor** (`outcomebound floor`) | Blocks new format, lint, type, secret and shell findings with your own tool configs; findings you already have go into a baseline you can read and shrink | Python and shell |
+| **Instruction check** (`outcomebound instructions check .`) | Reads the instruction files your agents load and reports hidden characters, concealed content, override phrases and risky harness settings, for you to judge | reports only; writes nothing |
+| **Tickets** (fragment `tickets`) | Cuts large work into readable tickets as GitHub issues, lints them, and hands each one to its implementer | see [docs/tickets.md](docs/tickets.md) |
+| **Research** (fragment `research`) | Lets agents read [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), a neutral library about current models, harnesses, providers and practices | optional clone |
+| **Text for people** (`adopt --human-style ste`) | Agents write reports, briefs and commit messages for people in the style of ASD-STE100 Simplified Technical English | opt-in |
 
-The test suite checks the engine's mechanics, not what a model does. What the contract changes
-in a model's work is measured by the eval fixtures in [evals/](evals/): small repositories with a
-task, run with the install and without OutcomeBound, three or more runs a cell on one strong
-model at a time. On the four core fixtures, runs without OutcomeBound did the same work and
-differed in how they reported it. On the skill fixtures, the install changed how a design was
-cut into tickets, what a test report said and how an unclear outcome was handled. On a
-four-task ladder of rising risk, whose project's `CONTRIBUTING.md` suggests a design note, a
-decision record, the full suite and a second reader for any change, the install as it ships
-stopped that suggested process on the two middle tasks: every run with it made the change with
-no process document and skipped the slow suite on the two-character fix, and every run without
-it wrote a design note and ran the slow suite (6 of 6 against 0 of 6; 12 runs, three a cell, on
-one model, gpt-6.1-sol; E10). An earlier pass on another model, gpt-6-sol, whose install arm
-carried no project-facts block and so not its line on suggested process, stopped process
-documents only on the smallest task (36 runs; E7). No fixture yet separates the arms on
-underengineering. Method, every result and its limits:
+### The finish check
+
+```mermaid
+flowchart TD
+    S["Agent ends its turn"] --> Q{"Did the tree change<br/>since Done last passed?"}
+    Q -- no --> E["Turn ends"]
+    Q -- yes --> R["Run your Done commands"]
+    R -- pass --> E
+    R -- fail --> G{"First stop<br/>of this finish?"}
+    G -- yes --> H["Failure goes back<br/>to the agent"]
+    H --> S
+    G -- no --> P["Report goes to you;<br/>turn ends"]
+    R -- "time limit" --> U["Check reads UNVERIFIED;<br/>turn ends"]
+```
+
+The check runs only the Done commands that the manifest records. The hook entry holds their
+digest, so a changed command list runs nothing until you run `adopt` again.
+
+## Hand off to a cheaper model
+
+For ticket work, a strong model can plan and slice, and a cheaper model can build. The
+`hand-off-tickets` skill shapes what the implementer gets by its tier:
+
+```mermaid
+flowchart LR
+    T["Accepted ticket"] --> W{"Who implements?<br/>(asked before slicing)"}
+    W --> O["Outcome tier<br/>strong model"]
+    W --> D["Design tier<br/>mid model"]
+    W --> S["Spec tier<br/>smaller or local model"]
+    O --> PO["the ticket's brief"]
+    D --> PD["brief + approach, signatures,<br/>invariants, edge cases, milestones"]
+    S --> PS["brief with numbered steps (--detail full)<br/>+ failing tests and stubs written first"]
+```
+
+The tier comes from you, or from the placement table in the research library. In a comparison
+of 63 runs, the spec package raised `gpt-6-luna` at `xhigh` from 6 to 9 passes of 9, and the
+same package did not lower `gpt-6-astra` at `high` (9 of 9 either way). The whole gain came from
+one requirement on one of three small tasks, and the design package's effect did not show. This
+is a direction we are measuring, not a result we generalise.
+
+## Evidence
+
+The test suite checks the engine's mechanics. What the contract changes in a model's work is
+measured by eval fixtures in [evals/](evals/): small repositories with a task, run with and
+without OutcomeBound, three runs a cell.
+
+| Task (a project whose `CONTRIBUTING.md` suggests a design note, a decision record, the full suite and a second reader for every change) | With OutcomeBound | Without |
+| --- | --- | --- |
+| A two-character bug fix and a new option: change made with a regression test, no process document, the slow suite not run for the two-character fix | 6 of 6 | 0 of 6 |
+
+Without OutcomeBound, every run wrote a design note, ran the slow suite and asked for a second
+reader. Both arms made correct changes. This is two tasks, on one model (`gpt-6.1-sol` through
+Codex), twelve runs. Every result, its method and its limits are in
 [docs/evaluations.md](docs/evaluations.md).
 
-A project's own instructions outrank OutcomeBound's, so process a project requires stays
-required.
+## Limits
 
-## More
+- **Underengineering is not measured yet.** No fixture yet separates the arms on a shortcut that
+  breaks something.
+- **The work was not more correct.** On the core fixtures, runs without OutcomeBound did the same
+  work; the difference was in how they reported it.
+- **One model family.** Every behaviour run used OpenAI models through Codex. No Claude, Gemini or
+  open-weight model has been measured.
+- **Small samples.** Three runs a cell shows only a large effect, never its size.
+- **It costs tokens.** On the skill fixtures, runs with the install used about 27% more tokens and
+  18% more time.
+- **It sizes suggested process only.** Process that your project requires stays required: a
+  project's own instructions outrank OutcomeBound's.
+- **The checks are not an authority boundary.** The instruction check is lexical and you judge
+  what it finds. A floor loosening is allowed by a commit line, which branch protection, not the
+  floor, holds to a person's decision.
+- **Few adopters so far.** It has been used in this repository and one outside project.
 
-- [OutcomeBound.md](OutcomeBound.md) — the full contract
-- [docs/specs/](docs/specs/) — one current design per area
-- [docs/evaluations.md](docs/evaluations.md) — what OutcomeBound's own evaluations measured, with
-  each result's scope
-- [outcomebound-research](https://github.com/rajasdevel/outcomebound-research) — the research
-  behind it, in its own repository: one prompting document per model, one file per coding harness,
-  practices, providers, per-model advice and the implementer tiers
-- [templates/](templates/) — files to copy into a project yourself, also under
-  `outcomebound home`: CI jobs ([templates/ci/](templates/ci/README.md)), Make targets for the
-  floor and a validation plan (`outcomebound.mk`), a goal envelope for autonomous or
-  multi-session work (`goal/goal.md`), and the design and plan `scripts/new-spec.sh` scaffolds
-  for a spec (`spec/`)
-- [references/portability.md](references/portability.md) — the harnesses `adopt` installs for,
-  and how each reaches `AGENTS.md`
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to propose and land a change
-- [SECURITY.md](SECURITY.md) — how to report a vulnerability privately
-- [CHANGELOG.md](CHANGELOG.md)
+## Works with
 
-Apache-2.0, with one exception: the text `adopt` writes into your repository carries no licence-copy
-or NOTICE duty (see [LICENSE](LICENSE)). The OutcomeBound name and mark are not licensed with the
-code: saying a project uses OutcomeBound is fine; a fork ships under its own name.
+| Harness | How it loads the contract |
+| --- | --- |
+| Claude Code | reads `AGENTS.md`, or a `CLAUDE.md` with an `@AGENTS.md` import |
+| Codex | reads `AGENTS.md` |
+| Cursor | reads `AGENTS.md` |
+| Gemini CLI | a `GEMINI.md` with an `@AGENTS.md` import |
+| Amp | reads `AGENTS.md` |
+| any other | `--harness generic`: skills go under `.outcomebound/skills/`; loading is yours to check |
+
+pi is listed in the harness table but not yet verified, so `adopt` refuses it. The full matrix,
+with sources: [references/portability.md](references/portability.md).
+
+## The research library
+
+[outcomebound-research](https://github.com/rajasdevel/outcomebound-research) is a separate,
+neutral library: one file per current model (how to instruct it, what its system card reports,
+benchmarks), one per provider, harness notes and practices, each dated and sourced. Any project
+can read it. OutcomeBound reads it with `outcomebound research <path>` from a local clone
+(`outcomebound research clone <folder> --accept`). Each printed file starts with the clone's
+commit and the sha256 of the text: cite a document by its path, that commit and that digest.
+Findings go back to it as an issue that
+`outcomebound research ingest` prepares for you.
+
+## Contributing, security and licence
+
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to propose and land a change. Commits are signed off
+  under the DCO; there is no CLA.
+- [SECURITY.md](SECURITY.md): report a vulnerability privately.
+- [CHANGELOG.md](CHANGELOG.md), [docs/specs/](docs/specs/) (one current design for each area),
+  [templates/](templates/) (CI jobs, Make targets, a goal envelope, a spec scaffold).
+
+Apache-2.0, with one exception: the text `adopt` writes into your repository carries no
+licence-copy or NOTICE duty (see [LICENSE](LICENSE)). The OutcomeBound name and mark are not
+licensed with the code: to say that a project uses OutcomeBound is fine; a fork ships under its
+own name.
+
+## Acknowledgements
+
+OutcomeBound's text is its own, but many of its ideas come from others. We name them for
+credit; none of them is affiliated with this project or endorses it.
+
+- [AGENTS.md](https://agents.md/) — the shared instruction file that the contract lives in.
+- [Agent Skills](https://agentskills.io/specification) — the skill format the skills follow.
+- [superpowers](https://github.com/obra/superpowers) by Jesse Vincent and
+  [Matt Pocock's skills](https://github.com/mattpocock/skills) — ideas on tests that are worth
+  keeping, on separating what a person said from what was assumed, and on when a run should stop.
+- Kent Beck's *Test Desiderata*, DeMillo, Lipton and Sayward's work on mutation testing (1978),
+  and the Google Testing Blog — the testing ideas behind `tests-worth-keeping`.
+- [Inspect](https://inspect.aisi.org.uk/) by the UK AI Security Institute — ideas on scoring and
+  handling errors in the eval fixtures.
+- [ASD-STE100 Simplified Technical English](https://www.asd-ste100.org/) — the style that
+  `--human-style ste` names. The standard is named, not copied.
+- The documentation of Claude Code, Codex, Cursor, Gemini CLI and Amp, which the harness table
+  cites row by row.
+
+Each idea, and the exact source it came from, is listed in the research library's
+[credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
