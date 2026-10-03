@@ -5,8 +5,8 @@ the tests.
 
 ## Approach
 
-Match the stripped text against two anchored patterns in turn, whole minutes and then hours and
-minutes, and compute the minutes from the groups of the one that matches. Rejected: cutting the
+Test the stripped text against two whole-text forms in turn, whole minutes and then hours and
+minutes, and compute the minutes from the parts of the one that matches. Rejected: cutting the
 text at `h` and `m` by hand, which reads `1h30`, `30m1h` and `1hm` unless each is caught on its
 own.
 
@@ -16,16 +16,14 @@ own.
   the whole minutes, always more than 0. For every refused form it raises
   `ValueError(f"invalid duration: {text!r}")`, with `text` as passed in, and it raises nothing
   else.
-- Two module constants added to `durations.py`, private: the compiled patterns
-  `[0-9]+` and `(?:([0-9]+)h)?(?:([0-9]+)m)?`, matched with `fullmatch`.
+- No other public symbol is added: a helper or constant added to `durations.py` is private.
 
 ## Data and invariants
 
 - The result is an `int` greater than 0; an hour is 60 minutes.
-- `fullmatch` keeps anything from standing before, between or after the parts.
-- `[0-9]`, not `\d`: `\d` also matches digits of other scripts.
-- The empty text matches the hours-and-minutes pattern with both groups empty, so a match with
-  no group is a refusal.
+- Nothing stands before, between or after the parts, apart from the space around the whole.
+- Only ASCII digits read as digits: a digit of another script is refused.
+- The empty text, and a unit with no number before it, are refusals.
 - Minutes after hours are 0 to 59; minutes alone have no upper limit.
 
 ## Edge cases

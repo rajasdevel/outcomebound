@@ -39,6 +39,8 @@ LOG = (
     "2026-09-30\tacme\t30\t\n"
     "2026-10-01\tbeta\t15\t\n"
 )
+# A log whose first project sorts last: the projects are listed by name, not as first seen.
+UNSORTED = "2026-09-02\tbeta\t10\t\n2026-09-03\tacme\t20\t\n2026-09-04\tbeta\t5\t\n"
 SEPTEMBER = ("--from", "2026-09-01", "--to", "2026-09-30")
 
 
@@ -79,7 +81,39 @@ class InvoiceAcceptance(unittest.TestCase):
                 "total_minutes": 240,
             },
         )
-        self.assertEqual(self.report("--to", "2026-08-31")["from"], None)
+
+    def test_one_day_given_is_a_string_and_the_other_null(self) -> None:
+        self.assertEqual(
+            self.report("--to", "2026-08-31"),
+            {
+                "from": None,
+                "to": "2026-08-31",
+                "projects": [{"project": "acme", "minutes": 60}],
+                "total_minutes": 60,
+            },
+        )
+        self.assertEqual(
+            self.report("--from", "2026-10-01"),
+            {
+                "from": "2026-10-01",
+                "to": None,
+                "projects": [{"project": "beta", "minutes": 15}],
+                "total_minutes": 15,
+            },
+        )
+
+    def test_the_projects_are_listed_by_name_whatever_order_the_log_has_them(self) -> None:
+        log = Log(UNSORTED)
+        self.addCleanup(log.close)
+        done = log.run("report", "--json")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(
+            json.loads(done.stdout)["projects"],
+            [{"project": "acme", "minutes": 20}, {"project": "beta", "minutes": 15}],
+        )
+        billed = command("invoice.py", "--rate", "60", stdin=done.stdout)
+        self.assertEqual(billed.returncode, 0, billed.stderr)
+        self.assertEqual(rows(billed.stdout)[-1], ["total", "0:35", "35.00"])
 
     def test_no_entries_is_the_empty_shape(self) -> None:
         self.assertEqual(

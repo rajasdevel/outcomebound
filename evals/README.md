@@ -28,8 +28,8 @@ grades another.
   sentence pointing at the core skill, which is not installed. Against `current`, it measures
   what OutcomeBound's text adds at all.
 
-The prompt is the arm's block, `Task:`, and the fixture's `prompt.md`; the `none` arm's is
-`Task:` and the prompt. In the earlier and current arms each fixture installs this checkout's
+The prompt is the arm's block, `Task:`, and the fixture's `prompt.md` (or what its `task.sh`
+prints, for the hand-off fixtures); the `none` arm's is `Task:` and the task. In the earlier and current arms each fixture installs this checkout's
 core skill and writes its own project note. That core skill points to the `decision-brief`
 skill, which only the current and unsized arms install, so under earlier the core skill names
 a skill that arm does not carry. The current arm's skills are written into the
@@ -102,13 +102,18 @@ and a diagram are printed as `observed:` lines and never fail a run: the earlier
 does not ask for them.
 
 The runner hashes each fixture's graders, and reads its seed commit, before the model runs;
-a changed grader fails the run unexecuted.
+a changed grader fails the run unexecuted. This holds for the fixtures that keep their graders in
+the workspace. The hand-off fixtures keep theirs outside it (below), so nothing hashes them:
+their integrity rests on codex's `workspace-write` sandbox, and on the `commit` and `dirty`
+provenance each run records.
 
 ## The hand-off fixtures
 
 These twelve fixtures do the comparison that `docs/specs/tickets/design.md` requires before a
 release carries `hand-off-tickets`. They measure the hand-off package on one implementer, not
-the kernel. Thus they run only under `current`, and only when `--fixtures` names them.
+the kernel. Thus they are measured under `current` only, and run only when `--fixtures` names
+them. The runner does not enforce the arm: another arm runs, and its result is not this
+comparison.
 
 Three bases share one repository, `evals/fixtures/handoff/base.sh`. It is `timelog`, a small
 command line that records time on projects in a tab-separated log and reports it. It also has
@@ -137,23 +142,48 @@ export that `evals/fixtures/handoff/export.py` writes outside the workspace. Eve
 with the same hand-over, `evals/fixtures/handoff/handover.md`. No message names a tier or a
 model, so one package text goes to each implementer it runs on.
 
-The post-checks are the same for each variant of a base, so the variants can be compared:
+The verdict of a run is four claims, the same for each variant of a base, so a verdict means
+the same in each variant and the variants can be compared:
 
 - `within-bounds`: every path that is different from the seed is in the ticket's `bounds`. A
-  scratch `timelog.tsv` is not counted.
-- `acceptance`: the hidden acceptance tests of the base, `<base>/accept.py`, pass.
-- `project-tests-pass`: `python3 -B -m unittest discover -s tests` passes.
-- `package-tests-unchanged` (only `spec`): the package's tests are the same, byte for byte, as
-  in the seed.
-- `eval-files-unread`: no command in the transcript names `evals/fixtures` or `evals/graders`.
+  scratch `timelog.tsv` is not counted, and nor are the caches that the test runners and the
+  engine's checks leave in the checkout (`.pytest_cache`, `.mypy_cache`, `.ruff_cache`,
+  `.outcomebound-checks`), which are listed as an `observed:` line. Any other file the run
+  leaves in the checkout is counted, a `report.json` it redirected into included.
+- `acceptance`: the hidden acceptance tests of the base, `<base>/accept.py`, pass. Each row is a
+  decision that the ticket states, and some rows are ones that the packages' tests leave out
+  (see the reading rules).
+- `project-tests-pass`: `python3 -B -m unittest discover -s tests` passes, less the spec
+  package's fixed tests where the seed holds them. Those tests are the next claim. Without this,
+  `spec` would be held to a suite that no other variant has.
+- `eval-files-unread`: no command in the transcript names `evals/fixtures`, `evals/graders` or
+  a file in them (`accept.py`, `reference.sh`, `grade.py`, `accepting.py`, `export.py`), and the
+  transcript shows no text that only those files hold.
+
+Two more claims are in `spec` runs only. They are not in the verdict, and are read beside it:
+
+- `package-tests-pass`: the package's fixed tests pass.
+- `package-tests-unchanged`: the package's tests are the same, byte for byte, as in the seed.
+
+Each run also prints `observed:` lines, which never change a verdict: files, lines and commits,
+test runs (commands that run a test runner), `guidance_reads` (commands that name the
+hand-off or slicing skills, or the model guidance), and the tool caches ignored.
+
+The fixtures select no fragments, so the installed skills are the core ones: the hand-off and
+slicing skills, which say what a package does to a strong model, are not in the workspace. A
+run that reads them through this checkout shows in `guidance_reads`.
 
 The acceptance tests and the graders (`evals/fixtures/handoff/grade.py`) are never in the
 workspace. The runner gives the post-checks this checkout's `evals/` in
 `OUTCOMEBOUND_EVAL_DIR`, and the plan runs them from there. A model can read files outside its
-workspace, so `eval-files-unread` shows a run that did. Each `<base>/reference.sh` is a
-reference solution. `tests/test_eval_handoff.py` shows that each variant's post-checks fail on
-its seed and pass on the reference. It also shows that each spec package test fails on its seed
-for the reason that the package gives.
+workspace, so `eval-files-unread` shows a run that did, by the commands it ran: a read that no
+recorded command shows is not seen. Each `<base>/reference.sh` is a reference solution.
+`tests/test_eval_handoff.py` shows that each variant's post-checks fail on its seed and pass on
+the reference. It also shows that each spec package test fails on its seed for the reason that
+the package gives, and that a build that breaks one row the ticket states (a log with its
+projects out of order, six fields read without an error, a changed read-error message, `--to`
+dropped, the report's `H:MM` changed, the log-format document left as it was) fails
+`acceptance`.
 
 The comparison is seven cells. Each cell is one implementer and one variant, on the three bases,
 for three repetitions: 63 runs. `gpt-6-astra` at `high` (the outcome tier) runs `ticket` and
@@ -181,22 +211,49 @@ verdict and each claim, the median tokens and seconds, and the calls that failed
 three blocks of its variant for one implementer, nine runs. A failed call is not counted, so
 count it beside the cell. Read the cells by these rules, written before any run:
 
+A cell's score is its verdict PASS count of 9. Each rule is read on the cells' totals, and
+the per-base counts (duration, invoice, tags: three runs each) are reported beside them, since
+the nine runs are three clusters of three.
+
 1. Does the tier's package help its implementer? For `gpt-6-sol`, `design` against `ticket`. For
    `gpt-6-luna`, `spec` against `ticket`. A package helps when its cell has at least 3 more
    verdict PASSes of 9. It does not help when the difference is 1 or less, or the package's cell
-   is lower. Between these, the result is inconclusive. For `gpt-6-astra`, `ticket` is its tier's
-   package, so it has no such comparison.
+   is lower, and the `ticket` cell has 6 or fewer PASSes. Between these, the result is
+   inconclusive. For `gpt-6-astra`, `ticket` is its tier's package, so it has no such
+   comparison.
 2. Does the spec package make a result worse on an outcome-tier implementer? For `gpt-6-astra`,
    `spec` against `ticket`. A drop of 3 or more of 9 supports the maintainer's hypothesis of
    overfitting. A smaller drop is inconclusive, and no drop does not support it.
 3. Does `--detail full` beat the spec package? For `gpt-6-luna`, `full` against `spec`. It beats
-   it only when its cell has more verdict PASSes. Thus `--detail full` stays only then, as the
-   tickets design says.
+   it only when its cell has at least 3 more verdict PASSes than `spec`'s, the same margin as in
+   rule 1. Thus `--detail full` stays only then, as the tickets design says.
+4. No headroom. Where the cell that a rule uses as its baseline has 7 or more of 9 (`ticket` in
+   rules 1 and 2, `spec` in rule 3), a difference of 3 cannot show. The result is "no headroom:
+   inconclusive", never "does not help", and no brief to cut a part follows from it. In rule 3
+   `--detail full` cannot stay on such a result; the maintainer's brief says that this is a
+   ceiling, not a finding. A drop of 3 or more in rule 2 is still a drop.
+5. Noise. Report `gpt-6-luna` `ticket` against `full` as well. `full` adds only generic steps
+   to the ticket's own text, so the difference between them is the nearest thing to a repeat
+   of one cell. A package's difference that does not exceed it is not a result.
 
-Read `acceptance` beside the verdict: a run can build the ticket and fail only `within-bounds`
-or `package-tests-unchanged`. Read tokens and seconds beside the counts. Nine runs a cell can
-show only a large effect, and a PASS shows only what its check reads, for that model on that
-day.
+Read `acceptance` beside the verdict: a run can build the ticket and fail only `within-bounds`.
+For `spec` runs, read `package-tests-pass` and `package-tests-unchanged` beside the verdict too.
+Read tokens, seconds and the `observed:` lines beside the counts. Nine runs a cell can show only
+a large effect, and a PASS shows only what its check reads, for that model on that day.
+
+What the comparison can show about question 2. The graded rows that the spec package's tests
+leave out are these. `duration`: the command line and the report, which a build that changes
+only `durations.py` keeps. `invoice`: a day given on one side only, the projects in the log's
+own order, an empty report read by `invoice.py`, and the unchanged text report. `tags`: `--to`,
+a line of three fields, the read error at the command line, and the text of
+`docs/log-format.md`. A drop on `acceptance` can come only through these rows, where a build that
+follows the package departs from the ticket, so `duration` gives the least room for it. A drop
+in the verdict can also come through `within-bounds`. State this with the result.
+
+What the spec cells measure. A spec package carries the algorithm as steps, the data structure
+and the verbatim text, with tests that fail first. It is close to the solution. A `spec` cell
+reads whether the implementer applies a near-complete package and stays in its bounds, and rule
+3 compares `--detail full` with that.
 
 ## Running the runs
 

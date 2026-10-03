@@ -25,7 +25,7 @@ reading as it does today.
 
 <!-- outcomebound:begin id=ticket v=1 -->
 reads: docs/log-format.md#lines
-bounds: entries.py, store.py, report.py, timelog.py, docs/log-format.md, tests/*
+bounds: entries.py, store.py, report.py, timelog.py, docs/log-format.md, README.md, tests/*
 human-only: no
 done-when:
 - timelog-tests

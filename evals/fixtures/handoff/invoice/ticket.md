@@ -21,7 +21,7 @@ stay as they are; where the shape cannot be printed as the document gives it, st
 
 <!-- outcomebound:begin id=ticket v=1 -->
 reads: docs/report-json.md#shape
-bounds: timelog.py, report.py, tests/*
+bounds: timelog.py, report.py, README.md, tests/*
 human-only: no
 done-when:
 - timelog-tests

@@ -31,13 +31,9 @@
       "kind": "test",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "-m",
-        "unittest",
-        "discover",
-        "-s",
-        "tests"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?the runner sets OUTCOMEBOUND_EVAL_DIR}/fixtures/handoff/grade.py\" suite duration"
       ],
       "required_paths": [
         "tests"

@@ -38,6 +38,7 @@ def render_json(found: dict[str, int], start: date | None = None, end: date | No
 
 - `report.py`
 - `timelog.py`
+- `README.md`
 - new test files under `tests/`
 
 ## Existing symbols
@@ -57,10 +58,12 @@ def render_json(found: dict[str, int], start: date | None = None, end: date | No
 1. In `render_json`, build a `dict` with exactly the four keys `from`, `to`, `projects` and
    `total_minutes`, in that order.
 2. `from` is `start.isoformat()`, or `None` where `start` is `None`. `to` is the same for `end`.
-3. `projects` is a `list` with one `dict` for each item of `sorted(found.items())`. Each `dict`
-   has exactly the keys `project`, the name, and `minutes`, the `int`.
-4. `total_minutes` is `sum(found.values())`.
-5. Return `json.dumps(document, indent=2)`. Add `import json` at the top of `report.py`.
+3. `projects` is a `list` with one `dict` for each project in `found`, in the order of the
+   project names. Each `dict` has exactly the keys `project`, the name, and `minutes`, the
+   `int`.
+4. `total_minutes` is the sum of the minutes in `found`.
+5. Return the document as JSON text, written by the standard library's `json` module. Add the
+   import at the top of `report.py`.
 6. In `timelog.parser()`, add to `shown` the option `--json` with `action="store_true"` and the
    help text `print the report as JSON`.
 7. In `timelog.main()`, for the `report` verb, compute `found` as today. Then print

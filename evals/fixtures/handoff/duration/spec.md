@@ -43,18 +43,20 @@ None. The step changes the body of one existing function and adds no symbol.
 
 ## Algorithm
 
-1. Strip the text: `written = text.strip()`.
-2. Where `written` fully matches `[0-9]+`, the result is `int(written)`.
-3. Otherwise, fully match `written` against `(?:([0-9]+)h)?(?:([0-9]+)m)?`.
-4. Refuse when there is no match, or when both groups are `None`.
-5. Read the hours from group 1 and the minutes from group 2, each 0 where its group is `None`.
-6. Refuse when group 1 is not `None` and the minutes are more than 59.
-7. The result is `hours * 60 + minutes`.
+1. Strip the text of the space around it.
+2. Where the stripped text is only ASCII digits, it names whole minutes: the result is that
+   number.
+3. Otherwise, match the whole stripped text against a second form: an optional hours part, then
+   an optional minutes part. Each part is a run of ASCII digits and then its lowercase unit
+   letter, `h` for hours and `m` for minutes.
+4. Refuse when the whole text does not match, or when neither part is present.
+5. Hours and minutes are each 0 where their part is absent.
+6. Refuse when the hours part is present and the minutes are more than 59.
+7. The result is the hours times 60, plus the minutes.
 8. Refuse when the result is 0.
 
 To refuse is to raise `ValueError(f"invalid duration: {text!r}")`, with `text` exactly as passed
-in. Compile both patterns once, at module level, with `re.compile`, and match them with
-`fullmatch`. Use `[0-9]` in both patterns, so that only ASCII digits read.
+in. Match the whole stripped text, never a part of it. Only ASCII digits read as digits.
 
 ## Text a person reads
 
@@ -67,7 +69,7 @@ from 0 to 59 after hours, `1h60m` and `1h75m`, `1h 30m`, `1H30M`, `1h30`, `30m1h
 `1.5h`, `-1h`, `h`, `m`, `hm`, the empty text, `0h`, `0m`, `0h0m`, `0`, and the message of a
 refusal.
 
-The tests leave out: digits from scripts other than ASCII, which step 2's pattern refuses, and
+The tests leave out: digits from scripts other than ASCII, which steps 2 and 3 refuse, and
 the command line, which already turns a refusal into exit status 2.
 
 ## Shape to follow

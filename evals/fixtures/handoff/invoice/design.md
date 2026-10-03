@@ -13,7 +13,7 @@ beside `report.render`.
 ## Signatures
 
 - `report.render_json(found: dict[str, int], start: date | None = None, end: date | None = None)
-  -> str`, added. It returns the document as text, from `json.dumps`, with no line end after it;
+  -> str`, added. It returns the document as JSON text, with no line end after it;
   it raises nothing for any `found` that `report.totals` returns.
 - `timelog.parser()`, changed: the `report` sub-parser gains `--json`, `action="store_true"`.
 - `timelog.main()`, changed: for `report`, it prints `render_json(found, options.start,

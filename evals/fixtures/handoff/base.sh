@@ -163,7 +163,7 @@ def parser():
     add = verbs.add_parser("add", help="record time spent on a project")
     add.add_argument("day", type=date.fromisoformat, metavar="DATE")
     add.add_argument("project")
-    add.add_argument("duration", help="whole minutes, such as 90")
+    add.add_argument("duration", help="the time spent, such as 90")
     add.add_argument("note", nargs="?", default="")
     shown = verbs.add_parser("report", help="total the time per project")
     shown.add_argument("--from", dest="start", type=date.fromisoformat, metavar="DATE")

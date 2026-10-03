@@ -48,6 +48,7 @@ def totals(entries, start=None, end=None, tag: str | None = None):
 - `report.py`
 - `timelog.py`
 - `docs/log-format.md`
+- `README.md`
 - new test files under `tests/`
 
 ## Existing symbols
@@ -73,21 +74,21 @@ def totals(entries, start=None, end=None, tag: str | None = None):
 2. In `store.parse_line`, accept a line of `FIELDS` or `FIELDS + 1` fields. For any other count,
    raise the `LogError` it raises today, with the same message.
 3. In `store.parse_line`, read the first four fields as today. Where there is a fifth field, the
-   tags are `tuple(tag for tag in fifth.split(",") if tag)`. Where there is none, the tags are
-   `()`. Pass the tags to `Entry` as its fifth argument.
+   tags are the parts of it between its commas, an empty part left out, as a `tuple`. Where
+   there is none, the tags are `()`. Pass the tags to `Entry` as its fifth argument.
 4. In `report.totals`, skip an entry where `tag` is not `None` and `tag not in entry.tags`. Keep
    the `start` and `end` checks as they are.
-5. In `timelog.parser()`, add to `add` the option `--tag` with `dest="tags"`,
-   `action="append"`, `default=[]` and `metavar="TAG"`.
+5. In `timelog.parser()`, add to `add` the option `--tag` with `metavar="TAG"`. It may be given
+   more than once, and `options.tags` is the list of its uses, empty where it is not given.
 6. In `timelog.parser()`, add to `shown` the option `--tag` with `metavar="TAG"` and the help
    text `total only the entries tagged TAG`.
-7. In `timelog.py`, add the module constant `TAG = re.compile(r"[a-z0-9-]{1,20}")`, and
-   `import re`.
-8. In `timelog.add`, before anything is written, check each tag in `options.tags` with
-   `TAG.fullmatch`. Raise `ValueError(f"invalid tag: {tag!r}")` for the first tag that does not
+7. In `timelog.py`, add a module constant `TAG` that holds the compiled pattern of a tag: 1 to
+   20 characters, each a lowercase ASCII letter, a digit or `-`.
+8. In `timelog.add`, before anything is written, check each tag in `options.tags` against the
+   whole of `TAG`. Raise `ValueError(f"invalid tag: {tag!r}")` for the first tag that does not
    match.
-9. In `timelog.add`, pass `tuple(dict.fromkeys(options.tags))` to `Entry` as `tags`. This keeps
-   the order given and drops repeats.
+9. In `timelog.add`, pass the tags to `Entry` as `tags`, as a `tuple` in the order given with
+   each repeated tag kept at its first place only.
 10. In `timelog.main`, pass `options.tag` to `report.totals` as `tag`.
 11. In `docs/log-format.md`, under `## Lines`, add one paragraph that describes the fifth field
     with the decisions the ticket gives for it.

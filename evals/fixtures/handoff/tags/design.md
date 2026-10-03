@@ -20,14 +20,15 @@ every line a log without tags gets and break the ticket's byte-for-byte rule.
   error and message it raises today.
 - `report.totals(entries, start=None, end=None, tag: str | None = None) -> dict[str, int]`,
   changed: with `tag`, only the entries carrying it count. It raises nothing.
-- `timelog.parser()`, changed: `add` gains `--tag` (`action="append"`, `dest="tags"`,
-  `default=[]`), and `report` gains `--tag` (one value).
+- `timelog.parser()`, changed: `add` gains `--tag`, which may be given more than once and is read
+  as `options.tags`, a list that is empty where the option is not used; `report` gains `--tag`
+  (one value, read as `options.tag`).
 - `timelog.add(options)`, changed: raises `ValueError(f"invalid tag: {tag!r}")` for the first
   tag that is not 1 to 20 characters of `a-z`, `0-9` and `-`, before anything is written.
 
 ## Data and invariants
 
-- `Entry.tags` is a tuple in the order given, each tag once: `tuple(dict.fromkeys(options.tags))`.
+- `Entry.tags` is a tuple in the order given, each tag once: a repeated tag keeps its first place.
 - Every tag in a log matches `[a-z0-9-]{1,20}`, so no tag holds a comma, a tab or a line end, and
   joining by commas can be split back.
 - A log written with no tags is byte for byte what the code writes today.

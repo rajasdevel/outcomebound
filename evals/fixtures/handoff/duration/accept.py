@@ -81,6 +81,16 @@ class DurationAcceptance(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(log.text(), "2026-10-01\tacme\t90\treview\n")
 
+    def test_the_report_keeps_printing_time_as_hours_and_minutes(self) -> None:
+        log = Log()
+        self.addCleanup(log.close)
+        self.assertEqual(log.run("add", "2026-10-01", "acme", "1h30m").returncode, 0)
+        done = log.run("report")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(accepting.rows(done.stdout), [["acme", "1:30"], ["total", "1:30"]])
+        format_minutes = accepting.workspace_module("durations").format_minutes
+        self.assertEqual(format_minutes(90), "1:30")
+
     def test_add_refuses_a_duration_and_writes_nothing(self) -> None:
         log = Log()
         self.addCleanup(log.close)

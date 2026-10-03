@@ -288,9 +288,7 @@ def test_the_ticket_fixtures_select_the_tickets_fragment_and_the_others_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     selecting = {name for name in RUN.fixture_names() if RUN.selected_fragments(name)}
-    handoff = {name for name in RUN.fixture_names() if name.startswith("handoff-")}
-    assert len(handoff) == 12
-    assert selecting == {"slice-a-spec", *handoff}
+    assert selecting == {"slice-a-spec"}
     for name in selecting:
         assert RUN.selected_fragments(name) == ("tickets",)
     fixtures = tmp_path / "fixtures"
@@ -598,7 +596,8 @@ def test_a_hand_off_run_briefs_the_seed_and_grades_with_tests_kept_outside_the_w
     expected = {
         "within-bounds": "PASS",
         "acceptance": "PASS" if act == "reference" else "FAIL",
-        "project-tests-pass": "PASS" if act == "reference" else "FAIL",
+        "project-tests-pass": "PASS",
+        "package-tests-pass": "PASS" if act == "reference" else "FAIL",
         "package-tests-unchanged": "PASS",
         "eval-files-unread": "PASS",
     }
