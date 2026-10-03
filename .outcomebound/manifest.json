@@ -28,7 +28,10 @@
         ".outcomebound/fragments/multi-agent.md": "85c97f860da9b047176f66934e3c983de14f0eb8717a5da0e5e509d86b475758",
         ".outcomebound/fragments/workspace.md": "fc64040f7f22efeed2b10f428427cfb7e4691725e9ae597b40704ea388cddd28"
       },
-      "sha256": "419a23474fa4e38f1e9be2782bd9fadb82f5b0d8e348e68ed8f98944479e7d9e"
+      "style": [
+        "ste"
+      ],
+      "sha256": "20203513fb34424c3c301551e90efbb8df4806fc0855d2b729f71b1fa5051c67"
     },
     {
       "kind": "block",
