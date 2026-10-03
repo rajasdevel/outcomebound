@@ -15,5 +15,5 @@ validation rules give it. OutcomeBound keeps a verbatim copy and runs the same c
 
 Each rule has its two sides at the boundary: the longest accepted value and the shortest refused
 one. Accepted boundary values use ASCII text only, so a link of the finding stays within its
-length limit. The rules are in `validate_finding` in `scripts/collect.py`; the contract in
+length limit. The rules are in `validate_finding`, in the research repository's collect script; the contract in
 CONTRIBUTING.md names them.

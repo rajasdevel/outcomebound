@@ -497,7 +497,7 @@ def checked_fields(
         fields["corrects"] = _text("corrects", given["corrects"])
         if len(fields["corrects"]) > CORRECTS_MAX:
             raise Refusal(f"ingest: corrects must be at most {CORRECTS_MAX} characters")
-    if kind == "correction" and "corrects" not in fields:
+    if kind == "correction" and not fields.get("corrects", "").strip():
         raise Refusal("ingest: a correction needs --corrects: the path or evidence id it corrects")
     return fields
 
@@ -517,6 +517,9 @@ def checked_document(data: object, today: datetime.date | None = None) -> dict[s
     version_value = data.get("version")
     if version_value != FORMAT_VERSION or isinstance(version_value, bool):
         raise Refusal(f"ingest: version is not {FORMAT_VERSION}")
+    empty = [name for name in REQUIRED if data[name] in (None, "")]
+    if empty:
+        raise Refusal(f"ingest: {', '.join(empty)} is empty")
     return checked_fields(data, today)
 
 
