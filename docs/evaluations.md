@@ -1,5 +1,5 @@
 ---
-last_checked: 2026-10-01
+last_checked: 2026-10-03
 volatility: STABLE (dated results of named models and codex versions; the method) / MONITOR (codex isolation and sign-in facts under Method)
 sources:
   - https://learn.chatgpt.com/docs/agent-approvals-security
@@ -38,7 +38,7 @@ under Sources with the day they were read.
 
 ## Key findings
 
-Each finding carries an id (E1–E16) that other documents may cite.
+Each finding carries an id (E1–E17) that other documents may cite.
 
 - **E1. On the four core fixtures, the task alone did the work; the install changed the
   report.** Without OutcomeBound every run did the substantive work, and all five failures were
@@ -139,6 +139,13 @@ Each finding carries an id (E1–E16) that other documents may cite.
   an index bit hiding an edit, a newline in a file name, an unreadable file, a symlink, a
   directory pruned by name. What held was one walk of the filesystem that lists every entry by
   its raw name and counts what it cannot read as a change (O; lesson 4).
+- **E17. The spec-tier package fixed the one row a smaller implementer missed, and cost the
+  outcome tier nothing.** gpt-6-luna at xhigh passed 9 of 9 with the spec package against 6 of 9
+  with the ticket alone and 6 of 9 with `--detail full`; all six failures were one sentence of one
+  ticket, which the package stated exactly. gpt-6-astra at high passed 9 of 9 with the ticket and
+  9 of 9 with the spec package; gpt-6-sol at medium passed 9 of 9 with the ticket and with the
+  design package, which leaves the design package's effect unshown. 9 runs a cell, 2026-10-03
+  (the hand-off comparison, under Results).
 
 ## The question evals answer
 
@@ -542,6 +549,59 @@ both.
   it, three runs of the fact-in-reach decision probe passed 3 of 3 (above).
 - Run times: gpt-6-luna at max effort took 238 to 701 seconds a run on this fixture, against 104
   to 136 for gpt-6-sol at medium.
+
+### The hand-off comparison
+
+Run 2026-10-03, codex-cli 0.160.0, the `current` arm, 63 runs, every one at one clean commit; no
+call failed. The fixtures, the cells and the reading rules, written before any run, are in
+`evals/README.md`. Three bases (`duration`, `invoice`, `tags`), three repetitions each, so a cell
+is 9 runs; the counts below are verdict PASSes, with the per-base counts after them.
+
+| Implementer (its tier) | `ticket` | `design` | `spec` | `full` |
+| --- | --- | --- | --- | --- |
+| gpt-6-astra high (outcome) | 9 (3, 3, 3) | | 9 (3, 3, 3) | |
+| gpt-6-sol medium (design) | 9 (3, 3, 3) | 9 (3, 3, 3) | | |
+| gpt-6-luna xhigh (spec) | 6 (3, 3, 0) | | 9 (3, 3, 3) | 6 (3, 3, 0) |
+
+`within-bounds`, `project-tests-pass` and `eval-files-unread` passed in all 63 runs; every
+failed verdict failed `acceptance` only. In the 18 `spec` runs, `package-tests-pass` and
+`package-tests-unchanged` passed in all 18. No run read the hand-off or slicing skills
+(`guidance_reads` 0 in all 63).
+
+All six failures are one row of the `tags` ticket: "Any other number of fields is the read error
+it is today." gpt-6-luna widened the message to `expected 4 or 5 fields, found 3` in each of the
+six `ticket` and `full` runs; gpt-6-astra and gpt-6-sol kept it in all their `ticket` runs. The
+spec package's step says to raise the error "with the same message", and gpt-6-luna kept it in
+all nine `spec` runs.
+
+Read by the rules:
+
+1. The design package on gpt-6-sol: its `ticket` cell has 9, so a gain cannot show. No
+   headroom: inconclusive. Nothing is cut on this result.
+2. The spec package on gpt-6-luna: 9 against 6, a gain of 3, so by rule 1 the package helps.
+   The whole gain is one row on one base, the same in all six runs it failed, so it shows that an
+   exact sentence in the package reached a detail the ticket's own words left to the implementer.
+   It does not show a gain spread over many kinds of detail.
+3. The spec package on gpt-6-astra: 9 against 9, no drop, so it does not support the hypothesis
+   that the package makes an outcome-tier implementer overfit. The rows the package's tests leave
+   out (listed in `evals/README.md`) passed in all nine.
+4. `--detail full` on gpt-6-luna: 6 against `spec`'s 9, so it does not beat the spec package.
+   `--detail full` and its three fixtures were removed, as the tickets design says.
+5. Noise: gpt-6-luna `ticket` against `full` is 6 against 6, the same failure in the same runs.
+   The spec package's difference of 3 exceeds it.
+
+Median tokens per base (`duration`, `invoice`, `tags`): gpt-6-astra `ticket` 25,643, 22,361,
+30,595, `spec` 22,039, 17,337, 22,519. gpt-6-sol `ticket` 16,605, 24,095, 32,770, `design`
+23,813, 22,189, 25,201. gpt-6-luna `ticket` 27,960, 36,817, 49,004, `spec` 19,860, 28,142,
+34,855, `full` 33,997, 38,748, 55,699. Median seconds: gpt-6-astra `ticket` 109.5, 140.4,
+170.2, `spec` 65.4, 58.9, 106.9; gpt-6-sol `ticket` 76.9, 97.4, 145.9, `design` 110.5, 119.0,
+132.3; gpt-6-luna `ticket` 144.5, 124.8, 216.3, `spec` 101.3, 70.2, 120.2, `full` 146.3,
+211.4, 294.7. The spec package, which carries most of the solution, cost fewer tokens and
+seconds on both models it ran on; the token and second counts never change a verdict.
+
+Scope: one implementer a tier, all three from one maker and one harness, three small bases in
+one repository, nine runs a cell, which shows only a large effect; a PASS shows only what its
+check reads, for that model on that day.
 
 ### Results not kept here
 

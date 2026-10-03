@@ -31,8 +31,10 @@ The bump comes from what an adopter must do, not from the commit type; see
   table and milestones. At the spec tier the ticket is cut into steps, each with failing tests and
   stubs written first and reviewed before the next. The tier comes from the person, or from the
   research repository's tier table, read with `outcomebound research models/tiers.md`; without a
-  clone the skill asks the person. Pending a comparison on request, what it does for an adopter is
-  `UNVERIFIED`. The `tickets` fragment is now version 6: run `adopt` again to install the skill.
+  clone the skill asks the person. In a comparison of 63 runs (2026-10-03), the spec-tier package
+  raised gpt-6-luna at xhigh from 6 to 9 of 9 and left gpt-6-astra at high at 9 of 9; the design
+  package's effect did not show, since gpt-6-sol at medium passed 9 of 9 with the ticket alone.
+  The `tickets` fragment is now version 6: run `adopt` again to install the skill.
 
 ### Changed
 
@@ -50,6 +52,9 @@ The bump comes from what an adopter must do, not from the commit type; see
 - `docs/research/` and `docs/model-guidance.md`: the research moved to outcomebound-research, and
   the wheel no longer ships `docs/model-guidance.md`. OutcomeBound's own evaluation record is now
   `docs/evaluations.md`.
+- `tickets brief --detail full`. The hand-off comparison found the step form no better than the
+  plain brief (6 of 9 against 6 of 9) and below the spec-tier package (9 of 9), so `brief`
+  renders one document.
 
 ## [1.0.0] - 2026-10-01
 
