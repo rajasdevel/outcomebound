@@ -250,7 +250,7 @@ def test_a_folder_and_a_missing_file_are_refused_and_the_missing_one_points_at_t
     assert "a folder" in err
     status, out, err = run(capsys, "models/absent.md")
     assert (status, out) == (1, "")
-    assert "INDEX.md lists every document and MOVED.md every path that moved" in err
+    assert "not in the clone; INDEX.md lists every document" in err
 
 
 def test_the_variable_overrides_the_link(

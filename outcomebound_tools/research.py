@@ -290,7 +290,7 @@ def _why_not(root: Path, path: str, message: str) -> str:
     if target.is_dir():
         return "a folder, not a document"
     if not target.exists():
-        return f"not in the clone; {INDEX} lists every document and MOVED.md every path that moved"
+        return f"not in the clone; {INDEX} lists every document"
     return message
 
 
