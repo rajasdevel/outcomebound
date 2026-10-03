@@ -12,6 +12,7 @@ vendor. The Owner column holds `user` or `agent`: whose decision the row is.
 - [decision-brief](decision-brief/design.md) — how a decision is put to a person, `outcomebound brief`.
 - [instructions](instructions/design.md) — read-only checks on a project's instruction files, `outcomebound instructions`.
 - [finish-check](finish-check/design.md) — at the stop hook of `claude-code` and `codex`, the recorded Done commands run, and a failure goes back to the agent; `outcomebound finish-check`.
+- [research](research/design.md) — the research repository: how the engine finds, prints and updates its clone, and takes findings back.
 
 Drafts, marked `status: draft`, say at their top what landing them takes, and none of the rules
 above holds one until it lands.
