@@ -11,41 +11,167 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
-OutcomeBound now lets an agent work for many hours inside clear bounds. A stop holds one item, never
-the run, and no limit applies to size, count, length or time unless you set it, a harness documents
-it, or a measurement supports it. Run `outcomebound adopt .` again to get the changes.
+A stop now holds one item, never the run. No limit applies to size, count, length or time unless
+you set it, a harness documents it, or a measurement supports it. The finish check can keep the
+failures that Done already has as known failures, and then it holds a turn only on a new failure.
+
+Do these steps first:
+
+1. Run `outcomebound adopt .` again. Until you do, `adopt --check` reads each 1.0.0 finish-check
+   entry as `stale`, and your install does not get the new fragments, skills and templates.
+2. In Codex, trust the changed finish-check entry again in `/hooks`. The install report shows an
+   `action` line for each changed `codex` entry.
+3. If an edge in `.outcomebound/fragments/local.md` contains a `;`, split it into two list items,
+   or put a comma in place of the `;`. adopt refuses such an edge.
+4. If your project publishes a package and selects no `ci-release` fragment, add
+   `publishing a package` to `edges:` in your local fragment. Add `moving a shared registry tag`
+   too if your project does that. The `python` and `node-typescript` fragments do not add
+   publishing edges now.
+5. If you wrote `.outcomebound/.gitignore` yourself, move its lines to the root `.gitignore` and
+   delete the file. Then run adopt again. adopt refuses that file, also with `--force`.
+6. If a `tickets` claims plan has a relative `cwd`, examine it. A relative `cwd` now starts at the
+   folder of the plan file. A plan in `.outcomebound/` that runs its claims at the root needs
+   `"cwd": ".."`.
+7. Put a `Floor-Loosening:` line in each commit that loosens the floor. A line now rules only the
+   loosenings of its own commit, so a range that passed before can fail.
+8. If a `validation` claim must stop after a time, set `timeout_seconds` on the claim or on the
+   plan. `validation` has no default timeout now.
+
+### Security
+
+- `floor check --base`: a `Floor-Loosening: <what>; ruled <id>` line rules only the loosenings
+  that its own commit makes. Before, one line anywhere in the range let every loosening in the
+  range pass.
+  - A merge commit carries the line for a loosening that its own edit makes. A loosening that a
+    side commit makes stays the side commit's to rule.
+  - A loosening in a file that a later commit renames counts at the path of the file at HEAD. The
+    result is the same in each merge order of the rename and the loosening.
+  - The first baseline of a claim is not a loosening only when the claim is new at HEAD. A claim
+    that the range drops and then adds again does not get this exemption.
+  - A tool config loosens by each line that it gains, loses or moves. A blank line, or spaces at
+    the end of a line, do not count.
+  - `<what>` stays free text, so the lines in earlier commits read as before.
+- In `pyproject.toml`, the loosening check also reads the `[tool]` table and the lines before the
+  first header. There, a dotted key such as `tool.ruff.lint.ignore = ["F401"]` changes a ruff or
+  mypy setting, and the check did not see it before. A dotted key there for another tool also
+  reads as a change.
+
+### Added
+
+- `adopt --finish-check` now runs the Done commands one time, after its writes. It runs each
+  command to its end, past each failure, with no time limit. It shows the verdict and the seconds
+  of each command. When Done takes longer than the timeout less 30 seconds, it shows `UNVERIFIED`
+  and gives a larger `--finish-timeout` to use. An install without `--finish-check` does not run
+  Done. It shows the record that applies, or it says that Done was not measured.
+- Known failures: adopt keeps each Done command that fails at this measurement, with its exit code
+  and the failure ids that its output names. The record is in the Git common directory and is not
+  committed. At a turn end, the finish check does not hold the turn while a known command fails
+  with the same exit code and names no new failure id. It reads failure ids from the summary lines
+  of pytest, unittest, go test, cargo test, jest, vitest and make. Where neither the record nor the
+  output names a failure id, the exit code alone decides, and the report says so.
+  - A record applies only in a checkout whose HEAD descends from the measured commit. In other
+    checkouts, every failure holds the turn.
+  - A known command that passes leaves the record, so its next failure holds the turn.
+  - When a new measurement replaces a record, adopt prints each failure that the earlier record did
+    not hold. Read this output: an agent that runs `adopt --finish-check` after its change broke
+    the code makes those failures known.
+- `adopt --finish-timeout SECONDS` sets the time for the Done commands at a turn end. The default
+  is 600 seconds, the documented default of both harnesses.
+- `tickets publish --draft <file>...` prints a POSIX shell script that publishes the drafts as
+  issues with `gh`. The script creates the issues in the order of their relations, and sets
+  `--parent` and `--blocked-by`. It applies the ticket label, and the hold label for a
+  `human-only: yes` ticket. The verb runs `check --draft` first and refuses with
+  `PUBLISH_REFUSED` on an error. It runs nothing itself.
+- The ticket block key `waits-on: <brief id>, ...` names the decision briefs that a ticket waits
+  on. `tickets check` shows it as `WAITS_ON_BRIEF`, and `tickets brief` adds a `## Waits on`
+  section. Other tickets stay startable.
+- `tickets check` gives the warning `CLAIM_READS_OUTSIDE_BOUNDS` when a `done-when` claim declares
+  `required_paths` that the ticket's `bounds` do not cover.
+- A floor claim can set `timeout_seconds`, and `prefix` for a container or environment runner such
+  as `docker compose run --rm app` or `uv run`. The tool still comes first in the argv. A change
+  to `timeout_seconds` is not a loosening.
+- `floor propose` offers the new `secrets` recipe to each project in which Git tracks a file, not
+  only to a Python project. A floor that already holds `python.secrets` keeps it. For a TypeScript
+  project, `propose` says why it gives no type or lint claim, and prints `tsc --noEmit` and
+  `eslint .` as claims that the project can add.
+- Every install writes `.outcomebound/.gitignore`, which adopt owns. It keeps `research-inbox/` and
+  each `.outcomebound-checks/` below `.outcomebound/` out of Git. A validation plan outside
+  `.outcomebound/` writes `.outcomebound-checks/` next to it, and the project must ignore that
+  folder itself.
+- adopt gives warnings, and refuses nothing, for these conditions:
+  - a path that the install writes and that Git ignores. The warning names the rule.
+  - a change to a tracked `AGENTS.md` that has changes that are not committed.
+  - a `CLAUDE.md` or `AGENTS.md` above the target that Claude Code also loads.
+  - instruction files that load into one folder and pass a harness's documented byte limit.
+- With `codex`, the install report shows one `UNVERIFIED` line about the Codex sandbox: how to add
+  `.agents` and the Git common directory as writable roots.
+- The `claude-code` row of `adapters/harnesses.json` has an optional `ancestors` field: the
+  instruction files that Claude Code loads from the folders above the working directory.
+  `instructions check` names each such file above the target as a review hit that does not change
+  the result.
+- Each finding of `instructions check --json` has a new field, `decides`. A finding with
+  `decides: false` is reported but does not change the exit code.
+- A GraphQL error inside one issue of the export holds only that issue (`EXPORT_PARTIAL`). The
+  export asks for 100 labels and blockers for each issue.
 
 ### Changed
 
-- The goal envelope (`templates/goal/goal.md`) has no Size line and no size stop. One run stopped
-  after less than an hour of work on that stop, which no ruling or measurement supported.
+- The goal envelope (`templates/goal/goal.md`):
+  - It has no Size line and no size stop. No ruling or measurement supported that stop.
   - An act outside the authorized acts, a check that does not go green, or an unanswered decision
-    holds only its item. The agent records it and continues with every item that does not depend
-    on it. The run ends only when the Done checks pass or no item can continue.
-  - The run starts without answers. A new Decisions line gives the answers that you have.
-  - A new Follow-ups line lets the envelope accept the issues that the run files for work it finds.
-  - The handoff has no page limit.
-- The kernel and the contract say "hold" for one item, not "stop" for the run. A path just outside
-  one item's file list, but inside the granted authority, is not wider scope.
+    holds only its item. The agent records the hold one time, when it starts, and continues with
+    every item that does not depend on it. The run ends only when every item is closed and the
+    Done checks pass, or when no item can continue.
+  - A continuation turn does not ask a held question again. The run does not replace the goal's
+    objective with its own text.
+  - New lines: Decisions gives the answers that you have, and the run starts without answers.
+    Order gives the order of the items. Follow-ups lets the envelope accept the issues that the run
+    files for work that it finds. Handoff names the path of the handoff.
+  - Not authorized always names every credential act: unlock a credential store, add a key to an
+    SSH agent, log in, and read or print a secret.
+  - The note tells you to paste the envelope as one block, as the run's first message, and to keep
+    your own instructions outside that block. The handoff has no page limit.
+- The kernel and the contract say "hold" for one item, not "stop" for the run. Where a ticket, a
+  package or a delegation names the paths of an item, those paths are the authority of that item.
+  Where nothing names them, a path inside your owned scope is not wider scope.
 - A spec has no word limit in the contract, the spec template or the core skill. It holds only the
-  decisions that the code cannot show, and no decision is cut to make it shorter. The designs of
-  this repository have no word limit either. The plan template has no step limit.
+  decisions that the code cannot show, and no decision is cut to make it shorter. The plan template
+  has no step limit.
 - Skills:
   - A decision brief never ends the turn. It holds only the work that waits on its answer.
+  - `decision-brief`: each brief gets an id that no other session can take. Where the project keeps
+    one numbering for briefs, the agent takes the next id from it. Otherwise it puts the task's
+    name before the number, for example `fix-login-D1`.
   - `hand-off-tickets` does not ask you for the implementer or its tier. It names the implementer
-    that it starts. Without a research clone, it reads the public tier table, and if no table can
-    be read, it uses the spec tier.
+    that it starts. A tier that the project's committed instructions give a model comes before the
+    placement table. Where neither places the model, the handover says so and uses the spec tier.
   - A spec-tier package names the acts that end a step, not "when to stop rather than guess".
   - A ticket that cannot be built as written gets a follow-up or a brief, and the other tickets
     continue.
-  - `slice-tickets` draws `bounds` as wide as the authority of the outcome. It settles a contract
-    gap that a later commit can undo, and gives you only a gap that is hard to undo.
+  - `slice-tickets` draws `bounds` as wide as the authority of the outcome. Where a `done-when`
+    command reads more than the ticket's own paths, the `bounds` cover what it reads, or a repair
+    ticket comes first. The skill publishes with the script of `tickets publish`. It settles a
+    contract gap that a later commit can undo, and gives you only a gap that is hard to undo.
   - A failed `gh` command runs again from a new export.
 - Fragments:
-  - `workspace`: a FAIL on a note means that the agent does not rely on that note. Every other
-    result of `instructions check` goes into the handoff and blocks nothing. Remove a worktree
-    only when its task is finished and nothing in it is still needed. In the Codex sandbox, the
-    agent continues with the work that needs no refused write.
+  - `workspace` (version 5): a FAIL on a note means that the agent does not rely on that note.
+    Every other result of `instructions check` goes into the handoff and blocks nothing.
+    - In Codex, the agent asks you one time to add `.agents` and the Git common directory as
+      writable roots. Until you do, it holds each item that writes there and continues with reads
+      and checks.
+    - A scan that walks ignored folders reads each worktree as a second copy of the repository, so
+      the agent runs such a scan from the worktree's root.
+    - The commits of a worktree land as the project's instructions or the goal envelope say.
+    - The finish-check hook checks only the session's working directory. Before the agent lands
+      work from a worktree, it runs Done in that worktree.
+    - Work in another repository goes in a session that starts there, so that its hooks and
+      sandbox apply.
+    - A handoff that starts a run gives you one block to paste. Remove a worktree only when its
+      task is finished and nothing in it is still needed.
+  - `python` and `node-typescript` (version 5) add no publishing edges. `ci-release` (version 5)
+    also names "moving a shared registry tag" as an irreversible edge.
+  - `templates/fragment-local.md` states three rules: all five slots are present, only mechanism
+    ids take backticks on the Mechanisms line, and an edge is one line with no `;`.
   - `commands`: a long command runs in the background, with its output in a file. Slow is not
     hung: the agent never shortens, skips or stops a check because it takes long.
   - `tickets`: where neither `CONTRIBUTING.md` nor `AGENTS.md` says how work lands, the agent uses
@@ -58,47 +184,71 @@ it, or a measurement supports it. Run `outcomebound adopt .` again to get the ch
 - The finish check:
   - It remembers every verdict for the working tree. On an unchanged tree it runs nothing, and it
     shows an earlier failure again without holding the turn.
-  - A command that cannot start in the hook's environment (exit 126 or 127) reads UNVERIFIED and
+  - A command that cannot start in the hook's environment (exit 126 or 127) reads `UNVERIFIED` and
     does not hold the turn.
   - On Claude Code, it waits while scheduled wake-ups are set, as it does for background tasks.
   - The hold text tells the agent to fix what its change broke and continue.
-  - The entry command now carries `--timeout N`. Each 1.0.0 entry reads `stale` until you run
-    `adopt` again, and Codex asks you to trust the changed hook in `/hooks`.
+  - The entry command now carries `--timeout N`.
+  - The documentation says what Codex shows the model and the person, and that a changed entry
+    needs a new trust. That a Codex release runs the hook stays `UNVERIFIED`.
 - The quality floor:
-  - No fixed time limit applies to a tool, a version probe or a Git read.
+  - No fixed time limit applies to a tool, a version probe, a Git read or `provision`.
   - `check` shows every new finding.
-  - A claim whose files no longer exist reads PASS, and dropping it is not a loosening.
+  - A claim whose pattern matches no tracked file reads PASS, with 0 findings in 0 files. To drop
+    such a claim is still a loosening.
   - A rename carries its baselined findings.
-  - The loosening range starts at the floor's adoption commit when the merge base has no floor.
+  - The loosening range starts at the floor's adoption commit when the merge base has no floor and
+    no commit from the merge base to the adoption commit touches `floor.json`. Then the secrets
+    claim also scans the tracked files.
   - Without a base, gitleaks reads only the tracked files.
   - A baseline line is `path:code`. An older `path:code:message` line still reads.
-- `tickets brief`: at a limit, the implementer finishes every part that the limit does not block.
-  Without `CONTRIBUTING.md`, the implementer commits on its own branch. The brief has no size line.
-  A claim with no timeout shows "no timeout".
-- `validation` has no default timeout: a claim waits for its command unless the plan or the claim
-  sets `timeout_seconds`.
+  - A folder or Python file that Git tracks, added to a types claim, is not a loosening. Any other
+    added word is a loosening, also a word that starts with `@`, which mypy reads as a file of
+    options.
+  - The proposed types claim names each outermost folder whose `__init__.py` Git tracks, where the
+    mypy config names no `files`.
+  - `floor apply` and `floor remove` print `next: outcomebound adopt <root>` when they add or
+    remove `floor.json` in an install.
+- adopt:
+  - `adopt --detect` proposes the floor's `--base` from the remote's default branch, and says when
+    no default branch resolves. It reads `.codex/` as a sign of `codex`. A test command that comes
+    from discovery and not from CI gets a comment: the command runs on the host.
+  - adopt reads every CI workflow file.
+  - `discovery` does not enter a folder that Git ignores, or a folder with its own `.git`.
 - `instructions check`:
-  - A hidden character in a note reads UNVERIFIED for that note, not FAIL for the repository.
+  - `--harness` accepts a comma list, as `adopt --harness` does.
+  - adopt's own finish-check entry stays a review hit, and its fact quotes the Done commands that it
+    runs. The hit does not change the result only when the entry is exactly what adopt writes for
+    the Done commands of the manifest and of `AGENTS.md`. Exit 2 again means that something needs
+    action.
+  - A hidden character in a note reads `UNVERIFIED` for that note, not FAIL for the repository.
   - A review hit asks for a person at the handoff, not before the work.
-  - adopt's own finish-check entry stays a review hit, and its fact quotes the Done commands that
-    it runs.
   - A harness row past its re-check date says that only the re-check is due.
-- `adopt --detect` proposes the floor's `--base` from the remote's default branch. adopt reads
-  every CI workflow file.
+- Tickets:
+  - `tickets brief . 20` names the ticket `#20`.
+  - A `bounds` entry can end in `/`. A `reads` entry with no `#anchor` names the whole file.
+  - `tickets check` shows all `CLAIM_PLANNED` warnings as one row. `--json` still lists each claim.
+  - On a `human-only: yes` ticket, the item `<name>: human: <observation>` in `done-when` names the
+    person's own check. On every other ticket it is still an error.
+  - `tickets check --draft` gives `RELATION_UNCHECKED` for a relation to a published ticket.
+  - `INPUT_REQUIRED` prints the export command for the declared repository.
+  - `tickets brief`: at a limit, the implementer finishes every part that the limit does not
+    block. Without `CONTRIBUTING.md`, the implementer commits on its own branch. The brief has no
+    size line. A claim with no timeout shows "no timeout".
 
-### Added
+### Fixed
 
-- `adopt --finish-timeout SECONDS` sets the time for the Done commands at a turn end. The default
-  is 600 seconds, the documented default of both harnesses.
-- The ticket block key `waits-on: <brief id>, ...` names the decision briefs that a ticket waits
-  on. `tickets check` shows it as `WAITS_ON_BRIEF`, and `tickets brief` adds a `## Waits on`
-  section. Other tickets stay startable.
-- A floor claim can set `timeout_seconds`, and `prefix` for a container or environment runner such
-  as `docker compose run --rm app` or `uv run`. The tool still comes first in the argv.
-- A GraphQL error inside one issue of the export holds only that issue (`EXPORT_PARTIAL`). The
-  export asks for 100 labels and blockers for each issue.
-- adopt warns where the instruction files that load into one folder pass a harness's documented
-  byte limit.
+- `floor provision` does not install a tool that is on `PATH` at its `min_version` or later, so it
+  does not ask a system Python that pip refuses.
+- When mypy stops (exit 2), the floor shows the error that stopped it. It gives the advice about
+  `files` only for the module-mapping hint.
+- When ruff or mypy cannot write its cache in the tree, the floor gives it a temporary cache
+  folder. A claim with a `prefix` does not get it.
+- A local-fragment edge with a `;` read as two edges. Now adopt refuses it and names the rule.
+- `tickets` and `validation` resolve a relative claims-plan `cwd` from the same folder: the folder
+  of the plan file.
+- `tickets check` refuses a `bounds` entry such as `src/[]` or `src//`, and a `discovered-from`
+  that names the ticket itself.
 
 ## [1.0.0] - 2026-10-04
 
