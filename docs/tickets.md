@@ -130,9 +130,13 @@ claim declares a path that the ticket's `bounds` do not cover, `check` gives a W
 `CLAIM_READS_OUTSIDE_BOUNDS`. A finding in that path is one that the ticket's work may not
 repair. Widen `bounds`, or put a ticket that repairs it first in `blocked-by`. A claim that
 declares no paths is not examined, because the plan does not say what its command reads.
-When a declared path is not in the checkout, as it resolves from the plan's `cwd`, `check` gives
-a WARNING about the plan, `CLAIM_PATH_ABSENT`, with no ticket id. A run of that claim reads
-`UNVERIFIED`. When the plan's claims run in the folder of the plan file, and that folder is not the
+When a declared path is not in the checkout as it resolves from the plan's `cwd`, but is in the
+checkout as it resolves from the checkout root, `check` gives a WARNING about the plan,
+`CLAIM_PATH_ABSENT`, with no ticket id. A run of that claim reads `UNVERIFIED`. When a declared
+path is in neither place, it is a planned path, for example a test file that an open ticket
+adds. `check` and `adopt` give no warning for a planned path, because it does not show that the
+`cwd` is wrong. A run of that claim reads `UNVERIFIED` and names the path until the path exists.
+When the plan's claims run in the folder of the plan file, and that folder is not the
 checkout root, `check` gives a WARNING about the plan, `CLAIM_CWD_PLAN_FOLDER`, with no ticket id.
 This warning does not need `required_paths`. A plan below the root runs its claims in its own folder
 when it has no `cwd` or has `"cwd": "."`, because a relative `cwd` starts at the folder of the plan

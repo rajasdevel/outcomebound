@@ -320,25 +320,28 @@ def _placement_messages(plan: ClaimsPlan, target: Path) -> Iterator[Message]:
     """What shows that the plan's claims would run in a folder it was not written for.
 
     `CLAIM_PATH_ABSENT` for each claim that declares a required path the checkout
-    does not hold, since a run of that claim reads `UNVERIFIED`; `CLAIM_CWD_PLAN_FOLDER`
+    does not hold from the plan's working directory but holds from the checkout root,
+    since a run of that claim reads `UNVERIFIED` there; `CLAIM_CWD_PLAN_FOLDER`
     where the claims would run in the plan file's own folder below the checkout root,
-    which a plan whose claims declare no paths shows in no other way. Both are facts
+    which a plan whose claims declare no paths shows in no other way. A path absent
+    from both is planned, and nothing is said of it: the claim's own run reads
+    `UNVERIFIED`, naming the path, until a ticket's work adds it. Both are facts
     about the plan and not about a ticket, so they are stamped with no id; both are
-    warnings, because a ticket's own work may add the path and a plan may mean its
-    own folder. `placement` decides both, the answer `adopt` reports too.
+    warnings, because a plan may mean its own folder. `placement` decides both, the
+    answer `adopt` reports too.
     """
 
     found = placement(plan, target)
-    for name, absent in found.absent.items():
+    for name, moved in found.moved.items():
         yield message(
             "CLAIM_PATH_ABSENT",
             "",
-            f"the claim `{name}` in {plan.path} declares {', '.join(absent)}, resolved from "
+            f"the claim `{name}` in {plan.path} declares {', '.join(moved)}, resolved from "
             f"its working directory {plan.cwd_resolved}, and the checkout holds none of "
-            "them there",
-            "point the plan's cwd at the folder the claim runs in (a relative cwd starts at "
-            f"the plan file's folder, so from there the checkout root is `{found.to_root}`), "
-            "or add the path",
+            "them there, but holds each from the checkout root",
+            f'write "cwd": "{found.to_root}" in the plan to run its claims at the checkout '
+            "root (a relative cwd starts at the plan file's folder), or add the path where "
+            "the claim runs",
         )
     if found.at_plan_folder:
         yield message(

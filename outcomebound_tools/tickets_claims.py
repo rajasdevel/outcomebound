@@ -72,12 +72,18 @@ class ClaimDefinition:
     that resolves outside the checkout is None, since no `bounds` entry can
     cover it. Empty where the claim declares none, which says nothing about what
     its command reads.
+
+    `root_paths` is the same entries, one for one, resolved as if the plan's `cwd`
+    were the checkout root: an absolute path as written, a relative one against the
+    root. `placement` compares the two to tell a plan that runs in the wrong folder
+    from a path that is not written yet.
     """
 
     name: str
     command: tuple[str, ...]
     timeout_seconds: float | None
     required_paths: tuple[str | None, ...] = ()
+    root_paths: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +232,7 @@ def _definitions(
             command=_command(item.get("command")),
             timeout_seconds=_timeout(item.get("timeout_seconds"), plan_timeout),
             required_paths=_required(root, cwd, item.get("required_paths")),
+            root_paths=_required(root, root.resolve(), item.get("required_paths")),
         )
     return MappingProxyType(definitions)
 
@@ -265,8 +272,10 @@ def absent_paths(plan: ClaimsPlan, target: Path | str) -> dict[str, tuple[str, .
     """Each claim's declared required paths that the checkout does not hold, by claim name.
 
     The paths are already resolved from the plan's working directory, as `validation`
-    resolves them, so a plan whose relative `cwd` was written for the checkout root,
-    and now starts at the plan file's folder, names paths that are not there. A path
+    resolves them. A path is absent for one of two reasons: the plan runs its claims in
+    a folder it was not written for, or the path is planned, one that a ticket's work
+    will add. This function does not tell the two apart; `placement` does. A fixture
+    that must name only paths its working directory holds asserts on this. A path
     outside the checkout is the bounds check's to report, not this one's.
     """
 
@@ -283,24 +292,29 @@ class Placement:
     """Whether a plan's claims would run in a folder the plan was not written for.
 
     Since a relative `cwd` started at the plan file's folder, a plan written for the
-    checkout root runs its claims elsewhere, and two signs show it. `absent` is the
-    first: each claim's declared required paths that the checkout does not hold, as
-    `absent_paths` finds them. `at_plan_folder` is the second, for a plan whose claims
-    declare no paths: the working directory is the plan file's own folder while that
-    folder is not the checkout root, which is what a plan below the root reads with
-    no `cwd` at all or with `"cwd": "."`. `to_root` is the relative `cwd` that runs
-    the claims at the checkout root instead, `..` from `.outcomebound/`.
+    checkout root runs its claims elsewhere, and two signs show it. `moved` is the
+    first: each claim's declared required paths that the checkout does not hold from
+    the plan's working directory but does hold from the checkout root, so that the
+    working directory explains the absence. A path absent from both is planned, one a
+    ticket's work will add, and is no sign: the claim's own run reads UNVERIFIED until
+    the path exists. `at_plan_folder` is the second, for a plan whose claims declare no
+    paths: the working directory is the plan file's own folder while that folder is
+    not the checkout root, which is what a plan below the root reads with no `cwd` at
+    all or with `"cwd": "."`. `to_root` is the relative `cwd` that runs the claims at
+    the checkout root instead, `..` from `.outcomebound/`. Neither sign is present
+    where the working directory is already the checkout root, so no advice built from
+    this tells a person to change a `cwd` that already runs there.
     """
 
     at_plan_folder: bool
-    absent: Mapping[str, tuple[str, ...]]
+    moved: Mapping[str, tuple[str, ...]]
     to_root: str
 
     @property
     def misplaced(self) -> bool:
         """Whether either sign is present."""
 
-        return self.at_plan_folder or bool(self.absent)
+        return self.at_plan_folder or bool(self.moved)
 
 
 def placement(plan: ClaimsPlan, target: Path | str) -> Placement:
@@ -312,9 +326,17 @@ def placement(plan: ClaimsPlan, target: Path | str) -> Placement:
 
     root = Path(target).resolve()
     folder = (root / plan.path).parent.resolve()
+    moved = {
+        name: tuple(
+            here
+            for here, there in zip(item.required_paths, item.root_paths, strict=True)
+            if here and there and not (root / here).exists() and (root / there).exists()
+        )
+        for name, item in plan.claims.items()
+    }
     return Placement(
         at_plan_folder=plan.cwd_resolved == folder and folder != root,
-        absent=MappingProxyType(absent_paths(plan, root)),
+        moved=MappingProxyType({name: found for name, found in moved.items() if found}),
         to_root=Path(os.path.relpath(root, folder)).as_posix(),
     )
 
