@@ -186,7 +186,9 @@ record, and its next failure sends the agent back. The check reads test names fr
 lines of pytest, unittest, go test, cargo test, jest, vitest and make. If a command prints no such
 names, only its exit code is compared, so a new failure in that same command does not send the
 agent back; the message says so. Split your Done into smaller commands to make this gap smaller.
-`adopt --finish-check` measures Done again. An install without `--finish-check` does not run Done.
+`adopt --finish-check` measures Done again. When it replaces an earlier record, it names each
+failure that is new since that record. Read these lines: an agent that runs it after its change
+broke code makes those failures known. An install without `--finish-check` does not run Done.
 
 The hook checks the checkout at the working directory of the session. If the agent works in a
 worktree and the session stays in the main checkout, a PASS tells you nothing about the worktree.

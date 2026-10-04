@@ -665,12 +665,53 @@ def test_a_new_failing_test_inside_a_known_command_holds(tmp_path: Path) -> None
     assert "FAILED tests/test_new.py::test_x" in reason
 
 
+def test_a_new_parametrized_case_with_a_space_in_its_id_holds(tmp_path: Path) -> None:
+    """Breaks if a pytest id is cut at its first space, which makes `test_x[hello mars]` the
+    known `test_x[hello world]` and hides the new failure."""
+
+    lines = tmp_path / "lines"
+    lines.write_text("FAILED tests/test_x.py::test_x[hello world] - assert 0\n", encoding="utf-8")
+    done = [f"cat {lines}; exit 1"]
+    root, digest = target(tmp_path / "t", done)
+    finish_check.measure(root, done, 600)
+
+    with lines.open("a", encoding="utf-8") as handle:
+        handle.write("FAILED tests/test_x.py::test_x[hello mars] - assert 1\n")
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    reason = hook("codex", digest, root)[1]["reason"]
+    assert "new failure ids pytest tests/test_x.py::test_x[hello mars]" in reason
+
+
+def test_a_measurement_that_replaces_a_record_names_what_it_adds(tmp_path: Path) -> None:
+    """Breaks if a measurement made after a change breaks code makes that failure known without
+    naming it apart from the failures the replaced record held."""
+
+    lines = tmp_path / "lines"
+    lines.write_text("FAILED tests/test_a.py::test_old - assert 0\n", encoding="utf-8")
+    done = [f"cat {lines}; exit 1", "true"]
+    root, _ = target(tmp_path / "t", done)
+    first = finish_check.measure(root, done, 600)
+    assert first.previous is None and first.added == ()
+
+    with lines.open("a", encoding="utf-8") as handle:
+        handle.write("FAILED tests/test_a.py::test_new - assert 1\n")
+    second = finish_check.measure(root, done, 600)
+    assert second.previous is not None
+    shown = finish_check.shorten(done[0], 80)
+    assert second.added == (f"`{shown}`: pytest tests/test_a.py::test_new",)
+    message = hook("codex", finish_check.done_digest(done), root)[1]["systemMessage"]
+    assert f"on commit {second.previous.head[:12]}, which this checkout descends from" in message
+
+
 @pytest.mark.parametrize(
     ("line", "found"),
     [
         ("FAILED tests/a.py::test_b - assert 1", "pytest tests/a.py::test_b"),
         ("ERROR tests/a.py - ImportError", "pytest tests/a.py"),
+        ("FAILED tests/a.py::t[hello world] - assert 0", "pytest tests/a.py::t[hello world]"),
+        ("FAILED tests/a.py::t[hello world]", "pytest tests/a.py::t[hello world]"),
         ("FAIL: test_x (pkg.tests.T)", "unittest test_x (pkg.tests.T)"),
+        ("FAIL: test_x (pkg.tests.T) (i=1)", "unittest test_x (pkg.tests.T) (i=1)"),
         ("    --- FAIL: TestThing (0.00s)", "go TestThing"),
         ("test tests::it_works ... FAILED", "cargo tests::it_works"),
         ("  \u2715 adds numbers (5 ms)", "jest adds numbers"),

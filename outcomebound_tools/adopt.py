@@ -1160,7 +1160,8 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
     run.notes.append(
         (
             "skip",
-            f"finish-check: Done was measured on {known.measured} in {known.seconds:.0f} s, "
+            f"finish-check: Done was measured on {known.measured}"
+            f"{f' on commit {known.head[:12]}' if known.head else ''} in {known.seconds:.0f} s, "
             f"known failures: {failing or 'none'}; --finish-check measures it again",
         )
     )
@@ -1205,6 +1206,16 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
                     "failure inside it is not told apart; once it passes, it leaves the record",
                 )
             )
+    if measured.previous is not None and measured.added:
+        earlier = measured.previous
+        on = f"commit {earlier.head[:12]}" if earlier.head else "a branch with no commit"
+        notes.append(
+            (
+                "known",
+                f"finish-check: new since the record measured on {earlier.measured} on {on}, "
+                f"which this one replaces here: {'; '.join(measured.added)}",
+            )
+        )
     limit = timeout - finish_check.MARGIN_SECONDS
     notes.append(
         (
