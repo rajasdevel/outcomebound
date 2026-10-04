@@ -552,6 +552,35 @@ def test_claim_planned_on_an_open_ticket(
     assert codes(found, "#3") == []
 
 
+def test_a_claim_that_reads_outside_the_bounds_is_a_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A claim whose declared `required_paths` reach past the ticket's `bounds` is a
+    warning naming the paths; one inside them, or one that declares none, says
+    nothing, since only declared paths make it decidable."""
+
+    root = checkout(
+        tmp_path,
+        document("#1", bounds=["src/feature"], done_when=["whole-tree"]),
+        document("#2", bounds=["src/feature/"], done_when=["feature-only"]),
+        document("#3", bounds=["src/feature"], done_when=[CLAIM]),
+        claims=(CLAIM,),
+    )
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"] += [
+        {"name": "whole-tree", "command": ["true"], "required_paths": [".", "src/feature"]},
+        {"name": "feature-only", "command": ["true"], "required_paths": ["src/feature/a.py"]},
+    ]
+    write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == ["CLAIM_READS_OUTSIDE_BOUNDS"]
+    assert codes(found, "#2") == [] and codes(found, "#3") == []
+    [text] = said(found, "CLAIM_READS_OUTSIDE_BOUNDS")
+    assert "`whole-tree`" in text and "reads ., which" in text, text
+
+
 def test_planned_claims_fold_into_one_text_row(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
