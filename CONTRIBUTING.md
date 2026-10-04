@@ -221,10 +221,10 @@ Each pull request lands as one squash commit. Its title and description become t
 `main`, and GitHub adds the `Signed-off-by` lines of the pull request's commits, so the
 description is the commit message that a person reads. Merge with `gh pr merge <n> --squash` and
 no `--subject` or `--body`: nobody types a merge message or an identity at the merge. The
-required checks must pass on a branch that is up to date with `main`; `gh pr update-branch <n>`
-brings it up to date. CI checks the title and the description again each time they change, and
-checks that each commit of the pull request has a `Signed-off-by` line (the workflow
-`pr-text.yml`).
+required checks must pass on a branch that is up to date with `main`;
+`gh pr update-branch <n> --rebase` brings it up to date. CI checks the title and the description
+again each time they change, and checks that each commit of the pull request, except a merge
+commit, has a `Signed-off-by` line (the workflow `pr-text.yml`).
 
 An agent's pull request text, commit messages and files are public. They name no project that
 uses OutcomeBound, no person, no local path, no id or role from a private working file, and no

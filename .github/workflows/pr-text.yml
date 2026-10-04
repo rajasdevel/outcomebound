@@ -5,7 +5,8 @@ name: PR text
 # each time they are edited or the branch moves. It also checks that each commit of the pull
 # request carries a Signed-off-by line (the Developer Certificate of Origin in CONTRIBUTING.md),
 # because the squash commit keeps the description, not the commits' own messages; the commits
-# stay readable at refs/pull/<n>/head.
+# stay readable at refs/pull/<n>/head. A merge commit is not checked: the one that GitHub's
+# "Update branch" writes brings main's commits in and certifies no new work.
 on:
   pull_request:
     branches: [main]
@@ -52,7 +53,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           missing=0
-          for commit in $(git rev-list "$BASE..$HEAD"); do
+          for commit in $(git rev-list --no-merges "$BASE..$HEAD"); do
             if ! git log -1 --format=%B "$commit" | git interpret-trailers --parse | grep -q '^Signed-off-by: '; then
               echo "FAIL sign-off: commit $(git rev-parse --short "$commit") has no Signed-off-by line (git commit -s)"
               missing=1
