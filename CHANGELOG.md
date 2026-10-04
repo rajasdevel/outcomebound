@@ -11,6 +11,15 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+### Fixed
+
+- A recorded block or file that holds what `adopt` writes there now, but not what it recorded,
+  is no edit. An example is a guidance-pointers block that a person changed with the local
+  fragment it comes from. `adopt --check` read it `edited` and told the person to use `--force`.
+  Now `--check` reads it `stale` and says why, and `adopt` records it without `--force` and
+  names it on a `kept` line. A block or file that differs from both is refused without
+  `--force`, as before.
+
 ## [1.1.0] - 2026-10-04
 
 A stop now holds one item, never the run. No limit applies to size, count, length or time unless
