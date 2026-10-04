@@ -2,8 +2,8 @@
 
 Every target is a Git repository under `tmp_path`, and every assertion is about bytes on
 disk, the manifest or an exit status, never about a sentence adopt prints; the printed things
-read are the footprint's figure, the nested byte warning and the finish check's statement per
-harness, which exist only as output.
+read are the footprint's figure, the nested byte warning, the finish check's statement per
+harness and the `kept` line, which exist only as output.
 """
 
 from __future__ import annotations
@@ -312,6 +312,118 @@ def test_an_edited_owned_block_is_refused_and_force_replaces_it(
     assert code == 0, err
     kernel = adopt.kernel_block(ROOT).encode()
     assert adopt.block_text(agents.read_text(encoding="utf-8"), adopt.KERNEL) == kernel
+
+
+DISTINGUISH = "**Distinguish** — the states that must not impersonate each other in this project."
+
+
+def kept(out: str) -> list[str]:
+    """The labels an install's report names as recorded without --force."""
+
+    return [
+        line.split(None, 1)[1].split(": ", 1)[0]
+        for line in out.splitlines()
+        if line.startswith("kept ")
+    ]
+
+
+def edit_local(target: Path, fragment: str, block: str) -> str:
+    """Change the local fragment's Distinguish line to `fragment` and the same line in the
+    installed pointers block to `block`; returns AGENTS.md as edited."""
+
+    local = target / adopt.LOCAL_FRAGMENT
+    local.write_text(local.read_text(encoding="utf-8").replace(DISTINGUISH, fragment), "utf-8")
+    agents = target / "AGENTS.md"
+    text = agents.read_text(encoding="utf-8")
+    assert text.count(DISTINGUISH) == 1
+    agents.write_text(text.replace(DISTINGUISH, block), encoding="utf-8")
+    return agents.read_text(encoding="utf-8")
+
+
+def test_a_block_edited_to_what_this_install_writes_needs_no_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The reported case: a commit changes the local fragment and makes the same change in the
+    pointers block it renders. Breaks if `--check` calls the block edited and sends the person
+    to --force, if the install refuses it or says nothing, or if the manifest keeps the old
+    digest, so that the next change to the fragment would read as an edit."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local")[0] == 0
+    commit_all(target)
+    line = "**Distinguish** — committed ≠ pushed in this project."
+    edited = edit_local(target, line, line)
+    pointers = f"AGENTS.md ({adopt.POINTERS})"
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1 and states(out)[pointers] == "stale"
+    assert f"stale    {pointers}: {adopt.UNRECORDED}" in out.splitlines()
+    assert next_lines(out) == [
+        f"next: outcomebound adopt {shlex.quote(str(target))} makes every record current"
+    ]
+
+    code, out, err = run(capsys, str(target))
+
+    assert code == 0, err
+    assert kept(out) == [pointers]
+    assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and set(states(out).values()) == {"current"}
+
+
+def test_a_block_edit_that_differs_from_what_this_install_writes_still_needs_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The negative control: the block's edit is not the fragment's. Breaks if any edit to a
+    recorded block is taken without --force."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local")[0] == 0
+    fragment = "**Distinguish** — committed ≠ pushed in this project."
+    edited = edit_local(target, fragment, "**Distinguish** — my own words, not the fragment's.")
+    pointers = f"AGENTS.md ({adopt.POINTERS})"
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1 and states(out)[pointers] == "edited"
+
+    code, _, err = run(capsys, str(target))
+
+    assert code == 1
+    assert f"{pointers} differs from what adopt wrote; restore it, or pass --force" in err
+    assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
+
+
+def test_a_file_edited_to_what_this_install_writes_needs_no_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A skill file holding what the next release ships, put there before the upgrade, is no
+    edit, as a block is not; one holding anything else still refuses. Breaks if files and
+    blocks are judged by different rules."""
+
+    source = engine_copy(tmp_path)
+    target = repo(tmp_path / "t")
+    assert run(capsys, str(target), source=source)[0] == 0
+    shipped = source / "skills/decision-brief/SKILL.md"
+    shipped.write_text(shipped.read_text(encoding="utf-8") + "\nOne more line.\n", "utf-8")
+    skill = ".outcomebound/skills/decision-brief/SKILL.md"
+    (target / skill).write_text("mine\n", encoding="utf-8")
+
+    code, _, err = run(capsys, str(target), source=source)
+
+    assert code == 1
+    assert f"{skill} differs from what adopt wrote; restore it, or pass --force" in err
+
+    (target / skill).write_bytes(shipped.read_bytes())
+    code, out, _ = run(capsys, str(target), "--check", source=source)
+    assert states(out)[skill] == "stale"
+
+    code, out, err = run(capsys, str(target), source=source)
+
+    assert code == 0, err
+    assert kept(out) == [skill]
+    assert (target / skill).read_bytes() == shipped.read_bytes()
 
 
 def test_a_manifest_of_another_format_is_refused_even_when_forced(

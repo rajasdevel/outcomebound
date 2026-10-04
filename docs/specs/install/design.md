@@ -36,9 +36,10 @@ test:ci`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`
 test-data` and `npm run test:watch` are not.
 
 The facts record holds the selection (`fragments`), the `done` commands, any `style`, and `inputs`: each source
-path read, with its sha256. `--check` recomputes the block: bytes other than the record's read
-`edited`; a record other than the recomputation reads `stale`, naming each fact that moved and
-each input that changed.
+path read, with its sha256. `--check` recomputes the block: bytes other than both the record's and
+the recomputation's read `edited`; a record other than the recomputation reads `stale`, naming each
+fact that moved and each input that changed, or, where the bytes are the recomputation's, saying
+so.
 
 `guidance-pointers` holds the `local` fragment inline first, since only its author knows which of
 it every task needs; then `- <condition>: read <path>` per selected fragment, the path a verbatim
@@ -71,7 +72,7 @@ an install carries and the fragment bodies, for a delegate's role prompt.
 | Re-running is the upgrade, and Git is the undo | three-way merges against copies of every release | user | decided |
 | No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records | user | decided |
 | The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last | per-artifact base caches, source receipts and bundle digests | agent | decided |
-| An owned block or file whose bytes differ from its record is refused without `--force` | overwriting it, or merging | agent | decided |
+| An owned block or file whose bytes differ from its record is refused without `--force`, unless they are byte for byte what this install writes there: such bytes are no person's edit, so the install records them and its report names each on a `kept` line, and `--check` reads the record `stale`, saying so, with a next step that needs no `--force`. Bytes that differ from both are refused as before, so a person's edit is never overwritten without `--force` | overwriting it, or merging; refusing bytes this install writes too, which sends a person who changed the local fragment and its rendered block in one commit to `--force`, which also overrides the refusals that protect an edit; reading the block as `current` while its record is behind, so that the next change to its source reads as an edit | agent | decided |
 | `--check` ends, when a record is not current, with the command that makes it current | one `doctor` verb over every layer, recording each choice declined | agent | decided |
 | A harness that cannot be made to load `AGENTS.md` is refused before any write | a reminder and exit 0, leaving an install nothing loads | agent | decided |
 | A harness's host file gets an `@AGENTS.md` import block, except where the harness table's row records `reads_agents_md` and none of the files it lists is in the target: that harness reads `AGENTS.md` itself | creating the host file for that harness | user | decided |
