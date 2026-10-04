@@ -711,7 +711,7 @@ def test_a_loosening_made_before_its_file_is_renamed_is_ruled_by_its_own_commit(
     git(root, "mv", "src/old.py", "src/new.py")
     commit(root, "rename", {})
     if later:
-        commit(root, "later\n\nFloor-Loosening: another change; ruled D4", later)
+        commit(root, "later\n\nFloor-Loosening: another change; ruled #4", later)
 
     verdict, output = ranged(capsys, root, base)
 
@@ -728,7 +728,7 @@ def test_a_claim_dropped_and_brought_back_with_a_larger_baseline_needs_its_own_r
 
     root, base = ruled_range(tmp_path)
     original = (root / floor.FLOOR_PATH).read_text(encoding="utf-8")
-    trailer = "\n\nFloor-Loosening: drop python.lint; ruled D4" if ruled else ""
+    trailer = "\n\nFloor-Loosening: drop python.lint; ruled #4" if ruled else ""
     dropped = {floor.FLOOR_PATH: claims_text(shipped("shell.injection")), LINT_BASELINE: ""}
     commit(root, "drop lint" + trailer, dropped)
     fat = "".join(f"src/x{n}.py:E501\n" for n in range(50))

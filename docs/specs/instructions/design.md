@@ -9,7 +9,11 @@ status: ratified
 
 Before a model reads a project's instruction files, a person can see what in them, or in the
 harness settings beside them, could steer an agent unseen, and whether the loading facts behind
-that reading are current. The command reads and reports; what a hit means is the person's call.
+that reading are current. The invariant the command holds: each file or setting in scope that
+could steer an agent unseen is reported on every run, as a FAIL, a review hit or `UNVERIFIED`,
+and data in the target can decide only whether a review hit changes the result, as the rows below
+say, never whether it is reported. The command reads and reports; what a hit means is the
+person's call.
 How: `outcomebound instructions check --help` and `outcomebound_tools/instruction_audit.py`.
 
 ## Decisions
@@ -66,6 +70,17 @@ hit benign, applies no edit and gives no score.
 A clean pass does not rule out an injection: the lexical checks claim only the classes they
 list, and `load-resolution` trusts the table, never watching a harness load. The steps it
 prints are the person's to run, sandboxed.
+
+What each verdict reads, and who writes it (`outcomebound_tools/instruction_audit.py`). The
+instruction files, settings and skills in scope are the target's, which the change under check
+can write; every check reads them, and nothing in them removes a hit. Which harness rows apply
+comes from `--harness`, which the caller names, else from the manifest, which the change can
+write: each row that loads a file the target holds and no row so far covers is added to it
+(`manifest+present`), so an edit to the manifest cannot take a file a harness loads out of the
+read. The manifest's Done commands decide only whether adopt's own entry's review hit changes
+the result, and only while they equal the `Done` line of `AGENTS.md`, which every check reads.
+The harness table and the rule ids are the engine's (`adapters/harnesses.json`,
+`docs/prompt-standard.md`). The agents' notes are written by agents in a session, not by a commit.
 
 ## Exits
 

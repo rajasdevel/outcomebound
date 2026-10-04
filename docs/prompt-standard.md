@@ -2,13 +2,13 @@
 
 - **Checked:** 2026-09-27, each rule's key records read as fact-checked; the corrections to those
   records' readings made on 2026-10-01 left every rule's confidence, tiers and direction as
-  stated.
+  stated; S23 added 2026-10-04 on OutcomeBound's own recorded results.
 - **Volatility:** monitor: a rule moves when its evidence does, most often at a model generation.
 - **Re-check when:** the research repository's references are refreshed (its
   [CONVENTIONS.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONVENTIONS.md)
   says when), or a key record a rule cites is corrected.
 
-The rules OutcomeBound's model-facing text follows, S1 to S22, each with the evidence behind it, the
+The rules OutcomeBound's model-facing text follows, S1 to S23, each with the evidence behind it, the
 evidence's class, the reader tiers that evidence covers, its confidence and direction, and the
 instruction-audit checks that hold it: `outcomebound instructions check` runs six, S4's five and
 S7's `load-resolution`, and a rule reading `Checks: none` is held by review or by a test of
@@ -219,6 +219,22 @@ Tiers: frontier\
 Confidence: medium; direction: rising\
 Checks: none
 
+### Every layer
+
+S23 binds the model-facing text of each layer above: the contract, the kernel, the templates,
+the fragments and the skills.
+
+**S23** A number or a stop in model-facing text names its evidence: a limit on size, count,
+length, duration, attempts or spending appears only where the operator set it, a harness
+documents it or a measurement backs it, the source beside it or in the area's design; a stop
+holds one item and names the act or check that holds it, never the run\
+Evidence: `docs/evaluations.md` E14 (O); `practices/agent-workspace.md` §7 (O); the goal
+template's size stop, shipped from a class-O row and removed 2026-10-04 (O)\
+Tiers: frontier, mid, small\
+Confidence: medium; direction: rising\
+Checks: none; held by `tests/test_model_text_limits.py` over the contract, the kernel, the
+templates, the fragments and the skills
+
 ## The placement table
 
 An obligation goes to the first layer that can carry it.
@@ -261,7 +277,7 @@ when one is due. Each rule the refreshed records bear on is reviewed against the
 method in §8 of the research repository's
 [`practices/writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md),
 and the **Checked** date at the top of this page moves with the review. S1 to S19 are practices
-of that repository; S20 to S22 are OutcomeBound's own additions. A rule changes only on an independent measurement,
+of that repository; S20 to S23 are OutcomeBound's own additions. A rule changes only on an independent measurement,
 guidance from two or more independent groups, or a recorded run of OutcomeBound's own; one lab's
 advice for one model becomes a note in the research repository's
 [`models/README.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/models/README.md)

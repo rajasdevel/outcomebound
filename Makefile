@@ -9,7 +9,7 @@ XDIST_VERSION ?= 3.8.0
 # The ref the floor's loosening check reads the change against: what it replaces.
 OB_BASE ?= origin/main
 
-.PHONY: test gate check release-check
+.PHONY: test gate check scrub release-check
 test:
 	@if $(PYTHON) -m pytest --version >/dev/null 2>&1; then \
 		if $(PYTHON) -c "import xdist" >/dev/null 2>&1; then $(PYTHON) -m pytest -n auto; \
@@ -37,6 +37,13 @@ check: gate
 		uv run --no-project --quiet --with-requirements requirements-dev.txt \
 			scripts/outcomebound floor check . --base $(OB_BASE); \
 	fi
+
+# The public-text check with the local list of private names that OB_SCRUB_LIST names, over
+# the tracked files and the commit messages since OB_BASE. The list stays outside this
+# repository; without it, the check reads UNVERIFIED and fails. `make check` runs the part
+# that needs no list: home paths.
+scrub:
+	$(PYTHON) scripts/check-public-text.py --private --base $(OB_BASE)
 
 # Before a release is tagged: the release commit's version agrees everywhere (and with TAG,
 # e.g. TAG=v1.0.0, once it is tagged), this repository's install is current, and gate, floor

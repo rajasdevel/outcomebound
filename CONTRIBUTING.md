@@ -66,10 +66,12 @@ make test
   `scripts/`.
 - `make check` runs the gate. Then it runs this repository's quality floor against `origin/main`.
   Use `OB_BASE=<ref>` to name another base. The floor runs ruff, mypy, gitleaks, `bash -n`, the
-  shell injection scan and `scripts/check-structure.py`. The rules are in `ruff.toml` and
-  `mypy.ini`.
+  shell injection scan, `scripts/check-structure.py` and `scripts/check-public-text.py`. The rules
+  are in `ruff.toml` and `mypy.ini`.
 - `make test` runs the suite across CPUs. If your `python3` has no pytest, it runs pytest through
   `uv run --with pytest`.
+- `make scrub` applies a local list of private names to the same text as the public-text check
+  ([Agents and releases](#agents-and-releases)). A maintainer runs it before a merge.
 
 The floor needs ruff and mypy. Get them in one of three ways:
 
@@ -91,6 +93,10 @@ that makes the change can allow it with this line:
 `Floor-Loosening: <what>; ruled #123`. The line allows only the changes of its own commit. After
 `ruled`, write one word that says where a maintainer agreed to the change. It can be an issue or pull request (`#123`), a decision record, or a link. `scripts/outcomebound floor ratchet .` deletes the baseline
 lines that no finding matches any more.
+
+A change to a gate (the floor, the instruction audit, the finish check, a tickets refusal)
+that adds an exemption or narrows what the gate counts needs an independent review. The review
+tries to pass the gate without the ruling the gate requires. The pull request links the review.
 
 In a Git worktree of this repository, `.agents/tools/runner <command>` runs a command with that
 worktree's engine first on `PATH`. There is no editable install (`pip install -e`). The launcher
@@ -210,6 +216,21 @@ branch and never pushes to `main`. A person directs the agent, reviews its commi
 off under the DCO; the sign-off is that person's certification. An agent may land its own pull
 request once CI is green, unless the pull request carries `needs-maintainer`. Issues are the
 backlog, and a milestone names what a release waits for.
+
+An agent's pull request text, commit messages and files are public. They name no project that
+uses OutcomeBound, no person, no local path, no id or role from a private working file, and no
+count or anecdote from a private run. A private working file includes a decision brief that no
+public issue or pull request holds. If a commit or a `ruled` line cites a brief, a public issue or
+pull request holds that brief, and the citation uses its number. Describe a behavior in general terms, with a synthetic
+reproduction. `make check` runs `scripts/check-public-text.py` over the tracked files and over
+the commit messages since `OB_BASE`. It finds each path under a home folder, and it reads PASS or
+FAIL. `make scrub` also applies a local list of private names. The environment variable
+`OB_SCRUB_LIST` names the list, and the list stays outside this repository. With the list,
+`make scrub` reads PASS or FAIL. Without it, `make scrub` reads `UNVERIFIED`, and a maintainer
+runs it before the merge. CI applies the same checks to the title and the body of a pull request.
+CI applies the list only when the repository has the secret `OB_SCRUB_LIST`. A pull request from
+a fork does not get the secret, so for that pull request CI reads `UNVERIFIED` for the list and
+does not fail.
 
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)

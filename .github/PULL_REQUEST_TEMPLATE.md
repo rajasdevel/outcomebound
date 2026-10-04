@@ -22,6 +22,8 @@ unmarked.
 - [ ] This change leaves the released sections of `CHANGELOG.md` as they were.
 - [ ] If this change reaches what a release ships, it adds a bullet under `## [Unreleased]` in
       `CHANGELOG.md`.
+- [ ] Public text: the title, the body, the commit messages and the files name no private
+      project, person, local path, internal id or run anecdote.
 
 ## Sign-off
 

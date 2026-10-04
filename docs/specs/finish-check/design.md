@@ -12,7 +12,11 @@ For `claude-code` and `codex`; the evidence is in
 
 In `claude-code` or `codex`, when a turn ends on a working tree the project's Done commands have
 not been checked on, those commands run, and a failure goes back to the agent as something to
-fix, so the run continues instead of ending on an unchecked "done". The kernel's Done line
+fix, so the run continues instead of ending on an unchecked "done". The invariant the hook
+holds: a turn that ends on a changed tree reads as checked only where the Done commands passed
+on that tree; a failure holds the turn, unless adopt measured it as a known failure on a commit
+this checkout descends from and it fails the same way (the record of known failures is in no
+committed file); and a Done that does not run or does not finish reads `UNVERIFIED`. The kernel's Done line
 becomes a check the harness runs (S2, S5). The hook fires at every turn end, so a turn that
 changed nothing reruns nothing, whatever the last verdict was. A command that already failed when
 adopt measured Done, on a commit this checkout descends from, holds no turn while it fails the same
@@ -84,6 +88,18 @@ again with the same exit code and failure ids, it is not held. A pull does not m
 `adopt --finish-check` after it does. A mixed selection installs
 the entry where a row has one and names the rest; with no selected row that has one,
 `--finish-check` is refused.
+
+What each verdict reads, and who writes it (`outcomebound_tools/finish_check.py`). The hook's
+input on stdin (`cwd`, `stop_hook_active`, `background_tasks`, `session_crons`) is the harness's.
+The Done commands come from the manifest, which the change under check can write; they run only
+while their digest equals the one in the committed hook entry, so a changed Done list runs
+nothing and reads `UNVERIFIED`, unheld, to the person. That is flagged, not held: a hold cannot
+tell a planted list from a new one, and the instruction audit keeps the entry a review hit that
+quotes the Done commands. The timeout is the entry's own, also committed. The known-failure
+record is in the Git common directory and the checked-tree record in the Git directory, neither
+committed: adopt writes the first and the verb edits it, since a known command that passes leaves
+it; the verb writes the second. A pull request can write neither, and an agent in the session
+can, as the paragraph above says.
 
 ## Validation
 
