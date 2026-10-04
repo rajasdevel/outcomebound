@@ -17,7 +17,8 @@
       "type": "string"
     },
     "timeout_seconds": {
-      "type": "number"
+      "type": "number",
+      "description": "Seconds after which each claim that sets none of its own is stopped, with everything it started, and reads UNVERIFIED. Optional: with neither this nor the claim's own timeout_seconds there is no timeout, and a claim waits for its command however long it runs."
     },
     "claims": {
       "type": "array",
@@ -64,7 +65,8 @@
             }
           },
           "timeout_seconds": {
-            "type": "number"
+            "type": "number",
+            "description": "Seconds after which this claim's command, with everything it started, is stopped and reads UNVERIFIED; it takes the place of the plan's timeout_seconds. Optional: with neither set there is no timeout."
           }
         }
       }

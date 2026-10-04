@@ -9,7 +9,9 @@ it. ``shell=False`` prevents implicit shell interpretation, not arbitrary effect
 from an executable named by the plan.
 
 `_execute` is also the one subprocess seam the floor runs its tools through, so a
-timeout ends a check and everything it started the same way wherever it runs.
+timeout ends a check and everything it started the same way wherever it runs. No
+timeout is the default: a claim waits for its command unless the plan or the claim
+sets `timeout_seconds`.
 """
 
 from __future__ import annotations
@@ -42,7 +44,6 @@ PLAN_KEYS = frozenset({"version", "cwd", "timeout_seconds", "claims"})
 CLAIM_KEYS = frozenset(
     {"name", "risk", "kind", "required", "command", "required_paths", "timeout_seconds"}
 )
-DEFAULT_TIMEOUT_SECONDS = 120.0
 
 _PLAN_SCHEMA_PATH = home.ROOT / "schemas" / "validation-plan.schema.json"
 _PLAN_SCHEMA: dict[str, Any] | None = None
@@ -70,7 +71,7 @@ class Claim:
     required: bool
     command: tuple[str, ...]
     required_paths: tuple[str, ...]
-    timeout_seconds: float
+    timeout_seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -115,7 +116,13 @@ def _string_list(value: Any, field: str, *, allow_empty: bool) -> tuple[str, ...
     return tuple(_nonempty_string(item, f"{field} item") for item in value)
 
 
-def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float) -> Claim:
+def _optional_seconds(value: Any, field: str) -> float | None:
+    """A timeout where one is set; None, which waits for the command, where none is."""
+
+    return None if value is None else _positive_number(value, field)
+
+
+def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float | None) -> Claim:
     """One claim after its name was read; every other field is checked here."""
 
     risk = _nonempty_string(item.get("risk"), f"{prefix}.risk")
@@ -136,7 +143,7 @@ def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float)
         required_paths=_string_list(
             item.get("required_paths", []), f"{prefix}.required_paths", allow_empty=True
         ),
-        timeout_seconds=_positive_number(
+        timeout_seconds=_optional_seconds(
             item.get("timeout_seconds", default_timeout), f"{prefix}.timeout_seconds"
         ),
     )
@@ -169,9 +176,7 @@ def parse_plan(
     if not cwd.is_dir():
         raise PlanError(f"cwd is not a directory: {cwd}")
 
-    default_timeout = _positive_number(
-        raw.get("timeout_seconds", DEFAULT_TIMEOUT_SECONDS), "timeout_seconds"
-    )
+    default_timeout = _optional_seconds(raw.get("timeout_seconds"), "timeout_seconds")
     raw_claims = raw.get("claims")
     if not isinstance(raw_claims, list) or not raw_claims:
         raise PlanError("claims must be a non-empty list")
@@ -248,9 +253,10 @@ def _terminate_group(process: subprocess.Popen[bytes]) -> None:
 
 
 def _execute(
-    command: Sequence[str], cwd: Path, timeout: float, env: Mapping[str, str] | None = None
+    command: Sequence[str], cwd: Path, timeout: float | None, env: Mapping[str, str] | None = None
 ) -> tuple[int | None, bytes, bool]:
-    """Run one argv, returning (exit status or None, output, timed_out).
+    """Run one argv, returning (exit status or None, output, timed_out); a `timeout` of None
+    waits for the command however long it runs.
 
     `env` replaces the inherited environment entirely; `None` inherits it. The
     caller composes it, because what belongs in it is the caller's knowledge,
@@ -353,7 +359,8 @@ def _main(argv: Sequence[str] | None = None) -> int:
         description=(
             "Run each check a validation plan declares, report each PASS, FAIL or UNVERIFIED,\n"
             "and end with one VERDICT line: PASS only when every required check passed.\n\n"
-            "A plan is a JSON document: a cwd, a timeout for each check, and claims, each\n"
+            "A plan is a JSON document: a cwd, an optional timeout for each check (none by\n"
+            "default: a check waits for its command), and claims, each\n"
             "with a name, the risk it addresses, its kind, its command as an argv (never a\n"
             "shell string), whether it is required, and the paths it needs. Its schema is\n"
             "$(outcomebound home)/schemas/validation-plan.schema.json, and\n"

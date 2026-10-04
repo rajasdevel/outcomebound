@@ -2,8 +2,8 @@
 
 Every target is a Git repository under `tmp_path`, and every assertion is about bytes on
 disk, the manifest or an exit status, never about a sentence adopt prints; the printed things
-read are the footprint's figure and the finish check's statement per harness, which exist only
-as output.
+read are the footprint's figure, the nested byte warning and the finish check's statement per
+harness, which exist only as output.
 """
 
 from __future__ import annotations
@@ -1171,6 +1171,64 @@ def test_detect_proposes_the_floors_runner_then_the_projects_test_command(
     assert proposed(with_floor) == [adopt.FLOOR_RUNNER, "python3 -m pytest"]
     assert proposed(without) == ["python3 -m pytest"]
     assert proposed(bare) == []
+
+
+def test_the_floors_base_is_the_remotes_default_branch(tmp_path: Path) -> None:
+    """`--base` names the branch `origin/HEAD` points at, else `origin/main` where it resolves,
+    and is left out where neither does, so the proposed Done never fails on a missing ref."""
+
+    def git(target: Path, *arguments: str) -> None:
+        subprocess.run([GIT, *arguments], cwd=target, check=True, capture_output=True)
+
+    def floor_line(target: Path) -> str:
+        return adopt.proposed_done(target)[0]
+
+    target = repo(tmp_path / "t", {".outcomebound/floor.json": "{}\n"})
+    identity_flags = ("-c", "user.name=t", "-c", "user.email=t@example.invalid")
+    git(target, "add", "-A")
+    git(target, *identity_flags, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "one")
+    assert floor_line(target) == adopt.FLOOR_RUNNER
+
+    git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert floor_line(target) == f"{adopt.FLOOR_RUNNER} --base origin/main"
+
+    git(target, "update-ref", "refs/remotes/origin/trunk", "HEAD")
+    git(target, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+    assert floor_line(target) == f"{adopt.FLOOR_RUNNER} --base origin/trunk"
+
+    # origin/HEAD naming a branch that does not resolve falls back to origin/main.
+    git(target, "update-ref", "-d", "refs/remotes/origin/trunk")
+    assert floor_line(target) == f"{adopt.FLOOR_RUNNER} --base origin/main"
+
+
+def test_an_install_warns_where_nested_instructions_pass_a_harness_byte_cap(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Per folder holding a nested AGENTS.md, the bytes loaded from the root down are measured
+    against the row's doc_byte_cap; past it is a warning, and the install still succeeds."""
+
+    cap = adopt.harness_table(ROOT)["codex"]["doc_byte_cap"]
+    files = {
+        "AGENTS.md": "# Project\n",
+        "small/AGENTS.md": "a\n",
+        "big/AGENTS.md": "b" * cap,
+        "big/deeper/AGENTS.override.md": "c\n",
+        "big/deeper/AGENTS.md": "d" * cap,
+    }
+    target = repo(tmp_path / "t", files)
+    code, out, _ = run(capsys, str(target), "--harness", "codex")
+    assert code == 0
+    warned = [line for line in out.splitlines() if line.startswith("warning")]
+    assert all("codex:" in line and f"{cap}-byte cap" in line for line in warned)
+    assert [line.split("a session in ")[1].split("/ ")[0] for line in warned] == [
+        "big",
+        "big/deeper",
+    ]
+    # The override file stands in for its folder's AGENTS.md.
+    assert "big/deeper/AGENTS.override.md 2)" in warned[1]
+    assert "big/deeper/AGENTS.md" not in warned[1]
+    code, out, _ = run(capsys, str(target), "--harness", "claude-code")
+    assert code == 0 and "warning" not in out
 
 
 def test_no_harness_installs_the_skills_where_the_pointers_name_them(

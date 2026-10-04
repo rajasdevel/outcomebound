@@ -23,6 +23,9 @@ How: `outcomebound instructions check --help` and `outcomebound_tools/instructio
 | Harnesses come from `--harness`; else the manifest's, plus each other row, in table order, loading a file the target holds that no row so far covers (`manifest+present`); else every row. A `generic` install has no row, so `load-resolution` reads it `UNVERIFIED` and its `.outcomebound/skills/` copies are not read | the manifest alone, which the target's own edit could narrow | agent | decided |
 | The agents' notes in `.agents/handoffs/` and `.agents/shared-memory/` are read too, though Git ignores them: the next session reads them as it reads instructions, and planted memory is a measured attack | leaving them unread because Git ignores them | user | decided |
 | A review hit recurs on every run until the file changes | a record of a person's judgment that silences the hit | agent | decided |
+| An entry adopt wrote into a harness's settings reads PASS: its canonical JSON has the digest a manifest `hook` record holds for that file, and each hook in it runs only an adopt verb (`finish-check`) with plain arguments; any other entry under the same key is still a review hit. The manifest is the target's own data, so the command shape bounds what a planted record can exempt, and with `--base` a changed manifest is an `instruction-change` hit (maintainer, 2026-10-04) | every hook entry a review hit, adopt's own included, so an install with the finish check never reads PASS | user | decided |
+| A hidden character in an agents' note reads UNVERIFIED for that note, with "do not rely on this note"; in a file a harness loads as instructions it stays a FAIL (maintainer, 2026-10-04) | one character in one session's note failing the whole repository | user | decided |
+| A review hit's next step asks for a person at handoff and lets the work go on; a row past its re-check date names the day it was verified and that only the re-check is due, still UNVERIFIED (maintainer, 2026-10-04) | "confirm with a person" as a step before the work | user | decided |
 | Six checks in two families, security and loading. No agreement, structure or wording check: none answers a failure seen in a project's instruction files (S13), and OutcomeBound's own text is held by its suite | a catalog of 23 checks, agreement, structure and wording among them, with a worksheet a model answers and an audit skill | agent | decided |
 
 ## Checks
@@ -33,12 +36,12 @@ S4 and report first; `load-resolution` answers to S7.
 
 | Check | Observes | Kind |
 | --- | --- | --- |
-| `hidden-characters` | tag characters, zero-width and bidirectional controls, variation selectors (one after a symbol excepted), private-use and unassigned characters, a combining mark after ASCII, any non-ASCII in a URL or code span (a span wraps within its paragraph; fenced code is none); a file left unopened reads UNVERIFIED | gate |
+| `hidden-characters` | tag characters, zero-width and bidirectional controls, variation selectors (one after a symbol excepted), private-use and unassigned characters, a combining mark after ASCII, any non-ASCII in a URL or code span (a span wraps within its paragraph; fenced code is none); a file left unopened reads UNVERIFIED; in an agents' note that no harness loads as an instruction file, a hit reads UNVERIFIED for that note | gate |
 | `concealed-content` | HTML comments but OutcomeBound's block markers; base64-shaped runs, a 40- or 64-character hex pin excepted; fetch-and-run lines | review |
 | `override-phrases` | phrases that override earlier instructions, ask for secrecy, grant autonomy or plant memory | review |
-| `harness-config` | in each configuration file a row names, keys holding commands, tool servers, all tool servers at once, endpoints or permission bypasses; TOML is read lexically, an unsettled value reading UNVERIFIED | review; a secret-shaped value is a gate |
+| `harness-config` | in each configuration file a row names, keys holding commands, tool servers, all tool servers at once, endpoints or permission bypasses; TOML is read lexically, an unsettled value reading UNVERIFIED; an entry adopt wrote, as the manifest records it, reads PASS | review; a secret-shaped value is a gate |
 | `instruction-change` | with `--base <ref>`, each file in scope, and `.outcomebound/manifest.json`, changed between the ref and HEAD; a ref that does not resolve reads UNVERIFIED | review |
-| `load-resolution` | per harness, whether its row is verified and inside its re-check date; where its configuration was read, one line naming the key categories the row leaves unsettled | gate |
+| `load-resolution` | per harness, whether its row is verified and inside its re-check date (past it, the fact names the day the row was verified and that only the re-check is due); where its configuration was read, one line naming the key categories the row leaves unsettled | gate |
 
 The files read are those each selected row says its harness loads: root and nested instruction
 files, imports, project override files, rules and skill directories, and configuration. In a Git
@@ -54,7 +57,7 @@ anything outside the target but the engine's own data; a path it leaves unopened
 included, reads UNVERIFIED. It never walks what Git ignores but those two note folders, never
 runs, follows or obeys what it reads, and escapes quoted text so no file can steer the terminal.
 Its one process is Git, to list the files and for `--base`: from PATH's absolute entries, with
-no pager, fsmonitor, external diff or textconv. It opens no connection, writes nothing, rules no
+no pager, fsmonitor, external diff or textconv, and no time limit. It opens no connection, writes nothing, rules no
 hit benign, applies no edit and gives no score.
 
 A clean pass does not rule out an injection: the lexical checks claim only the classes they

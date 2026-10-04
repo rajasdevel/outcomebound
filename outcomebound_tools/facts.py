@@ -49,7 +49,6 @@ STYLES = {
 WORKFLOWS = ".github/workflows"
 GITLAB = ".gitlab-ci.yml"
 SCRIPT_KEYS = frozenset({"script", "before_script", "after_script"})
-MAX_CI_FILES = 64
 MAX_CI_BYTES = 1_000_000
 
 KEY = re.compile(
@@ -351,10 +350,11 @@ def ci_paths(target: Path) -> list[str]:
 
 
 def read_ci(target: Path) -> list[CiFile]:
-    """Each CI file with the test commands it runs, read lexically; nothing is run."""
+    """Each CI file with the test commands it runs, read lexically, every file read; nothing is
+    run."""
 
     result = []
-    for path in ci_paths(target)[:MAX_CI_FILES]:
+    for path in ci_paths(target):
         try:
             data = paths.read_bounded(target, path)
         except paths.PathError:

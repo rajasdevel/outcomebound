@@ -159,6 +159,18 @@ def test_each_workflow_yields_the_test_commands_it_runs(
     assert (read.path, read.tests, read.unread) == (".github/workflows/ci.yml", tests, ())
 
 
+def test_every_workflow_file_is_read_however_many_there_are(tmp_path: Path) -> None:
+    """No count of files cuts the reading short: the test command in the last of a hundred
+    workflow files, in path order, is read."""
+
+    quiet = "on: push\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n"
+    files = workflows(**{f"a{index:03}": quiet for index in range(99)}, zz=PYTHON)
+    read = facts.read_ci(project(tmp_path, files))
+    assert len(read) == 100
+    assert read[-1].path == ".github/workflows/zz.yml"
+    assert read[-1].tests == ("python -m pytest -q --cov=pkg",)
+
+
 def test_a_gitlab_pipeline_yields_its_script_test_command(tmp_path: Path) -> None:
     target = project(tmp_path, {".gitlab-ci.yml": GITLAB})
 

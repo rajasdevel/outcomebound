@@ -34,6 +34,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -51,6 +52,7 @@ from outcomebound_tools import (
     identity,
     paths,
 )
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ENGINE = home.ROOT
 MANIFEST = ".outcomebound/manifest.json"
@@ -92,8 +94,10 @@ GENERIC_SKILLS = ".outcomebound/skills"
 KERNEL_TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LOCAL = facts.LOCAL
 LOCAL_FRAGMENT = f"{facts.FRAGMENT_DIR}/{LOCAL}.md"
-# What --detect proposes first for Done where a floor is installed: the floor's runner.
-FLOOR_RUNNER = "outcomebound floor check . --base origin/main"
+# What --detect proposes first for Done where a floor is installed: the floor's runner, with
+# `--base` the remote's default branch where Git resolves it (`default_base`).
+FLOOR_RUNNER = "outcomebound floor check ."
+FALLBACK_BASE = "origin/main"
 # The import block's body never changes, so its version does not follow the
 # engine's: an upgrade never rewrites a harness file the adopter owns.
 POINTER_VERSION = "1.0.0"
@@ -1149,6 +1153,88 @@ def footprint(wants: Sequence[Want]) -> tuple[str, str]:
     return "words", f"{sum(count for _, count in counts)} always loaded: {listed}"
 
 
+def _byte_cap(row: object) -> int | None:
+    """A row's documented byte cap on the instructions it loads, or None where it records none."""
+
+    cap = row.get("doc_byte_cap") if isinstance(row, dict) else None
+    return cap if isinstance(cap, int) and not isinstance(cap, bool) else None
+
+
+def _chain_names(row: dict[str, Any]) -> tuple[str, ...]:
+    """The file names a row's harness loads at most one of per folder, root down, an override
+    name first: Codex takes `AGENTS.override.md` in place of its folder's `AGENTS.md`
+    (research, harnesses/codex.md section 1)."""
+
+    nested = row.get("nested") or {}
+    globs = nested.get("globs", []) if nested.get("loads") is not False else []
+    names = [glob[3:] for glob in globs if glob.startswith("**/") and "/" not in glob[3:]]
+    return tuple(sorted(names, key=lambda name: ".override." not in name))
+
+
+def _instruction_folders(target: Path, names: Sequence[str]) -> list[str]:
+    """The target's root and each folder under it holding one of `names`; `.git` and nested
+    repositories are not entered, and no link is followed."""
+
+    found = ["."]
+    for directory, dirnames, filenames in os.walk(target):
+        here = Path(directory)
+        dirnames[:] = sorted(
+            name for name in dirnames if name != ".git" and not (here / name / ".git").exists()
+        )
+        relative = here.relative_to(target).as_posix()
+        if relative != "." and any(name in filenames for name in names):
+            found.append(relative)
+    return found
+
+
+def nested_bytes(run: Run, table: dict[str, Any], found: Sequence[Route]) -> Notes:
+    """A warning for each folder whose instructions, root down, exceed the byte cap a selected
+    harness's row records; a warning only, it refuses nothing. Codex stops loading at
+    `project_doc_max_bytes`, 32 KiB by default, and cuts the file that crosses it, the deepest
+    one first lost (research, harnesses/codex.md section 2). The root AGENTS.md is measured as
+    this install leaves it."""
+
+    def size(relative: str) -> int:
+        host = run.hosts.get(relative)
+        if host is not None:
+            return len(host.after() or b"")
+        try:
+            return len((run.target / relative).read_bytes())
+        except OSError:
+            return 0
+
+    notes: Notes = []
+    for route in found:
+        row = table.get(route.harness)
+        cap = _byte_cap(row)
+        names = _chain_names(row) if isinstance(row, dict) else ()
+        if cap is None or not names:
+            continue
+        for folder in _instruction_folders(run.target, names):
+            parts = [] if folder == "." else folder.split("/")
+            loaded: list[tuple[str, int]] = []
+            for depth in range(len(parts) + 1):
+                prefix = "/".join(parts[:depth])
+                sized = (
+                    (path, size(path)) for path in (f"{prefix}/{n}".lstrip("/") for n in names)
+                )
+                first = next(((path, count) for path, count in sized if count), None)
+                loaded.extend([first] if first else [])
+            total = sum(count for _, count in loaded)
+            if total > cap:
+                listed = " + ".join(f"{path} {count}" for path, count in loaded)
+                notes.append(
+                    (
+                        "warning",
+                        f"{route.harness}: a session in {folder}/ loads {total} bytes of "
+                        f"instructions ({listed}), past the {cap}-byte cap its row records "
+                        "(doc_byte_cap); the harness cuts what is past it, the deepest file "
+                        "first",
+                    )
+                )
+    return notes
+
+
 @dataclass(frozen=True)
 class Selection:
     """What an install is asked for; `None` keeps what the manifest records, and no harness
@@ -1184,6 +1270,7 @@ def install(
     for record in recorded.values():
         run.drop(record)
     run.notes.append(footprint(wants))
+    run.notes.extend(nested_bytes(run, table, found))
     return run.planned(manifest, engine_version(source)), run.edited, run.notes
 
 
@@ -1337,16 +1424,54 @@ def check(target: Path, source: Path) -> int:
     return min(sum(state != "current" for state in found), CHECK_CAP)
 
 
+def _git_line(target: Path, *arguments: str) -> str | None:
+    """What one read-only git command printed in `target`, stripped; None where it failed.
+    Git comes from PATH's absolute entries only, so the target cannot supply its own."""
+
+    inherited = dict(os.environ)
+    inherited["PATH"] = os.pathsep.join(
+        part for part in inherited.get("PATH", "").split(os.pathsep) if os.path.isabs(part)
+    )
+    try:
+        completed = subprocess.run(
+            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            cwd=target,
+            env=git_environment(inherited),
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    text = completed.stdout.decode("utf-8", "replace").strip()
+    return text if completed.returncode == 0 and text else None
+
+
+def default_base(target: Path) -> str | None:
+    """The ref the floor compares against: the remote's default branch, as
+    `refs/remotes/origin/HEAD` names it, else `origin/main` where it resolves, else None."""
+
+    named = _git_line(target, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD")
+    for ref in (named, FALLBACK_BASE):
+        if ref and _git_line(target, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"):
+            return ref
+    return None
+
+
 def proposed_done(target: Path) -> list[str]:
     """What `--detect` proposes for Done, in run order: the floor's runner where a floor is
-    installed, then the first test command the project's CI runs, as the CI test fact reads it,
-    or, where CI names none, the first check command discovery offers for the target's root."""
+    installed, with `--base` the remote's default branch where one resolves, then the first
+    test command the project's CI runs, as the CI test fact reads it, or, where CI names none,
+    the first check command discovery offers for the target's root."""
 
     try:
         floor = paths.read_bounded(target, facts.FLOOR)
     except paths.PathError:
         floor = None
-    done = [FLOOR_RUNNER] if floor is not None else []
+    done = []
+    if floor is not None:
+        base = default_base(target)
+        done.append(FLOOR_RUNNER + (f" --base {shlex.quote(base)}" if base else ""))
     ci = [command for item in facts.read_ci(target) for command in item.tests]
     if ci:
         return [*done, ci[0]]

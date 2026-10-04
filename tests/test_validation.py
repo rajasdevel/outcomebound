@@ -116,6 +116,37 @@ def test_timeout_is_unverified(tmp_path):
     assert "timeout" in r.stdout.lower()
 
 
+def test_a_claim_waits_for_its_command_unless_a_timeout_is_set(tmp_path):
+    """No timeout is the default: neither the plan nor the claim sets one, so the claim has
+    none; the plan's applies where the claim sets none, and the claim's own wins."""
+
+    def claims(**plan_fields: Any) -> dict[str, float | None]:
+        path = _plan(
+            tmp_path,
+            [_claim(name="bare"), _claim(name="own", timeout_seconds=7)],
+            **plan_fields,
+        )
+        return {c.name: c.timeout_seconds for c in validation.load_plan(path).claims}
+
+    assert claims() == {"bare": None, "own": 7.0}
+    assert claims(timeout_seconds=19) == {"bare": 19.0, "own": 7.0}
+    assert not hasattr(validation, "DEFAULT_TIMEOUT_SECONDS")
+
+
+def test_a_command_without_a_timeout_runs_to_its_end(monkeypatch, tmp_path):
+    seen: list[float | None] = []
+    real = validation._execute
+
+    def recording(command, cwd, timeout, env=None):
+        seen.append(timeout)
+        return real(command, cwd, timeout, env)
+
+    monkeypatch.setattr(validation, "_execute", recording)
+    path = _plan(tmp_path, [_claim([sys.executable, "-c", "import time; time.sleep(0.3)"])])
+    [result] = validation.run_plan(validation.load_plan(path))
+    assert seen == [None] and result.status == validation.PASSED
+
+
 def test_human_view_claim_is_rejected_instead_of_being_self_attested(tmp_path):
     # The command-line seam for a plan refusal: an invalid plan is exit 2, named on stderr.
     view = {
