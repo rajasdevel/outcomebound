@@ -37,6 +37,16 @@ LAUNCHER = ROOT / "scripts" / "outcomebound"
 Capture = pytest.CaptureFixture[str]
 
 
+def commit_all(target: Path) -> None:
+    """Commit what `target` holds, so that it has a HEAD commit."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run([GIT, "-C", str(target), "add", "-A"], check=True)
+    subprocess.run(
+        [GIT, "-C", str(target), *identity, "commit", "-q", "--allow-empty", "-m", "c"], check=True
+    )
+
+
 def repo(path: Path, files: dict[str, str] | None = None) -> Path:
     """A fresh Git repository at `path` holding `files`, by relative path."""
 
@@ -1561,6 +1571,7 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     count = tmp_path / "count"
     failing = f"echo run >> {count}; exit 3"
     target = repo(tmp_path / "t")
+    commit_all(target)
     arguments = ("--harness", "claude-code", "--done", failing, "--done", "true", "--finish-check")
 
     code, out, _ = run(capsys, str(target), *arguments, "--dry-run")
@@ -1578,7 +1589,8 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
 
     code, out, _ = run(capsys, str(target), "--fragments", "")
     assert code == 0 and "running " not in out
-    assert "finish-check: Done was measured on " in out and f"`{failing}` (exit 3)" in out
+    assert re.search(r"finish-check: Done was measured on \S+ on commit [0-9a-f]{12} in ", out)
+    assert f"`{failing}` (exit 3)" in out
     assert len(count.read_text(encoding="utf-8").splitlines()) == 1
     assert run(capsys, str(target), "--finish-check")[0] == 0
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
@@ -1587,6 +1599,26 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     assert code == 0 and "running " not in out
     assert "finish-check: Done was not measured, so no record of known failures applies" in out
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_a_new_measurement_names_the_failures_new_since_the_record_it_replaces(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `adopt --finish-check`, run after a change broke code, makes the new failure
+    known without the install report naming it apart from the failures known before."""
+
+    lines = tmp_path / "lines"
+    lines.write_text("FAILED tests/test_a.py::test_old - assert 0\n", encoding="utf-8")
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    arguments = ("--harness", "codex", "--done", f"cat {lines}; exit 1", "--finish-check")
+    assert "new since the record" not in run(capsys, str(target), *arguments)[1]
+
+    with lines.open("a", encoding="utf-8") as handle:
+        handle.write("FAILED tests/test_a.py::test_new - assert 1\n")
+    out = run(capsys, str(target), "--finish-check")[1]
+    assert re.search(r"known    finish-check: new since the record measured on \S+ on commit ", out)
+    assert "pytest tests/test_a.py::test_new" in out and "test_old" not in out.split("new since")[1]
 
 
 def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(

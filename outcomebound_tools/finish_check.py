@@ -353,8 +353,11 @@ def remember(target: Path, checked: Checked, deadline: float | None = None) -> N
 # runner, matched against each line of a command's kept output, terminal escapes stripped. A
 # command whose output matches none yields no failure ids, and its exit code alone decides.
 FAILURE_IDS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("pytest", re.compile(r"^(?:FAILED|ERROR) (\S+)")),
-    ("unittest", re.compile(r"^(?:FAIL|ERROR): (\S+ \(\S+\))")),
+    # A pytest node id runs to pytest's " - " before the message, or to the end of the line, so
+    # a parametrize id with a space in it stays whole.
+    ("pytest", re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - .*)?$")),
+    # The whole rest of a unittest line, so a subtest's "(i=1)" stays part of the id.
+    ("unittest", re.compile(r"^(?:FAIL|ERROR): (.+)$")),
     ("go", re.compile(r"^\s*--- FAIL: (\S+)")),
     ("cargo", re.compile(r"^test (\S+) \.\.\. FAILED$")),
     # The marks jest and vitest print before a failing test: ✕, the multiplication sign, ✗.
@@ -601,13 +604,18 @@ class Result:
     code: int | None = None
     known: bool = False
     note: str = ""
+    # For a known failure: the commit adopt measured it on.
+    commit: str = ""
 
     def line(self) -> str:
         shown = shorten(self.command)
         if self.verdict == PASS:
             return f"PASS {shown} ({self.seconds:.0f} s)"
         if self.known:
-            return f"FAIL {shown}: {self.why}, as when adopt measured Done ({self.note}; not held)"
+            on = f" on commit {self.commit[:12]}" if self.commit else ""
+            return (
+                f"FAIL {shown}: {self.why}, as when adopt measured Done{on} ({self.note}; not held)"
+            )
         if self.note:
             return f"{self.verdict} {shown}: {self.why} ({self.note})"
         return f"{self.verdict} {shown}: {self.why}"
@@ -623,6 +631,7 @@ class Result:
             "code": self.code,
             "known": self.known,
             "note": self.note,
+            "commit": self.commit,
         }
 
     @classmethod
@@ -635,6 +644,7 @@ class Result:
         command, verdict, why = item.get("command"), item.get("verdict"), item.get("why")
         output, cause, seconds = item.get("output"), item.get("cause"), item.get("seconds")
         code, known, note = item.get("code"), item.get("known", False), item.get("note", "")
+        commit = item.get("commit", "")
         if not (
             isinstance(command, str)
             and verdict in (PASS, FAIL, UNVERIFIED)
@@ -646,10 +656,13 @@ class Result:
             and (code is None or type(code) is int)
             and isinstance(known, bool)
             and isinstance(note, str)
+            and isinstance(commit, str)
         ):
             return None
         data = output.encode("utf-8")
-        return cls(command, str(verdict), float(seconds), why, data, cause, code, known, note)
+        return cls(
+            command, str(verdict), float(seconds), why, data, cause, code, known, note, commit
+        )
 
 
 def shorten(text: str, limit: int = COMMAND_SHOWN) -> str:
@@ -714,13 +727,17 @@ def run_one(target: Path, line: str, seconds: float | None) -> Result:
 
 
 def run_all(
-    target: Path, done: Sequence[str], deadline: float, known: Mapping[str, Failure] | None = None
+    target: Path,
+    done: Sequence[str],
+    deadline: float,
+    record: Known | None = None,
 ) -> list[Result]:
     """Each Done command in run order until `deadline`, stopping at the first that does not
-    pass, a known failure aside: a FAIL that the command's `Failure` in `known` tolerates is
-    marked known, and the next command runs."""
+    pass, a known failure aside: a FAIL that the command's `Failure` in `record` tolerates is
+    marked known, with the record's commit, and the next command runs."""
 
-    known = known or {}
+    known = record.failing if record is not None else {}
+    commit = record.head if record is not None else ""
     results: list[Result] = []
     for line in done:
         left = deadline - time.monotonic()
@@ -731,7 +748,7 @@ def run_all(
         result = run_one(target, line, left)
         if result.verdict == FAIL and line in known:
             tolerated, note = known[line].tolerates(result)
-            result = replace(result, known=tolerated, note=note)
+            result = replace(result, known=tolerated, note=note, commit=commit if tolerated else "")
         results.append(result)
         if result.verdict != PASS and not result.known:
             break
@@ -746,6 +763,25 @@ class Measured:
     results: tuple[Result, ...]
     seconds: float
     kept: bool
+    # The record this one supersedes in this checkout, and each failure kept now that it did
+    # not hold: a command, or a failure id of a command it held.
+    previous: Known | None = None
+    added: tuple[str, ...] = ()
+
+
+def added_since(previous: Known, failing: Mapping[str, Failure]) -> list[str]:
+    """Each failure in `failing` that `previous` did not hold: a command it did not name or held
+    with another exit code, or a failure id new to a command it held."""
+
+    added: list[str] = []
+    for line, failure in failing.items():
+        before = previous.failing.get(line)
+        if before is None or before.code != failure.code:
+            added.append(f"`{shorten(line, 80)}` (exit {failure.code})")
+            continue
+        new = sorted((failure.ids or frozenset()) - (before.ids or frozenset()))
+        added.extend(f"`{shorten(line, 80)}`: {shorten(item, 120)}" for item in new)
+    return added
 
 
 def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
@@ -770,15 +806,17 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
             ids = failure_ids(result.output)
             failing[result.command] = Failure(result.code, ids or None)
             note = "known by its failure ids" if ids else "known by its exit code only"
-            results[index] = replace(result, known=True, note=note)
+            results[index] = replace(result, known=True, note=note, commit=head or "")
     day = time.strftime("%Y-%m-%d")
     record = Known(digest, "", head or "", day, round(seconds, 1), failing)
+    previous = known_record(target, digest) if head is not None else None
     kept = head is not None and keep_known(target, record)
+    added = tuple(added_since(previous, failing)) if previous is not None else ()
     environment = any(result.cause == ENVIRONMENT for result in results)
     if kept and before is not None and not environment and tree_digest(target, digest) == before:
         verdict = FAIL if failing else PASS
         remember(target, Checked(before, timeout, verdict, tuple(results) if failing else ()))
-    return Measured(tuple(results), seconds, kept)
+    return Measured(tuple(results), seconds, kept, previous, added)
 
 
 # --- The report ------------------------------------------------------------------
@@ -886,10 +924,12 @@ def verdict_for(
             if coarse
             else ""
         )
+        commits = sorted({result.commit[:12] for result in results if result.commit})
+        on = f"on commit {', '.join(commits)}, which" if commits else "on a commit"
         head = (
             "finish-check FAIL, known: each Done command that failed here failed as it did when "
-            "adopt measured Done on a commit this checkout descends from: the same exit code, "
-            "and no failure id its output names is new; so nothing was held." + limit + " A "
+            f"adopt measured Done {on} this checkout descends from: the same exit code, and no "
+            "failure id its output names is new; so nothing was held." + limit + " A "
             "known command that passes leaves the record, and a later failure of it holds. "
             f"`outcomebound adopt {shlex.quote(str(target))} --finish-check` measures Done again."
             + again
@@ -920,6 +960,17 @@ def verdict_for(
         f"agent, since {why}."
     )
     return told(report(head, results))
+
+
+def drop_fixed(
+    target: Path, record: Known | None, results: Sequence[Result], deadline: float
+) -> None:
+    """A known failure that passes leaves the record: from then on, its failure holds."""
+
+    fixed = {result.command for result in results if result.verdict == PASS}
+    if record is not None and fixed & record.failing.keys():
+        left = {line: item for line, item in record.failing.items() if line not in fixed}
+        keep_known(target, replace(record, failing=left), deadline)
 
 
 def check(
@@ -960,7 +1011,7 @@ def check(
             return {}
         return verdict_for(last.results, False, target, last.timeout, repeated=True)
     record = known_record(target, digest, deadline) if before is not None else None
-    results = run_all(target, done, deadline, record.failing if record else None)
+    results = run_all(target, done, deadline, record)
     if results[-1].verdict == UNVERIFIED:
         verdict = UNVERIFIED
     else:
@@ -976,11 +1027,7 @@ def check(
     if before is not None and not environment and tree_digest(target, digest, book) == before:
         kept = () if verdict == PASS else tuple(results)
         remember(target, Checked(before, timeout, verdict, kept), book)
-    # A known failure that passes leaves the record: from then on, its failure holds.
-    fixed = {result.command for result in results if result.verdict == PASS}
-    if record is not None and fixed & record.failing.keys():
-        left = {line: code for line, code in record.failing.items() if line not in fixed}
-        keep_known(target, replace(record, failing=left), book)
+    drop_fixed(target, record, results, book)
     if verdict == PASS:
         seconds = time.monotonic() - started
         listed = ", ".join(shorten(line, 80) for line in done)
