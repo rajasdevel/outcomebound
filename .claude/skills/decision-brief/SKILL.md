@@ -38,6 +38,12 @@ way forward leads to and what its downside is, so the evidence chooses your reco
 - whether it can be undone;
 - a diagram only when order, dependency, flow or before/after is the point.
 
+Give each brief an id no other session or record can take. Where the project's instructions keep
+one numbering for briefs, take the next id from it; otherwise put your task's or worktree's name
+before the number (`fix-login-D1`), so that two sessions on one machine, and the project's own
+decision numbers, never share an id. Cite a brief by that whole id wherever it goes outside its
+document: a commit subject, a ticket, a handoff.
+
 Explain every internal id or term in plain words where you use it, or leave it out. A step the
 user types or checks by eye names a version, branch, tag or path, never a commit hash or other
 digest. Claim no check that did not run: a verdict you give is your report of a command you ran.
