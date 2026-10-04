@@ -23,7 +23,9 @@ prevent one.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
+import difflib
 import json
 import math
 import os
@@ -33,8 +35,8 @@ import shutil
 import sys
 import tempfile
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -527,8 +529,9 @@ def _ready(claim: Claim, root: Path) -> str:
     return executable
 
 
-# The tools that keep a cache in the tree they read, and the variables that move it.
-CACHES = {"ruff": "RUFF_CACHE_DIR", "mypy": "MYPY_CACHE_DIR"}
+# The tools that keep a cache in the tree they read: the folder each makes in the project root,
+# and the variable that moves it.
+CACHES = {"ruff": (".ruff_cache", "RUFF_CACHE_DIR"), "mypy": (".mypy_cache", "MYPY_CACHE_DIR")}
 
 
 def _writable(folder: Path) -> bool:
@@ -539,23 +542,49 @@ def _writable(folder: Path) -> bool:
         return False
 
 
-def _run(claim: Claim, argv: Sequence[str], cwd: Path) -> tuple[int, str]:
-    """Run `argv`, waiting for it unless the claim sets `timeout_seconds`. Where `cwd` cannot
-    be written (a sandbox that keeps the tree read-only), ruff's and mypy's caches go to a
-    scratch folder for the run, unless the environment already names one."""
+@contextlib.contextmanager
+def _caches(root: Path, claims: Iterable[Claim]) -> Iterator[dict[str, str]]:
+    """For one verb's run of `claims`, the cache variables to set: for each ruff or mypy claim
+    with no prefix, where the environment names no cache and the tool cannot write its cache
+    in the tree (its cache folder where one is there, else the root, each tried once), a folder
+    in one scratch folder that lasts the run. A prefix such as `docker compose run` does not
+    pass the variable on, so a prefixed claim gets none."""
+
+    tools = sorted(
+        {claim.tool for claim in claims if claim.tool in CACHES and not claim.prefix}
+        - {tool for tool, (_, variable) in CACHES.items() if variable in os.environ}
+    )
+    tried: dict[Path, bool] = {}
+    blocked = []
+    for tool in tools:
+        folder = root / CACHES[tool][0]
+        place = folder if folder.is_dir() else root
+        if place not in tried:
+            tried[place] = _writable(place)
+        if not tried[place]:
+            blocked.append(tool)
+    if not blocked:
+        yield {}
+        return
+    with tempfile.TemporaryDirectory(prefix="outcomebound-floor-cache-") as scratch:
+        yield {CACHES[tool][1]: str(Path(scratch) / tool) for tool in blocked}
+
+
+def _run(
+    claim: Claim, argv: Sequence[str], cwd: Path, caches: Mapping[str, str] | None = None
+) -> tuple[int, str]:
+    """Run `argv`, waiting for it unless the claim sets `timeout_seconds`; `caches` are the
+    cache variables `_caches` set for this run, which a ruff or mypy claim with no prefix
+    gets."""
 
     tool = claim.tool or Path(argv[0]).name
     seconds = claim.timeout_seconds
-    variable = CACHES.get(tool)
+    variable = CACHES[tool][1] if tool in CACHES and not claim.prefix else None
+    environment: dict[str, str] | None = None
+    if caches and variable is not None and variable in caches:
+        environment = {**os.environ, variable: caches[variable]}
     try:
-        if variable is None or variable in os.environ or _writable(cwd):
-            status, output, timed_out = validation._execute(list(argv), cwd, seconds, None)
-        else:
-            with tempfile.TemporaryDirectory(prefix="outcomebound-floor-cache-") as cache:
-                environment = {**os.environ, variable: cache}
-                status, output, timed_out = validation._execute(
-                    list(argv), cwd, seconds, environment
-                )
+        status, output, timed_out = validation._execute(list(argv), cwd, seconds, environment)
     except OSError as error:
         raise Unreadable(f"{tool} could not run: {error}") from error
     if timed_out or status is None:
@@ -599,6 +628,9 @@ FORMAT_ERROR = re.compile(
 )
 BASH_ERROR = re.compile(r"^.*?: line (?P<line>\d+): (?P<message>.+)$", re.MULTILINE)
 MISSING_TARGET = "Missing target module, package, files, or command"
+# What mypy's hint names where it stops on a file it maps to two module names, or two files to
+# one: a stop that the folders the claim reads decide.
+MODULE_MAPPING = "mapping-file-paths-to-modules"
 COMMENT = re.compile(r"^\s*#")
 # The injection scan: text a shell script executes as code.
 INJECTION = (
@@ -723,13 +755,15 @@ def parse_mypy(status: int, text: str, root: Path) -> list[Finding]:
             if item.get("code") is None and not stop:
                 hint = _message(str(item.get("hint") or ""))
                 stop = f"{finding.path}: {finding.message}" + (f" ({hint})" if hint else "")
+                if MODULE_MAPPING in hint:
+                    stop += (
+                        "; set `files` or `exclude` in the project's mypy config, or name the"
+                        " folders to read after the claim's argv"
+                    )
     if status == 2:
         if not stop:
             stop = findings[-1].shown() if findings else _first(text)
-        raise Unreadable(
-            f"mypy stopped at a blocking error: {stop}; set `files` or `exclude` in the"
-            " project's mypy config, or name the folders to read after the claim's argv"
-        )
+        raise Unreadable(f"mypy stopped at a blocking error: {stop}")
     if status not in (0, 1) or (status == 1 and not findings):
         raise Unreadable(f"mypy exited {status} and reported no error: {_first(text)}")
     return findings
@@ -832,6 +866,7 @@ class Context:
     base_commit: str | None = None
     base_problem: str | None = None
     adopted: Adoption | None = None
+    caches: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -967,15 +1002,16 @@ def findings_for(claim: Claim, context: Context) -> tuple[list[Finding], int | N
         for path in scripts:
             parts = [part.replace("{file}", path) for part in claim.argv]
             argv = _command(claim, executable, parts)
-            found.extend(parse_per_file(claim.parser, *_run(claim, argv, root), path))
+            ran = _run(claim, argv, root, context.caches)
+            found.extend(parse_per_file(claim.parser, *ran, path))
         return found, len(scripts)
     if claim.parser == "gitleaks":
         return _secrets(claim, executable, context), None
     argv = _argv(claim, executable, context, "")
-    status, text = _run(claim, argv, root)
+    status, text = _run(claim, argv, root, context.caches)
     if claim.parser == "mypy" and status == 2 and MISSING_TARGET in text:
         # The project's config names no files, so its own `mypy` would stop here: `.` it is.
-        status, text = _run(claim, [*argv, "."], root)
+        status, text = _run(claim, [*argv, "."], root, context.caches)
     return WHOLE_RUN_PARSERS[claim.parser](status, text, root), None
 
 
@@ -1123,46 +1159,76 @@ def _floor_at(root: Path, sha: str | None) -> Floor | None:
         return None
 
 
+def _target(argv: Sequence[str]) -> bool:
+    """`argv` ends in a positional argument: neither its last word nor the one before it starts
+    with `-`, so the last is not an option's value."""
+
+    return len(argv) >= 2 and not argv[-1].startswith("-") and not argv[-2].startswith("-")
+
+
 def _kept(before: Claim, after: Claim | None) -> bool:
-    """`after` is `before`, or `before` with its mode moved from baseline to gate. Its
+    """`after` is `before`, or `before` with its mode moved from baseline to gate, or a types
+    claim that names folders with more folders after them, which mypy then reads too. Its
     `timeout_seconds` may differ: a claim that times out reads UNVERIFIED, which fails too."""
 
     if after is None:
         return False
     after = replace(after, timeout_seconds=before.timeout_seconds)
+    extra = after.argv[len(before.argv) :]
+    if (
+        before.parser == "mypy"
+        and extra
+        and after.argv[: len(before.argv)] == before.argv
+        and _target(before.argv)
+        and not any(word.startswith("-") for word in extra)
+    ):
+        after = replace(after, argv=before.argv)
     return after == before or (before.mode == BASELINE and after == replace(before, mode=GATE))
 
 
-def _floor_change(before: Floor | None, after: Floor | None) -> str | None:
-    """A claim floor.json drops or changes, or an adoption record it changes or removes,
-    loosens the floor; a claim it adds, a baseline claim it makes a gate, and an adoption
-    record where there was none do not."""
+ADOPTION_RECORD = "its adoption record"
+
+
+def _floor_change(before: Floor | None, after: Floor | None) -> list[str]:
+    """The claims floor.json drops or changes, and its adoption record where it changes or
+    removes one; "" where either side cannot be read. A claim it adds, a baseline claim it
+    makes a gate, and an adoption record where there was none loosen nothing."""
 
     if before is None or after is None:
-        return f"{FLOOR_PATH} changed"
+        return [""]
     now = {claim.name: claim for claim in after.claims}
     altered = sorted(c.name for c in before.claims if not _kept(c, now.get(c.name)))
     if before.adopted is not None and after.adopted != before.adopted:
-        altered.append("its adoption record")
-    return f"{FLOOR_PATH} drops or changes {', '.join(altered)}" if altered else None
+        altered.append(ADOPTION_RECORD)
+    return altered
 
 
-def _renames(root: Path, fork: str, head: str) -> dict[str, str]:
-    """Each path Git reports renamed between `fork` and `head`: the new path to the old."""
+def _name_status(root: Path, fork: str, head: str) -> tuple[set[str], dict[str, str]]:
+    """The paths that change between `fork` and `head`, and each path Git reports renamed: the
+    new path to the old."""
 
     raw = _git(root, "diff", "--name-status", "-z", "-M", "--relative", fork, head, "--")
     fields = raw.decode("utf-8", "surrogateescape").split("\0")
+    touched: set[str] = set()
     renamed: dict[str, str] = {}
     index = 0
     while index < len(fields) and fields[index]:
         status = fields[index]
         if status[0] in "RC":
+            touched.update(fields[index + 1 : index + 3])
             if status[0] == "R":
                 renamed[fields[index + 2]] = fields[index + 1]
             index += 3
         else:
+            touched.add(fields[index + 1])
             index += 2
-    return renamed
+    return touched, renamed
+
+
+def _renames(root: Path, fork: str, head: str) -> dict[str, str]:
+    """Each path Git reports renamed between `fork` and `head`: the new path to the old."""
+
+    return _name_status(root, fork, head)[1]
 
 
 def _carried(gained: Counter[str], lost: Counter[str], renamed: dict[str, str]) -> Counter[str]:
@@ -1192,32 +1258,61 @@ class Span:
     renamed: dict[str, str]
 
 
+# One loosening, counted: its kind, its file, and what in that file loosens. A claim
+# floor.json drops or changes ("floor", FLOOR_PATH, name); a line a tool config gains or
+# loses ("config", path, "+line" or "-line"); a line a baseline gains ("baseline", path, key);
+# a suppression comment a file gains ("directive", path, comment).
+Unit = tuple[str, str, str]
+
+
+def _changed_lines(before: list[str], after: list[str]) -> Counter[str]:
+    """The lines `after` adds ("+line") and drops ("-line") from `before`, in order, so a line
+    moved within the file counts as dropped and added."""
+
+    changed: Counter[str] = Counter()
+    matcher = difflib.SequenceMatcher(None, before, after, autojunk=False)
+    for tag, low, high, first, last in matcher.get_opcodes():
+        if tag != "equal":
+            changed.update(f"-{line}" for line in before[low:high])
+            changed.update(f"+{line}" for line in after[first:last])
+    return changed
+
+
+def _config_lines(text: str | None) -> list[str]:
+    return [line.rstrip() for line in (text or "").splitlines() if line.strip()]
+
+
 def _policy_change(
     span: Span, path: str, old: str | None, new: str | None, added: frozenset[str]
-) -> str | None:
+) -> Counter[Unit]:
     """What loosens the floor in one changed file; `added` names the claims the range adds,
     whose first baseline records where they start rather than loosening them."""
 
     root, name = span.root, path.rsplit("/", 1)[-1]
     if path == FLOOR_PATH:
-        return _floor_change(_floor_at(root, old), _floor_at(root, new))
+        altered = _floor_change(_floor_at(root, old), _floor_at(root, new))
+        return Counter({("floor", path, claim): 1 for claim in altered})
     if name in WHOLE_CONFIGS:
-        return f"{path} changed"
+        lines = _changed_lines(*(_config_lines(_blob(root, sha)) for sha in (old, new)))
+        return Counter({("config", path, line): n for line, n in lines.items()})
     if path.startswith(f"{BASELINE_DIR}/") and path.endswith(".baseline"):
         if old is None and name.removesuffix(".baseline") in added:
-            return None
+            return Counter()
         before, after = (_lines(_blob(root, sha)) for sha in (old, new))
-        gained = sum(_carried(after - before, before - after, span.renamed).values())
-        return f"{path} gained {_plural(gained, 'line')}" if gained else None
+        gained = _carried(after - before, before - after, span.renamed)
+        return Counter({("baseline", path, line): n for line, n in gained.items()})
     if name not in SECTIONED:
-        return None
-    label, wanted = SECTIONED[name]
-    before_lines, after_lines = (_section_lines(_blob(root, sha), wanted) for sha in (old, new))
-    return f"{path} changed its {label} settings" if before_lines != after_lines else None
+        return Counter()
+    wanted = SECTIONED[name][1]
+    lines = _changed_lines(*(_section_lines(_blob(root, sha), wanted) for sha in (old, new)))
+    return Counter({("config", path, line): n for line, n in lines.items()})
 
 
-def _policy_changes(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
-    """Each changed file that loosens the floor between `fork` and `head`, and how."""
+def _policy_changes(
+    root: Path, fork: str, head: str, added: frozenset[str] | None
+) -> tuple[Counter[Unit], frozenset[str]]:
+    """What the changed files loosen between `fork` and `head`, and the claims floor.json adds
+    there; with `added`, those claims stand in for the ones it adds."""
 
     raw = _git(
         root, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--relative", fork, head, "--"
@@ -1230,16 +1325,20 @@ def _policy_changes(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
             continue
         old, new = (None if set(sha) == {"0"} else sha for sha in parts[2:4])
         entries.append((named.decode("utf-8", "surrogateescape"), old, new))
-    added: frozenset[str] = frozenset()
-    for path, old, new in entries:
-        if path == FLOOR_PATH:
-            before, after = _floor_at(root, old), _floor_at(root, new)
-            if before is not None and after is not None:
-                added = frozenset(c.name for c in after.claims) - {c.name for c in before.claims}
+    if added is None:
+        added = frozenset()
+        for path, old, new in entries:
+            if path == FLOOR_PATH:
+                before, after = _floor_at(root, old), _floor_at(root, new)
+                if before is not None and after is not None:
+                    names = {c.name for c in before.claims}
+                    added = frozenset(c.name for c in after.claims) - names
     baselines = any(path.startswith(f"{BASELINE_DIR}/") for path, _, _ in entries)
     span = Span(root, fork, head, _renames(root, fork, head) if baselines else {})
-    changes = ((path, _policy_change(span, path, old, new, added)) for path, old, new in entries)
-    return [(path, change) for path, change in changes if change is not None]
+    units: Counter[Unit] = Counter()
+    for path, old, new in entries:
+        units.update(_policy_change(span, path, old, new, added))
+    return units, added
 
 
 def _directive_counts(patch: str) -> dict[str, Counter[str]]:
@@ -1265,7 +1364,7 @@ def _directive_counts(patch: str) -> dict[str, Counter[str]]:
     return {name: +counts for name, counts in net.items() if +counts}
 
 
-def _added_directives(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
+def _added_directives(root: Path, fork: str, head: str) -> Counter[Unit]:
     patch = _git(
         root,
         "-c",
@@ -1283,89 +1382,153 @@ def _added_directives(root: Path, fork: str, head: str) -> list[tuple[str, str]]
         head,
         "--",
     ).decode("utf-8", "replace")
-    return [
-        (path, f"{path} adds {directive}" + (f" (x{count})" if count > 1 else ""))
-        for path, counts in sorted(_directive_counts(patch).items())
-        if not path.startswith(f"{BASELINE_DIR}/")
-        for directive, count in sorted(counts.items())
-    ]
+    return Counter(
+        {
+            ("directive", path, directive): count
+            for path, counts in _directive_counts(patch).items()
+            if not path.startswith(f"{BASELINE_DIR}/")
+            for directive, count in counts.items()
+        }
+    )
 
 
-def _loosenings(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
-    """What loosens the floor between `fork` and `head`: each file, and how it loosens."""
+def _loosenings(
+    root: Path, fork: str, head: str, added: frozenset[str] | None = None
+) -> tuple[Counter[Unit], frozenset[str]]:
+    """What loosens the floor between `fork` and `head`, each loosening counted, and the claims
+    floor.json adds there (or `added`, where given)."""
 
-    return _policy_changes(root, fork, head) + _added_directives(root, fork, head)
+    units, added = _policy_changes(root, fork, head, added)
+    return units + _added_directives(root, fork, head), added
 
 
-def _literal(path: str) -> str:
-    return f":(literal){path}"
+def _onward(unit: Unit, forward: dict[str, str]) -> Unit:
+    """The loosening under the paths its files have at HEAD, through the renames after it."""
+
+    kind, path, what = unit
+    if kind == "baseline":
+        found = KEY.fullmatch(what)
+        if found is not None and found["path"] in forward:
+            return (kind, path, f"{forward[found['path']]}:{found['code']}")
+        return unit
+    return unit if kind == "floor" else (kind, forward.get(path, path), what)
 
 
-def _rulings(
-    root: Path, start: str, head: str, changes: Sequence[tuple[str, str]]
-) -> tuple[list[tuple[str, bool]], list[str]]:
-    """Each change as shown, with whether a ruling covers it, and the ruling lines that do.
+def _made(
+    root: Path, start: str, head: str, wanted: Counter[Unit], added: frozenset[str]
+) -> dict[str, Counter[Unit]]:
+    """Each commit in `start..head` with what its own diff makes of the loosenings `wanted`.
 
-    A `Floor-Loosening: <what>; ruled <id>` line covers the loosenings its own commit makes,
-    not those of another commit: a change passes only where each commit in the range whose
-    own diff loosens that file carries one. A change no single commit makes (a merge's own
-    edit, a rename split across commits) passes where a commit that touches its file carries
-    one. Any earlier line, whatever its `<what>` says, still reads, and covers its commit."""
+    A commit with one parent makes what its diff against that parent loosens. A merge makes
+    what it loosens against every parent, which is the edit it makes itself, not what it
+    brings in from either side. A loosening a commit made at a path a later commit renames is
+    counted at the path it has at HEAD."""
 
-    paths = sorted({path for path, _ in changes})
+    listed = _git(root, "rev-list", "--topo-order", "--parents", f"{start}..{head}")
+    relevant = {path for _, path, _ in wanted} | {
+        found["path"]
+        for kind, _, what in wanted
+        if kind == "baseline" and (found := KEY.fullmatch(what)) is not None
+    }
+    forward: dict[str, str] = {}
+    made: dict[str, Counter[Unit]] = {}
+    for line in listed.decode("ascii", "replace").splitlines():
+        commit, *parents = line.split()
+        if not parents:
+            continue
+        if len(parents) == 1:
+            touched, renamed = _name_status(root, parents[0], commit)
+            for new, old in renamed.items():
+                forward[old] = forward.get(new, new)
+            if not any(forward.get(path, path) in relevant for path in touched):
+                continue
+        own: Counter[Unit] | None = None
+        for parent in parents:
+            against = _loosenings(root, parent, commit, added)[0]
+            own = against if own is None else own & against
+        counted: Counter[Unit] = Counter()
+        for unit, n in (own or Counter()).items():
+            counted[_onward(unit, forward)] += n
+        made[commit] = Counter({unit: n for unit, n in counted.items() if unit in wanted})
+    return made
+
+
+def _messages(root: Path, start: str, head: str) -> dict[str, list[str]]:
+    """Each commit in `start..head` with the `Floor-Loosening` lines its message carries."""
+
     log = _git(
         root,
         "-c",
         "log.showSignature=false",
         "log",
         "--no-color",
-        "--full-history",
-        "--format=%H%x1f%P%x1f%B%x1e",
+        "--format=%H%x1f%B%x1e",
         f"{start}..{head}",
-        "--",
-        *(_literal(path) for path in paths),
     ).decode("utf-8", "replace")
     ruled: dict[str, list[str]] = {}
-    makers: dict[str, list[str]] = {}
     for record in log.split("\x1e"):
-        commit, _, rest = record.strip().partition("\x1f")
-        parents, _, message = rest.partition("\x1f")
-        if not commit:
-            continue
+        commit, _, message = record.strip().partition("\x1f")
         lines = [f"{found['what']}; ruled {found['ruling']}" for found in TRAILER.finditer(message)]
-        if lines:
+        if commit and lines:
             ruled[commit] = lines
-        if len(parents.split()) == 1:
-            for path, _ in _loosenings(root, parents.strip(), commit):
-                if path in paths:
-                    makers.setdefault(path, []).append(commit)
+    return ruled
+
+
+def _shown(kind: str, path: str, units: Counter[Unit]) -> str:
+    """One loosening group as a person reads it."""
+
+    if kind == "floor":
+        names = sorted((what for _, _, what in units), key=lambda n: (n == ADOPTION_RECORD, n))
+        return f"{path} changed" if "" in names else f"{path} drops or changes {', '.join(names)}"
+    if kind == "config":
+        name = path.rsplit("/", 1)[-1]
+        label = SECTIONED[name][0] if name in SECTIONED else ""
+        return f"{path} changed its {label} settings" if label else f"{path} changed"
+    if kind == "baseline":
+        return f"{path} gained {_plural(sum(units.values()), 'line')}"
+    ((_, _, directive), count), *_ = units.items()
+    return f"{path} adds {directive}" + (f" (x{count})" if count > 1 else "")
+
+
+def _rulings(
+    root: Path, start: str, head: str, units: Counter[Unit], added: frozenset[str]
+) -> tuple[list[tuple[str, bool]], list[str]]:
+    """Each loosening as shown, with whether rulings cover it, and the ruling lines that do.
+
+    A `Floor-Loosening: <what>; ruled <id>` line covers the loosenings its own commit makes,
+    and no other commit's. A loosening passes where each commit whose own diff makes it carries
+    one, and those commits make all of it: what no commit's own diff makes is never covered.
+    `<what>` is free text, so a line written before this rule reads as it did."""
+
+    made = _made(root, start, head, units, added)
+    ruled = _messages(root, start, head)
+    groups: dict[tuple[str, ...], Counter[Unit]] = {}
+    for unit, n in sorted(units.items(), key=lambda item: (item[0][0] == "directive", item[0])):
+        kind, path, what = unit
+        key = (kind, path, what) if kind == "directive" else (kind, path)
+        groups.setdefault(key, Counter())[unit] = n
     shown: list[tuple[str, bool]] = []
     used: dict[str, None] = {}
-    for path, change in changes:
-        made = makers.get(path)
-        if made is None:
-            touching = _git(
-                root,
-                "log",
-                "--full-history",
-                "--format=%H",
-                f"{start}..{head}",
-                "--",
-                _literal(path),
-            ).decode("ascii", "replace")
-            covering = [commit for commit in touching.split() if commit in ruled][:1]
-            missing = "" if covering else "no one commit makes it, and none that touches it"
+    for (kind, path, *_), group in groups.items():
+        makers: dict[str, None] = {}
+        short = False
+        for unit, n in group.items():
+            by = [commit for commit, own in made.items() if own[unit] > 0]
+            makers.update(dict.fromkeys(by))
+            short = short or sum(made[commit][unit] for commit in by) < n
+        unruled = [commit[:12] for commit in makers if commit not in ruled]
+        reasons = []
+        if unruled:
+            verb = "carries" if len(unruled) == 1 else "carry"
+            reasons.append(f"{', '.join(unruled)} {verb} no Floor-Loosening line")
+        if short:
+            reasons.append("no commit's own diff makes all of it")
+        text = _shown(kind, path, group)
+        if reasons:
+            shown.append((f"{text} (not ruled: {'; '.join(reasons)})", False))
         else:
-            covering = [commit for commit in made if commit in ruled]
-            unruled = [commit[:12] for commit in made if commit not in ruled]
-            missing = ", ".join(unruled)
-        if missing:
-            shown.append(
-                (f"{change} (not ruled: {missing} carries no Floor-Loosening line)", False)
-            )
-        else:
-            used.update(dict.fromkeys(covering))
-            shown.append((f"{change} (ruled in {', '.join(c[:12] for c in covering)})", True))
+            used.update(makers)
+            shown.append((f"{text} (ruled in {', '.join(c[:12] for c in makers)})", True))
     lines = [f"{commit[:12]} Floor-Loosening: {line}" for commit in used for line in ruled[commit]]
     return shown, lines
 
@@ -1424,21 +1587,21 @@ def loosening(context: Context) -> Outcome:
         fork = _git(context.root, "merge-base", context.base_commit, head).decode().strip()
         adopted = _adopted_after(context.root, fork, context.adopted)
         start = adopted or fork
-        changes = _loosenings(context.root, start, head)
-        shown, rulings = _rulings(context.root, start, head, changes) if changes else ([], [])
+        units, added = _loosenings(context.root, start, head)
+        shown, rulings = _rulings(context.root, start, head, units, added) if units else ([], [])
     except FloorError as problem:
         return Outcome(name, UNVERIFIED, str(problem))
     span = f"{context.base}..HEAD"
     if adopted is not None:
         span = f"{adopted[:12]}..HEAD, the commits since the floor's adoption"
-    if not changes:
+    if not units:
         return Outcome(name, PASS, f"none in {span}")
     details = (*(text for text, _ in shown), *rulings)
     unruled = sum(not ruled for _, ruled in shown)
     if not unruled:
-        return Outcome(name, PASS, f"{len(changes)} in {span}, ruled", details)
+        return Outcome(name, PASS, f"{len(shown)} in {span}, ruled", details)
     summary = (
-        f"{len(changes)} in {span}, {unruled} not ruled; the commit that makes a loosening"
+        f"{len(shown)} in {span}, {unruled} not ruled; the commit that makes a loosening"
         " carries Floor-Loosening: <what>; ruled <id>"
     )
     return Outcome(name, FAIL, summary, details)
@@ -1531,6 +1694,13 @@ def _fingerprint(finding: Finding) -> str:
 def fit(
     root: Path, proposed: Floor, source: Path, strict: bool
 ) -> tuple[list[Claim], dict[str, bytes | None], dict[str, int]]:
+    with _caches(root, proposed.claims) as caches:
+        return _fit(Context(root, caches=caches), proposed, source, strict)
+
+
+def _fit(
+    context: Context, proposed: Floor, source: Path, strict: bool
+) -> tuple[list[Claim], dict[str, bytes | None], dict[str, int]]:
     """Run each claim once and fit it to the findings the project holds today: the claims to
     write, their baselines, and how many findings each baseline recorded.
 
@@ -1540,7 +1710,7 @@ def fit(
     claim whose tool runs but cannot read the project is left out, with why. `strict` fits
     nothing: every claim stays as proposed, and each says what it would fail on now."""
 
-    context = Context(root)
+    root = context.root
     claims: list[Claim] = []
     changes: dict[str, bytes | None] = {}
     recorded: dict[str, int] = {}
@@ -1596,13 +1766,38 @@ def _installed(root: Path) -> Floor | None:
         return None
 
 
+def _as_installed(proposed: Floor, installed: Floor | None) -> Floor:
+    """`proposed`, with each claim that an installed claim of another name equals, but for its
+    name and its mode, under the installed name: a claim the recipes renamed (`python.secrets`,
+    now `secrets`) stays the claim it was, so applying a new proposal drops nothing."""
+
+    if installed is None:
+        return proposed
+    named = {claim.name for claim in installed.claims}
+    free = [held for held in installed.claims if held.name not in {c.name for c in proposed.claims}]
+    claims = []
+    for claim in proposed.claims:
+        twin = None
+        if claim.name not in named:
+            same = (
+                held for held in free if replace(held, name=claim.name, mode=claim.mode) == claim
+            )
+            twin = next(same, None)
+        if twin is not None:
+            free.remove(twin)
+            claim = replace(claim, name=twin.name)
+        claims.append(claim)
+    return replace(proposed, claims=tuple(claims))
+
+
 def apply(root: Path, source: Path, accept: bool, strict: bool) -> int:
     try:
         proposed = parse_floor(json.loads(source.read_text(encoding="utf-8")))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise FloorError(f"cannot read {source}: {error}") from error
-    claims, changes, recorded = fit(root, proposed, source, strict)
     installed = _installed(root)
+    proposed = _as_installed(proposed, installed)
+    claims, changes, recorded = fit(root, proposed, source, strict)
     adopted = proposed.adopted or (installed.adopted if installed else None)
     if adopted is None and not strict:
         try:
@@ -1661,10 +1856,11 @@ def check(root: Path, base: str | None, only: str | None) -> int:
     claims = [claim for claim in floor.claims if only is None or claim.name == only]
     if not claims and only is not None:
         raise FloorError(f"no claim is named {only}")
-    context = _context(root, base, floor.adopted)
     status = 0
-    for claim in claims:
-        status = max(status, _show(_noted(evaluate(claim, context), claim, context)))
+    with _caches(root, claims) as caches:
+        context = replace(_context(root, base, floor.adopted), caches=caches)
+        for claim in claims:
+            status = max(status, _show(_noted(evaluate(claim, context), claim, context)))
     if base is not None:
         status = max(status, _show(loosening(context)))
     return status
@@ -1680,9 +1876,15 @@ def _show(outcome: Outcome) -> int:
 def record(root: Path, accept: bool) -> int:
     """`baseline`: the current findings, into each empty or absent baseline only."""
 
-    context, status = Context(root), 0
+    claims = [claim for claim in load_floor(root).claims if claim.mode == BASELINE]
+    with _caches(root, claims) as caches:
+        return _record(Context(root, caches=caches), claims, accept)
+
+
+def _record(context: Context, claims: list[Claim], accept: bool) -> int:
+    root, status = context.root, 0
     changes: dict[str, bytes | None] = {}
-    for claim in (claim for claim in load_floor(root).claims if claim.mode == BASELINE):
+    for claim in claims:
         held = sum(read_baseline(root, claim).values())
         if held:
             print(f"KEPT {claim.name} ({_plural(held, 'line')}; delete it to record it again)")
@@ -1701,9 +1903,15 @@ def record(root: Path, accept: bool) -> int:
 def ratchet(root: Path) -> int:
     """Delete each baseline line no finding matches; a tightening, so it asks nothing."""
 
-    context, status = Context(root), 0
+    claims = [claim for claim in load_floor(root).claims if claim.mode == BASELINE]
+    with _caches(root, claims) as caches:
+        return _ratchet(Context(root, caches=caches), claims)
+
+
+def _ratchet(context: Context, claims: list[Claim]) -> int:
+    root, status = context.root, 0
     changes: dict[str, bytes | None] = {}
-    for claim in (claim for claim in load_floor(root).claims if claim.mode == BASELINE):
+    for claim in claims:
         held = read_baseline(root, claim)
         if not held:
             continue
@@ -1882,16 +2090,19 @@ an adoption record it changes or removes; a change to ruff.toml, .ruff.toml, myp
 [tool.mypy] and [mypy] settings; an added noqa, type ignore, mypy, shellcheck-disable or
 gitleaks-allow comment (in a document, only gitleaks-allow).
 None of these loosens: a claim floor.json adds, with its first baseline; a claim's move
-from baseline to gate; a claim's timeout_seconds; an adoption record where there was none;
-a baseline line that moves with its file, where Git reports the file renamed.
+from baseline to gate; a claim's timeout_seconds; a folder a types claim adds after the
+folders it names; an adoption record where there was none; a baseline line that moves with
+its file, where Git reports the file renamed; a blank line in a tool config.
 Where the floor was adopted after the merge base (the merge base holds no floor.json and no
 commit before the adoption touches it), both ranges start at the adoption commit instead, so
 commits from before the floor never fail; gitleaks then also scans the files Git tracks.
 A loosening passes where each commit in the range that makes it, in its own diff, has the
 line 'Floor-Loosening: <what>; ruled <decision id>' in its message, the id being whatever
 names the decision in the project: an issue or pull request (#123), a decision record, a
-link. The line covers the loosenings of its own commit only, never another commit's; one no
-single commit makes (a merge's own edit) passes where a commit that touches its file has it.
+link. The line covers the loosenings of its own commit only, never another commit's: each
+loosening is counted, and the commits whose own diffs make it must make all of it. A merge's
+own edit, what it loosens against every parent, is the merge commit's to rule; a loosening
+made before its file was renamed is ruled by the commit that made it.
 
 A project's own check is one more claim: {"name": "project.imports", "mode": "gate",
 "tool": "lint-imports", "argv": ["lint-imports"], "parser": "exit"} fails when it exits

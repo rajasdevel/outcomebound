@@ -601,26 +601,204 @@ def test_a_ruled_commit_does_not_cover_a_later_loosening_of_the_same_file(
     assert f"src/b.py adds {comment('noqa: e501')} (x2) (not ruled: {later[:12]}" in output
 
 
-@pytest.mark.parametrize("ruled", [False, True])
-def test_a_loosening_only_a_merge_makes_passes_where_a_commit_touching_its_file_is_ruled(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], ruled: bool
-) -> None:
+LONG = SPACED + comment("noqa: E501") + "\n"
+IMPORT = "import os  " + comment("noqa: F401") + "\n"
+
+
+def ruled_range(tmp_path: Path) -> tuple[Path, str]:
+    """A repository holding `BEFORE`, and a floor with shell.injection and python.lint at a
+    base commit: the repository and the base commit."""
+
     root = repository(tmp_path, BEFORE)
-    install(root, shipped("shell.injection"))
-    base = commit(root, "floor", {})
+    install(root, shipped("shell.injection"), shipped("python.lint"))
+    return root, commit(root, "floor", {})
+
+
+def merged(root: Path, message: str, edit: dict[str, str]) -> str:
+    """A side branch and main each commit an unrelated file; the merge commit then makes
+    `edit` itself. The merge commit."""
+
     git(root, "checkout", "-q", "-b", "side")
     commit(root, "side", {"src/c.py": "z = 1\n"})
     git(root, "checkout", "-q", "main")
     commit(root, "main", {"src/d.py": "w = 1\n"})
     git(root, "merge", "-q", "--no-ff", "--no-commit", "side")
-    (root / "src" / "b.py").write_text(SPACED + comment("noqa: E501") + "\n", encoding="utf-8")
-    trailer = "\n\nFloor-Loosening: a long line; ruled D2" if ruled else ""
-    commit(root, "merge side" + trailer, {})
+    return commit(root, message, edit)
 
-    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
 
-    assert (status, verdicts.get("loosening")) == ((0, "PASS") if ruled else (1, "FAIL")), output
-    assert ("no one commit makes it, and none that touches it" in output) != ruled
+def ranged(capsys: pytest.CaptureFixture[str], root: Path, base: str) -> tuple[str, str]:
+    """The loosening verdict against `base`, and what check printed."""
+
+    output = run(capsys, "check", str(root), "--base", base, "--claim", "shell.injection")[2]
+    word = next(line.split(" ", 2)[0] for line in output.splitlines() if " loosening " in line)
+    return word, output
+
+
+def claims_text(*claims: dict[str, Any]) -> str:
+    return json.dumps({"version": 1, "claims": list(claims)})
+
+
+GROWN = BEFORE[LINT_BASELINE] + "src/a.py:E501\n"
+MERGE_EDITS = {
+    "a suppression comment": ({"src/b.py": LONG}, {"src/b.py": LONG + IMPORT}),
+    "a claim in floor.json": (
+        {floor.FLOOR_PATH: claims_text(shipped("shell.injection")), LINT_BASELINE: ""},
+        {floor.FLOOR_PATH: claims_text(shipped("shell.injection", files=["nothing/*.sh"]))},
+    ),
+    "baseline lines": (
+        {LINT_BASELINE: GROWN},
+        {LINT_BASELINE: GROWN + "".join(f"src/x{n}.py:E501\n" for n in range(30))},
+    ),
+}
+
+
+@pytest.mark.parametrize("on_merge", [False, True])
+@pytest.mark.parametrize("edits", MERGE_EDITS.values(), ids=MERGE_EDITS.keys())
+def test_a_merge_makes_its_own_edits_so_only_its_own_line_rules_them(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    edits: tuple[dict[str, str], dict[str, str]],
+    on_merge: bool,
+) -> None:
+    """A ruled commit loosens a file; a merge then loosens the same file in its own edit."""
+
+    first, own = edits
+    root, base = ruled_range(tmp_path)
+    commit(root, "first\n\nFloor-Loosening: an earlier change; ruled D1", first)
+    trailer = "\n\nFloor-Loosening: the merge's own change; ruled D2" if on_merge else ""
+    merge = merged(root, "merge side" + trailer, own)
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == ("PASS" if on_merge else "FAIL"), output
+    assert (f"not ruled: {merge[:12]} carries no Floor-Loosening line" in output) != on_merge
+
+
+def test_a_ruled_commit_that_only_touches_a_file_rules_no_other_commits_loosening_of_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, base = ruled_range(tmp_path)
+    widen = {"ruff.toml": "line-length = 120\n", "src/b.py": "x = 2\n"}
+    commit(root, "widen\n\nFloor-Loosening: ruff line length 120; ruled D2", widen)
+    merge = merged(root, "merge side", {"src/b.py": "x = 2\n" + IMPORT})
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == "FAIL", output
+    assert "ruff.toml changed (ruled in " in output
+    assert f"src/b.py adds {comment('noqa: f401')} (not ruled: {merge[:12]}" in output
+
+
+@pytest.mark.parametrize(
+    ("first", "later", "passes"),
+    [
+        ("hide", {"src/new.py": IMPORT + LONG}, False),
+        ("hide", {"src/new.py": IMPORT + "y = 2\n", "ruff.toml": "line-length = 120\n"}, False),
+        ("hide\n\nFloor-Loosening: an unused import kept; ruled D3", {}, True),
+    ],
+    ids=["a later ruling loosens it too", "a later ruling only touches it", "rename only"],
+)
+def test_a_loosening_made_before_its_file_is_renamed_is_ruled_by_its_own_commit(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    first: str,
+    later: dict[str, str],
+    passes: bool,
+) -> None:
+    root, _ = ruled_range(tmp_path)
+    base = commit(root, "add old", {"src/old.py": "x = 1\n"})
+    hidden = commit(root, first, {"src/old.py": IMPORT})
+    git(root, "mv", "src/old.py", "src/new.py")
+    commit(root, "rename", {})
+    if later:
+        commit(root, "later\n\nFloor-Loosening: another change; ruled D4", later)
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == ("PASS" if passes else "FAIL"), output
+    assert (f"not ruled: {hidden[:12]} carries no Floor-Loosening line" in output) != passes
+    assert "no commit's own diff" not in output
+
+
+@pytest.mark.parametrize("ruled", [False, True])
+def test_a_claim_dropped_and_brought_back_with_a_larger_baseline_needs_its_own_ruling(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], ruled: bool
+) -> None:
+    """The first-baseline exemption is for a claim new at HEAD, not one the range drops."""
+
+    root, base = ruled_range(tmp_path)
+    original = (root / floor.FLOOR_PATH).read_text(encoding="utf-8")
+    trailer = "\n\nFloor-Loosening: drop python.lint; ruled D4" if ruled else ""
+    dropped = {floor.FLOOR_PATH: claims_text(shipped("shell.injection")), LINT_BASELINE: ""}
+    commit(root, "drop lint" + trailer, dropped)
+    fat = "".join(f"src/x{n}.py:E501\n" for n in range(50))
+    back = commit(root, "bring lint back", {floor.FLOOR_PATH: original, LINT_BASELINE: fat})
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == "FAIL", output
+    assert f"{LINT_BASELINE} gained 50 lines (not ruled: {back[:12]}" in output
+
+
+@pytest.mark.parametrize("side_ruled", [False, True])
+def test_a_merges_own_line_does_not_rule_what_a_side_commit_made(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], side_ruled: bool
+) -> None:
+    root, base = ruled_range(tmp_path)
+    git(root, "checkout", "-q", "-b", "side")
+    trailer = "\n\nFloor-Loosening: keep import; ruled D7" if side_ruled else ""
+    side = commit(root, "side" + trailer, {"src/b.py": IMPORT})
+    git(root, "checkout", "-q", "main")
+    commit(root, "main", {"src/d.py": "w = 1\n"})
+    git(root, "merge", "-q", "--no-ff", "--no-commit", "side")
+    commit(root, "merge\n\nFloor-Loosening: keep import; ruled D9", {})
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == ("PASS" if side_ruled else "FAIL"), output
+    assert (f"(ruled in {side[:12]})" in output) == side_ruled
+
+
+@pytest.mark.parametrize(
+    ("argv", "loosens"),
+    [
+        (["mypy", "--output", "json", "src/pkg", "other"], False),
+        (["mypy", "--output", "json"], True),
+        (["mypy", "--output", "json", "src/pkg", "--follow-imports=skip"], True),
+    ],
+    ids=["a folder added", "the folders dropped", "an option added"],
+)
+def test_a_folder_the_types_claim_adds_tightens_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], argv: list[str], loosens: bool
+) -> None:
+    types = shipped("python.types", argv=["mypy", "--output", "json", "src/pkg"])
+    root = repository(tmp_path, {"run.sh": "echo\n"})
+    install(root, shipped("shell.injection"), types)
+    base = commit(root, "floor", {})
+    commit(
+        root,
+        "widen",
+        {floor.FLOOR_PATH: claims_text(shipped("shell.injection"), {**types, "argv": argv})},
+    )
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == ("FAIL" if loosens else "PASS"), output
+
+
+def test_applying_a_proposal_over_a_floor_with_python_secrets_keeps_its_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {"run.sh": "echo\n"})
+    install(root, shipped("shell.injection"), {**shipped("secrets"), "name": "python.secrets"})
+    base = commit(root, "floor", {})
+    source = proposal(tmp_path, shipped("shell.injection"), shipped("secrets"))
+
+    run(capsys, "apply", str(root), "--floor", str(source), "--accept")
+    commit(root, "apply again", {})
+
+    assert [c["name"] for c in installed(root)["claims"]] == ["shell.injection", "python.secrets"]
+    assert ranged(capsys, root, base)[0] == "PASS"
 
 
 def test_the_range_starts_at_the_merge_base_so_a_tightening_on_the_base_is_not_a_loosening(
@@ -762,7 +940,10 @@ def test_the_proposed_types_claim_reads_a_project_whose_scripts_share_a_module_n
 
 
 def test_mypy_stopping_is_named_by_the_error_that_stopped_it_with_its_hint(tmp_path: Path) -> None:
-    hint = "Common resolutions include:\n    a) adding `__init__.py` somewhere"
+    hint = (
+        "See https://mypy.readthedocs.io/en/stable/running_mypy.html#mapping-file-paths-to-modules"
+        " for more info\nCommon resolutions include:\n    a) adding `__init__.py` somewhere"
+    )
     records = [
         {"file": "src/pkg/a.py", "line": 1, "column": 0, "code": "import-not-found"},
         {"file": "scripts/tool.py", "line": -1, "column": -1, "code": None, "hint": hint},
@@ -778,8 +959,17 @@ def test_mypy_stopping_is_named_by_the_error_that_stopped_it_with_its_hint(tmp_p
 
     shown = str(stopped.value)
     assert "scripts/tool.py: Source file found twice: tool, scripts.tool" in shown
-    assert "(Common resolutions include: a) adding `__init__.py` somewhere)" in shown
+    assert "Common resolutions include: a) adding `__init__.py` somewhere)" in shown
     assert "missing" not in shown and "`files` or `exclude`" in shown
+
+
+def test_a_mypy_stop_that_no_folder_decides_gets_no_advice_on_folders(tmp_path: Path) -> None:
+    text = "error: INTERNAL ERROR -- Please try using mypy master on GitHub:\n"
+
+    with pytest.raises(floor.Unreadable) as stopped:
+        floor.parse_mypy(2, text, tmp_path)
+
+    assert str(stopped.value) == f"mypy stopped at a blocking error: {text.strip()}"
 
 
 def test_apply_then_remove_leaves_the_tree_as_it_was(
@@ -2036,7 +2226,7 @@ def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_fo
     seen = tmp_path / "seen"
     tools = tmp_path / "tools"
     tools.mkdir()
-    for tool, variable in floor.CACHES.items():
+    for tool, (_, variable) in floor.CACHES.items():
         script = f'#!/bin/sh\nprintf "%s\\n" "${variable}" >> "{seen}"\n'
         (tools / tool).write_text(script, encoding="utf-8")
         (tools / tool).chmod(0o755)
@@ -2062,3 +2252,51 @@ def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_fo
     caches = seen.read_text(encoding="utf-8").split()
     assert len(caches) == 2 and all(root not in Path(c).parents for c in caches), caches
     assert not any(Path(cache).exists() for cache in caches)
+
+
+def test_an_unwritable_cache_folder_moves_only_its_tool_once_per_run_and_never_a_prefixed_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path, {"README": "x\n"})
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for tool, (_, variable) in floor.CACHES.items():
+        script = f'#!/bin/sh\nprintf "%s=%s\\n" "$0" "${variable}" >> "{tmp_path / "seen"}"\n'
+        (tools / tool).write_text(script, encoding="utf-8")
+        (tools / tool).chmod(0o755)
+        monkeypatch.delenv(variable, raising=False)
+    (tools / "wrap").write_text('#!/bin/sh\nexec "$@"\n', encoding="utf-8")
+    (tools / "wrap").chmod(0o755)
+    own = {"mode": "gate", "parser": "exit"}
+    install(
+        root,
+        {**own, "name": "project.ruff", "tool": "ruff", "argv": ["ruff"]},
+        {**own, "name": "project.wrapped", "tool": "ruff", "prefix": ["wrap"], "argv": ["ruff"]},
+        {**own, "name": "project.mypy", "tool": "mypy", "argv": ["mypy"]},
+    )
+    monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
+    (root / ".ruff_cache").mkdir()
+    (root / ".ruff_cache").chmod(0o555)
+    tried: list[Path] = []
+    writable = floor._writable
+
+    def counted(folder: Path) -> bool:
+        tried.append(folder)
+        return writable(folder)
+
+    monkeypatch.setattr(floor, "_writable", counted)
+    try:
+        if writable(root / ".ruff_cache"):
+            pytest.skip("UNVERIFIED: this user can write a folder whose mode forbids it")
+        status = run(capsys, "check", str(root))[0]
+    finally:
+        (root / ".ruff_cache").chmod(0o755)
+
+    assert status == 0
+    assert sorted(tried) == sorted([root, root / ".ruff_cache"])
+    seen = [line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines()]
+    caches = {
+        tool: sorted(c for name, c in seen if Path(name).name == tool) for tool in floor.CACHES
+    }
+    assert caches["mypy"] == [""], caches
+    assert caches["ruff"][0] == "" and root not in Path(caches["ruff"][1]).parents, caches
