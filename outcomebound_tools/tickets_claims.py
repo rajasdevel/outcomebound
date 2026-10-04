@@ -138,7 +138,9 @@ def _required(root: Path, cwd: Path, value: object) -> tuple[str | None, ...]:
             continue
         candidate = Path(raw.strip())
         resolved = Path(os.path.normpath(candidate if candidate.is_absolute() else cwd / candidate))
-        found.append(resolved.relative_to(base).as_posix() if resolved.is_relative_to(base) else None)
+        found.append(
+            resolved.relative_to(base).as_posix() if resolved.is_relative_to(base) else None
+        )
     return tuple(found)
 
 

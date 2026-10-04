@@ -432,7 +432,9 @@ def test_a_cited_section_is_named_and_never_quoted(tmp_path: Path) -> None:
     assert "outcomebound:begin" not in document
 
 
-def test_a_whole_file_read_is_named_by_its_path(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_whole_file_read_is_named_by_its_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """A `reads` entry with no anchor names the whole file, by path alone and never
     quoted; one naming a file the checkout does not hold is refused like a section."""
 

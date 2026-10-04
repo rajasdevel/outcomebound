@@ -1,6 +1,6 @@
 """`outcomebound tickets <verb>`: the ticket engine's command line.
 
-What this module decides: the two verbs, every option's name and default,
+What this module decides: the three verbs, every option's name and default,
 which stream a report and a refusal reach, and the exit code of the process. A
 verb reads `options` and parses nothing.
 
@@ -9,7 +9,8 @@ refuses an undeclared or misdeclared project alike and none loads it again.
 
 What it does not decide: anything a verb does. It holds no ticket logic: a verb
 returns a `Report`, this module renders it as text or as JSON and returns the
-report's own exit code; `brief` alone returns its document's text. A verb that
+report's own exit code; `brief` and `publish` return text, a document and a
+script, which it prints as they are. A verb that
 stops instead raises, and the exception says which exit it carries: a `Refusal`
 is one named line and exit 1, a `PlanningError` one named line and exit 2.
 """
@@ -26,6 +27,7 @@ from types import MappingProxyType
 from outcomebound_tools.tickets_brief import brief
 from outcomebound_tools.tickets_check import check
 from outcomebound_tools.tickets_declaration import Declaration, load_declaration
+from outcomebound_tools.tickets_publish import publish
 from outcomebound_tools.tickets_report import (
     EngineError,
     PlanningError,
@@ -49,6 +51,7 @@ VERBS: Mapping[str, VerbFunction] = MappingProxyType(
     {
         "check": check,
         "brief": brief,
+        "publish": publish,
     }
 )
 
@@ -110,6 +113,28 @@ def _brief_usage(options: argparse.Namespace) -> str:
     return ""
 
 
+def _publish_options(command: argparse.ArgumentParser) -> None:
+    """`publish --draft <file>…`: the breakdown to publish, linted together first."""
+
+    command.add_argument(
+        "--draft",
+        metavar="FILE",
+        nargs="+",
+        action="extend",
+        help="the draft files to publish together; their relations to one another are kept",
+    )
+
+
+def _publish_usage(options: argparse.Namespace) -> str:
+    """A publish reads drafts, at least one, and no store."""
+
+    if not options.draft:
+        return "publish needs the drafts to publish: --draft <file>…"
+    if options.input is not None:
+        return "publish reads drafts and no store, so it cannot be given --input"
+    return ""
+
+
 @dataclass(frozen=True, slots=True)
 class _Surface:
     """What one verb's parser offers, in one row.
@@ -150,6 +175,16 @@ _ROWS: Mapping[str, _Surface] = {
         own=_brief_options,
         usage=_brief_usage,
         epilog="Exits: 0 the brief printed; 1 a refusal; 2 a planning error or a usage error.",
+        prints_report=False,
+    ),
+    "publish": _Surface(
+        "print the gh commands that publish drafts as tickets, with their relations; "
+        "run nothing and write nothing",
+        own=_publish_options,
+        usage=_publish_usage,
+        epilog="The script runs gh under the login of whoever runs it. An agent runs it only "
+        "where the declaration's `writes` grant allows; otherwise a person does. "
+        "Exits: 0 the script printed; 1 a refusal; 2 a usage error.",
         prints_report=False,
     ),
 }
@@ -245,7 +280,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stderr.write(f"ENGINE_ERROR: {could_not}\n")
         return 1
     if isinstance(outcome, str):
-        # `brief` prints its document and nothing else.
+        # `brief` prints its document, and `publish` its script, and nothing else.
         sys.stdout.write(outcome)
         return 0
     sys.stdout.write(render_json(outcome) if options.json else render_text(outcome))

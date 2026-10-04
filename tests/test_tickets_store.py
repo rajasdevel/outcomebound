@@ -55,3 +55,8 @@ def test_a_github_store_without_an_export_cannot_be_planned(tmp_path: Path) -> N
     assert raised.value.code == "INPUT_REQUIRED"
     assert "--input" in raised.value.text
     assert EXPORT_REPO in raised.value.text
+    owner, _, name = EXPORT_REPO.partition("/")
+    assert f"gh api graphql --paginate --slurp -F owner={owner} -F name={name} " in (
+        raised.value.text
+    ), "the refusal carries the export command for the declared repository"
+    assert "templates/tickets/github-export.graphql" in raised.value.text
