@@ -256,6 +256,23 @@ def _plan(root: Path, path: str, document: object) -> ClaimsPlan:
     )
 
 
+def absent_paths(plan: ClaimsPlan, target: Path | str) -> dict[str, tuple[str, ...]]:
+    """Each claim's declared required paths that the checkout does not hold, by claim name.
+
+    The paths are already resolved from the plan's working directory, as `validation`
+    resolves them, so a plan whose relative `cwd` was written for the checkout root,
+    and now starts at the plan file's folder, names paths that are not there. A path
+    outside the checkout is the bounds check's to report, not this one's.
+    """
+
+    root = Path(target).resolve()
+    found = {
+        name: tuple(path for path in item.required_paths if path and not (root / path).exists())
+        for name, item in plan.claims.items()
+    }
+    return {name: paths for name, paths in found.items() if paths}
+
+
 def load_claims(target: Path | str, declaration: Declaration) -> ClaimsPlan:
     """The claims plan in the working tree, or `CLAIMS_UNREADABLE`."""
 

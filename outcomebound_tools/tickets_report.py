@@ -129,6 +129,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "BRIEF_THIN",
         "CLAIM_PLANNED",
         "CLAIM_READS_OUTSIDE_BOUNDS",
+        "CLAIM_PATH_ABSENT",
         "BOUNDS_WHOLE_REPOSITORY",
         "DISCOVERED_FROM_ABSENT",
     ),

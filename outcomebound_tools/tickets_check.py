@@ -35,7 +35,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from outcomebound_tools.tickets_bounds import covers
-from outcomebound_tools.tickets_claims import ClaimsPlan, load_claims
+from outcomebound_tools.tickets_claims import ClaimsPlan, absent_paths, load_claims
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_draft import draft_relations, read_draft
 from outcomebound_tools.tickets_graph import cycles
@@ -316,6 +316,27 @@ def _cwd_messages(plan: ClaimsPlan, target: Path) -> tuple[Message, ...]:
     )
 
 
+def _absent_messages(plan: ClaimsPlan, target: Path) -> Iterator[Message]:
+    """Each claim that declares a required path the checkout does not hold.
+
+    A run of that claim reads `UNVERIFIED`, so the plan is the place to say it first.
+    It is a fact about the plan and not about a ticket, so it is stamped with no id;
+    a ticket's own work may still add the path, so it is a warning.
+    """
+
+    for name, absent in absent_paths(plan, target).items():
+        yield message(
+            "CLAIM_PATH_ABSENT",
+            "",
+            f"the claim `{name}` in {plan.path} declares {', '.join(absent)}, resolved from "
+            f"its working directory {plan.cwd_resolved}, and the checkout holds none of "
+            "them there",
+            "point the plan's cwd at the folder the claim runs in (a relative cwd starts at "
+            "the plan file's folder, so from `.outcomebound/` the checkout root is `..`), "
+            "or add the path",
+        )
+
+
 # --- relations ---------------------------------------------------------------------
 
 
@@ -489,5 +510,9 @@ def check_loaded(
         input=given.source,
         counts=_counts(given),
         tickets=tuple(_judge(ticket, run) for ticket in judged),
-        messages=(*given.run_level, *_cwd_messages(claims, root)),
+        messages=(
+            *given.run_level,
+            *_cwd_messages(claims, root),
+            *_absent_messages(claims, root),
+        ),
     )

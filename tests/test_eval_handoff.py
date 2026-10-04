@@ -191,6 +191,22 @@ def test_the_seed_fails_the_ticket_and_the_reference_passes_every_claim(
 
 
 @pytest.mark.parametrize("base", BASES)
+def test_the_claims_plan_names_paths_its_working_directory_holds(
+    workspace: Callable[..., Path], base: str
+) -> None:
+    """The brief built from the workspace sends the implementer to the folder where the
+    project tests run: each required path of the plan's claims is there."""
+
+    from outcomebound_tools.tickets_claims import absent_paths, load_claims
+    from outcomebound_tools.tickets_declaration import load_declaration
+
+    target = workspace(f"handoff-{base}-ticket")
+    plan = load_claims(target, load_declaration(target))
+    assert plan.cwd_resolved == target.resolve()
+    assert absent_paths(plan, target) == {}
+
+
+@pytest.mark.parametrize("base", BASES)
 def test_a_write_outside_the_ticket_s_bounds_fails_only_the_bounds_claim(
     workspace: Callable[..., Path], base: str
 ) -> None:

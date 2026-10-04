@@ -698,6 +698,29 @@ def test_a_human_item_is_an_error_where_a_ticket_is_still_to_be_worked(
     assert codes(linted, "one") == ["VALUE_INVALID"]
 
 
+def test_a_required_path_absent_from_the_claims_working_directory_is_a_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A plan written for the checkout root with `"cwd": "."`, read from the plan file's
+    folder, names required paths that are not there: a run-level warning that names
+    the claim and the paths. The same plan with `".."` says nothing."""
+
+    found = {}
+    for cwd in (".", ".."):
+        root = checkout(tmp_path / cwd.replace(".", "d"), document("#1"), cwd=cwd)
+        write(root, "app.py", "")
+        plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+        plan["claims"][0]["required_paths"] = ["app.py"]
+        write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+        found[cwd] = report(root, capsys=capsys, expect=0)
+
+    assert run_codes(found["."]) == ["CLAIM_PATH_ABSENT"]
+    assert run_codes(found[".."]) == []
+    assert "CLAIM_PATH_ABSENT" not in codes(found["."], "#1"), "a fact about the plan"
+    [text] = said(found["."], "CLAIM_PATH_ABSENT")
+    assert f"`{CLAIM}`" in text and "declares .outcomebound/app.py," in text, text
+
+
 def test_claim_cwd_outside_is_an_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A plan whose working directory resolves out of the checkout is ERROR."""
 
