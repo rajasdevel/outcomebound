@@ -51,11 +51,24 @@ the decision itself changed, and then the design is edited in the same change.
 **Bounds** — `outcomebound_tools/` and `scripts/` import the standard library only. Pushing a
 release tag is an irreversible edge: a maintainer's act, or an agent's where a grant in
 `.outcomebound/tag-grants.json` covers it. Released changelog sections are preserved history.
+Text that leaves this machine (a commit message, a pull request, an issue, a changelog line, a
+design, a shipped file) is public: it names no project that uses OutcomeBound, no person, no
+local path, no id or role from a working file (a brief id, a review finding id, a stream, whose
+ruling it was), and no count or anecdote from a private run; a behaviour is described in general
+terms with a synthetic reproduction; a fact stands as fact only where a public source or a check
+you ran shows it, else `UNVERIFIED`. A change lands only through a pull request, as
+`CONTRIBUTING.md` "Agents and releases" says. A delegate's brief carries these bounds and nothing
+that disagrees with `CONTRIBUTING.md`.
 **Mechanisms** — `spec` when a wire format or block schema changes; `review` when a change alters
-what the kernel, the contract or the core skill tells a model to do; `broad-suite` once at each
-landing, never inside a delegate.
+what the kernel, the contract, a skill, a fragment or a template tells a model to do, and when a
+change adds an exemption to a gate or narrows what a gate counts (the floor, the instruction
+audit, the finish check, a tickets refusal): that review tries to pass the gate without the ruling
+it requires, and the pull request links it; `broad-suite` once at each landing, never inside a
+delegate.
 **Completion bar** — `make gate`, `make check` and `make test`, green at the tip that lands;
-at a release, `make release-check` passes on the release commit.
+at a release, `make release-check` passes on the release commit. `make check` holds the
+public-text claim, home paths, PASS or FAIL; `make scrub` adds the local list in `OB_SCRUB_LIST`,
+PASS or FAIL with it and `UNVERIFIED` without it, before a pull request opens.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
@@ -91,6 +104,7 @@ standard library only.
 | `make gate` | the standard-library boundary over `outcomebound_tools/` and `scripts/` |
 | `make check` | `make gate`, then this repository's quality floor against `OB_BASE` (default `origin/main`) |
 | `make test` | the suite, spread across CPUs |
+| `make scrub` | the public-text check plus the local list of private names `OB_SCRUB_LIST` names, over the tracked files and the commits since `OB_BASE`; `UNVERIFIED` without the list |
 | `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: `VERSION`, changelog, README and CI templates agree (and the tag, once named), the install is current, and gate, floor and suite pass |
 | `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `home` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |

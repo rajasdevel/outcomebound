@@ -55,6 +55,15 @@
       "min_version": "3.10",
       "argv": ["python3", "scripts/check-structure.py"],
       "parser": "exit"
+    },
+    {
+      "name": "public-text",
+      "mode": "gate",
+      "tool": "python3",
+      "min_version": "3.10",
+      "argv": ["python3", "scripts/check-public-text.py", "--range", "{range}"],
+      "argv_without_base": ["python3", "scripts/check-public-text.py"],
+      "parser": "exit"
     }
   ]
 }
