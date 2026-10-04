@@ -1344,9 +1344,12 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
             "sha256": sha(finish_check.canonical(ours)),
         }
     ]
+    assert fire(target, ours["hooks"][0]["command"]) == {}
+    (target / "changed.txt").write_text("a change\n", encoding="utf-8")
     assert fire(target, ours["hooks"][0]["command"])["systemMessage"].startswith(
         "finish-check PASS: true, "
     )
+    (target / "changed.txt").unlink()
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and states(out)[f"{path} (finish-check)"] == "current"
 
@@ -1456,6 +1459,7 @@ def test_finish_timeout_is_written_kept_and_changed_in_the_one_entry(
         "timeout": 1200,
     }
     assert [record["timeout"] for record in hook_records(target)] == [1200]
+    (target / "changed.txt").write_text("a change\n", encoding="utf-8")
     assert fire(target, stop()[0]["hooks"][0]["command"])["systemMessage"].startswith(
         "finish-check PASS: true, "
     )
@@ -1542,6 +1546,77 @@ def test_a_mixed_selection_installs_where_a_row_has_one_and_names_the_rest(
         accept = f"the one-time accept: {table[name]['finish_hook']['accept']}, and `outcomebound`"
         assert accept in out and "on the harness process's PATH" in out
     assert finish_check.CAUTION["codex"] in out
+
+
+def test_an_install_measures_done_once_and_records_the_failures_there_now(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install with the finish check does not run Done once and report its time and
+    each failure, if it does not keep the failures as known, if a dry run or a later install that
+    keeps the record runs Done again, or if --finish-check does not measure it again."""
+
+    count = tmp_path / "count"
+    failing = f"echo run >> {count}; exit 3"
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code", "--done", failing, "--done", "true", "--finish-check")
+
+    code, out, _ = run(capsys, str(target), *arguments, "--dry-run")
+    assert code == 0 and "a dry run does not run Done" in out and not count.exists()
+
+    code, out, err = run(capsys, str(target), *arguments)
+    assert code == 0, err
+    assert f"known    finish-check: `{failing}` failed, exit 3 after " in out
+    assert "PASS     finish-check: `true` in " in out
+    assert "measured finish-check: Done ran once in " in out
+    assert "the hook gives it 570 s of its 600 s timeout" in out
+    digest = finish_check.done_digest([failing, "true"])
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.failing == {failing: 3}
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+
+    code, out, _ = run(capsys, str(target), "--fragments", "")
+    assert code == 0 and "running " not in out
+    assert "finish-check: Done was measured on " in out and f"`{failing}` (exit 3)" in out
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert run(capsys, str(target), "--finish-check")[0] == 0
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a Done slower than the hook allows is installed without saying so, or if the
+    install stops it at the hook's limit instead of measuring it to its end."""
+
+    target = repo(tmp_path / "t")
+    timeout = finish_check.MARGIN_SECONDS + 1
+    arguments = ("--harness", "codex", "--done", "sleep 2", "--finish-check")
+
+    code, out, err = run(capsys, str(target), *arguments, "--finish-timeout", str(timeout))
+
+    assert code == 0, err
+    assert "PASS     finish-check: `sleep 2` in 2 s" in out
+    assert "UNVERIFIED finish-check: Done took 2 s, longer than the 1 s" in out
+    assert f"--finish-timeout <seconds>` with more than {3 + finish_check.MARGIN_SECONDS}" in out
+    assert "UNVERIFIED finish-check: Done took" in run(capsys, str(target))[1]
+
+
+def test_a_changed_codex_entry_names_the_new_trust_in_hooks(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install that changes the codex entry, which Codex then skips until it is
+    trusted again, does not say so, or says so where the entry did not change."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code,codex", "--done", "true", "--finish-check")
+    again = finish_check.REVIEW_AGAIN["codex"]
+
+    assert again not in run(capsys, str(target), *arguments)[1]
+    assert again not in run(capsys, str(target), "--fragments", "")[1]
+    out = run(capsys, str(target), "--finish-timeout", "900")[1]
+    assert "action   codex finish-check: the entry changed" in out and again in out
+    assert "claude-code finish-check: the entry changed" not in out
+    assert again in run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
 
 
 # --- the writer -------------------------------------------------------------------

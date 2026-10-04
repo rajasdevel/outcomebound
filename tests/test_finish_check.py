@@ -568,3 +568,138 @@ def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str]) -> 
     )
 
     assert done.returncode == 1 and done.stdout == b""
+
+
+# --- known failures: what failed when adopt measured Done -------------------------
+
+
+def failing(root: Path, digest: str) -> dict[str, int]:
+    """The known failures kept for `root` and this Done digest; a record must be kept."""
+
+    record = finish_check.known_record(root, digest)
+    assert record is not None
+    return record.failing
+
+
+def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path: Path) -> None:
+    """Breaks if a failure that was there when Done was measured holds every changed tree, if a
+    command after it is skipped, or if a new failure in another command does not hold, with its
+    own output shown and the known one named as such."""
+
+    broken = tmp_path / "broken"
+    done = ["echo old; exit 1", f"test ! -e {broken} || {{ echo new; exit 4; }}"]
+    root, digest = target(tmp_path / "t", done)
+    measured = finish_check.measure(root, done, 600)
+    assert measured.kept and [r.verdict for r in measured.results] == ["FAIL", "PASS"]
+
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    verdict = hook("codex", digest, root)[1]
+    assert list(verdict) == ["systemMessage"]
+    message = verdict["systemMessage"]
+    assert message.startswith("finish-check FAIL, known: ")
+    assert "(known, not held)" in message and f"PASS {done[1]}" in message
+
+    broken.write_text("", encoding="utf-8")
+    (root / "src.txt").write_text("three\n", encoding="utf-8")
+    reason = hook("codex", digest, root)[1]["reason"]
+    assert "FAIL echo old; exit 1: exit 1 after " in reason and "(known, not held)" in reason
+    assert f"FAIL {done[1]}: exit 4 after " in reason
+    assert "A command marked known failed the same way before your change" in reason
+    assert reason.endswith("```output\nnew\n```")
+
+
+def test_a_known_command_failing_with_another_exit_code_holds(tmp_path: Path) -> None:
+    """Breaks if a command known to fail hides a different failure of it, read by exit code."""
+
+    code = tmp_path / "code"
+    code.write_text("1", encoding="utf-8")
+    done = [f'exit "$(cat {code})"']
+    root, digest = target(tmp_path / "t", done)
+    finish_check.measure(root, done, 600)
+
+    code.write_text("2", encoding="utf-8")
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    assert hook("codex", digest, root)[1]["decision"] == "block"
+
+
+def test_a_known_failure_that_passes_leaves_the_record_and_holds_when_it_fails_again(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a known failure, once fixed, can break again without a hold: the record would
+    then hide a failure the change caused."""
+
+    flag = tmp_path / "flag"
+    flag.write_text("", encoding="utf-8")
+    done = [f"test ! -e {flag}"]
+    root, digest = target(tmp_path / "t", done)
+    finish_check.measure(root, done, 600)
+    assert failing(root, digest) == {done[0]: 1}
+
+    flag.unlink()
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    assert hook("codex", digest, root)[1]["systemMessage"].startswith("finish-check PASS: ")
+    assert failing(root, digest) == {}
+
+    flag.write_text("", encoding="utf-8")
+    (root / "src.txt").write_text("three\n", encoding="utf-8")
+    assert hook("codex", digest, root)[1]["decision"] == "block"
+
+
+def test_known_failures_are_shared_by_worktrees_and_kept_for_one_done_list(tmp_path: Path) -> None:
+    """Breaks if a worktree of the repository holds on a failure measured in its main checkout,
+    or if the record applies to a Done list it was not measured for."""
+
+    done = ["echo old; exit 1"]
+    root, digest = target(tmp_path / "t", done)
+    finish_check.measure(root, done, 600)
+    tree = tmp_path / "wt"
+    subprocess.run([GIT, "-C", str(root), "worktree", "add", "-q", str(tree)], check=True)
+
+    (tree / "src.txt").write_text("two\n", encoding="utf-8")
+    message = hook("codex", digest, tree)[1]["systemMessage"]
+    assert message.startswith("finish-check FAIL, known: ")
+    assert finish_check.known_record(root, finish_check.done_digest(["make test"])) is None
+
+
+def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the install's one run stops at a failure, keeps a command the environment could
+    not run as a known failure, or makes the first turn end on the tree it measured run Done
+    again."""
+
+    count = tmp_path / "count"
+    done = [f"echo run >> {count}; exit 2", "true"]
+    root, digest = target(tmp_path / "t", done)
+
+    measured = finish_check.measure(root, done, 600)
+
+    assert [r.verdict for r in measured.results] == ["FAIL", "PASS"]
+    assert failing(root, digest) == {done[0]: 2}
+    message = hook("codex", digest, root)[1]["systemMessage"]
+    assert message.startswith("finish-check FAIL, known: ")
+    assert "Not run again: the working tree is unchanged" in message
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+
+    other = ["no-such-tool-here", "exit 3"]
+    root, digest = target(tmp_path / "u", other)
+    measured = finish_check.measure(root, other, 600)
+    assert [r.verdict for r in measured.results] == ["UNVERIFIED", "FAIL"]
+    assert failing(root, digest) == {"exit 3": 3}
+    assert hook("codex", digest, root)[1]["systemMessage"].startswith(
+        "finish-check UNVERIFIED: `no-such-tool-here` could not run"
+    )
+
+
+def test_a_known_record_is_read_only_in_its_own_shape() -> None:
+    """Breaks if a damaged record of known failures is trusted, which could hide a failure."""
+
+    good = finish_check.Known("a" * 64, "", "2026-10-04", 1.0, {"make test": 2})
+    assert finish_check.parse_known(good.text()) == good
+    for text in (
+        "",
+        "not json",
+        json.dumps({**json.loads(good.text()), "failing": {"make test": "2"}}),
+        json.dumps({**json.loads(good.text()), "done": "short"}),
+    ):
+        assert finish_check.parse_known(text) is None
