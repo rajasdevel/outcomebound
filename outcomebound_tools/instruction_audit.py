@@ -47,7 +47,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import adapters, facts, finish_check, identity
+from outcomebound_tools import adapters, facts, finish_check, identity, walk
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
@@ -476,15 +476,11 @@ def _walk(root: Path, scope: _Scope, listed: Sequence[str] | None) -> list[str]:
     exactly is looked up too, ignored or under a linked directory."""
 
     found: list[str] = [path for path in listed or () if scope.wants(path)]
-    for directory, dirnames, filenames in os.walk(root) if listed is None else ():
-        here = Path(directory)
-        dirnames[:] = sorted(
-            name for name in dirnames if name != ".git" and not (here / name / ".git").exists()
-        )
+    for folder in walk.folders(root) if listed is None else ():
         found.extend(
             relative
-            for name in sorted(filenames)
-            if scope.wants(relative := (here / name).relative_to(root).as_posix())
+            for name in folder.files
+            if scope.wants(relative := (folder.path / name).relative_to(root).as_posix())
         )
     exact = [path for path in sorted(scope.exact) if scope.wants(path)]
     return sorted(path for path in {*found, *exact} if os.path.lexists(root / path))
@@ -492,27 +488,23 @@ def _walk(root: Path, scope: _Scope, listed: Sequence[str] | None) -> list[str]:
 
 def _notes(root: Path) -> list[str]:
     """Every file in the note folders, nested repositories and `.git` not entered; a folder
-    reached through a link, at the top or below, is listed itself, so it reads UNVERIFIED
-    unopened."""
+    reached through a link, at the top or below, or one that cannot be listed, is listed
+    itself, so it reads UNVERIFIED unopened."""
 
     found: list[str] = []
     for folder in NOTES:
-        if not (root / folder).is_dir():
+        if not os.path.isdir(root / folder):
             continue
-        if any((root / part).is_symlink() for part in (".agents", folder)):
+        if any(os.path.islink(root / part) for part in (".agents", folder)):
             found.append(folder)
             continue
-        for directory, dirnames, filenames in os.walk(root / folder):
-            here = Path(directory)
-            linked = sorted(name for name in dirnames if (here / name).is_symlink())
-            dirnames[:] = sorted(
-                name
-                for name in dirnames
-                if name not in linked and name != ".git" and not (here / name / ".git").exists()
-            )
+        unreadable: list[Path] = []
+        for entered in walk.folders(root / folder, unreadable=unreadable):
             found.extend(
-                (here / name).relative_to(root).as_posix() for name in [*linked, *filenames]
+                (entered.path / name).relative_to(root).as_posix()
+                for name in [*entered.links, *entered.files]
             )
+        found.extend(path.relative_to(root).as_posix() for path in unreadable)
     return found
 
 

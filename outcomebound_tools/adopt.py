@@ -43,7 +43,7 @@ import shlex
 import signal
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Sequence, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -59,6 +59,7 @@ from outcomebound_tools import (
     identity,
     instruction_audit,
     paths,
+    walk,
 )
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 from outcomebound_tools.tickets_claims import load_claims, placement
@@ -1344,20 +1345,16 @@ def _chain_names(row: dict[str, Any]) -> tuple[str, ...]:
     return tuple(sorted(names, key=lambda name: ".override." not in name))
 
 
-def _instruction_folders(target: Path, names: Sequence[str]) -> list[str]:
-    """The target's root and each folder under it holding one of `names`; `.git` and nested
-    repositories are not entered, and no link is followed."""
+def _instruction_folders(target: Path, names: Sequence[str], ignored: Set[str]) -> list[str]:
+    """The target's root and each folder under it holding one of `names`; `.git`, nested
+    repositories and the `ignored` folders are not entered, no link is followed, and a folder
+    that cannot be listed is passed over."""
 
-    found = ["."]
-    for directory, dirnames, filenames in os.walk(target):
-        here = Path(directory)
-        dirnames[:] = sorted(
-            name for name in dirnames if name != ".git" and not (here / name / ".git").exists()
-        )
-        relative = here.relative_to(target).as_posix()
-        if relative != "." and any(name in filenames for name in names):
-            found.append(relative)
-    return found
+    return ["."] + [
+        folder.relative
+        for folder in walk.folders(target, skip=ignored)
+        if folder.relative != "." and any(name in folder.files for name in names)
+    ]
 
 
 def nested_bytes(run: Run, table: dict[str, Any], found: Sequence[Route]) -> Notes:
@@ -1365,7 +1362,8 @@ def nested_bytes(run: Run, table: dict[str, Any], found: Sequence[Route]) -> Not
     harness's row records; a warning only, it refuses nothing. Codex stops loading at
     `project_doc_max_bytes`, 32 KiB by default, and cuts the file that crosses it, the deepest
     one first lost (research, harnesses/codex.md section 2). The root AGENTS.md is measured as
-    this install leaves it."""
+    this install leaves it. A folder Git ignores is not measured: it is no part of what another
+    clone gets, as discovery and `instructions check` read it too."""
 
     def size(relative: str) -> int:
         host = run.hosts.get(relative)
@@ -1377,13 +1375,16 @@ def nested_bytes(run: Run, table: dict[str, Any], found: Sequence[Route]) -> Not
             return 0
 
     notes: Notes = []
+    ignored: Set[str] | None = None
     for route in found:
         row = table.get(route.harness)
         cap = _byte_cap(row)
         names = _chain_names(row) if isinstance(row, dict) else ()
         if cap is None or not names:
             continue
-        for folder in _instruction_folders(run.target, names):
+        if ignored is None:
+            ignored = (discovery.git_ignored(run.target) or (frozenset(), frozenset()))[0]
+        for folder in _instruction_folders(run.target, names, ignored):
             parts = [] if folder == "." else folder.split("/")
             loaded: list[tuple[str, int]] = []
             for depth in range(len(parts) + 1):

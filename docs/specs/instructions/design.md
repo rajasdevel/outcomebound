@@ -54,7 +54,9 @@ files, imports, project override files, rules and skill directories, and configu
 work tree they come from what Git tracks or does not ignore, plus each path a row names exactly,
 plus every file in `.agents/handoffs/` and `.agents/shared-memory/`; a target Git cannot list,
 or ignores, is walked whole, and the report says which. Nested repositories and `.git` are not
-entered.
+entered, and no link is followed. A folder that cannot be listed is not entered and stops
+nothing: in a walk of the whole target it is passed over, as Git's own listing passes it over;
+in a note folder it is listed itself, so it reads UNVERIFIED unopened, as a linked folder does.
 
 ## Edges
 

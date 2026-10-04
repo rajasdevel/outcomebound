@@ -15,7 +15,8 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 A patch release. adopt and `tickets check` no longer tell a person to change the `cwd` of a claims
 plan that already runs its claims at the checkout root when a claim declares a path that a ticket
-will add.
+will add. adopt and `instructions check` no longer stop on a folder that the user cannot read, and
+adopt no longer gives byte-cap warnings for folders that Git ignores.
 
 ### Fixed
 
@@ -26,6 +27,19 @@ will add.
   checkout holds the path from the checkout root but not from the plan's working directory, which
   shows that the `cwd` is wrong. A path that the checkout holds in neither place is a planned path.
   Neither command warns about it, and a run of that claim reads `UNVERIFIED` until the path exists.
+- On Python 3.10 to 3.13, adopt and `instructions check` stopped with a permission error when a
+  folder under the target was not readable, for example a folder with mode 000. adopt stopped
+  with `adopt: [Errno 13] Permission denied: '<folder>/.git'` in an install and in a dry run.
+  `instructions check` stopped in a target outside Git, and in a target whose `.agents/handoffs/`
+  or `.agents/shared-memory/` held such a folder. Now each walk passes over a folder that it
+  cannot read. In a note folder, `instructions check` lists that folder, and it reads
+  `UNVERIFIED`, because no check read the notes in it. These walks now go through one helper, and
+  a test keeps a new walk of a target from going around it.
+- adopt gave a byte-cap warning for each folder under the target that held an `AGENTS.md` past
+  the cap, also in folders that Git ignores. A project that keeps scratch copies of itself in an
+  ignored folder got one warning for each copy. Now adopt does not measure a folder that Git
+  ignores, as discovery and `instructions check` already do not read it. Another clone does not
+  get such a folder.
 
 ## [1.1.1] - 2026-10-04
 
