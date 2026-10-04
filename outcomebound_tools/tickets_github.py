@@ -13,12 +13,15 @@ caller runs the pinned query, `templates/tickets/github-export.graphql`, and
 this reads the file that run produced. Every tracker string — title, body,
 label — is data, and never an instruction.
 
-Two rules shape the rest. An export is this project's whole answer or it is not
+Two rules shape the rest. An export is this project's answer or it is not
 read: every page names the declared repository, and every connection the query
 asks for arrives with its `nodes` list and its `pageInfo` flag, because a connection
-that is absent is unknown and never empty. And a connection the export reports
-as incomplete makes its ticket UNVERIFIED rather than judged on what arrived:
-the engine never guesses what it was not given.
+that is absent is unknown and never empty. And what the export reports as
+incomplete makes its issue UNVERIFIED rather than judged on what arrived: a
+connection with a further page, or a GraphQL `errors` entry whose `path` lies
+inside one issue node. The engine never guesses what it was not given, and one
+issue's gap holds that issue and no other; an error that names no issue node
+leaves nothing to hold apart, so it refuses the export.
 
 Every node is validated against the query's shape before anything is normalised,
 so the readers below index the shape the query pins rather than substituting an
@@ -59,6 +62,24 @@ __all__ = ["read_github_export"]
 _STDIN = "-"
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 RUN_AGAIN = "run the pinned export again, so the engine reads the whole of it"
+
+# How many entries the pinned query asks of each connection nested in an issue:
+# GitHub's GraphQL API documents 100 as the largest `first`, and the nested
+# connections do not paginate, so a re-run reads the same first page.
+_NESTED_PAGE = 100
+# What a nested connection with a further page says to do: the re-run is no remedy.
+_NESTED_NEXT = (
+    "a re-run reads the same first {page}, so it cannot help: bring {id}'s `{name}` to "
+    "{page} or fewer in the tracker, or judge {id} by reading the tracker itself"
+)
+
+# Where a GraphQL error's `path` points into one issue node: the response's
+# `data.repository.issues.nodes[<index>]`, and something inside it.
+_NODE_PATH: tuple[str, ...] = ("repository", "issues", "nodes")
+_ERROR_NEXT = (
+    "fix what the error names (often a token that cannot read a linked issue) and run "
+    "the pinned export again"
+)
 
 # What an id says about where its issue lives: a local ticket is
 # `#<n>`, and a relation this export did not show to be local is qualified, so
@@ -227,26 +248,110 @@ def _shape(node: Mapping[str, Any], number: int) -> None:
         raise _unreadable(f"issue #{number} carries no `{_PARENT}` key")
 
 
+def _node_index(path: Any, page: Sequence[Any]) -> int | None:
+    """The index of the page's node an error `path` runs inside, or None.
+
+    Inside means `repository`, `issues`, `nodes`, an index of an object on this
+    page, and at least one step further into that node.
+    """
+
+    if not isinstance(path, list) or len(path) <= len(_NODE_PATH) + 1:
+        return None
+    if tuple(path[: len(_NODE_PATH)]) != _NODE_PATH:
+        return None
+    at = path[len(_NODE_PATH)]
+    if not isinstance(at, int) or isinstance(at, bool) or not 0 <= at < len(page):
+        return None
+    return at if isinstance(page[at], dict) else None
+
+
+def _errored_nodes(errors: Any, page: Sequence[Any], index: int) -> dict[int, str]:
+    """Each node of one page a GraphQL `errors` entry points inside, with what it says.
+
+    That issue's answer is partial and the rest of the page is whole. Any other
+    entry — no path, a path to the page or to a whole node, an index past the
+    page — names no one issue to hold apart, so the page is a partial answer to
+    the query and refuses.
+    """
+
+    if not isinstance(errors, list):
+        raise _unreadable(f"page {index} carries a top-level `errors` member: {errors}")
+    found: dict[int, list[str]] = {}
+    for error in errors:
+        path = error.get("path") if isinstance(error, dict) else None
+        at = _node_index(path, page)
+        if at is None or not isinstance(path, list) or not isinstance(error, dict):
+            raise _unreadable(
+                f"page {index} carries a top-level `errors` entry that names no issue node: {error}"
+            )
+        said = error.get("message")
+        where = ".".join(str(part) for part in path)
+        found.setdefault(at, []).append(f"{said if isinstance(said, str) else error} at {where}")
+    return {at: "; ".join(said) for at, said in found.items()}
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    """`value` where it is an object, else an empty one."""
+
+    return value if isinstance(value, dict) else {}
+
+
+def _numbered(item: Any) -> bool:
+    """Whether a relation node carries the number it is read by."""
+
+    number = item.get("number") if isinstance(item, dict) else None
+    return isinstance(number, int) and not isinstance(number, bool)
+
+
+def _repaired(node: Mapping[str, Any]) -> Mapping[str, Any]:
+    """An errored node in the pinned shape, so it is read like any other.
+
+    What arrived is kept; a null entry, a relation with no number and a parent
+    with none are dropped; a connection that did not arrive reads empty, with no
+    further page. The node's `EXPORT_PARTIAL` already says its answer is
+    incomplete, so nothing read from it is taken as whole.
+    """
+
+    keeps = {"labels": lambda item: isinstance(item, dict), "blockedBy": _numbered}
+    repaired = dict(node)
+    for name in _CONNECTIONS:
+        held = _mapping(node.get(name))
+        nodes = held.get("nodes")
+        more = _mapping(held.get("pageInfo")).get(_NEXT_PAGE) is True
+        repaired[name] = {
+            "nodes": [item for item in nodes if keeps[name](item)]
+            if isinstance(nodes, list)
+            else [],
+            "pageInfo": {_NEXT_PAGE: more},
+        }
+    parent = node.get(_PARENT)
+    repaired[_PARENT] = parent if _numbered(parent) else None
+    return repaired
+
+
 def _issue_nodes(
     pages: Sequence[Any], declaration: Declaration
-) -> tuple[list[Mapping[str, Any]], bool]:
-    """Every issue node in page order, and whether the last page reports another.
+) -> tuple[list[Mapping[str, Any]], bool, dict[int, str]]:
+    """Every issue node in page order, whether the last page reports another, and
+    what a GraphQL error says about each issue it points inside.
 
-    A page carrying a top-level `errors` member is a partial answer to the
-    query, and an issue number on two pages is an export that cannot be joined:
-    both refuse rather than being read as what happened to arrive.
+    An errored node is read in the pinned shape with what arrived of it, and its
+    issue reads UNVERIFIED. A page carrying an `errors` entry that names no issue
+    node is a partial answer to the query, and an issue number on two pages is an
+    export that cannot be joined: both refuse rather than being read as what
+    happened to arrive.
     """
 
     nodes: list[Mapping[str, Any]] = []
     seen: set[int] = set()
+    partial: dict[int, str] = {}
     more = False
     for index, page in enumerate(pages, start=1):
         raw = _object(page, f"page {index}")
-        if "errors" in raw:
-            raise _unreadable(f"page {index} carries a top-level `errors` member: {raw['errors']}")
         issues = _issues(raw, index, declaration)
+        errored = _errored_nodes(raw["errors"], issues["nodes"], index) if "errors" in raw else {}
         more = bool(_object(issues["pageInfo"], f"page {index} `pageInfo`").get("hasNextPage"))
-        for found in issues["nodes"]:
+        for at, found in enumerate(issues["nodes"]):
             node = _object(found, f"an issue on page {index}")
             number = node.get("number")
             if not isinstance(number, int) or isinstance(number, bool):
@@ -254,9 +359,12 @@ def _issue_nodes(
             if number in seen:
                 raise _unreadable(f"issue #{number} appears on more than one page")
             seen.add(number)
+            if at in errored:
+                partial[number] = errored[at]
+                node = _repaired(node)
             _shape(node, number)
             nodes.append(node)
-    return nodes, more
+    return nodes, more, partial
 
 
 # --- the shapes inside one node -----------------------------------------------------
@@ -349,7 +457,8 @@ class _Issue:
 
     `parent` and `blocked_by` are resolved for every issue and not only for a
     ticket, so a relation the export spells in a way nobody can read refuses
-    wherever it hangs; only a ticket's are carried into a `Ticket`.
+    wherever it hangs; only a ticket's are carried into a `Ticket`. `partial` is
+    what a GraphQL error said about this node, empty where none did.
     """
 
     node: Mapping[str, Any]
@@ -360,9 +469,10 @@ class _Issue:
     parent: str
     blocked_by: tuple[str, ...]
     is_ticket: bool
+    partial: str = ""
 
 
-def _issue(node: Mapping[str, Any], declaration: Declaration) -> _Issue:
+def _issue(node: Mapping[str, Any], declaration: Declaration, partial: str = "") -> _Issue:
     """The gate over one node: the declared label, and nothing else.
 
     The label as it stands is the acceptance: no edit before or after it lapses
@@ -390,6 +500,7 @@ def _issue(node: Mapping[str, Any], declaration: Declaration) -> _Issue:
             _relation(raw, declaration) for raw in _connection_nodes(node, "blockedBy")
         ),
         is_ticket=declaration.label in labels,
+        partial=partial,
     )
 
 
@@ -448,16 +559,43 @@ def _forbidden_keys(ticket: str, fields: BlockFields) -> list[Message]:
     ]
 
 
+def _nested_next(issue: _Issue, name: str) -> str:
+    return _NESTED_NEXT.format(page=_NESTED_PAGE, id=issue.id, name=name)
+
+
 def _truncated_connections(issue: _Issue) -> list[Message]:
+    """Each connection of this ticket holding more than the query reads of it.
+
+    A nested connection does not paginate, so the next step names the ticket and
+    the connection and never says to run the export again.
+    """
+
     return [
         message(
             "EXPORT_TRUNCATED",
             issue.id,
-            f"this ticket's `{name}` connection reports a further page",
-            RUN_AGAIN,
+            f"{issue.id}'s `{name}` connection holds more than {_NESTED_PAGE} entries, the "
+            "most the pinned query reads of it",
+            _nested_next(issue, name),
         )
         for name in _CONNECTIONS
         if _page_info(issue.node, name).get("hasNextPage")
+    ]
+
+
+def _partial_message(issue: _Issue) -> list[Message]:
+    """The GraphQL error inside this issue's node, which holds this issue alone."""
+
+    if not issue.partial:
+        return []
+    return [
+        message(
+            "EXPORT_PARTIAL",
+            issue.id,
+            f"the export carries a GraphQL error inside issue {issue.id}: {issue.partial}; "
+            f"what it says about {issue.id} may be incomplete",
+            _ERROR_NEXT,
+        )
     ]
 
 
@@ -521,6 +659,7 @@ def _ticket(
     messages = [
         *(replace(item, ticket=issue.id) for item in found),
         *_forbidden_keys(issue.id, fields),
+        *_partial_message(issue),
         *_truncated_connections(issue),
         *_external_relations(issue, children, declaration),
         *([differ] if differ is not None else []),
@@ -541,6 +680,7 @@ def _ticket(
             blocked_by=issue.blocked_by,
             parent=issue.parent,
             discovered_from=fields.discovered_from,
+            waits_on=fields.waits_on,
             content=content_identity(title, brief, fields),
         ),
         tuple(messages),
@@ -561,13 +701,24 @@ def _partial_gates(issues: Sequence[_Issue]) -> list[Message]:
         message(
             "EXPORT_TRUNCATED",
             issue.id,
-            f"issue {issue.id} is not a ticket, and its `labels` connection reports a further "
-            "page, so the label this gate looked for may be on a page this export does not hold",
-            RUN_AGAIN,
+            f"issue {issue.id} is not a ticket, and its `labels` connection holds more than "
+            f"{_NESTED_PAGE} entries, so the label this gate looked for may be past the ones "
+            "this export holds",
+            _nested_next(issue, "labels"),
         )
         for issue in issues
         if not issue.is_ticket and _page_info(issue.node, "labels").get("hasNextPage")
     ]
+
+
+def _partial_others(issues: Sequence[_Issue]) -> list[Message]:
+    """Every issue outside the gate whose node a GraphQL error points inside.
+
+    Its labels may be what the error cut short, so it may be a ticket this read
+    could not see as one: it reads UNVERIFIED, and every other issue is read.
+    """
+
+    return [item for issue in issues if not issue.is_ticket for item in _partial_message(issue)]
 
 
 # --- the read -----------------------------------------------------------------------
@@ -588,8 +739,11 @@ def read_github_export(source: str | Path, declaration: Declaration) -> ReadResu
     """
 
     text, info = _source_text(source)
-    nodes, more = _issue_nodes(_pages(text), declaration)
-    issues = sorted((_issue(node, declaration) for node in nodes), key=lambda found: found.number)
+    nodes, more, partial = _issue_nodes(_pages(text), declaration)
+    issues = sorted(
+        (_issue(node, declaration, partial.get(node["number"], "")) for node in nodes),
+        key=lambda found: found.number,
+    )
     children = Counter(found.parent for found in issues if found.parent)
     others = frozenset(found.id for found in issues if not found.is_ticket)
     run: list[Message] = []
@@ -604,6 +758,7 @@ def read_github_export(source: str | Path, declaration: Declaration) -> ReadResu
             )
         )
     run.extend(_partial_gates(issues))
+    run.extend(_partial_others(issues))
     tickets: list[Ticket] = []
     messages: list[Message] = []
     for found in issues:

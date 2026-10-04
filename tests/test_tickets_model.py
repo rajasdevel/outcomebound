@@ -22,6 +22,7 @@ from outcomebound_tools.tickets_model import (
     BLOCK_VERSIONS,
     LIFECYCLE_KEYS,
     LIST_KEYS,
+    WAIT_KEYS,
     BlockFields,
     DoneWhen,
     InputInfo,
@@ -247,6 +248,23 @@ def test_lifecycle_keys_are_read_whatever_the_store() -> None:
     assert _fields({"blocked-by": ""}).blocked_by == ()
     assert "status" not in _fields().present
     assert _codes(_block({"status": "started"})) == ["VALUE_INVALID"]
+
+
+def test_waits_on_names_decision_briefs_and_moves_no_identity() -> None:
+    """`waits-on` reads one or more brief ids in written order, refuses anything that is
+    not one, and is no part of the decision content: answering a brief and dropping its
+    id leaves the identity where it was."""
+
+    assert WAIT_KEYS == ("waits-on",)
+    assert _fields({"waits-on": "D82"}).waits_on == ("D82",)
+    assert _fields({"waits-on": "D82, brief-3"}).waits_on == ("D82", "brief-3")
+    assert _fields().waits_on == ()
+    for offending in ("", "#41", "D82 D83", "3D"):
+        fields, messages = parse_block(_block({"waits-on": offending}))
+        assert [item.code for item in messages] == ["VALUE_INVALID"], offending
+        assert "waits-on" in messages[0].text and fields.waits_on == (), offending
+    assert _codes(_block({"waits-on": ["D82"]})) == ["VALUE_INVALID"]
+    assert _identity(keys={"waits-on": "D82"}) == _identity()
 
 
 @pytest.mark.parametrize("key", ["discovered-from", "parent"])

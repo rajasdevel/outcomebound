@@ -3,8 +3,9 @@
 What this module decides: the brief's layout — which section follows
 which, how a check line reads for each claim, what an empty brief, an
 absent `reads` and an empty `bounds` say, where a project's workflow
-document is named, and which refusals stop a compilation. It decides too
-that `size:` counts the finished document, that line included.
+document is named, how a ticket that waits on a decision brief says so, and
+which refusals stop a compilation. The brief carries no size figure: no cutoff
+applies to it, and a figure in a hand-off reads as one.
 
 What it does not decide: anything it names. Which heading a `reads` entry names
 is `tickets_links`'; a claim's command, working directory and timeout are
@@ -69,12 +70,12 @@ _TICKET = "## Ticket"
 _READ = "## Read"
 _CHECKS = "## Checks"
 _BOUNDS = "## Bounds"
+_WAITS = "## Waits on"
 _STEPS = "## Steps"
 _LANDS = "## How work lands"
 _USING = "## Using this brief"
 
-# The header lines. `size:` is rendered twice — see `_document`.
-_SIZE = "size: {lines} lines"
+# The header's tree word.
 _TREE: Mapping[bool, str] = {True: "clean", False: "dirty"}
 
 # What each section says where the ticket gives it nothing. An empty section
@@ -85,22 +86,31 @@ _NO_READS = "This ticket cites no section to read."
 _NO_BOUNDS = "This ticket grants no path, so nothing here says where the work may go."
 _NO_WORKFLOW = (
     f"No {_WORKFLOW} is at the root of this checkout, so how work lands is not written "
-    "down here; ask the user how it lands before opening anything."
+    "down here; commit on your own branch and say in the handover how it should land."
+)
+
+# What a ticket that waits on a person's decision brief says, beside the ids.
+_WAITS_BODY = (
+    "This ticket's work waits on the decision brief(s) {named}, which a person has yet to "
+    "answer. Do every part the answer does not decide, then hand over naming what waits on it."
 )
 
 # The brief's own closing paragraph, wrapped as it is printed.
 _USING_BODY = (
     "Read the sections named above, and source as needed in and around the bounds. Decide\n"
     "nothing the ticket or those sections already decide. When a stop under Limits is met,\n"
-    "stop and ask. Hand the work over saying what changed, each check's verdict, what you\n"
-    "decided beyond the ticket, and the follow-ups you found."
+    "finish every part it does not block, then hand over naming the stop and what it waits\n"
+    "on. Hand the work over saying what changed, each check's verdict, what you decided\n"
+    "beyond the ticket, and the follow-ups you found."
 )
 
 # The two check lines, and a third: a claim the plan defines with nothing
 # this engine could run.
 _PLANNED = "planned: the plan does not define it yet; this ticket's work adds it"
 _UNRUNNABLE = "the plan defines it with no command this engine could run"
-_COMMAND_LINE = "`{command}` in `{cwd}`, timeout {timeout}s"
+_COMMAND_LINE = "`{command}` in `{cwd}`, {timeout}"
+_TIMEOUT = "timeout {seconds}s"
+_NO_TIMEOUT = "no timeout"
 
 # `--detail full` adds `## Steps` after `## Bounds`;
 # `plain`, the default, is the document without it, byte for byte.
@@ -112,9 +122,7 @@ class _Compiled:
     """Everything the document is rendered from, read before a line is written.
 
     Gathering and rendering are kept apart so that the rendering is a pure
-    function of this value: it is run twice, once to count the lines and once
-    with the count in place, and two runs that read the checkout twice could
-    disagree about it.
+    function of this value, and two compilations at one commit are the same bytes.
     """
 
     ticket: Ticket
@@ -376,13 +384,12 @@ def _title(ticket: Ticket) -> str:
     return _terminated(f"# Brief — {named}")
 
 
-def _header(compiled: _Compiled, size: str) -> str:
+def _header(compiled: _Compiled) -> str:
     """The header lines, in order."""
 
     lines = (
         f"compiled-at: {compiled.commit} ({_TREE[compiled.clean]})",
         f"content: {compiled.ticket.content}",
-        size,
     )
     return "".join(_terminated(line) for line in lines)
 
@@ -397,13 +404,16 @@ def _read(compiled: _Compiled) -> str:
     return _part(_READ, named or _NO_READS)
 
 
-def _seconds(value: float) -> str:
-    """A timeout as the brief writes it: whole seconds carry no decimal point."""
+def _timeout(value: float | None) -> str:
+    """A timeout as the brief writes it: whole seconds carry no decimal point, and a
+    claim the plan sets none for has none, which the line says."""
 
+    if value is None:
+        return _NO_TIMEOUT
     if not isfinite(value):
-        return str(value)
+        return _TIMEOUT.format(seconds=value)
     whole = int(value)
-    return str(whole) if value == whole else repr(value)
+    return _TIMEOUT.format(seconds=whole if value == whole else repr(value))
 
 
 def _check_body(item: DoneWhen, compiled: _Compiled) -> str:
@@ -423,7 +433,7 @@ def _check_body(item: DoneWhen, compiled: _Compiled) -> str:
     return _COMMAND_LINE.format(
         command=shlex.join(definition.command),
         cwd=compiled.cwd,
-        timeout=_seconds(definition.timeout_seconds),
+        timeout=_timeout(definition.timeout_seconds),
     )
 
 
@@ -453,14 +463,31 @@ def _bounds(ticket: Ticket) -> str:
     return _part(_BOUNDS, written if written else _NO_BOUNDS)
 
 
+def _waits_named(ticket: Ticket) -> str:
+    return ", ".join(ticket.waits_on)
+
+
+def _waits(ticket: Ticket) -> tuple[str, ...]:
+    """`## Waits on`, only for a ticket whose work waits on a person's decision brief.
+
+    A ticket that waits on none has no such section: nothing is missing, and an
+    empty one would read as a wait nobody named.
+    """
+
+    if not ticket.waits_on:
+        return ()
+    return (_part(_WAITS, _WAITS_BODY.format(named=_waits_named(ticket))),)
+
+
 def _steps(compiled: _Compiled) -> str:
     """`## Steps`: the brief's own facts as numbered steps, in the order an implementer
     meets them.
 
-    Read the cited sections, keep to the bounds, run each check as `## Checks`
-    renders it, report. Every section, bound, check and command named here is one the
-    document already carries, and none it carries is left out, so the step form adds
-    no fact and drops none. A ticket citing nothing still has the last three.
+    Read the cited sections, keep to the bounds, leave what waits on a decision
+    brief, run each check as `## Checks` renders it, report. Every section, bound,
+    check, brief and command named here is one the document already carries, and
+    none it carries is left out, so the step form adds no fact and drops none. A
+    ticket citing nothing still has the last three.
     """
 
     ticket = compiled.ticket
@@ -473,6 +500,11 @@ def _steps(compiled: _Compiled) -> str:
         steps.append(f"Keep every change inside the bounds: {paths}.")
     else:
         steps.append(f"Keep to the bounds: {_NO_BOUNDS}")
+    if ticket.waits_on:
+        steps.append(
+            f"Do every part the decision brief(s) {_waits_named(ticket)} do not decide, and "
+            "name what waits on them in the report."
+        )
     checks = "".join(
         f"\n   - `{item.claim}` — {_check_body(item, compiled)}" for item in ticket.done_when
     )
@@ -484,42 +516,28 @@ def _steps(compiled: _Compiled) -> str:
     return _part(_STEPS, "\n".join(f"{number}. {step}" for number, step in enumerate(steps, 1)))
 
 
-def _render(compiled: _Compiled, size: str, detail: str = "plain") -> str:
+def _document(compiled: _Compiled, detail: str = "plain") -> str:
     """The whole document: the brief's sections, one blank line between them.
 
-    `size` is given rather than taken here because the line has to exist while
-    the lines are counted; `_document` counts this same rendering and re-renders
-    it with only the digits changed. `detail` full adds `## Steps` after
-    `## Bounds`; plain leaves every other byte as it is.
+    `## Waits on` follows `## Bounds` only where the ticket waits on a brief.
+    `detail` full adds `## Steps` after those; plain leaves every other byte as it
+    is. The engine applies no cutoff, here or anywhere.
     """
 
     steps = (_steps(compiled),) if detail == _FULL else ()
     sections = (
         _title(compiled.ticket),
-        _header(compiled, size),
+        _header(compiled),
         _part(_TICKET, compiled.ticket.brief.strip() or _NO_BRIEF),
         _read(compiled),
         _checks(compiled),
         _bounds(compiled.ticket),
+        *_waits(compiled.ticket),
         *steps,
         _part(_LANDS, _WORKFLOW if compiled.workflow else _NO_WORKFLOW),
         _part(_USING, _USING_BODY),
     )
     return "\n".join(sections)
-
-
-def _document(compiled: _Compiled, detail: str = "plain") -> str:
-    """The document with its own size in it.
-
-    A line is a line feed and the document ends with one, so the count is the
-    line feeds of the finished text, the `size:` line included. The line is
-    rendered with a placeholder first: it is there while the count is taken, and
-    the width of the number never changes how many lines there are. The engine
-    applies no cutoff, here or anywhere.
-    """
-
-    counted = _render(compiled, _SIZE.format(lines=0), detail)
-    return _render(compiled, _SIZE.format(lines=counted.count("\n")), detail)
 
 
 # --- the seam ----------------------------------------------------------------------

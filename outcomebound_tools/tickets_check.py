@@ -4,7 +4,8 @@ What this module decides: which tickets are judged — the open ones, and every
 draft — the order in which one ticket is judged and where that pass stops, when
 a body is too thin to be a brief, what a `reads` entry that will not resolve
 reads, what a claim the plan does not define reads, and what is said about a
-knot of the waiting graph and about a `discovered-from` the input does not hold.
+knot of the waiting graph, about a `discovered-from` the input does not hold,
+and about a ticket whose work waits on a person's decision brief.
 A closed or dropped ticket's links are history and are not resolved: it is read,
 so that a relation naming it resolves, and it is not judged.
 
@@ -17,7 +18,7 @@ writes nothing and asks git nothing.
 
 **The pass order is what makes the count honest.** One ticket is read in one
 fixed order — the reader's own messages, the brief, the links, the claims, the
-relations — and a block whose version this engine never shipped ends the pass
+relations, the waits — and a block whose version this engine never shipped ends the pass
 before any of the rest. **A draft goes down that same pass.** `--draft` reads
 each local file through `tickets_draft` and judges the tickets it hands back
 exactly as it judges a store's, and such a run reads no store at all.
@@ -319,6 +320,30 @@ def _knots(tickets: Sequence[Ticket]) -> Mapping[str, tuple[str, ...]]:
     return MappingProxyType({id: knot for knot in cycles(tickets) for id in knot})
 
 
+# --- what the work waits on --------------------------------------------------------
+
+
+def _wait_messages(ticket: Ticket) -> Iterator[Message]:
+    """A ticket whose work waits on a person's decision brief reads as waiting.
+
+    It is INFO, so the ticket still reads PASS and no other ticket moves: a
+    brief nobody has answered yet holds the work it decides and nothing else. The
+    message is what makes "can this start" computable from the report.
+    """
+
+    if not ticket.waits_on:
+        return
+    named = ", ".join(ticket.waits_on)
+    yield message(
+        "WAITS_ON_BRIEF",
+        ticket.id,
+        f"{ticket.id} waits on the decision brief(s) {named}: the work they decide starts "
+        "once a person answers them",
+        f"carry on with every ticket that does not wait on {named}; when the answer is "
+        "recorded, drop its id from `waits-on`",
+    )
+
+
 # --- the pass ----------------------------------------------------------------------
 
 
@@ -334,7 +359,7 @@ class _Run:
 
 def _judge(ticket: Ticket, run: _Run) -> TicketResult:
     """One ticket, in the one order this verb reads it: the reader's own messages
-    unchanged, then the brief, the links, the claims and the relations.
+    unchanged, then the brief, the links, the claims, the relations and the waits.
 
     A block whose version this engine never shipped ends the pass here, before
     anything else is asked. A block that could not be read at all is
@@ -351,6 +376,7 @@ def _judge(ticket: Ticket, run: _Run) -> TicketResult:
         *_reads_messages(ticket, run.sections),
         *_claim_messages(ticket, run.plan),
         *_relation_messages(ticket, run.given, run.knots),
+        *_wait_messages(ticket),
     )
     return TicketResult(ticket.id, ticket.title, ticket.state, messages)
 

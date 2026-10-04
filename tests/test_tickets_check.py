@@ -65,6 +65,7 @@ def block(
     status: str = "",
     blocked_by: Sequence[str] | None = None,
     parent: str | None = None,
+    waits_on: str = "",
 ) -> list[str]:
     """One `id=ticket` block, with only the keys a test spells out.
 
@@ -88,6 +89,8 @@ def block(
         lines.append(f"blocked-by: {', '.join(blocked_by)}")
     if parent is not None:
         lines.append(f"parent: {parent}")
+    if waits_on:
+        lines.append(f"waits-on: {waits_on}")
     lines.append("<!-- outcomebound:end id=ticket -->")
     return lines
 
@@ -692,6 +695,29 @@ def test_discovered_from_absent_warns_and_makes_no_knot(
     assert codes(found, "#2") == []
     assert codes(found, "#3") == []
     assert "DEPENDENCY_CYCLE" not in every_code(found)
+
+
+def test_a_ticket_waiting_on_a_brief_reads_waiting_and_holds_no_other(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`waits-on` is INFO on its own ticket, naming each brief: the ticket still
+    passes, the run exits 0, and a ticket beside it reads exactly as it would alone.
+    A draft is read the same way."""
+
+    root = checkout(tmp_path, document("#1", waits_on="D82, D83"), document("#2"))
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == ["WAITS_ON_BRIEF"]
+    [waits] = messages_of(about(found, "#1"))
+    assert waits["level"] == "INFO" and "D82, D83" in str(waits["text"])
+    assert about(found, "#1")["result"] == "PASS"
+    assert codes(found, "#2") == [] and about(found, "#2")["result"] == "PASS"
+    assert validate(found, json.loads(REPORT_SCHEMA.read_text(encoding="utf-8"))) == []
+
+    _, paths = drafts(tmp_path, waiting=draft_text(waits_on="D82"))
+    drafted = report(tmp_path / "repo", "--draft", *paths, capsys=capsys, expect=0)
+    assert codes(drafted, "waiting") == ["WAITS_ON_BRIEF"]
 
 
 # --- what the reader said ----------------------------------------------------------

@@ -256,7 +256,7 @@ def test_a_symlinked_plan_path_is_refused(tmp_path: Path) -> None:
 
 
 def test_definitions_carry_command_and_timeout(tmp_path: Path) -> None:
-    """The timeout in effect: the claim's own, else the plan's, else the runner's."""
+    """The timeout in effect: the claim's own, else the plan's, else none at all."""
 
     root = _repository(tmp_path)
     _write_plan(
@@ -275,7 +275,7 @@ def test_definitions_carry_command_and_timeout(tmp_path: Path) -> None:
 
     _write_plan(root, _plan_document([_claim("neither", _exit(0))]))
     bare = load_claims(root, _declaration())
-    assert bare.claims["neither"].timeout_seconds == validation.DEFAULT_TIMEOUT_SECONDS
+    assert bare.claims["neither"].timeout_seconds is None
 
     # Written order, which is the order `brief` renders.
     _write_plan(root, _plan_document([_claim("b", _exit(0)), _claim("a", _exit(0))]))
@@ -285,24 +285,27 @@ def test_definitions_carry_command_and_timeout(tmp_path: Path) -> None:
 def test_the_timeout_rendered_is_the_timeout_the_runner_gives_the_claim(tmp_path: Path) -> None:
     """Compared against the runner's own parsed value, never a hand-written number.
 
-    `ClaimDefinition.timeout_seconds` is what `brief` renders, so it
-    has to be what would actually apply -- including where the claim declares
-    none and where neither it nor the plan does.
+    `ClaimDefinition.timeout_seconds` is what `brief` renders, so where the
+    claim or the plan sets a timeout it has to be the one that would apply,
+    including where the claim declares none and inherits the plan's. Where
+    neither sets one the claim has no timeout, which `brief` says as such.
     """
 
     root = _repository(tmp_path)
-    for top in ({"timeout_seconds": 19}, {}):
-        document = _plan_document(
-            [_claim("own", _exit(0), timeout_seconds=7), _claim("inherits", _exit(0))], **top
-        )
-        _write_plan(root, document)
-        rendered = load_claims(root, _declaration()).claims
-        runner = {
-            claim.name: claim.timeout_seconds
-            for claim in validation.parse_plan(document, invocation_cwd=root).claims
-        }
+    document = _plan_document(
+        [_claim("own", _exit(0), timeout_seconds=7), _claim("inherits", _exit(0))],
+        timeout_seconds=19,
+    )
+    _write_plan(root, document)
+    rendered = load_claims(root, _declaration()).claims
+    runner = {
+        claim.name: claim.timeout_seconds
+        for claim in validation.parse_plan(document, invocation_cwd=root).claims
+    }
+    assert {name: item.timeout_seconds for name, item in rendered.items()} == runner
 
-        assert {name: item.timeout_seconds for name, item in rendered.items()} == runner, top
+    _write_plan(root, _plan_document([_claim("inherits", _exit(0))]))
+    assert load_claims(root, _declaration()).claims["inherits"].timeout_seconds is None
 
 
 # --- the seam ---------------------------------------------------------------------

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
-from outcomebound_tools import paths, validation
+from outcomebound_tools import paths
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_report import Refusal
 
@@ -53,7 +53,8 @@ class ClaimDefinition:
     """One claim of the plan, as `brief` renders it.
 
     `timeout_seconds` is the timeout in effect: the claim's own where it
-    declares one, otherwise the plan's, otherwise the runner's default.
+    declares one, otherwise the plan's, and None where neither sets one, because
+    a claim waits for its command unless the project sets a hang guard.
     `command` is empty where the claim declares none the runner could use. The
     directory it would run in is the plan's `cwd_resolved`, the same for every
     claim, since a validation claim declares none of its own.
@@ -61,7 +62,7 @@ class ClaimDefinition:
 
     name: str
     command: tuple[str, ...]
-    timeout_seconds: float
+    timeout_seconds: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,14 +147,14 @@ def _number(value: object) -> float | None:
     return float(value)
 
 
-def _timeout(claim_value: object, plan_value: object) -> float:
-    """The timeout in effect: the claim's, else the plan's, else the runner's default."""
+def _timeout(claim_value: object, plan_value: object) -> float | None:
+    """The timeout in effect: the claim's, else the plan's, else None, which is none."""
 
     for value in (claim_value, plan_value):
         number = _number(value)
         if number is not None:
             return number
-    return validation.DEFAULT_TIMEOUT_SECONDS
+    return None
 
 
 def _definitions(raw_claims: list[object], plan_timeout: object) -> Mapping[str, ClaimDefinition]:

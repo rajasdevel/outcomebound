@@ -122,6 +122,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
     ),
     Level.UNVERIFIED: (
         "EXPORT_TRUNCATED",
+        "EXPORT_PARTIAL",
         "RELATION_EXTERNAL",
     ),
     Level.WARNING: (
@@ -130,7 +131,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "BOUNDS_WHOLE_REPOSITORY",
         "DISCOVERED_FROM_ABSENT",
     ),
-    Level.INFO: ("HOLD_SURFACES_DIFFER",),
+    Level.INFO: ("HOLD_SURFACES_DIFFER", "WAITS_ON_BRIEF"),
 }
 
 MESSAGES: Mapping[str, Level] = MappingProxyType(

@@ -206,6 +206,102 @@ def test_truncation_table(tmp_path: Path) -> None:
     assert all(codes(flagged, id) == [] for id in unread)
 
 
+QUERY = ROOT / "templates" / "tickets" / "github-export.graphql"
+
+
+def test_nested_connections_read_100_and_a_truncation_names_no_re_run(tmp_path: Path) -> None:
+    """The pinned query asks 100 of each nested connection, GitHub's largest page, and a
+    nested connection does not paginate: its truncation names the issue and the bound,
+    and never sends a reader to run the export again, which would read the same 100."""
+
+    query = QUERY.read_text(encoding="utf-8")
+    assert "labels(first: 100)" in query and "blockedBy(first: 100)" in query
+
+    def flag(loaded: list[Any]) -> None:
+        node(loaded, 4)["blockedBy"]["pageInfo"]["hasNextPage"] = True
+        strip_label(9)(loaded)
+        node(loaded, 9)["labels"]["pageInfo"]["hasNextPage"] = True
+
+    result = read(variant(tmp_path, flag))
+    for id, connection in (("#4", "blockedBy"), ("#9", "labels")):
+        [said] = [item for item in about(result, id) if item.code == "EXPORT_TRUNCATED"]
+        assert "more than 100" in said.text, said
+        assert id in said.next and f"`{connection}`" in said.next, said
+        assert "cannot help" in said.next and "run the pinned export again" not in said.next
+
+
+def _error_at(
+    number: int, *rest: object, message: str = "Could not resolve"
+) -> Callable[[list[Any]], None]:
+    """A change adding a GraphQL error whose path runs into one issue's node."""
+
+    def change(loaded: list[Any]) -> None:
+        listed = loaded[0]["data"]["repository"]["issues"]["nodes"]
+        at = next(index for index, found in enumerate(listed) if found["number"] == number)
+        path = ["repository", "issues", "nodes", at, *rest]
+        loaded[0].setdefault("errors", []).append({"message": message, "path": path})
+
+    return change
+
+
+def test_an_error_inside_one_issue_holds_that_issue_and_the_rest_are_read(
+    tmp_path: Path,
+) -> None:
+    """An `errors` entry whose path lies inside one issue node makes that issue
+    UNVERIFIED, read with what arrived of it, and every other ticket reads as before."""
+
+    def change(loaded: list[Any]) -> None:
+        _error_at(26, "blockedBy", "nodes", 1, message="Resource not accessible")(loaded)
+        node(loaded, 26)["blockedBy"]["nodes"][1] = None
+
+    result = read(variant(tmp_path, change))
+    [said] = [item for item in about(result, "#26") if item.code == "EXPORT_PARTIAL"]
+    assert said.level.name == "UNVERIFIED"
+    assert "Resource not accessible" in said.text and "blockedBy.nodes.1" in said.text
+    assert ticket(result, "#26").blocked_by == ("#24", "#3")
+    assert [item.id for item in result.tickets] == TICKET_IDS
+    clean = read()
+    for id in TICKET_IDS:
+        if id != "#26":
+            assert about(result, id) == about(clean, id), id
+            assert ticket(result, id) == ticket(clean, id), id
+
+
+def test_an_error_inside_an_issue_outside_the_gate_is_reported_and_held(tmp_path: Path) -> None:
+    """An errored issue the gate leaves out may carry the label on what the error cut,
+    so it reads UNVERIFIED against its own id; the tickets are read as before."""
+
+    def change(loaded: list[Any]) -> None:
+        strip_label(9)(loaded)
+        _error_at(9, "labels")(loaded)
+        node(loaded, 9)["labels"] = None
+
+    result = read(variant(tmp_path, change))
+    assert "#9" in result.others
+    assert codes(result, "#9") == ["EXPORT_PARTIAL"]
+    assert len(result.tickets) == len(TICKET_IDS) - 1
+
+
+def test_an_error_naming_no_issue_node_still_refuses(tmp_path: Path) -> None:
+    """No path, a path to a whole node, or an index past the page names no one issue."""
+
+    def at_whole_node(loaded: list[Any]) -> None:
+        loaded[0]["errors"] = [{"message": "gone", "path": ["repository", "issues", "nodes", 0]}]
+
+    def past_the_page(loaded: list[Any]) -> None:
+        loaded[0]["errors"] = [
+            {"message": "gone", "path": ["repository", "issues", "nodes", 999, "title"]}
+        ]
+
+    def at_the_repository(loaded: list[Any]) -> None:
+        loaded[0]["errors"] = [{"message": "gone", "path": ["repository"]}]
+
+    for change in (at_whole_node, past_the_page, at_the_repository):
+        raised = refusal(variant(tmp_path, change, name=f"{change.__name__}.json"))
+        assert raised.code == "EXPORT_UNREADABLE", change.__name__
+        assert "names no issue node" in raised.text, change.__name__
+
+
 def test_an_issue_outside_the_gate_with_unfinished_labels_reads_truncated(tmp_path: Path) -> None:
     """The gate was decided from a label set the export did not finish.
 
@@ -513,6 +609,22 @@ def test_lifecycle_key_in_a_github_block_is_unknown(tmp_path: Path) -> None:
         assert len(said) == 1, key
         assert key in said[0].text, key
         assert said[0].level.name == "ERROR", key
+
+
+def test_waits_on_in_a_github_block_is_read_onto_the_ticket(tmp_path: Path) -> None:
+    """No tracker relation holds a wait on a decision brief, so a `github` block carries
+    it, and the reader puts it on the ticket without a message."""
+
+    def change(loaded: list[Any]) -> None:
+        target = node(loaded, 2)
+        target["body"] = target["body"].replace(
+            "<!-- outcomebound:end id=ticket -->",
+            "waits-on: D82\n<!-- outcomebound:end id=ticket -->",
+        )
+
+    result = read(variant(tmp_path, change))
+    assert ticket(result, "#2").waits_on == ("D82",)
+    assert codes(result, "#2") == []
 
 
 def test_hold_surfaces(tmp_path: Path) -> None:

@@ -49,6 +49,7 @@ __all__ = [
     "LIFECYCLE_KEYS",
     "LIST_KEYS",
     "STATES",
+    "WAIT_KEYS",
     "BlockFields",
     "DoneWhen",
     "InputInfo",
@@ -148,6 +149,28 @@ def _read_entries(value: str, items: tuple[str, ...]) -> tuple[str, ...]:
 
     _refuse_items(items)
     return _entries(value)
+
+
+# A decision brief's id, as `schemas/decision-briefs.schema.json` spells it: a
+# letter, then letters, digits and hyphens.
+_BRIEF_ID = re.compile(r"[A-Za-z][A-Za-z0-9-]*")
+
+
+def _read_brief_ids(value: str, items: tuple[str, ...]) -> tuple[str, ...]:
+    """`waits-on`: the ids of the decision briefs the ticket's work waits on.
+
+    At least one, each a brief id; the order is the order written.
+    """
+
+    entries = _read_entries(value, items)
+    if not entries:
+        raise ModelError("names at least one decision brief id, such as `D3`")
+    for entry in entries:
+        if _BRIEF_ID.fullmatch(entry) is None:
+            raise ModelError(
+                f"entry {entry!r} is not a decision brief id matching {_BRIEF_ID.pattern}"
+            )
+    return entries
 
 
 def _closed_set(allowed: tuple[str, ...]) -> Callable[[str, tuple[str, ...]], str]:
@@ -253,6 +276,7 @@ _KEYS: tuple[_Key, ...] = (
     _Key("human-only", "human_only", "decision", _closed_set(HOLDS), True),
     _Key("done-when", "done_when", "decision", _read_done_when, True, _written_items),
     _Key("discovered-from", "discovered_from", "decision", _read_id),
+    _Key("waits-on", "waits_on", "wait", _read_brief_ids),
     _Key("status", "status", "lifecycle", _closed_set(STATES)),
     _Key("assignee", "assignee", "lifecycle", _read_text),
     _Key("blocked-by", "blocked_by", "lifecycle", _read_entries),
@@ -265,6 +289,10 @@ _RETIRED: Mapping[str, str] = MappingProxyType(
 )
 DECISION_KEYS: tuple[str, ...] = tuple(key.name for key in _KEYS if key.kind == "decision")
 LIFECYCLE_KEYS: tuple[str, ...] = tuple(key.name for key in _KEYS if key.kind == "lifecycle")
+# The keys that say what a ticket's work waits on outside the tracker: carried in the
+# block in every store, because no tracker relation holds them, and no part of the
+# decision content, so answering a brief and dropping its id moves no identity.
+WAIT_KEYS: tuple[str, ...] = tuple(key.name for key in _KEYS if key.kind == "wait")
 # The keys the identity hashes as a list of entries, in the table's order.
 LIST_KEYS: tuple[str, ...] = tuple(key.name for key in _KEYS if key.written is not None)
 _NO_ENTRIES: Mapping[str, tuple[str, ...]] = MappingProxyType(dict.fromkeys(LIST_KEYS, ()))
@@ -296,6 +324,7 @@ class BlockFields:
     human_only: str = ""
     done_when: tuple[DoneWhen, ...] = ()
     discovered_from: str = ""
+    waits_on: tuple[str, ...] = ()
     status: str = ""
     assignee: str = ""
     blocked_by: tuple[str, ...] = ()
@@ -556,8 +585,8 @@ def content_identity(title: str, brief: str, fields: BlockFields) -> str:
     different values, never an absent key, and an item is never re-rendered, so
     two spellings of one item are two contents. A list stays a list because any
     joined form collides — one item holding the separator would read as two
-    items. Lifecycle facts are absent from the document, which is why none of
-    them moves the identity.
+    items. Lifecycle facts and `waits-on` are absent from the document, which is
+    why none of them moves the identity.
     """
 
     document: dict[str, object] = {
@@ -642,7 +671,8 @@ class Ticket:
     """One ticket as every verb consumes it.
 
     `block_version` is the block's `v` as written, empty where none could be
-    read, and `path` a draft's file.
+    read, and `path` a draft's file. `waits_on` names the decision briefs a
+    person has yet to answer before the work they decide can proceed.
     """
 
     id: str
@@ -660,6 +690,7 @@ class Ticket:
     blocked_by: tuple[str, ...] = ()
     parent: str = ""
     discovered_from: str = ""
+    waits_on: tuple[str, ...] = ()
     content: str = ""
 
 

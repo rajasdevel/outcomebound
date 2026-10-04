@@ -6,9 +6,9 @@ query($owner: String!, $name: String!, $endCursor: String) {
       pageInfo { hasNextPage endCursor }
       nodes {
         number title body state stateReason url
-        labels(first: 50) { nodes { name } pageInfo { hasNextPage } }
+        labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
         parent { number repository { nameWithOwner } }
-        blockedBy(first: 50) { nodes { number repository { nameWithOwner } } pageInfo { hasNextPage } }
+        blockedBy(first: 100) { nodes { number repository { nameWithOwner } } pageInfo { hasNextPage } }
         subIssuesSummary { total }
       }
     }

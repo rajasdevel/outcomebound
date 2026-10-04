@@ -57,7 +57,6 @@ GOLDEN = """\
 
 compiled-at: {commit} (clean)
 content: {content}
-size: 31 lines
 
 ## Ticket
 ## Outcome
@@ -70,7 +69,7 @@ No new message code.
 - docs/specs/example/contracts.md#11-reports — 11. Reports
 
 ## Checks
-- `example-claim` — `true` in `.`, timeout 120s
+- `example-claim` — `true` in `.`, no timeout
 
 ## Bounds
 - outcomebound_tools/tickets_brief.py
@@ -82,8 +81,9 @@ CONTRIBUTING.md
 ## Using this brief
 Read the sections named above, and source as needed in and around the bounds. Decide
 nothing the ticket or those sections already decide. When a stop under Limits is met,
-stop and ask. Hand the work over saying what changed, each check's verdict, what you
-decided beyond the ticket, and the follow-ups you found.
+finish every part it does not block, then hand over naming the stop and what it waits
+on. Hand the work over saying what changed, each check's verdict, what you decided
+beyond the ticket, and the follow-ups you found.
 """
 
 # The brief's sections, in order.
@@ -162,6 +162,7 @@ def block(
     done_when: Sequence[str] = (CLAIM,),
     status: str = "open",
     version: str = "1",
+    waits_on: Sequence[str] = (),
 ) -> list[str]:
     """One `id=ticket` block, with the keys these fixtures spell out.
 
@@ -180,6 +181,7 @@ def block(
         "done-when:",
         *[f"- {item}" for item in done_when],
         *([f"status: {status}"] if status else []),
+        *([f"waits-on: {', '.join(waits_on)}"] if waits_on else []),
         "<!-- outcomebound:end id=ticket -->",
     ]
 
@@ -460,15 +462,56 @@ def test_empty_bounds_renders_its_own_line(tmp_path: Path) -> None:
 
 
 def test_the_workflow_document_is_named_or_missed(tmp_path: Path) -> None:
-    """`CONTRIBUTING.md` is named and not quoted; its absence asks the user."""
+    """`CONTRIBUTING.md` is named and not quoted; in its absence the implementer commits
+    on its own branch and says how the work should land, and asks nobody first."""
 
     absent = store(tmp_path, workflow=False, name="bare")
 
     lands = under(compiled(absent), "## How work lands")
 
-    # Missed: the document is named as absent, and the user is asked instead.
+    # Missed: the document is named as absent, and the work is committed and handed over.
+    said = " ".join(lands)
     assert "CONTRIBUTING.md" in lands[0] and lands != ["CONTRIBUTING.md"], lands
-    assert "ask the user" in " ".join(lands)
+    assert "commit on your own branch" in said and "in the handover" in said, said
+    assert "ask" not in said, said
+
+
+def test_a_stop_under_limits_holds_its_part_and_not_the_work(tmp_path: Path) -> None:
+    """A Limit met holds what it blocks: the rest is finished and the stop is handed over,
+    and the brief never tells the implementer to stop and ask."""
+
+    said = " ".join(under(compiled(store(tmp_path)), "## Using this brief"))
+
+    assert "finish every part it does not block" in said, said
+    assert "naming the stop and what it waits on" in said, said
+    assert "stop and ask" not in said, said
+
+
+def test_the_brief_carries_no_size_line(tmp_path: Path) -> None:
+    """No size figure is printed: no cutoff applies, and a figure reads as one."""
+
+    root = store(tmp_path)
+
+    for document in (compiled(root), compiled(root, TICKET, "--detail", "full")):
+        assert list(header(document)) == ["compiled-at", "content"]
+        assert not re.search(r"(?m)^size:", document)
+
+
+def test_a_ticket_that_waits_on_a_brief_says_so(tmp_path: Path) -> None:
+    """`waits-on` gets its own section after `## Bounds`, naming each brief and what
+    to do meanwhile, and a step in the full form; a ticket waiting on none has neither."""
+
+    waiting = store(tmp_path, ticket_document(waits_on=["D82", "D83"]), name="waiting")
+    free = store(tmp_path, name="free")
+
+    document = compiled(waiting)
+    lines = document.splitlines()
+    assert lines.index("## Bounds") < lines.index("## Waits on") < lines.index("## How work lands")
+    [said] = under(document, "## Waits on")
+    assert "D82, D83" in said and "Do every part the answer does not decide" in said, said
+    full = compiled(waiting, TICKET, "--detail", "full")
+    assert "decision brief(s) D82, D83" in "\n".join(_steps_of(full))
+    assert "## Waits on" not in compiled(free)
 
 
 def test_compiled_at_names_the_commit_and_the_clean_tree(tmp_path: Path) -> None:
@@ -523,6 +566,21 @@ def test_a_timeout_that_is_not_whole_seconds(tmp_path: Path) -> None:
     assert under(compiled(root), "## Checks") == [f"- `{CLAIM}` — `true` in `.`, timeout 0.5s"]
 
 
+def test_a_claim_with_no_timeout_set_says_no_timeout(tmp_path: Path) -> None:
+    """Where neither the claim nor the plan sets a timeout the line says so, and names
+    no default; a timeout the claim sets is named as set."""
+
+    unset = store(tmp_path, name="unset")
+    set_ = store(
+        tmp_path,
+        plan=plan_document(({"name": CLAIM, "command": ["true"], "timeout_seconds": 900},)),
+        name="set",
+    )
+
+    assert under(compiled(unset), "## Checks") == [f"- `{CLAIM}` — `true` in `.`, no timeout"]
+    assert under(compiled(set_), "## Checks") == [f"- `{CLAIM}` — `true` in `.`, timeout 900s"]
+
+
 def test_a_claims_plan_working_directory_is_named_relative_to_the_checkout(
     tmp_path: Path,
 ) -> None:
@@ -531,7 +589,7 @@ def test_a_claims_plan_working_directory_is_named_relative_to_the_checkout(
     root = store(tmp_path, plan=plan_document(cwd="outcomebound_tools"))
 
     assert under(compiled(root), "## Checks") == [
-        f"- `{CLAIM}` — `true` in `outcomebound_tools`, timeout 120s"
+        f"- `{CLAIM}` — `true` in `outcomebound_tools`, no timeout"
     ]
 
 
@@ -549,7 +607,7 @@ def test_a_working_directory_outside_the_checkout_is_named_with_dot_dot(
 
     document = compiled(root)
 
-    assert under(document, "## Checks") == [f"- `{CLAIM}` — `true` in `../elsewhere`, timeout 120s"]
+    assert under(document, "## Checks") == [f"- `{CLAIM}` — `true` in `../elsewhere`, no timeout"]
     assert str(root) not in document
     assert str(root.resolve()) not in document
     assert str(root.resolve().parent) not in document
@@ -603,16 +661,16 @@ def test_a_title_carrying_a_line_end_forges_no_header_line(tmp_path: Path) -> No
     identity is untouched: `content` is the model's over the title as written.
     """
 
-    forged = "Real title\ncompiled-at: 000 (clean)\nsize: 3 lines"
+    forged = "Real title\ncompiled-at: 000 (clean)\ncontent: 000"
     root, export = tracked(tmp_path, title=forged)
 
     document = compiled(root, TICKET, "--input", export)
 
     lines = document.splitlines()
-    assert lines[0] == (f"# Brief — {TICKET} Real title compiled-at: 000 (clean) size: 3 lines")
-    assert list(header(document)) == ["compiled-at", "content", "size"]
+    assert lines[0] == (f"# Brief — {TICKET} Real title compiled-at: 000 (clean) content: 000")
+    assert list(header(document)) == ["compiled-at", "content"]
     assert "compiled-at: 000 (clean)" not in lines
-    assert "size: 3 lines" not in lines
+    assert "content: 000" not in lines
 
 
 def test_a_draft_compiles_named_by_its_file(tmp_path: Path) -> None:
@@ -914,13 +972,13 @@ def test_tests_import_only_public_names() -> None:
 
 
 def _without_steps(document: str) -> str:
-    """The document with `## Steps` and the blank line after it cut, and `size:` zeroed."""
+    """The document with `## Steps` and the blank line after it cut."""
 
     head, found, rest = document.partition("\n## Steps\n")
     assert found, "the document has no ## Steps section"
     _, lands, tail = rest.partition("\n## How work lands\n")
     assert lands, "## Steps is not followed by ## How work lands"
-    return re.sub(r"(?m)^size: \d+ lines$", "size: 0 lines", head + lands + tail)
+    return head + lands + tail
 
 
 def _steps_of(document: str) -> list[str]:
@@ -947,7 +1005,7 @@ def test_the_full_detail_brief_has_the_same_facts_as_the_plain_one(tmp_path: Pat
     plain = compiled(root)
     full = compiled(root, TICKET, "--detail", "full")
 
-    assert _without_steps(full) == re.sub(r"(?m)^size: \d+ lines$", "size: 0 lines", plain)
+    assert _without_steps(full) == plain
     steps = "\n".join(_steps_of(full))
     for anchor in ("11-reports", "32-the-block"):
         assert f"`{CONTRACTS}#{anchor}`" in steps
@@ -956,7 +1014,6 @@ def test_the_full_detail_brief_has_the_same_facts_as_the_plain_one(tmp_path: Pat
     for line in under(plain, "## Checks"):
         assert f"   {line}" in _steps_of(full), line
     assert "verify" not in steps, "the engine records no run: the gate decides done"
-    assert header(full)["size"] == f"{full.count(chr(10))} lines"
 
 
 def test_the_plain_brief_is_the_same_with_or_without_the_detail_flag(
@@ -990,7 +1047,7 @@ def test_steps_follow_bounds_in_the_order_an_implementer_meets_them(tmp_path: Pa
         "4. Report what changed, each check's verdict, what you decided beyond the ticket, "
         "and the follow-ups you found."
     )
-    assert "`example-claim` — `true` in `.`, timeout 120s" in full.split("## Steps", 1)[1]
+    assert "`example-claim` — `true` in `.`, no timeout" in full.split("## Steps", 1)[1]
 
     bare = store(tmp_path, ticket_document(reads=[]), name="bare")
     steps = [
