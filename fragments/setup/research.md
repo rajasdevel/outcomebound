@@ -5,7 +5,7 @@ applies: projects whose work depends on how models, harnesses, providers or agen
 condition: when a task depends on how a model, harness, provider or agent practice behaves
 detect: []
 edges: ["pushing to the research repository"]
-version: 1
+version: 2
 ---
 **Context** — research on models, harnesses, providers and agent practice is in the
 outcomebound-research repository, one clone per machine. `outcomebound research` prints its index
@@ -21,7 +21,7 @@ relying on the claim.
 **Completion bar** — a decision that rests on a research claim cites the path, the commit and the sha256
 from the printed first line (the text is the working tree's, which may differ from the commit), or,
 where you read the public link, that link and the day you read it. A dated,
-sourced observation about a model, harness, provider or practice that the work turned up goes back
-with `outcomebound research ingest` (its `--help` gives the fields), in your own words, with no
-project, client or person name.
+sourced observation about a model, harness, provider or practice that the work turned up is noted
+as you go and sent at the handoff with `outcomebound research ingest` (its `--help` gives the
+fields), in your own words, with no project, client or person name.
 **Distinguish** — the research records it ≠ the maker documents it today ≠ observed here.

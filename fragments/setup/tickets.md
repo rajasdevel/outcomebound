@@ -5,19 +5,22 @@ applies: projects that declare a ticket store
 condition: when reading, working or changing this project's tickets or their declaration
 detect: []
 skills: ["slice-tickets", "hand-off-tickets"]
-version: 6
+version: 7
 ---
 **Context** — `.outcomebound/tickets.json` declares where this project's tickets live; the
-engine reads them and reports, and writes nothing. How work lands here is `CONTRIBUTING.md`'s to
-say; where it says nothing, that is a question for the user.
+engine reads them and reports, and writes nothing. How work lands here is what `CONTRIBUTING.md`
+or `AGENTS.md` says, else what the goal envelope says; where none of them says, land it as local
+commits on the current branch in the style the history shows, put how it should land in the
+handover as a decision brief, and go on to the next ticket.
 **Bounds** — a ticket's `bounds` are the paths its work may write. An accepted ticket's title,
 body and decision keys are the user's; assigning it, commenting on it and closing it are the
-agent's. A tracker is written to only where the declaration records that grant, and otherwise
-the commands are printed for a person to run.
+agent's. Push or merge only where that is granted. A tracker is written to only where the
+declaration records that grant, and otherwise the commands are printed for a person to run.
 **Mechanisms** — `review` when how the work was sliced is a material blind spot; `spec` when a
 decision something outside the slice relies on is missing.
 **Completion bar** — `check` for a ticket's well-formedness; for its work, the `done-when`
-checks passing where the project's own gate runs them, and a handover, the pull request or the
-closing comment, saying what changed, each check's verdict, what was decided beyond the ticket,
-and the follow-ups found.
+checks run with each verdict reported, and passing at the project's own gate once the work lands
+there (a ticket that waits on that gate is handed over, not waited on), and a handover, the pull
+request or the closing comment, saying what changed, each check's verdict, what was decided beyond
+the ticket, and the follow-ups found.
 **Distinguish** — accepted ≠ assigned ≠ checks passing ≠ landed ≠ closed.

@@ -63,9 +63,9 @@ All four are under `.agents/`. Every agent on the machine shares them.
 
 | Folder | What goes in it |
 | --- | --- |
-| `worktrees/<name>/` | One Git worktree for each task. An agent works in a worktree that it made, and it removes the worktree when the work is committed |
+| `worktrees/<name>/` | One Git worktree for each task. An agent works in a worktree that it made. It keeps the worktree while the task, or an agent that can resume it, needs it. It removes the worktree only when three conditions are true: the task is finished, its commits are on a branch that is kept (landed, pushed or named in the handoff), and nothing uncommitted or ignored in it is still necessary |
 | `work/<task>/` | Working files and evidence for the task: logs, drafts, command output |
-| `handoffs/<date>-<task>.md` | One page for each session, for whoever picks the task up next |
+| `handoffs/<date>-<task>.md` | One handoff for each task, for whoever picks the task up next. The agent keeps it current while it works, so that a run that stops at any point can continue from it |
 | `shared-memory/` | Facts about this repository that later sessions need |
 
 The agent keeps these files here and not in a temporary or session directory, because the system
@@ -104,10 +104,13 @@ The four folders are not committed. They are not in a clone, and they do not rea
 
 ## Handoffs and shared memory
 
-A handoff is the page that one session leaves for the next. A good one holds:
+A handoff is the record that one session keeps for the next. The agent updates it while the
+work continues, not only at the end, so a run that stops at any point leaves a record to continue
+from. It has no length limit. A good one holds:
 
 - what landed, and the verdict of each check: `PASS`, `FAIL` or `UNVERIFIED`;
 - what is in flight;
+- what is blocked, and why;
 - the next step;
 - the choices that the session made;
 - what is still owed;
@@ -151,20 +154,35 @@ other files that Git ignores, it reads only a file that a harness loads by its e
 
 The check is lexical. It reports hidden characters, phrases that override earlier instructions and
 risky harness settings, and it quotes each line it finds. It writes nothing and runs nothing that a
-file names. You judge each hit. A clean result does not prove that a note is safe. The fragment
-asks the agent to run the check, and to re-check each fact against its source, before it relies on
-notes that another session wrote.
+file names. You judge each hit. A clean result does not prove that a note is safe.
+
+The fragment tells the agent to run the check before it relies on notes that another session
+wrote, and to read the result as follows:
+
+- A `FAIL` on a note in `.agents/handoffs/` or `.agents/shared-memory/`: the agent does not rely
+  on the notes that the check names. It gets the same facts again from their sources, and it names
+  those notes in its handoff for you.
+- All other results: the agent writes them in its handoff, and it continues to use the notes.
+  These results include a `FAIL` or a review hit in a different file, and any `UNVERIFIED`. Two
+  examples occur often. The finish-check entry that `adopt` writes in the harness settings is a
+  review hit in every install. A row in the harness table becomes `UNVERIFIED` after its re-check
+  date.
+
+Then, before the agent uses a fact from a note, it checks that fact against its source.
 
 ## Harness notes
 
 - Every harness that `adopt` installs for loads `AGENTS.md`, directly or through an import file,
   so the pointer reaches all of them. With `--harness generic`, you check that your harness loads
   the file.
-- Codex's default sandbox keeps `.agents/` and `.git` read-only. Where a write there is refused,
-  the fragment tells the agent to say so, and to name how you start Codex: with
-  `--add-dir <repository>/.agents`, and `--add-dir <repository>/.git` so that it can commit. The
-  agent does not write the work elsewhere. The harness table does not record this sandbox
-  behavior, so check it against your Codex version.
+- Codex's default sandbox keeps `.agents/` and `.git` read-only. The fragment tells the agent to
+  ask for each write there through the approval path of the harness. Where Codex refuses the
+  write, the agent continues with the work that does not need that write, and it keeps that work
+  in the writable part of the checkout. It never moves the work to a temporary directory. In its
+  handoff, or in its report when it cannot write the handoff, it names how you start Codex the
+  next time: with `--add-dir <repository>/.agents`, and `--add-dir <repository>/.git` so that it
+  can commit. The harness table does not record this sandbox behavior, so check it against your
+  Codex version.
 
 ## What it gives you, and what it does not
 

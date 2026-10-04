@@ -65,10 +65,24 @@ the agent reads the fragment only when it runs a command.
 - **Commands that do not end.** Do not run `tail -f`, `journalctl -f`, `docker logs -f`,
   `watch`, a development server or a test runner in watch mode in the foreground. Use a
   bounded form (`tail -n 50`, `docker logs --tail 100`), or the harness's background mode. Run
-  tests one time (`vitest run`).
+  a test runner in its single-run mode (`vitest run`), not in its watch mode.
   - Fixes: the harness stops the command after 2 to 5 minutes, and the output is lost.
   - Source: harness documentation (Claude Code, Codex, Gemini CLI timeouts); Codex issue
     <https://github.com/openai/codex/issues/3951> (Vitest watch mode).
+- **Commands that end after a long time.** A full test suite, a build or a migration ends, but it
+  can take longer than the foreground limit of the harness. Run it in the background, and write
+  its output and its exit code to a file. Wait until it ends, then read the file. Use the
+  harness's background mode, or the shell:
+  `(make test > .agents/work/<task>/test.log 2>&1; echo "exit=$?" >> .agents/work/<task>/test.log) < /dev/null &`.
+  - Fixes: the harness stops a long command in the foreground after 2 to 5 minutes. The output
+    is lost, and the check has no verdict.
+  - A slow command is not a command that hangs. Do not shorten, skip or stop a check because it
+    takes a long time. Let it run to its end. A check that the agent stops has no verdict, and
+    the agent reports it as `UNVERIFIED`.
+  - Source: harness documentation (Claude Code, Codex, Gemini CLI timeouts). Test on
+    2026-10-04 with a command that printed one line, waited 3 seconds and stopped with exit
+    code 3: the shell form returned at once. When the command ended, the file held its output
+    and, on the last line, `exit=3`.
 
 ## Habits that keep output small
 
@@ -81,10 +95,11 @@ the agent reads the fragment only when it runs a command.
   - Source: Anthropic, "Writing tools for agents"; test on 2026-10-03.
 - **Send long output to a file.** Write the output to a file. Use a task folder such as
   `.agents/work/<task>/` when the repository has one. Else use a temporary file. Then read the
-  end of the file and the exit code:
+  exit code and the end of the file, and search the file for the first error:
   `make check > .agents/work/<task>/check.log 2>&1; rc=$?; tail -n 40 .agents/work/<task>/check.log; echo "exit=$rc"`.
   - Fixes: in Claude Code, the output of a failed command is cut to about 10,000 characters
-    from the start and the end. The first error is often in the middle. Search the file for it.
+    from the start and the end. The first error is often in the middle, so the end of the file
+    does not always show it.
   - Do not use `make check | tail -n 40`. The pipe gives the exit code of `tail`, so a failure
     shows as a success.
   - Source: Claude Code tools reference, "Output limits"; test on 2026-10-03 (`$?` was 0 when
@@ -119,9 +134,12 @@ give them to your agents, add them to your `local` fragment.
     `node --test --test-reporter=dot` made 92 lines into 26 lines, and the failure text stayed.
     `pytest` was not tested.
 - **Timeouts**, when `timeout` is installed (macOS does not have it; Homebrew coreutils gives
-  `gtimeout`): `timeout 120 <command>` for network commands and unknown commands. Exit code
-  124 means that the command was stopped. Report that result as UNVERIFIED. Do not use a
-  timeout on `git` or `npm install`, because a stopped command can leave a lock file.
+  `gtimeout`): `timeout 120 <command>` only for a network call that can hang, such as a request
+  to a server that does not answer. Exit code 124 means that the command was stopped. Report that
+  result as UNVERIFIED. Do not use a timeout on a test suite, a build, a migration or any other
+  command that can take a long time and then end: run it in the background (see
+  [Commands that end after a long time](#habits-that-prevent-a-wait)). Do not use a timeout on
+  `git` or `npm install`, because a stopped command can leave a lock file.
   - Source: test on 2026-10-03. `timeout 3 sleep 10` stopped with exit code 124 after 3
     seconds. Stock macOS has no `timeout` command.
 
