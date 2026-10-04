@@ -6,6 +6,8 @@ each carries, and where a claim would run and whether that directory lies inside
 the checkout (answered once, so that `check` and `brief` cannot answer it
 differently). A relative `cwd` starts at the plan file's own folder, as
 `outcomebound validation` resolves it, so one plan runs in one place for both.
+Whether a plan's claims would run in a folder it was not written for is decided
+once too, by `placement`, which `check` and `adopt` both read.
 
 What it does not decide: any message, any verdict about a ticket, and what an
 undefined claim means — `CLAIM_PLANNED` and `CLAIM_CWD_OUTSIDE` belong to
@@ -37,7 +39,10 @@ from outcomebound_tools.tickets_report import Refusal
 __all__ = [
     "ClaimDefinition",
     "ClaimsPlan",
+    "Placement",
+    "absent_paths",
     "load_claims",
+    "placement",
 ]
 
 UNREADABLE = "CLAIMS_UNREADABLE"
@@ -271,6 +276,47 @@ def absent_paths(plan: ClaimsPlan, target: Path | str) -> dict[str, tuple[str, .
         for name, item in plan.claims.items()
     }
     return {name: paths for name, paths in found.items() if paths}
+
+
+@dataclass(frozen=True, slots=True)
+class Placement:
+    """Whether a plan's claims would run in a folder the plan was not written for.
+
+    Since a relative `cwd` started at the plan file's folder, a plan written for the
+    checkout root runs its claims elsewhere, and two signs show it. `absent` is the
+    first: each claim's declared required paths that the checkout does not hold, as
+    `absent_paths` finds them. `at_plan_folder` is the second, for a plan whose claims
+    declare no paths: the working directory is the plan file's own folder while that
+    folder is not the checkout root, which is what a plan below the root reads with
+    no `cwd` at all or with `"cwd": "."`. `to_root` is the relative `cwd` that runs
+    the claims at the checkout root instead, `..` from `.outcomebound/`.
+    """
+
+    at_plan_folder: bool
+    absent: Mapping[str, tuple[str, ...]]
+    to_root: str
+
+    @property
+    def misplaced(self) -> bool:
+        """Whether either sign is present."""
+
+        return self.at_plan_folder or bool(self.absent)
+
+
+def placement(plan: ClaimsPlan, target: Path | str) -> Placement:
+    """The one answer to whether `plan`'s claims would run in the wrong folder.
+
+    `check` warns on it and `adopt` reports it at each install and upgrade, so the
+    two cannot disagree on which plan needs a new `cwd` or on what to write there.
+    """
+
+    root = Path(target).resolve()
+    folder = (root / plan.path).parent.resolve()
+    return Placement(
+        at_plan_folder=plan.cwd_resolved == folder and folder != root,
+        absent=MappingProxyType(absent_paths(plan, root)),
+        to_root=Path(os.path.relpath(root, folder)).as_posix(),
+    )
 
 
 def load_claims(target: Path | str, declaration: Declaration) -> ClaimsPlan:

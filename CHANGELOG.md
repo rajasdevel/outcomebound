@@ -11,6 +11,17 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+A patch release. adopt now reports a `tickets` claims plan whose claims run in a folder that the
+plan was not written for, and it no longer reads a block that holds what it writes as an edit.
+
+Do these steps first:
+
+1. If a `tickets` claims plan has no `cwd`, examine it too. 1.1.0 step 6 names only a relative
+   `cwd`, but a plan with no `cwd` also starts at the folder of the plan file. A plan in
+   `.outcomebound/` that runs its claims at the checkout root needs `"cwd": ".."`. Run
+   `outcomebound adopt .` again: the install report now shows a `warning` line for each such plan,
+   with the `cwd` to write.
+
 ### Fixed
 
 - A recorded block or file that holds what `adopt` writes there now, but not what it recorded,
@@ -19,6 +30,19 @@ The bump comes from what an adopter must do, not from the commit type; see
   Now `--check` reads it `stale` and says why, and `adopt` records it without `--force` and
   names it on a `kept` line. A block or file that differs from both is refused without
   `--force`, as before.
+- A claims plan below the checkout root with no `cwd`, or with `"cwd": "."`, runs its claims in the
+  folder of the plan file. Before, `tickets check` gave no warning for such a plan when its claims
+  declared no `required_paths`, and adopt gave no warning at all.
+
+### Added
+
+- `tickets check` gives the warning `CLAIM_CWD_PLAN_FOLDER`, about the plan and with no ticket id,
+  when the plan's claims run in the folder of the plan file and that folder is not the checkout
+  root. Its next step gives the `cwd` that runs the claims at the root, `..` from `.outcomebound/`.
+- adopt, at each install and upgrade, gives a `warning` line for the claims plan that
+  `.outcomebound/tickets.json` declares: one for each claim that `CLAIM_PATH_ABSENT` names, and one
+  for the condition of `CLAIM_CWD_PLAN_FOLDER`. Each line gives the `cwd` to write. adopt does not
+  change the plan and refuses nothing. `tickets check` and adopt use one rule for both conditions.
 
 ## [1.1.0] - 2026-10-04
 

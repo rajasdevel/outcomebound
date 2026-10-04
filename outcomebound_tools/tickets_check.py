@@ -35,7 +35,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from outcomebound_tools.tickets_bounds import covers
-from outcomebound_tools.tickets_claims import ClaimsPlan, absent_paths, load_claims
+from outcomebound_tools.tickets_claims import ClaimsPlan, load_claims, placement
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_draft import draft_relations, read_draft
 from outcomebound_tools.tickets_graph import cycles
@@ -316,15 +316,20 @@ def _cwd_messages(plan: ClaimsPlan, target: Path) -> tuple[Message, ...]:
     )
 
 
-def _absent_messages(plan: ClaimsPlan, target: Path) -> Iterator[Message]:
-    """Each claim that declares a required path the checkout does not hold.
+def _placement_messages(plan: ClaimsPlan, target: Path) -> Iterator[Message]:
+    """What shows that the plan's claims would run in a folder it was not written for.
 
-    A run of that claim reads `UNVERIFIED`, so the plan is the place to say it first.
-    It is a fact about the plan and not about a ticket, so it is stamped with no id;
-    a ticket's own work may still add the path, so it is a warning.
+    `CLAIM_PATH_ABSENT` for each claim that declares a required path the checkout
+    does not hold, since a run of that claim reads `UNVERIFIED`; `CLAIM_CWD_PLAN_FOLDER`
+    where the claims would run in the plan file's own folder below the checkout root,
+    which a plan whose claims declare no paths shows in no other way. Both are facts
+    about the plan and not about a ticket, so they are stamped with no id; both are
+    warnings, because a ticket's own work may add the path and a plan may mean its
+    own folder. `placement` decides both, the answer `adopt` reports too.
     """
 
-    for name, absent in absent_paths(plan, target).items():
+    found = placement(plan, target)
+    for name, absent in found.absent.items():
         yield message(
             "CLAIM_PATH_ABSENT",
             "",
@@ -332,8 +337,17 @@ def _absent_messages(plan: ClaimsPlan, target: Path) -> Iterator[Message]:
             f"its working directory {plan.cwd_resolved}, and the checkout holds none of "
             "them there",
             "point the plan's cwd at the folder the claim runs in (a relative cwd starts at "
-            "the plan file's folder, so from `.outcomebound/` the checkout root is `..`), "
+            f"the plan file's folder, so from there the checkout root is `{found.to_root}`), "
             "or add the path",
+        )
+    if found.at_plan_folder:
+        yield message(
+            "CLAIM_CWD_PLAN_FOLDER",
+            "",
+            f"the claims plan {plan.path} runs its claims in {plan.cwd_resolved}, the plan "
+            "file's own folder and not the checkout root; a plan with no cwd, or with "
+            '"cwd": ".", runs them there, since a relative cwd starts at the plan file\'s folder',
+            f'write "cwd": "{found.to_root}" in the plan to run its claims at the checkout root',
         )
 
 
@@ -513,6 +527,6 @@ def check_loaded(
         messages=(
             *given.run_level,
             *_cwd_messages(claims, root),
-            *_absent_messages(claims, root),
+            *_placement_messages(claims, root),
         ),
     )

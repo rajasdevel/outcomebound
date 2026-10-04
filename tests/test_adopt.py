@@ -3,7 +3,7 @@
 Every target is a Git repository under `tmp_path`, and every assertion is about bytes on
 disk, the manifest or an exit status, never about a sentence adopt prints; the printed things
 read are the footprint's figure, the nested byte warning, the finish check's statement per
-harness and the `kept` line, which exist only as output.
+harness, the `kept` line and the claims plan warning, which exist only as output.
 """
 
 from __future__ import annotations
@@ -2038,3 +2038,76 @@ def test_a_codex_install_names_the_sandbox_route_for_unattended_sessions(
     assert f'"{resolved / ".agents"}"' in line and f'"{resolved / ".git"}"' in line
     _, out, _ = run(capsys, str(target), "--harness", "claude-code")
     assert "writable_roots" not in out
+
+
+TICKETS_DECLARATION = {
+    "version": 1,
+    "store": "github",
+    "repo": "example/project",
+    "label": "ticket",
+    "human_label": "human-only",
+    "request_label": "human-requested",
+    "claims": ".outcomebound/ticket-claims.json",
+}
+
+
+def tickets_target(path: Path, cwd: str | None, declares: bool, declared: bool = True) -> Path:
+    """A repository whose claims plan sits in `.outcomebound/`, written for the checkout root,
+    with the given top-level `cwd`; its one claim declares `app.py` where `declares`."""
+
+    claim: dict[str, object] = {"name": "unit", "command": ["true"]}
+    if declares:
+        claim["required_paths"] = ["app.py"]
+    plan: dict[str, object] = {"version": 1, "claims": [claim]}
+    if cwd is not None:
+        plan["cwd"] = cwd
+    files = {"app.py": "", ".outcomebound/ticket-claims.json": json.dumps(plan)}
+    if declared:
+        files[".outcomebound/tickets.json"] = json.dumps(TICKETS_DECLARATION)
+    return repo(path, files)
+
+
+def tickets_lines(out: str) -> list[str]:
+    return [line for line in warnings(out) if line.startswith("warning  tickets:")]
+
+
+@pytest.mark.parametrize("declares", [True, False])
+@pytest.mark.parametrize("cwd", [None, ".", ".."])
+def test_an_install_reports_a_claims_plan_that_runs_in_its_own_folder(
+    tmp_path: Path, capsys: Capture, cwd: str | None, declares: bool
+) -> None:
+    """A claims plan in `.outcomebound/` with no `cwd` or `"cwd": "."` runs its claims there
+    since 1.1.0, whether or not a claim declares paths: each install and upgrade warns and says
+    to write `"cwd": ".."`, and leaves the plan, the project's file, as it was. `".."` is
+    not warned about."""
+
+    target = tickets_target(tmp_path / "t", cwd, declares)
+    plan = (target / ".outcomebound/ticket-claims.json").read_bytes()
+
+    code, out, _ = run(capsys, str(target))
+
+    assert code == 0
+    assert (target / ".outcomebound/ticket-claims.json").read_bytes() == plan
+    lines = tickets_lines(out)
+    if cwd == "..":
+        assert lines == []
+        return
+    assert any("runs its claims in .outcomebound/" in line for line in lines), lines
+    assert all('"cwd": ".."' in line for line in lines), lines
+    assert any("`unit`" in line and ".outcomebound/app.py" in line for line in lines) is declares
+
+
+def test_an_install_says_nothing_of_a_plan_no_tickets_declaration_names(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """With no `.outcomebound/tickets.json`, or a declaration whose plan is absent, there is no
+    claims plan to report on, and `tickets check` refuses the second itself."""
+
+    undeclared = tickets_target(tmp_path / "u", None, True, declared=False)
+    code, out, _ = run(capsys, str(undeclared))
+    assert code == 0 and tickets_lines(out) == []
+
+    planless = tickets_target(tmp_path / "p", None, True)
+    (planless / ".outcomebound/ticket-claims.json").unlink()
+    code, out, _ = run(capsys, str(planless))
+    assert code == 0 and tickets_lines(out) == []

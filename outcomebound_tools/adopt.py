@@ -61,6 +61,9 @@ from outcomebound_tools import (
     paths,
 )
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
+from outcomebound_tools.tickets_claims import load_claims, placement
+from outcomebound_tools.tickets_declaration import load_declaration
+from outcomebound_tools.tickets_report import EngineError, Refusal
 
 ENGINE = home.ROOT
 MANIFEST = ".outcomebound/manifest.json"
@@ -1452,6 +1455,49 @@ def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     ]
 
 
+def claims_plan_notes(target: Path) -> Notes:
+    """A warning where the claims plan that `.outcomebound/tickets.json` declares would run
+    its claims in a folder it was not written for, as `tickets_claims.placement` decides for
+    `tickets check` too: since 1.1.0 a relative `cwd`, and a plan with none, starts at the plan
+    file's folder, and an upgrade is where a plan written for 1.0.0 first meets that. The plan
+    is the project's file, so this writes nothing to it and refuses nothing. With no
+    declaration, or none `tickets` can read, or no readable plan, it says nothing:
+    `tickets check` refuses those itself."""
+
+    try:
+        plan = load_claims(target, load_declaration(target))
+    except (Refusal, EngineError):
+        return []
+    found = placement(plan, target)
+    if not found.misplaced:
+        return []
+    root = target.resolve()
+    shown = _printable(plan.path)
+    folder = _printable(Path(plan.path).parent.as_posix())
+    where = _printable(Path(os.path.relpath(plan.cwd_resolved, root)).as_posix())
+    fix = f'"cwd": "{_printable(found.to_root)}"'
+    notes: Notes = [
+        (
+            "warning",
+            f"tickets: the claim `{_printable(name)}` in {shown} declares "
+            f"{_printable(', '.join(absent))}, which the checkout does not hold from the plan's "
+            f"working directory {where}; point the plan's cwd at the folder the claim runs in "
+            f"(from {folder}/ the checkout root is {fix}), or add the path",
+        )
+        for name, absent in found.absent.items()
+    ]
+    if found.at_plan_folder:
+        notes.append(
+            (
+                "warning",
+                f"tickets: the claims plan {shown} runs its claims in {folder}/, the plan file's "
+                'own folder, not at the checkout root, as a plan with no cwd or with "cwd": "." '
+                f"does; write {fix} in it to run them at the root",
+            )
+        )
+    return notes
+
+
 def ignored_notes(target: Path, planned: Planned) -> Notes:
     """A warning for each path this run writes that Git ignores: the manifest records it, so
     every other clone, which never gets it, reads it missing in `--check`. A tracked path is
@@ -1551,6 +1597,7 @@ def install(
     run.notes.extend(nested_bytes(run, table, found))
     run.notes.extend(ancestor_notes(target, found))
     run.notes.extend(codex_sandbox_notes(target, found))
+    run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
     run.notes.extend(ignored_notes(target, planned))
     run.notes.extend(uncommitted_notes(target, planned))

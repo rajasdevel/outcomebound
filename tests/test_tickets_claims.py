@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import validation
-from outcomebound_tools.tickets_claims import ClaimDefinition, load_claims
+from outcomebound_tools.tickets_claims import ClaimDefinition, load_claims, placement
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_git import git
 from outcomebound_tools.tickets_report import Refusal
@@ -176,6 +176,22 @@ def test_cwd_absent_is_the_plan_folder(tmp_path: Path) -> None:
     assert plan.cwd_inside is True
     assert plan.cwd_resolved == (root / ".outcomebound").resolve()
     assert validation.load_plan(root / PLAN).cwd == plan.cwd_resolved
+
+
+def test_a_plan_in_a_nested_folder_is_told_the_cwd_back_to_the_root(tmp_path: Path) -> None:
+    """With no `cwd`, a plan two folders below the root runs its claims in its own folder,
+    and the `cwd` that runs them at the root from there is `../..`; written, it is not
+    at the plan's folder any more."""
+
+    root = _repository(tmp_path)
+    nested = "config/checks/plan.json"
+    _write_plan(root, _plan_document([_claim("here", _exit(0))]), nested)
+
+    found = placement(load_claims(root, _declaration(nested)), root)
+
+    assert (found.at_plan_folder, found.to_root) == (True, "../..")
+    _write_plan(root, _plan_document([_claim("here", _exit(0))], cwd="../.."), nested)
+    assert placement(load_claims(root, _declaration(nested)), root).misplaced is False
 
 
 def test_required_paths_are_named_relative_to_the_checkout(tmp_path: Path) -> None:
@@ -339,4 +355,4 @@ def test_tests_import_only_public_names() -> None:
         for alias in node.names:
             reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
-    assert reached == 5, "this file imports exactly the seam it tests"
+    assert reached == 6, "this file imports exactly the seam it tests"
