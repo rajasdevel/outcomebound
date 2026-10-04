@@ -131,7 +131,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "BOUNDS_WHOLE_REPOSITORY",
         "DISCOVERED_FROM_ABSENT",
     ),
-    Level.INFO: ("HOLD_SURFACES_DIFFER", "WAITS_ON_BRIEF"),
+    Level.INFO: ("HOLD_SURFACES_DIFFER", "WAITS_ON_BRIEF", "RELATION_UNCHECKED"),
 }
 
 MESSAGES: Mapping[str, Level] = MappingProxyType(

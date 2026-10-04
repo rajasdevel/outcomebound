@@ -327,11 +327,11 @@ def test_a_heading_of_only_removed_characters_is_citable_by_nobody(tmp_path: Pat
 
     assert anchor_of("## —") == anchor_of("## ***") == ""
     # Two headings whose anchor is the empty string are not two headings sharing
-    # an anchor: neither has one, so the empty citation resolves to nothing
-    # rather than to whichever came first.
-    with pytest.raises(LinksError) as raised:
-        section(tmp_path, path, "")
-    assert raised.value.code == "READS_UNRESOLVED"
+    # an anchor: neither has one. The empty citation names the whole file, never
+    # whichever of them came first.
+    whole = section(tmp_path, path, "")
+    assert (whole.anchor, whole.heading, whole.level) == ("", "", 0)
+    assert whole.text == (tmp_path / path).read_text(encoding="utf-8")
 
     # They still end the section above them, because the extent rule counts
     # headings and the anchor rule only decides what can be cited.

@@ -48,7 +48,9 @@ class Section:
 
     `heading` is the heading's text, with its `#` markers and any closing run of
     them dropped; `level` is how many markers it carried. `text` is the section's
-    lines as written, fenced content included: what an implementer reads.
+    lines as written, fenced content included: what an implementer reads. A
+    citation of a path alone names the whole file: its `anchor` and `heading` are
+    empty, its `level` is 0, and `text` is the file.
     """
 
     path: str
@@ -169,6 +171,9 @@ def _fenced(text: str, lines: list[str]) -> list[bool]:
 def section(target: Path | str, path: str, anchor: str) -> Section:
     """The one section `path#anchor` names, or the `LinksError` saying why not.
 
+    An empty `anchor` names the whole file, which resolves wherever the file can
+    be read as text.
+
     `READS_UNRESOLVED` where the path is not one this engine reads, the file is
     not there, or no heading carries the anchor; `READS_AMBIGUOUS` where two
     headings share it. A section runs from its heading to the line before the
@@ -187,11 +192,14 @@ def section(target: Path | str, path: str, anchor: str) -> Section:
         ) from error
     text = _read(target, relative)
     if text is None:
+        resolves = f"the anchor {anchor!r}" if anchor else "the whole-file citation"
         raise LinksError(
             "READS_UNRESOLVED",
-            f"no file {relative} is in this checkout, so the anchor {anchor!r} resolves to "
-            "nothing; cite a markdown file the repository holds",
+            f"no file {relative} is in this checkout, so {resolves} resolves to "
+            "nothing; cite a file the repository holds",
         )
+    if not anchor:
+        return Section(path=relative, anchor="", heading="", level=0, text=text)
     lines = text.split("\n")
     headings = _headings(lines, _fenced(text, lines))
     found = [at for at, heading in enumerate(headings) if heading.anchor == anchor != ""]

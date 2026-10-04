@@ -750,8 +750,8 @@ def test_reader_messages_reach_the_report(
 def test_bounds_findings_reach_the_report(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A `bounds` entry with an empty last segment grants nothing and is an error;
-    one whose literal part is the whole repository is a warning.
+    """A `bounds` entry with an empty segment grants nothing and is an error; one
+    whose literal part is the whole repository is a warning; a folder may end in `/`.
 
     A ticket is linted through `check`, so this is pinned where `check` carries
     it and not only where the model decides it.
@@ -759,17 +759,17 @@ def test_bounds_findings_reach_the_report(
 
     root = checkout(
         tmp_path,
-        document("#1", bounds=["docs/"]),
+        document("#1", bounds=["docs//specs"]),
         document("#2", bounds=["."]),
-        document("#3", bounds=["docs/specs"]),
+        document("#3", bounds=["docs/specs", "docs/tickets/"]),
     )
 
     found = report(root, capsys=capsys, expect=1)
 
     assert codes(found, "#1") == ["BOUNDS_INVALID"]
     assert codes(found, "#2") == ["BOUNDS_WHOLE_REPOSITORY"]
-    assert codes(found, "#3") == [], "a directory is written without a trailing separator"
-    assert any("docs/" in one for one in said(found, "BOUNDS_INVALID"))
+    assert codes(found, "#3") == [], "a folder is written with or without a trailing `/`"
+    assert any("docs//specs" in one for one in said(found, "BOUNDS_INVALID"))
 
 
 # --- the seam, the schema and two runs ---------------------------------------------
