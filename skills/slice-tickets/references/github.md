@@ -77,8 +77,11 @@ gh issue edit <n> --repo <repo> --parent <p>
 gh issue edit <n> --repo <repo> --add-blocked-by <b1>,<b2>
 ```
 
-A `gh` that lacks these flags sets neither; set the relation in the tracker's own view instead.
-The ticket label is applied at creation, to the issues the user accepted in the breakdown, and
-to nothing that already exists; removing it is the user's act alone. Where a command fails, stop
-there and print what is left for a person. Produce the export again after the last write, and
-run `check --input issues.json` on it.
+A `gh` that lacks these flags sets neither: print each relation for a person, and name it in the
+report as not set, since agents read what can start from these relations. The ticket label is
+applied at creation, to the issues the user accepted in the breakdown and to a follow-up a goal
+envelope's Follow-ups line accepts, and to nothing that already exists; removing it is the user's
+act alone. Where a command fails, produce the export again to see what was created, and run again
+only what it shows missing. Where it fails again, stop publishing, print what is left for a
+person, report those tickets as waiting on them, and go on with the work that does not depend on
+them. Produce the export again after the last write, and run `check --input issues.json` on it.

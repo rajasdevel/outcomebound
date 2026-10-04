@@ -1113,9 +1113,9 @@ def test_the_skills_and_the_fragment_name_what_the_code_does() -> None:
     assert "`outcomebound research models/README.md`" in core
     assert "`outcomebound research models/<maker>/<model-id>.md`" in core
     assert research.BLOB + "models/README.md" in core
-    assert "`outcomebound research applications/implementer-tiers.md`" in words(
-        "skills/hand-off-tickets/SKILL.md"
-    )
+    handoff = words("skills/hand-off-tickets/SKILL.md")
+    assert "`outcomebound research applications/implementer-tiers.md`" in handoff
+    assert research.BLOB + "applications/implementer-tiers.md" in handoff
     named = set(re.findall(r"outcomebound research (\w+)", words("fragments/setup/research.md")))
     assert named == set(research.SUBCOMMANDS)
 
