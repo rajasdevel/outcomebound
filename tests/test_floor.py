@@ -333,19 +333,19 @@ def test_secrets_scan_the_range_with_base_and_the_tracked_files_without_it(
     (tools / "gitleaks").chmod(0o755)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     root = repository(tmp_path, {"app.py": "token = 1\n"})
-    install(root, shipped("python.secrets"))
+    install(root, shipped("secrets"))
     base = commit(root, "floor", {})
     (root / "local.env").write_text("untracked\n", encoding="utf-8")
 
-    status, verdicts, output = run(capsys, "check", str(root), "--claim", "python.secrets")
+    status, verdicts, output = run(capsys, "check", str(root), "--claim", "secrets")
     scanned = (tools / "argv").read_text(encoding="utf-8").split()
 
-    assert (status, verdicts) == (1, {"python.secrets": "FAIL"}), output
+    assert (status, verdicts) == (1, {"secrets": "FAIL"}), output
     assert scanned[0] == "dir" and "--redact" in scanned
     assert "app.py:3: generic-api-key" in output and "local.env" not in output
     assert "s3cr3t" not in output
 
-    status, _, output = run(capsys, "check", str(root), "--claim", "python.secrets", "--base", base)
+    status, _, output = run(capsys, "check", str(root), "--claim", "secrets", "--base", base)
     scanned = (tools / "argv").read_text(encoding="utf-8").split()
 
     assert scanned[:2] == ["git", f"--log-opts={base}..HEAD"] and "--redact" in scanned
@@ -371,23 +371,21 @@ def test_a_clean_gitleaks_run_passes_through_its_report_file(
     (tools / "gitleaks").chmod(0o755)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     root = repository(tmp_path, {"app.py": "x = 1\n"})
-    install(root, shipped("python.secrets"))
+    install(root, shipped("secrets"))
     base = commit(root, "floor", {})
     commit(root, "work", {"app.py": "x = 2\n"})
 
     for extra in ((), ("--base", base)):
-        status, verdicts, output = run(
-            capsys, "check", str(root), "--claim", "python.secrets", *extra
-        )
+        status, verdicts, output = run(capsys, "check", str(root), "--claim", "secrets", *extra)
 
-        assert (status, verdicts.get("python.secrets")) == (0, "PASS"), output
+        assert (status, verdicts.get("secrets")) == (0, "PASS"), output
 
 
 def test_the_shipped_secrets_claim_keeps_redact_in_both_of_its_argvs() -> None:
     """Both argvs, with a base and without one, carry gitleaks' own `--redact`, so gitleaks
     itself redacts the secret in what it reports."""
 
-    claim = shipped("python.secrets")
+    claim = shipped("secrets")
 
     assert "--redact" in claim["argv"] and "--redact" in claim["argv_without_base"]
 
@@ -535,7 +533,7 @@ def test_a_claim_floor_json_adds_with_its_first_baseline_loosens_nothing(
     [
         (("widen\n\nFloor-Loosening: a long line in b.py; ruled D12",), True),
         (("widen\n\nFloor-Loosening: drop E501; keep E502; ruled D12",), True),
-        (("Floor-Loosening: allow long lines; ruled D12\n\nSigned-off-by: x", "widen"), True),
+        (("Floor-Loosening: allow long lines; ruled D12\n\nSigned-off-by: x", "widen"), False),
         (("widen\n\nFloor-Loosening: a long line in b.py",), False),
         (("widen\n\nFloor-Loosening: ; ruled D12",), False),
     ],
@@ -549,7 +547,7 @@ def test_a_floor_loosening_line_in_the_range_lets_it_pass_and_is_named(
     status, verdicts, output = run(capsys, "check", str(root), "--base", base)
 
     assert (status, verdicts.get("loosening")) == ((0, "PASS") if passes else (1, "FAIL")), output
-    assert (ruling[:12] in output) == passes
+    assert (f"{ruling[:12]} Floor-Loosening:" in output) == passes
 
 
 def test_a_ruling_at_or_before_the_base_does_not_cover_the_range(
@@ -564,6 +562,65 @@ def test_a_ruling_at_or_before_the_base_does_not_cover_the_range(
         1,
         {"shell.injection": "PASS", "loosening": "FAIL"},
     )
+
+
+@pytest.mark.parametrize(
+    ("second", "passes"),
+    [("widen", False), ("widen\n\nFloor-Loosening: a long line in b.py; ruled D13", True)],
+)
+def test_a_ruling_covers_the_loosenings_its_own_commit_makes_and_no_other(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], second: str, passes: bool
+) -> None:
+    root = repository(tmp_path, BEFORE)
+    install(root, shipped("shell.injection"))
+    base = commit(root, "floor", {})
+    ruled = "record\n\nFloor-Loosening: python.lint baseline; ruled X1"
+    commit(root, ruled, LOOSENINGS["a baseline gains a line"])
+    widened = commit(root, second, LOOSENINGS["a noqa is added"])
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+
+    assert (status, verdicts.get("loosening")) == ((0, "PASS") if passes else (1, "FAIL")), output
+    assert f"{LINT_BASELINE} gained 1 line (ruled in " in output
+    assert (f"not ruled: {widened[:12]} carries no Floor-Loosening line" in output) != passes
+
+
+def test_a_ruled_commit_does_not_cover_a_later_loosening_of_the_same_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, BEFORE)
+    install(root, shipped("shell.injection"))
+    base = commit(root, "floor", {})
+    line = SPACED + comment("noqa: E501") + "\n"
+    commit(root, "one\n\nFloor-Loosening: one long line; ruled D1", {"src/b.py": line})
+    later = commit(root, "two", {"src/b.py": line + line})
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+
+    assert (status, verdicts.get("loosening")) == (1, "FAIL"), output
+    assert f"src/b.py adds {comment('noqa: e501')} (x2) (not ruled: {later[:12]}" in output
+
+
+@pytest.mark.parametrize("ruled", [False, True])
+def test_a_loosening_only_a_merge_makes_passes_where_a_commit_touching_its_file_is_ruled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], ruled: bool
+) -> None:
+    root = repository(tmp_path, BEFORE)
+    install(root, shipped("shell.injection"))
+    base = commit(root, "floor", {})
+    git(root, "checkout", "-q", "-b", "side")
+    commit(root, "side", {"src/c.py": "z = 1\n"})
+    git(root, "checkout", "-q", "main")
+    commit(root, "main", {"src/d.py": "w = 1\n"})
+    git(root, "merge", "-q", "--no-ff", "--no-commit", "side")
+    (root / "src" / "b.py").write_text(SPACED + comment("noqa: E501") + "\n", encoding="utf-8")
+    trailer = "\n\nFloor-Loosening: a long line; ruled D2" if ruled else ""
+    commit(root, "merge side" + trailer, {})
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+
+    assert (status, verdicts.get("loosening")) == ((0, "PASS") if ruled else (1, "FAIL")), output
+    assert ("no one commit makes it, and none that touches it" in output) != ruled
 
 
 def test_the_range_starts_at_the_merge_base_so_a_tightening_on_the_base_is_not_a_loosening(
@@ -614,11 +671,12 @@ def tree(root: Path) -> dict[str, bytes]:
 @pytest.mark.parametrize(
     ("files", "stacks"),
     [
-        ({"lib/a.py": "x = 1\n"}, ("python",)),
-        ({"pyproject.toml": "[project]\n"}, ("python",)),
-        ({"bin/run.sh": "echo\n"}, ("shell",)),
-        ({"a.py": "x = 1\n", "run.sh": "echo\n"}, ("python", "shell")),
-        ({"README": "x\n"}, ()),
+        ({"lib/a.py": "x = 1\n"}, ("python", "secrets")),
+        ({"pyproject.toml": "[project]\n"}, ("python", "secrets")),
+        ({"bin/run.sh": "echo\n"}, ("shell", "secrets")),
+        ({"a.py": "x = 1\n", "run.sh": "echo\n"}, ("python", "shell", "secrets")),
+        ({"README": "x\n"}, ("secrets",)),
+        ({}, ()),
     ],
 )
 def test_propose_offers_the_stacks_git_tracks_and_writes_nothing(
@@ -638,6 +696,90 @@ def test_propose_offers_the_stacks_git_tracks_and_writes_nothing(
     assert status == (0 if stacks else 1)
     offered = [claim["name"] for claim in json.loads(printed)["claims"]] if stacks else []
     assert offered == [claim["name"] for stack in stacks for claim in floor.RECIPES[stack]]
+
+
+def test_propose_for_typescript_offers_secrets_and_says_why_it_proposes_no_type_or_lint_claim(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    files = {"package.json": "{}\n", "tsconfig.json": "{}\n", "src/a.ts": "export const a = 1;\n"}
+    root = repository(tmp_path, {**files, "bin/run.sh": "echo\n"})
+
+    status = floor.main(["propose", str(root)])
+    printed = capsys.readouterr()
+
+    assert status == 0
+    offered = [claim["name"] for claim in json.loads(printed.out)["claims"]]
+    assert offered == ["shell.syntax", "shell.injection", "shell.lint", "secrets"]
+    assert "no claim is proposed for its types or its lint" in printed.err
+    for claim in floor.TYPESCRIPT_CLAIMS:
+        assert json.dumps(claim) in printed.err
+        assert floor.parse_claim(claim).mode == "gate"
+
+
+PACKAGES = {
+    "src/pkg/__init__.py": "\n",
+    "src/pkg/sub/__init__.py": "\n",
+    "src/pkg/a.py": "x: int = 1\n",
+    "scripts/tool.py": "y = 1\n",
+    "docs/tool.py": "y = 2\n",
+}
+
+
+@pytest.mark.parametrize(
+    ("config", "targets"),
+    [
+        ({}, ["src/pkg"]),
+        ({"mypy.ini": "[mypy]\nfiles = src\n"}, []),
+        ({"pyproject.toml": '[tool.mypy]\nfiles = ["src"]\n'}, []),
+        ({"setup.cfg": "[mypy-yaml]\nfiles = x\n"}, ["src/pkg"]),
+        ({"__init__.py": "\n"}, []),
+    ],
+)
+def test_propose_names_each_outermost_package_where_the_mypy_config_names_no_files(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], config: dict[str, str], targets: list[str]
+) -> None:
+    root = repository(tmp_path, {**PACKAGES, **config})
+
+    assert floor.main(["propose", str(root)]) == 0
+    claims = {claim["name"]: claim for claim in json.loads(capsys.readouterr().out)["claims"]}
+
+    assert claims["python.types"]["argv"] == ["mypy", "--output", "json", *targets]
+
+
+def test_the_proposed_types_claim_reads_a_project_whose_scripts_share_a_module_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    on_path(monkeypatch, "mypy")
+    root = repository(tmp_path, PACKAGES)
+    assert floor.main(["propose", str(root)]) == 0
+    proposed = json.loads(capsys.readouterr().out)["claims"]
+    source = proposal(tmp_path, *(c for c in proposed if c["name"] == "python.types"))
+
+    output = run(capsys, "apply", str(root), "--floor", str(source), "--accept")[2]
+
+    assert "python.types: passes" in output, output
+    assert run(capsys, "check", str(root))[:2] == (0, {"python.types": "PASS"})
+
+
+def test_mypy_stopping_is_named_by_the_error_that_stopped_it_with_its_hint(tmp_path: Path) -> None:
+    hint = "Common resolutions include:\n    a) adding `__init__.py` somewhere"
+    records = [
+        {"file": "src/pkg/a.py", "line": 1, "column": 0, "code": "import-not-found"},
+        {"file": "scripts/tool.py", "line": -1, "column": -1, "code": None, "hint": hint},
+    ]
+    messages = ['Cannot find a stub for "missing"', "Source file found twice: tool, scripts.tool"]
+    text = "".join(
+        json.dumps({**record, "message": message, "severity": "error"}) + "\n"
+        for record, message in zip(records, messages, strict=True)
+    )
+
+    with pytest.raises(floor.Unreadable) as stopped:
+        floor.parse_mypy(2, text, tmp_path)
+
+    shown = str(stopped.value)
+    assert "scripts/tool.py: Source file found twice: tool, scripts.tool" in shown
+    assert "(Common resolutions include: a) adding `__init__.py` somewhere)" in shown
+    assert "missing" not in shown and "`files` or `exclude`" in shown
 
 
 def test_apply_then_remove_leaves_the_tree_as_it_was(
@@ -1106,18 +1248,18 @@ def test_an_old_secret_is_listed_once_never_recorded_and_a_new_one_fails(
 ) -> None:
     on_path(monkeypatch, "gitleaks")
     root = repository(tmp_path, {"app.py": f'aws = "{OLD_LEAK}"\n'})
-    source = proposal(tmp_path, shipped("python.secrets"))
+    source = proposal(tmp_path, shipped("secrets"))
 
     status, _, output = run(capsys, "apply", str(root), "--floor", str(source), "--accept")
 
     assert status == 0, output
     assert "  app.py:aws-access-token:1" in output.splitlines(), output
     assert OLD_LEAK not in output
-    assert modes(root) == {"python.secrets": "gate"}
+    assert modes(root) == {"secrets": "gate"}
     assert "recorded" not in installed(root)["adopted"]
     assert not (root / floor.BASELINE_DIR).exists()
     status, verdicts, output = run(capsys, "check", str(root))
-    assert (status, verdicts) == (0, {"python.secrets": "PASS"}), output
+    assert (status, verdicts) == (0, {"secrets": "PASS"}), output
     assert "in the commits since adoption on" in output
 
     base = commit(root, "adopt the floor", {})
@@ -1125,7 +1267,7 @@ def test_an_old_secret_is_listed_once_never_recorded_and_a_new_one_fails(
     for extra in ((), ("--base", base)):
         status, verdicts, output = run(capsys, "check", str(root), *extra)
 
-        assert (status, verdicts["python.secrets"]) == (1, "FAIL"), output
+        assert (status, verdicts["secrets"]) == (1, "FAIL"), output
         assert "deploy.py:1 in " in output and "app.py" not in output
         assert NEW_LEAK not in output
 
@@ -1140,7 +1282,7 @@ def test_the_fingerprint_apply_prints_allowlists_the_secret_in_gitleaksignore(
     root = repository(tmp_path, {"README": "x\n"})
     base = git(root, "rev-parse", "HEAD")
     commit(root, "leak", {"app.py": f'aws = "{OLD_LEAK}"\n'})
-    source = proposal(tmp_path, shipped("python.secrets"))
+    source = proposal(tmp_path, shipped("secrets"))
     output = run(capsys, "apply", str(root), "--floor", str(source), "--strict", "--accept")[2]
     line = next(text.strip() for text in output.splitlines() if "aws-access-token" in text)
 
@@ -1148,9 +1290,9 @@ def test_the_fingerprint_apply_prints_allowlists_the_secret_in_gitleaksignore(
         if allowed:
             (root / ".gitleaksignore").write_text(line + "\n", encoding="utf-8")
         for extra in ((), ("--base", base)):
-            verdicts = run(capsys, "check", str(root), "--claim", "python.secrets", *extra)[1]
+            verdicts = run(capsys, "check", str(root), "--claim", "secrets", *extra)[1]
 
-            assert verdicts["python.secrets"] == verdict, (line, extra)
+            assert verdicts["secrets"] == verdict, (line, extra)
 
 
 def test_apply_fits_the_real_ruff_and_mypy_and_a_new_lint_finding_fails(
@@ -1203,16 +1345,47 @@ def test_apply_fits_the_real_shellcheck_and_a_new_warning_fails(
 
 
 def test_provision_prints_shellchecks_install_command_and_downloads_nothing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = repository(tmp_path, {"run.sh": "echo\n"})
-    install(root, shipped("shell.lint"), shipped("python.secrets"))
+    install(root, shipped("shell.lint"), shipped("secrets"))
+    (tmp_path / "empty").mkdir()
+    monkeypatch.setenv("PATH", str(tmp_path / "empty"))
 
     status, _, output = run(capsys, "provision", str(root), "--accept")
 
     assert status == 0
     assert "shellcheck is never downloaded here; install 0.9.0 or later from" in output
     assert "gitleaks is never downloaded here" in output and "pip" not in output
+
+
+def test_provision_installs_no_tool_path_has_at_its_min_version_or_later(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An externally managed python3 refuses pip, and needs no install of a tool PATH has."""
+
+    root = repository(tmp_path, {"a.py": "x = 1\n", "run.sh": "echo\n"})
+    install(
+        root,
+        *(shipped(name) for name in ("python.lint", "python.types", "secrets", "shell.lint")),
+    )
+    bin_dir = tmp_path / "tools"
+    bin_dir.mkdir()
+    versions = {"ruff": "ruff 0.16.7", "mypy": "mypy 2.3.0", "gitleaks": "8.30.1"}
+    versions["shellcheck"] = "ShellCheck - shell script analysis tool\nversion: 0.11.0"
+    for tool, text in {**versions, "python3": "Python 3.12.0"}.items():
+        (bin_dir / tool).write_text(f"#!/bin/sh\nprintf '%s\\n' '{text}'\n", encoding="utf-8")
+        (bin_dir / tool).chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir))
+
+    status, _, output = run(capsys, "provision", str(root))
+
+    assert status == 0, output
+    for tool, version in (("ruff", "0.16.7"), ("gitleaks", "8.21.2"), ("shellcheck", "0.9.0")):
+        assert f"{tool} is on PATH at {version} or later ({bin_dir / tool}): present" in output
+    assert "never downloaded" not in output
+    assert f"would run: {bin_dir / 'python3'} -I -m pip install mypy==2.3.1" in output, output
+    assert "ruff==" not in output
 
 
 def test_provision_installs_into_the_python3_on_path(
@@ -1228,7 +1401,7 @@ def test_provision_installs_into_the_python3_on_path(
     python = bin_dir / "python3"
     python.write_text("#!/bin/sh\n", encoding="utf-8")
     python.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(bin_dir))
 
     status, _, output = run(capsys, "provision", str(root))
 
@@ -1252,7 +1425,7 @@ def test_provision_runs_pip_isolated_so_a_pip_package_in_the_target_does_not_run
     bin_dir = tmp_path / "project-env" / "bin"
     bin_dir.mkdir(parents=True)
     (bin_dir / "python3").symlink_to(sys.executable)
-    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(bin_dir))
     seen: list[list[str]] = []
 
     def fake_execute(argv: list[str], *_: Any) -> tuple[int, bytes, bytes]:
@@ -1302,13 +1475,13 @@ def test_an_adoption_commit_outside_heads_history_leaves_the_secrets_claim_unver
     side = commit(root, "side", {"app.py": "x = 2\n"})
     git(root, "checkout", "-q", "main")
     adopted = {"commit": side if where == "a side branch" else "d" * 40, "on": "2026-01-15"}
-    install(root, shipped("python.secrets"), adopted=adopted)
+    install(root, shipped("secrets"), adopted=adopted)
 
     status, verdicts, output = run(capsys, "check", str(root))
 
-    assert (status, verdicts) == (1, {"python.secrets": "UNVERIFIED"}), output
+    assert (status, verdicts) == (1, {"secrets": "UNVERIFIED"}), output
     assert "is not in HEAD's history here; fetch it, or pass --base" in output
-    assert run(capsys, "check", str(root), "--base", "HEAD")[1]["python.secrets"] == "PASS"
+    assert run(capsys, "check", str(root), "--base", "HEAD")[1]["secrets"] == "PASS"
 
 
 def test_the_adoption_record_round_trips_one_field_a_line() -> None:
@@ -1654,11 +1827,11 @@ def test_the_secrets_range_starts_at_the_adoption_when_the_floor_was_adopted_on_
     fork = commit(root, "fork", {})
     adopted = commit(root, "before the floor", {"app.py": "x = 2\n"})
     record = {"commit": adopted, "on": "2026-01-15"}
-    commit(root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("python.secrets"), adopted=record)})
+    commit(root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("secrets"), adopted=record)})
 
     verdicts = run(capsys, "check", str(root), "--base", fork)[1]
 
-    assert verdicts == {"python.secrets": "PASS", "loosening": "PASS"}
+    assert verdicts == {"secrets": "PASS", "loosening": "PASS"}
     runs = [line.split() for line in (tools / "argv").read_text(encoding="utf-8").splitlines()]
     assert [words[:2] for words in runs] == [
         ["git", f"--log-opts={adopted}..HEAD"],
@@ -1678,11 +1851,11 @@ def test_a_secret_committed_before_an_adoption_on_the_branch_still_fails_the_sec
     fork = git(root, "rev-parse", "HEAD")
     adopted = commit(root, "a secret before the floor", {"app.py": f'aws = "{OLD_LEAK}"\n'})
     record = {"commit": adopted, "on": "2026-01-15"}
-    commit(root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("python.secrets"), adopted=record)})
+    commit(root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("secrets"), adopted=record)})
 
     status, verdicts, output = run(capsys, "check", str(root), "--base", fork)
 
-    assert (status, verdicts["python.secrets"]) == (1, "FAIL"), output
+    assert (status, verdicts["secrets"]) == (1, "FAIL"), output
     assert "app.py:1: aws-access-token" in output and OLD_LEAK not in output
 
 
@@ -1727,11 +1900,11 @@ def test_secrets_without_a_base_or_an_adoption_read_only_the_files_git_tracks(
     (root / ".venv" / "lib.py").write_text("token = 1\n", encoding="utf-8")
     (root / ".env").write_text("token = 1\n", encoding="utf-8")
     (root / ".gitleaksignore").write_text("app.py:generic-api-key:1\n", encoding="utf-8")
-    install(root, shipped("python.secrets"))
+    install(root, shipped("secrets"))
 
-    verdicts = run(capsys, "check", str(root), "--claim", "python.secrets")[1]
+    verdicts = run(capsys, "check", str(root), "--claim", "secrets")[1]
 
-    assert verdicts == {"python.secrets": "PASS"}
+    assert verdicts == {"secrets": "PASS"}
     listing = (tools / "listing").read_text(encoding="utf-8").split()
     assert listing == ["./.gitignore", "./.gitleaksignore", "./app.py"]
 
@@ -1746,11 +1919,9 @@ def test_the_tracked_files_scan_never_follows_a_symlinked_folder_out_of_the_root
     (outside / "file.txt").write_text("outside\n", encoding="utf-8")
     shutil.rmtree(root / "dir")
     (root / "dir").symlink_to(outside, target_is_directory=True)
-    install(root, shipped("python.secrets"))
+    install(root, shipped("secrets"))
 
-    assert run(capsys, "check", str(root), "--claim", "python.secrets")[1] == {
-        "python.secrets": "PASS"
-    }
+    assert run(capsys, "check", str(root), "--claim", "secrets")[1] == {"secrets": "PASS"}
     assert (tools / "listing").read_text(encoding="utf-8").split() == ["./app.py"]
 
 
@@ -1834,3 +2005,60 @@ def test_provision_says_a_prefixed_tool_is_installed_where_its_prefix_runs(
     assert status == 0
     assert "mypy runs through docker compose run --rm app: install it there" in output
     assert "pip" not in output
+
+
+# --- What a project's install and its sandbox need from the floor ---------------------------
+
+
+@pytest.mark.parametrize("adopted", [False, True])
+def test_apply_and_remove_name_the_adopt_step_where_outcomebound_is_installed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], adopted: bool
+) -> None:
+    """The project facts name a floor loosening as an edge only while a floor is installed."""
+
+    manifest = {floor.MANIFEST: "{}\n"} if adopted else {}
+    root = repository(tmp_path, {"run.sh": "echo\n", **manifest})
+    source = proposal(tmp_path, shipped("shell.injection"))
+    step = f"next: outcomebound adopt {root}\n  the floor is"
+
+    first = run(capsys, "apply", str(root), "--floor", str(source), "--accept")[2]
+    again = run(capsys, "apply", str(root), "--floor", str(source), "--accept")[2]
+    removed = run(capsys, "remove", str(root), "--accept")[2]
+
+    assert (f"{step} installed" in first, f"{step} removed" in removed) == (adopted, adopted)
+    assert "next:" not in again
+
+
+def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_folder(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = repository(tmp_path, {"README": "x\n"})
+    seen = tmp_path / "seen"
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    for tool, variable in floor.CACHES.items():
+        script = f'#!/bin/sh\nprintf "%s\\n" "${variable}" >> "{seen}"\n'
+        (tools / tool).write_text(script, encoding="utf-8")
+        (tools / tool).chmod(0o755)
+        monkeypatch.delenv(variable, raising=False)
+    claims = [
+        {"name": f"project.{tool}", "mode": "gate", "tool": tool, "argv": [tool], "parser": "exit"}
+        for tool in floor.CACHES
+    ]
+    install(root, *claims)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
+    passed = (0, {"project.ruff": "PASS", "project.mypy": "PASS"})
+
+    assert run(capsys, "check", str(root))[:2] == passed
+    assert seen.read_text(encoding="utf-8") == "\n\n"
+    seen.unlink()
+    root.chmod(0o555)
+    try:
+        if floor._writable(root):
+            pytest.skip("UNVERIFIED: this user can write a folder whose mode forbids it")
+        assert run(capsys, "check", str(root))[:2] == passed
+    finally:
+        root.chmod(0o755)
+    caches = seen.read_text(encoding="utf-8").split()
+    assert len(caches) == 2 and all(root not in Path(c).parents for c in caches), caches
+    assert not any(Path(cache).exists() for cache in caches)

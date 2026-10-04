@@ -5,7 +5,8 @@ What this module decides: the claims each stack is offered (`RECIPES`), what eac
 output means (the parsers), when a finding is new (a baseline is a sorted multiset of
 `path:code` lines, with no message, no position and no count), how `apply` fits a floor to a
 project that already has findings (`fit`: each finding recorded, never a secret, and the
-commit it was adopted at) and when a change loosens the floor (`loosening`). Every tool runs
+commit it was adopted at), when a change loosens the floor (`loosening`) and which commit's
+ruling covers it (`_rulings`: only the commit that makes it). Every tool runs
 from the project root through `validation._execute`, so it finds the project's own config:
 nothing here renders, names or shadows a config file, so every rule a check applies is the
 project's own. Tools come from PATH's absolute entries only, so a checkout cannot supply its
@@ -27,25 +28,27 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import sys
 import tempfile
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import fileplan, validation
+from outcomebound_tools import facts, fileplan, validation
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
-FLOOR_PATH = ".outcomebound/floor.json"
+FLOOR_PATH = facts.FLOOR
+MANIFEST = ".outcomebound/manifest.json"
 BASELINE_DIR = ".outcomebound/floor"
 FORMAT_VERSION = 1
 PASS, FAIL, UNVERIFIED = "PASS", "FAIL", "UNVERIFIED"
 GATE, BASELINE = "gate", "baseline"
 
-# --- The shipped recipes: python and shell ------------------------------------------------
+# --- The shipped recipes: python, shell and secrets ---------------------------------------
 #
 # `{file}` runs the argv once per tracked file matching `files`; `{range}` is `<base>..HEAD`
 # under `check --base`, and without it `argv_without_base` runs instead; `{report}` is a
@@ -78,15 +81,6 @@ RECIPES: dict[str, tuple[dict[str, Any], ...]] = {
             "argv": ["mypy", "--output", "json"],
             "parser": "mypy",
         },
-        {
-            "name": "python.secrets",
-            "mode": GATE,
-            "tool": "gitleaks",
-            "min_version": "8.21.2",
-            "argv": ["gitleaks", "git", "--log-opts={range}", *_LEAKS, "."],
-            "argv_without_base": ["gitleaks", "dir", *_LEAKS, "."],
-            "parser": "gitleaks",
-        },
     ),
     "shell": (
         {
@@ -108,8 +102,46 @@ RECIPES: dict[str, tuple[dict[str, Any], ...]] = {
             "parser": "shellcheck",
         },
     ),
+    # Offered to every project Git tracks a file in: a secret can be committed in any file.
+    "secrets": (
+        {
+            "name": "secrets",
+            "mode": GATE,
+            "tool": "gitleaks",
+            "min_version": "8.21.2",
+            "argv": ["gitleaks", "git", "--log-opts={range}", *_LEAKS, "."],
+            "argv_without_base": ["gitleaks", "dir", *_LEAKS, "."],
+            "parser": "gitleaks",
+        },
+    ),
 }
 STACKS = (("python", ("pyproject.toml", "setup.cfg", "*.py")), ("shell", ("*.sh",)))
+# A stack no recipe ships for: `propose` says so, and prints the project's own claims to add.
+TYPESCRIPT = ("tsconfig.json", "*.ts", "*.tsx", "*.mts", "*.cts")
+TYPESCRIPT_CLAIMS = (
+    {
+        "name": "typescript.types",
+        "mode": GATE,
+        "tool": "tsc",
+        "prefix": ["npx", "--no"],
+        "argv": ["tsc", "--noEmit"],
+        "parser": "exit",
+    },
+    {
+        "name": "typescript.lint",
+        "mode": GATE,
+        "tool": "eslint",
+        "prefix": ["npx", "--no"],
+        "argv": ["eslint", "."],
+        "parser": "exit",
+    },
+)
+TYPESCRIPT_NOTE = """\
+floor: Git tracks TypeScript here, and no claim is proposed for its types or its lint: the
+shipped recipes are python's, shell's and the secrets scan, and the floor has no parser that
+reads tsc's or ESLint's findings into a baseline. Add them as the project's own claims, which
+gate on the tool's exit status, once the project passes them, for example:
+{claims}"""
 
 PARSER_NAMES = (
     "ruff-format",
@@ -495,13 +527,35 @@ def _ready(claim: Claim, root: Path) -> str:
     return executable
 
 
+# The tools that keep a cache in the tree they read, and the variables that move it.
+CACHES = {"ruff": "RUFF_CACHE_DIR", "mypy": "MYPY_CACHE_DIR"}
+
+
+def _writable(folder: Path) -> bool:
+    try:
+        with tempfile.TemporaryFile(dir=folder):
+            return True
+    except OSError:
+        return False
+
+
 def _run(claim: Claim, argv: Sequence[str], cwd: Path) -> tuple[int, str]:
-    """Run `argv`, waiting for it unless the claim sets `timeout_seconds`."""
+    """Run `argv`, waiting for it unless the claim sets `timeout_seconds`. Where `cwd` cannot
+    be written (a sandbox that keeps the tree read-only), ruff's and mypy's caches go to a
+    scratch folder for the run, unless the environment already names one."""
 
     tool = claim.tool or Path(argv[0]).name
     seconds = claim.timeout_seconds
+    variable = CACHES.get(tool)
     try:
-        status, output, timed_out = validation._execute(list(argv), cwd, seconds, None)
+        if variable is None or variable in os.environ or _writable(cwd):
+            status, output, timed_out = validation._execute(list(argv), cwd, seconds, None)
+        else:
+            with tempfile.TemporaryDirectory(prefix="outcomebound-floor-cache-") as cache:
+                environment = {**os.environ, variable: cache}
+                status, output, timed_out = validation._execute(
+                    list(argv), cwd, seconds, environment
+                )
     except OSError as error:
         raise Unreadable(f"{tool} could not run: {error}") from error
     if timed_out or status is None:
@@ -645,9 +699,12 @@ def parse_ruff(status: int, text: str, root: Path) -> list[Finding]:
 
 
 def parse_mypy(status: int, text: str, root: Path) -> list[Finding]:
-    """`mypy --output json`: a JSON object per line; a note is not a finding."""
+    """`mypy --output json`: a JSON object per line; a note is not a finding. Where mypy stops
+    (exit 2), the error that stopped it is the one with no code, which can follow errors that
+    have one: it is named with mypy's own hint, which gives the settings that fix it."""
 
     findings = []
+    stop = ""
     for line in text.splitlines():
         if not line.lstrip().startswith("{"):
             continue
@@ -656,17 +713,23 @@ def parse_mypy(status: int, text: str, root: Path) -> list[Finding]:
         except json.JSONDecodeError as error:
             raise Unreadable(f"a mypy record is not JSON: {error}") from error
         if isinstance(item, dict) and item.get("severity") == "error":
-            findings.append(
-                Finding(
-                    _relative(str(item.get("file") or ""), root),
-                    str(item.get("code") or "error"),
-                    _message(str(item.get("message") or "")),
-                    f"{item.get('line', '')}:{item.get('column', '')}",
-                )
+            finding = Finding(
+                _relative(str(item.get("file") or ""), root),
+                str(item.get("code") or "error"),
+                _message(str(item.get("message") or "")),
+                f"{item.get('line', '')}:{item.get('column', '')}",
             )
+            findings.append(finding)
+            if item.get("code") is None and not stop:
+                hint = _message(str(item.get("hint") or ""))
+                stop = f"{finding.path}: {finding.message}" + (f" ({hint})" if hint else "")
     if status == 2:
-        stop = findings[0].shown() if findings else _first(text)
-        raise Unreadable(f"mypy stopped at a blocking error: {stop}")
+        if not stop:
+            stop = findings[-1].shown() if findings else _first(text)
+        raise Unreadable(
+            f"mypy stopped at a blocking error: {stop}; set `files` or `exclude` in the"
+            " project's mypy config, or name the folders to read after the claim's argv"
+        )
     if status not in (0, 1) or (status == 1 and not findings):
         raise Unreadable(f"mypy exited {status} and reported no error: {_first(text)}")
     return findings
@@ -1153,7 +1216,9 @@ def _policy_change(
     return f"{path} changed its {label} settings" if before_lines != after_lines else None
 
 
-def _policy_changes(root: Path, fork: str, head: str) -> list[str]:
+def _policy_changes(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
+    """Each changed file that loosens the floor between `fork` and `head`, and how."""
+
     raw = _git(
         root, "diff", "--raw", "-z", "--no-abbrev", "--no-renames", "--relative", fork, head, "--"
     )
@@ -1173,8 +1238,8 @@ def _policy_changes(root: Path, fork: str, head: str) -> list[str]:
                 added = frozenset(c.name for c in after.claims) - {c.name for c in before.claims}
     baselines = any(path.startswith(f"{BASELINE_DIR}/") for path, _, _ in entries)
     span = Span(root, fork, head, _renames(root, fork, head) if baselines else {})
-    changes = (_policy_change(span, path, old, new, added) for path, old, new in entries)
-    return [change for change in changes if change is not None]
+    changes = ((path, _policy_change(span, path, old, new, added)) for path, old, new in entries)
+    return [(path, change) for path, change in changes if change is not None]
 
 
 def _directive_counts(patch: str) -> dict[str, Counter[str]]:
@@ -1200,7 +1265,7 @@ def _directive_counts(patch: str) -> dict[str, Counter[str]]:
     return {name: +counts for name, counts in net.items() if +counts}
 
 
-def _added_directives(root: Path, fork: str, head: str) -> list[str]:
+def _added_directives(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
     patch = _git(
         root,
         "-c",
@@ -1219,31 +1284,90 @@ def _added_directives(root: Path, fork: str, head: str) -> list[str]:
         "--",
     ).decode("utf-8", "replace")
     return [
-        f"{path} adds {directive}" + (f" (x{count})" if count > 1 else "")
+        (path, f"{path} adds {directive}" + (f" (x{count})" if count > 1 else ""))
         for path, counts in sorted(_directive_counts(patch).items())
         if not path.startswith(f"{BASELINE_DIR}/")
         for directive, count in sorted(counts.items())
     ]
 
 
-def _rulings(root: Path, base_commit: str) -> list[str]:
+def _loosenings(root: Path, fork: str, head: str) -> list[tuple[str, str]]:
+    """What loosens the floor between `fork` and `head`: each file, and how it loosens."""
+
+    return _policy_changes(root, fork, head) + _added_directives(root, fork, head)
+
+
+def _literal(path: str) -> str:
+    return f":(literal){path}"
+
+
+def _rulings(
+    root: Path, start: str, head: str, changes: Sequence[tuple[str, str]]
+) -> tuple[list[tuple[str, bool]], list[str]]:
+    """Each change as shown, with whether a ruling covers it, and the ruling lines that do.
+
+    A `Floor-Loosening: <what>; ruled <id>` line covers the loosenings its own commit makes,
+    not those of another commit: a change passes only where each commit in the range whose
+    own diff loosens that file carries one. A change no single commit makes (a merge's own
+    edit, a rename split across commits) passes where a commit that touches its file carries
+    one. Any earlier line, whatever its `<what>` says, still reads, and covers its commit."""
+
+    paths = sorted({path for path, _ in changes})
     log = _git(
         root,
         "-c",
         "log.showSignature=false",
         "log",
         "--no-color",
-        "--format=%H%x1f%B%x1e",
-        f"{base_commit}..HEAD",
+        "--full-history",
+        "--format=%H%x1f%P%x1f%B%x1e",
+        f"{start}..{head}",
+        "--",
+        *(_literal(path) for path in paths),
     ).decode("utf-8", "replace")
-    rulings: list[str] = []
+    ruled: dict[str, list[str]] = {}
+    makers: dict[str, list[str]] = {}
     for record in log.split("\x1e"):
-        commit, _, message = record.strip().partition("\x1f")
-        rulings.extend(
-            f"{commit[:12]} Floor-Loosening: {found['what']}; ruled {found['ruling']}"
-            for found in TRAILER.finditer(message)
-        )
-    return rulings
+        commit, _, rest = record.strip().partition("\x1f")
+        parents, _, message = rest.partition("\x1f")
+        if not commit:
+            continue
+        lines = [f"{found['what']}; ruled {found['ruling']}" for found in TRAILER.finditer(message)]
+        if lines:
+            ruled[commit] = lines
+        if len(parents.split()) == 1:
+            for path, _ in _loosenings(root, parents.strip(), commit):
+                if path in paths:
+                    makers.setdefault(path, []).append(commit)
+    shown: list[tuple[str, bool]] = []
+    used: dict[str, None] = {}
+    for path, change in changes:
+        made = makers.get(path)
+        if made is None:
+            touching = _git(
+                root,
+                "log",
+                "--full-history",
+                "--format=%H",
+                f"{start}..{head}",
+                "--",
+                _literal(path),
+            ).decode("ascii", "replace")
+            covering = [commit for commit in touching.split() if commit in ruled][:1]
+            missing = "" if covering else "no one commit makes it, and none that touches it"
+        else:
+            covering = [commit for commit in made if commit in ruled]
+            unruled = [commit[:12] for commit in made if commit not in ruled]
+            missing = ", ".join(unruled)
+        if missing:
+            shown.append(
+                (f"{change} (not ruled: {missing} carries no Floor-Loosening line)", False)
+            )
+        else:
+            used.update(dict.fromkeys(covering))
+            shown.append((f"{change} (ruled in {', '.join(c[:12] for c in covering)})", True))
+    lines = [f"{commit[:12]} Floor-Loosening: {line}" for commit in used for line in ruled[commit]]
+    return shown, lines
 
 
 def _is_ancestor(root: Path, older: str, newer: str) -> bool:
@@ -1288,9 +1412,9 @@ def _since(root: Path, base_commit: str, adopted: Adoption | None) -> str:
 
 
 def loosening(context: Context) -> Outcome:
-    """FAIL on a loosening between the merge base with `--base` and HEAD, unless a commit in
-    that same range carries a `Floor-Loosening: <what>; ruled <id>` line. Where the floor was
-    adopted after the merge base, the range starts at the adoption commit instead."""
+    """FAIL on a loosening between the merge base with `--base` and HEAD, unless each commit in
+    that range that makes it carries a `Floor-Loosening: <what>; ruled <id>` line. Where the
+    floor was adopted after the merge base, the range starts at the adoption commit instead."""
 
     name = "loosening"
     if context.base_commit is None:
@@ -1300,9 +1424,8 @@ def loosening(context: Context) -> Outcome:
         fork = _git(context.root, "merge-base", context.base_commit, head).decode().strip()
         adopted = _adopted_after(context.root, fork, context.adopted)
         start = adopted or fork
-        changes = _policy_changes(context.root, start, head)
-        changes += _added_directives(context.root, start, head)
-        rulings = _rulings(context.root, start) if changes else []
+        changes = _loosenings(context.root, start, head)
+        shown, rulings = _rulings(context.root, start, head, changes) if changes else ([], [])
     except FloorError as problem:
         return Outcome(name, UNVERIFIED, str(problem))
     span = f"{context.base}..HEAD"
@@ -1310,10 +1433,15 @@ def loosening(context: Context) -> Outcome:
         span = f"{adopted[:12]}..HEAD, the commits since the floor's adoption"
     if not changes:
         return Outcome(name, PASS, f"none in {span}")
-    if rulings:
-        return Outcome(name, PASS, f"{len(changes)} in {span}, ruled", (*changes, *rulings))
-    summary = f"{len(changes)} in {span}; no commit carries Floor-Loosening: <what>; ruled <id>"
-    return Outcome(name, FAIL, summary, tuple(changes))
+    details = (*(text for text, _ in shown), *rulings)
+    unruled = sum(not ruled for _, ruled in shown)
+    if not unruled:
+        return Outcome(name, PASS, f"{len(changes)} in {span}, ruled", details)
+    summary = (
+        f"{len(changes)} in {span}, {unruled} not ruled; the commit that makes a loosening"
+        " carries Floor-Loosening: <what>; ruled <id>"
+    )
+    return Outcome(name, FAIL, summary, details)
 
 
 # --- The verbs ----------------------------------------------------------------------------
@@ -1343,15 +1471,53 @@ def _write(root: Path, changes: dict[str, bytes | None], accept: bool) -> int:
     return 0
 
 
+TOOL_MYPY = ["tool", "mypy"]
+MYPY_CONFIGS = (
+    ("mypy.ini", "mypy".__eq__),
+    (".mypy.ini", "mypy".__eq__),
+    ("pyproject.toml", lambda name: [p.strip("\"' ") for p in name.split(".")][:2] == TOOL_MYPY),
+    ("setup.cfg", "mypy".__eq__),
+)
+FILES_SETTING = re.compile(r"files\s*=")
+
+
+def mypy_targets(root: Path) -> list[str]:
+    """The folders the types claim names, where the project's mypy config names no `files`:
+    each outermost folder whose `__init__.py` Git tracks, so mypy reads each module under one
+    name. A bare `mypy .` maps a file in a folder without `__init__.py` to a top-level module,
+    and stops where two such folders hold files of one name. None where the config names
+    files, or where no package is tracked, or the root is one."""
+
+    for name, wanted in MYPY_CONFIGS:
+        data = fileplan.current(root, name)
+        lines = _section_lines(None if data is None else data.decode("utf-8", "replace"), wanted)
+        if any(FILES_SETTING.match(line) for line in lines):
+            return []
+    packages = {
+        PurePosixPath(path).parent.as_posix()
+        for path in _tracked(root, ["*__init__.py"])
+        if PurePosixPath(path).name == "__init__.py"
+    }
+    if "." in packages:
+        return []
+    return sorted(p for p in packages if PurePosixPath(p).parent.as_posix() not in packages)
+
+
 def propose(root: Path) -> int:
-    stacks = [stack for stack, patterns in STACKS if _tracked(root, patterns)]
-    if not stacks:
-        print("floor: Git tracks no python or shell file here; nothing to propose", file=sys.stderr)
+    if not _tracked(root, ()):
+        print("floor: Git tracks no file here; nothing to propose", file=sys.stderr)
         return 1
-    floor = parse_floor(
-        {"version": FORMAT_VERSION, "claims": [c for s in stacks for c in RECIPES[s]]}
-    )
+    stacks = [stack for stack, patterns in STACKS if _tracked(root, patterns)]
+    claims = [dict(claim) for stack in (*stacks, "secrets") for claim in RECIPES[stack]]
+    targets = mypy_targets(root) if "python" in stacks else []
+    for claim in claims:
+        if claim["parser"] == "mypy" and targets:
+            claim["argv"] = [*claim["argv"], *targets]
+    floor = parse_floor({"version": FORMAT_VERSION, "claims": claims})
     sys.stdout.write(floor.text().decode("utf-8"))
+    if _tracked(root, TYPESCRIPT):
+        shown = "\n".join(f"  {json.dumps(claim)}" for claim in TYPESCRIPT_CLAIMS)
+        print(TYPESCRIPT_NOTE.format(claims=shown), file=sys.stderr)
     return 0
 
 
@@ -1451,11 +1617,27 @@ def apply(root: Path, source: Path, accept: bool, strict: bool) -> int:
     for claim in claims:
         if claim.mode == BASELINE and fileplan.current(root, claim.baseline_path) is None:
             changes.setdefault(claim.baseline_path, b"")
+    new = fileplan.current(root, FLOOR_PATH) is None
     status = _write(root, changes, accept)
     if accept and installed is not None:
-        print("check --base reads a claim this changes or drops as a loosening: its commit")
-        print("carries the line Floor-Loosening: <what>; ruled <decision id>")
+        print("check --base reads a claim this changes or drops as a loosening: the commit")
+        print("that makes it carries the line Floor-Loosening: <what>; ruled <decision id>")
+    if accept and new:
+        _adopt_next(root, "installed")
     return status
+
+
+def _adopt_next(root: Path, done: str) -> None:
+    """Where OutcomeBound is installed, the step that records a floor installed or removed: the
+    project facts in AGENTS.md name a floor loosening as an irreversible edge only while a
+    floor is installed, so `adopt --check` reads that block stale until adopt runs again."""
+
+    if fileplan.current(root, MANIFEST) is not None:
+        command = f"outcomebound adopt {shlex.quote(str(root))}"
+        change = "gain" if done == "installed" else "lose"
+        print(f"next: {command}")
+        print(f"  the floor is {done}, so the project facts in AGENTS.md {change} the edge")
+        print(f"  '{facts.FLOOR_EDGE}'; until adopt runs, `adopt --check` reads them stale")
 
 
 def _noted(outcome: Outcome, claim: Claim, context: Context) -> Outcome:
@@ -1564,7 +1746,17 @@ def provision(root: Path, accept: bool) -> int:
             print("  where PATH finds it")
         elif claim.tool is not None:
             wanted[claim.tool] = _newest(wanted.get(claim.tool), claim.min_version)
+    present = set()
     for tool, version in sorted(wanted.items()):
+        try:
+            found = _ready(Claim(tool, GATE, "exit", tool, (tool,), min_version=version), root)
+        except Missing:
+            pass
+        else:
+            least = f" at {version} or later" if version else ""
+            print(f"{tool} is on PATH{least} ({found}): present, so not installed")
+            present.add(tool)
+            continue
         if tool == "gitleaks":
             command = (
                 GITLEAKS_INSTALL.format(version=version)
@@ -1577,7 +1769,11 @@ def provision(root: Path, accept: bool) -> int:
             print(f"shellcheck is never downloaded here; install{least} from {SHELLCHECK_INSTALL}")
         elif tool not in PIP_TOOLS:
             print(f"{tool} is not provisioned here; install it with the system's packages")
-    packages = [f"{t}=={v}" if v else t for t, v in sorted(wanted.items()) if t in PIP_TOOLS]
+    packages = [
+        f"{t}=={v}" if v else t
+        for t, v in sorted(wanted.items())
+        if t in PIP_TOOLS and t not in present
+    ]
     return _pip_install(root, packages, accept) if packages else 0
 
 
@@ -1619,7 +1815,10 @@ def remove(root: Path, accept: bool) -> int:
     if not found:
         print("no floor here; nothing to remove")
         return 0
-    return _write(root, dict.fromkeys(found), accept)
+    status = _write(root, dict.fromkeys(found), accept)
+    if accept and FLOOR_PATH in found:
+        _adopt_next(root, "removed")
+    return status
 
 
 # --- The command line -----------------------------------------------------------------------
@@ -1629,7 +1828,8 @@ Run a project's own ruff, mypy, gitleaks, bash and shellcheck from its root; fai
 is new.
 
 verbs:
-  propose TARGET              print a floor.json for the stacks Git tracks; writes nothing
+  propose TARGET              print a floor.json for the stacks Git tracks, and a secrets
+                              claim for every project; writes nothing
   apply TARGET --floor FILE   write FILE to .outcomebound/floor.json, fitted to the findings
                               the project has today (apply --help; --strict fits nothing)
   check TARGET                run the claims (check --help: --base, --claim)
@@ -1637,13 +1837,16 @@ verbs:
   ratchet TARGET              delete the baseline lines no finding matches
   provision TARGET            pip-install ruff and mypy at their min_version into the
                               python3 on PATH; print gitleaks' and shellcheck's install
-                              commands, never downloading either
+                              commands, never downloading either; a tool PATH has at its
+                              min_version or later is present, and nothing installs it
   remove TARGET               delete .outcomebound/floor.json and the baselines
 
 apply, baseline, provision and remove change nothing without --accept. A gate claim fails
 on any finding, a baseline claim on a finding its .outcomebound/floor/<claim>.baseline
 does not hold. No tool or Git read has a time limit unless its claim sets
-timeout_seconds. Exit 0: every claim passed; 1: a claim failed or could not be verified;
+timeout_seconds. Where the project root cannot be written, ruff's and mypy's caches go to a
+scratch folder for each run (RUFF_CACHE_DIR, MYPY_CACHE_DIR), unless the environment names
+one. Exit 0: every claim passed; 1: a claim failed or could not be verified;
 2: the floor could not run."""
 APPLY_DESCRIPTION = """\
 Write FILE to .outcomebound/floor.json, fitted to what the project holds today: each claim
@@ -1684,9 +1887,11 @@ a baseline line that moves with its file, where Git reports the file renamed.
 Where the floor was adopted after the merge base (the merge base holds no floor.json and no
 commit before the adoption touches it), both ranges start at the adoption commit instead, so
 commits from before the floor never fail; gitleaks then also scans the files Git tracks.
-A commit in the range whose message has the line
-'Floor-Loosening: <what>; ruled <decision id>' lets it pass, the id being whatever names
-the decision in the project: an issue or pull request (#123), a decision record, a link.
+A loosening passes where each commit in the range that makes it, in its own diff, has the
+line 'Floor-Loosening: <what>; ruled <decision id>' in its message, the id being whatever
+names the decision in the project: an issue or pull request (#123), a decision record, a
+link. The line covers the loosenings of its own commit only, never another commit's; one no
+single commit makes (a merge's own edit) passes where a commit that touches its file has it.
 
 A project's own check is one more claim: {"name": "project.imports", "mode": "gate",
 "tool": "lint-imports", "argv": ["lint-imports"], "parser": "exit"} fails when it exits
@@ -1695,7 +1900,12 @@ non-zero. A claim may run its tool through a prefix, "prefix": ["uv", "run"] or
 min_version is asked through the same prefix. "timeout_seconds": 1800 stops a claim's run
 after that long, and it reads UNVERIFIED; without it, the floor waits for the tool."""
 VERBS = {
-    "propose": "Print a floor.json for the stacks Git tracks (python, shell); write nothing.",
+    "propose": (
+        "Print a floor.json for the stacks Git tracks (python, shell), and the secrets claim\n"
+        "for every project; write nothing. The types claim names each outermost package Git\n"
+        "tracks where the project's mypy config names no files. Where Git tracks TypeScript,\n"
+        "say on stderr why no claim is proposed for it, and print claims to add."
+    ),
     "apply": APPLY_DESCRIPTION,
     "check": CHECK_DESCRIPTION,
     "baseline": "Record the current findings into each empty or absent baseline.",
@@ -1703,7 +1913,8 @@ VERBS = {
     "provision": (
         "pip-install ruff and mypy at their min_version into the python3 on PATH, where the floor\n"
         "finds its tools.\n"
-        "Print the commands that install gitleaks and shellcheck, and never download either."
+        "Print the commands that install gitleaks and shellcheck, and never download either.\n"
+        "A tool PATH already has at its min_version or later is present: nothing installs it."
     ),
     "remove": "Delete .outcomebound/floor.json and the baselines.",
 }

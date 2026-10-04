@@ -9,8 +9,8 @@ status: ratified
 
 A project blocks regressions in what catches defects — format, lint, types, secrets, shell
 syntax, shell lint and shell injection — with its own tool configs and a baseline a person can
-read, and a change that loosens the floor fails `check --base` unless a commit names the decision
-that allowed it. A project that already has findings adopts the floor the day it wants to: what
+read, and a change that loosens the floor fails `check --base` unless the commit that makes it
+names the decision that allowed it. A project that already has findings adopts the floor the day it wants to: what
 it holds is recorded, and what each change adds is gated. How: `outcomebound_tools/floor.py`,
 which opens with what it decides, and `outcomebound floor --help`.
 
@@ -28,6 +28,8 @@ which opens with what it decides, and `outcomebound floor --help`.
 | Two modes, `gate` and `baseline` | an `observe` mode that reports and never fails | agent | decided |
 | A claim whose tool is missing or older than its `min_version` reads `UNVERIFIED`, and `check` fails | an exact version pin, which turns a patch release into a skipped claim | agent | decided |
 | Recipes for python and shell only; a project's own check joins as one more `exit` claim | recipes for stacks no adopter runs | user | decided |
+| The secrets claim, `secrets`, is its own recipe, which `propose` offers to every project Git tracks a file in. Where Git tracks TypeScript, `propose` says on stderr why it proposes no type or lint claim (no recipe, and no parser that reads tsc's or ESLint's findings into a baseline) and prints `tsc --noEmit` and `eslint .` as `exit` claims through `npx --no` to add once the project passes them. A floor that holds `python.secrets` keeps it: the name changes nothing it does | the secrets claim in the python stack, which left a project without Python with no secrets claim; TypeScript recipes, which the decision above leaves out | agent | decided |
+| Where the project's mypy config names no `files`, the proposed types claim names each outermost folder whose `__init__.py` Git tracks, so mypy reads each module under one name. Where mypy stops (exit 2), the floor names the error with no code, the one that stopped it, with mypy's own hint, which gives the settings that fix it | a bare `mypy .`, which maps a file in a folder without `__init__.py` to a top-level module and stops where two such folders hold files of one name; naming the first error, often an import mypy cannot find, which did not stop it | agent | decided |
 | `shell.lint`: shellcheck 0.9.0 or later, `-f json1`, one run a script over the files the other shell claims cover, in baseline mode; `provision` prints its install command and never downloads it | no shell lint beyond syntax and injection | user | decided |
 | This repository gates secrets: gitleaks is a pinned dev tool, installed by CI at a pinned version and checksum, and on each developer's machine | secrets left out of this repository's floor | user | decided |
 | `apply` fits the floor to what the project holds: each claim runs once; one with findings records them in its baseline and becomes a baseline claim, except an `exit` claim, which stays a gate with its failure named; one whose tool runs but cannot read the project is left out, with why | a floor adopted strict, which fails a real project on hundreds of old findings before any change | user | decided |
@@ -37,7 +39,9 @@ which opens with what it decides, and `outcomebound floor --help`.
 | Where the merge base holds no `floor.json`, no commit from it to the adoption commit touches `floor.json`, and the adoption commit descends from it in HEAD's history, `check --base` starts both the secrets range and the loosening range at the adoption commit, so commits from before the floor existed never fail it; the secrets claim then also scans the files Git tracks, as without a base, so a secret committed before the adoption and still in the tree fails it (maintainer, 2026-10-04) | the merge base always, which failed a long branch on what it did before it adopted the floor; the adoption commit whenever it is later, which lets a record added to a floor the merge base already holds, or a floor removed and adopted again at the removing commit, hide a loosening committed before it, and lets a secret in the tree pass | user | decided |
 | A secret is never recorded: `apply` lists the ones the tracked files hold, once, to rotate or to allowlist by fingerprint in `.gitleaksignore` | a secrets baseline, which leaves a committed secret quietly valid | user | decided |
 | `apply --strict` fits nothing, adds no adoption record and keeps one already there, and says what each claim fails on now | one mode for every project | user | decided |
-| A loosening, as listed below, fails `check --base` unless a commit between the merge base and HEAD carries `Floor-Loosening: <what>; ruled <id>`, the id one word naming the decision in the project's own terms: an issue or pull request (`#123`), a decision record, or a link | CODEOWNERS, which binds nothing without branch protection; a ledger the agent itself writes | agent | decided |
+| A loosening, as listed below, fails `check --base` unless each commit between the merge base and HEAD that makes it, in its own diff, carries `Floor-Loosening: <what>; ruled <id>`, the id one word naming the decision in the project's own terms: an issue or pull request (`#123`), a decision record, or a link. The line covers the loosenings of its own commit, and no other commit's. A loosening that no single commit makes (an edit a merge makes itself) passes where a commit in the range that touches its file carries the line. `<what>` stays free text, so a line written before this rule reads as it did and covers its own commit | CODEOWNERS, which binds nothing without branch protection; a ledger the agent itself writes; one line anywhere in the range for every loosening in it, which let one ruling pass a later loosening that no ruling named; `<what>` matched against the change, which free text cannot carry and which earlier lines do not follow | agent | decided |
+| `apply` and `remove`, where OutcomeBound is installed (`.outcomebound/manifest.json`), print `outcomebound adopt <root>` as the next step when they install or remove `floor.json`: the project facts name a floor loosening as an irreversible edge only while a floor is installed, so `adopt --check` reads them stale until adopt runs again | `adopt --check` alone, which a person reads only once the install is already stale | agent | decided |
+| Where the project root cannot be written (a sandbox that keeps the tree read-only), ruff's and mypy's caches go to a scratch folder for each run, through `RUFF_CACHE_DIR` and `MYPY_CACHE_DIR`, unless the environment already names one | caches in the tree only, which ruff and mypy cannot open there, so their claims read `UNVERIFIED`; caches always in a scratch folder, which makes every run start cold | agent | decided |
 | Adding a claim with its first baseline, moving a claim from `baseline` to `gate`, and an adoption record where there was none loosen nothing | every `floor.json` change read as a loosening, so adding a gate would need a recorded decision; exempting every baseline where an adoption record appears, which lets a strict floor be baselined in one commit | user | decided |
 
 ## What loosens
@@ -57,7 +61,8 @@ adoption commit where the floor was adopted after the merge base (Decisions). Th
   document (`.md`, `.rst`, `.txt`), which only gitleaks reads, only gitleaks' allow comment counts.
 
 So fitting a floor that is already committed, such as a strict one, loosens and needs its
-`Floor-Loosening` line; before the floor's first commit lands, every baseline is a first one.
+`Floor-Loosening` line in the commit that fits it; before the floor's first commit lands, every
+baseline is a first one.
 
 ## Adoption
 
@@ -85,13 +90,20 @@ The loosening check makes a loosening visible; it cannot prevent one, because th
 loosens can also edit the check. Prevention needs branch protection on the server, which the
 floor does not set. `provision` is the floor's one networked step: it pip-installs ruff and mypy
 into the `python3` on `PATH`, the project's environment, where `check` finds its tools, not into
-the environment an installed engine keeps to itself.
+the environment an installed engine keeps to itself. A tool that `PATH` already has at its
+`min_version` or later is present: `provision` says so and installs nothing for it, so a system
+Python that pip refuses is not asked.
+
+The proposed types claim reads the packages it names; a Python file outside them (a script in a
+folder without `__init__.py`) is read where the project's mypy config names it in `files`.
 
 A prefixed claim runs its tool where the prefix puts it. The loosening check watches the prefix in
 `floor.json` and the tool configs, not the image, lock file or environment the prefix runs, as it
 does not watch which version of a host tool PATH finds. The tool reads the project's configs only
 where the prefix runs it from the project root, as a container that mounts the root at its
-working directory does; paths it reports outside the root stay as it reports them.
+working directory does; paths it reports outside the root stay as it reports them. A cache
+variable the floor sets reaches a prefix that keeps the environment (`uv run`), not one that does
+not (`docker compose run`).
 
 Without `--base`, a fitted floor reads a secret once it is committed, not in the working tree. A
 fingerprint names its line, so moving an allowlisted line needs its new fingerprint. Where the
@@ -104,9 +116,14 @@ claim reads `UNVERIFIED` unless `--base` is given.
 file's, decides what a claim reads; the fit on scratch repositories with findings in each claim;
 each loosening rule, with a rename, a dropped claim whose files are gone and a range that starts
 at the adoption; a prefix through a stand-in container; no time limit unless a claim sets one;
-and a secrets scan without a base that reads only tracked files. A test that needs a real ruff, mypy, gitleaks or shellcheck skips as
-`UNVERIFIED` where it is not installed. This repository's own floor runs in `make check` and in
-CI. Observed by hand:
+a secrets scan without a base that reads only tracked files; a ruling that covers only its own
+commit, with a merge's own edit; the proposal for a TypeScript project and the packages the types
+claim names; the error that stopped mypy; `provision` with tools already on `PATH`; the adopt step
+after `apply` and `remove`; and the caches of a tree that cannot be written. A test that needs a
+real ruff, mypy, gitleaks or shellcheck skips as `UNVERIFIED` where it is not installed. This
+repository's own floor runs in `make check` and in CI. Observed by hand: in a tree its user
+cannot write, ruff 0.16.7 stops with "Failed to initialize cache" and mypy 2.3.1 with an internal
+error, and both pass once `RUFF_CACHE_DIR` and `MYPY_CACHE_DIR` name a scratch folder;
 gitleaks 8.30.1 with `--redact` reads `.gitleaksignore` from the project root, and a fingerprint
 without a commit, `path:rule:line`, allowlists its line in the directory scan and in every commit
 scan; shellcheck 0.9.0, 0.10.0 and 0.11.0 print the same `json1` report over one script.
