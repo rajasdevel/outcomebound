@@ -7,16 +7,18 @@ hook's input on stdin, finds the target, and runs the manifest's Done commands o
 digest is the entry's, and only on a working tree they have not already been checked on: an
 unchanged tree repeats the verdict it was last checked with and runs nothing. A failure holds
 the finish, its report the reason the agent reads, unless it is a known failure: a command that
-failed with the same exit code when adopt last measured Done (`measure`), which goes on to the
-next command and holds nothing, and leaves the record once it passes. Every other outcome goes to
-the person as `systemMessage`, or as `{}` where there is nothing to say, and holds nothing. It
-exits 0 whenever it ran, its verdict on stdout as both rows read it; a usage error exits 1, never 2,
-which a row reads as holding the finish.
+fails with the exit code it had when adopt last measured Done (`measure`), and names no failure id
+that measurement did not, which goes on to the next command and holds nothing, and leaves the
+record once it passes. Every other outcome goes to the person as `systemMessage`, or as `{}`
+where there is nothing to say, and holds nothing. It exits 0 whenever it ran, its verdict on
+stdout as both rows read it; a usage error exits 1, never 2, which a row reads as holding the
+finish.
 
 What it does not decide: whether the harness fires the hook (its install report reads
-`UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are. It reads
-each command's exit code, not its output, so a new failure inside a command that already failed
-in the same way is not told apart from the known one.
+`UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are. It
+compares a known command's exit code and the failure ids its output names; where neither the
+record nor the output names any, a new failure inside a command that fails with the same exit code
+is not told apart from the known one.
 """
 
 from __future__ import annotations
@@ -1044,15 +1046,15 @@ the hook's JSON input on stdin, finds the target (the nearest directory holding
 Done commands from the target's root, in order, stopping at the first that does not pass, only while
 their digest is --done, and stopping them 30 seconds before --timeout. A working tree they were
 already checked on runs nothing: after a pass it prints {}, after a failure or an UNVERIFIED it
-repeats that verdict; a command the environment could not run is not remembered. A known
-failure, a command that fails with the exit code it had when adopt last measured Done (kept in the
-Git common directory), holds nothing and the next command runs; once it passes, it leaves that
-record. Any other failure while the input's stop_hook_active is false holds the finish, its report
-the reason the agent reads; a pass, a failure after that, a known failure alone, a repeated
-verdict, a digest that no longer matches, a missing manifest, a command stopped at the time limit
-and one the hook's environment could not run (exit 126 or 127) go to the person as systemMessage
-and hold nothing. On claude-code nothing runs while background_tasks or session_crons is
-non-empty."""
+repeats that verdict; a command the environment could not run is not remembered. A known failure, a
+command that fails with the exit code it had when adopt last measured Done and names no failure id
+that measurement did not (kept in the Git common directory), holds nothing and the next command
+runs; once it passes, it leaves that record. Any other failure while the input's stop_hook_active is
+false holds the finish, its report the reason the agent reads; a pass, a failure after that, a known
+failure alone, a repeated verdict, a digest that no longer matches, a missing manifest, a command
+stopped at the time limit and one the hook's environment could not run (exit 126 or 127) go to the
+person as systemMessage and hold nothing. On claude-code nothing runs while background_tasks or
+session_crons is non-empty."""
 EPILOG = """\
 exit: 0 whenever it ran, its verdict as JSON on stdout; 1 on a usage error, never 2, which a
 harness reads as holding the finish."""
