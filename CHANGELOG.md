@@ -11,6 +11,8 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-04
+
 A stop now holds one item, never the run. No limit applies to size, count, length or time unless
 you set it, a harness documents it, or a measurement supports it. The finish check can keep the
 failures that Done already has as known failures, and then it holds a turn only on a new failure.
@@ -395,5 +397,6 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
 [1.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.0.0
