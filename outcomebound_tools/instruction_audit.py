@@ -10,8 +10,12 @@ facts are verified and current. Each check answers to one rule of the prompt sta
 (`docs/prompt-standard.md`) and carries that rule's severity; the security family runs
 first and is reported first. A harness entry adopt wrote, its digest the manifest's record and
 its command only adopt's verb, is a review hit that quotes the Done commands it runs, since the
-manifest is the target's own data; a hidden character in an agents' note reads
-UNVERIFIED for that note, where in an instruction file it is a FAIL.
+manifest is the target's own data; it does not change the result while those commands are the
+ones AGENTS.md's project facts show. A hidden character in an agents' note reads
+UNVERIFIED for that note, where in an instruction file it is a FAIL. Also reported, and not
+changing the result: each instruction file a harness's row says it loads from a folder above
+the target (`ancestors`), which this module names and never opens, and, where every row was
+selected, the loading facts of a row whose files the target does not hold.
 
 What it does not decide: whether a flagged line is benign, which a person decides.
 It never executes, follows or obeys anything it reads: the audited files are untrusted
@@ -42,7 +46,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import adapters
+from outcomebound_tools import adapters, facts, identity
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
@@ -178,6 +182,8 @@ class Finding:
     rule: str
     severity: str
     next: str
+    # False for a finding that is reported and does not change the result; its fact says why.
+    decides: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,7 +200,9 @@ class Report:
     findings: tuple[Finding, ...]
 
 
-def _finding(check: str, path: str, line: int, verdict: str, fact: str, **extra: str) -> Finding:
+def _finding(
+    check: str, path: str, line: int, verdict: str, fact: str, *, decides: bool = True, **extra: str
+) -> Finding:
     """A finding for `check`, with its family, kind, rule and severity."""
 
     family, kind, rule = CHECKS[check]
@@ -209,6 +217,7 @@ def _finding(check: str, path: str, line: int, verdict: str, fact: str, **extra:
         rule=rule,
         severity=SEVERITY[rule],
         next=extra.get("next", _NEXT.get(check, "")),
+        decides=decides,
     )
 
 
@@ -259,6 +268,69 @@ def _row_state(harness: str, row: Mapping[str, Any] | None, today: date) -> tupl
         )
         return fact, overdue
     return None
+
+
+def ancestor_files(target: Path, harness: str) -> list[tuple[Path, str]]:
+    """The instruction files `harness` loads at session start from the folders above `target`,
+    nearest first, as its row's `ancestors` records; none where the row records none. A name
+    ending in `AGENTS.md` loads only where none of the row's `reads_agents_md` files is in
+    `target` or above it, the default setting. The person's own `~/.claude/CLAUDE.md` is user
+    memory, not a folder's instructions, and is left out. Each is (the folder, the name under
+    it); only existence is looked at, and no file is opened."""
+
+    row = _row(harness) or {}
+    record = row.get("ancestors")
+    if not isinstance(record, dict) or record.get("loads") is not True:
+        return []
+    names = [name for name in record.get("names") or [] if isinstance(name, str)]
+    unless = ((row.get("reads_agents_md") or {}).get("unless")) or []
+    home = Path.home().resolve()
+    root = Path(target).resolve()
+
+    def present(folder: Path, name: str) -> bool:
+        return not (folder == home and name == ".claude/CLAUDE.md") and (folder / name).is_file()
+
+    hidden = any(present(folder, name) for folder in (root, *root.parents) for name in unless)
+    return [
+        (folder, name)
+        for folder in root.parents
+        for name in names
+        if present(folder, name) and not (hidden and name.endswith("AGENTS.md"))
+    ]
+
+
+def _ancestors(root: Path, harnesses: Sequence[str]) -> list[Finding]:
+    """One finding per instruction file a selected harness loads from above the target: it is
+    reported, never opened, and does not change the result, since it lies outside the target."""
+
+    found = []
+    for harness in harnesses:
+        for above, name in ancestor_files(root, harness):
+            folder = os.path.relpath(above, root).replace(os.sep, "/")
+            relative = f"{folder}/{name}"
+            fact = (
+                f"{harness} also loads {relative} at session start, from a folder above the "
+                "target (its row's ancestors); this check does not read it, and the paths it "
+                "names resolve from that folder, not from the target, which is all this check "
+                "reads"
+            )
+            step = (
+                f"run outcomebound instructions check {folder} to read it, or work where no "
+                f"folder above holds instructions for {harness}"
+            )
+            found.append(
+                _finding(
+                    "load-resolution",
+                    relative,
+                    0,
+                    UNVERIFIED,
+                    fact,
+                    kind="review",
+                    next=step,
+                    decides=False,
+                )
+            )
+    return found
 
 
 def _glob_pattern(glob: str) -> re.Pattern[str]:
@@ -808,18 +880,26 @@ def _config_hits(
     keys: Mapping[str, Any],
     own: frozenset[str] = frozenset(),
     done: Sequence[str] | None = None,
-) -> list[tuple[int, str, str]]:
-    """(line, verdict, fact) for each listed key present, or each value left unsettled; each
-    entry adopt wrote, its digest in `own`, is one review hit quoting the Done commands it runs."""
+    done_shown: bool = False,
+) -> list[tuple[int, str, str, bool]]:
+    """(line, verdict, fact, decides) for each listed key present, or each value left
+    unsettled; each entry adopt wrote, its digest in `own`, is one review hit quoting the Done
+    commands it runs, and it decides the result only where AGENTS.md does not show those
+    commands (`done_shown`)."""
 
     specs = [(category, spec) for category in _CATEGORIES for spec in keys.get(category) or []]
     if path.endswith(".toml"):
-        return _toml_hits(text, specs)
+        return [(*hit, True) for hit in _toml_hits(text, specs)]
     try:
         document = json.loads(text)
     except json.JSONDecodeError as error:
-        return [(error.lineno, UNVERIFIED, f"not read as JSON: {error.msg}")]
-    hits: list[tuple[int, str, str]] = []
+        return [(error.lineno, UNVERIFIED, f"not read as JSON: {error.msg}", True)]
+    hits: list[tuple[int, str, str, bool]] = []
+    settled = (
+        "; they are the Done commands AGENTS.md's project facts show"
+        if done_shown
+        else "; AGENTS.md's project facts do not show these Done commands"
+    )
     for category, spec in specs:
         for path_keys, value in _json_values(document, spec.split(".")):
             if category == "hooks" and own and isinstance(value, dict):
@@ -836,7 +916,8 @@ def _config_hits(
                         UNVERIFIED,
                         f"adopt's finish-check entry {key}.{event}[{index}] "
                         f"({_quote(command, 120)}) runs the Done commands the manifest records: "
-                        f"{commands}",
+                        f"{commands}{settled}",
+                        not done_shown,
                     )
                     for event, index, command in recognised
                 )
@@ -844,7 +925,7 @@ def _config_hits(
                     continue
             shown = _quote(json.dumps(value, sort_keys=True), 120)
             fact = f"{_CATEGORY_NAMES[category]}: {'.'.join(path_keys)} = {shown}"
-            hits.append((_line_of(text, path_keys), UNVERIFIED, fact))
+            hits.append((_line_of(text, path_keys), UNVERIFIED, fact, True))
     return hits
 
 
@@ -854,6 +935,7 @@ def _harness_config(
     harnesses: Sequence[str],
     own: frozenset[str] = frozenset(),
     done: Sequence[str] | None = None,
+    done_shown: bool = False,
 ) -> list[Finding]:
     """Secret-shaped values (a gate) and each listed key present (a review), per harness; an
     entry adopt wrote, its digest in `own`, is a review hit that quotes its Done commands."""
@@ -879,12 +961,18 @@ def _harness_config(
             f"carry this to your handoff, where a person confirms that {harness} should load "
             f"it, and go on with the work; its permissions and hooks documentation: {docs}"
         )
-        hits = _config_hits(path, text, keys, own, done)
+        hits = _config_hits(path, text, keys, own, done, done_shown)
         findings.extend(
             _finding(
-                "harness-config", path, number, verdict, fact, next="" if verdict == PASS else step
+                "harness-config",
+                path,
+                number,
+                verdict,
+                fact,
+                next="" if verdict == PASS else step,
+                decides=decides,
             )
-            for number, verdict, fact in hits
+            for number, verdict, fact, decides in hits
         )
     return findings
 
@@ -1002,6 +1090,7 @@ def _order(finding: Finding) -> tuple[int, int, str, int]:
 
 
 def _result(findings: Sequence[Finding]) -> str:
+    findings = [f for f in findings if f.decides]
     if any(f.verdict == FAIL and f.kind == "gate" for f in findings):
         return FAIL
     if any(f.verdict in (FAIL, UNVERIFIED) for f in findings):
@@ -1052,13 +1141,15 @@ def _file_findings(
         found = [_note_finding(finding) for finding in found]
     owners = [h for h in scope.config.get(relative, ()) if h in harnesses]
     if owners:
+        done = recorded_done(root) if (own or {}).get(relative) else None
         found.extend(
             _harness_config(
                 relative,
                 text,
                 owners,
                 (own or {}).get(relative, frozenset()),
-                recorded_done(root) if (own or {}).get(relative) else None,
+                done,
+                _done_shown(root, done),
             )
             or [
                 _finding(
@@ -1069,9 +1160,31 @@ def _file_findings(
     return found
 
 
-def _loading(harnesses: Sequence[str], configured: set[str]) -> list[Finding]:
+def _done_shown(root: Path, done: Sequence[str] | None) -> bool:
+    """Whether the project-facts block of the target's AGENTS.md shows exactly these Done
+    commands, as adopt renders them: then the finish check runs only what the instructions an
+    agent loads already name. An AGENTS.md that resolves outside the target shows none."""
+
+    if not done or not _inside(root, root / "AGENTS.md"):
+        return False
+    text, _ = _read(root, "AGENTS.md")
+    if text is None:
+        return False
+    line = f"- Done: {facts.both([facts.code(command) for command in done])}"
+    return any(
+        line in text[block.begin_offset : block.end_offset].splitlines()
+        for block in identity.find_managed_blocks(text)
+        if block.block_id == facts.FACTS
+    )
+
+
+def _loading(
+    harnesses: Sequence[str], configured: set[str], unused: frozenset[str] = frozenset()
+) -> list[Finding]:
     """Per harness, whether its row's loading facts are verified and current, and, where its
-    configuration was read, which of its key categories the table leaves unsettled."""
+    configuration was read, which of its key categories the table leaves unsettled. A harness
+    in `unused`, selected only because every row was and loading no file the target holds, is
+    reported and does not change the result."""
 
     found = []
     for harness in harnesses:
@@ -1082,8 +1195,20 @@ def _loading(harnesses: Sequence[str], configured: set[str]) -> list[Finding]:
             "",
         )
         verdict = UNVERIFIED if state else PASS
+        decides = True
+        if state and harness in unused:
+            fact += "; the target holds no file this harness loads"
+            decides = False
         found.append(
-            _finding("load-resolution", "adapters/harnesses.json", 0, verdict, fact, next=step)
+            _finding(
+                "load-resolution",
+                "adapters/harnesses.json",
+                0,
+                verdict,
+                fact,
+                next=step,
+                decides=decides,
+            )
         )
         keys = (row.get("config") or {}).get("keys") or {}
         unsettled = [_CATEGORY_LABELS[c] for c in _CATEGORIES if keys.get(c) is None]
@@ -1104,6 +1229,7 @@ def _audit(
     harnesses: Sequence[str],
     base: str | None,
     own: Mapping[str, frozenset[str]] | None = None,
+    unused: frozenset[str] = frozenset(),
 ) -> list[Finding]:
     """Every finding for `files` under `root` and the named harnesses, unordered.
 
@@ -1127,7 +1253,8 @@ def _audit(
         seen.append(relative)
         findings.extend(_file_findings(root, relative, scope, harnesses, own))
         configured.update(scope.config.get(relative, ()))
-    findings.extend(_loading(harnesses, configured))
+    findings.extend(_loading(harnesses, configured, unused))
+    findings.extend(_ancestors(root, harnesses))
     if base is not None:
         findings.extend(_instruction_change(root, base, seen, scope))
     return findings
@@ -1226,7 +1353,12 @@ def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) 
     notes = _notes(root)
     files = [path for path in present if scope.wants(path)] + notes
     own = _manifest_entries(root)
-    ordered = tuple(sorted(_audit(root, files, names, base, own), key=_order))
+    unused = frozenset(
+        harness
+        for harness in names
+        if selected_by == "table" and not any(_scope([harness]).wants(p) for p in present)
+    )
+    ordered = tuple(sorted(_audit(root, files, names, base, own, unused), key=_order))
     if notes:
         listing += "; and the agents' notes in .agents/handoffs/ and .agents/shared-memory/"
     return Report(
@@ -1284,7 +1416,8 @@ def _line(finding: Finding) -> str:
         f"{finding.check} {finding.path}:{finding.line} {finding.verdict}: {finding.fact} "
         f"[{finding.severity}]"
     )
-    return line if finding.verdict == PASS else f"{line} next: {finding.next}"
+    line = line if finding.verdict == PASS else f"{line} next: {finding.next}"
+    return line if finding.decides else f"{line} (does not change the result)"
 
 
 def render(report: Report, *, verbose: bool = False) -> str:
@@ -1324,7 +1457,10 @@ _DESCRIPTION = (
     "rule it answers to (S4 security, S7 loading) and whether it is a gate or asks a person to "
     "review."
 )
-_EXITS = "exits: 0 PASS, 1 FAIL, 2 UNVERIFIED or a usage error."
+_EXITS = (
+    "exits: 0 PASS, 1 FAIL, 2 UNVERIFIED or a usage error. A finding marked (does not change "
+    "the result) is reported and leaves the exit as it is."
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -1343,9 +1479,10 @@ def _parser() -> argparse.ArgumentParser:
         "--harness",
         action="append",
         default=[],
-        metavar="<h>",
-        help="a harness to check for, repeatable; default: those the manifest records plus any "
-        "whose files the target holds, else every row of adapters/harnesses.json",
+        metavar="<h>[,<h>]",
+        help="a harness to check for, repeatable or comma-separated; default: those the manifest "
+        "records plus any whose files the target holds, else every row of "
+        "adapters/harnesses.json",
     )
     check_parser.add_argument(
         "--base",
@@ -1373,7 +1510,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SystemExit as stop:
         return stop.code if isinstance(stop.code, int) else 2
     try:
-        report = check(Path(args.target), args.harness, args.base)
+        named = [name.strip() for value in args.harness for name in value.split(",")]
+        report = check(Path(args.target), [name for name in named if name], args.base)
     except (AuditError, adapters.AdapterError) as error:
         print(f"outcomebound instructions: {_plain(str(error))}", file=sys.stderr)
         return 2

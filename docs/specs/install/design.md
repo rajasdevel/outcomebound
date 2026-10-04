@@ -47,6 +47,17 @@ install carries, naming its `SKILL.md`. A fragment has a five-slot body and thre
 frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped fragment declaring
 edges only where its text names an act irreversible, in words the fragments share so the union
 names each act once; and `skills:`, a JSON list of the engine skills its selection installs.
+
+The same rules hold for the project's own `local` fragment, which starts from
+`templates/fragment-local.md`, and a parse refuses a fragment that breaks one, naming the rule:
+
+- The body holds all five slots, Context, Bounds, Mechanisms, Completion bar and Distinguish, in
+  that order, each line starting `**<slot>** — `, and nothing before the first. A slot with
+  little to say stays, short.
+- On the Mechanisms line, only a mechanism id of the registry takes backticks: every backticked
+  token there is read as one. A command or any other name is written without them.
+- An edge is one line and holds no `;`: the Irreversible edges fact joins the edges with `; `, so
+  such an edge would read as two.
 `fragments compose` renders both blocks for a selection; `--inline` emits the kernel, the skills
 an install carries and the fragment bodies, for a delegate's role prompt.
 
@@ -72,6 +83,10 @@ an install carries and the fragment bodies, for a delegate's role prompt.
 | `generic` serves a harness the table does not list: named as `--harness generic`, the default where none is named or recorded, and what `--detect` proposes where no harness file is found. Each skill goes once under `.outcomebound/skills/`, which the pointers name even beside native copies, and the install report reads `UNVERIFIED` that the harness reads `AGENTS.md`. Any other unlisted name is refused | no route for such a harness; the kernel alone, with no skill and no pointer | agent | decided |
 | Selecting the `workspace` fragment also installs `.agents/.gitignore` from `templates/workspace.gitignore`, keeping its four folders out of Git, as its own record of kind `ignore`, owned whole; its first line sends any other ignore to the root `.gitignore`. `--detect` proposes it where one of those folders exists, not for `.agents/skills/`, which a Codex or Amp install writes | lines in the root `.gitignore`, which the managed-block markers do not fit; asking the adopter to ignore them by hand; a proposal for any `.agents/` folder | user | decided |
 | `--detect` proposes `commands` everywhere: `detect: ["."]` matches every target | the habits in `workspace`; a kernel line | user | decided |
+| `--detect` reads `CLAUDE.md` or `.claude/` as `claude-code`, `.codex/` as `codex`, `.cursor/` as `cursor`, and `GEMINI.md` or `.gemini/` as `gemini`; `AGENTS.md` alone names no harness. A test command it takes from discovery, not from CI, carries a comment that it runs on the host, so that a project that runs its tests only in a container gives that command instead | reading the project's rules to decide host or container, which a lexical read cannot settle | agent | decided |
+| Discovery does not enter what Git ignores, which one `git ls-files --others --ignored --exclude-standard --directory` names without listing an ignored folder's contents, nor a folder holding its own `.git`; where Git lists nothing, its limits say no `.gitignore` was applied | a hand-written `.gitignore` reader; walking everything to the entry limit | agent | decided |
+| Every install writes `.outcomebound/.gitignore`, a record of kind `ignore` and id `local-records`, owned whole: it keeps `research-inbox/` and every `.outcomebound-checks/` under `.outcomebound/` out of Git, which `research ingest` and `validation` write on this machine. A validation plan outside `.outcomebound/` writes its logs beside it, which the project ignores itself | lines in the root `.gitignore`, which the managed-block markers do not fit; asking each adopter to ignore them by hand | agent | decided |
+| The install report warns, and refuses nothing: for each path the run writes that `git check-ignore` matches, naming the rule, since another clone never gets it and reads it missing; where the run changes a tracked `AGENTS.md` that holds changes not committed; and for each instruction file a selected harness also loads from a folder above the target, as its row's `ancestors` records (Claude Code: research `harnesses/claude-code.md` §1), whose paths resolve from that folder | refusing such an install; un-ignoring paths in the project's `.gitignore` | agent | decided |
 | `--finish-check` writes a `hook` entry for `claude-code` and `codex`: the [finish-check design](../finish-check/design.md) | every harness | user | decided |
 
 ## Edges
@@ -81,7 +96,7 @@ Writes stay inside the target and go through `fileplan.write`: never through a s
 read. Every byte adopt did not write is preserved, save a settings document's whitespace and an
 empty `hooks` object or `Stop` list it had, which `--remove` deletes; `--remove` restores a file
 adopt created or extended to what it held before: the fragment copies, the skill folders and
-`.agents/.gitignore` go, the project's own `local.md` stays. Reading a fact runs nothing from the
+`.agents/.gitignore` and `.outcomebound/.gitignore` go, the project's own `local.md` stays. Reading a fact runs nothing from the
 target.
 
 ## Validation

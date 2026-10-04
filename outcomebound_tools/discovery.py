@@ -3,7 +3,9 @@
 The output is deliberately ephemeral: filesystem observations may become stale and
 recommendations are not accepted profile choices.  This module reads only a small
 allowlist of project metadata, never follows symlinks, and never executes a detected
-command.
+command. In a Git work tree it does not enter what Git ignores, which one read-only
+`git ls-files` names, and it never enters a nested repository: a folder holding its own
+`.git`.
 """
 
 from __future__ import annotations
@@ -14,11 +16,13 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
 from outcomebound_tools import declared_tests, home, paths, schemacheck
+from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ROOT = home.ROOT
 
@@ -143,6 +147,51 @@ def _candidates(commands) -> list[dict]:
 
 class DiscoveryError(ValueError):
     """The requested discovery boundary is invalid or unreadable."""
+
+
+def git_read(target: Path, *arguments: str, data: bytes | None = None) -> bytes | None:
+    """What one read-only git command printed in `target`, or None where it failed or Git
+    cannot run. Git comes from PATH's absolute entries only, so the target cannot supply its
+    own, and nothing the target configures runs (`GIT_READ_CONFIGURATION`)."""
+
+    inherited = dict(os.environ)
+    inherited["PATH"] = os.pathsep.join(
+        part for part in inherited.get("PATH", "").split(os.pathsep) if os.path.isabs(part)
+    )
+    try:
+        completed = subprocess.run(
+            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            cwd=target,
+            env=git_environment(inherited),
+            input=data,
+            stdin=None if data is not None else subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def git_ignored(target: Path) -> tuple[frozenset[str], frozenset[str]] | None:
+    """What Git ignores under `target`: the folders it ignores whole and the other files it
+    ignores, target-relative; None where `target` is not in a Git work tree, lies in a folder
+    its repository ignores, or Git cannot list it. One `git ls-files --directory` names an
+    ignored folder once, so its contents are never listed."""
+
+    inside = git_read(target, "rev-parse", "--is-inside-work-tree")
+    if inside is None or inside.strip() != b"true":
+        return None
+    if git_read(target, "check-ignore", "-q", ".") is not None:
+        return None
+    raw = git_read(
+        target, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"
+    )
+    if raw is None:
+        return None
+    items = [os.fsdecode(item) for item in raw.split(b"\0") if item]
+    folders = frozenset(item.rstrip("/") for item in items if item.endswith("/"))
+    return folders, frozenset(item for item in items if not item.endswith("/"))
 
 
 def _timestamp() -> str:
@@ -531,6 +580,8 @@ def discover(target, roots=None) -> dict:
         raise DiscoveryError(f"cannot inspect target {requested}: {error}") from error
 
     scan_roots = _normal_roots(target_path, roots)
+    ignored = git_ignored(target_path)
+    ignored_folders, ignored_files = ignored or (frozenset(), frozenset())
     markers = []
     shell_scripts: list[str] = []
     shell_truncated = False
@@ -564,6 +615,8 @@ def discover(target, roots=None) -> dict:
                     symlink = False
                 if symlink:
                     skipped.append({"path": relative, "reason": "symlink"})
+                elif relative in ignored_folders or os.path.lexists(path / ".git"):
+                    continue
                 elif name not in IGNORED_DIRECTORIES:
                     if depth < MAX_DEPTH:
                         safe_directories.append(name)
@@ -576,6 +629,11 @@ def discover(target, roots=None) -> dict:
                     if row["path"] not in seen_relevant:
                         seen_relevant.add(row["path"])
                         markers.append(row)
+            file_names[:] = [
+                name
+                for name in file_names
+                if _relative(current / name, target_path) not in ignored_files
+            ]
             for name in sorted(file_names):
                 if not name.endswith(SHELL_SUFFIX) or not _is_regular(current / name):
                     continue
@@ -680,6 +738,11 @@ def discover(target, roots=None) -> dict:
         f"component scan is limited to depth {MAX_DEPTH} and {MAX_ENTRIES} directory entries",
         "only allowlisted project metadata was read; workflow files were observed by path only",
         "symlinks were not followed and detected commands were not executed",
+        "nested repositories were not entered",
+        "what Git ignores was not entered"
+        if ignored is not None
+        else "Git listed no ignored paths here (not a Git work tree, an ignored folder, or Git "
+        "could not run), so no .gitignore was applied",
     ]
     if shell_truncated:
         limits.append(

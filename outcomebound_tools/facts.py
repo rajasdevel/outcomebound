@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from outcomebound_tools import identity, paths
-from outcomebound_tools.fragments import Fragment
+from outcomebound_tools.fragments import EDGE_SEPARATOR, Fragment
 
 FACTS = "project-facts"
 POINTERS = "guidance-pointers"
@@ -443,7 +443,9 @@ def render(
         inputs[FLOOR] = sha256(floor)
         edges.append(FLOOR_EDGE)
     if edges:
-        lines.append(f"- Irreversible edges: {'; '.join(dict.fromkeys(edges))}")
+        # No edge holds the separator (`fragments._edges`), so each one reads back whole.
+        joined = f"{EDGE_SEPARATOR} ".join(dict.fromkeys(edges))
+        lines.append(f"- Irreversible edges: {joined}")
     else:
         unverified.append("Irreversible edges: no selected fragment declares one, and no floor")
     lines.extend(f"- Text for people: {STYLES[name]}" for name in style)

@@ -85,8 +85,13 @@ def _read_text(path: Path, what: str) -> str:
         raise FragmentError(f"cannot read {what} at {path}: {error}") from error
 
 
+# The project facts join a fragment's edges on one line with this, so no edge may hold it.
+EDGE_SEPARATOR = ";"
+
+
 def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
-    """The `edges:` list: a JSON list of non-empty one-line strings."""
+    """The `edges:` list: a JSON list of non-empty one-line strings, none holding the
+    separator the facts line joins them with."""
 
     try:
         parsed = json.loads(value)
@@ -96,6 +101,15 @@ def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
         isinstance(item, str) and item.strip() for item in parsed
     ):
         raise FragmentError(f"{source}:{number}: edges must be a JSON list of non-empty strings")
+    for item in parsed:
+        if "\n" in item or "\r" in item:
+            raise FragmentError(f"{source}:{number}: edge {item!r} must be one line")
+        if EDGE_SEPARATOR in item:
+            raise FragmentError(
+                f"{source}:{number}: edge {item!r} holds {EDGE_SEPARATOR!r}, which the project "
+                "facts join edges with, so it would read as two edges; give each edge as its "
+                "own list item, or word it with a comma"
+            )
     return tuple(item.strip() for item in parsed)
 
 
@@ -194,7 +208,8 @@ def _slot_bodies(body: str, source: str) -> dict[str, str]:
     found = [match.group("slot").strip() for match in matches]
     if found != list(SLOTS):
         raise FragmentError(
-            f"{source}: body must contain exactly the slots {list(SLOTS)} in order; got {found}"
+            f"{source}: body must contain exactly the slots {list(SLOTS)} in order, each one "
+            f"present, even where it has little to say; got {found}"
         )
     if body[: matches[0].start()].strip():
         raise FragmentError(
@@ -220,7 +235,8 @@ def parse_fragment(text: str, source: str = "<fragment>") -> Fragment:
     if invalid:
         raise FragmentError(
             f"{source}: Mechanisms names unknown mechanism(s): {', '.join(invalid)}; "
-            f"the registry is {', '.join(MECHANISMS)}"
+            f"only mechanism ids take backticks on this line, so write any other name, such as "
+            f"a command, without them; the registry is {', '.join(MECHANISMS)}"
         )
     return Fragment(
         id=fields["id"],

@@ -6,7 +6,10 @@ operating contract; the project facts the engine observes or the adopter records
 fragment inline and then one line per selected fragment, copied under
 `.outcomebound/fragments/`, and per skill: those in `SKILLS`, and those a selected fragment names
 in its `skills:`. Selecting the workspace fragment also
-installs `.agents/.gitignore`, which keeps its four folders out of Git. `--finish-check` adds one
+installs `.agents/.gitignore`, which keeps its four folders out of Git; every install writes
+`.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
+report warns where Git ignores a path it writes, where AGENTS.md holds changes not committed, and
+where a harness also loads instructions from a folder above the target. `--finish-check` adds one
 entry to the settings document of each selected harness whose table row has a `finish_hook`
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
@@ -53,6 +56,7 @@ from outcomebound_tools import (
     fragments,
     home,
     identity,
+    instruction_audit,
     paths,
 )
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
@@ -91,6 +95,17 @@ FINISH_CHECK = finish_check.ID
 WORKSPACE = "workspace"
 WORKSPACE_IGNORE = ".agents/.gitignore"
 WORKSPACE_TEMPLATE = "templates/workspace.gitignore"
+# OutcomeBound's own local records stay out of Git: every install writes this file whole.
+# `research ingest` writes its inbox here, and `validation` writes its logs beside the plan file,
+# a plan under `.outcomebound/` included.
+LOCAL_RECORDS = "local-records"
+LOCAL_IGNORE = ".outcomebound/.gitignore"
+LOCAL_IGNORE_TEXT = (
+    b"# OutcomeBound's local records: written on this machine, never committed. adopt writes this\n"
+    b"# file whole; put any other ignore in the root .gitignore.\n"
+    b"/research-inbox/\n"
+    b".outcomebound-checks/\n"
+)
 # A harness outside the harness table: the skills go where the pointers name them.
 GENERIC = "generic"
 GENERIC_SKILLS = ".outcomebound/skills"
@@ -109,6 +124,7 @@ CHECK_CAP = 100
 HARNESS_SIGNS = (
     ("CLAUDE.md", "claude-code"),
     (".claude", "claude-code"),
+    (".codex", "codex"),
     (".cursor", "cursor"),
     ("GEMINI.md", "gemini"),
     (".gemini", "gemini"),
@@ -621,6 +637,7 @@ def _own(record: object) -> bool:
             and record.get("path") == f"{facts.FRAGMENT_DIR}/{name}.md"
         )
         or (kind == "ignore" and name == WORKSPACE and record.get("path") == WORKSPACE_IGNORE)
+        or (kind == "ignore" and name == LOCAL_RECORDS and record.get("path") == LOCAL_IGNORE)
         or (kind == HOOK and name == FINISH_CHECK and isinstance(record.get("harness"), str))
     )
 
@@ -990,8 +1007,8 @@ def desired(
     style: Sequence[str] = (),
 ) -> list[Want]:
     """What this engine installs for these harnesses, fragments and Done commands, in record
-    order: the kernel, the facts, the pointers, the fragment files and the workspace's
-    `.agents/.gitignore`, the imports, the skills.
+    order: the kernel, the facts, the pointers, the fragment files, the workspace's
+    `.agents/.gitignore` and `.outcomebound/.gitignore`, the imports, the skills.
 
     A host no harness needs (`_unneeded`) gets no import block, and a record of one is dropped
     without writing its file again. Claude Code's host, CLAUDE.md, is itself one of the files
@@ -1012,6 +1029,7 @@ def desired(
     wants.extend(Want("fragment", path, Path(path).stem, data) for path, data in made.files.items())
     if WORKSPACE in ids:
         wants.append(Want("ignore", WORKSPACE_IGNORE, WORKSPACE, workspace_ignore(source)))
+    wants.append(Want("ignore", LOCAL_IGNORE, LOCAL_RECORDS, LOCAL_IGNORE_TEXT))
     run.notes.extend(("UNVERIFIED", text) for text in made.rendered.unverified)
     wants.extend(imports)
     if any(item.harness == GENERIC for item in found):
@@ -1359,6 +1377,74 @@ def nested_bytes(run: Run, table: dict[str, Any], found: Sequence[Route]) -> Not
     return notes
 
 
+def ancestor_notes(target: Path, found: Sequence[Route]) -> Notes:
+    """A warning for each instruction file a selected harness also loads from a folder above
+    the target, as its row's `ancestors` records: a parent install's contract and pointers load
+    beside this one, and the paths they name resolve from that folder."""
+
+    notes: Notes = []
+    for route in found:
+        for folder, name in instruction_audit.ancestor_files(target, route.harness):
+            relative = f"{os.path.relpath(folder, target)}/{name}".replace(os.sep, "/")
+            notes.append(
+                (
+                    "warning",
+                    f"{route.harness}: a session here also loads {relative}, from a folder "
+                    "above the target (the row's ancestors); what it says loads beside this "
+                    "install, and the paths it names resolve from that folder, not from here",
+                )
+            )
+    return notes
+
+
+def ignored_notes(target: Path, planned: Planned) -> Notes:
+    """A warning for each path this run writes that Git ignores: the manifest records it, so
+    every other clone, which never gets it, reads it missing in `--check`. A tracked path is
+    never ignored, as Git keeps tracking it."""
+
+    written = [path for path, (_, after) in planned.items() if after is not None]
+    if not written:
+        return []
+    data = b"".join(os.fsencode(path) + b"\0" for path in written)
+    raw = discovery.git_read(target, "check-ignore", "-v", "-z", "--stdin", data=data)
+    fields = os.fsdecode(raw or b"").split("\0")
+    notes: Notes = []
+    for source, line, pattern, path in zip(*[iter(fields)] * 4, strict=False):
+        if pattern.startswith("!"):
+            continue
+        notes.append(
+            (
+                "warning",
+                f"{path}: Git ignores it ({source}:{line}: {pattern}), so it stays out of "
+                f"every commit while {MANIFEST} records it, and another clone reads it missing "
+                "in adopt --check; un-ignore it, or choose a harness whose files Git keeps",
+            )
+        )
+    return notes
+
+
+def uncommitted_notes(target: Path, planned: Planned) -> Notes:
+    """A warning where this run changes a tracked AGENTS.md that holds changes not committed:
+    adopt's blocks and those changes then share one file, and a clean commit of either needs
+    them apart. An untracked AGENTS.md is new as a whole, and is not warned about."""
+
+    before, after = planned.get(AGENTS, (None, None))
+    if before is None or after is None:
+        return []
+    status = discovery.git_read(
+        target, "--no-optional-locks", "status", "--porcelain", "-z", "--", AGENTS
+    )
+    if not status or status.startswith(b"??"):
+        return []
+    return [
+        (
+            "warning",
+            f"{AGENTS} holds changes that are not committed; this install's blocks join them in "
+            "the one file, so commit or set those changes apart before you commit the install",
+        )
+    ]
+
+
 @dataclass(frozen=True)
 class Selection:
     """What an install is asked for; `None` keeps what the manifest records, and no harness
@@ -1397,7 +1483,11 @@ def install(
         run.drop(record)
     run.notes.append(footprint(wants))
     run.notes.extend(nested_bytes(run, table, found))
-    return run.planned(manifest, engine_version(source)), run.edited, run.notes, run.measure
+    run.notes.extend(ancestor_notes(target, found))
+    planned = run.planned(manifest, engine_version(source))
+    run.notes.extend(ignored_notes(target, planned))
+    run.notes.extend(uncommitted_notes(target, planned))
+    return planned, run.edited, run.notes, run.measure
 
 
 def remove(target: Path, source: Path, force: bool) -> tuple[Planned, list[str], Notes]:
@@ -1444,7 +1534,7 @@ def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record])
             raise AdoptError(f"this engine ships no {relative} in the {name} skill")
         return files[relative]
     if kind == "ignore":
-        return workspace_ignore(source)
+        return LOCAL_IGNORE_TEXT if name == LOCAL_RECORDS else workspace_ignore(source)
     if kind == "fragment":
         shipped = catalog(source, target, []).get(name)
         if shipped is None:
@@ -1584,11 +1674,9 @@ def default_base(target: Path) -> str | None:
     return None
 
 
-def proposed_done(target: Path) -> list[str]:
-    """What `--detect` proposes for Done, in run order: the floor's runner where a floor is
-    installed, with `--base` the remote's default branch where one resolves, then the first
-    test command the project's CI runs, as the CI test fact reads it, or, where CI names none,
-    the first check command discovery offers for the target's root."""
+def _proposal(target: Path) -> tuple[list[str], str | None]:
+    """What `--detect` proposes for Done, in run order, and, where its test command came from
+    discovery rather than CI, the files that suggested it: such a command runs on the host."""
 
     try:
         floor = paths.read_bounded(target, facts.FLOOR)
@@ -1600,13 +1688,25 @@ def proposed_done(target: Path) -> list[str]:
         done.append(FLOOR_RUNNER + (f" --base {shlex.quote(base)}" if base else ""))
     ci = [command for item in facts.read_ci(target) for command in item.tests]
     if ci:
-        return [*done, ci[0]]
+        return [*done, ci[0]], None
     try:
         components = discovery.discover(target)["inferred"]["components"]
     except (discovery.DiscoveryError, OSError):
         components = []
-    roots = [item["check_candidates"] for item in components if item["root"] == "."]
-    return done + [candidates[0]["command"] for candidates in roots if candidates]
+    for item in components:
+        if item["root"] == "." and item["check_candidates"]:
+            evidence = ", ".join(item["evidence"]) or "the target's files"
+            return [*done, item["check_candidates"][0]["command"]], evidence
+    return done, None
+
+
+def proposed_done(target: Path) -> list[str]:
+    """What `--detect` proposes for Done, in run order: the floor's runner where a floor is
+    installed, with `--base` the remote's default branch where one resolves, then the first
+    test command the project's CI runs, as the CI test fact reads it, or, where CI names none,
+    the first check command discovery offers for the target's root."""
+
+    return _proposal(target)[0]
 
 
 def detect(target: Path, source: Path) -> int:
@@ -1624,10 +1724,16 @@ def detect(target: Path, source: Path) -> int:
     words.append(harnesses)
     if ids:
         words += ["--fragments", ",".join(ids)]
-    done = proposed_done(target)
+    done, suggested_by = _proposal(target)
     for command in done:
         words += ["--done", command]
     line = " ".join(map(shlex.quote, words))
+    if suggested_by is not None:
+        line += (
+            f"  # {done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on "
+            "the host, so where the project runs its tests only in a container, give that "
+            "command to --done in its place"
+        )
     if FLOOR_RUNNER in done:
         line += (
             "  # no default branch resolves: the floor runs without --base, so its loosening "
@@ -1658,8 +1764,12 @@ ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers:
 fragment inline, then one line per fragment in --fragments, copied under
 .outcomebound/fragments/, and per skill: the core skills, and those a selected fragment names,
 such as the tickets fragment's slice-tickets. The workspace fragment also gets
-.agents/.gitignore, which keeps its four folders out of Git. A fact it cannot observe is left
-out, and the install report names it UNVERIFIED. Each harness gets the skills, and an @AGENTS.md
+.agents/.gitignore, which keeps its four folders out of Git, and every install gets
+.outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
+validation logs) out of Git. A fact it cannot observe is left out, and the install report names
+it UNVERIFIED. The report also warns, refusing nothing, for each path it writes that Git
+ignores, where a tracked AGENTS.md holds changes not committed, and for each instruction file a
+harness also loads from a folder above the target. Each harness gets the skills, and an @AGENTS.md
 import block in each harness file that needs one: none where the harness reads AGENTS.md itself,
 as Claude Code 2.1.281 and later does where the target has no CLAUDE.md, .claude/CLAUDE.md or
 CLAUDE.local.md. generic, the default where no harness is named, serves a harness the table does

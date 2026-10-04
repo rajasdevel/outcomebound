@@ -214,6 +214,43 @@
         }
       }
     },
+    "ancestors": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "loads",
+        "names",
+        "source"
+      ],
+      "description": "Whether the harness also loads instruction files from the folders above the working directory, up to the filesystem root, and their names in each folder; a name ending in AGENTS.md loads only where reads_agents_md lets it. Absent or null means no source settles it.",
+      "properties": {
+        "loads": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "null means no source settles it."
+        },
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "description": "Where this fact is written down, dated where it was read from documentation; null where no source settles it."
+        }
+      }
+    },
     "overrides": {
       "type": "array",
       "description": "Override files the harness documents. A person-owned file is named only so the audit leaves it unopened.",
