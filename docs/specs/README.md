@@ -52,7 +52,10 @@ These rules are for the maintainers of this repository and its own designs only.
   meaning of a key) ships with a check that `adopt` runs at each install and upgrade and reports,
   and with an item under "Do these steps first" in the changelog that names each case the change
   moves, a key left out included. Only the adopter can change their file, so the upgrade is where
-  they must first see that it reads differently.
+  they must first see that it reads differently. A test fixture that an engine change breaks is
+  an adopter that the change breaks, so the change ships this check and this changelog step, not
+  only the fixture fix. A new warning or finding states its hits on the canary (`make canary`)
+  and on the tests before it merges, each hit true or false, and a false hit blocks the merge.
 
 ## Write a new design
 

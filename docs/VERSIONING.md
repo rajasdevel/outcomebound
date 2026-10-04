@@ -39,10 +39,17 @@ At a release, these places name the same version:
 - the `v=` of the operating-contract block that `adopt` installs
 - every install line in the README and in `templates/ci/` (`…/outcomebound@v<VERSION>`)
 
+Before the release commit, the person runs `make canary`, as CONTRIBUTING.md says: the engine
+of the release beside the installed release, on the local list of projects, with no change to
+them. A pull request that changes `adopt`, `tickets`, `floor`, `instructions` or `discovery` also
+runs it before it opens.
+
 The person who prepares the release commit runs `make release-check` on it. A maintainer or an
-agent can prepare it. The command checks that these places agree and that this repository's own
-install is current. It also runs the gate, the quality floor and the test suite, and they must
-pass.
+agent can prepare it. The command first reads the record of `make canary` and fails unless that
+record is PASS for the tree of the release commit. A squash merge keeps the tree of the branch,
+so a record from the branch applies. The command then checks that these places agree and that
+this repository's own install is current. It also runs the gate, the quality floor and the test
+suite, and they must pass.
 
 You cannot undo the push of a tag. A maintainer pushes it. An agent can push it only where a
 grant of a maintainer in `.outcomebound/tag-grants.json` covers that version on that day. The last

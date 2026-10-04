@@ -243,7 +243,18 @@ of a pull request. CI applies the list only when the repository has the secret `
 a fork does not get the secret, so for that pull request CI reads `UNVERIFIED` for the list and
 does not fail.
 
+`make canary` runs the engine of your checkout beside the installed release, and changes
+nothing. It runs on each project of a local list, under Python 3.10 and under the Python of the
+installed release. The environment variable `OB_CANARY_LIST` names the list: one project path on
+each line, and `#` for a comment. The list stays outside this repository, and the report names
+each project by its number only. A crash, an exception, a refusal, or a change to a project's
+tree is FAIL. The report also gives the warning and finding kinds that the candidate adds or
+removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIED`. Run
+`make canary` before you open a pull request that changes `adopt`, `tickets`, `floor`,
+`instructions` or `discovery`, and before the release commit. The pull request gives the summary
+in counts.
+
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
-on the release commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)
+on the release commit, and it fails unless `make canary` recorded PASS for the tree of that commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)
 says who may push it, and what `make release-check` confirms first. When the CI run on the tag
 passes, CI publishes the GitHub release with the attested wheel and source archive.
