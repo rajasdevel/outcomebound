@@ -21,9 +21,9 @@ check you can run would catch it; the project's own gate at a protected boundary
 you author; broad or runtime checks when the changed risk reaches that layer.
 
 Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
-Decide what you can; proceed on stated assumptions. Hold only the item expanding authority
-or crossing an ungranted irreversible edge: write its decision brief (the `decision-brief`
-skill) and continue every other item.
+Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
+crosses an ungranted irreversible edge: write its decision brief (the `decision-brief` skill); all
+other work continues.
 Delegates receive the same four inputs and bounds.
 
 Report each named check as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
