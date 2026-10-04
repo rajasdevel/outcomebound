@@ -740,6 +740,39 @@ def test_a_plan_that_runs_its_claims_in_its_own_folder_is_a_warning(
         assert 'write "cwd": ".."' in text, text
 
 
+@pytest.mark.parametrize(
+    ("cwd", "expected"),
+    [
+        (None, ["CLAIM_PATH_ABSENT", "CLAIM_CWD_PLAN_FOLDER"]),
+        (".", ["CLAIM_PATH_ABSENT", "CLAIM_CWD_PLAN_FOLDER"]),
+        ("..", []),
+    ],
+)
+def test_a_planned_path_is_no_sign_of_a_misplaced_cwd(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    cwd: str | None,
+    expected: list[str],
+) -> None:
+    """A claim may declare a path that an open ticket will add, such as a test file not
+    written yet. The checkout holds it from neither the working directory nor the root, so it
+    says nothing about the `cwd`: with `".."` the plan gets no warning, and with no `cwd` or
+    `"."` the warning names only the path that the checkout root holds."""
+
+    root = checkout(tmp_path, document("#1"), cwd=cwd)
+    write(root, "app.py", "")
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"][0]["required_paths"] = ["app.py", "tests/test_new.py"]
+    write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert run_codes(found) == expected
+    if expected:
+        [text] = said(found, "CLAIM_PATH_ABSENT")
+        assert "declares .outcomebound/app.py," in text and "test_new.py" not in text, text
+
+
 def test_a_plan_at_the_checkout_root_with_no_cwd_is_not_warned(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

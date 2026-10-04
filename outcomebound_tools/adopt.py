@@ -1459,7 +1459,8 @@ def claims_plan_notes(target: Path) -> Notes:
     """A warning where the claims plan that `.outcomebound/tickets.json` declares would run
     its claims in a folder it was not written for, as `tickets_claims.placement` decides for
     `tickets check` too: since 1.1.0 a relative `cwd`, and a plan with none, starts at the plan
-    file's folder, and an upgrade is where a plan written for 1.0.0 first meets that. The plan
+    file's folder, and an upgrade is where a plan written for 1.0.0 first meets that. A declared
+    path that the checkout root does not hold either is planned, and is not reported. The plan
     is the project's file, so this writes nothing to it and refuses nothing. With no
     declaration, or none `tickets` can read, or no readable plan, it says nothing:
     `tickets check` refuses those itself."""
@@ -1480,11 +1481,11 @@ def claims_plan_notes(target: Path) -> Notes:
         (
             "warning",
             f"tickets: the claim `{_printable(name)}` in {shown} declares "
-            f"{_printable(', '.join(absent))}, which the checkout does not hold from the plan's "
-            f"working directory {where}; point the plan's cwd at the folder the claim runs in "
-            f"(from {folder}/ the checkout root is {fix}), or add the path",
+            f"{_printable(', '.join(moved))}, which the checkout does not hold from the plan's "
+            f"working directory {where} but holds from the checkout root; write {fix} in the "
+            "plan to run its claims at the root, or add the path where the claim runs",
         )
-        for name, absent in found.absent.items()
+        for name, moved in found.moved.items()
     ]
     if found.at_plan_folder:
         notes.append(

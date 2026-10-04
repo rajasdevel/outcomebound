@@ -2051,13 +2051,16 @@ TICKETS_DECLARATION = {
 }
 
 
-def tickets_target(path: Path, cwd: str | None, declares: bool, declared: bool = True) -> Path:
+def tickets_target(
+    path: Path, cwd: str | None, declares: bool, declared: bool = True, planned: bool = False
+) -> Path:
     """A repository whose claims plan sits in `.outcomebound/`, written for the checkout root,
-    with the given top-level `cwd`; its one claim declares `app.py` where `declares`."""
+    with the given top-level `cwd`; its one claim declares `app.py` where `declares`, and
+    `tests/test_new.py`, which no folder holds yet, where `planned`."""
 
     claim: dict[str, object] = {"name": "unit", "command": ["true"]}
-    if declares:
-        claim["required_paths"] = ["app.py"]
+    if declares or planned:
+        claim["required_paths"] = ["app.py"] * declares + ["tests/test_new.py"] * planned
     plan: dict[str, object] = {"version": 1, "claims": [claim]}
     if cwd is not None:
         plan["cwd"] = cwd
@@ -2095,6 +2098,29 @@ def test_an_install_reports_a_claims_plan_that_runs_in_its_own_folder(
     assert any("runs its claims in .outcomebound/" in line for line in lines), lines
     assert all('"cwd": ".."' in line for line in lines), lines
     assert any("`unit`" in line and ".outcomebound/app.py" in line for line in lines) is declares
+
+
+@pytest.mark.parametrize("cwd", [None, ".", ".."])
+def test_an_install_does_not_read_a_planned_path_as_a_misplaced_cwd(
+    tmp_path: Path, capsys: Capture, cwd: str | None
+) -> None:
+    """A path that an open ticket will add is held from neither the plan's working directory
+    nor the checkout root. With `".."` the install gives no `tickets:` warning, so it never
+    tells a person to change a `cwd` that already runs at the root; with no `cwd` or `"."` it
+    warns only of the path the root holds and of the plan's folder."""
+
+    target = tickets_target(tmp_path / "t", cwd, declares=True, planned=True)
+
+    code, out, _ = run(capsys, str(target))
+
+    assert code == 0
+    lines = tickets_lines(out)
+    if cwd == "..":
+        assert lines == []
+        return
+    assert len(lines) == 2, lines
+    assert not any("test_new.py" in line for line in lines), lines
+    assert any("`unit`" in line and ".outcomebound/app.py" in line for line in lines), lines
 
 
 def test_an_install_says_nothing_of_a_plan_no_tickets_declaration_names(

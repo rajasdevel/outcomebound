@@ -11,6 +11,20 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+A patch release. adopt and `tickets check` no longer tell a person to change the `cwd` of a claims
+plan that already runs its claims at the checkout root when a claim declares a path that a ticket
+will add.
+
+### Fixed
+
+- A claims plan can declare a `required_paths` entry that an open ticket will add, such as a test
+  file. Before, adopt gave one `warning  tickets:` line for each such claim at each install, and
+  `tickets check` gave `CLAIM_PATH_ABSENT`. Each told the person to point the plan's `cwd` at the
+  checkout root, also when the `cwd` was already `".."`. Now these warnings come only when the
+  checkout holds the path from the checkout root but not from the plan's working directory, which
+  shows that the `cwd` is wrong. A path that the checkout holds in neither place is a planned path.
+  Neither command warns about it, and a run of that claim reads `UNVERIFIED` until the path exists.
+
 ## [1.1.1] - 2026-10-04
 
 A patch release. adopt now reports a `tickets` claims plan whose claims run in a folder that the
