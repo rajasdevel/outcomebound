@@ -176,14 +176,17 @@ flowchart TD
     class back,report,told bad
 ```
 
-When it installs the finish check, `adopt` runs your Done commands one time. It shows the verdict
-and the time of each command. It records each command that fails now, with its exit code, as a
-known failure. A known failure does not send the agent back while it fails with the same exit
-code. All other failures send the agent back. When a known command passes, the check removes it from
-the record, and its next failure sends the agent back. The check reads exit codes only. Thus, while
-a command fails in a known way, a new failure in that same command does not send the agent back.
-Split your Done into smaller commands to make this gap smaller. `adopt --finish-check` measures
-Done again.
+With `--finish-check`, `adopt` runs your Done commands one time. It shows the verdict and the
+time of each command. It records each command that fails now as a known failure, with its exit
+code, the names of the failing tests that its output gives, and the commit. A known failure does
+not send the agent back while it fails in the same way: the same exit code, and no new failing
+test name. All other failures send the agent back. The record applies only in a checkout whose
+history contains the measured commit. When a known command passes, the check removes it from the
+record, and its next failure sends the agent back. The check reads test names from the summary
+lines of pytest, unittest, go test, cargo test, jest, vitest and make. If a command prints no such
+names, only its exit code is compared, so a new failure in that same command does not send the
+agent back; the message says so. Split your Done into smaller commands to make this gap smaller.
+`adopt --finish-check` measures Done again. An install without `--finish-check` does not run Done.
 
 The hook checks the checkout at the working directory of the session. If the agent works in a
 worktree and the session stays in the main checkout, a PASS tells you nothing about the worktree.

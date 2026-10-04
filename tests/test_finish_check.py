@@ -572,13 +572,33 @@ def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str]) -> 
 
 # --- known failures: what failed when adopt measured Done -------------------------
 
+IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
 
 def failing(root: Path, digest: str) -> dict[str, int]:
-    """The known failures kept for `root` and this Done digest; a record must be kept."""
+    """The exit code of each known failure kept for `root` and this Done digest; a record that
+    applies to `root` must be kept."""
 
     record = finish_check.known_record(root, digest)
     assert record is not None
-    return record.failing
+    return {line: failure.code for line, failure in record.failing.items()}
+
+
+def runner_script(root: Path, flags: Path) -> str:
+    """A Done command that prints a pytest summary line for each flag file in `flags` and exits
+    1 where there is any, as a test runner reports its failing tests."""
+
+    script = root / "suite.sh"
+    script.write_text(
+        "#!/bin/sh\nrc=0\n"
+        f'for f in "{flags}"/*; do [ -e "$f" ] || continue; '
+        'echo "FAILED tests/$(basename "$f").py::test_x - AssertionError"; rc=1; done\n'
+        'echo "short test summary"; exit $rc\n',
+        encoding="utf-8",
+    )
+    subprocess.run([GIT, "-C", str(root), "add", "suite.sh"], check=True)
+    subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "suite"], check=True)
+    return "sh suite.sh"
 
 
 def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path: Path) -> None:
@@ -597,15 +617,73 @@ def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
     assert message.startswith("finish-check FAIL, known: ")
-    assert "(known, not held)" in message and f"PASS {done[1]}" in message
+    assert "(known by its exit code only, since its output names no failure ids; not held)" in (
+        message
+    )
+    assert "a new failure inside it is not told apart" in message
+    assert f"PASS {done[1]}" in message
 
     broken.write_text("", encoding="utf-8")
     (root / "src.txt").write_text("three\n", encoding="utf-8")
     reason = hook("codex", digest, root)[1]["reason"]
-    assert "FAIL echo old; exit 1: exit 1 after " in reason and "(known, not held)" in reason
+    assert "FAIL echo old; exit 1: exit 1 after " in reason and "; not held)" in reason
     assert f"FAIL {done[1]}: exit 4 after " in reason
     assert "A command marked known failed the same way before your change" in reason
     assert reason.endswith("```output\nnew\n```")
+
+
+def test_a_new_failing_test_inside_a_known_command_holds(tmp_path: Path) -> None:
+    """Breaks if a known command hides a test that newly fails inside it with the same exit
+    code: its failure ids must be among those adopt measured. An old failing test alone still
+    holds nothing."""
+
+    flags = tmp_path / "flags"
+    flags.mkdir()
+    (flags / "test_old").write_text("", encoding="utf-8")
+    root, _ = target(tmp_path / "t", ["true"])
+    done = [runner_script(root, flags)]
+    manifest = root / ".outcomebound/manifest.json"
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"][0]["done"] = done
+    manifest.write_text(json.dumps(document), encoding="utf-8")
+    digest = finish_check.done_digest(done)
+    finish_check.measure(root, done, 600)
+    record = finish_check.known_record(root, digest)
+    assert record is not None
+    assert record.failing[done[0]].ids == {"pytest tests/test_old.py::test_x"}
+
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    message = hook("codex", digest, root)[1]["systemMessage"]
+    assert (
+        message.startswith("finish-check FAIL, known: ") and "known by its failure ids" in message
+    )
+
+    (flags / "test_new").write_text("", encoding="utf-8")
+    (root / "src.txt").write_text("three\n", encoding="utf-8")
+    reason = hook("codex", digest, root)[1]["reason"]
+    assert "not known: new failure ids pytest tests/test_new.py::test_x" in reason
+    assert "FAILED tests/test_new.py::test_x" in reason
+
+
+@pytest.mark.parametrize(
+    ("line", "found"),
+    [
+        ("FAILED tests/a.py::test_b - assert 1", "pytest tests/a.py::test_b"),
+        ("ERROR tests/a.py - ImportError", "pytest tests/a.py"),
+        ("FAIL: test_x (pkg.tests.T)", "unittest test_x (pkg.tests.T)"),
+        ("    --- FAIL: TestThing (0.00s)", "go TestThing"),
+        ("test tests::it_works ... FAILED", "cargo tests::it_works"),
+        ("  \u2715 adds numbers (5 ms)", "jest adds numbers"),
+        (" \u00d7 src/a.test.ts > sum 3ms", "jest src/a.test.ts > sum"),
+        ("make: *** [Makefile:4: test] Error 1", "make Makefile:4: test"),
+        ("make[1]: *** [check] Error 2", "make check"),
+    ],
+)
+def test_each_runner_names_its_failures_by_id(line: str, found: str) -> None:
+    """Breaks if a runner's own failure line is not read as an id, or a timing in it is kept,
+    which would make the same failure a new id at each run."""
+
+    assert finish_check.failure_ids(f"noise\n{line}\n12 failed in 3.2s\n".encode()) == {found}
 
 
 def test_a_known_command_failing_with_another_exit_code_holds(tmp_path: Path) -> None:
@@ -661,6 +739,61 @@ def test_known_failures_are_shared_by_worktrees_and_kept_for_one_done_list(tmp_p
     assert finish_check.known_record(root, finish_check.done_digest(["make test"])) is None
 
 
+def test_a_record_measured_on_another_branch_does_not_apply(tmp_path: Path) -> None:
+    """Breaks if a failure measured on one branch is known in a worktree whose history does not
+    hold that commit: there the failure may be the change's own, so it must hold."""
+
+    flag = "bad"
+    done = [f"test ! -e {flag}"]
+    root, digest = target(tmp_path / "t", done)
+    subprocess.run([GIT, "-C", str(root), "branch", "-q", "passing"], check=True)
+    subprocess.run([GIT, "-C", str(root), "checkout", "-q", "-b", "old"], check=True)
+    (root / flag).write_text("", encoding="utf-8")
+    subprocess.run([GIT, "-C", str(root), "add", flag], check=True)
+    subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "old failure"], check=True)
+    finish_check.measure(root, done, 600)
+    tree = tmp_path / "wt"
+    subprocess.run(
+        [GIT, "-C", str(root), "worktree", "add", "-q", str(tree), "passing"], check=True
+    )
+
+    assert finish_check.known_record(tree, digest) is None
+    (tree / flag).write_text("", encoding="utf-8")
+    assert hook("codex", digest, tree)[1]["decision"] == "block"
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    assert hook("codex", digest, root)[1]["systemMessage"].startswith("finish-check FAIL, known: ")
+
+
+def test_two_targets_and_two_branches_keep_their_own_records(tmp_path: Path) -> None:
+    """Breaks if measuring one target, or the same target on another branch, drops the record
+    another one still applies, which would make it hold on every failure again."""
+
+    done = ["exit 1"]
+    root, digest = target(tmp_path / "t", done)
+    inner = root / "inner"
+    (inner / ".outcomebound").mkdir(parents=True)
+    shutil.copy(root / ".outcomebound/manifest.json", inner / ".outcomebound/manifest.json")
+    subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "inner"], check=True)
+    finish_check.measure(root, done, 600)
+    finish_check.measure(inner, done, 600)
+    assert failing(root, digest) == failing(inner, digest) == {"exit 1": 1}
+
+    tree = tmp_path / "wt"
+    subprocess.run(
+        [GIT, "-C", str(root), "worktree", "add", "-q", "-b", "side", str(tree)], check=True
+    )
+    (tree / "side.txt").write_text("", encoding="utf-8")
+    subprocess.run([GIT, "-C", str(tree), "add", "side.txt"], check=True)
+    subprocess.run([GIT, "-C", str(tree), *IDENTITY, "commit", "-qm", "side"], check=True)
+    (root / "main.txt").write_text("", encoding="utf-8")
+    subprocess.run([GIT, "-C", str(root), "add", "main.txt"], check=True)
+    subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "main"], check=True)
+    finish_check.measure(tree, done, 600)
+    finish_check.measure(root, done, 600)
+    assert failing(tree, digest) == failing(root, digest) == {"exit 1": 1}
+
+
 def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
     tmp_path: Path,
 ) -> None:
@@ -692,14 +825,23 @@ def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
 
 
 def test_a_known_record_is_read_only_in_its_own_shape() -> None:
-    """Breaks if a damaged record of known failures is trusted, which could hide a failure."""
+    """Breaks if a damaged record of known failures is trusted, which could hide a failure, or
+    if a failure kept as a bare exit code is not read as naming no failure ids."""
 
-    good = finish_check.Known("a" * 64, "", "2026-10-04", 1.0, {"make test": 2})
-    assert finish_check.parse_known(good.text()) == good
+    failure = finish_check.Failure(2, frozenset({"pytest a.py::t"}))
+    good = finish_check.Known("a" * 64, "", "b" * 40, "2026-10-04", 1.0, {"make test": failure})
+    document = good.document()
+    assert finish_check.parse_known(json.dumps({"records": [document]})) == [good]
+    bare = {**document, "failing": {"make test": 2}}
+    read = finish_check.parse_known(json.dumps({"records": [bare]}))
+    assert read is not None and read[0].failing == {"make test": finish_check.Failure(2)}
     for text in (
         "",
         "not json",
-        json.dumps({**json.loads(good.text()), "failing": {"make test": "2"}}),
-        json.dumps({**json.loads(good.text()), "done": "short"}),
+        json.dumps(document),
+        json.dumps({"records": [{**document, "failing": {"make test": "2"}}]}),
+        json.dumps({"records": [{**document, "done": "short"}]}),
+        json.dumps({"records": [{**document, "head": "main"}]}),
+        json.dumps({"records": [{k: v for k, v in document.items() if k != "head"}]}),
     ):
         assert finish_check.parse_known(text) is None
