@@ -9,8 +9,8 @@ version: 5
 **Context** — the live schema and data volume are evidence; the ORM model is a claim about them,
 not the truth.
 **Bounds** — shared or production application requires its granted authority. A disposable
-database that the project's own test setup creates, or a local one you create with synthetic or
-fixture data, is inside scope; a copy of production or sensitive data is used only where that use
+database that the project's own test setup creates, or a local one you create on the server that
+setup already uses, with synthetic or fixture data, is inside scope; a copy of production or sensitive data is used only where that use
 is granted, and a local copy does not remove the restrictions on that data.
 **Mechanisms** — `spec` when later work relies on a semantic or backfill decision the schema cannot show; `policy-gate`
 at the project's existing protected apply boundary; `broad-suite` when the changed model is used

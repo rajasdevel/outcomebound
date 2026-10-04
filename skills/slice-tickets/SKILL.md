@@ -13,7 +13,7 @@ accept in one reading; the engine lints their form and links, and the cut is you
 1. `outcomebound tickets check --draft <every draft>` reads `PASS`, and each warning is one the
    draft means.
 2. Every path, symbol and `Follow:` file a draft names is in the tree.
-3. The user has read the breakdown as one page and said which tickets they accept; a follow-up
+3. The user has read the breakdown in one message they can accept in one reading and said which tickets they accept; a follow-up
    filed under a goal envelope that accepts follow-ups needs no further reading (see Publish).
 4. Each accepted ticket is in the declared store with its relations set, or, without a
    `writes` grant, its commands are printed for a person and the breakdown is reported as
@@ -162,7 +162,7 @@ together.
 ## Lint, then show the user
 
 Lint the whole breakdown in one run, `check --draft <file>...` with every draft, so relations
-and cycles are judged across them. Then show the user the breakdown as one page: for each ticket
+and cycles are judged across them. Then show the user the breakdown in one message they can accept in one reading: for each ticket
 its outcome sentence, its `Accepting this decides:` line, the boundary that separates it from
 its neighbours; then the relations, and the implementer the work is for. Compile any ticket they open with
 `brief <id> --draft <file>...`, given every draft.
@@ -175,7 +175,7 @@ implementer it is for, where one was named. What you find that is not this
 breakdown's work is a follow-up for the next one, or, where it is a slice by the rules above, a
 draft with `discovered-from` naming the ticket whose work surfaced it. A goal envelope the person
 wrote whose Follow-ups line accepts follow-ups is their acceptance of each issue a run files under
-it, inside the paths and authority that line names: lint it, publish it with the ticket label and
+it, inside the envelope's Authorized line: lint it, publish it with the ticket label and
 `discovered-from`, and build it in the run as the envelope orders. Without that line, a follow-up
 waits for the person's next reading, and the work that does not need it goes on. A person's own
 act with no implementer work in it, a tag push or a grant commit, is not a ticket: it goes to the

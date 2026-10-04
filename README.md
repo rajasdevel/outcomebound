@@ -18,7 +18,7 @@ without a test, or with a report that says "done" when nothing was pushed. The c
 - **Honest reports.** Each check is `PASS`, `FAIL` or `UNVERIFIED`, and missing evidence is never
   success. A passing test is never reported as a push, and a push never as a deployment.
 - **Autonomy within your bounds.** The agent decides what it can, states its assumptions, and
-  stops only before an act you did not grant. Your decisions come back as short **decision
+  holds only an act you did not grant, and continues the rest. Your decisions come back as short **decision
   briefs**, each with the options, a recommendation, and whether the choice can be undone.
 
 Here is one, as an agent puts it to you. `outcomebound brief` draws it from the agent's JSON, and
@@ -140,9 +140,9 @@ check you can run would catch it; the project's own gate at a protected boundary
 you author; broad or runtime checks when the changed risk reaches that layer.
 
 Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
-Decide what you can; proceed on stated assumptions. Hold only the item expanding authority
-or crossing an ungranted irreversible edge: write its decision brief (the `decision-brief`
-skill) and continue every other item.
+Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
+crosses an ungranted irreversible edge: write its decision brief (the `decision-brief` skill); all
+other work continues.
 Delegates receive the same four inputs and bounds.
 
 Report each named check as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is

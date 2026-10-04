@@ -46,8 +46,11 @@ downside; your recommendation first, with why; the evidence; and whether it can 
 diagram where order or flow is the point. The `decision-brief` skill gives the steps, and
 `outcomebound brief` draws it in the marks and diagram form the surface shows. Hold only an act
 your authority does not grant, such as destroying others' work, an irreversible act, an external
-write, spending money, or widening scope beyond the granted authority; a path outside one item's
-file list but inside that authority is not widening, so name it in the commit and go on. A held
+write, spending money, or widening scope beyond the granted authority. Where a ticket, a package or a delegation names the
+paths an item may write, those paths are that item's authority: a file it needs outside them holds
+that item, through the follow-up the envelope accepts or a decision brief, and no other. Where
+nothing names an item's paths, a path inside your owned scope is not widening: name it in the
+commit and go on. A held
 act, a check you cannot make green inside your authority, and a decision brief not yet answered
 each hold only the items that depend on them, never the run: record each where the person will
 read it, with what would settle it, and continue every item that does not depend on it. A run

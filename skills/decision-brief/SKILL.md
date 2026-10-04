@@ -7,8 +7,8 @@ description: Use when a decision must go to the user — an act your authority d
 
 Put each decision that is the user's so they can make it quickly and make it well. You are done
 when each one is a drawn brief where the user will read it (the handoff, the goal's Progress
-section, a comment on the ticket it holds, or your final message once no work that does not wait
-on an answer is left), and each reversible choice you made yourself is noted in one line where
+section, a comment on the ticket it holds, or your final message, when every remaining item waits
+on an answer), and each reversible choice you made yourself is noted in one line where
 the work is recorded.
 
 ## Decide what is yours

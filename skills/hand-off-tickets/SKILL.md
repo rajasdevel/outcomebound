@@ -97,13 +97,14 @@ Where a step's package would be its code, write the code yourself and go on to t
 
 Review each step against its tests, its files and the ticket's `bounds`, and the last step against
 the ticket's `done-when` as well. A step that fails review goes back once with the finding; one
-that fails again you write yourself or hand to a higher tier, and the handover says which.
+that fails again you write yourself or hand to a higher tier, since a second miss says the tier is
+wrong and further fix rounds tend to add defects; the handover says which.
 
 ## Hand over
 
 The package is a message to the implementer, or a file in the ticket's worktree that the message
 names; it never goes into the ticket's body. Give the implementer the commands it needs: where to
-work, how to run the tests, and what not to run. Commit as the project's `CONTRIBUTING.md` says.
+work, how to run the tests, and what not to run. Commit as the tickets fragment says work lands here.
 The implementer's handover says what changed, each check's verdict, what it decided beyond the
 package, and the follow-ups it found. When the ticket is done, your handover says the same for the
 ticket, and names the tier and the implementer that built it.

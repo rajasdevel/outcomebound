@@ -85,8 +85,9 @@ _NO_BRIEF = "This ticket's body is empty, so nothing here says what the work is.
 _NO_READS = "This ticket cites no section to read."
 _NO_BOUNDS = "This ticket grants no path, so nothing here says where the work may go."
 _NO_WORKFLOW = (
-    f"No {_WORKFLOW} is at the root of this checkout, so how work lands is not written "
-    "down here; commit on your own branch and say in the handover how it should land."
+    f"No {_WORKFLOW} is at the root of this checkout. Land as AGENTS.md or the goal envelope "
+    "says; where neither says, commit on the current branch in the style the history shows, "
+    "and say in the handover how it should land."
 )
 
 # What a ticket that waits on a person's decision brief says, beside the ids.
@@ -98,9 +99,9 @@ _WAITS_BODY = (
 # The brief's own closing paragraph, wrapped as it is printed.
 _USING_BODY = (
     "Read the sections named above, and source as needed in and around the bounds. Decide\n"
-    "nothing the ticket or those sections already decide. When a stop under Limits is met,\n"
-    "finish every part it does not block, then hand over naming the stop and what it waits\n"
-    "on. Hand the work over saying what changed, each check's verdict, what you decided\n"
+    "nothing the ticket or those sections already decide. When Limits holds a part for the\n"
+    "person, finish every part it does not block, then hand over with that part as a decision\n"
+    "brief naming what it waits on. Hand the work over saying what changed, each check's verdict, what you decided\n"
     "beyond the ticket, and the follow-ups you found."
 )
 

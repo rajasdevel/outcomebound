@@ -80,9 +80,9 @@ CONTRIBUTING.md
 
 ## Using this brief
 Read the sections named above, and source as needed in and around the bounds. Decide
-nothing the ticket or those sections already decide. When a stop under Limits is met,
-finish every part it does not block, then hand over naming the stop and what it waits
-on. Hand the work over saying what changed, each check's verdict, what you decided
+nothing the ticket or those sections already decide. When Limits holds a part for the
+person, finish every part it does not block, then hand over with that part as a decision
+brief naming what it waits on. Hand the work over saying what changed, each check's verdict, what you decided
 beyond the ticket, and the follow-ups you found.
 """
 
@@ -472,7 +472,7 @@ def test_the_workflow_document_is_named_or_missed(tmp_path: Path) -> None:
     # Missed: the document is named as absent, and the work is committed and handed over.
     said = " ".join(lands)
     assert "CONTRIBUTING.md" in lands[0] and lands != ["CONTRIBUTING.md"], lands
-    assert "commit on your own branch" in said and "in the handover" in said, said
+    assert "commit on the current branch" in said and "AGENTS.md" in said and "in the handover" in said, said
     assert "ask" not in said, said
 
 
@@ -483,7 +483,7 @@ def test_a_stop_under_limits_holds_its_part_and_not_the_work(tmp_path: Path) -> 
     said = " ".join(under(compiled(store(tmp_path)), "## Using this brief"))
 
     assert "finish every part it does not block" in said, said
-    assert "naming the stop and what it waits on" in said, said
+    assert "as a decision\nbrief naming what it waits on" in said or "as a decision brief naming what it waits on" in said, said
     assert "stop and ask" not in said, said
 
 
