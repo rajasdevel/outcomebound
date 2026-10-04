@@ -203,17 +203,6 @@ Tiers: frontier, mid, small\
 Confidence: low to medium; direction: rising\
 Checks: none
 
-**S23** A number or a stop in model-facing text names its evidence: a limit on size, count,
-length, duration, attempts or spending appears only where the operator set it, a harness
-documents it or a measurement backs it, the source beside it or in the area's design; a stop
-holds one item and names the act or check that holds it, never the run\
-Evidence: `docs/evaluations.md` E14 (O); `practices/agent-workspace.md` §7 (O); the goal
-template's size stop, shipped from a class-O row and removed 2026-10-04 (O)\
-Tiers: frontier, mid, small\
-Confidence: medium; direction: rising\
-Checks: none; held by `tests/test_model_text_limits.py` over the contract, the kernel, the
-templates, the fragments and the skills
-
 **S21** Leave the path to the reader unless the path is a requirement\
 Evidence: `capability-tier-readers-6` (L), `research-28` (M); against: `capability-tier-readers-16`
 (M), `capability-tier-readers-22` (M), `capability-tier-readers-26` (M)\
@@ -229,6 +218,22 @@ Evidence: `measured-g5` (M), `models Do 14` (L)\
 Tiers: frontier\
 Confidence: medium; direction: rising\
 Checks: none
+
+### Every layer
+
+S23 binds the model-facing text of each layer above: the contract, the kernel, the templates,
+the fragments and the skills.
+
+**S23** A number or a stop in model-facing text names its evidence: a limit on size, count,
+length, duration, attempts or spending appears only where the operator set it, a harness
+documents it or a measurement backs it, the source beside it or in the area's design; a stop
+holds one item and names the act or check that holds it, never the run\
+Evidence: `docs/evaluations.md` E14 (O); `practices/agent-workspace.md` §7 (O); the goal
+template's size stop, shipped from a class-O row and removed 2026-10-04 (O)\
+Tiers: frontier, mid, small\
+Confidence: medium; direction: rising\
+Checks: none; held by `tests/test_model_text_limits.py` over the contract, the kernel, the
+templates, the fragments and the skills
 
 ## The placement table
 

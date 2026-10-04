@@ -89,6 +89,17 @@ again with the same exit code and failure ids, it is not held. A pull does not m
 the entry where a row has one and names the rest; with no selected row that has one,
 `--finish-check` is refused.
 
+What each verdict reads, and who writes it (`outcomebound_tools/finish_check.py`). The hook's
+input on stdin (`cwd`, `stop_hook_active`, `background_tasks`, `session_crons`) is the harness's.
+The Done commands come from the manifest, which the change under check can write; they run only
+while their digest equals the one in the committed hook entry, so a changed Done list runs
+nothing and reads `UNVERIFIED`, unheld, to the person. That is flagged, not held: a hold cannot
+tell a planted list from a new one, and the instruction audit keeps the entry a review hit that
+quotes the Done commands. The timeout is the entry's own, also committed. The known-failure
+record and the checked-tree record are in the Git directory and never committed: adopt writes the
+first, the verb the second; a pull request can write neither, and an agent in the session can,
+as the paragraph above says.
+
 ## Validation
 
 `tests/test_finish_check.py` runs the verb on scratch targets in each row's input form, one

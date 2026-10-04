@@ -10,7 +10,8 @@ status: ratified
 Work too large for one acceptance is cut into tickets a person accepts in one reading. Each
 ticket states its outcome, what its implementer cannot find in the tree, the paths it may write,
 and the checks that prove it done. The layer is opt-in and inert until `.outcomebound/tickets.json`
-declares a store. How: `outcomebound tickets --help` (`check`, `brief` and `publish`), the `tickets*.py`
+declares a store. The invariant the layer holds: no draft reaches the publish script while
+`check` reports an ERROR about it, and no ticket text runs as a command. How: `outcomebound tickets --help` (`check`, `brief` and `publish`), the `tickets*.py`
 modules, the `tickets` fragment, and the `slice-tickets` and `hand-off-tickets` skills, which
 selecting the fragment installs. A ticket is the same whoever builds it; what changes with the
 implementer is the package the agent handing it over writes, shaped by the implementer's tier.
@@ -50,6 +51,16 @@ implementer's own report, and read as that. Several agents on one backlog read w
 from the tracker's own relations and assignees. Changing what an accepted ticket asks takes the
 word of a person who can accept it, said in a comment, since an edit does not lapse the label;
 while it waits, the tickets that do not depend on it go on (maintainer, 2026-10-04).
+
+What each verdict reads, and who writes it (`outcomebound_tools/tickets_*.py`). `check` and
+`publish` read the tracker export given as `--input` (`tickets_store`), which whoever has access
+to the tracker writes; acceptance, the `ob-ticket` label, only accounts with triage access. Drafts
+are local files the agent writes (`tickets_draft`). The declaration, `.outcomebound/tickets.json`
+(`tickets_declaration`), and the claims plan it names (`tickets_claims`) are committed, so the
+change under check can write them: a declaration can add its own `writes` grant, and a plan can
+change the command a claim runs. Both are accepted because they are visible: they show in the
+change's diff, the publish script's header names the grant or says a person runs it, and the
+project's own gate decides done, as above.
 
 ## Validation
 

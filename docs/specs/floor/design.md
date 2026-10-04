@@ -11,7 +11,9 @@ A project blocks regressions in what catches defects — format, lint, types, se
 syntax, shell lint and shell injection — with its own tool configs and a baseline a person can
 read, and a change that loosens the floor fails `check --base` unless the commit that makes it
 names the decision that allowed it. A project that already has findings adopts the floor the day it wants to: what
-it holds is recorded, and what each change adds is gated. How: `outcomebound_tools/floor.py`,
+it holds is recorded, and what each change adds is gated. The invariant the floor holds: a finding
+that no baseline line holds fails `check`, and a loosening fails `check --base` unless the commit
+that makes it names the decision that allowed it. How: `outcomebound_tools/floor.py`,
 which opens with what it decides, and `outcomebound floor --help`.
 
 ## Decisions
@@ -123,6 +125,18 @@ Without `--base`, a fitted floor reads a secret once it is committed, not in the
 fingerprint names its line, so moving an allowlisted line needs its new fingerprint. Where the
 adoption commit is not in HEAD's history (a shallow clone, a rewritten history), the secrets
 claim reads `UNVERIFIED` unless `--base` is given.
+
+What each verdict reads, and who writes it (`outcomebound_tools/floor.py`). A claim's verdict
+reads the tracked tree, the project's tool configs and its baseline under `.outcomebound/floor/`,
+all written by the change under check, and a tool from PATH's absolute entries, which the person
+or the CI runner provides, never the checkout. The loosening verdict reads the diff from the
+merge base with `--base`, which the caller names, to HEAD, and the `Floor-Loosening` line of each
+commit message, which the change's author writes: the engine checks that the line is on the
+commit that makes the loosening, not that the decision it names exists, so a false line passes
+and stays in the history for a reviewer. That is accepted: the check makes a loosening visible,
+and branch protection prevents one. The adoption record in `floor.json` is the change's data
+too: a record added where there was none moves a range's start only where the merge base holds no
+`floor.json` (`_adopted_after`), and a record that changes or goes away is a loosening.
 
 ## Validation
 
