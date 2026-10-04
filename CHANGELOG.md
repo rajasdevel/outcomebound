@@ -58,6 +58,10 @@ Do these steps first:
 
 ### Added
 
+- Each release is now a GitHub release with the wheel and the source archive. CI builds them from
+  the tagged commit, attests them with signed build provenance, and publishes the release only
+  when every check on the tag passes. Verify a downloaded file with
+  `gh attestation verify <file> -R rajasdevel/outcomebound`.
 - `adopt --finish-check` now runs the Done commands one time, after its writes. It runs each
   command to its end, past each failure, with no time limit. It shows the verdict and the seconds
   of each command. When Done takes longer than the timeout less 30 seconds, it shows `UNVERIFIED`

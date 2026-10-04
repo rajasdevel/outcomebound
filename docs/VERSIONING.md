@@ -24,6 +24,10 @@ section is never edited.
 Until you do step 2, `outcomebound adopt . --check` reads the operating-contract block as stale.
 The block carries the version that wrote it.
 
+From 1.1.0, each release is also a GitHub release with the wheel and the source archive. CI
+builds them from the tagged commit and attests them with signed build provenance. To verify a
+file that you downloaded, run `gh attestation verify <file> -R rajasdevel/outcomebound`.
+
 ## How a release is made
 
 This section is for the person who prepares a release of OutcomeBound.
@@ -46,3 +50,10 @@ line of `make release-check` names the grant, or says that none applies.
 
 After the tag exists, `make release-check TAG=v<VERSION>` and the CI run on the tag check that the
 tag is annotated, that it names `VERSION`, and that it points at the release commit.
+
+When every leg of the CI run on the tag passes, its `release` job publishes the release. It
+builds the wheel and the source archive from the tagged commit, attests them, puts them on a
+draft release whose notes are the changelog section of the version, and publishes the draft. If
+a leg fails, the job does not run and nothing is published. Where the repository has immutable
+releases on, nobody can change a published release, its tag or its files, so a mistake needs a
+new version.

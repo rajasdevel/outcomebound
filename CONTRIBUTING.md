@@ -234,4 +234,5 @@ does not fail.
 
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)
-says who may push it, and what `make release-check` confirms first.
+says who may push it, and what `make release-check` confirms first. When the CI run on the tag
+passes, CI publishes the GitHub release with the attested wheel and source archive.
