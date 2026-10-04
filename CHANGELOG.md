@@ -11,6 +11,96 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+OutcomeBound now lets an agent work for many hours inside clear bounds. A stop holds one item, never
+the run, and no limit applies to size, count, length or time unless you set it, a harness documents
+it, or a measurement supports it. The overnight runs of 2026-10-04 in six adopting projects showed
+the problems that this release removes. Run `outcomebound adopt .` again to get the changes.
+
+### Changed
+
+- The goal envelope (`templates/goal/goal.md`) has no Size line and no size stop. One run stopped
+  after less than an hour of work on that stop, which no ruling or measurement supported.
+  - An act outside the authorized acts, a check that does not go green, or an unanswered decision
+    holds only its item. The agent records it and continues with every item that does not depend
+    on it. The run ends only when the Done checks pass or no item can continue.
+  - The run starts without answers. A new Decisions line gives the answers that you have.
+  - A new Follow-ups line lets the envelope accept the issues that the run files for work it finds.
+  - The handoff has no page limit.
+- The kernel and the contract say "hold" for one item, not "stop" for the run. A path just outside
+  one item's file list, but inside the granted authority, is not wider scope.
+- A spec has no word limit in the contract, the spec template or the core skill. It holds only the
+  decisions that the code cannot show, and no decision is cut to make it shorter. The designs of
+  this repository have no word limit either. The plan template has no step limit.
+- Skills:
+  - A decision brief never ends the turn. It holds only the work that waits on its answer.
+  - `hand-off-tickets` does not ask you for the implementer or its tier. It names the implementer
+    that it starts. Without a research clone, it reads the public tier table, and if no table can
+    be read, it uses the spec tier.
+  - A spec-tier package names the acts that end a step, not "when to stop rather than guess".
+  - A ticket that cannot be built as written gets a follow-up or a brief, and the other tickets
+    continue.
+  - `slice-tickets` draws `bounds` as wide as the authority of the outcome. It settles a contract
+    gap that a later commit can undo, and gives you only a gap that is hard to undo.
+  - A failed `gh` command runs again from a new export.
+- Fragments:
+  - `workspace`: a FAIL on a note means that the agent does not rely on that note. Every other
+    result of `instructions check` goes into the handoff and blocks nothing. Remove a worktree
+    only when its task is finished and nothing in it is still needed. In the Codex sandbox, the
+    agent continues with the work that needs no refused write.
+  - `commands`: a long command runs in the background, with its output in a file. Slow is not
+    hung: the agent never shortens, skips or stops a check because it takes long.
+  - `tickets`: where neither `CONTRIBUTING.md` nor `AGENTS.md` says how work lands, the agent uses
+    the goal envelope, else local commits on the current branch. It puts the question in the
+    handover and goes on to the next ticket.
+  - `db-migrations`: a test database from the project's own test setup, or a local one with
+    synthetic data, is in scope.
+  - `solo`, `research`, `multi-agent` and `ci-release`: unattended work continues inside its
+    bounds.
+- The finish check:
+  - It remembers every verdict for the working tree. On an unchanged tree it runs nothing, and it
+    shows an earlier failure again without holding the turn.
+  - A command that cannot start in the hook's environment (exit 126 or 127) reads UNVERIFIED and
+    does not hold the turn.
+  - On Claude Code, it waits while scheduled wake-ups are set, as it does for background tasks.
+  - The hold text tells the agent to fix what its change broke and continue.
+  - The entry command now carries `--timeout N`. Each 1.0.0 entry reads `stale` until you run
+    `adopt` again, and Codex asks you to trust the changed hook in `/hooks`.
+- The quality floor:
+  - No fixed time limit applies to a tool, a version probe or a Git read.
+  - `check` shows every new finding.
+  - A claim whose files no longer exist reads PASS, and dropping it is not a loosening.
+  - A rename carries its baselined findings.
+  - The loosening range starts at the floor's adoption commit when the merge base has no floor.
+  - Without a base, gitleaks reads only the tracked files.
+  - A baseline line is `path:code`. An older `path:code:message` line still reads.
+- `tickets brief`: at a limit, the implementer finishes every part that the limit does not block.
+  Without `CONTRIBUTING.md`, the implementer commits on its own branch. The brief has no size line.
+  A claim with no timeout shows "no timeout".
+- `validation` has no default timeout: a claim waits for its command unless the plan or the claim
+  sets `timeout_seconds`.
+- `instructions check`:
+  - A hidden character in a note reads UNVERIFIED for that note, not FAIL for the repository.
+  - A review hit asks for a person at the handoff, not before the work.
+  - adopt's own finish-check entry stays a review hit, and its fact quotes the Done commands that
+    it runs.
+  - A harness row past its re-check date says that only the re-check is due.
+- `adopt --detect` proposes the floor's `--base` from the remote's default branch. adopt reads
+  every CI workflow file.
+
+### Added
+
+- `adopt --finish-timeout SECONDS` sets the time for the Done commands at a turn end. The default
+  is 600 seconds, the documented default of both harnesses.
+- The ticket block key `waits-on: <brief id>, ...` names the decision briefs that a ticket waits
+  on. `tickets check` shows it as `WAITS_ON_BRIEF`, and `tickets brief` adds a `## Waits on`
+  section. Other tickets stay startable.
+- A floor claim can set `timeout_seconds`, and `prefix` for a container or environment runner such
+  as `docker compose run --rm app` or `uv run`. The tool still comes first in the argv.
+- A GraphQL error inside one issue of the export holds only that issue (`EXPORT_PARTIAL`). The
+  export asks for 100 labels and blockers for each issue.
+- adopt warns where the instruction files that load into one folder pass a harness's documented
+  byte limit.
+
 ## [1.0.0] - 2026-10-04
 
 The first public release: the operating contract for coding agents, and the engine that installs

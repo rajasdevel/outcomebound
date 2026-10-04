@@ -220,10 +220,13 @@ them:
 
 ```text
 FAIL python.lint (2 new, 26 baselined)
-  +1 outcomebound_tools/tickets.py:F401:`os` imported but unused  at 260:12
-  +1 outcomebound_tools/tickets.py:S307:Use of possibly insecure function; consider using `ast.literal_eval`  at 261:12
+  +1 outcomebound_tools/tickets.py:F401
+    260:12 `os` imported but unused
+  +1 outcomebound_tools/tickets.py:S307
+    261:12 Use of possibly insecure function; consider using `ast.literal_eval`
 FAIL python.types (1 new, 46 baselined)
-  +1 outcomebound_tools/tickets.py:no-untyped-def:Function is missing a type annotation  at 259:0
+  +1 outcomebound_tools/tickets.py:no-untyped-def
+    259:0 Function is missing a type annotation
 ```
 
 An agent that hides a finding instead of fixing it fails too. A new suppression comment, a

@@ -13,7 +13,7 @@ inspect the relevant source or runtime.
 
 | id | If the task needs… | Use… |
 | --- | --- | --- |
-| `spec` | later work relies on a decision the code cannot show | a spec within 1,500 words, edited in place |
+| `spec` | later work relies on a decision the code cannot show | a spec, edited in place, holding only the decisions later work relies on |
 | `goal-envelope` | work across sessions or meaningful autonomous effects | a goal envelope, its Progress section written as each milestone lands, so the next session resumes from the file and not from memory |
 | `failing-test-first` | a failing example that clarifies behavior or prevents regression | a failing test first |
 | `review` | a miss would reach users and no check you can run would catch it | one bounded review |

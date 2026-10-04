@@ -6,18 +6,20 @@ description: Use when a decision must go to the user — an act your authority d
 # Decision brief
 
 Put each decision that is the user's so they can make it quickly and make it well. You are done
-when each one is a drawn brief in the message that reaches the user (the turn's final message,
-the handoff, or the tracker comment), and each reversible choice you made yourself is noted in
-one line where the work is recorded.
+when each one is a drawn brief where the user will read it (the handoff, the goal's Progress
+section, a comment on the ticket it holds, or your final message once no work that does not wait
+on an answer is left), and each reversible choice you made yourself is noted in one line where
+the work is recorded.
 
 ## Decide what is yours
 
 Decide every reversible choice inside your granted authority yourself. Ask the user only what is
 theirs — an act your authority does not grant, such as an irreversible edge, an external write,
-spending, or widening scope — batched into one message when the work reaches it, and continue the
-work that does not wait on the answer. Some harnesses honor authority only from the user's own
-words: for an act a permission check guards, such as a deletion or a write outside the project,
-the brief names the act so the user's reply can state it, not only a letter.
+spending, or widening scope — batched into one message, and continue the work that does not wait
+on the answer. A brief never ends your turn: a run starts without answers, and a brief holds only
+the work that waits on it, so every other item goes on. Some harnesses honor authority only from
+the user's own words: for an act a permission check guards, such as a deletion or a write outside
+the project, the brief names the act so the user's reply can state it, not only a letter.
 
 ## Do the due diligence first
 
