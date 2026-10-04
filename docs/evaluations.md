@@ -39,7 +39,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | The install adds about 27% more tokens a run | E6 | gpt-6-sol, the skill fixtures. The ladder rerun's tokens went both ways (E6) |
 | No run in any arm interrupted the person | The ladder and its rerun | No ladder or rerun run put a question to the person. Runs in other passes did ask: most runs that stopped short in E14 asked for the merge, and in the wording audit runs ended with a confirmation question |
 | The under-engineering side is not separated | E8 | No fixture separates the arms |
-| A test-first hand-off took a smaller model from 6 to 9 of 9 | E17, the hand-off comparison | gpt-6-luna at xhigh, three small tasks, 9 runs a cell. The whole gain is one row of one ticket |
+| A test-first hand-off took a smaller model from 6 to 9 of 9 | E17, the hand-off comparison, and E18, its rerun | gpt-6-luna at xhigh, three small tasks, 9 runs a cell. The whole gain is one row of one ticket, in both passes |
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
 | OpenAI models through Codex, three runs a cell | Model choice, Runs per cell and power | Every candidate model ran through codex. The hand-off comparison has nine runs a cell |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
@@ -61,7 +61,8 @@ model judge scored them.
 - **Repositories.** Each fixture family is one small synthetic repository.
 - **What a PASS means.** A PASS establishes only what its check reads, for that model on that day.
 - **How the counts were taken.** Every count was re-derived on 2026-10-01 from the kept run
-  records and result files. The hand-off counts were re-derived again on 2026-10-03.
+  records and result files. The hand-off counts were re-derived again on 2026-10-03. The counts of
+  the hand-off rerun were taken on 2026-10-04.
 
 **Evidence classes.** (M) measured. (L) a lab's or vendor's documentation or guidance. (S) a
 standard. (P) practitioner consensus. (A) an anecdote or one uncontrolled report. (F) a forecast.
@@ -88,14 +89,15 @@ recorded run, because a model call does not repeat exactly.
 | Ladder, `current`, `unsized` and `none` | 2026-09-30 | gpt-6-sol | 36 | E7, E8, E9 | The ladder |
 | Ladder rerun, rungs 2 and 3, `current` and `none` | 2026-09-30 | gpt-6.1-sol | 12 | E10 | The ladder rerun |
 | Hand-off comparison, `current` | 2026-10-03 | gpt-6-astra high, gpt-6-sol medium, gpt-6-luna xhigh | 63 | E17 | The hand-off comparison |
+| Hand-off comparison rerun, `current` | 2026-10-04 | gpt-6-astra high, gpt-6-sol medium, gpt-6-luna xhigh | 63 | E18 | The hand-off comparison rerun |
 | Judge-scored decision probes | 2026-09-24, 2026-09-25 | gpt-6-sol | 12 | E11 | Judge-scored decision probes |
 | Ticket-skill probes, probed, before and after two skill fixes | 2026-09-24 | gpt-6-sol medium, gpt-6-luna max | 18 | E13, E14 | Judge-scored probes of a ticket-working skill |
 | Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
 
-In all there are 226 model runs. 180 were graded by deterministic checks alone: the first seven
-passes above, 117 runs, and the hand-off comparison, 63 runs. 46 were judged by a model beside
-deterministic post-checks: the last four passes.
+In all there are 289 model runs. 243 were graded by deterministic checks alone: the first seven
+passes above, 117 runs, the hand-off comparison, 63 runs, and its rerun, 63 runs. 46 were judged
+by a model beside deterministic post-checks: the last four passes.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
 `--summary` reads them. The records of the judge-scored runs also hold the raw answers, and the
@@ -104,7 +106,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E17). Other documents may cite the id.
+Each finding has an id (E1 to E18). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -231,6 +233,24 @@ Each finding has an id (E1 to E17). Other documents may cite the id.
   9 runs a cell, 63 runs, 2026-10-03 (the hand-off comparison, under Results). By `evals/README.md` rule 3,
   `--detail full` would go. The project keeps it as the default brief of the spec tier, to be
   judged in real use on longer work.
+- **E18. The 1.1.0 hand-off held against E17. No cell scored lower.**
+  - Six of the seven cells scored the same as in E17. gpt-6-astra at high passed 9 of 9 with the
+    ticket and 9 of 9 with the spec package. gpt-6-sol at medium passed 9 of 9 with the ticket and
+    9 of 9 with the design package. gpt-6-luna at xhigh passed 6 of 9 with the ticket alone and
+    9 of 9 with the spec package.
+  - gpt-6-luna with `--detail full` passed 8 of 9, against 6 of 9 in E17.
+  - All four failures were the same sentence of the `tags` ticket that E17 found. gpt-6-luna again
+    kept that sentence in all nine `spec` runs.
+  - The readings by the rules did not change: the spec package helps gpt-6-luna, it does not make
+    gpt-6-astra worse, the design package has no headroom, and `--detail full` does not beat the
+    spec package. No part is cut. The noise difference (gpt-6-luna `ticket` against `full`) is now 2,
+    so the gain of 3 for the spec package exceeds it by one run only.
+
+  9 runs a cell, 63 runs, 2026-10-04 (the hand-off comparison rerun, under Results). The
+  message that the implementers read differed from the message of E17 in four places, all
+  from changes for 1.1.0. Those changes are the kernel's sentence on holding one item, the
+  brief's sentence on a held part, the brief's `size:` line, which is gone, and the check line. The check line named `.outcomebound`
+  as the directory of the project tests (see the rerun section).
 
 ## The question that evals answer
 
@@ -288,7 +308,7 @@ An arm keeps to what it claims only with isolation.
 - The skills of the `current` arm are committed into the fixture before its setup runs. No check
   counts them as a change by the model.
 
-The flags did not keep out every user-level file. All 180 deterministic transcripts here record
+The flags did not keep out every user-level file. All 243 deterministic transcripts here record
 codex reading an agent role definition from the `agents/` directory of the Codex home of the
 operator. This happened although `--ignore-user-config` was set. The file was malformed, and codex
 ignored it with a warning (codex-cli 0.158.0, 0.159.0 and 0.160.0). Whether a well-formed role
@@ -463,7 +483,7 @@ as sent. Claim no equivalence between the level of one vendor and the level of a
 
 Each comparison also ran on one codex version. codex-cli 0.156.1 ran every judge-scored probe.
 0.158.0 ran the core passes of 2026-09-29. 0.159.0 ran the skill-fixture pass, the ladder and its
-rerun. 0.160.0 ran the hand-off comparison.
+rerun. 0.160.0 ran the hand-off comparison and its rerun.
 
 ### Cost
 
@@ -473,9 +493,10 @@ Each run records its tokens (the count that codex prints for the call) and its s
 - On the kernel and skill fixtures, the median of a cell ranged from 8,072 to 36,747 tokens and
   from 31 to 193 seconds.
 - On the hand-off fixtures, the median for one implementer on one fixture (three runs) ranged
-  from 16,605 to 55,699 tokens and from 59 to 295 seconds.
+  from 16,605 to 55,699 tokens and from 59 to 295 seconds (2026-10-03), and from 16,021 to 47,723
+  tokens and from 57 to 323 seconds in the rerun (2026-10-04).
 - All eleven kernel and skill fixtures at three runs are 33 calls an arm. The measurement of the
-  ladder is 36 calls. The hand-off comparison is 63 calls.
+  ladder is 36 calls. The hand-off comparison, and each rerun of it, is 63 calls.
 - A failed call is recorded and never retried.
 - A minimal call used 3,887 tokens on gpt-6-sol at low effort in the `workspace-write` sandbox. The
   task was to reply "OK" or to run one `git commit`. The same kind of call used 15,228 tokens on
@@ -494,7 +515,8 @@ of model time. The sums come from the count and seconds that each run recorded:
 - the 12-run rerun: 211,566 tokens and 21 minutes
 
 The 63 hand-off runs used 1,886,860 tokens and about 136 minutes (2026-10-03). All 63 used a
-subscription sign-in, and no call failed. The judge-scored probes recorded no token counts. Their
+subscription sign-in, and no call failed. The 63 runs of the rerun used 1,930,740 tokens and about
+139 minutes (2026-10-04). All 63 used a subscription sign-in, and no call failed. The judge-scored probes recorded no token counts. Their
 times are under Results. Subscription usage was not metered.
 
 ## The fixtures and what each isolates
@@ -803,6 +825,93 @@ only what its check reads, for that model on that day. The fixtures select no fr
 hand-off and slicing skills were not in the workspace. The comparison measures the packages, not
 those skills.
 
+### The hand-off comparison rerun
+
+Run 2026-10-04, codex-cli 0.160.0, the `current` arm, 63 runs, for the 1.1.0 release. It used the
+models, efforts, variants, fixtures, repetitions and reading rules of the 2026-10-03 pass, as the
+`cell` commands of `evals/README.md` give them. Every run was at one clean commit. No call failed.
+The three implementers ran at the same time, one after another within each implementer. The pass
+took about 80 minutes of wall time. The runs recorded about 139 minutes of model time.
+
+The message differed from the message of the 2026-10-03 pass only in four places, all from
+changes for 1.1.0, and in the workspace commit that each brief names:
+
+- The kernel's sentence on holding one item ("Hold only an act that expands authority...") in place
+  of the sentence on stopping.
+- The brief's sentence on a part that Limits holds for the person, in place of "stop and ask".
+- The brief has no `size:` line. In E17 it gave the size of the ticket in lines.
+- The check line. Since 1.1.0, a relative `cwd` in the claims plan resolves from the folder of the
+  plan file. The fixture's plan, `.outcomebound/ticket-claims.json`, still gives `"cwd": "."`. So
+  the brief told every implementer to run the project tests in `.outcomebound`, with no timeout,
+  where E17's brief gave `.`, timeout 120s. The tests are at the root of the workspace. The
+  verdict runs its own command, so `project-tests-pass` is not affected. Three gpt-6-astra
+  `ticket` answers named the directory as wrong. Two of those runs also ran the tests in
+  `.outcomebound`, found none, and reported that line `FAIL`. No other run ran them there.
+
+The counts below are verdict PASSes, with the E17 count after the slash. The per-base counts follow
+in brackets, in the order `duration`, `invoice`, `tags`.
+
+| Implementer (its tier) | `ticket` | `design` | `spec` | `full` |
+| --- | --- | --- | --- | --- |
+| gpt-6-astra high (outcome) | 9 / 9 (3, 3, 3) | | 9 / 9 (3, 3, 3) | |
+| gpt-6-sol medium (design) | 9 / 9 (3, 3, 3) | 9 / 9 (3, 3, 3) | | |
+| gpt-6-luna xhigh (spec) | 6 / 6 (3, 3, 0) | | 9 / 9 (3, 3, 3) | 8 / 6 (3, 3, 2) |
+
+Against E17, six cells are the same and one is better: gpt-6-luna `full`, by 2. No cell is worse.
+
+`within-bounds`, `project-tests-pass` and `eval-files-unread` passed in all 63 runs. Every failed
+verdict failed `acceptance` only. In the 18 `spec` runs, `package-tests-pass` and
+`package-tests-unchanged` passed in all 18. No run read the hand-off or slicing skills
+(`guidance_reads` was 0 in all 63). No run left a tool cache in the checkout.
+
+All four failures are the row of the `tags` ticket that E17 found: "Any other number of fields is
+the read error it is today." In the three `ticket` runs and one `full` run of gpt-6-luna on
+`tags`, the message became `expected 4 or 5 fields, found 6`. The other two `full` runs kept
+`expected 4 fields`. gpt-6-astra and gpt-6-sol kept the message in all their `ticket` runs, and
+gpt-6-luna kept it in all nine `spec` runs.
+
+Read by the rules:
+
+1. **The design package on gpt-6-sol.** Its `ticket` cell has 9, so there is no headroom: the result
+   is inconclusive, as in E17. Nothing is cut on this result.
+2. **The spec package on gpt-6-luna.** The result is 9 against 6, a gain of 3, so by
+   `evals/README.md` rule 1 the package helps, as in E17. The whole gain is again one row on one
+   base.
+3. **The spec package on gpt-6-astra.** The result is 9 against 9. There is no drop, so it does not
+   support the hypothesis that the package makes an outcome-tier implementer overfit. The rows that
+   the tests of the package leave out passed in all nine.
+4. **`--detail full` on gpt-6-luna.** The result is 8 against 9 for `spec`, so `full` does not beat
+   the spec package (rule 3). The `spec` cell has 9, so by rule 4 this is no headroom: inconclusive.
+   `--detail full` cannot stay on this result, and no part is cut on it. The project keeps it as
+   the default brief of the spec tier, to be judged in real use on longer work, as the tickets
+   design records.
+5. **Noise.** For gpt-6-luna, `ticket` against `full` is 6 against 8, a difference of 2. In E17 it
+   was 0. The difference of 3 for the spec package exceeds it, but by one run only.
+
+Median tokens for each base (`duration`, `invoice`, `tags`):
+
+- gpt-6-astra: `ticket` 23,863, 22,046, 26,110. `spec` 23,249, 18,055, 26,433.
+- gpt-6-sol: `ticket` 16,021, 35,567, 36,736. `design` 31,424, 35,833, 26,633.
+- gpt-6-luna: `ticket` 31,895, 32,900, 43,546. `spec` 18,199, 25,981, 32,118. `full` 29,033,
+  38,326, 47,723.
+
+Median seconds:
+
+- gpt-6-astra: `ticket` 82.9, 120.9, 163.1. `spec` 65.5, 56.6, 99.3.
+- gpt-6-sol: `ticket` 78.3, 109.6, 125.0. `design` 105.9, 104.2, 122.0.
+- gpt-6-luna: `ticket` 122.8, 157.9, 322.7. `spec` 74.0, 102.2, 110.5. `full` 199.0, 173.8, 266.2.
+
+As in E17, the spec package cost gpt-6-luna fewer tokens and seconds than the ticket alone on each
+base. On gpt-6-astra, it cost fewer seconds on each base, and fewer tokens on `duration` and
+`invoice` but not on `tags`. The
+three implementers ran at the same time, so the seconds are not fully comparable with E17's. The
+counts of tokens and seconds never change a verdict.
+
+**Scope.** The scope of the 2026-10-03 pass applies. All 63 transcripts record the warning about
+the malformed agent role file in the Codex home of the operator, as in E17 (see Isolation). A
+second pass of nine runs a cell shows that the result repeats for these models on that day. It
+does not make the effect larger or more general.
+
 ### Results not kept here
 
 - **Twelve `none` runs refused at setup** (2026-09-29; lesson 11). No model ran, and no verdict
@@ -847,7 +956,8 @@ one small repository for each fixture.
   merge to the default branch stopped every run that did the work (E13, E14).
 - In the hand-off comparison, the spec package raised gpt-6-luna at xhigh from 6 to 9 passes of 9.
   The whole gain is one row of one ticket (E17). The same package cost gpt-6-astra at high
-  nothing. Nine runs a cell.
+  nothing. Nine runs a cell. The 2026-10-04 rerun for 1.1.0 gave the same counts for these
+  cells (E18).
 
 **Not supported, or not measured.**
 
@@ -867,8 +977,8 @@ one small repository for each fixture.
   max effort ran only in the judge-scored diagnostics. Each family of fixtures is one synthetic
   repository.
 - **The effect of the design package.** The `ticket` cell of gpt-6-sol has 9 of 9, so the result is
-  inconclusive (E17).
-- **A gain of the spec package over many kinds of detail.** Its gain here is one row (E17).
+  inconclusive (E17, E18).
+- **A gain of the spec package over many kinds of detail.** Its gain here is one row (E17, E18).
 - **`--detail full` on longer work.** Only three small tasks ran. Real use on longer work will
   judge it.
 - **Whether the recommendation of a brief follows the evidence.** The brief check of the `decision`
