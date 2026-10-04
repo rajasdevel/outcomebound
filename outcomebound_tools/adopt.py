@@ -8,8 +8,9 @@ fragment inline and then one line per selected fragment, copied under
 in its `skills:`. Selecting the workspace fragment also
 installs `.agents/.gitignore`, which keeps its four folders out of Git. `--finish-check` adds one
 entry to the settings document of each selected harness whose table row has a `finish_hook`
-(`outcomebound_tools.finish_check`), a `hook` record, written back with its keys, their order and
-its indentation kept. It installs each skill for
+(`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
+`--finish-timeout` sets, written back with its keys, their order and its indentation
+kept. It installs each skill for
 every harness, and an `@AGENTS.md` import into each harness file that would not load
 AGENTS.md otherwise: none where the harness table says the harness reads AGENTS.md
 itself unless one of its files exists, and none exists. A harness outside
@@ -636,6 +637,13 @@ def _check_record(record: Record) -> None:
         raise AdoptError(
             f"{MANIFEST}: whether adopt created {path} is not recorded as true or false"
         )
+    if record.get("kind") == HOOK and not finish_check.admits_timeout(
+        record.get("timeout", finish_check.DEFAULT_TIMEOUT)
+    ):
+        raise AdoptError(
+            f"{MANIFEST}: the finish-check timeout recorded for {path} is not whole seconds above "
+            f"{finish_check.MARGIN_SECONDS}"
+        )
 
 
 @dataclass
@@ -718,6 +726,15 @@ def recorded_fragments(own: Sequence[Record]) -> list[str]:
 
 def recorded_done(own: Sequence[Record]) -> list[str]:
     return _recorded(own, "done")
+
+
+def recorded_timeout(own: Sequence[Record]) -> int:
+    """The finish check's timeout the hook records hold; one written without it, the default."""
+
+    for record in own:
+        if record["kind"] == HOOK:
+            return int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
+    return finish_check.DEFAULT_TIMEOUT
 
 
 def recorded_style(own: Sequence[Record]) -> list[str]:
@@ -1031,15 +1048,24 @@ def finish_hooks(
     table: dict[str, Any],
     found: Sequence[Route],
     done: Sequence[str],
-    asked: bool | None,
-    recorded: bool,
+    selection: Selection,
+    own: Sequence[Record],
 ) -> list[Want]:
     """The finish-check entry for each selected harness whose row has a `finish_hook`, while the
-    person asked for it (`asked`; None keeps what the manifest `recorded`), each other selected
-    harness named as not available yet. Asked for without Done, or where no selected harness
-    has one, it is refused; an install that empties Done removes it."""
+    person asked for it (None keeps what the manifest's records `own` hold), its timeout the one
+    the person named, else the recorded one, each other selected harness named as not available
+    yet. Asked for without Done, or where no selected harness has one, it is refused, as is a
+    timeout named for an install with no finish check; an install that empties Done removes it."""
 
+    asked = selection.finish_check
+    recorded = any(record["kind"] == HOOK for record in own)
+    timeout = selection.finish_timeout or recorded_timeout(own)
     if not (recorded if asked is None else asked):
+        if selection.finish_timeout is not None:
+            raise AdoptError(
+                "--finish-timeout sets the finish check's time limit, and this install has no "
+                "finish check; add --finish-check"
+            )
         return []
     if asked and not done:
         raise AdoptError(
@@ -1065,9 +1091,9 @@ def finish_hooks(
             continue
         if not paths.admits(hook.get("file")):
             raise AdoptError(f"{name}: the harness table names no settings file inside the target")
-        entry = finish_check.entry(name, digest)
+        entry = finish_check.entry(name, digest, timeout)
         data = finish_check.canonical(entry)
-        extra = {"harness": name}
+        extra: dict[str, Any] = {"harness": name, "timeout": timeout}
         wants.append(HookWant(HOOK, hook["file"], FINISH_CHECK, data, extra, hook["event"], entry))
         caution = f"; {finish_check.CAUTION[name]}" if name in finish_check.CAUTION else ""
         run.notes.append(
@@ -1133,6 +1159,7 @@ class Selection:
     done: list[str] | None = None
     finish_check: bool | None = None
     style: list[str] | None = None
+    finish_timeout: int | None = None
 
 
 def install(
@@ -1150,9 +1177,7 @@ def install(
     style = recorded_style(own) if selection.style is None else selection.style
     run = Run(target, force)
     wants = desired(run, source, found, ids, done, style)
-    hooked = any(record["kind"] == HOOK for record in own)
-    table = harness_table(source)
-    wants += finish_hooks(run, table, found, done, selection.finish_check, hooked)
+    wants += finish_hooks(run, harness_table(source), found, done, selection, own)
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
         run.keep(want, recorded.pop(want.key(), None))
@@ -1234,7 +1259,9 @@ def _hook_rendered(source: Path, record: Record, own: Sequence[Record]) -> bytes
         raise AdoptError(
             f"this engine writes no finish-check entry for {harness} at {record['path']}"
         )
-    return finish_check.canonical(finish_check.entry(harness, finish_check.done_digest(done)))
+    timeout = int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
+    entry = finish_check.entry(harness, finish_check.done_digest(done), timeout)
+    return finish_check.canonical(entry)
 
 
 def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> str:
@@ -1361,7 +1388,7 @@ def detect(target: Path, source: Path) -> int:
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
                             [--human-style ste] [--finish-check | --no-finish-check]
-                            [--dry-run] [--force]
+                            [--finish-timeout SECONDS] [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
@@ -1387,13 +1414,16 @@ remove a block or file whose bytes are not what it recorded. A refusal writes no
 
 --finish-check adds one entry to the settings of each selected harness that has a finish hook,
 claude-code (.claude/settings.json) and codex (.codex/hooks.json): when that harness's agent
-ends a turn on a working tree the Done commands have not passed on, `outcomebound finish-check`
-runs them, and a failure goes back to the agent to fix. It needs a Done command. The install
-report names each harness's one-time accept, reads UNVERIFIED that the harness runs the hook
-until a person sees its PASS message end a run, and names each other selected harness as not
-available yet. adopt writes the document back with its keys, their order and its indentation
-kept, rewriting only its whitespace, and refuses one with comments. A Done change rewrites the
-entry; --no-finish-check or --remove takes it out."""
+ends a turn on a working tree the Done commands have not been checked on, `outcomebound
+finish-check` runs them, and a failure goes back to the agent to fix. It needs a Done command.
+The install report names each harness's one-time accept, reads UNVERIFIED that the harness runs
+the hook until a person sees its PASS message end a run, and names each other selected harness
+as not available yet. The entry's timeout is --finish-timeout, default 600 seconds, the documented
+default of both harnesses; finish-check stops the Done commands 30 seconds before it, so a Done
+that takes longer needs a larger value, and re-running adopt with a new value rewrites the entry.
+adopt writes the document back with its keys, their order and its indentation kept, rewriting
+only its whitespace, and refuses one with comments. A Done change rewrites the entry;
+--no-finish-check or --remove takes it out."""
 EPILOG = """\
 exit: 0 done, 1 refused or failed, 2 usage; --check exits with the number of records that are
 not current, at most 100."""
@@ -1436,6 +1466,15 @@ def _parser() -> argparse.ArgumentParser:
         help="take the finish check's entries out",
     )
     parser.add_argument(
+        "--finish-timeout",
+        type=_seconds,
+        metavar="SECONDS",
+        help=f"the finish check's entry timeout, whole seconds above "
+        f"{finish_check.MARGIN_SECONDS}; the Done commands stop "
+        f"{finish_check.MARGIN_SECONDS} s before it; omitted keeps the recorded one, else "
+        f"{finish_check.DEFAULT_TIMEOUT}",
+    )
+    parser.add_argument(
         "--harness",
         action="append",
         metavar="H[,H]",
@@ -1470,6 +1509,18 @@ def _parser() -> argparse.ArgumentParser:
         "refused even so",
     )
     return parser
+
+
+def _seconds(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if not finish_check.admits_timeout(value):
+        raise argparse.ArgumentTypeError(
+            f"whole seconds above {finish_check.MARGIN_SECONDS}, not {text!r}"
+        )
+    return value
 
 
 def _names(values: Sequence[str] | None) -> list[str] | None:
@@ -1516,6 +1567,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             None if args.done is None else _commands(args.done),
             args.finish_check,
             None if args.human_style is None else [args.human_style] if args.human_style else [],
+            args.finish_timeout,
         )
         planned, edited, notes = install(target, source, selection, args.force)
     if args.dry_run:
@@ -1539,10 +1591,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
     if (args.detect or args.check) and (args.dry_run or args.force):
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
-    chosen = chosen or args.human_style is not None
+    chosen = chosen or args.human_style is not None or args.finish_timeout is not None
     if (args.detect or args.check or args.remove) and (chosen or args.finish_check is not None):
         parser.error(
-            "--harness, --fragments, --done, --human-style and --finish-check apply to an install"
+            "--harness, --fragments, --done, --human-style, --finish-check and --finish-timeout "
+            "apply to an install"
         )
     target = Path(args.target).resolve()
     try:

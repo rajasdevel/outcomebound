@@ -69,6 +69,7 @@ def hook(
     root: Path,
     stdin: bytes | dict[str, Any] | None = None,
     cwd: Path | None = None,
+    timeout: int | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """Run the entry as `row` fires it, the input's `cwd` naming where the agent works unless
     `stdin` is given. claude-code runs from the checkout its session started in, which its root
@@ -90,8 +91,11 @@ def hook(
     if stdin is None:
         stdin = {**INPUT[row], "cwd": str(working)}
     data = stdin if isinstance(stdin, bytes) else json.dumps(stdin).encode()
+    words = [str(LAUNCHER), "finish-check", "--harness", row, "--done", digest]
+    if timeout is not None:
+        words += ["--timeout", str(timeout)]
     done = subprocess.run(
-        [str(LAUNCHER), "finish-check", "--harness", row, "--done", digest],
+        words,
         input=data,
         cwd=cwd,
         env=environment,
@@ -214,11 +218,19 @@ def test_a_set_guard_or_unreadable_input_tells_the_person_and_holds_nothing(
     assert "```output\nboom\n```" in verdict["systemMessage"]
 
 
-def test_claude_code_runs_nothing_while_background_tasks_wait(tmp_path: Path) -> None:
-    """Breaks if the Done commands run when the session is paused, not finished."""
+@pytest.mark.parametrize(
+    "waiting",
+    [{"background_tasks": [{"task_id": "b1"}]}, {"session_crons": [{"id": "c1"}]}],
+    ids=["background-tasks", "session-crons"],
+)
+def test_claude_code_runs_nothing_while_background_work_or_a_wake_up_waits(
+    tmp_path: Path, waiting: dict[str, Any]
+) -> None:
+    """Breaks if the Done commands run when the session is paused, not finished: background
+    work in flight, or a scheduled wake-up that brings the session back."""
 
     root, digest = target(tmp_path / "t", ["touch ran"])
-    paused = {**INPUT["claude-code"], "cwd": str(root), "background_tasks": [{"task_id": "b1"}]}
+    paused = {**INPUT["claude-code"], "cwd": str(root), **waiting}
 
     _, verdict = hook("claude-code", digest, root, stdin=paused)
 
@@ -249,6 +261,94 @@ def test_an_unchanged_tree_reruns_nothing_and_a_changed_one_runs_again(tmp_path:
         [GIT, "-C", str(root), "status", "--porcelain"], capture_output=True, text=True, check=True
     )
     assert finish_check.STATE not in status.stdout
+
+
+def test_an_unchanged_failing_tree_repeats_its_verdict_unheld_and_runs_nothing(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a failure is run again on the tree it just failed on, at the stop after the
+    hold or at a later turn end, or if that repeat holds the finish again; a changed tree runs
+    again and may hold."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {count}; echo boom; exit 1"])
+
+    def runs() -> int:
+        return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
+
+    assert hook("codex", digest, root)[1]["decision"] == "block" and runs() == 1
+    after_hold = {**INPUT["codex"], "cwd": str(root / "deeper"), "stop_hook_active": True}
+    for stdin in (after_hold, None):
+        verdict = hook("codex", digest, root, stdin=stdin)[1]
+        assert list(verdict) == ["systemMessage"] and runs() == 1
+        message = verdict["systemMessage"]
+        assert message.startswith("finish-check FAIL: ")
+        assert "unchanged since this failure, so it was not run again" in message
+        assert "```output\nboom\n```" in message
+        assert len(message) < finish_check.REPORT_CHARACTERS
+    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    assert hook("codex", digest, root)[1]["decision"] == "block" and runs() == 2
+
+
+def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a timed-out tree is run again, the limit spent, at every turn end, or if
+    raising the timeout cannot get the same tree checked."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {count}; sleep 3"])
+    short = finish_check.MARGIN_SECONDS + 1
+
+    def runs() -> int:
+        return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
+
+    first = hook("codex", digest, root, timeout=short)[1]["systemMessage"]
+    assert first.startswith("finish-check UNVERIFIED: ") and runs() == 1
+    again = hook("codex", digest, root, timeout=short)[1]["systemMessage"]
+    assert again.startswith("finish-check UNVERIFIED: ") and runs() == 1
+    assert "Not run again: the working tree is unchanged since that check." in again
+    longer = hook("codex", digest, root, timeout=short + 10)[1]["systemMessage"]
+    assert longer.startswith("finish-check PASS: ") and runs() == 2
+
+
+@pytest.mark.parametrize(
+    ("line", "code"), [("no-such-tool-here --check", 127), ("./not-executable", 126)]
+)
+def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_nothing(
+    tmp_path: Path, line: str, code: int
+) -> None:
+    """Breaks if a tool missing from the hook's PATH, or a file that cannot be executed, holds
+    the finish as a failure the agent's change caused."""
+
+    root, digest = target(tmp_path / "t", [line])
+    (root / "not-executable").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+
+    _, verdict = hook("codex", digest, root)
+
+    assert list(verdict) == ["systemMessage"]
+    message = verdict["systemMessage"]
+    assert message.startswith(
+        f"finish-check UNVERIFIED: `{line}` could not run in the hook's environment"
+    )
+    assert f"UNVERIFIED {line}: exit {code} after " in message
+
+
+def test_a_record_1_0_0_wrote_reads_as_a_pass_and_an_unreadable_one_as_none() -> None:
+    """Breaks if an install upgraded from 1.0.0 reruns or misreads the pass it remembered, or if
+    a damaged record is trusted as a verdict."""
+
+    tree = "a" * 64
+    assert finish_check.parse_checked(tree + "\n") == finish_check.Checked(
+        tree, finish_check.DEFAULT_TIMEOUT, finish_check.PASS
+    )
+    for text in (
+        "",
+        "not json",
+        '{"tree": "x"}',
+        json.dumps({"tree": tree, "timeout": 600, "verdict": "FAIL", "results": []}),
+    ):
+        assert finish_check.parse_checked(text) is None
 
 
 def test_two_targets_in_one_repository_never_share_a_pass(tmp_path: Path) -> None:
@@ -290,7 +390,8 @@ def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path) ->
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"]
     script.chmod(0o644)
     verdict = hook("codex", digest, root)[1]
-    assert verdict.get("decision") == "block" and "./check.sh" in verdict["reason"]
+    assert list(verdict) == ["systemMessage"]
+    assert "UNVERIFIED ./check.sh: exit 126" in verdict["systemMessage"]
 
 
 def test_a_command_is_not_started_once_the_limit_has_passed(tmp_path: Path) -> None:
@@ -298,19 +399,27 @@ def test_a_command_is_not_started_once_the_limit_has_passed(tmp_path: Path) -> N
 
     marker = tmp_path / "ran"
     results = finish_check.run_all(tmp_path, [f"touch {marker}"], time.monotonic() - 1)
-    assert [(r.verdict, r.why) for r in results] == [
-        (finish_check.UNVERIFIED, "not started: the time limit had passed")
+    assert [(r.verdict, r.why, r.cause) for r in results] == [
+        (finish_check.UNVERIFIED, "not started: the time limit had passed", finish_check.TIME)
     ]
     assert not marker.exists()
 
 
-def test_the_held_report_lets_a_failure_that_predates_the_work_finish(tmp_path: Path) -> None:
-    """Breaks if the hold tells the agent to fix a failure it did not cause, or to keep working
-    past a stop to ask the person."""
+def test_the_held_report_sends_the_agent_on_with_the_work_a_failure_does_not_block(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the hold tells the agent to fix a failure it did not cause or one outside its
+    authority, or to end its turn on such a failure instead of continuing with the rest."""
 
     root, digest = target(tmp_path / "t", ["exit 1"])
     reason = hook("codex", digest, root)[1]["reason"]
-    assert "If it failed before your change, or you are stopping to ask" in reason
+    assert "Fix what your change broke and continue with the work." in reason
+    assert (
+        "If it failed before your change, a tool it needs is missing here, or the fix needs an "
+        "act outside your authority, say so in your report and continue with the work it does "
+        "not block."
+    ) in reason
+    assert "End your turn only when your work is done." in reason
 
 
 def test_a_long_run_of_backticks_keeps_the_report_under_the_limit(tmp_path: Path) -> None:
@@ -325,15 +434,16 @@ def test_a_long_run_of_backticks_keeps_the_report_under_the_limit(tmp_path: Path
 
 
 def test_a_pass_too_near_the_limit_is_reported_and_not_remembered(tmp_path: Path) -> None:
-    """Breaks if reading the tree again and remembering it can run past the limit: with the
-    time left for them already spent, the pass is reported and the next turn end runs again."""
+    """Breaks if reading the tree again and remembering it can run past their own deadline:
+    with the time left for them already spent, the pass is reported and the next turn end runs
+    again."""
 
     count = tmp_path / "count"
     root, digest = target(tmp_path / "t", [f"sleep 1; echo run >> {count}"])
     program = (
         "import sys; sys.path.insert(0, sys.argv[1]); "
         "from outcomebound_tools import finish_check as f; "
-        "f.LIMIT_SECONDS = 16; f.REMEMBER_SECONDS = 15.5; "
+        "f.REMEMBER_SECONDS = -15.5; "
         "sys.exit(f.main(sys.argv[2:]))"
     )
     for _ in range(2):
@@ -348,6 +458,8 @@ def test_a_pass_too_near_the_limit_is_reported_and_not_remembered(tmp_path: Path
                 "codex",
                 "--done",
                 digest,
+                "--timeout",
+                str(finish_check.MARGIN_SECONDS + 16),
             ],
             input=json.dumps(INPUT["codex"]).encode(),
             cwd=root,
@@ -373,32 +485,27 @@ def test_the_tree_is_not_read_once_its_deadline_has_passed(tmp_path: Path) -> No
 def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     tmp_path: Path,
 ) -> None:
-    """Breaks if a slow check is left for the harness to cut off, or leaves a process it started
-    running; the limit is lowered to one second in the verb's own module."""
+    """Breaks if a slow check is left for the harness to cut off, if the commands do not stop
+    the margin before the entry's own timeout, if a process it started keeps running, or if the
+    report offers shortening Done before a longer limit: the entry's timeout is one second past
+    the margin."""
 
     root, digest = target(tmp_path / "t", ["sleep 60 & echo $! > child.pid; wait"])
-    program = (
-        "import sys; sys.path.insert(0, sys.argv[1]); "
-        "from outcomebound_tools import finish_check as f; f.LIMIT_SECONDS = 1; "
-        "sys.exit(f.main(sys.argv[2:]))"
-    )
+    timeout = finish_check.MARGIN_SECONDS + 1
     started = time.monotonic()
 
-    done = subprocess.run(
-        [sys.executable, "-I", "-c", program, str(ROOT), "--harness", "codex", "--done", digest],
-        input=json.dumps(INPUT["codex"]).encode(),
-        cwd=root,
-        capture_output=True,
-        check=False,
-        timeout=60,
-    )
+    _, verdict = hook("codex", digest, root, cwd=root, timeout=timeout)
 
-    assert done.returncode == 0 and time.monotonic() - started < 30, done.stderr
-    verdict = json.loads(done.stdout)
+    assert time.monotonic() - started < 30
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
-    assert message.startswith("finish-check UNVERIFIED: ") and "--no-finish-check" in message
-    assert "stopped at the 1 s limit" in message
+    assert message.startswith(
+        f"finish-check UNVERIFIED: `sleep 60 & echo $! > child.pid; wait` did not finish within "
+        f"1 s, {finish_check.MARGIN_SECONDS} s before the hook's {timeout} s timeout"
+    )
+    assert f"--finish-timeout <seconds>`, for example {2 * timeout}" in message
+    assert message.index("--finish-timeout") < message.index("--no-finish-check")
+    assert "stopped at the time limit after 1 s" in message
     child = int((root / "child.pid").read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and _alive(child):
@@ -436,8 +543,10 @@ def test_no_manifest_names_the_directory_searched_and_holds_nothing(
         ["--harness", "gemini", "--done", "0" * 64],
         ["--harness", "codex", "--done", "short"],
         ["--harness", "codex"],
+        ["--harness", "codex", "--done", "0" * 64, "--timeout", "30"],
+        ["--harness", "codex", "--done", "0" * 64, "--timeout", "ten"],
     ],
-    ids=["unavailable-row", "not-a-digest", "no-digest"],
+    ids=["unavailable-row", "not-a-digest", "no-digest", "timeout-within-margin", "not-seconds"],
 )
 def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str]) -> None:
     """Breaks if a malformed entry exits 2, which both rows read as holding the finish."""

@@ -1,14 +1,15 @@
 """The finish check: at a harness's stop hook, the project's recorded Done commands run.
 
-`outcomebound finish-check --harness <row> --done <digest>` is the command adopt writes into a
-row's settings document (`docs/specs/finish-check/design.md`); the rows are those whose harness
-table entry carries `finish_hook`, `claude-code` and `codex`. It reads the hook's input on stdin,
-finds the target, and runs the manifest's Done commands only while their digest is the entry's,
-and only on a working tree they have not already passed on. A failure holds the finish, its
-report the reason the agent reads; every other outcome goes to the person as `systemMessage`,
-or as `{}` where there is nothing to say, and holds nothing. It exits 0 whenever it ran, its
-verdict on stdout as both rows read it; a usage error exits 1, never 2, which a row reads as
-holding the finish.
+`outcomebound finish-check --harness <row> --done <digest> --timeout <seconds>` is the command
+adopt writes into a row's settings document (`docs/specs/finish-check/design.md`); the rows are
+those whose harness table entry carries `finish_hook`, `claude-code` and `codex`. It reads the
+hook's input on stdin, finds the target, and runs the manifest's Done commands only while their
+digest is the entry's, and only on a working tree they have not already been checked on: an
+unchanged tree repeats the verdict it was last checked with and runs nothing. A failure holds
+the finish, its report the reason the agent reads; every other outcome goes to the person as
+`systemMessage`, or as `{}` where there is nothing to say, and holds nothing. It exits 0
+whenever it ran, its verdict on stdout as both rows read it; a usage error exits 1, never 2,
+which a row reads as holding the finish.
 
 What it does not decide: whether the harness fires the hook (its install report reads
 `UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are.
@@ -40,18 +41,23 @@ ID = "finish-check"
 MARKER = f"outcomebound {ID}".encode()
 MANIFEST = ".outcomebound/manifest.json"
 FACTS = "project-facts"
-# adopt writes this many seconds in the row's `timeout` field; the verb stops its commands
-# earlier, so it reports the stop itself rather than being cut off by the harness.
-TIMEOUT = 600
-LIMIT_SECONDS = 570
+# The seconds adopt writes in the row's `timeout` field and passes to the verb where the person
+# names none: the documented default of both rows, a setting and not a ceiling (research
+# harnesses/claude-code.md:267, harnesses/codex.md:143). `adopt --finish-timeout` changes it.
+DEFAULT_TIMEOUT = 600
+# The verb stops its commands this many seconds before the entry's timeout, so it remembers and
+# reports the stop itself rather than being cut off by the harness; a timeout must exceed it.
+MARGIN_SECONDS = 30
 REPORT_CHARACTERS = 4000
-# The seconds kept free before the limit for the report itself: a pass is read again and
-# remembered only where both finish before them.
+# The seconds of the margin, after the commands' deadline, in which the tree is read again and
+# its verdict remembered; the rest of the margin is the report's. A verdict is remembered only
+# where both finish within them, a command stopped at the deadline included.
 REMEMBER_SECONDS = 15
 # The longest backtick run output keeps as written; a longer one is written as its count.
 LONGEST_RUN = 15
 BACKTICKS = re.compile(f"`{{{LONGEST_RUN + 1},}}")
-# Where the digest of the last tree the Done commands passed on is kept, in the Git directory.
+# Where the last tree the Done commands were checked on is kept with its verdict, in the Git
+# directory.
 STATE = "outcomebound-finish-check"
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 STDIN_LIMIT = 16 * 1024 * 1024
@@ -99,14 +105,22 @@ def done_digest(done: Sequence[str]) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def command(harness: str, digest: str) -> str:
-    return f"outcomebound {ID} --harness {harness} --done {digest}"
+def command(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> str:
+    return f"outcomebound {ID} --harness {harness} --done {digest} --timeout {timeout}"
 
 
-def entry(harness: str, digest: str) -> dict[str, Any]:
-    """The group adopt adds under the row's event, in the order it is written."""
+def entry(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
+    """The group adopt adds under the row's event, in the order it is written: the harness
+    cancels the hook at `timeout` seconds, and the verb is told the same number."""
 
-    return {"hooks": [{"type": "command", "command": command(harness, digest), "timeout": TIMEOUT}]}
+    line = command(harness, digest, timeout)
+    return {"hooks": [{"type": "command", "command": line, "timeout": timeout}]}
+
+
+def admits_timeout(value: object) -> bool:
+    """Whether `value` is a timeout the verb can work within: whole seconds past the margin."""
+
+    return type(value) is int and value > MARGIN_SECONDS
 
 
 def canonical(value: object) -> bytes:
@@ -172,7 +186,7 @@ def recorded_done(target: Path) -> list[str] | None:
     return None
 
 
-# --- The working tree the Done commands last passed on ---------------------------
+# --- The working tree the Done commands were last checked on ----------------------
 
 
 def _git(target: Path, *arguments: str, deadline: float | None = None) -> bytes | None:
@@ -245,30 +259,87 @@ def _state(target: Path, deadline: float | None = None) -> Path | None:
     return Path(os.fsdecode(directory.strip())) / STATE if directory else None
 
 
-def last_passed(target: Path, deadline: float | None = None) -> str | None:
+@dataclass(frozen=True)
+class Checked:
+    """The last working tree the Done commands were checked on, the timeout they ran under, the
+    verdict, and the results of a verdict other than a pass, which an unchanged tree repeats."""
+
+    tree: str
+    timeout: int
+    verdict: str
+    results: tuple[Result, ...] = ()
+
+    def text(self) -> str:
+        results = [result.document() for result in self.results]
+        document = {
+            "tree": self.tree,
+            "timeout": self.timeout,
+            "verdict": self.verdict,
+            "results": results,
+        }
+        return json.dumps(document, ensure_ascii=False) + "\n"
+
+    def repeats(self, tree: str | None, timeout: int) -> bool:
+        """Whether a turn end on `tree` under `timeout` repeats this verdict without running: the
+        same tree, and for a verdict other than a pass the same timeout, since a longer one may
+        let a command finish."""
+
+        return tree == self.tree and (self.verdict == PASS or timeout == self.timeout)
+
+
+def parse_checked(text: str) -> Checked | None:
+    """The record `remember` wrote, or None where it cannot be read as one; a record holding
+    only a tree digest, as 1.0.0 wrote it, is a pass under the default timeout."""
+
+    text = text.strip()
+    if DIGEST.fullmatch(text):
+        return Checked(text, DEFAULT_TIMEOUT, PASS)
+    try:
+        document = json.loads(text)
+        tree, timeout = document["tree"], document["timeout"]
+        verdict, items = document["verdict"], list(document["results"])
+    except (ValueError, KeyError, TypeError):
+        return None
+    results = tuple(result for result in map(Result.of, items) if result is not None)
+    if not (isinstance(tree, str) and DIGEST.fullmatch(tree) and admits_timeout(timeout)):
+        return None
+    if verdict not in (PASS, FAIL, UNVERIFIED) or len(results) != len(items):
+        return None
+    if verdict != PASS and (not results or results[-1].verdict != verdict):
+        return None
+    return Checked(tree, int(timeout), str(verdict), results)
+
+
+def last_checked(target: Path, deadline: float | None = None) -> Checked | None:
     state = _state(target, deadline)
     try:
-        return state.read_text(encoding="utf-8").strip() if state else None
-    except OSError:
+        return parse_checked(state.read_text(encoding="utf-8")) if state else None
+    except (OSError, ValueError):
         return None
 
 
-def remember(target: Path, tree: str, deadline: float | None = None) -> None:
-    """Keep `tree` as the one Done last passed on; a Git directory that cannot take it, or one
-    `deadline` passes before it is found, is left."""
+def remember(target: Path, checked: Checked, deadline: float | None = None) -> None:
+    """Keep `checked` as the last tree the Done commands were checked on; a Git directory that
+    cannot take it, or one `deadline` passes before it is found, is left."""
 
     state = _state(target, deadline)
     if state is None:
         return
     stage = state.with_name(f"{STATE}.{os.getpid()}")
     try:
-        stage.write_text(tree + "\n", encoding="utf-8")
+        stage.write_text(checked.text(), encoding="utf-8")
         os.replace(stage, state)
     except OSError:
         stage.unlink(missing_ok=True)
 
 
 # --- Running the Done commands ---------------------------------------------------
+
+
+# Why a command reads UNVERIFIED: it met the time limit, or it could not run where the hook runs.
+TIME, ENVIRONMENT = "time", "environment"
+# The exit codes of a shell that could not run the command: 126 not executable, 127 not found.
+NOT_RUN = (126, 127)
 
 
 @dataclass(frozen=True)
@@ -278,12 +349,43 @@ class Result:
     seconds: float
     why: str = ""
     output: bytes = b""
+    cause: str = ""
 
     def line(self) -> str:
         shown = shorten(self.command)
         if self.verdict == PASS:
             return f"PASS {shown} ({self.seconds:.0f} s)"
         return f"{self.verdict} {shown}: {self.why}"
+
+    def document(self) -> dict[str, Any]:
+        return {
+            "command": self.command,
+            "verdict": self.verdict,
+            "seconds": self.seconds,
+            "why": self.why,
+            "output": self.output.decode("utf-8", "replace"),
+            "cause": self.cause,
+        }
+
+    @classmethod
+    def of(cls, item: object) -> Result | None:
+        """The result `document` wrote, or None where `item` is not one."""
+
+        if not isinstance(item, dict):
+            return None
+        command, verdict, why = item.get("command"), item.get("verdict"), item.get("why")
+        output, cause, seconds = item.get("output"), item.get("cause"), item.get("seconds")
+        if not (
+            isinstance(command, str)
+            and verdict in (PASS, FAIL, UNVERIFIED)
+            and isinstance(why, str)
+            and isinstance(output, str)
+            and isinstance(cause, str)
+            and isinstance(seconds, (int, float))
+            and not isinstance(seconds, bool)
+        ):
+            return None
+        return cls(command, str(verdict), float(seconds), why, output.encode("utf-8"), cause)
 
 
 def shorten(text: str, limit: int = COMMAND_SHOWN) -> str:
@@ -322,17 +424,21 @@ def run_one(target: Path, line: str, seconds: float) -> Result:
                 start_new_session=True,
             )
         except OSError as error:
-            return Result(line, UNVERIFIED, 0.0, f"could not start: {error.strerror or error}")
+            why = f"could not start: {error.strerror or error}"
+            return Result(line, UNVERIFIED, 0.0, why, cause=ENVIRONMENT)
         try:
             code = process.wait(timeout=max(seconds, 0.0))
         except subprocess.TimeoutExpired:
             _stop(process)
             elapsed = time.monotonic() - started
-            why = f"stopped at the {LIMIT_SECONDS} s limit after {elapsed:.0f} s"
-            return Result(line, UNVERIFIED, elapsed, why, _tail(sink))
+            why = f"stopped at the time limit after {elapsed:.0f} s"
+            return Result(line, UNVERIFIED, elapsed, why, _tail(sink), TIME)
         elapsed = time.monotonic() - started
         if code == 0:
             return Result(line, PASS, elapsed)
+        if code in NOT_RUN:
+            why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
+            return Result(line, UNVERIFIED, elapsed, why, _tail(sink), ENVIRONMENT)
         return Result(line, FAIL, elapsed, f"exit {code} after {elapsed:.0f} s", _tail(sink))
 
 
@@ -344,7 +450,8 @@ def run_all(target: Path, done: Sequence[str], deadline: float) -> list[Result]:
     for line in done:
         left = deadline - time.monotonic()
         if left <= 0:
-            results.append(Result(line, UNVERIFIED, 0.0, "not started: the time limit had passed"))
+            why = "not started: the time limit had passed"
+            results.append(Result(line, UNVERIFIED, 0.0, why, cause=TIME))
             break
         results.append(run_one(target, line, left))
         if results[-1].verdict != PASS:
@@ -408,25 +515,50 @@ def told(message: str) -> Verdict:
     return {"systemMessage": message}
 
 
-def verdict_for(results: Sequence[Result], held: bool, target: Path) -> Verdict:
-    last = results[-1]
-    if last.verdict == UNVERIFIED:
-        head = (
-            f"finish-check UNVERIFIED: `{shorten(last.command, 80)}` did not finish; nothing was "
-            "held. The check is yours to shorten or drop: a quicker --done, or "
-            f"`outcomebound adopt {shlex.quote(str(target))} --no-finish-check`."
+def _unverified_head(last: Result, target: Path, timeout: int) -> str:
+    shown = shorten(last.command, 80)
+    if last.cause == ENVIRONMENT:
+        return (
+            f"finish-check UNVERIFIED: `{shown}` could not run in the hook's environment, which "
+            "has the harness process's PATH and no activated virtual environment; nothing was held."
         )
-        return told(report(head, results))
-    if held:
+    quoted = shlex.quote(str(target))
+    return (
+        f"finish-check UNVERIFIED: `{shown}` did not finish within {timeout - MARGIN_SECONDS} s, "
+        f"{MARGIN_SECONDS} s before the hook's {timeout} s timeout; nothing was held. To give the "
+        f"Done commands longer, re-run `outcomebound adopt {quoted} --finish-timeout <seconds>`, "
+        f"for example {2 * timeout}; to take the check out, `outcomebound adopt {quoted} "
+        "--no-finish-check`."
+    )
+
+
+def verdict_for(
+    results: Sequence[Result], held: bool, target: Path, timeout: int, repeated: bool = False
+) -> Verdict:
+    """What a run whose last result is not a pass prints; `repeated` where it is the verdict an
+    unchanged tree was last checked with, run again for nothing."""
+
+    last = results[-1]
+    again = " Not run again: the working tree is unchanged since that check." if repeated else ""
+    if last.verdict == UNVERIFIED:
+        return told(report(_unverified_head(last, target, timeout) + again, results))
+    if held and not repeated:
         head = (
             "finish-check FAIL: a Done command failed on this working tree. Fix what your change "
-            "broke, then finish. If it failed before your change, or you are stopping to ask the "
-            "person, say so in your report and finish."
+            "broke and continue with the work. If it failed before your change, a tool it needs "
+            "is missing here, or the fix needs an act outside your authority, say so in your "
+            "report and continue with the work it does not block. End your turn only when your "
+            "work is done."
         )
         return {"decision": "block", "reason": report(head, results)}
+    why = (
+        "the working tree is unchanged since this failure, so it was not run again"
+        if repeated
+        else "the stop hook already continued once or its input could not be read"
+    )
     head = (
         "finish-check FAIL: a Done command failed on this working tree; told to you, not the "
-        "agent, since the stop hook already continued once or its input could not be read."
+        f"agent, since {why}."
     )
     return told(report(head, results))
 
@@ -437,14 +569,18 @@ def check(
     digest: str,
     payload: dict[str, Any] | None,
     cwd: Path,
-    limit: float,
+    timeout: int,
 ) -> Verdict:
     """What the hook prints for this input, running the Done commands where they are due, all of
-    it within `limit` seconds."""
+    it `MARGIN_SECONDS` before the entry's `timeout`."""
 
     started = time.monotonic()
-    # A claude-code session with background work in flight is paused, not finished.
-    if harness == "claude-code" and payload is not None and payload.get("background_tasks"):
+    # A claude-code session with background work in flight or a scheduled wake-up is paused,
+    # not finished.
+    waiting = payload is not None and (
+        payload.get("background_tasks") or payload.get("session_crons")
+    )
+    if harness == "claude-code" and waiting:
         return {}
     held = payload is not None and payload.get(hook["guard"]) is False
     target, found = find_target(payload, cwd)
@@ -457,22 +593,28 @@ def check(
             "this hook was written for; nothing ran. "
             f"Re-run `outcomebound adopt {shlex.quote(str(target))}`."
         )
-    before = tree_digest(target, digest, started + limit)
-    if before is not None and before == last_passed(target, started + limit):
-        return {}
-    results = run_all(target, done, started + limit)
-    if all(result.verdict == PASS for result in results):
-        # Only a tree the commands left as they found it is remembered as passed: one that
-        # changed while they ran was checked part-way through a change. Reading it again and
-        # remembering it stop at their own deadline, so the report is never what the harness
-        # cuts off.
-        book = started + limit - REMEMBER_SECONDS
-        if before is not None and tree_digest(target, digest, book) == before:
-            remember(target, before, book)
+    deadline = started + timeout - MARGIN_SECONDS
+    before = tree_digest(target, digest, deadline)
+    last = last_checked(target, deadline) if before is not None else None
+    if last is not None and last.repeats(before, timeout):
+        if last.verdict == PASS:
+            return {}
+        return verdict_for(last.results, False, target, last.timeout, repeated=True)
+    results = run_all(target, done, deadline)
+    verdict = results[-1].verdict
+    # Only a tree the commands left as they found it is remembered with its verdict: one that
+    # changed while they ran was checked part-way through a change. Reading it again and
+    # remembering it stop at their own deadline inside the margin, so the report is never what
+    # the harness cuts off.
+    book = deadline + REMEMBER_SECONDS
+    if before is not None and tree_digest(target, digest, book) == before:
+        kept = () if verdict == PASS else tuple(results)
+        remember(target, Checked(before, timeout, verdict, kept), book)
+    if verdict == PASS:
         seconds = time.monotonic() - started
         listed = ", ".join(shorten(line, 80) for line in done)
         return told(f"finish-check PASS: {listed}, {seconds:.0f}s; not reviewed, not landed")
-    return verdict_for(results, held, target)
+    return verdict_for(results, held, target, timeout)
 
 
 # --- Command line ----------------------------------------------------------------
@@ -481,11 +623,15 @@ DESCRIPTION = """\
 Run at a harness's stop hook, from the entry `outcomebound adopt --finish-check` writes. It reads
 the hook's JSON input on stdin, finds the target (the nearest directory holding
 .outcomebound/manifest.json upward from the input's cwd, else from its own), and runs the
-manifest's Done commands from the target's root, in order, stopping at the first failure, only
-while their digest is --done and only on a working tree they have not already passed on. A
-failure while the input's stop_hook_active is false holds the finish, its report the reason the
-agent reads; a pass, a failure after that, a digest that no longer matches, a missing manifest,
-and a command stopped at 570 seconds go to the person as systemMessage and hold nothing."""
+manifest's Done commands from the target's root, in order, stopping at the first that does not
+pass, only while their digest is --done, and stopping them 30 seconds before --timeout. A working
+tree they were already checked on runs nothing: after a pass it prints {}, after a failure or an
+UNVERIFIED it repeats that verdict. A failure while the input's stop_hook_active is false holds
+the finish, its report the reason the agent reads; a pass, a failure after that, a repeated
+verdict, a digest that no longer matches, a missing manifest, a command stopped at the time limit
+and one the hook's environment could not run (exit 126 or 127) go to the person as systemMessage
+and hold nothing. On claude-code nothing runs while background_tasks or session_crons is
+non-empty."""
 EPILOG = """\
 exit: 0 whenever it ran, its verdict as JSON on stdout; 1 on a usage error, never 2, which a
 harness reads as holding the finish."""
@@ -510,7 +656,25 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--done", required=True, metavar="DIGEST", help="the digest of the Done list it runs"
     )
+    parser.add_argument(
+        "--timeout",
+        type=_seconds,
+        default=DEFAULT_TIMEOUT,
+        metavar="SECONDS",
+        help=f"the entry's timeout, which the commands stop {MARGIN_SECONDS} seconds before; "
+        f"default {DEFAULT_TIMEOUT}, the value entries written without it carry",
+    )
     return parser
+
+
+def _seconds(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        value = 0
+    if not admits_timeout(value):
+        raise argparse.ArgumentTypeError(f"whole seconds above {MARGIN_SECONDS}, not {text!r}")
+    return value
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -525,7 +689,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not DIGEST.fullmatch(args.done):
         parser.error("--done takes the 64-character digest adopt wrote")
     payload = read_input(getattr(sys.stdin, "buffer", None))
-    verdict = check(args.harness, hook, args.done, payload, Path.cwd(), LIMIT_SECONDS)
+    verdict = check(args.harness, hook, args.done, payload, Path.cwd(), args.timeout)
     sys.stdout.write(json.dumps(verdict) + "\n")
     sys.stdout.flush()
     return 0

@@ -52,8 +52,10 @@ as one brief (`outcomebound brief --help`).
   tree the Done commands run and a failure goes back to it. It needs a Done command, and
   `outcomebound` on the harness process's PATH, which a harness launched from a desktop may not
   share with the shell; each person accepts the entry once in their harness, which the install
-  report names; any other harness is named as not available yet. `--no-finish-check` takes it
-  out.
+  report names; any other harness is named as not available yet. The Done commands get the
+  entry's timeout less 30 seconds: 600 by default, the harnesses' documented default; for a Done
+  that takes longer, add `--finish-timeout <seconds>`, which a later adopt can also change.
+  `--no-finish-check` takes it out.
 
 ## Check and remove
 

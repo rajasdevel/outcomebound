@@ -1265,6 +1265,7 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
     ours = finish_check.entry(row, finish_check.done_digest(["true"]))
     assert document["hooks"]["Stop"][-1] == ours
     assert ours["hooks"][0]["timeout"] == 600
+    assert ours["hooks"][0]["command"].endswith(" --timeout 600")
     if seeded:
         assert list(document) == ["zeta", "hooks", "alpha"]
         assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == "./their-own.sh"
@@ -1275,6 +1276,7 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
             "path": path,
             "id": "finish-check",
             "harness": row,
+            "timeout": 600,
             "created": not seeded,
             "sha256": sha(finish_check.canonical(ours)),
         }
@@ -1366,6 +1368,56 @@ def test_a_done_change_rewrites_the_entry_and_an_emptied_done_takes_it_out(
     refused = snapshot(target)
     assert run(capsys, str(target), "--finish-check")[0] == 1 and snapshot(target) == refused
     assert run(capsys, str(target), "--remove")[0] == 0 and snapshot(target) == before
+
+
+def test_finish_timeout_is_written_kept_and_changed_in_the_one_entry(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the timeout the person names is not the entry's `timeout` and the verb's
+    `--timeout` both, if an install that omits it drops it, if a new value adds a second entry
+    or leaves the old one, or if `--check` misreads an entry with a named timeout."""
+
+    target = repo(tmp_path / "t")
+    hooks_file, name = target / ".codex/hooks.json", ".codex/hooks.json (finish-check)"
+    digest = finish_check.done_digest(["true"])
+    arguments = ("--harness", "codex", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments, "--finish-timeout", "1200")[0] == 0
+
+    def stop() -> list[Any]:
+        return list(json.loads(hooks_file.read_text(encoding="utf-8"))["hooks"]["Stop"])
+
+    assert stop() == [finish_check.entry("codex", digest, 1200)]
+    assert stop()[0]["hooks"][0] == {
+        "type": "command",
+        "command": f"outcomebound finish-check --harness codex --done {digest} --timeout 1200",
+        "timeout": 1200,
+    }
+    assert [record["timeout"] for record in hook_records(target)] == [1200]
+    assert fire(target, stop()[0]["hooks"][0]["command"])["systemMessage"].startswith(
+        "finish-check PASS: true, "
+    )
+    assert run(capsys, str(target), "--fragments", "")[0] == 0
+    assert stop() == [finish_check.entry("codex", digest, 1200)]
+    assert states(run(capsys, str(target), "--check")[1])[name] == "current"
+
+    assert run(capsys, str(target), "--finish-timeout", "900")[0] == 0
+    assert stop() == [finish_check.entry("codex", digest, 900)]
+    assert states(run(capsys, str(target), "--check")[1])[name] == "current"
+
+
+def test_finish_timeout_is_refused_without_a_finish_check_or_within_the_margin(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a timeout is accepted for an install that writes no entry, which would record
+    a limit nothing reads, or one that leaves the Done commands no time before the margin."""
+
+    target = repo(tmp_path / "t")
+    code, _, err = run(capsys, str(target), "--done", "true", "--finish-timeout", "900")
+    assert code == 1 and "add --finish-check" in err and snapshot(target) == {}
+    margin = str(finish_check.MARGIN_SECONDS)
+    with pytest.raises(SystemExit):
+        run(capsys, str(target), "--done", "true", "--finish-check", "--finish-timeout", margin)
+    assert snapshot(target) == {}
 
 
 def test_omitted_keeps_the_finish_check_and_no_finish_check_takes_it_out(
