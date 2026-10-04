@@ -48,6 +48,11 @@ These rules are for the maintainers of this repository and its own designs only.
   exemption row says which invariant it keeps and how. A change that adds an exemption or narrows
   a finding carries the independent review the `local` fragment names, and the pull request links
   it.
+- A change to how the engine reads a file that an adopter owns (a default, a resolution rule, the
+  meaning of a key) ships with a check that `adopt` runs at each install and upgrade and reports,
+  and with an item under "Do these steps first" in the changelog that names each case the change
+  moves, a key left out included. Only the adopter can change their file, so the upgrade is where
+  they must first see that it reads differently.
 
 ## Write a new design
 

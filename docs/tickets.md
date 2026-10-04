@@ -132,8 +132,15 @@ repair. Widen `bounds`, or put a ticket that repairs it first in `blocked-by`. A
 declares no paths is not examined, because the plan does not say what its command reads.
 When a declared path is not in the checkout, as it resolves from the plan's `cwd`, `check` gives
 a WARNING about the plan, `CLAIM_PATH_ABSENT`, with no ticket id. A run of that claim reads
-`UNVERIFIED`. The usual cause is a plan in `.outcomebound/` with `"cwd": "."`, written before a
-relative `cwd` started at the plan file's folder: there, the checkout root is `"cwd": ".."`.
+`UNVERIFIED`. When the plan's claims run in the folder of the plan file, and that folder is not the
+checkout root, `check` gives a WARNING about the plan, `CLAIM_CWD_PLAN_FOLDER`, with no ticket id.
+This warning does not need `required_paths`. A plan below the root runs its claims in its own folder
+when it has no `cwd` or has `"cwd": "."`, because a relative `cwd` starts at the folder of the plan
+file. The usual cause of both warnings is a plan in `.outcomebound/` that was written for 1.0.0, when
+a relative `cwd` started at the checkout root. To run the claims at the checkout root from
+`.outcomebound/`, write `"cwd": ".."`. The next step of each warning gives this `cwd`. `adopt` gives
+the same two warnings at each install and upgrade, for the plan that `.outcomebound/tickets.json`
+declares. It does not change the plan.
 
 In text, the warnings for claims that the plan does not define yet (`CLAIM_PLANNED`) are one
 row after the other findings. The row gives their number and their tickets. `--json` lists each
