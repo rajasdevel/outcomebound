@@ -38,8 +38,10 @@ your copy.
 ## Wire the quality floor
 
 The floor runs your project's own ruff, mypy, gitleaks, bash and shellcheck. Place it after the
-step that puts them on `PATH`. A tool that is missing or too old reads `UNVERIFIED`, and
-`UNVERIFIED` fails the check.
+step that puts them on `PATH`. If the tools are in a container or in a managed environment, give
+each claim in `floor.json` a `prefix`, for example `["docker", "compose", "run", "--rm", "app"]` or
+`["uv", "run"]`. Then only the first word of the prefix must be on `PATH`. A tool that is missing
+or too old reads `UNVERIFIED`, and `UNVERIFIED` fails the check.
 
 `<ref>` is the commit that the change replaces:
 

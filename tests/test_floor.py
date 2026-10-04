@@ -136,13 +136,14 @@ def test_the_projects_own_mypy_config_fails_the_types_claim(
 
     assert status == 1, output
     assert verdicts == {"python.types": "FAIL"}, output
-    assert "src/app/__init__.py:arg-type:" in output
+    assert "+1 src/app/__init__.py:arg-type\n" in output
+    assert 'Argument 2 to "add" has incompatible type "str"' in output
 
 
 # --- Baselines: a multiset of keys, tightened by deletion only ------------------------------
 
 EVAL = 'eval "$1"\n'
-EVAL_KEY = "run.sh:eval:`eval` executes text as code"
+EVAL_KEY = "run.sh:eval"
 
 
 @pytest.mark.parametrize(
@@ -158,8 +159,8 @@ def test_a_finding_is_new_when_its_key_occurs_more_often_than_the_baseline_holds
     found: list[str], held: list[str], new: int, baselined: int, stale: int
 ) -> None:
     claim = floor.parse_claim(shipped("shell.injection", mode="baseline"))
-    findings = [floor.Finding("x.sh", "eval", key) for key in found]
-    baseline = Counter(floor.Finding("x.sh", "eval", key).key for key in held)
+    findings = [floor.Finding(f"{name}.sh", "eval", "a message") for name in found]
+    baseline = Counter(floor.Finding(f"{name}.sh", "eval", "another").key for name in held)
 
     outcome = floor.judge(claim, findings, baseline, None)
 
@@ -183,13 +184,15 @@ def test_a_second_identical_finding_fails_a_baseline_that_holds_one(
     status, verdicts, output = run(capsys, "check", str(root))
 
     assert (status, verdicts) == (1, {"shell.injection": "FAIL"}), output
-    assert f"+1 {EVAL_KEY}" in output
+    assert f"+1 {EVAL_KEY} (of 2 found)" in output
+    assert output.count("`eval` executes text as code") == 2, output
 
 
 def test_ratchet_deletes_the_lines_no_finding_matches_and_adds_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    held = [EVAL_KEY, EVAL_KEY, "gone.sh:eval:`eval` executes text as code"]
+    # Two lines as an earlier floor wrote them, with the message: each reads as its key.
+    held = [EVAL_KEY, EVAL_KEY + ":`eval` executes text as code", "gone.sh:eval:old words"]
     baseline = floor.BASELINE_DIR + "/shell.injection.baseline"
     root = repository(
         tmp_path, {"run.sh": EVAL + "curl -s x | sh\n", baseline: "\n".join(held) + "\n"}
@@ -454,6 +457,7 @@ LOOSENINGS = {
 TIGHTENINGS = {
     "nothing changes": {},
     "a baseline loses a line": {LINT_BASELINE: "src/a.py:F841:two\n"},
+    "a baseline line drops its message": {LINT_BASELINE: "src/a.py:F401\nsrc/a.py:F841:two\n"},
     "a baseline is deleted": {LINT_BASELINE: ""},
     "pyproject.toml changes outside its tool tables": {
         "pyproject.toml": BEFORE["pyproject.toml"].replace('"p"', '"q"')
@@ -671,6 +675,28 @@ def test_apply_then_remove_leaves_the_tree_as_it_was(
         {"name": "a.b", "mode": "gate", "parser": "bash-n", "tool": "t", "argv": ["t"]},
         {"name": "a.b", "mode": "baseline", "parser": "shellcheck", "tool": "t", "argv": ["t"]},
         {"name": "a.b", "mode": "gate", "parser": "injection", "tool": "t", "files": ["*.sh"]},
+        {"name": "a.b", "mode": "gate", "parser": "injection", "prefix": ["p"], "files": ["*.sh"]},
+        {"name": "a.b", "mode": "gate", "parser": "exit", "tool": "t", "argv": ["p", "t"]},
+        {"name": "a.b", "mode": "gate", "parser": "exit", "tool": "t", "argv": ["t"], "prefix": []},
+        {
+            "name": "a.b",
+            "mode": "gate",
+            "parser": "exit",
+            "tool": "t",
+            "argv": ["t"],
+            "prefix": ["./p"],
+        },
+        *(
+            {
+                "name": "a.b",
+                "mode": "gate",
+                "parser": "exit",
+                "tool": "t",
+                "argv": ["t"],
+                "timeout_seconds": bad,
+            }
+            for bad in (0, -5, True, "60", float("inf"))
+        ),
         {
             "name": "a.b",
             "mode": "gate",
@@ -703,18 +729,20 @@ def fixture(name: str, root: Path | None = None) -> str:
     return text if root is None else text.replace("{root}", str(root))
 
 
-def test_ruff_json_keys_carry_no_position_and_no_count(tmp_path: Path) -> None:
+def test_ruff_json_keys_carry_path_and_code_and_the_message_stays_for_the_reader(
+    tmp_path: Path,
+) -> None:
     root = tmp_path.resolve()
 
     findings = floor.parse_ruff(
         1, "warning: a notice ruff printed first\n" + fixture("ruff-check.json", root), root
     )
 
-    assert [finding.key for finding in findings] == [
-        "pkg/core.py:F401:`os` imported but unused",
-        "pkg/core.py:F401:`sys` imported but unused",
-        "pkg/core.py:C901:`pick` is too complex",
-        "pkg/core.py:F811:Redefinition of unused `pick` from line N: `pick` redefined here",
+    assert [(finding.key, finding.message) for finding in findings] == [
+        ("pkg/core.py:F401", "`os` imported but unused"),
+        ("pkg/core.py:F401", "`sys` imported but unused"),
+        ("pkg/core.py:C901", "`pick` is too complex (3 > 2)"),
+        ("pkg/core.py:F811", "Redefinition of unused `pick` from line 5: `pick` redefined here"),
     ]
     assert [finding.where for finding in findings] == ["1:8", "2:8", "5:5", "13:5"]
 
@@ -734,9 +762,7 @@ def test_a_file_ruff_format_cannot_parse_is_named_by_ruffs_own_error(tmp_path: P
 def test_ruff_format_names_each_file_it_would_rewrite(tmp_path: Path) -> None:
     findings = floor.parse_ruff_format(1, fixture("ruff-format.txt"), tmp_path)
 
-    assert [finding.key for finding in findings] == [
-        "pkg/style.py:unformatted:the formatter would rewrite this file"
-    ]
+    assert [finding.key for finding in findings] == ["pkg/style.py:unformatted"]
     assert floor.parse_ruff_format(0, fixture("ruff-format-clean.txt"), tmp_path) == []
     with pytest.raises(floor.Unreadable):
         floor.parse_ruff_format(2, "error: Failed to parse pkg/x.py", tmp_path)
@@ -745,12 +771,17 @@ def test_ruff_format_names_each_file_it_would_rewrite(tmp_path: Path) -> None:
 def test_mypy_keys_count_errors_not_notes(tmp_path: Path) -> None:
     findings = floor.parse_mypy(1, fixture("mypy.jsonl"), tmp_path)
 
-    assert [finding.key for finding in findings] == [
-        'pkg/core.py:no-redef:Name "pick" already defined on line N',
-        'pkg/core.py:arg-type:Argument 2 to "pick" has incompatible type "str"; expected "int"',
-        'pkg/core.py:assignment:Incompatible types in assignment (expression has type "str", '
-        'variable has type "int")',
-        'pkg/notes.py:import-untyped:Library stubs not installed for "yaml"',
+    assert [(finding.key, finding.message) for finding in findings] == [
+        ("pkg/core.py:no-redef", 'Name "pick" already defined on line 5'),
+        (
+            "pkg/core.py:arg-type",
+            'Argument 2 to "pick" has incompatible type "str"; expected "int"',
+        ),
+        (
+            "pkg/core.py:assignment",
+            'Incompatible types in assignment (expression has type "str", variable has type "int")',
+        ),
+        ("pkg/notes.py:import-untyped", 'Library stubs not installed for "yaml"'),
     ]
     assert floor.parse_mypy(0, "\n", tmp_path) == []
     for status, text in ((2, fixture("mypy.jsonl")), (1, "\n"), (2, "mypy: error: bad config")):
@@ -761,8 +792,8 @@ def test_mypy_keys_count_errors_not_notes(tmp_path: Path) -> None:
 def test_bash_n_reads_the_first_message_of_a_broken_script() -> None:
     findings = floor.parse_per_file("bash-n", 2, fixture("bash-n.txt"), "scripts/broken.sh")
 
-    assert [(finding.key, finding.where) for finding in findings] == [
-        ("scripts/broken.sh:syntax:syntax error near unexpected token `fi'", "4")
+    assert [(finding.key, finding.message, finding.where) for finding in findings] == [
+        ("scripts/broken.sh:syntax", "syntax error near unexpected token `fi'", "4")
     ]
     assert floor.parse_per_file("bash-n", 0, "", "scripts/ok.sh") == []
 
@@ -803,26 +834,18 @@ def test_gitleaks_reads_path_line_and_rule_from_a_stated_report(tmp_path: Path) 
             floor.parse_gitleaks(status, text, tmp_path, None)
 
 
-def test_shellcheck_keys_carry_its_code_and_message_not_the_position() -> None:
+def test_shellcheck_keys_carry_its_code_not_the_message_or_the_position() -> None:
     findings = floor.parse_per_file("shellcheck", 1, fixture("shellcheck.json"), "scripts/lint.sh")
 
-    quote = "Double quote to prevent globbing and word splitting."
     assert [(finding.key, finding.where) for finding in findings] == [
-        (f"scripts/lint.sh:SC2086:{quote}", "2:6"),
-        ("scripts/lint.sh:SC2045:Iterating over ls output is fragile. Use globs.", "3:10"),
-        (
-            "scripts/lint.sh:SC2035:Use ./*glob* or -- *glob* so names with dashes won't become"
-            " options.",
-            "3:15",
-        ),
-        (f"scripts/lint.sh:SC2086:{quote}", "4:7"),
-        ("scripts/lint.sh:SC2162:read without -r will mangle backslashes.", "6:1"),
-        (
-            "scripts/lint.sh:SC2034:name appears unused. Verify use (or export if used"
-            " externally).",
-            "6:6",
-        ),
+        ("scripts/lint.sh:SC2086", "2:6"),
+        ("scripts/lint.sh:SC2045", "3:10"),
+        ("scripts/lint.sh:SC2035", "3:15"),
+        ("scripts/lint.sh:SC2086", "4:7"),
+        ("scripts/lint.sh:SC2162", "6:1"),
+        ("scripts/lint.sh:SC2034", "6:6"),
     ]
+    assert findings[0].message == "Double quote to prevent globbing and word splitting."
     assert floor.parse_per_file("shellcheck", 0, '{"comments":[]}\n', "ok.sh") == []
 
 
@@ -872,7 +895,7 @@ def test_the_real_ruff_fails_format_and_new_lint_then_passes_on_a_recorded_basel
     status, verdicts, output = run(capsys, "check", str(root))
 
     assert (status, verdicts) == (1, {"python.format": "FAIL", "python.lint": "FAIL"}), output
-    assert "+1 a.py:F401:`os` imported but unused" in output
+    assert "+1 a.py:F401\n    1:8 `os` imported but unused" in output
 
     assert run(capsys, "baseline", str(root), "--accept")[0] == 0
     (root / "a.py").write_text("import os\n\nx = 1\n", encoding="utf-8")
@@ -940,7 +963,7 @@ def test_apply_records_each_claims_findings_so_check_passes_and_a_new_one_fails(
         status, verdicts, output = run(capsys, "check", str(root), *extra)
 
         assert (status, verdicts["shell.injection"]) == (1, "FAIL"), output
-        assert "+1 run.sh:pipe-to-shell:" in output
+        assert "+1 run.sh:pipe-to-shell\n" in output
     assert verdicts["loosening"] == "PASS", output
 
 
@@ -968,9 +991,12 @@ def test_a_claim_whose_tool_is_missing_stays_as_proposed_and_reads_unverified(
     )
 
 
-def test_apply_leaves_out_a_claim_whose_tool_cannot_read_the_project_and_says_why(
+def test_a_claim_whose_files_match_nothing_passes_on_no_file_at_apply_and_at_check(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """A run that deletes the last script it reads leaves the claim nothing to hold: it found
+    nothing new, so it passes, and once a matching file is tracked it gates that file."""
+
     root = repository(tmp_path, {"run.sh": EVAL})
     nothing = {**shipped("shell.syntax", files=["*.bash"]), "name": "shell.other"}
     source = proposal(tmp_path, shipped("shell.injection"), nothing)
@@ -978,10 +1004,14 @@ def test_apply_leaves_out_a_claim_whose_tool_cannot_read_the_project_and_says_wh
     status, _, output = run(capsys, "apply", str(root), "--floor", str(source), "--accept")
 
     assert status == 0, output
-    assert modes(root) == {"shell.injection": "baseline"}
-    assert "shell.other: left out (no tracked file matches *.bash); once that is fixed" in output
-    assert f"apply {source} again" in output
-    assert run(capsys, "check", str(root))[:2] == (0, {"shell.injection": "PASS"})
+    assert modes(root) == {"shell.injection": "baseline", "shell.other": "gate"}
+    assert "shell.other: passes" in output
+    status, verdicts, output = run(capsys, "check", str(root))
+    assert (status, verdicts) == (0, {"shell.injection": "PASS", "shell.other": "PASS"}), output
+    assert "PASS shell.other (0 findings in 0 files)" in output
+
+    commit(root, "a script arrives", {"new.bash": SYNTAX_ERROR})
+    assert run(capsys, "check", str(root))[1]["shell.other"] == "FAIL"
 
 
 def test_apply_leaves_out_the_types_claim_when_mypy_stops_at_a_blocking_error(
@@ -1147,7 +1177,7 @@ def test_apply_fits_the_real_ruff_and_mypy_and_a_new_lint_finding_fails(
     status, verdicts, output = run(capsys, "check", str(root))
 
     assert (status, verdicts["python.lint"]) == (1, "FAIL"), output
-    assert "+1 a.py:F401:`sys` imported but unused" in output
+    assert "+1 a.py:F401 (of 2 found)" in output and "`sys` imported but unused" in output
     assert (verdicts["python.format"], verdicts["python.types"]) == ("PASS", "PASS"), output
 
 
@@ -1167,7 +1197,8 @@ def test_apply_fits_the_real_shellcheck_and_a_new_warning_fails(
     status, verdicts, output = run(capsys, "check", str(root))
 
     assert (status, verdicts) == (1, {"shell.lint": "FAIL"}), output
-    assert "+1 run.sh:SC2086:Double quote to prevent globbing" in output
+    assert "+1 run.sh:SC2086 (of 2 found)" in output
+    assert "3:6 Double quote to prevent globbing" in output
 
 
 def test_provision_prints_shellchecks_install_command_and_downloads_nothing(
@@ -1389,6 +1420,43 @@ FLOOR_CHANGES = {
         {floor.FLOOR_PATH: floor_text(shipped("shell.injection"))},
         "FAIL",
     ),
+    "a claim's timeout_seconds is set": (
+        {floor.FLOOR_PATH: floor_text(shipped("shell.syntax"))},
+        {floor.FLOOR_PATH: floor_text(shipped("shell.syntax", timeout_seconds=1800))},
+        "PASS",
+    ),
+    "a claim is dropped once the last file it reads is deleted": (
+        {floor.FLOOR_PATH: floor_text(shipped("shell.syntax"), shipped("shell.injection"))},
+        {floor.FLOOR_PATH: floor_text(shipped("shell.injection")), "run.sh": ""},
+        "PASS",
+    ),
+    "a renamed file carries its baselined finding, an earlier floor's line included": (
+        {
+            floor.FLOOR_PATH: floor_text(shipped("shell.injection", mode="baseline")),
+            "run.sh": EVAL,
+            HELD: "run.sh:eval:`eval` executes text as code\n",
+        },
+        {"run.sh": "", "bin/run.sh": EVAL, HELD: "bin/run.sh:eval\n"},
+        "PASS",
+    ),
+    "a renamed file's baseline line comes back with another code": (
+        {
+            floor.FLOOR_PATH: floor_text(shipped("shell.injection", mode="baseline")),
+            "run.sh": EVAL,
+            HELD: "run.sh:eval\n",
+        },
+        {"run.sh": "", "bin/run.sh": EVAL, HELD: "bin/run.sh:pipe-to-shell\n"},
+        "FAIL",
+    ),
+    "a new file's finding joins the baseline": (
+        {
+            floor.FLOOR_PATH: floor_text(shipped("shell.injection", mode="baseline")),
+            "run.sh": EVAL,
+            HELD: "run.sh:eval\n",
+        },
+        {"other.sh": "#!/bin/sh\n" + EVAL, HELD: "other.sh:eval\nrun.sh:eval\n"},
+        "FAIL",
+    ),
 }
 
 
@@ -1409,3 +1477,255 @@ def test_what_an_adoption_record_or_a_mode_change_loosens(
     output = run(capsys, "check", str(root), "--base", base)[2]
 
     assert f"{verdict} loosening" in output, output
+
+
+# --- No limit the project did not set: time, output, a container prefix -------------------
+
+
+def test_no_tool_probe_or_git_read_has_a_time_limit_unless_the_claim_sets_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", os.pathsep.join([str(probe(tmp_path)), os.environ["PATH"]]))
+    root = repository(tmp_path, {"a.txt": "x\n"})
+    install(root, probe_claim(min_version="1.2"))
+    base = commit(root, "floor", {})
+    seen: list[float | None] = []
+    real: Any = floor.validation._execute
+
+    def spy(argv: list[str], cwd: Path, seconds: float | None, env: Any = None) -> Any:
+        seen.append(seconds)
+        return real(argv, cwd, seconds, env)
+
+    monkeypatch.setattr(floor.validation, "_execute", spy)
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+
+    assert (status, verdicts) == (0, {"project.probe": "PASS", "loosening": "PASS"}), output
+    assert len(seen) > 3 and set(seen) == {None}, seen
+
+
+def test_a_claim_that_runs_past_its_own_timeout_seconds_is_unverified(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "floor-slow").write_text("#!/bin/sh\nsleep 5\n", encoding="utf-8")
+    (tools / "floor-slow").chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
+    root = repository(tmp_path, {"a.txt": "x\n"})
+    slow = {"tool": "floor-slow", "argv": ["floor-slow"], "timeout_seconds": 0.2}
+    install(root, probe_claim(**slow))
+
+    status, verdicts, output = run(capsys, "check", str(root))
+
+    assert (status, verdicts) == (1, {"project.probe": "UNVERIFIED"}), output
+    assert "floor-slow did not finish in its timeout_seconds, 0.2" in output
+
+
+def test_every_new_finding_is_printed() -> None:
+    gate = floor.parse_claim(shipped("shell.injection"))
+    held = floor.parse_claim(shipped("shell.injection", mode="baseline"))
+    findings = [
+        floor.Finding(f"s{n}.sh", "eval", "`eval` executes text as code") for n in range(45)
+    ]
+
+    assert len(floor.judge(gate, findings, Counter(), 45).details) == 45
+    listed = floor.judge(held, findings, Counter(), 45).details
+    assert sum(line.startswith("+1 ") for line in listed) == 45
+    assert not any("more" in line for line in listed)
+
+
+def test_a_baselined_finding_stays_baselined_when_the_tool_rewords_its_message() -> None:
+    claim = floor.parse_claim(shipped("python.lint"))
+    held = floor._lines("src/a.py:F401:`os` imported but unused\n")
+
+    outcome = floor.judge(claim, [floor.Finding("src/a.py", "F401", "`os` is unused")], held, None)
+
+    assert (outcome.status, outcome.summary) == ("PASS", "0 new, 1 baselined")
+
+
+# --- The range starts where the floor began ---------------------------------------------------
+
+
+def adopted_on_the_branch(tmp_path: Path, floor_at_fork: bool) -> tuple[Path, str, str]:
+    """A fork, a commit that adds a noqa, then a floor adopted at that commit: the repository,
+    the fork and the adoption commit. With `floor_at_fork`, the fork already holds a floor
+    without an adoption record."""
+
+    root = repository(tmp_path, BEFORE)
+    if floor_at_fork:
+        install(root, shipped("shell.injection"))
+    fork = commit(root, "fork", {})
+    adopted = commit(root, "before the floor", LOOSENINGS["a noqa is added"])
+    record = {"commit": adopted, "on": "2026-01-15"}
+    commit(
+        root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("shell.injection"), adopted=record)}
+    )
+    commit(root, "work", {"src/c.py": "z = 3\n"})
+    return root, fork, adopted
+
+
+def test_commits_from_before_the_floor_was_adopted_never_fail_the_loosening_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, fork, adopted = adopted_on_the_branch(tmp_path, floor_at_fork=False)
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", fork)
+
+    assert (status, verdicts["loosening"]) == (0, "PASS"), output
+    assert f"none in {adopted[:12]}..HEAD, the commits since the floor's adoption" in output
+
+    commit(root, "widen", {"src/d.py": SPACED + comment("noqa: E501") + "\n"})
+    assert run(capsys, "check", str(root), "--base", fork)[1]["loosening"] == "FAIL"
+
+
+def test_an_adoption_record_added_to_a_floor_the_fork_holds_does_not_move_the_range(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Otherwise a loosening, then a record naming its commit, would hide the loosening."""
+
+    root, fork, _ = adopted_on_the_branch(tmp_path, floor_at_fork=True)
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", fork)
+
+    assert (status, verdicts["loosening"]) == (1, "FAIL"), output
+    assert "src/b.py adds" in output
+
+
+RECORDING_GITLEAKS = """#!/bin/sh
+[ "$1" = version ] && { echo 8.21.2; exit 0; }
+here=$(dirname "$0")
+echo "$@" > "$here/argv"
+find . -type f | sort > "$here/listing"
+while [ $# -gt 0 ]; do [ "$1" = --report-path ] && report=$2; shift; done
+printf '[]' > "$report"
+exit 0
+"""
+
+
+def recording_gitleaks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "gitleaks").write_text(RECORDING_GITLEAKS, encoding="utf-8")
+    (tools / "gitleaks").chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
+    return tools
+
+
+def test_the_secrets_range_starts_at_the_adoption_when_the_floor_was_adopted_on_the_branch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools = recording_gitleaks(tmp_path, monkeypatch)
+    root = repository(tmp_path, {"app.py": "x = 1\n"})
+    fork = commit(root, "fork", {})
+    adopted = commit(root, "before the floor", {"app.py": "x = 2\n"})
+    record = {"commit": adopted, "on": "2026-01-15"}
+    commit(root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("python.secrets"), adopted=record)})
+
+    verdicts = run(capsys, "check", str(root), "--base", fork)[1]
+
+    assert verdicts == {"python.secrets": "PASS", "loosening": "PASS"}
+    assert (tools / "argv").read_text(encoding="utf-8").split()[1] == f"--log-opts={adopted}..HEAD"
+
+
+def test_secrets_without_a_base_or_an_adoption_read_only_the_files_git_tracks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """gitleaks scans a directory whole, so it runs where only tracked files are: an ignored
+    environment or secrets file is never read. Its own allowlist comes along, tracked or not."""
+
+    tools = recording_gitleaks(tmp_path, monkeypatch)
+    root = repository(tmp_path, {"app.py": "x = 1\n", ".gitignore": ".venv/\n.env\n"})
+    (root / ".venv").mkdir()
+    (root / ".venv" / "lib.py").write_text("token = 1\n", encoding="utf-8")
+    (root / ".env").write_text("token = 1\n", encoding="utf-8")
+    (root / ".gitleaksignore").write_text("app.py:generic-api-key:1\n", encoding="utf-8")
+    install(root, shipped("python.secrets"))
+
+    verdicts = run(capsys, "check", str(root), "--claim", "python.secrets")[1]
+
+    assert verdicts == {"python.secrets": "PASS"}
+    listing = (tools / "listing").read_text(encoding="utf-8").split()
+    assert listing == ["./.gitignore", "./.gitleaksignore", "./app.py"]
+
+
+# --- A claim's tool may run through a prefix: a container, uv run, poetry run ---------------
+
+WRAP = """#!/bin/sh
+echo "$@" >> "$(dirname "$0")/wrapped"
+shift
+PATH="{inside}:$PATH" exec "$@"
+"""
+
+
+def wrapped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """`floor-wrap BOX TOOL ...` runs TOOL where only it can find it, as a container would:
+    `floor-probe` is in a directory PATH does not name."""
+
+    inside = probe(tmp_path / "box")
+    tools = tmp_path / "host"
+    tools.mkdir()
+    (tools / "floor-wrap").write_text(WRAP.format(inside=inside), encoding="utf-8")
+    (tools / "floor-wrap").chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
+    return tools
+
+
+def test_a_prefixed_claim_asks_its_version_and_runs_its_tool_through_the_prefix(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "box").mkdir()
+    tools = wrapped(tmp_path, monkeypatch)
+    root = repository(tmp_path, {"a.txt": "x\n"})
+    install(root, probe_claim(prefix=["floor-wrap", "app"], min_version="1.2"))
+
+    status, verdicts, output = run(capsys, "check", str(root))
+
+    assert (status, verdicts) == (0, {"project.probe": "PASS"}), output
+    calls = (tools / "wrapped").read_text(encoding="utf-8").splitlines()
+    assert calls == ["app floor-probe --version", "app floor-probe"]
+
+
+@pytest.mark.parametrize(
+    ("changes", "reason"),
+    [
+        ({"prefix": ["floor-absent", "app"]}, "floor-absent is not on PATH"),
+        (
+            {"prefix": ["floor-wrap", "app"], "tool": "floor-gone", "argv": ["floor-gone"]},
+            "floor-gone did not report a version through floor-wrap app",
+        ),
+        (
+            {"prefix": ["floor-wrap", "app"], "min_version": "1.10"},
+            "floor-probe through floor-wrap app is 1.2, older than 1.10",
+        ),
+    ],
+)
+def test_a_prefixed_claim_whose_prefix_or_tool_is_missing_or_old_is_unverified(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    changes: dict[str, Any],
+    reason: str,
+) -> None:
+    (tmp_path / "box").mkdir()
+    wrapped(tmp_path, monkeypatch)
+    root = repository(tmp_path, {"a.txt": "x\n"})
+    install(root, probe_claim(**{"min_version": "1.2", **changes}))
+
+    status, verdicts, output = run(capsys, "check", str(root))
+
+    assert (status, verdicts) == (1, {"project.probe": "UNVERIFIED"}), output
+    assert reason in output
+
+
+def test_provision_says_a_prefixed_tool_is_installed_where_its_prefix_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {"a.py": "x = 1\n"})
+    install(root, shipped("python.types", prefix=["docker", "compose", "run", "--rm", "app"]))
+
+    status, _, output = run(capsys, "provision", str(root))
+
+    assert status == 0
+    assert "mypy runs through docker compose run --rm app: install it there" in output
+    assert "pip" not in output

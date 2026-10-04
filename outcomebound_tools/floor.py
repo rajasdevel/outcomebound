@@ -3,13 +3,15 @@ only what is new.
 
 What this module decides: the claims each stack is offered (`RECIPES`), what each tool's
 output means (the parsers), when a finding is new (a baseline is a sorted multiset of
-`path:code:message` lines, with no position and no count), how `apply` fits a floor to a
+`path:code` lines, with no message, no position and no count), how `apply` fits a floor to a
 project that already has findings (`fit`: each finding recorded, never a secret, and the
 commit it was adopted at) and when a change loosens the floor (`loosening`). Every tool runs
 from the project root through `validation._execute`, so it finds the project's own config:
 nothing here renders, names or shadows a config file, so every rule a check applies is the
 project's own. Tools come from PATH's absolute entries only, so a checkout cannot supply its
-own.
+own; a claim's `prefix` (`uv run`, `docker compose run --rm app`) is found there too, and its
+tool runs where the prefix puts it. No run has a time limit unless its claim sets
+`timeout_seconds`.
 
 What it does not decide: which rules hold. Those live in the project's `ruff.toml`,
 `mypy.ini`, `pyproject.toml`, `setup.cfg`, `.gitleaks.toml` and `.shellcheckrc`, which the
@@ -22,6 +24,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import os
 import re
 import shutil
@@ -41,10 +44,6 @@ BASELINE_DIR = ".outcomebound/floor"
 FORMAT_VERSION = 1
 PASS, FAIL, UNVERIFIED = "PASS", "FAIL", "UNVERIFIED"
 GATE, BASELINE = "gate", "baseline"
-RUN_SECONDS = 900.0
-GIT_SECONDS = 120.0
-PROBE_SECONDS = 60.0
-SHOWN = 20
 
 # --- The shipped recipes: python and shell ------------------------------------------------
 #
@@ -124,7 +123,18 @@ PARSER_NAMES = (
 )
 PER_FILE_PARSERS = ("bash-n", "shellcheck", "exit")
 CLAIM_FIELDS = frozenset(
-    {"name", "mode", "tool", "min_version", "argv", "argv_without_base", "files", "parser"}
+    {
+        "name",
+        "mode",
+        "tool",
+        "min_version",
+        "prefix",
+        "argv",
+        "argv_without_base",
+        "files",
+        "parser",
+        "timeout_seconds",
+    }
 )
 NAME = re.compile(r"[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*")
 TOOL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
@@ -158,6 +168,8 @@ class Claim:
     argv_without_base: tuple[str, ...] | None = None
     files: tuple[str, ...] = ()
     min_version: str | None = None
+    prefix: tuple[str, ...] = ()
+    timeout_seconds: float | None = None
 
     @property
     def baseline_path(self) -> str:
@@ -171,12 +183,14 @@ class Claim:
             "mode": self.mode,
             "tool": self.tool,
             "min_version": self.min_version,
+            "prefix": list(self.prefix),
             "argv": list(self.argv),
             "argv_without_base": None
             if self.argv_without_base is None
             else [*self.argv_without_base],
             "files": list(self.files),
             "parser": self.parser,
+            "timeout_seconds": self.timeout_seconds,
         }
         return {key: value for key, value in values.items() if value not in (None, [])}
 
@@ -240,6 +254,15 @@ def _words(raw: dict[str, Any], key: str, where: str) -> tuple[str, ...] | None:
     return tuple(value)
 
 
+def _seconds(raw: dict[str, Any], where: str) -> float | None:
+    value = raw.get("timeout_seconds")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value < math.inf:
+        raise FloorError(f"{where}: timeout_seconds {value!r} is not a positive number")
+    return value
+
+
 def _ranged(argv: Sequence[str]) -> bool:
     return any("{range}" in part for part in argv)
 
@@ -248,13 +271,16 @@ def _incoherent(claim: Claim) -> str | None:
     """Why a claim cannot run as written, or None."""
 
     if claim.parser == "injection":
-        if claim.files and not (claim.tool or claim.argv or claim.argv_without_base):
+        engine_only = not (claim.tool or claim.argv or claim.argv_without_base or claim.prefix)
+        if claim.files and engine_only:
             return None
-        return "the injection scan runs in the engine: give it files, and no tool or argv"
+        return "the injection scan runs in the engine: give it files, and no tool, prefix or argv"
     if claim.tool is None or not claim.argv:
         return "give it a tool and an argv"
     if any(argv[0] != claim.tool for argv in (claim.argv, claim.argv_without_base) if argv):
-        return f"each argv starts with its tool, {claim.tool}"
+        return f"each argv starts with its tool, {claim.tool}; a command before it is its prefix"
+    if claim.prefix and not TOOL.fullmatch(claim.prefix[0]):
+        return f"a prefix starts with a command PATH finds, not {claim.prefix[0]!r}"
     each = "{file}" in claim.argv
     if each != bool(claim.files) or (each and claim.parser not in PER_FILE_PARSERS):
         return "{file} in argv, files and a per-file parser (bash-n, shellcheck, exit) go together"
@@ -288,6 +314,8 @@ def parse_claim(raw: object) -> Claim:
         argv_without_base=_words(raw, "argv_without_base", where),
         files=_words(raw, "files", where) or (),
         min_version=_field(raw, "min_version", where, DOTTED),
+        prefix=_words(raw, "prefix", where) or (),
+        timeout_seconds=_seconds(raw, where),
     )
     problem = _incoherent(claim)
     if problem is not None:
@@ -372,7 +400,7 @@ def _git(root: Path, *arguments: str) -> bytes:
     environment = git_environment({**inherited, "GIT_OPTIONAL_LOCKS": "0"})
     try:
         status, output, _ = validation._execute(
-            ["git", *GIT_READ_CONFIGURATION, *arguments], root, GIT_SECONDS, environment
+            ["git", *GIT_READ_CONFIGURATION, *arguments], root, None, environment
         )
     except OSError as error:
         raise FloorError(f"git could not run: {error}") from error
@@ -426,10 +454,21 @@ def _older(found: tuple[int, ...], least: tuple[int, ...]) -> bool:
     return found + (0,) * (width - len(found)) < least + (0,) * (width - len(least))
 
 
-def _version(executable: str, tool: str, root: Path) -> tuple[int, ...] | None:
-    asked = [executable, "version" if tool == "gitleaks" else "--version"]
+def _command(claim: Claim, executable: str, argv: Sequence[str]) -> list[str]:
+    """What runs: the tool found on PATH in place of `argv[0]`, or, with a prefix, the prefix's
+    command found on PATH, then the rest of the prefix and the whole argv, so the tool is the
+    one where the prefix runs it."""
+
+    if claim.prefix:
+        return [executable, *claim.prefix[1:], *argv]
+    return [executable, *argv[1:]]
+
+
+def _version(claim: Claim, executable: str, root: Path) -> tuple[int, ...] | None:
+    tool = claim.tool or ""
+    asked = _command(claim, executable, [tool, "version" if tool == "gitleaks" else "--version"])
     try:
-        status, output, _ = validation._execute(asked, root, PROBE_SECONDS, None)
+        status, output, _ = validation._execute(asked, root, claim.timeout_seconds, None)
     except OSError:
         return None
     found = VERSION_TEXT.search(output.decode("utf-8", "replace"))
@@ -437,30 +476,36 @@ def _version(executable: str, tool: str, root: Path) -> tuple[int, ...] | None:
 
 
 def _ready(claim: Claim, root: Path) -> str:
-    """The claim's tool as an absolute path, or `Unreadable` when it is missing or old."""
+    """The command the claim starts with (its prefix's, or else its tool) as an absolute path,
+    or `Missing` when it is not on PATH, or the tool, through its prefix, is old or silent."""
 
     tool = claim.tool or ""
-    executable = _executable(tool)
+    first = claim.prefix[0] if claim.prefix else tool
+    executable = _executable(first)
     if executable is None:
-        raise Missing(f"{tool} is not on PATH")
+        raise Missing(f"{first} is not on PATH")
     if claim.min_version is not None:
-        found = _version(executable, tool, root)
+        found = _version(claim, executable, root)
+        through = f" through {' '.join(claim.prefix)}" if claim.prefix else ""
         if found is None:
-            raise Missing(f"{tool} did not report a version")
+            raise Missing(f"{tool} did not report a version{through}")
         if _older(found, _numbers(claim.min_version)):
             shown = ".".join(str(part) for part in found)
-            raise Missing(f"{tool} {shown} is older than {claim.min_version}")
+            raise Missing(f"{tool}{through} is {shown}, older than {claim.min_version}")
     return executable
 
 
-def _run(argv: Sequence[str], root: Path) -> tuple[int, str]:
-    tool = Path(argv[0]).name
+def _run(claim: Claim, argv: Sequence[str], cwd: Path) -> tuple[int, str]:
+    """Run `argv`, waiting for it unless the claim sets `timeout_seconds`."""
+
+    tool = claim.tool or Path(argv[0]).name
+    seconds = claim.timeout_seconds
     try:
-        status, output, timed_out = validation._execute(list(argv), root, RUN_SECONDS, None)
+        status, output, timed_out = validation._execute(list(argv), cwd, seconds, None)
     except OSError as error:
         raise Unreadable(f"{tool} could not run: {error}") from error
     if timed_out or status is None:
-        raise Unreadable(f"{tool} did not finish in {RUN_SECONDS:.0f} s")
+        raise Unreadable(f"{tool} did not finish in its timeout_seconds, {seconds}")
     return status, output.decode("utf-8", "replace")
 
 
@@ -476,17 +521,20 @@ class Finding:
 
     @property
     def key(self) -> str:
-        """The finding as a baseline line holds it: no line, no column, no count."""
+        """The finding as a baseline line holds it: its path and its rule's code. No message,
+        which a tool rewords between releases and which quotes the project's own names; no
+        line, no column, no count."""
 
-        return f"{self.path}:{self.code}:{self.message}"
+        return f"{self.path}:{self.code}"
 
     def shown(self) -> str:
         place = ":".join(part for part in (self.path, self.where) if part)
         return f"{place}: {self.code} {self.message}" if place else f"{self.code} {self.message}"
 
 
-MEASUREMENT = re.compile(r"\s*\(\d+ > \d+\)")
-POSITION = re.compile(r"\b(lines?|columns?|col)\s+\d+(?:\s*[-:,]\s*\d+)?", re.IGNORECASE)
+# A baseline line: the path, then the first `:code` that ends the line or opens a message. An
+# earlier floor wrote `path:code:message`; it reads as `path:code`.
+KEY = re.compile(r"(?P<path>.*?):(?P<code>[A-Za-z][A-Za-z0-9_-]*)(?::.*)?")
 SPACE = re.compile(r"\s+")
 REFORMAT = re.compile(r"^(?:Would reformat: |\s*--> )(?P<path>.+?)(?::\d+:\d+)?$", re.MULTILINE)
 REFORMAT_COUNT = re.compile(r"^(\d+) files? would be reformatted", re.MULTILINE)
@@ -513,10 +561,8 @@ INJECTION = (
 
 
 def _message(text: str) -> str:
-    """A tool's message as a key holds it: one line, `line N` for a position, no count."""
+    """A tool's message on one line."""
 
-    text = MEASUREMENT.sub("", text)
-    text = POSITION.sub(lambda found: f"{found.group(1)} N", text)
     return SPACE.sub(" ", text).strip()
 
 
@@ -755,24 +801,50 @@ def _argv(claim: Claim, executable: str, context: Context, report: str) -> list[
         argv = claim.argv_without_base
     elif _ranged(argv) and start is None:
         raise Unreadable(context.base_problem or "no base commit")
+    elif _ranged(argv) and start is not None:
+        start = _since(context.root, start, context.adopted)
     span = f"{start}..HEAD"
-    return [
-        executable,
-        *(part.replace("{range}", span).replace("{report}", report) for part in argv[1:]),
-    ]
+    parts = [part.replace("{range}", span).replace("{report}", report) for part in argv]
+    return _command(claim, executable, parts)
+
+
+GITLEAKS_FILES = (".gitleaks.toml", ".gitleaksignore")
+
+
+def _mirror(root: Path, paths: Iterable[str], into: Path) -> None:
+    """The tracked regular files `paths` under `into`, at the same relative paths, linked where
+    the file system allows and copied where it does not; and gitleaks' own config and
+    allowlist from the root, tracked or not, since gitleaks reads them from where it runs."""
+
+    for path in {*paths, *(name for name in GITLEAKS_FILES if (root / name).is_file())}:
+        source = root / path
+        if not source.is_file() or source.is_symlink():
+            continue
+        target = into / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.link(source, target)
+        except OSError:
+            shutil.copyfile(source, target)
 
 
 def _secrets(claim: Claim, executable: str, context: Context) -> list[Finding]:
     """gitleaks over `<base>..HEAD`, or without a base over the commits since adoption, or
-    without either over the tracked files alone."""
+    without either over the tracked files alone: gitleaks scans a directory whole, ignored
+    folders included, so it runs in a scratch copy that holds only the files Git tracks."""
 
     working_tree = context.base is None and context.adopted is None and _ranged(claim.argv)
+    tracked = frozenset(_tracked(context.root, ())) if working_tree else None
     with tempfile.TemporaryDirectory(prefix="outcomebound-floor-") as scratch:
         report = Path(scratch) / "report.json"
-        status, _ = _run(_argv(claim, executable, context, str(report)), context.root)
+        where = context.root
+        if tracked is not None:
+            where = Path(os.path.realpath(scratch)) / "tracked"
+            where.mkdir()
+            _mirror(context.root, tracked, where)
+        status, _ = _run(claim, _argv(claim, executable, context, str(report)), where)
         text = report.read_text(encoding="utf-8", errors="replace") if report.is_file() else ""
-    tracked = frozenset(_tracked(context.root, ())) if working_tree else None
-    return parse_gitleaks(status, text, context.root, tracked)
+        return parse_gitleaks(status, text, where, tracked)
 
 
 def findings_for(claim: Claim, context: Context) -> tuple[list[Finding], int | None]:
@@ -781,30 +853,40 @@ def findings_for(claim: Claim, context: Context) -> tuple[list[Finding], int | N
     root = context.root
     scripts = _scripts(root, claim.files) if claim.files else []
     if claim.files and not scripts:
-        raise Unreadable(f"no tracked file matches {' '.join(claim.files)}")
+        # Nothing the claim reads is left, so nothing it holds can be new.
+        return [], 0
     if claim.parser == "injection":
         return scan_injection(root, scripts), len(scripts)
     executable = _ready(claim, root)
     if scripts:
         found = []
         for path in scripts:
-            argv = [executable, *(part.replace("{file}", path) for part in claim.argv[1:])]
-            found.extend(parse_per_file(claim.parser, *_run(argv, root), path))
+            parts = [part.replace("{file}", path) for part in claim.argv]
+            argv = _command(claim, executable, parts)
+            found.extend(parse_per_file(claim.parser, *_run(claim, argv, root), path))
         return found, len(scripts)
     if claim.parser == "gitleaks":
         return _secrets(claim, executable, context), None
     argv = _argv(claim, executable, context, "")
-    status, text = _run(argv, root)
+    status, text = _run(claim, argv, root)
     if claim.parser == "mypy" and status == 2 and MISSING_TARGET in text:
         # The project's config names no files, so its own `mypy` would stop here: `.` it is.
-        status, text = _run([*argv, "."], root)
+        status, text = _run(claim, [*argv, "."], root)
     return WHOLE_RUN_PARSERS[claim.parser](status, text, root), None
 
 
-def _lines(text: str | None) -> Counter[str]:
-    """A baseline's text as the multiset of its lines; a blank line holds nothing."""
+def _key(line: str) -> str:
+    """A baseline line as `path:code`; `path:code:message`, as an earlier floor wrote it,
+    reads the same."""
 
-    return Counter(line for line in (text or "").splitlines() if line.strip())
+    found = KEY.fullmatch(line.strip())
+    return line.strip() if found is None else f"{found['path']}:{found['code']}"
+
+
+def _lines(text: str | None) -> Counter[str]:
+    """A baseline's text as the multiset of its keys; a blank line holds nothing."""
+
+    return Counter(_key(line) for line in (text or "").splitlines() if line.strip())
 
 
 def read_baseline(root: Path, claim: Claim) -> Counter[str]:
@@ -820,16 +902,6 @@ def _plural(count: int, word: str) -> str:
     return f"{count} {word}{'' if count == 1 else 's'}"
 
 
-def _at(places: Sequence[str]) -> str:
-    known = [place for place in places if place]
-    return f"  at {', '.join(known)}" if known else ""
-
-
-def _listed(lines: Sequence[str]) -> tuple[str, ...]:
-    more = (f"... and {len(lines) - SHOWN} more",) if len(lines) > SHOWN else ()
-    return (*lines[:SHOWN], *more)
-
-
 def judge(
     claim: Claim, findings: Sequence[Finding], baseline: Counter[str], files: int | None
 ) -> Outcome:
@@ -837,7 +909,7 @@ def judge(
 
     read = "" if files is None else f" in {_plural(files, 'file')}"
     if claim.mode == GATE:
-        shown = _listed([finding.shown() for finding in findings])
+        shown = tuple(finding.shown() for finding in findings)
         summary = f"{_plural(len(findings), 'finding')}{read}"
         return Outcome(claim.name, FAIL if findings else PASS, summary, shown)
     found = Counter(finding.key for finding in findings)
@@ -845,11 +917,15 @@ def judge(
     summary = f"{sum(new.values())} new, {sum((found & baseline).values())} baselined{read}"
     if stale:
         summary += f", {sum(stale.values())} stale"
-    places: dict[str, list[str]] = {}
+    grouped: dict[str, list[Finding]] = {}
     for finding in findings:
-        places.setdefault(finding.key, []).append(finding.where)
-    added = [f"+{n} {key}{_at(places[key])}" for key, n in sorted(new.items())]
-    return Outcome(claim.name, FAIL if new else PASS, summary, _listed(added))
+        grouped.setdefault(finding.key, []).append(finding)
+    added: list[str] = []
+    for key, n in sorted(new.items()):
+        # A key's findings are alike to the baseline, so each is listed: any may be the new one.
+        added.append(f"+{n} {key}" + (f" (of {found[key]} found)" if found[key] > n else ""))
+        added.extend(f"  {' '.join(filter(None, (f.where, f.message)))}" for f in grouped[key])
+    return Outcome(claim.name, FAIL if new else PASS, summary, tuple(added))
 
 
 def evaluate(claim: Claim, context: Context) -> Outcome:
@@ -943,41 +1019,108 @@ def _floor_at(root: Path, sha: str | None) -> Floor | None:
 
 
 def _kept(before: Claim, after: Claim | None) -> bool:
-    """`after` is `before`, or `before` with its mode moved from baseline to gate."""
+    """`after` is `before`, or `before` with its mode moved from baseline to gate. Its
+    `timeout_seconds` may differ: a claim that times out reads UNVERIFIED, which fails too."""
 
+    if after is None:
+        return False
+    after = replace(after, timeout_seconds=before.timeout_seconds)
     return after == before or (before.mode == BASELINE and after == replace(before, mode=GATE))
 
 
-def _floor_change(before: Floor | None, after: Floor | None) -> str | None:
+def _floor_change(
+    before: Floor | None, after: Floor | None, emptied: Callable[[Claim], bool]
+) -> str | None:
     """A claim floor.json drops or changes, or an adoption record it changes or removes,
-    loosens the floor; a claim it adds, a baseline claim it makes a gate, and an adoption
-    record where there was none do not."""
+    loosens the floor; a claim it adds, a baseline claim it makes a gate, an adoption record
+    where there was none, and a claim it drops whose files are all gone (`emptied`) do not."""
 
     if before is None or after is None:
         return f"{FLOOR_PATH} changed"
     now = {claim.name: claim for claim in after.claims}
-    altered = sorted(c.name for c in before.claims if not _kept(c, now.get(c.name)))
+    altered = sorted(
+        c.name
+        for c in before.claims
+        if not _kept(c, now.get(c.name)) and not (c.name not in now and emptied(c))
+    )
     if before.adopted is not None and after.adopted != before.adopted:
         altered.append("its adoption record")
     return f"{FLOOR_PATH} drops or changes {', '.join(altered)}" if altered else None
 
 
+def _matches_none(root: Path, head: str, patterns: Sequence[str]) -> bool:
+    """Whether `head` tracks no file matching `patterns`."""
+
+    empty = _git(root, "hash-object", "-t", "tree", os.devnull).decode("ascii").strip()
+    listed = _git(root, "diff", "--name-only", "-z", "--relative", empty, head, "--", *patterns)
+    return not listed.strip(b"\0")
+
+
+def _renames(root: Path, fork: str, head: str) -> dict[str, str]:
+    """Each path Git reports renamed between `fork` and `head`: the new path to the old."""
+
+    raw = _git(root, "diff", "--name-status", "-z", "-M", "--relative", fork, head, "--")
+    fields = raw.decode("utf-8", "surrogateescape").split("\0")
+    renamed: dict[str, str] = {}
+    index = 0
+    while index < len(fields) and fields[index]:
+        status = fields[index]
+        if status[0] in "RC":
+            if status[0] == "R":
+                renamed[fields[index + 2]] = fields[index + 1]
+            index += 3
+        else:
+            index += 2
+    return renamed
+
+
+def _carried(gained: Counter[str], lost: Counter[str], renamed: dict[str, str]) -> Counter[str]:
+    """The gained baseline lines left once each nets against a lost line of the same code at
+    the path Git reports renamed to its own: a moved finding, not a new one."""
+
+    left, lost = Counter(gained), Counter(lost)
+    for line, count in gained.items():
+        found = KEY.fullmatch(line)
+        old = renamed.get(found["path"]) if found else None
+        if found is None or old is None:
+            continue
+        twin = f"{old}:{found['code']}"
+        moved = min(count, lost[twin])
+        left[line] -= moved
+        lost[twin] -= moved
+    return +left
+
+
+@dataclass(frozen=True)
+class Span:
+    """One loosening range: its root, its ends, and what Git reports renamed inside it."""
+
+    root: Path
+    fork: str
+    head: str
+    renamed: dict[str, str]
+
+
 def _policy_change(
-    root: Path, path: str, old: str | None, new: str | None, added: frozenset[str]
+    span: Span, path: str, old: str | None, new: str | None, added: frozenset[str]
 ) -> str | None:
     """What loosens the floor in one changed file; `added` names the claims the range adds,
     whose first baseline records where they start rather than loosening them."""
 
-    name = path.rsplit("/", 1)[-1]
+    root, name = span.root, path.rsplit("/", 1)[-1]
     if path == FLOOR_PATH:
-        return _floor_change(_floor_at(root, old), _floor_at(root, new))
+        return _floor_change(
+            _floor_at(root, old),
+            _floor_at(root, new),
+            lambda claim: bool(claim.files) and _matches_none(root, span.head, claim.files),
+        )
     if name in WHOLE_CONFIGS:
         return f"{path} changed"
     if path.startswith(f"{BASELINE_DIR}/") and path.endswith(".baseline"):
         if old is None and name.removesuffix(".baseline") in added:
             return None
         before, after = (_lines(_blob(root, sha)) for sha in (old, new))
-        gained = sum((after - before).values())
+        gained = sum(_carried(after - before, before - after, span.renamed).values())
         return f"{path} gained {_plural(gained, 'line')}" if gained else None
     if name not in SECTIONED:
         return None
@@ -1004,7 +1147,9 @@ def _policy_changes(root: Path, fork: str, head: str) -> list[str]:
             before, after = _floor_at(root, old), _floor_at(root, new)
             if before is not None and after is not None:
                 added = frozenset(c.name for c in after.claims) - {c.name for c in before.claims}
-    changes = (_policy_change(root, path, old, new, added) for path, old, new in entries)
+    baselines = any(path.startswith(f"{BASELINE_DIR}/") for path, _, _ in entries)
+    span = Span(root, fork, head, _renames(root, fork, head) if baselines else {})
+    changes = (_policy_change(span, path, old, new, added) for path, old, new in entries)
     return [change for change in changes if change is not None]
 
 
@@ -1077,9 +1222,49 @@ def _rulings(root: Path, base_commit: str) -> list[str]:
     return rulings
 
 
+def _is_ancestor(root: Path, older: str, newer: str) -> bool:
+    try:
+        _git(root, "merge-base", "--is-ancestor", older, newer)
+    except FloorError:
+        return False
+    return True
+
+
+def _adopted_after(root: Path, fork: str, adopted: Adoption | None) -> str | None:
+    """The adoption commit, where the floor was adopted after `fork`: `fork` holds no
+    floor.json, and the adoption commit descends from `fork` and is in HEAD's history. The
+    commits before it come from before the floor existed. Where `fork` holds a floor, the range
+    starts at `fork`, so an adoption record added or moved later hides nothing before it."""
+
+    if adopted is None:
+        return None
+    try:
+        commit = _commit(root, adopted.commit)
+        held = _git(root, "ls-tree", "-z", "--name-only", fork, "--", FLOOR_PATH)
+    except FloorError:
+        return None
+    if held.strip(b"\0") or commit == fork:
+        return None
+    if _is_ancestor(root, fork, commit) and _is_ancestor(root, commit, "HEAD"):
+        return commit
+    return None
+
+
+def _since(root: Path, base_commit: str, adopted: Adoption | None) -> str:
+    """Where a scan of `<base>..HEAD` starts: the adoption commit when the floor was adopted
+    after the merge base, or else `base_commit`."""
+
+    try:
+        fork = _git(root, "merge-base", base_commit, "HEAD").decode("ascii").strip()
+    except FloorError:
+        return base_commit
+    return _adopted_after(root, fork, adopted) or base_commit
+
+
 def loosening(context: Context) -> Outcome:
     """FAIL on a loosening between the merge base with `--base` and HEAD, unless a commit in
-    that same range carries a `Floor-Loosening: <what>; ruled <id>` line."""
+    that same range carries a `Floor-Loosening: <what>; ruled <id>` line. Where the floor was
+    adopted after the merge base, the range starts at the adoption commit instead."""
 
     name = "loosening"
     if context.base_commit is None:
@@ -1087,12 +1272,16 @@ def loosening(context: Context) -> Outcome:
     try:
         head = _commit(context.root, "HEAD")
         fork = _git(context.root, "merge-base", context.base_commit, head).decode().strip()
-        changes = _policy_changes(context.root, fork, head)
-        changes += _added_directives(context.root, fork, head)
-        rulings = _rulings(context.root, fork) if changes else []
+        adopted = _adopted_after(context.root, fork, context.adopted)
+        start = adopted or fork
+        changes = _policy_changes(context.root, start, head)
+        changes += _added_directives(context.root, start, head)
+        rulings = _rulings(context.root, start) if changes else []
     except FloorError as problem:
         return Outcome(name, UNVERIFIED, str(problem))
     span = f"{context.base}..HEAD"
+    if adopted is not None:
+        span = f"{adopted[:12]}..HEAD, the commits since the floor's adoption"
     if not changes:
         return Outcome(name, PASS, f"none in {span}")
     if rulings:
@@ -1333,7 +1522,6 @@ SHELLCHECK_INSTALL = (
     "the system's packages (apt-get install shellcheck, brew install shellcheck) or a release"
     " from https://github.com/koalaman/shellcheck/releases"
 )
-INSTALL_SECONDS = 900.0
 
 
 def _newest(first: str | None, second: str | None) -> str | None:
@@ -1344,7 +1532,11 @@ def _newest(first: str | None, second: str | None) -> str | None:
 def provision(root: Path, accept: bool) -> int:
     wanted: dict[str, str | None] = {}
     for claim in load_floor(root).claims:
-        if claim.tool is not None:
+        if claim.tool is not None and claim.prefix:
+            where = " ".join(claim.prefix)
+            print(f"{claim.tool} runs through {where}: install it there, and {claim.prefix[0]}")
+            print("  where PATH finds it")
+        elif claim.tool is not None:
             wanted[claim.tool] = _newest(wanted.get(claim.tool), claim.min_version)
     for tool, version in sorted(wanted.items()):
         if tool == "gitleaks":
@@ -1380,7 +1572,7 @@ def _pip_install(root: Path, packages: list[str], accept: bool) -> int:
     if not accept:
         print("nothing installed: pass --accept")
         return 0
-    status, output, _ = validation._execute(argv, root, INSTALL_SECONDS, None)
+    status, output, _ = validation._execute(argv, root, None, None)
     if status != 0:
         text = output.decode("utf-8", "replace").strip()
         if "externally-managed-environment" in text:
@@ -1424,7 +1616,8 @@ verbs:
 
 apply, baseline, provision and remove change nothing without --accept. A gate claim fails
 on any finding, a baseline claim on a finding its .outcomebound/floor/<claim>.baseline
-does not hold. Exit 0: every claim passed; 1: a claim failed or could not be verified;
+does not hold. No tool or Git read has a time limit unless its claim sets
+timeout_seconds. Exit 0: every claim passed; 1: a claim failed or could not be verified;
 2: the floor could not run."""
 APPLY_DESCRIPTION = """\
 Write FILE to .outcomebound/floor.json, fitted to what the project holds today: each claim
@@ -1449,23 +1642,32 @@ floor.json adds, is not."""
 CHECK_DESCRIPTION = """\
 Run every claim, or --claim NAME alone, and print one line per claim.
 
+A claim whose files match no tracked file passes: 0 findings in 0 files.
+
 With --base REF, gitleaks scans the commits REF..HEAD (without it, the commits since the
-floor's adoption record or, where there is none, the files Git tracks in the working tree),
-and a loosening since the merge base with REF fails: an added baseline line; a claim
-floor.json drops or changes, a move from gate to baseline included; an adoption record it
-changes or removes; a change to ruff.toml, .ruff.toml, mypy.ini, .mypy.ini, .gitleaks.toml,
-.gitleaksignore, .shellcheckrc, shellcheckrc or the [tool.ruff], [tool.mypy] and [mypy]
-settings; an added noqa, type ignore, mypy, shellcheck-disable or gitleaks-allow comment
-(in a document, only gitleaks-allow).
+floor's adoption record or, where there is none, the files Git tracks in the working tree,
+never an ignored one), and a loosening since the merge base with REF fails: an added
+baseline line; a claim floor.json drops or changes, a move from gate to baseline included;
+an adoption record it changes or removes; a change to ruff.toml, .ruff.toml, mypy.ini,
+.mypy.ini, .gitleaks.toml, .gitleaksignore, .shellcheckrc, shellcheckrc or the [tool.ruff],
+[tool.mypy] and [mypy] settings; an added noqa, type ignore, mypy, shellcheck-disable or
+gitleaks-allow comment (in a document, only gitleaks-allow).
 None of these loosens: a claim floor.json adds, with its first baseline; a claim's move
-from baseline to gate; an adoption record where there was none.
-A commit in REF..HEAD whose message has the line
+from baseline to gate; a claim's timeout_seconds; a claim it drops whose files are all
+gone; an adoption record where there was none; a baseline line that moves with its file,
+where Git reports the file renamed.
+Where the floor was adopted after the merge base (the merge base holds no floor.json), both
+ranges start at the adoption commit instead, so commits from before the floor never fail.
+A commit in the range whose message has the line
 'Floor-Loosening: <what>; ruled <decision id>' lets it pass, the id being whatever names
 the decision in the project: an issue or pull request (#123), a decision record, a link.
 
 A project's own check is one more claim: {"name": "project.imports", "mode": "gate",
 "tool": "lint-imports", "argv": ["lint-imports"], "parser": "exit"} fails when it exits
-non-zero."""
+non-zero. A claim may run its tool through a prefix, "prefix": ["uv", "run"] or
+["docker", "compose", "run", "--rm", "app"]: the prefix's first word comes from PATH, and its
+min_version is asked through the same prefix. "timeout_seconds": 1800 stops a claim's run
+after that long, and it reads UNVERIFIED; without it, the floor waits for the tool."""
 VERBS = {
     "propose": "Print a floor.json for the stacks Git tracks (python, shell); write nothing.",
     "apply": APPLY_DESCRIPTION,
