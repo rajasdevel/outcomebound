@@ -4,17 +4,22 @@ local path, and, with the local list, no private name.
 
 Two parts:
 
-1. Home paths, with no list: a path under `/Users` or `/home`, or a leading home-relative
-   path, in every text file Git tracks and in each commit message of the range. A
-   home-relative path that this repository documents on purpose is in `DOCUMENTED`, with
-   its reason. The floor runs this part, so it reads PASS or FAIL wherever it runs.
+1. Home paths, with no list: a path under `/Users` or `/home`, a Windows `Users` folder, or
+   a leading home-relative path, in the name and the text of every file Git tracks and in
+   each commit message of the range, line by line. A home-relative path that this
+   repository documents on purpose is in `DOCUMENTED`, with its reason. The floor runs this
+   part, so it reads PASS or FAIL wherever it runs.
 2. The local list, with `--private`: each term of the file that `OB_SCRUB_LIST` names, one
    term a line, `#` for a comment, matched whole-word and case-insensitively in the same
-   text. Without the list, this part reads UNVERIFIED. The list is private, so it stays
-   outside this repository.
+   names and text. The words of a term match across spaces and one line break, with the
+   comment or quote marker of a wrapped line; invisible format characters (Unicode category
+   Cf) are removed before the match. Without the list, this part reads UNVERIFIED. The list
+   is private, so it stays outside this repository.
 
 A hit is reported by its place and its kind, never by the text it matched, so the output can
-go to a public log. The first line printed is the verdict, as the floor shows only that line.
+go to a public log: a file whose name has a hit is named by its number in `git ls-files`
+order, not by its path. The first line printed is the verdict, as the floor shows only that
+line.
 
 The range: `--range <a>..<b>`, as the floor passes it; else `--base <ref>`, read as
 `<ref>..HEAD`; else `OUTCOMEBOUND_BASE`, where it names a commit; else no commit message is
@@ -38,9 +43,10 @@ from pathlib import Path
 NAME = "public-text"
 LIST_ENV = "OB_SCRUB_LIST"
 BASE_ENV = "OUTCOMEBOUND_BASE"
-# A path under a home folder. The character before it is not part of a word, a host or a
-# longer path segment, so a URL path such as example.org/home/page is not one.
-HOME = re.compile(r"(?<![\w.-])/(?:Users|home)/[^/\s]+")
+# A path under a home folder, or under a Windows drive's Users folder. The character before
+# the first is not part of a word, a host or a longer path segment, so a URL path such as
+# example.org/home/page is not one.
+HOME = re.compile(r"(?<![\w.-])/(?:Users|home)/[^/\s]+|(?<!\w)[A-Za-z]:\\Users\\[^\\\s]+")
 # A home-relative path: a tilde that starts a path, then the path up to the first character
 # that ends a path in prose or code.
 TILDE = re.compile(r"(?<![\w.])~(?=/)[^\s`'\"()<>\[\]{},;]*")
@@ -54,6 +60,10 @@ DOCUMENTED = {
     "~/x.md": "a synthetic home-relative path that a test shows as refused",
     "~/empty": "a synthetic clone destination in a test",
 }
+# What may stand between two words of a term: spaces or tabs, or one line break with the spaces
+# and the comment or quote marker (`#`, `>`, `//`, `*`) that starts a wrapped line. A blank line
+# ends a paragraph, so two words on either side of one are not a term.
+SEPARATOR = r"(?:[^\S\n]+|[^\S\n]*\n[^\S\n]*(?:(?:#+|>+|//|\*)[^\S\n]*)?)"
 # How much of a file the binary probe reads, as Git's own probe does.
 PROBE = 8000
 
@@ -83,19 +93,17 @@ def _commit(root: Path, ref: str) -> bool:
     return True
 
 
-def tracked_texts(root: Path) -> Iterator[tuple[str, str]]:
-    """Each tracked regular file that is text, as (path, text); a binary file is one with a
-    NUL byte in its first `PROBE` bytes."""
+def tracked(root: Path) -> Iterator[tuple[int, str, str | None]]:
+    """Each tracked path with its number in `git ls-files` order, and its text, or None for a
+    file that is not a regular text file; a binary file is one with a NUL byte in its first
+    `PROBE` bytes."""
 
     listed = _git(root, "ls-files", "-z").decode("utf-8", "surrogateescape").split("\0")
-    for path in filter(None, listed):
+    for number, path in enumerate(filter(None, listed), start=1):
         full = root / path
-        if full.is_symlink() or not full.is_file():
-            continue
-        data = full.read_bytes()
-        if b"\0" in data[:PROBE]:
-            continue
-        yield path, data.decode("utf-8", "replace")
+        data = None if full.is_symlink() or not full.is_file() else full.read_bytes()
+        text = None if data is None or b"\0" in data[:PROBE] else data.decode("utf-8", "replace")
+        yield number, path, text
 
 
 def commit_messages(root: Path, span: str) -> Iterator[tuple[str, str]]:
@@ -115,10 +123,20 @@ def load_list(path: Path | None) -> list[re.Pattern[str]]:
         return []
     patterns = []
     for line in path.read_text(encoding="utf-8").splitlines():
-        term = unicodedata.normalize("NFC", line.strip())
+        term = _visible(line.strip())
         if term and not term.startswith("#"):
-            patterns.append(re.compile(r"(?<!\w)" + re.escape(term) + r"(?!\w)", re.IGNORECASE))
+            words = SEPARATOR.join(re.escape(word) for word in term.split())
+            patterns.append(re.compile(rf"(?<!\w){words}(?!\w)", re.IGNORECASE))
     return patterns
+
+
+def _visible(text: str) -> str:
+    """`text` in Unicode NFC form without format characters (category Cf), such as a
+    zero-width joiner or a soft hyphen; line breaks are not of that category, so line numbers
+    hold."""
+
+    normal = unicodedata.normalize("NFC", text)
+    return "".join(char for char in normal if unicodedata.category(char) != "Cf")
 
 
 def _documented(path: str) -> bool:
@@ -126,16 +144,27 @@ def _documented(path: str) -> bool:
     return any(token == entry or token.startswith(entry + "/") for entry in DOCUMENTED)
 
 
+def kinds(text: str, terms: list[re.Pattern[str]]) -> list[tuple[int, str]]:
+    """Each (line, kind) of a hit in `text`, in line order: a home path line by line, and a term
+    of the local list over the whole text, at the line where its match starts."""
+
+    found = set()
+    for number, line in enumerate(text.splitlines(), start=1):
+        tilde = (match.group(0) for match in TILDE.finditer(line))
+        if HOME.search(line) or any(not _documented(path) for path in tilde):
+            found.add((number, "a home path"))
+    visible = _visible(text)
+    for term in terms:
+        for match in term.finditer(visible):
+            found.add((visible.count("\n", 0, match.start()) + 1, "matches the local list"))
+    return sorted(found)
+
+
 def hits(where: str, text: str, terms: list[re.Pattern[str]]) -> Iterator[str]:
     """One line per hit in `text`: its place and its kind, never the matched text."""
 
-    for number, line in enumerate(text.splitlines(), start=1):
-        normal = unicodedata.normalize("NFC", line)
-        tilde = (match.group(0) for match in TILDE.finditer(line))
-        if HOME.search(line) or any(not _documented(path) for path in tilde):
-            yield f"{where}:{number}: a home path"
-        if any(term.search(normal) for term in terms):
-            yield f"{where}:{number}: matches the local list"
+    for number, kind in kinds(text, terms):
+        yield f"{where}:{number}: {kind}"
 
 
 def _plural(count: int, word: str) -> str:
@@ -188,9 +217,13 @@ def main(argv: list[str] | None = None) -> int:
             read, note = "standard input", ""
         else:
             files = commits = 0
-            for path, text in tracked_texts(root):
-                files += 1
-                found += hits(path, text, terms)
+            for number, path, text in tracked(root):
+                named_hits = sorted({kind for _, kind in kinds(path, terms)})
+                where = f"tracked file {number}" if named_hits else path
+                found += [f"{where}: {kind} in its name" for kind in named_hits]
+                if text is not None:
+                    files += 1
+                    found += hits(where, text, terms)
             chosen, note = _span(root, args.range, args.base)
             for where, message in commit_messages(root, chosen) if chosen else ():
                 commits += 1

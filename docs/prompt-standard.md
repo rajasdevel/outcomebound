@@ -2,7 +2,7 @@
 
 - **Checked:** 2026-09-27, each rule's key records read as fact-checked; the corrections to those
   records' readings made on 2026-10-01 left every rule's confidence, tiers and direction as
-  stated.
+  stated; S23 added 2026-10-04 on OutcomeBound's own recorded results.
 - **Volatility:** monitor: a rule moves when its evidence does, most often at a model generation.
 - **Re-check when:** the research repository's references are refreshed (its
   [CONVENTIONS.md](https://github.com/rajasdevel/outcomebound-research/blob/main/CONVENTIONS.md)

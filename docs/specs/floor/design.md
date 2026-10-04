@@ -129,7 +129,8 @@ claim reads `UNVERIFIED` unless `--base` is given.
 What each verdict reads, and who writes it (`outcomebound_tools/floor.py`). A claim's verdict
 reads the tracked tree, the project's tool configs and its baseline under `.outcomebound/floor/`,
 all written by the change under check, and a tool from PATH's absolute entries, which the person
-or the CI runner provides, never the checkout. The loosening verdict reads the diff from the
+or the CI runner provides; or, through a `prefix`, a tool from wherever the prefix runs it, which
+the lock file or image the checkout names can decide, and the loosening check watches neither. The loosening verdict reads the diff from the
 merge base with `--base`, which the caller names, to HEAD, and the `Floor-Loosening` line of each
 commit message, which the change's author writes: the engine checks that the line is on the
 commit that makes the loosening, not that the decision it names exists, so a false line passes

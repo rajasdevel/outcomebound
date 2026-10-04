@@ -219,7 +219,9 @@ backlog, and a milestone names what a release waits for.
 
 An agent's pull request text, commit messages and files are public. They name no project that
 uses OutcomeBound, no person, no local path, no id or role from a private working file, and no
-count or anecdote from a private run. Describe a behavior in general terms, with a synthetic
+count or anecdote from a private run. A private working file includes a decision brief that no
+public issue or pull request holds. If a commit or a `ruled` line cites a brief, a public issue or
+pull request holds that brief, and the citation uses its number. Describe a behavior in general terms, with a synthetic
 reproduction. `make check` runs `scripts/check-public-text.py` over the tracked files and over
 the commit messages since `OB_BASE`. It finds each path under a home folder, and it reads PASS or
 FAIL. `make scrub` also applies a local list of private names. The environment variable

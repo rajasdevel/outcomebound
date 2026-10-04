@@ -20,6 +20,8 @@ LINUX_HOME = "/" + "home" + "/someone"
 TILDE_PRIVATE = "~" + "/Documents/client/plan.md"
 TILDE_DOCUMENTED = "~" + "/.outcomebound/research"
 PRIVATE = "Zanzibarco"
+TWO_WORDS = "Quillfeather Labs"
+WINDOWS_HOME = "C:" + "\\" + "Users" + "\\someone"
 BASE = "OUTCOMEBOUND_BASE"
 
 
@@ -148,3 +150,51 @@ def test_a_base_that_names_no_commit_reads_unverified(tmp_path: Path) -> None:
         2,
         ["UNVERIFIED public-text: --base no-such-ref names no commit"],
     )
+
+
+def test_a_term_split_by_a_line_break_or_white_space_or_a_hidden_character_is_found(
+    tmp_path: Path,
+) -> None:
+    listed = tmp_path / "list.txt"
+    listed.write_text(f"{TWO_WORDS}\n", encoding="utf-8")
+    first, second = TWO_WORDS.split()
+    joiner, soft_hyphen = "\u200d", "\u00ad"
+    root = repository(
+        tmp_path / "r",
+        {
+            "wrapped.md": f"one\nas {first}\n{second} said\n",
+            "spaced.md": f"{first}  {second}\n",
+            "hidden.md": f"x\n{first[:3]}{joiner}{first[3:]} {second[:2]}{soft_hyphen}{second[2:]}",
+            "commented.py": f"# as {first}\n  # {second} said\n",
+            "apart.md": f"{first}\n\n{second}\n",
+        },
+    )
+
+    code, lines = check(root, "--private", listed=listed)
+
+    assert code == 1
+    assert sorted(lines[1:]) == [
+        "  commented.py:1: matches the local list",
+        "  hidden.md:2: matches the local list",
+        "  spaced.md:1: matches the local list",
+        "  wrapped.md:2: matches the local list",
+    ]
+    assert not any(first.lower() in line.lower() for line in lines)
+
+
+def test_a_file_name_is_read_and_a_hit_in_it_is_not_printed(tmp_path: Path) -> None:
+    listed = tmp_path / "list.txt"
+    listed.write_text(f"{PRIVATE}\n", encoding="utf-8")
+    root = repository(
+        tmp_path / "r",
+        {"a.md": "clean\n", f"notes/{PRIVATE.lower()}-plan.md": f"see {WINDOWS_HOME}\\x\n"},
+    )
+
+    code, lines = check(root, "--private", listed=listed)
+
+    assert code == 1
+    assert lines[1:] == [
+        "  tracked file 2: matches the local list in its name",
+        "  tracked file 2:1: a home path",
+    ]
+    assert not any(PRIVATE.lower() in line.lower() for line in lines)

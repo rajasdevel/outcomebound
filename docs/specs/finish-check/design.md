@@ -96,9 +96,10 @@ while their digest equals the one in the committed hook entry, so a changed Done
 nothing and reads `UNVERIFIED`, unheld, to the person. That is flagged, not held: a hold cannot
 tell a planted list from a new one, and the instruction audit keeps the entry a review hit that
 quotes the Done commands. The timeout is the entry's own, also committed. The known-failure
-record and the checked-tree record are in the Git directory and never committed: adopt writes the
-first, the verb the second; a pull request can write neither, and an agent in the session can,
-as the paragraph above says.
+record is in the Git common directory and the checked-tree record in the Git directory, neither
+committed: adopt writes the first and the verb edits it, since a known command that passes leaves
+it; the verb writes the second. A pull request can write neither, and an agent in the session
+can, as the paragraph above says.
 
 ## Validation
 

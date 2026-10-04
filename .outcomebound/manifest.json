@@ -27,7 +27,7 @@
         ".github/workflows/ci.yml": "b993a29c733391f9e727bc644aee1948582fc0ec6fbdf042bb1d9ebb7747327c",
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
         ".outcomebound/fragments/commands.md": "ea7969f7104c5cbcb180a272302408478dc6a4618314235fa6c607b12cc8c68a",
-        ".outcomebound/fragments/local.md": "7cbca5bb5d5034cbcabc51054e7dcc917d60b5f8d39de3cf853de44a1af06cc6",
+        ".outcomebound/fragments/local.md": "226376245385e5cbeaf20643407e8f277667763468471ea9bb5ebb911cd49352",
         ".outcomebound/fragments/multi-agent.md": "3262ae5071dc184672df36015b211dd2a959e7a3c8ea8a3aaf12b79cf6df7eec",
         ".outcomebound/fragments/research.md": "6c9009492b287148950cb4252ac4f04858dc4c852cd43556029e964494d45d4e",
         ".outcomebound/fragments/workspace.md": "449355e9f087ff00c481369c7047d25c94d3ff656115ab98fb74af287bc9383e"
@@ -41,7 +41,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "sha256": "48b284a6464922ea4b41373601c0c9fe397dc2d4219b24bf636836260244685d"
+      "sha256": "68c412e4c940fc88107c0217287722d9d3fba8040f930d8de6341757a8c30592"
     },
     {
       "kind": "fragment",

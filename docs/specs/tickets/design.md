@@ -54,7 +54,8 @@ while it waits, the tickets that do not depend on it go on (maintainer, 2026-10-
 
 What each verdict reads, and who writes it (`outcomebound_tools/tickets_*.py`). `check` and
 `publish` read the tracker export given as `--input` (`tickets_store`), which whoever has access
-to the tracker writes; acceptance, the `ob-ticket` label, only accounts with triage access. Drafts
+to the tracker writes; acceptance, the ticket label the declaration names, only accounts with
+triage access. Drafts
 are local files the agent writes (`tickets_draft`). The declaration, `.outcomebound/tickets.json`
 (`tickets_declaration`), and the claims plan it names (`tickets_claims`) are committed, so the
 change under check can write them: a declaration can add its own `writes` grant, and a plan can
