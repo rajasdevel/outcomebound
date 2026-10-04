@@ -1,0 +1,59 @@
+#!/bin/sh
+# OutcomeBound's one launcher: `outcomebound <verb> ...` runs the engine it belongs to.
+#
+# It resolves its own path through any symlink, so a link on PATH runs the engine it points
+# into, whichever directory the caller is standing in. In a checkout it sits in scripts/, beside
+# outcomebound_tools/, and runs that checkout with the python3 on PATH. Installed from the
+# package, it sits in the environment's bin/ beside the python that holds the engine, and runs
+# that. Python runs isolated (-I) either way: its path holds the engine and the standard library
+# only, so neither the caller's directory nor PYTHONPATH can shadow the engine, and nothing is
+# exported, so a command the engine runs, such as a project's own `python -m pytest`, gets the
+# caller's environment unchanged. The verbs are outcomebound_tools/__main__.py's.
+set -eu
+
+# The python3 an absolute PATH entry names, so a relative entry such as `.` never picks it. PATH
+# is split by hand, since zsh does not word-split an unquoted $PATH.
+python3_on_path() {
+	rest=$PATH:
+	while [ -n "$rest" ]; do
+		dir=${rest%%:*}
+		rest=${rest#*:}
+		case $dir in
+		/*) if [ -x "$dir/python3" ]; then
+			printf '%s\n' "$dir/python3"
+			return 0
+		fi ;;
+		esac
+	done
+	return 1
+}
+
+self=$0
+while [ -L "$self" ]; do
+	link=$(readlink "$self")
+	case $link in
+	/*) self=$link ;;
+	*) self=$(dirname -- "$self")/$link ;;
+	esac
+done
+here=$(CDPATH='' cd -P -- "$(dirname -- "$self")" && pwd -P)
+root=$(dirname -- "$here")
+
+if [ -d "$root/outcomebound_tools" ]; then
+	python=$(python3_on_path) || {
+		printf '%s\n' "outcomebound: no python3 on PATH" >&2
+		exit 2
+	}
+	exec "$python" -I -c 'import runpy, sys
+sys.path.insert(0, sys.argv[1])
+sys.argv = ["outcomebound", *sys.argv[2:]]
+runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)
+' "$root" "$@"
+fi
+for python in "$here/python" "$here/python3"; do
+	if [ -x "$python" ]; then
+		exec "$python" -I -m outcomebound_tools "$@"
+	fi
+done
+printf '%s\n' "outcomebound: no engine beside $self; install it with uv tool install, pipx, or pip into a virtual environment" >&2
+exit 2

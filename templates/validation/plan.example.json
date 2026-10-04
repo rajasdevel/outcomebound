@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "focused-regression",
+      "risk": "the changed parser truncates complete records",
+      "kind": "test",
+      "required": true,
+      "command": ["python3", "-m", "pytest", "-q", "tests/test_importer.py"],
+      "required_paths": ["tests/test_importer.py"]
+    },
+    {
+      "name": "static-check",
+      "risk": "the change leaves a source file on an untested path that does not compile",
+      "kind": "static",
+      "required": false,
+      "command": ["python3", "-m", "compileall", "-q", "src"],
+      "required_paths": ["src"]
+    }
+  ]
+}

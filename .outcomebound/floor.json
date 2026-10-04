@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "claims": [
+    {
+      "name": "python.format",
+      "mode": "gate",
+      "tool": "ruff",
+      "min_version": "0.16.7",
+      "argv": ["ruff", "format", "--check", "."],
+      "parser": "ruff-format"
+    },
+    {
+      "name": "python.lint",
+      "mode": "baseline",
+      "tool": "ruff",
+      "min_version": "0.16.7",
+      "argv": ["ruff", "check", "--output-format", "json", "."],
+      "parser": "ruff"
+    },
+    {
+      "name": "python.types",
+      "mode": "baseline",
+      "tool": "mypy",
+      "min_version": "2.3.1",
+      "argv": ["mypy", "--output", "json"],
+      "parser": "mypy"
+    },
+    {
+      "name": "python.secrets",
+      "mode": "gate",
+      "tool": "gitleaks",
+      "min_version": "8.21.2",
+      "argv": ["gitleaks", "git", "--log-opts={range}", "--redact", "--no-banner", "--report-format", "json", "--report-path", "{report}", "."],
+      "argv_without_base": ["gitleaks", "dir", "--redact", "--no-banner", "--report-format", "json", "--report-path", "{report}", "."],
+      "parser": "gitleaks"
+    },
+    {
+      "name": "shell.syntax",
+      "mode": "gate",
+      "tool": "bash",
+      "argv": ["bash", "-n", "{file}"],
+      "files": ["*.sh"],
+      "parser": "bash-n"
+    },
+    {
+      "name": "shell.injection",
+      "mode": "gate",
+      "files": ["*.sh"],
+      "parser": "injection"
+    },
+    {
+      "name": "structure",
+      "mode": "gate",
+      "tool": "python3",
+      "min_version": "3.10",
+      "argv": ["python3", "scripts/check-structure.py"],
+      "parser": "exit"
+    }
+  ]
+}

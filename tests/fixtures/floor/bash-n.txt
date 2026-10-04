@@ -1,0 +1,2 @@
+scripts/broken.sh: line 4: syntax error near unexpected token `fi'
+scripts/broken.sh: line 4: `fi fi'

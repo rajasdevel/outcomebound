@@ -1,0 +1,81 @@
+[
+  {
+    "data": {
+      "repository": {
+        "nameWithOwner": "owner/project",
+        "issues": {
+          "pageInfo": {
+            "hasNextPage": true,
+            "endCursor": "cursor-page-one"
+          },
+          "nodes": [
+            {
+              "number": 1,
+              "title": "A ticket on a page that is not the last one",
+              "body": "## Outcome\nThe export stopped short of the whole issue list.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nbounds: outcomebound_tools/example.py\nhuman-only: no\ndone-when:\n- example-claim\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "OPEN",
+              "stateReason": null,
+              "createdAt": "2026-09-01T09:00:00Z",
+              "closedAt": null,
+              "updatedAt": "2026-09-01T09:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/owner/project/issues/1",
+              "author": {
+                "login": "author-one"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": null,
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": []
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-09-01T09:00:00Z",
+                    "actor": {
+                      "login": "user-one"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

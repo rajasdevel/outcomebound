@@ -1,0 +1,113 @@
+{
+  "format_version": 2,
+  "engine_version": "1.0.0",
+  "artifacts": [
+    {
+      "kind": "block",
+      "path": "AGENTS.md",
+      "id": "operating-contract",
+      "sha256": "7a5d5e739badbdd492fac5a1b547c7e52c01d270b96a01799e12c93809e6fe75"
+    },
+    {
+      "kind": "block",
+      "path": "AGENTS.md",
+      "id": "project-facts",
+      "fragments": [
+        "multi-agent",
+        "local",
+        "workspace",
+        "research",
+        "commands"
+      ],
+      "done": [
+        "make check",
+        "make test"
+      ],
+      "inputs": {
+        ".github/workflows/ci.yml": "35dbb1a2c88aa57f2181a92f20e79518acf0ca7f5b5ed6db710ca701a1f3eccd",
+        ".outcomebound/floor.json": "88a078faaf0b10c02fed4d7d98d38d6234c6ed144578ac2572ba172b8655aa0e",
+        ".outcomebound/fragments/commands.md": "a220f88cb35d0a1080be21c3a1146c9c0e6e26aa936775a041a0594e0343dae6",
+        ".outcomebound/fragments/local.md": "7211d9fc3cb62a52b3180d2ad23828a487b492898888ce23fe6dda9f8fa90ac7",
+        ".outcomebound/fragments/multi-agent.md": "85c97f860da9b047176f66934e3c983de14f0eb8717a5da0e5e509d86b475758",
+        ".outcomebound/fragments/research.md": "b03d945a924436dc0925fa8a0bddb27926073e070a2d9c7a1550be45b967d418",
+        ".outcomebound/fragments/workspace.md": "e48dd46e93f5d84a7224b77cd796a0189e61ef9e29e78e7ad48f33dd338e6158"
+      },
+      "style": [
+        "ste"
+      ],
+      "sha256": "786489bf5106c77c7e3ec58e572038a24394207014c142170e276d2321118b9f"
+    },
+    {
+      "kind": "block",
+      "path": "AGENTS.md",
+      "id": "guidance-pointers",
+      "sha256": "99f8271bab87e0f1f05b90d382a7f6739639da5f8295c8c61708e1ff64cec167"
+    },
+    {
+      "kind": "fragment",
+      "path": ".outcomebound/fragments/multi-agent.md",
+      "id": "multi-agent",
+      "sha256": "85c97f860da9b047176f66934e3c983de14f0eb8717a5da0e5e509d86b475758"
+    },
+    {
+      "kind": "fragment",
+      "path": ".outcomebound/fragments/workspace.md",
+      "id": "workspace",
+      "sha256": "e48dd46e93f5d84a7224b77cd796a0189e61ef9e29e78e7ad48f33dd338e6158"
+    },
+    {
+      "kind": "fragment",
+      "path": ".outcomebound/fragments/research.md",
+      "id": "research",
+      "sha256": "b03d945a924436dc0925fa8a0bddb27926073e070a2d9c7a1550be45b967d418"
+    },
+    {
+      "kind": "fragment",
+      "path": ".outcomebound/fragments/commands.md",
+      "id": "commands",
+      "sha256": "a220f88cb35d0a1080be21c3a1146c9c0e6e26aa936775a041a0594e0343dae6"
+    },
+    {
+      "kind": "ignore",
+      "path": ".agents/.gitignore",
+      "id": "workspace",
+      "sha256": "a6f84c6e2212baaca339efffc76791b702d3f0cc650ff50c8af1906436e2c642"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/decision-brief/SKILL.md",
+      "id": "decision-brief",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "0c50574b397034c8f6f3e75f90cbda5f5c0d0f2a7f48ce56240ac15d983fc3b9"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/gather-requirements/SKILL.md",
+      "id": "gather-requirements",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "ab4653eadf6cb4bf93bbca60f71d9668e790bf45f8599d13eb314e06687274f2"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/tests-worth-keeping/SKILL.md",
+      "id": "tests-worth-keeping",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "f8c192ae2cfd895f702e7f528d993db9bae2a4893c56367bd8b427d8c37e0359"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/using-outcomebound/SKILL.md",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "91dd5d47483cb3bbe3f1a0e4ae8912ecb2c258c6bd58ec8f06f2f7f631bd5980"
+    }
+  ]
+}

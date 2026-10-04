@@ -1,0 +1,26 @@
+# Reference only. adopt never installs this; copy it into your CI yourself. Selection does not imply target wiring.
+#
+# Add as a target your existing CI already calls (e.g. `make outcomebound-check`).
+# `outcomebound` must be on PATH: install it at a pinned release with
+#   uv tool install "git+https://github.com/rajasdevel/outcomebound@v1.0.0"
+# (or `pipx install` of the same, or `pip install` of it into a virtual
+# environment), or link a checkout's scripts/outcomebound. If you install from a
+# fork, change the URL to your fork's.
+#
+# Two targets, selected separately: the install check and the quality floor.
+# Wire one or both, and delete the target you did not select.
+#
+# The floor target is for a project with a .outcomebound/floor.json. It runs the
+# project's own tools, so call it AFTER whatever puts them on PATH: a missing or
+# old tool makes its claim UNVERIFIED, which fails the check. OB_BASE is the
+# commit this change replaces: a pull request's base, or the commit a push
+# replaced.
+
+OB_BASE ?= HEAD~1
+
+.PHONY: outcomebound-check outcomebound-floor
+outcomebound-check:
+	outcomebound adopt . --check
+
+outcomebound-floor:
+	outcomebound floor check . --base "$(OB_BASE)"

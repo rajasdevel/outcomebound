@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+# No concurrency group: a waiting run that a newer push cancelled would leave its push's changes
+# unread by the floor's loosening check, whose base is the commit that push replaced.
+
+# The job reads the repository and writes nothing back to it.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # A push or pull request runs the oldest and newest Python this project
+        # supports; a release tag runs every version between them as well.
+        python-version: ${{ startsWith(github.ref, 'refs/tags/v') && fromJSON('["3.10", "3.11", "3.12", "3.13", "3.14"]') || fromJSON('["3.10", "3.14"]') }}
+    steps:
+      # Each action is pinned by commit, the only reference that cannot move; the comment names
+      # the release it is.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The floor's loosening check reads the commits since its base, so the
+          # clone holds the whole history.
+          fetch-depth: 0
+          # Later steps run code from the pull request; they do not keep the token.
+          persist-credentials: false
+
+      # A tag run checks the tag against the release commit: annotated, v<VERSION>, on this
+      # commit, and the changelog and CI template agreeing with it (scripts/release-check.py).
+      - name: Verify release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          # A checkout can leave the tag lightweight (actions/checkout before v6.0.2 did); fetch
+          # the annotated tag before reading it.
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          python3 scripts/release-check.py --tag "$RELEASE_TAG"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Standard-library boundary gate
+        run: make gate
+
+      # This repository's own install: each block and file adopt recorded reads current.
+      - name: Own install
+        run: scripts/outcomebound adopt . --check
+
+      # pytest and xdist for the suite, and the floor's ruff and mypy, as pinned.
+      - name: Install the development tools
+        run: python -m pip install -r requirements-dev.txt
+
+      # The floor's secrets claim runs gitleaks, pinned here by version and published checksum.
+      - name: Install gitleaks
+        if: matrix.python-version == '3.14'
+        run: |
+          case "$(uname -m)" in
+            x86_64) arch=x64 sum=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb ;;
+            aarch64 | arm64) arch=arm64 sum=e4a487ee7ccd7d3a7f7ec08657610aa3606637dab924210b3aee62570fb4b080 ;;
+            *) echo "no pinned gitleaks for $(uname -m)"; exit 1 ;;
+          esac
+          tarball="gitleaks_8.30.1_linux_$arch.tar.gz"
+          curl -fsSLo "$RUNNER_TEMP/$tarball" "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/$tarball"
+          echo "$sum  $RUNNER_TEMP/$tarball" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$tarball" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      # One leg runs the floor: its tools come from requirements-dev.txt, not from the
+      # matrix python. Its base is what this run's change replaces: a pull request's
+      # base, or the commit a push replaced -- all zeros for a new ref such as a tag,
+      # which falls back to HEAD~1. A root commit has no base, so the floor reads the
+      # tracked files instead. The value reaches the shell through the environment.
+      - name: Quality floor
+        if: matrix.python-version == '3.14'
+        env:
+          OUTCOMEBOUND_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$OUTCOMEBOUND_BASE"
+          case "$base" in "" | 0000000000000000000000000000000000000000) base=HEAD~1 ;; esac
+          if git rev-parse -q --verify "$base^{commit}" >/dev/null; then
+            scripts/outcomebound floor check . --base "$base"
+          else
+            scripts/outcomebound floor check .
+          fi
+
+      # -o addopts="" clears pytest.ini's defaults, so -rs has to be repeated
+      # here: every skipped native-tool check must report its reason, because
+      # an invisible skip reads as a pass. A displayed skip stays UNVERIFIED.
+      # -n auto spreads the suite across the runner's CPUs; --basetemp gives each
+      # job its own temporary tree, so jobs sharing a host never collide in it.
+      - name: Run test suite
+        run: python -m pytest -o addopts="" -q -rs -n auto --basetemp="$RUNNER_TEMP/pytest-${{ matrix.python-version }}"

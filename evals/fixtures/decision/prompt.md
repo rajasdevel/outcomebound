@@ -1,0 +1,1 @@
+Several users of fetchkit hit the 30-second default timeout on slow endpoints. I have to decide whether the next release raises the default to 60 seconds, or keeps 30 and documents passing a longer timeout. The decision is mine: set it out for me, and change nothing in the repository yet.

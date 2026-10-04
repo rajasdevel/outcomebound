@@ -1,0 +1,45 @@
+# This repository's own ruff config. `outcomebound floor check` runs `ruff format --check`
+# and `ruff check` from the repository root, so ruff reads this file as it always does.
+#
+# The selection is bug classes plus the complexity ceilings (C901, PLR0912/13/15) and the
+# security rules (S), less S603 and S607: those two flag every subprocess call, with or
+# without a shell, and the calls here pass an argv list. S602/S604/S605, the shell=True
+# family, stay. Style beyond the formatter's own is absent: formatting is `ruff format`'s.
+exclude = [".git", ".hg", ".venv", "venv", "node_modules", "vendor", "__pycache__", ".tox", ".nox", "dist", "build", "target", ".outcomebound", ".outcomebound-checks", ".mypy_cache", ".ruff_cache", ".pytest_cache", "docs/specs"]
+line-length = 100
+target-version = "py310"
+
+[lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "C4",
+    "PIE",
+    "RET",
+    "RUF",
+    "C901",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "PERF",
+    "S",
+]
+ignore = ["S603", "S607"]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-args = 6
+max-branches = 12
+max-statements = 50
+
+[lint.per-file-ignores]
+# Tests assert (S101) and are allowed to be long and widely parameterised.
+"tests/**" = ["S101", "PLR0913", "PLR0915"]
+"**/*_test.py" = ["S101", "PLR0913", "PLR0915"]

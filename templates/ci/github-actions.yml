@@ -1,0 +1,54 @@
+# Reference only. adopt never installs this; copy it into your CI yourself. Selection does not imply target wiring.
+#
+# A small standalone workflow adding the install check as its own job. Fold the
+# step into an existing workflow instead if you already have one. It installs
+# OutcomeBound with pip, into the job's own Python, from its repository at a
+# pinned release, which puts `outcomebound` on PATH.
+#
+# Two lines, selected separately: the install check and the quality floor.
+# Wire one or both, and delete the step you did not select.
+#
+# If you install from a fork, change the URL to your fork's.
+name: outcomebound-gates
+on: [push, pull_request]
+# No concurrency group: a cancelled waiting run would leave its push's changes unread by the
+# floor's loosening check, whose base is the commit that push replaced.
+# The job reads the repository and writes nothing back to it.
+permissions:
+  contents: read
+jobs:
+  outcomebound:
+    runs-on: ubuntu-latest
+    steps:
+      # Each action is pinned by commit, the only reference that cannot move; the comment
+      # names the release it is.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The floor's loosening check reads the commits since its base, so the
+          # clone holds the whole history.
+          fetch-depth: 0
+          # Later steps run code from the pull request; they do not keep the token.
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install OutcomeBound
+        # Pinned to a release tag, so the gate changes only when you change the tag; pin a commit for
+        # a reference that cannot move.
+        run: python -m pip install "git+https://github.com/rajasdevel/outcomebound@v1.0.0"
+      - name: OutcomeBound install check
+        run: outcomebound adopt . --check
+
+      # The quality floor, for a project with a .outcomebound/floor.json, placed
+      # AFTER the step that puts its tools on PATH: a missing or old tool makes
+      # its claim UNVERIFIED, which fails the check. Its base is what this run's
+      # change replaces: a pull request's base, or the commit a push replaced --
+      # all zeros for a new ref such as a tag, which falls back to HEAD~1. The
+      # value reaches the shell through the environment.
+      - name: OutcomeBound quality floor
+        env:
+          OUTCOMEBOUND_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$OUTCOMEBOUND_BASE"
+          case "$base" in "" | 0000000000000000000000000000000000000000) base=HEAD~1 ;; esac
+          outcomebound floor check . --base "$base"

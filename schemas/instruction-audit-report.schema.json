@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:outcomebound:schema:instruction-audit-report:1",
+  "title": "OutcomeBound instruction audit report v2",
+  "description": "What `outcomebound instructions check --json` prints (docs/specs/instructions/design.md). `result` is the top-level verdict. Every finding is the engine's reading of an untrusted file: a fact, the prompt standard's rule it answers to with that rule's severity, and a next step for a person or an agent to take, never an applied edit and never a score.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result",
+    "target",
+    "harnesses",
+    "selected_by",
+    "listed_by",
+    "listing",
+    "counts",
+    "findings",
+    "steps"
+  ],
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ],
+      "description": "FAIL on any gate FAIL; else UNVERIFIED on any unverified fact or review hit; else PASS. Under --strict an UNVERIFIED result is FAIL."
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The target as the caller named it."
+    },
+    "harnesses": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "The harnesses checked for."
+    },
+    "selected_by": {
+      "type": "string",
+      "enum": [
+        "flag",
+        "manifest",
+        "manifest+present",
+        "table"
+      ],
+      "description": "Where the harnesses came from: --harness; the target's manifest, with `+present` where rows whose files the target holds were added to it; or every row of adapters/harnesses.json."
+    },
+    "listed_by": {
+      "type": "string",
+      "enum": [
+        "git",
+        "walk"
+      ],
+      "description": "How the target's files were found: `git`, what Git tracks or does not ignore; `walk`, every file under a target Git cannot list or ignores. Each path a harness row names exactly is looked up either way."
+    },
+    "listing": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The same, in a sentence, with why the files were walked."
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "security",
+        "loading"
+      ],
+      "description": "Per check family, how many results read each verdict.",
+      "properties": {
+        "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "PASS",
+            "FAIL",
+            "UNVERIFIED"
+          ],
+          "properties": {
+            "PASS": {
+              "type": "integer"
+            },
+            "FAIL": {
+              "type": "integer"
+            },
+            "UNVERIFIED": {
+              "type": "integer"
+            }
+          }
+        },
+        "loading": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "PASS",
+            "FAIL",
+            "UNVERIFIED"
+          ],
+          "properties": {
+            "PASS": {
+              "type": "integer"
+            },
+            "FAIL": {
+              "type": "integer"
+            },
+            "UNVERIFIED": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "Every result, security first; one about a whole file or none carries line 0.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "check",
+          "family",
+          "path",
+          "line",
+          "kind",
+          "verdict",
+          "fact",
+          "rule",
+          "severity",
+          "next"
+        ],
+        "properties": {
+          "check": {
+            "type": "string",
+            "enum": [
+              "hidden-characters",
+              "concealed-content",
+              "override-phrases",
+              "harness-config",
+              "instruction-change",
+              "load-resolution"
+            ]
+          },
+          "family": {
+            "type": "string",
+            "enum": [
+              "security",
+              "loading"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Target-relative path, `.` for the target as a whole, or `adapters/harnesses.json` for a harness's loading facts."
+          },
+          "line": {
+            "type": "integer",
+            "description": "1-based line of the fact, or 0 where it concerns the whole file."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gate",
+              "review"
+            ]
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNVERIFIED"
+            ]
+          },
+          "fact": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What was observed, reproducibly; quoted text has every character outside printable ASCII escaped."
+          },
+          "rule": {
+            "type": "string",
+            "pattern": "^S[0-9]+(?![\\s\\S])",
+            "description": "The rule of docs/prompt-standard.md the check answers to."
+          },
+          "severity": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The prompt standard's severity entry for the rule."
+          },
+          "next": {
+            "type": "string",
+            "description": "The next step, for a person or an agent to take; never taken by the command."
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Steps for the person to run sandboxed, without network or credentials; the command runs none of them."
+    }
+  }
+}

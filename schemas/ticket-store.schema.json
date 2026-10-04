@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:ticket-store:1",
+  "title": "OutcomeBound ticket store declaration v1",
+  "description": "The `.outcomebound/tickets.json` a project declares its ticket store in. The bounded repository-relative path grammar of `claims` is checked after this, by the engine's one path reader. The declaration changes what the engine can report and never makes the engine act anywhere.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "store",
+    "repo",
+    "label",
+    "human_label",
+    "request_label",
+    "claims"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Exactly 1. A version this engine does not read is refused before anything else here is looked at."
+    },
+    "store": {
+      "type": "string",
+      "enum": [
+        "github"
+      ],
+      "description": "Which store holds the tickets: the `github` tracker, read from an export."
+    },
+    "repo": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\s]+/[^/\\s]+$",
+      "description": "owner/project, as the tracker spells it. The layer is one repository, and a relation naming another is never taken for a local one, so a name that is not owner/project would silently match nothing."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The label that makes an issue a ticket. Applying it is the user's acceptance, and no later edit lapses it."
+    },
+    "human_label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A person's hold on a ticket."
+    },
+    "request_label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "An agent's request that a person take the ticket."
+    },
+    "claims": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Bounded repository-relative path of one v1 validation plan, so claim names are one namespace."
+    },
+    "default_branch": {
+      "type": "string",
+      "minLength": 1,
+      "description": "An optional ref name. It is accepted and no verb reads it."
+    },
+    "writes": {
+      "type": "object",
+      "description": "The operator's grant of tracker writes for this project. Without it the skills print the tracker commands for a person to run.",
+      "additionalProperties": false,
+      "required": [
+        "granted_by",
+        "on"
+      ],
+      "properties": {
+        "granted_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The operator who granted tracker writes."
+        },
+        "on": {
+          "type": "string",
+          "minLength": 1,
+          "description": "When the grant was given; the commit that adds it records the grant."
+        }
+      }
+    }
+  }
+}

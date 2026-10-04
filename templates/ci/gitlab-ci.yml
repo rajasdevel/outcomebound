@@ -1,0 +1,31 @@
+# Reference only. adopt never installs this; copy it into your CI yourself. Selection does not imply target wiring.
+#
+# Two jobs for an existing .gitlab-ci.yml, selected separately: the install check
+# and the quality floor.
+# Wire one or both, and delete the job you did not select.
+# `outcomebound` must be on PATH: install it at a pinned release with
+#   uv tool install "git+https://github.com/rajasdevel/outcomebound@v1.0.0"
+# (or `pipx install` of the same, or `pip install` of it into a virtual
+# environment), or link a checkout's scripts/outcomebound. If you install from a
+# fork, change the URL to your fork's.
+outcomebound-install-check:
+  stage: test
+  script:
+    - outcomebound adopt . --check
+
+# The quality floor, for a project with a .outcomebound/floor.json. It runs the
+# project's own tools, so put it AFTER the step that puts them on PATH: a missing
+# or old tool makes its claim UNVERIFIED, which fails the check. Its base is a
+# merge request's diff base, else the commit the push replaced,
+# $CI_COMMIT_BEFORE_SHA -- HEAD~1 when that is the all-zero id of a new ref.
+outcomebound-floor:
+  stage: test
+  variables:
+    # The loosening check reads the commits since its base, which a shallow
+    # clone does not hold.
+    GIT_DEPTH: 0
+  script:
+    - |
+      base="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-${CI_COMMIT_BEFORE_SHA:-}}"
+      case "$base" in "" | 0000000000000000000000000000000000000000) base=HEAD~1 ;; esac
+      outcomebound floor check . --base "$base"

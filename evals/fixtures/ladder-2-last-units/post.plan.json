@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "the-last-units-can-be-taken",
+      "risk": "the last units still cannot be taken, or more than the stock can",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "python3 -B checks/footprint.py; exec python3 -B checks/probe_last_units.py"
+      ],
+      "required_paths": [
+        "checks/footprint.py",
+        "checks/probe_last_units.py",
+        "checks/cli_probe.py"
+      ]
+    },
+    {
+      "name": "no-process-document",
+      "risk": "a change this small was given a design note, decision record, spec or plan",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/no_process_document.py"
+      ],
+      "required_paths": [
+        "checks/no_process_document.py"
+      ]
+    },
+    {
+      "name": "no-slow-suite-run",
+      "risk": "a two-character fix ran the slow integration suite",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/transcript_commands.py",
+        "--not-executed",
+        "scripts/check-all.sh",
+        "--not-executed",
+        "tests/integration/run.py"
+      ],
+      "required_paths": [
+        "checks/transcript_commands.py"
+      ]
+    }
+  ]
+}

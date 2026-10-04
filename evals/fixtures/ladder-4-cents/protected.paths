@@ -1,0 +1,15 @@
+# Graders, the project note, documents and scripts, the installed core skill and repository
+# exclusion state, copied into the candidate-writable fixture.
+checks/footprint.py
+checks/no_process_document.py
+checks/cli_probe.py
+checks/transcript_commands.py
+checks/probe_cents.py
+checks/stock-before.db
+AGENTS.md
+CONTRIBUTING.md
+scripts/check-all.sh
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

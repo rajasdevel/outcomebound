@@ -1,0 +1,13 @@
+unformatted: File would be reformatted
+ --> pkg/style.py:1:2
+  |
+  - x=1
+  - def f( a ):
+1 + x = 1
+2 +
+3 +
+4 + def f(a):
+5 |     return a
+  |
+
+1 file would be reformatted, 2 files already formatted

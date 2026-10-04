@@ -1,0 +1,8 @@
+# The project note, the grader, the installed core skill and repository exclusion state
+# copied into the candidate-writable fixture.
+AGENTS.md
+checks/suite.py
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

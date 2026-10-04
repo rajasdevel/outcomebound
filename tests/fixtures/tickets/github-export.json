@@ -1,0 +1,3551 @@
+[
+  {
+    "data": {
+      "repository": {
+        "nameWithOwner": "example-org/example-project",
+        "issues": {
+          "pageInfo": {
+            "hasNextPage": false,
+            "endCursor": "cursor-page-last"
+          },
+          "nodes": [
+            {
+              "number": 1,
+              "title": "The lending service opens to members",
+              "body": "## Outcome\nMembers of every branch can borrow, renew, reserve and return items through the lending\nservice in place of the paper loan cards.\nAccepting this decides: the date the service opens to members.\n\n## Limits\nA person closes this once every ticket under it is closed or dropped and the opening\ndate is announced.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#scope\nbounds:\nhuman-only: yes\ndone-when:\n- release-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "OPEN",
+              "stateReason": null,
+              "createdAt": "2026-03-02T09:00:00Z",
+              "closedAt": null,
+              "updatedAt": "2026-03-02T09:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/1",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": null,
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 25
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": []
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "number": 2,
+              "title": "Every branch catalogue is migrated and signed off",
+              "body": "## Outcome\nEach branch's catalogue is in the lending service, and its branch librarian has\nconfirmed that what the service lists matches the shelves.\n\n## Limits\nThe sign-off is each branch librarian's; the import itself is each child ticket's.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#sign-off\nbounds:\nhuman-only: yes\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T09:07:00Z",
+              "closedAt": "2026-03-05T11:00:00Z",
+              "updatedAt": "2026-03-05T11:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/2",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 12
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/2#issuecomment-1002",
+                    "body": "## Closing note\nAll twelve branch librarians have signed off their catalogues.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-05T10:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:07:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:07:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-05T11:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 3,
+              "title": "A loan's due date follows the item's loan period",
+              "body": "## Outcome\nWhen an item is borrowed, the loan is due one loan period after today for that item's\ntype, moved to the next day the lending branch is open.\n\n## Design\nOpening days come from the branch calendar, never from a fixed weekday list.\nFollow: `lending/calendar.py`, which already answers whether a branch is open on a date.\n\n## Limits\nFines are out of scope.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#loan-periods\nbounds: lending/loans.py, tests/test_loans.py\nhuman-only: no\ndone-when:\n- loans-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T09:14:00Z",
+              "closedAt": "2026-03-04T12:00:00Z",
+              "updatedAt": "2026-03-04T12:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/3",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/3#issuecomment-1003",
+                    "body": "## Closing note\nDue dates now come from the item type's loan period and the branch calendar.\nFollow-up: #29, reference items' same-day loans are not in the help pages.\nChecks: `loans-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T11:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:14:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T12:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 4,
+              "title": "The overdue policy is agreed with the library board",
+              "body": "## Outcome\nThe library board has agreed how many reminders a member receives and when an overdue\nitem stops further borrowing.\nAccepting this decides: the reminder count and the borrowing limit for overdue items.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/policy.md#overdue-items\nbounds:\nhuman-only: yes\ndone-when:\n- policy-published\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T09:21:00Z",
+              "closedAt": "2026-03-04T13:00:00Z",
+              "updatedAt": "2026-03-04T13:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/4",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/4#issuecomment-1004",
+                    "body": "## Closing note\nAgreed at the board meeting: three reminders, and borrowing stops at two overdue items.\nChecks: `policy-published` PASS.\n",
+                    "createdAt": "2026-03-04T12:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:21:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:21:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T13:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 5,
+              "title": "Each branch has confirmed its opening hours",
+              "body": "## Outcome\nEvery branch manager has confirmed the opening hours and closure days the service uses\nto set due dates.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#branch-calendar\nbounds:\nhuman-only: yes\ndone-when:\n- calendar-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T09:28:00Z",
+              "closedAt": "2026-03-04T14:00:00Z",
+              "updatedAt": "2026-03-04T14:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/5",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/5#issuecomment-1005",
+                    "body": "## Closing note\nAll branch calendars are confirmed through the end of the year.\nChecks: `calendar-check` PASS.\n",
+                    "createdAt": "2026-03-04T13:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:28:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:28:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T14:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 6,
+              "title": "Members can download their borrowing history",
+              "body": "## Outcome\nA signed-in member can download every loan they have made as a CSV file, with each\nitem's title, the branch, and the dates it was borrowed and returned.\n\n## Design\nThe file is built from the loans table and the title alone; no other catalogue field is\nexported. Follow: `lending/reports.py` for the streaming CSV writer.\n\n## Limits\nLoans older than the retention period in the privacy policy are not included.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#member-data, docs/policy.md#retention\nbounds: lending/history.py, lending/web/account.py, tests/test_history.py\nhuman-only: no\ndone-when:\n- history-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "OPEN",
+              "stateReason": null,
+              "createdAt": "2026-03-02T09:35:00Z",
+              "closedAt": null,
+              "updatedAt": "2026-03-02T09:35:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/6",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": []
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:35:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "number": 7,
+              "title": "A renewal is refused when another member has reserved the item",
+              "body": "## Outcome\nA member who asks to renew an item someone else has reserved is told that it is reserved,\nand the loan keeps its due date.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#renewals\nbounds: lending/renewals.py, tests/test_renewals.py\nhuman-only: no\ndone-when:\n- renewals-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T09:42:00Z",
+              "closedAt": "2026-03-04T09:00:00Z",
+              "updatedAt": "2026-03-04T09:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/7",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/7#issuecomment-1007",
+                    "body": "## Closing note\nRenewal now checks the item's hold queue before extending a loan.\nChecks: `renewals-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T08:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:42:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T09:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 8,
+              "title": "The notice sender address is verified with the mail provider",
+              "body": "## Outcome\nThe mail provider accepts mail from the library's notice address, so reminders reach\nmembers' inboxes rather than their spam folders.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/operations.md#mail\nbounds:\nhuman-only: yes\ndone-when:\n- mail-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T09:49:00Z",
+              "closedAt": "2026-03-04T10:00:00Z",
+              "updatedAt": "2026-03-04T10:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/8",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/8#issuecomment-1008",
+                    "body": "## Closing note\nThe sending domain is verified and a test reminder reached three providers' inboxes.\nChecks: `mail-check` PASS.\n",
+                    "createdAt": "2026-03-04T09:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:49:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:49:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T10:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 9,
+              "title": "The privacy notice is approved",
+              "body": "## Outcome\nThe library's data protection officer has approved the privacy notice a member sees\nbefore signing in for the first time.\nAccepting this decides: the wording of the notice.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/policy.md#member-data\nbounds:\nhuman-only: yes\ndone-when:\n- docs-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "OPEN",
+              "stateReason": null,
+              "createdAt": "2026-03-02T09:56:00Z",
+              "closedAt": null,
+              "updatedAt": "2026-03-02T09:56:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/9",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": []
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:56:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T09:56:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "number": 10,
+              "title": "Overdue reminders follow the schedule each branch sets",
+              "body": "## Outcome\nEach branch can set the days after the due date on which reminders are sent, and a\nmember receives reminders on exactly those days.\n\n## Design\nThe schedule is a branch setting whose default is the schedule the board agreed.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/policy.md#overdue-items, docs/design.md#notices\nbounds: lending/reminders.py, lending/settings.py, tests/test_reminders.py\nhuman-only: no\ndone-when:\n- reminders-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:03:00Z",
+              "closedAt": "2026-03-04T12:00:00Z",
+              "updatedAt": "2026-03-04T12:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/10",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/10#issuecomment-1010",
+                    "body": "## Closing note\nReminder days are a branch setting, defaulting to days 3, 10 and 21.\nChecks: `reminders-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T11:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:03:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T12:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 11,
+              "title": "The production database credentials are issued",
+              "body": "## Outcome\nThe service's production database account exists, and its credentials are in the\ndeployment's secret store.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/operations.md#database\nbounds:\nhuman-only: yes\ndone-when:\n- deploy-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:10:00Z",
+              "closedAt": "2026-03-04T13:00:00Z",
+              "updatedAt": "2026-03-04T13:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/11",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/11#issuecomment-1011",
+                    "body": "## Closing note\nThe account exists and its credentials are in the secret store.\nChecks: `deploy-check` PASS.\n",
+                    "createdAt": "2026-03-04T12:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:10:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:10:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T13:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 12,
+              "title": "The Northgate branch catalogue imports without errors",
+              "body": "## Outcome\nThe Northgate branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/northgate.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:17:00Z",
+              "closedAt": "2026-03-04T14:00:00Z",
+              "updatedAt": "2026-03-04T14:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/12",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/12#issuecomment-1012",
+                    "body": "## Closing note\nThe Northgate branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T13:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:17:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T14:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 13,
+              "title": "The Riverside branch catalogue imports without errors",
+              "body": "## Outcome\nThe Riverside branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/riverside.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:24:00Z",
+              "closedAt": "2026-03-04T15:00:00Z",
+              "updatedAt": "2026-03-04T15:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/13",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/13#issuecomment-1013",
+                    "body": "## Closing note\nThe Riverside branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T14:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:24:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T15:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 14,
+              "title": "The Hillcrest branch catalogue imports without errors",
+              "body": "## Outcome\nThe Hillcrest branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/hillcrest.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:31:00Z",
+              "closedAt": "2026-03-04T09:00:00Z",
+              "updatedAt": "2026-03-04T09:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/14",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/14#issuecomment-1014",
+                    "body": "## Closing note\nThe Hillcrest branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T08:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:31:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T09:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 15,
+              "title": "The Eastwood branch catalogue imports without errors",
+              "body": "## Outcome\nThe Eastwood branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/eastwood.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:38:00Z",
+              "closedAt": "2026-03-04T10:00:00Z",
+              "updatedAt": "2026-03-04T10:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/15",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/15#issuecomment-1015",
+                    "body": "## Closing note\nThe Eastwood branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T09:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:38:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T10:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 16,
+              "title": "The Westfield branch catalogue imports without errors",
+              "body": "## Outcome\nThe Westfield branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/westfield.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:45:00Z",
+              "closedAt": "2026-03-04T11:00:00Z",
+              "updatedAt": "2026-03-04T11:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/16",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/16#issuecomment-1016",
+                    "body": "## Closing note\nThe Westfield branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T10:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:45:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T11:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 17,
+              "title": "The Lakeside branch catalogue imports without errors",
+              "body": "## Outcome\nThe Lakeside branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/lakeside.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:52:00Z",
+              "closedAt": "2026-03-04T12:00:00Z",
+              "updatedAt": "2026-03-04T12:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/17",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/17#issuecomment-1017",
+                    "body": "## Closing note\nThe Lakeside branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T11:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:52:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T12:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 18,
+              "title": "The Oakridge branch catalogue imports without errors",
+              "body": "## Outcome\nThe Oakridge branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/oakridge.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T10:59:00Z",
+              "closedAt": "2026-03-04T13:00:00Z",
+              "updatedAt": "2026-03-04T13:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/18",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/18#issuecomment-1018",
+                    "body": "## Closing note\nThe Oakridge branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T12:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T10:59:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T13:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 19,
+              "title": "The Southport branch catalogue imports without errors",
+              "body": "## Outcome\nThe Southport branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/southport.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:06:00Z",
+              "closedAt": "2026-03-04T14:00:00Z",
+              "updatedAt": "2026-03-04T14:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/19",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/19#issuecomment-1019",
+                    "body": "## Closing note\nThe Southport branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T13:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:06:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T14:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 20,
+              "title": "The Maple Street branch catalogue imports without errors",
+              "body": "## Outcome\nThe Maple Street branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/maple-street.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:13:00Z",
+              "closedAt": "2026-03-04T15:00:00Z",
+              "updatedAt": "2026-03-04T15:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/20",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/20#issuecomment-1020",
+                    "body": "## Closing note\nThe Maple Street branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T14:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:13:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T15:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 21,
+              "title": "The Harbour branch catalogue imports without errors",
+              "body": "## Outcome\nThe Harbour branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/harbour.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:20:00Z",
+              "closedAt": "2026-03-04T09:00:00Z",
+              "updatedAt": "2026-03-04T09:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/21",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/21#issuecomment-1021",
+                    "body": "## Closing note\nThe Harbour branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T08:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:20:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T09:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 22,
+              "title": "The Central branch catalogue imports without errors",
+              "body": "## Outcome\nThe Central branch's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/central.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:27:00Z",
+              "closedAt": "2026-03-04T10:00:00Z",
+              "updatedAt": "2026-03-04T10:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/22",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/22#issuecomment-1022",
+                    "body": "## Closing note\nThe Central branch's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T09:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:27:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T10:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 23,
+              "title": "The mobile library catalogue imports without errors",
+              "body": "## Outcome\nThe mobile library's catalogue export loads into the lending service, and every record is\neither accepted or listed in the import report with the reason it was not.\n\n## Limits\nRecords the report lists are corrected at the branch, not in the import rules.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#import-rules\nbounds: migration/branches/mobile-library.toml\nhuman-only: no\ndone-when:\n- import-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:34:00Z",
+              "closedAt": "2026-03-04T11:00:00Z",
+              "updatedAt": "2026-03-04T11:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/23",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 2,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/23#issuecomment-1023",
+                    "body": "## Closing note\nThe mobile library's catalogue imported; the import report lists the records left to correct.\nChecks: `import-check` PASS.\n",
+                    "createdAt": "2026-03-04T10:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:34:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T11:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 24,
+              "title": "Search results show each item's availability at every branch",
+              "body": "## Outcome\nA search result lists, for each branch that holds the item, whether a copy is on the\nshelf, on loan or reserved.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#search\nbounds: lending/search.py, tests/test_search.py\nhuman-only: no\ndone-when:\n- search-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:41:00Z",
+              "closedAt": "2026-03-05T12:00:00Z",
+              "updatedAt": "2026-03-05T12:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/24",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 39,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/24#issuecomment-1024",
+                    "body": "## Closing note\nSearch shows availability per branch, read from the availability index (#39).\nChecks: `search-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-05T11:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:41:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-03T11:41:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-requested"
+                    }
+                  },
+                  {
+                    "__typename": "UnlabeledEvent",
+                    "createdAt": "2026-03-03T13:41:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-requested"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-05T12:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 25,
+              "title": "The production database is loaded from the migration snapshot",
+              "body": "## Outcome\nThe production database holds the migrated catalogues and member records, loaded from\nthe snapshot the migration produced.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/operations.md#database, docs/migration.md#snapshot\nbounds:\nhuman-only: yes\ndone-when:\n- deploy-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:48:00Z",
+              "closedAt": "2026-03-05T13:00:00Z",
+              "updatedAt": "2026-03-05T13:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/25",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 11,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/25#issuecomment-1025",
+                    "body": "## Closing note\nLoaded from the final migration snapshot; record counts match the import reports.\nChecks: `deploy-check` PASS.\n",
+                    "createdAt": "2026-03-05T12:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:48:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:48:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-05T13:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 26,
+              "title": "The circulation desk load test is recorded",
+              "body": "## Outcome\nA load test of a busy opening hour, with borrowing, renewals and searches at once, runs\nagainst staging, and its results are written down.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/operations.md#load-testing\nbounds: loadtest, docs/load-test-results.md\nhuman-only: no\ndone-when:\n- load-test\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T11:55:00Z",
+              "closedAt": "2026-03-06T14:00:00Z",
+              "updatedAt": "2026-03-06T14:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/26",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 24,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 7,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 3,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/26#issuecomment-1026",
+                    "body": "## Closing note\nThe results are in `docs/load-test-results.md`; every response stayed under a second.\nChecks: `load-test` PASS.\n",
+                    "createdAt": "2026-03-06T13:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T11:55:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-06T14:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 27,
+              "title": "The service runs at one branch for a week and what it showed is written down",
+              "body": "## Outcome\nThe Central branch uses the service for a week beside the paper cards, and every problem\nstaff meet is written down, with a ticket for each defect.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#trial-week\nbounds: docs/trial-week.md\nhuman-only: no\ndone-when:\n- docs-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "OPEN",
+              "stateReason": null,
+              "createdAt": "2026-03-02T12:02:00Z",
+              "closedAt": null,
+              "updatedAt": "2026-03-02T12:02:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/27",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 26,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 24,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 7,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 3,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 6,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": []
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:02:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "number": 28,
+              "title": "The service is announced to members",
+              "body": "## Outcome\nEvery member receives the announcement with the opening date and the privacy notice.\nAccepting this decides: the announcement's wording and the day it is sent.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/migration.md#announcement\nbounds:\nhuman-only: yes\ndone-when:\n- release-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "OPEN",
+              "stateReason": null,
+              "createdAt": "2026-03-02T12:09:00Z",
+              "closedAt": null,
+              "updatedAt": "2026-03-02T12:09:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/28",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  },
+                  {
+                    "name": "human-only"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 27,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 9,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": []
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:09:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:09:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "human-only"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "number": 29,
+              "title": "The loan periods for reference items are documented",
+              "body": "## Outcome\nStaff can read in the help pages that reference items are lent for the day only, and\nwhy.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#loan-periods\nbounds: docs/help/loan-periods.md\nhuman-only: no\ndiscovered-from: #3\ndone-when:\n- docs-check\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:16:00Z",
+              "closedAt": "2026-03-04T10:00:00Z",
+              "updatedAt": "2026-03-04T10:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/29",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/29#issuecomment-1029",
+                    "body": "## Closing note\nThe help page explains same-day loans for reference items.\nChecks: `docs-check` PASS.\n",
+                    "createdAt": "2026-03-04T09:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:16:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T10:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 31,
+              "title": "Members can place a hold on an item that is out on loan",
+              "body": "## Outcome\nA member can reserve an item with no copy on the shelf, and joins the end of that item's\nhold queue.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#holds\nbounds: lending/holds.py, tests/test_holds.py\nhuman-only: no\ndone-when:\n- holds-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:23:00Z",
+              "closedAt": "2026-03-04T12:00:00Z",
+              "updatedAt": "2026-03-04T12:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/31",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/31#issuecomment-1031",
+                    "body": "## Closing note\nHolds are placed on the title, and the queue is first come, first served.\nChecks: `holds-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T11:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:23:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T12:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 32,
+              "title": "A returned item with a hold goes to the hold shelf",
+              "body": "## Outcome\nWhen an item with a waiting hold is returned, the desk is told to put it on the hold\nshelf for the first member in the queue instead of back on the open shelves.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#holds\nbounds: lending/returns.py, tests/test_returns.py\nhuman-only: no\ndone-when:\n- returns-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:30:00Z",
+              "closedAt": "2026-03-04T13:00:00Z",
+              "updatedAt": "2026-03-04T13:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/32",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/32#issuecomment-1032",
+                    "body": "## Closing note\nThe return screen names the member and the hold shelf slot.\nChecks: `returns-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T12:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:30:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T13:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 33,
+              "title": "A member is told when a held item is ready to collect",
+              "body": "## Outcome\nThe member first in the queue receives a notice when their held item reaches the hold\nshelf, naming the branch and the last day to collect it.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#notices\nbounds: lending/notices.py, tests/test_notices.py\nhuman-only: no\ndone-when:\n- notices-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:37:00Z",
+              "closedAt": "2026-03-04T14:00:00Z",
+              "updatedAt": "2026-03-04T14:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/33",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/33#issuecomment-1033",
+                    "body": "## Closing note\nA ready notice is sent when the item is shelved, with a seven-day collection window.\nChecks: `notices-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T13:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:37:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T14:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 34,
+              "title": "A member can see their holds and their place in each queue",
+              "body": "## Outcome\nThe account page lists each of the member's holds with their place in its queue and,\nwhere the item is ready, the last day to collect it.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#holds, docs/design.md#member-data\nbounds: lending/web/account.py, tests/test_account.py\nhuman-only: no\ndone-when:\n- account-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:44:00Z",
+              "closedAt": "2026-03-05T15:00:00Z",
+              "updatedAt": "2026-03-05T15:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/34",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 33,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 32,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 31,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/34#issuecomment-1034",
+                    "body": "## Closing note\nThe account page shows holds, queue places and collection deadlines.\nChecks: `account-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-05T14:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:44:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-05T15:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 35,
+              "title": "A hold not collected in time passes to the next member",
+              "body": "## Outcome\nA held item not collected by its deadline is offered to the next member in the queue,\nand the member who missed it is told.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#holds, docs/policy.md#holds\nbounds: lending/holds.py, lending/notices.py, tests/test_holds.py\nhuman-only: no\ndone-when:\n- holds-tests\n- notices-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:51:00Z",
+              "closedAt": "2026-03-06T09:00:00Z",
+              "updatedAt": "2026-03-06T09:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/35",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 34,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 31,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/35#issuecomment-1035",
+                    "body": "## Closing note\nExpired holds pass to the next member each night, and both members are notified.\nChecks: `holds-tests` PASS, `notices-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-06T08:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:51:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-06T09:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 36,
+              "title": "Staff can reorder a hold queue with a recorded reason",
+              "body": "## Outcome\nA librarian can move a member within a hold queue, and the move is kept with who made\nit and why.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#holds, docs/design.md#audit-log\nbounds: lending/holds.py, lending/web/staff.py, tests/test_holds.py, tests/test_staff.py\nhuman-only: no\ndone-when:\n- holds-tests\n- staff-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T12:58:00Z",
+              "closedAt": "2026-03-07T10:00:00Z",
+              "updatedAt": "2026-03-07T10:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/36",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 35,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 31,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/36#issuecomment-1036",
+                    "body": "## Closing note\nQueue moves are written to the audit log with the librarian and the reason.\nChecks: `holds-tests` PASS, `staff-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-07T09:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T12:58:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-07T10:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 37,
+              "title": "Reminders and hold notices arrive in one daily message",
+              "body": "## Outcome\nA member with several reminders and hold notices on one day receives a single message\nthat lists them all.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#notices\nbounds: lending/notices.py, lending/reminders.py, tests/test_notices.py\nhuman-only: no\ndone-when:\n- notices-tests\n- reminders-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T13:05:00Z",
+              "closedAt": "2026-03-08T11:00:00Z",
+              "updatedAt": "2026-03-08T11:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/37",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 10,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  },
+                  {
+                    "number": 36,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/37#issuecomment-1037",
+                    "body": "## Closing note\nNotices are gathered and sent once a day at 07:00 branch time.\nChecks: `notices-tests` PASS, `reminders-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-08T10:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T13:05:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-08T11:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 38,
+              "title": "Members choose which notices they receive",
+              "body": "## Outcome\nA member can turn off each kind of optional notice from their account page; the overdue\nreminders the board requires stay on.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#notices, docs/policy.md#overdue-items\nbounds: lending/web/account.py, lending/notices.py, tests/test_account.py\nhuman-only: no\ndone-when:\n- account-tests\n- notices-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T13:12:00Z",
+              "closedAt": "2026-03-09T12:00:00Z",
+              "updatedAt": "2026-03-09T12:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/38",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [
+                  {
+                    "number": 37,
+                    "repository": {
+                      "nameWithOwner": "example-org/example-project"
+                    }
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/38#issuecomment-1038",
+                    "body": "## Closing note\nNotice preferences are on the account page; overdue reminders cannot be turned off.\nChecks: `account-tests` PASS, `notices-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-09T11:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T13:12:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-09T12:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            },
+            {
+              "number": 39,
+              "title": "The availability index is updated when a loan changes",
+              "body": "## Outcome\nBorrowing, returning or reserving a copy updates the availability index in the same\ntransaction, so a search never shows a copy on the shelf that has just been borrowed.\n\n<!-- outcomebound:begin id=ticket v=1 -->\nreads: docs/design.md#search\nbounds: lending/search_index.py, lending/loans.py, tests/test_search_index.py\nhuman-only: no\ndiscovered-from: #24\ndone-when:\n- search-tests\n- loans-tests\n- lint\n<!-- outcomebound:end id=ticket -->\n",
+              "state": "CLOSED",
+              "stateReason": "COMPLETED",
+              "createdAt": "2026-03-02T13:19:00Z",
+              "closedAt": "2026-03-04T13:00:00Z",
+              "updatedAt": "2026-03-04T13:00:00Z",
+              "lastEditedAt": null,
+              "url": "https://tracker.invalid/example-org/example-project/issues/39",
+              "author": {
+                "login": "example-user"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "example-user"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "labels": {
+                "nodes": [
+                  {
+                    "name": "ob-ticket"
+                  }
+                ],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "parent": {
+                "number": 1,
+                "repository": {
+                  "nameWithOwner": "example-org/example-project"
+                }
+              },
+              "blockedBy": {
+                "nodes": [],
+                "pageInfo": {
+                  "hasNextPage": false
+                }
+              },
+              "subIssuesSummary": {
+                "total": 0
+              },
+              "comments": {
+                "pageInfo": {
+                  "hasNextPage": false
+                },
+                "nodes": [
+                  {
+                    "url": "https://tracker.invalid/example-org/example-project/issues/39#issuecomment-1039",
+                    "body": "## Closing note\nLoan changes update the index in the same transaction.\nChecks: `search-tests` PASS, `loans-tests` PASS, `lint` PASS.\n",
+                    "createdAt": "2026-03-04T12:59:00Z",
+                    "lastEditedAt": null,
+                    "author": {
+                      "login": "example-user"
+                    }
+                  }
+                ]
+              },
+              "timelineItems": {
+                "pageInfo": {
+                  "hasPreviousPage": false
+                },
+                "nodes": [
+                  {
+                    "__typename": "LabeledEvent",
+                    "createdAt": "2026-03-02T13:19:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "label": {
+                      "name": "ob-ticket"
+                    }
+                  },
+                  {
+                    "__typename": "ClosedEvent",
+                    "createdAt": "2026-03-04T13:00:00Z",
+                    "actor": {
+                      "login": "example-user"
+                    },
+                    "stateReason": "COMPLETED"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,226 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:tickets-report:2",
+  "title": "OutcomeBound ticket report v2",
+  "description": "The object `outcomebound tickets check --json` prints. The message object is written out wherever it appears, because the engine's schema checker has no reference keyword and an ignored one would un-validate the field it guards.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result",
+    "verb",
+    "store",
+    "input",
+    "counts",
+    "tickets",
+    "messages"
+  ],
+  "properties": {
+    "result": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ],
+      "description": "The worst ticket's, run-level messages counting as a ticket of their own."
+    },
+    "verb": {
+      "type": "string",
+      "enum": [
+        "check"
+      ],
+      "description": "`brief` is absent: it prints a document and no report."
+    },
+    "store": {
+      "type": "string",
+      "enum": [
+        "github"
+      ]
+    },
+    "input": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The export a verb was given, or null where it read none.",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "modified",
+        "age_seconds"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modified": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "UTC, one-second resolution. Null for input read from standard input, which has no modification time.",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "age_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Null where the age is unknown, which is what a report renders for input that has no modification time."
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tickets",
+        "ignored",
+        "open",
+        "closed",
+        "dropped"
+      ],
+      "properties": {
+        "tickets": {
+          "type": "integer"
+        },
+        "ignored": {
+          "type": "integer"
+        },
+        "open": {
+          "type": "integer"
+        },
+        "closed": {
+          "type": "integer"
+        },
+        "dropped": {
+          "type": "integer"
+        }
+      }
+    },
+    "tickets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "state",
+          "result",
+          "messages"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "`#<n>`, or the file stem of a draft, which `check --draft` reports before any id exists. The shape is the store reader's to judge, so it is not a pattern here.",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed",
+              "dropped"
+            ]
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "UNVERIFIED"
+            ]
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "level",
+                "code",
+                "ticket",
+                "text",
+                "next"
+              ],
+              "properties": {
+                "level": {
+                  "type": "string",
+                  "enum": [
+                    "ERROR",
+                    "UNVERIFIED",
+                    "WARNING",
+                    "INFO"
+                  ]
+                },
+                "code": {
+                  "type": "string",
+                  "description": "A code from the one message table, `tickets_report.MESSAGES`; the table is not repeated here, since a second copy could disagree with the one the engine refuses an unknown code against.",
+                  "pattern": "^[A-Z][A-Z_]+$"
+                },
+                "ticket": {
+                  "type": "string",
+                  "description": "The ticket the message is about, as `tickets[].id` spells it; empty on a run-level message."
+                },
+                "text": {
+                  "type": "string"
+                },
+                "next": {
+                  "type": "string",
+                  "description": "The next action, empty where there is none."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "messages": {
+      "type": "array",
+      "description": "Run-level messages: what is about the run rather than about one ticket.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "level",
+          "code",
+          "ticket",
+          "text",
+          "next"
+        ],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": [
+              "ERROR",
+              "UNVERIFIED",
+              "WARNING",
+              "INFO"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "A code from the one message table, `tickets_report.MESSAGES`.",
+            "pattern": "^[A-Z][A-Z_]+$"
+          },
+          "ticket": {
+            "type": "string",
+            "description": "The ticket the message is about, as `tickets[].id` spells it; empty on a run-level message."
+          },
+          "text": {
+            "type": "string"
+          },
+          "next": {
+            "type": "string",
+            "description": "The next action, empty where there is none."
+          }
+        }
+      }
+    }
+  }
+}

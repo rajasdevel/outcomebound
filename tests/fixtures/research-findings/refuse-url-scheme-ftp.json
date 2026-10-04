@@ -1,0 +1,8 @@
+{
+  "claim": "The model accepts an effort setting of xhigh.",
+  "kind": "fact",
+  "observed_on": "2026-10-02",
+  "subject": "claude-opus-5-5",
+  "url": "ftp://example.com/file",
+  "version": 1
+}

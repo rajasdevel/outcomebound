@@ -1,0 +1,15 @@
+# Baselines, graders, the parser's document, the project note, the installed core skill and
+# repository exclusion state copied into the candidate-writable fixture.
+checks/scope_walk.py
+checks/unchanged.sh
+checks/transcript_commands.py
+checks/cited.py
+docs/parser.md
+AGENTS.md
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.baseline-status
+.baseline-files
+.baseline-hashes
+.git/config
+.git/info/exclude

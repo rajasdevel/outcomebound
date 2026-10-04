@@ -1,0 +1,378 @@
+{
+ "version": 1,
+ "timeout_seconds": 1500,
+ "claims": [
+  {
+   "name": "tickets-github",
+   "risk": "the export reader misreads what the host wrote",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_github.py"
+   ]
+  },
+  {
+   "name": "tickets-brief",
+   "risk": "a brief misstates the ticket, a section it names or a check",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_brief.py"
+   ]
+  },
+  {
+   "name": "tickets-check",
+   "risk": "check misreports what the tickets say",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_check.py",
+    "tests/test_tickets_draft.py",
+    "tests/test_tickets_graph.py"
+   ]
+  },
+  {
+   "name": "tickets-claims",
+   "risk": "a claims plan is read as something it does not say, or stops a verb where it should be refused",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_claims.py"
+   ]
+  },
+  {
+   "name": "tickets-skills",
+   "risk": "the skills tell an agent something false or unsafe about the ticket layer",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_fragment.py",
+    "tests/test_skill_frontmatter.py",
+    "tests/test_skill_paths_resolve.py"
+   ]
+  },
+  {
+   "name": "tickets-docs",
+   "risk": "the user documents say something false about the ticket layer",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_docs.py"
+   ]
+  },
+  {
+   "name": "tickets-declaration",
+   "risk": "the store declaration reads a project's word as something it did not say",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_declaration.py"
+   ]
+  },
+  {
+   "name": "tickets-model",
+   "risk": "the normalised ticket and its schema come apart",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_model.py"
+   ]
+  },
+  {
+   "name": "tickets-report",
+   "risk": "a report key or message code exists that no contract and no schema declares",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_tickets_report.py"
+   ]
+  },
+  {
+   "name": "schemas-subset",
+   "risk": "a shipped schema uses a keyword the engine's checker ignores",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_schemacheck.py"
+   ]
+  },
+  {
+   "name": "gate-stdlib",
+   "risk": "a third-party import enters the engine",
+   "kind": "static",
+   "required": true,
+   "command": [
+    "make",
+    "gate"
+   ]
+  },
+  {
+   "name": "floor-fast",
+   "risk": "the floor finds a new finding, a missing tool or an unruled loosening",
+   "kind": "static",
+   "required": true,
+   "command": [
+    "make",
+    "check"
+   ]
+  },
+  {
+   "name": "validation-redaction",
+   "risk": "a redacting claim's report detail carries a parser's raw note",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_validation.py"
+   ]
+  },
+  {
+   "name": "discovery-adapters",
+   "risk": "a discovery or harness-table refusal names less than the whole set a caller has to fix",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_discovery.py",
+    "tests/test_adapters.py"
+   ]
+  },
+  {
+   "name": "adoption-writers",
+   "risk": "the two adoption writers, or the two managed-block readers, come apart",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_identity.py",
+    "tests/test_malformed_input.py"
+   ]
+  },
+  {
+   "name": "decision-brief",
+   "risk": "a decision brief is drawn in a shape a terminal or a markdown view misreads, or padded past what is known",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_decision_brief.py",
+    "tests/test_decision_brief_cli.py",
+    "tests/test_surfaces.py"
+   ]
+  },
+  {
+   "name": "adopt",
+   "risk": "an install writes, records, checks or removes a block, file, fact or skill other than the install design says, or a verb's help names a command that does not run",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_adopt.py",
+    "tests/test_facts.py",
+    "tests/test_fragments.py",
+    "tests/test_outcomebound_launcher.py",
+    "tests/test_paths.py"
+   ]
+  },
+  {
+   "name": "floor",
+   "risk": "the floor misreads a tool's findings, fits a project wrongly, or lets a loosening pass",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_floor.py"
+   ]
+  },
+  {
+   "name": "shipped-commands",
+   "risk": "a command the shipped text or a --help usage line gives an agent does not run in an adopting project",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_doc_cli_consistency.py",
+    "tests/test_outcomebound_launcher.py"
+   ]
+  },
+  {
+   "name": "instructions-audit",
+   "risk": "the instruction audit misses or misreports what a harness loads",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_instruction_audit.py"
+   ]
+  },
+  {
+   "name": "fragments",
+   "risk": "a fragment is parsed, detected or rendered wrongly",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_fragments.py"
+   ]
+  },
+  {
+   "name": "script-help",
+   "risk": "an entry point reads --help as an argument and fails, or answers it having checked nothing",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_script_help.py",
+    "tests/test_no_third_party_imports.py",
+    "tests/test_exec_bits.py"
+   ]
+  },
+  {
+   "name": "ci-workflow",
+   "risk": "the release check or this repository's CI workflow stops agreeing with VERSION, the changelog or the tag",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_release_check.py"
+   ]
+  },
+  {
+   "name": "claude-pointer",
+   "risk": "a route writes or asks for a CLAUDE.md pointer where Claude Code reads AGENTS.md itself, or stops writing one where it does not",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_harness_table.py"
+   ]
+  },
+  {
+   "name": "suite",
+   "risk": "a change breaks behaviour a test in this repository holds, a wording pin or a contract test among them",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "make",
+    "test"
+   ],
+   "timeout_seconds": 3600
+  },
+  {
+   "name": "evals-runner",
+   "risk": "the eval runner runs a model other than the one named, hands the model another kernel than its arm's, lets an API key reach codex, or counts a run whose grader the model rewrote",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_evals_runner.py",
+    "tests/test_evals_codex_isolation.py"
+   ]
+  },
+  {
+   "name": "eval-scenarios",
+   "risk": "a scenario's post-check accepts the behaviour it exists to catch, or rejects the one it exists to pass",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_eval_scenarios.py"
+   ]
+  },
+  {
+   "name": "spec-shapes",
+   "risk": "a rewritten spec template scaffolds a spec the checker misreads",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_spec_shapes.py"
+   ]
+  }
+ ]
+}
