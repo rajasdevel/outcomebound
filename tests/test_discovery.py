@@ -720,3 +720,43 @@ def test_discovery_names_a_harness_root_the_project_tracks_and_fills(tmp_path: P
     assert observations["observed"]["project_skill_roots"] == [
         {"path": ".agents/skills", "tracked": True, "skills": ["release-notes"]}
     ]
+
+
+def test_what_git_ignores_and_nested_repositories_are_not_entered(tmp_path: Path) -> None:
+    """In a Git work tree an ignored folder is never walked, so it cannot use up the entry
+    limit, and a nested repository's metadata is never read as this project's."""
+
+    target = tmp_path / "project"
+    target.mkdir()
+    subprocess.run(["git", "init", "-q", str(target)], check=True)
+    (target / ".gitignore").write_text("out/\n*.local.json\n", encoding="utf-8")
+    (target / "out" / "big").mkdir(parents=True)
+    (target / "out" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    (target / "package.local.json").write_text("{}\n", encoding="utf-8")
+    nested = target / "vendor-src" / "tool"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(nested)], check=True)
+    (nested / "package.json").write_text(
+        json.dumps({"scripts": {"test": "jest"}}), encoding="utf-8"
+    )
+    (target / "go.mod").write_text("module example.invalid/p\n", encoding="utf-8")
+
+    result = discover(target)
+
+    paths = {row["path"] for row in result["observed"]["markers"]}
+    assert paths == {"go.mod"}
+    assert result["observed"]["package_scripts"] == []
+    assert "what Git ignores was not entered" in result["limits"]
+    assert "nested repositories were not entered" in result["limits"]
+
+
+def test_outside_git_the_report_says_no_gitignore_was_applied(tmp_path: Path) -> None:
+    target = tmp_path / "plain"
+    (target / "out").mkdir(parents=True)
+    (target / ".gitignore").write_text("out/\n", encoding="utf-8")
+    (target / "out" / "go.mod").write_text("module example.invalid/p\n", encoding="utf-8")
+
+    result = discover(target)
+
+    assert {row["path"] for row in result["observed"]["markers"]} == {"out/go.mod"}
+    assert any("no .gitignore was applied" in row for row in result["limits"])

@@ -528,3 +528,32 @@ def test_a_duplicate_fragment_id_is_rejected_rather_than_silently_deduped(source
 
     with pytest.raises(FragmentError, match="duplicate fragment id.*python"):
         select(load_all(source), ["python", "solo", "python"])
+
+
+def _local(edges: str = "[]", mechanisms: str = "`review` when a change is risky.") -> str:
+    return (
+        "---\nid: local\nfamily: setup\napplies: this repository\n"
+        f"edges: {edges}\ndetect: []\nversion: 1\n---\n"
+        "**Context** — c.\n**Bounds** — b.\n"
+        f"**Mechanisms** — {mechanisms}\n"
+        "**Completion bar** — d.\n**Distinguish** — e.\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "edge", ["pushing a tag; deleting a branch", "pushing a tag\\ndeleting a branch"]
+)
+def test_an_edge_the_facts_line_would_split_is_refused(edge: str) -> None:
+    """The facts line joins edges with '; ' on one line, so an edge holding either reads as
+    two edges."""
+
+    with pytest.raises(FragmentError, match="edge"):
+        parse_fragment(_local(f'["{edge}"]'))
+    assert parse_fragment(_local('["pushing a tag, then a release"]')).edges == (
+        "pushing a tag, then a release",
+    )
+
+
+def test_a_backticked_command_on_the_mechanisms_line_is_refused_with_the_rule() -> None:
+    with pytest.raises(FragmentError, match="only mechanism ids take backticks"):
+        parse_fragment(_local(mechanisms="`review` before `make deploy`."))

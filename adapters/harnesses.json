@@ -50,6 +50,17 @@
       ],
       "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl [claude-harness]: subdirectory files on demand; .claude/rules/*.md scoped by paths:"
     },
+    "ancestors": {
+      "loads": true,
+      "names": [
+        "CLAUDE.md",
+        ".claude/CLAUDE.md",
+        "CLAUDE.local.md",
+        "AGENTS.md",
+        ".claude/AGENTS.md"
+      ],
+      "source": "https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/claude-code.md §1, read 2026-10-04 [claude-harness, harness-loading-coverage-3]: every CLAUDE.md, .claude/CLAUDE.md and CLAUDE.local.md from the filesystem root down to the working directory loads at launch, concatenated; where none of them is in the working directory or above it, every AGENTS.md and .claude/AGENTS.md from the working directory upward loads at session start"
+    },
     "overrides": [
       {
         "path": "CLAUDE.local.md",

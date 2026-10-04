@@ -192,6 +192,10 @@
           "next": {
             "type": "string",
             "description": "The next step, for a person or an agent to take; never taken by the command."
+          },
+          "decides": {
+            "type": "boolean",
+            "description": "false for a finding that is reported and does not change the result: OutcomeBound's own finish-check entry where AGENTS.md shows the Done commands it runs, a file loaded from a folder above the target, or an unverified row the target does not use."
           }
         }
       }

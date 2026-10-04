@@ -171,15 +171,20 @@ wrote, and to read the result as follows:
 - All other results: the agent writes them in its handoff, and it continues to use the notes.
   These results include a `FAIL` or a review hit in a different file, and any `UNVERIFIED`. Two
   examples occur often. The finish-check entry that `adopt` writes in the harness settings is a
-  review hit in every install. A row in the harness table becomes `UNVERIFIED` after its re-check
-  date.
+  review hit in every install. While it runs only the Done commands that `AGENTS.md` shows, the
+  report marks it "(does not change the result)", and the exit code stays as it is. A row in the
+  harness table becomes `UNVERIFIED` after its re-check date.
 
 Then, before the agent uses a fact from a note, it checks that fact against its source.
 
 ## Harness notes
 
 - Every harness that `adopt` installs for loads `AGENTS.md`, directly or through an import file,
-  so the pointer reaches all of them. With `--harness generic`, you check that your harness loads
+  so the pointer reaches all of them.
+- Claude Code also loads instruction files from each folder above the folder where it starts. A
+  session in a worktree under `.agents/worktrees/` thus also loads the main checkout's
+  `CLAUDE.md`, or its `AGENTS.md` where no `CLAUDE.md` is found. `outcomebound instructions check`
+  names each such file, and `adopt` warns about it. With `--harness generic`, you check that your harness loads
   the file.
 - Codex's default sandbox keeps `.agents/` and `.git` read-only. The fragment tells the agent to
   ask for each write there through the approval path of the harness. Where Codex refuses the

@@ -161,6 +161,7 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("block", "AGENTS.md", adopt.FACTS),
         ("block", "AGENTS.md", adopt.POINTERS),
         ("fragment", PYTHON_FRAGMENT, "python"),
+        ("ignore", adopt.LOCAL_IGNORE, adopt.LOCAL_RECORDS),
         ("pointer", "CLAUDE.md", "pointer-claude-md"),
         ("skill", CLAUDE_BRIEF, "decision-brief"),
         ("skill", ".claude/skills/gather-requirements/SKILL.md", "gather-requirements"),
@@ -168,10 +169,10 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("skill", CLAUDE_SKILL, "using-outcomebound"),
     ]
     assert records[1]["fragments"] == ["python"]
-    assert records[5]["harnesses"] == records[6]["harnesses"] == ["claude-code"]
+    assert records[6]["harnesses"] == records[7]["harnesses"] == ["claude-code"]
     for record in records:
         assert adopt.state(target, ROOT, record, records) == "current"
-    assert (records[5]["sha256"], records[-1]["sha256"]) == (sha(brief), sha(skill))
+    assert (records[6]["sha256"], records[-1]["sha256"]) == (sha(brief), sha(skill))
     assert records[3]["sha256"] == sha(shipped)
 
 
@@ -386,7 +387,7 @@ def test_claude_code_on_a_target_with_no_claude_md_gets_no_file(
 
     assert code == 0, err
     assert not (target / "CLAUDE.md").exists()
-    assert kinds(target) == ["block", "block", "block", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
     assert "CLAUDE.md" not in facts_lines(target)["Precedence"]
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
@@ -433,7 +434,7 @@ def test_each_file_that_hides_agents_md_brings_the_import_block_back(
     assert code == 0, err
     assert list(blocks(target, "CLAUDE.md")) == ["pointer-claude-md"]
     assert {path: snapshot(target)[path] for path in before} == before
-    assert kinds(target) == ["block", "block", "block", "pointer", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "block", "ignore", "pointer", *SKILL_RECORDS]
 
 
 def test_an_import_block_an_older_engine_wrote_is_kept_until_its_file_is_gone(
@@ -460,7 +461,7 @@ def test_an_import_block_an_older_engine_wrote_is_kept_until_its_file_is_gone(
 
     assert code == 0, err
     assert not (target / "CLAUDE.md").exists()
-    assert kinds(target) == ["block", "block", "block", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
 
@@ -497,7 +498,7 @@ def test_a_claude_md_link_or_import_line_already_loads_agents_md(
     for target in (linked, imported):
         code, _, err = run(capsys, str(target), "--harness", "claude-code")
         assert code == 0, err
-        assert kinds(target) == ["block", "block", "block", *SKILL_RECORDS]
+        assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
     assert os.readlink(linked / "CLAUDE.md") == "AGENTS.md"
     assert (imported / "CLAUDE.md").read_text(encoding="utf-8") == "# Notes\n\n@AGENTS.md\n"
 
@@ -514,7 +515,7 @@ def test_an_import_block_whose_file_became_a_link_is_dropped_not_followed(
 
     assert code == 0, err
     assert os.readlink(target / "CLAUDE.md") == "AGENTS.md"
-    assert kinds(target) == ["block", "block", "block", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
 
 
 def test_a_plain_claude_md_gets_the_import_block_above_its_own_text(
@@ -556,7 +557,7 @@ def test_repeated_harness_flags_accumulate_and_naming_fewer_drops_the_rest(
     assert not (target / "CLAUDE.md").exists()
     for name in adopt.SKILLS:
         assert (target / f".agents/skills/{name}/SKILL.md").is_file()
-    assert kinds(target) == ["block", "block", "block", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
 
 
 @pytest.mark.parametrize("row", [None, {"verified": True, "pointer_mechanism": "RULES.md"}])
@@ -681,6 +682,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         f"AGENTS.md ({adopt.FACTS})": "current",
         f"AGENTS.md ({adopt.POINTERS})": "current",
         PYTHON_FRAGMENT: "current",
+        adopt.LOCAL_IGNORE: "current",
         "CLAUDE.md (pointer-claude-md)": "missing",
         CLAUDE_BRIEF: "stale",
         CLAUDE_SKILL: "edited",
@@ -1782,3 +1784,145 @@ def test_an_unknown_human_style_is_refused_and_check_takes_none(tmp_path: Path) 
         adopt.main([str(target), "--human-style", "plain"])
     with pytest.raises(SystemExit):
         adopt.main([str(target), "--check", "--human-style", "ste"])
+
+
+# --- what an install warns about ---------------------------------------------------
+
+
+def warnings(out: str) -> list[str]:
+    return [line for line in out.splitlines() if line.startswith("warning")]
+
+
+def test_detect_reads_a_codex_folder_as_codex(tmp_path: Path, capsys: Capture) -> None:
+    target = repo(tmp_path / "t", {"AGENTS.md": "# P\n", ".codex/config.toml": ""})
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    words = shlex.split(out, comments=True)
+    assert code == 0 and words[words.index("--harness") + 1] == "codex"
+
+
+def test_detect_says_a_test_command_it_did_not_read_from_ci_runs_on_the_host(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    guessed = repo(tmp_path / "guessed", {"pytest.ini": "[pytest]\n"})
+    workflow = "jobs:\n  test:\n    steps:\n      - run: pytest -q\n"
+    from_ci = repo(
+        tmp_path / "ci", {"pytest.ini": "[pytest]\n", ".github/workflows/c.yml": workflow}
+    )
+
+    _, out, _ = run(capsys, str(guessed), "--detect")
+    assert "# python3 -m pytest is what pytest.ini suggests" in out and "on the host" in out
+    _, out, _ = run(capsys, str(from_ci), "--detect")
+    assert "on the host" not in out
+
+
+def test_every_install_keeps_outcomebounds_local_records_out_of_git(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t")
+    assert run(capsys, str(target))[0] == 0
+
+    records = [
+        ".outcomebound/research-inbox/20261004-x.json",
+        ".outcomebound/.outcomebound-checks/a.log",
+        ".outcomebound/plans/.outcomebound-checks/b.log",
+    ]
+    listed = subprocess.run(
+        [GIT, "check-ignore", "--no-index", *records, adopt.MANIFEST],
+        cwd=target,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+    assert listed == records
+    assert run(capsys, str(target), "--remove")[0] == 0
+    assert not (target / adopt.LOCAL_IGNORE).exists()
+
+
+def test_an_install_warns_for_each_path_git_ignores(tmp_path: Path, capsys: Capture) -> None:
+    target = repo(tmp_path / "t", {".gitignore": ".claude/\n"})
+
+    code, out, _ = run(capsys, str(target), "--harness", "claude-code,codex")
+
+    assert code == 0
+    ignored = [line.split()[1].rstrip(":") for line in warnings(out)]
+    assert ignored == sorted(path for path in manifest_paths(target) if path.startswith(".claude/"))
+    assert all("(.gitignore:1: .claude/)" in line for line in warnings(out))
+
+
+def manifest_paths(target: Path) -> list[str]:
+    return sorted({record["path"] for record in manifest(target)["artifacts"]})
+
+
+def test_an_install_warns_where_a_tracked_agents_md_holds_uncommitted_changes(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"AGENTS.md": "# P\n"})
+    commit_all(target)
+    _, out, _ = run(capsys, str(target), "--dry-run")
+    assert warnings(out) == []
+
+    (target / "AGENTS.md").write_text("# P\n\nA change not committed.\n", encoding="utf-8")
+    _, out, _ = run(capsys, str(target))
+    [warned] = warnings(out)
+    assert "AGENTS.md holds changes that are not committed" in warned
+
+
+def test_an_install_warns_where_a_harness_also_loads_a_folder_above(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Claude Code loads CLAUDE.md files from every folder above the working directory, so a
+    parent install's contract loads in a nested repository too."""
+
+    parent = repo(tmp_path / "parent", {"CLAUDE.md": "# Parent\n"})
+    child = repo(parent / "child", {"README.md": "# C\n"})
+
+    _, out, _ = run(capsys, str(child), "--harness", "claude-code")
+    [warned] = warnings(out)
+    assert warned.startswith("warning  claude-code: a session here also loads ../CLAUDE.md")
+    _, out, _ = run(capsys, str(child), "--harness", "codex")
+    assert warnings(out) == []
+
+
+def test_a_projects_own_local_ignore_file_is_refused_by_name_even_under_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """adopt now owns .outcomebound/.gitignore whole; a file the project wrote there is never
+    replaced, since its lines would be lost."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_IGNORE: "/my-own-thing/\n"})
+    before = snapshot(target)
+
+    for extra in ((), ("--force",)):
+        code, _, err = run(capsys, str(target), *extra)
+        assert code == 1 and "move its lines to the root .gitignore" in err
+    assert snapshot(target) == before
+
+
+def test_the_ignored_path_warning_escapes_the_rule_it_quotes(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {".gitignore": "[\x1b.]claude/\n"})
+
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code")
+
+    assert warnings(out) and "\x1b" not in out
+    assert "[\\x1b.]claude/" in warnings(out)[0]
+
+
+def test_a_codex_install_names_the_sandbox_route_for_unattended_sessions(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Codex's default sandbox keeps .agents and .git read-only and a Desktop or IDE session
+    is reported to have no --add-dir flag (not in the research), so the report names the
+    configuration route, UNVERIFIED."""
+
+    target = repo(tmp_path / "t")
+
+    _, out, _ = run(capsys, str(target), "--harness", "codex")
+    [line] = [line for line in out.splitlines() if "writable_roots" in line]
+    assert line.startswith("UNVERIFIED codex:")
+    resolved = target.resolve()
+    assert f'"{resolved / ".agents"}"' in line and f'"{resolved / ".git"}"' in line
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code")
+    assert "writable_roots" not in out
