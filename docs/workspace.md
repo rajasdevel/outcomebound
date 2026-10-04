@@ -106,7 +106,8 @@ envelope: the bounds that you grant in advance.
 
 Start a session in each repository that you change. The hooks and the sandbox of a repository
 apply only to a session that starts in it. If you ask one session to change a different
-repository, the agent asks you one time to add that repository as a writable root. It then runs
+repository, the agent asks you one time to add that repository as a writable root. Until you do,
+it holds the items that write there. It runs
 the Done commands of that repository itself, and it says so in its report, because the hooks of
 that repository do not run in the session.
 
@@ -123,7 +124,8 @@ The four folders are not committed. They are not in a clone, and they do not rea
 Some scanners walk folders that Git ignores, for example `gitleaks dir .` or a content gate that
 does not read `.gitignore`. Such a scanner reads each worktree under `.agents/worktrees/` as a
 second copy of the repository, so a gate that was green can fail. Make the scan skip the four
-folders at its root. The fragment tells the agent that a finding only in those folders is not a
+folders at its root. This is your change, not the agent's. The fragment tells the agent to run
+such a scan from the root of its worktree, and that a finding only in those folders is not a
 finding in its work.
 
 ## Handoffs and shared memory
@@ -217,15 +219,15 @@ Then, before the agent uses a fact from a note, it checks that fact against its 
   worktree commits into the Git common directory.
   - In the Codex CLI, start Codex with `--add-dir <repository>/.agents` and
     `--add-dir <repository>/.git`.
-  - The Codex desktop app and the IDE extension have no such flag. Add both paths to
-    `writable_roots` under `[sandbox_workspace_write]` in your own Codex `config.toml`. A project's
-    `.codex/config.toml` does not apply sandbox keys. The research for Codex does not record this
-    key, so check it against your Codex release.
+  - The Codex desktop app and the IDE extension are reported to have no such flag. Add both
+    paths to `writable_roots` under `[sandbox_workspace_write]` in your own Codex `config.toml`. A
+    project's `.codex/config.toml` does not apply sandbox keys. The research for Codex does not
+    record this key or the flags of these two surfaces, so check both against your Codex release.
 
-  Until both folders are writable, the agent continues with the work that does not need them, and
-  it keeps that work in the writable part of the checkout. It never moves the work to a temporary
-  directory. In its handoff, or in its report when it cannot write the handoff, it names what you
-  must set.
+  Until both folders are writable, the agent holds each item that must write there: make a
+  worktree, edit in one, commit or write a handoff. It continues with the work that does not
+  write there, such as reads and checks. It never moves the work to a temporary directory or into
+  the main checkout. In its report, it names what you must set.
 
 ## What it gives you, and what it does not
 

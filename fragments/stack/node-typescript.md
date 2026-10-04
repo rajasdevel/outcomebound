@@ -10,7 +10,7 @@ version: 5
 when present; type-checking, runtime tests, and an emitted bundle establish different properties.
 **Bounds** — existing dependency selections are preserved and changed deliberately; where the
 project publishes, publishing a package version and moving a shared registry tag are irreversible
-edges, which the `ci-release` fragment declares.
+edges, which the `ci-release` fragment, or this project's local fragment, declares.
 **Mechanisms** — `failing-test-first` when a focused regression adds useful signal; `broad-suite`
 when shared changes affect consumers; `spec` when later work relies on an API or wire-format
 decision the code cannot show; `review` when existing ownership policy requires it.
