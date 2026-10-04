@@ -1897,3 +1897,29 @@ def test_an_install_warns_where_a_harness_also_loads_a_folder_above(
     assert warned.startswith("warning  claude-code: a session here also loads ../CLAUDE.md")
     _, out, _ = run(capsys, str(child), "--harness", "codex")
     assert warnings(out) == []
+
+
+def test_a_projects_own_local_ignore_file_is_refused_by_name_even_under_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """adopt now owns .outcomebound/.gitignore whole; a file the project wrote there is never
+    replaced, since its lines would be lost."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_IGNORE: "/my-own-thing/\n"})
+    before = snapshot(target)
+
+    for extra in ((), ("--force",)):
+        code, _, err = run(capsys, str(target), *extra)
+        assert code == 1 and "move its lines to the root .gitignore" in err
+    assert snapshot(target) == before
+
+
+def test_the_ignored_path_warning_escapes_the_rule_it_quotes(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {".gitignore": "[\x1b.]claude/\n"})
+
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code")
+
+    assert warnings(out) and "\x1b" not in out
+    assert "[\\x1b.]claude/" in warnings(out)[0]

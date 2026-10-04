@@ -8,14 +8,15 @@ hidden characters, concealed content, override phrases, harness configuration, w
 `--base` the instruction files changed since a ref, and whether each harness's loading
 facts are verified and current. Each check answers to one rule of the prompt standard
 (`docs/prompt-standard.md`) and carries that rule's severity; the security family runs
-first and is reported first. A harness entry adopt wrote, its digest the manifest's record and
-its command only adopt's verb, is a review hit that quotes the Done commands it runs, since the
-manifest is the target's own data; it does not change the result while those commands are the
-ones AGENTS.md's project facts show. A hidden character in an agents' note reads
-UNVERIFIED for that note, where in an instruction file it is a FAIL. Also reported, and not
-changing the result: each instruction file a harness's row says it loads from a folder above
-the target (`ancestors`), which this module names and never opens, and, where every row was
-selected, the loading facts of a row whose files the target does not hold.
+first and is reported first. A harness entry that is byte for byte what adopt writes for the
+recorded Done commands, its digest the manifest's record, is a review hit that quotes the
+Done commands it runs, since the manifest is the target's own data; it does not change the
+result while those commands are the ones AGENTS.md's project facts show. A hidden character
+in an agents' note reads UNVERIFIED for that note, where in an instruction file it is a FAIL.
+Also reported, and not changing the result: each instruction file a harness's row says it
+loads from a folder above the target (`ancestors`), which this module names and never opens,
+and, where every row was selected, the loading facts of a row that loads no file of the
+target that another row does not load too.
 
 What it does not decide: whether a flagged line is benign, which a person decides.
 It never executes, follows or obeys anything it reads: the audited files are untrusted
@@ -46,7 +47,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import adapters, facts, identity
+from outcomebound_tools import adapters, facts, finish_check, identity
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
@@ -135,12 +136,10 @@ MANIFEST = ".outcomebound/manifest.json"
 # character in a note reads UNVERIFIED for that note, not FAIL for the target: the note is one
 # session's record, and the next session can work without it.
 NOTES = (".agents/handoffs", ".agents/shared-memory")
-# adopt's own harness entries: a manifest `hook` record holds the sha256 of the entry's
-# canonical JSON, and such an entry runs one of these verbs with plain arguments only. The
-# manifest is the target's own data, and the finish check runs the Done commands it records, so a
-# recognised entry stays a review hit: its fact quotes those commands for the person to confirm.
-OWN_VERBS = frozenset({"finish-check"})
-_PLAIN_ARGUMENT = re.compile(r"[A-Za-z0-9._=-]+")
+# adopt's own harness entries are recognised only where they are byte for byte what adopt
+# writes (`_own_entry`). The manifest is the target's own data, and the finish check runs the
+# Done commands it records, so a recognised entry stays a review hit: its fact quotes those
+# commands for the person to confirm.
 # adopt's route for a harness the table does not list: it reads AGENTS.md and nothing known else.
 GENERIC = "generic"
 _NEXT = {
@@ -826,34 +825,34 @@ def _toml_hits(text: str, specs: Sequence[tuple[str, str]]) -> list[tuple[int, s
     return hits
 
 
-def _own_command(hook: object) -> bool:
-    """Whether one hook runs only an OutcomeBound verb adopt writes, with plain arguments."""
+def _own_entry(
+    value: object, own: frozenset[str], harness: str, path: str, done: Sequence[str] | None
+) -> bool:
+    """Whether a group under a hook event is the one adopt writes for `harness` at `path`: its
+    canonical JSON is byte for byte `finish_check.entry` for the row whose `finish_hook` names
+    this file, the recorded Done commands' digest and the timeout the hook carries, where the row
+    admits it; and a manifest `hook` record for this file holds that digest. Any other key, hook
+    type, argument or Done digest makes it an ordinary entry."""
 
-    command = hook.get("command") if isinstance(hook, dict) else None
-    words = command.split(" ") if isinstance(command, str) else []
-    return (
-        len(words) >= 2
-        and words[0] == "outcomebound"
-        and words[1] in OWN_VERBS
-        and all(_PLAIN_ARGUMENT.fullmatch(word) for word in words[2:])
-    )
-
-
-def _own_entry(value: object, own: frozenset[str]) -> bool:
-    """Whether a group under a hook event is one adopt wrote: its canonical JSON has the digest
-    a manifest `hook` record holds for this file, and every hook in it runs only adopt's verb."""
-
+    hook = finish_check.hook_of(_row(harness))
     hooks = value.get("hooks") if isinstance(value, dict) else None
-    return (
-        hashlib.sha256(canonical(value)).hexdigest() in own
-        and isinstance(hooks, list)
-        and bool(hooks)
-        and all(_own_command(hook) for hook in hooks)
-    )
+    if done is None or hook is None or hook.get("file") != path or not isinstance(hooks, list):
+        return False
+    first = hooks[0] if hooks and isinstance(hooks[0], dict) else {}
+    timeout = first.get("timeout")
+    if not isinstance(timeout, int) or not finish_check.admits_timeout(timeout):
+        return False
+    expected = canonical(finish_check.entry(harness, finish_check.done_digest(done), timeout))
+    written = canonical(value)
+    return written == expected and hashlib.sha256(written).hexdigest() in own
 
 
 def _without_own(
-    value: dict[str, Any], own: frozenset[str]
+    value: dict[str, Any],
+    own: frozenset[str],
+    harness: str,
+    path: str,
+    done: Sequence[str] | None,
 ) -> tuple[dict[str, Any], list[tuple[str, int, str]]]:
     """A hooks object without adopt's own groups, and (event, index, command) for each one."""
 
@@ -865,7 +864,7 @@ def _without_own(
             continue
         kept = []
         for index, group in enumerate(groups):
-            if _own_entry(group, own):
+            if _own_entry(group, own, harness, path, done):
                 found.append((event, index, " ".join(h["command"] for h in group["hooks"])))
             else:
                 kept.append(group)
@@ -877,16 +876,17 @@ def _without_own(
 def _config_hits(
     path: str,
     text: str,
-    keys: Mapping[str, Any],
+    harness: str,
     own: frozenset[str] = frozenset(),
     done: Sequence[str] | None = None,
     done_shown: bool = False,
 ) -> list[tuple[int, str, str, bool]]:
-    """(line, verdict, fact, decides) for each listed key present, or each value left
+    """(line, verdict, fact, decides) for each key `harness`'s row lists present, or each value left
     unsettled; each entry adopt wrote, its digest in `own`, is one review hit quoting the Done
     commands it runs, and it decides the result only where AGENTS.md does not show those
     commands (`done_shown`)."""
 
+    keys = ((_row(harness) or {}).get("config") or {}).get("keys") or {}
     specs = [(category, spec) for category in _CATEGORIES for spec in keys.get(category) or []]
     if path.endswith(".toml"):
         return [(*hit, True) for hit in _toml_hits(text, specs)]
@@ -903,7 +903,7 @@ def _config_hits(
     for category, spec in specs:
         for path_keys, value in _json_values(document, spec.split(".")):
             if category == "hooks" and own and isinstance(value, dict):
-                value, recognised = _without_own(value, own)
+                value, recognised = _without_own(value, own, harness, path, done)
                 key = ".".join(path_keys)
                 commands = (
                     _quote(json.dumps(list(done)), 240)
@@ -956,12 +956,12 @@ def _harness_config(
     ]
     for harness in harnesses:
         config = (_row(harness) or {}).get("config") or {}
-        keys, docs = config.get("keys") or {}, config.get("docs") or "none recorded"
+        docs = config.get("docs") or "none recorded"
         step = (
             f"carry this to your handoff, where a person confirms that {harness} should load "
             f"it, and go on with the work; its permissions and hooks documentation: {docs}"
         )
-        hits = _config_hits(path, text, keys, own, done, done_shown)
+        hits = _config_hits(path, text, harness, own, done, done_shown)
         findings.extend(
             _finding(
                 "harness-config",
@@ -1340,6 +1340,14 @@ def _selection(
     return tuple(names), "manifest" if names == recorded else "manifest+present"
 
 
+def _only(harness: str, names: Sequence[str], present: Sequence[str]) -> bool:
+    """Whether the target holds a file that `harness` loads and no other of `names` does:
+    a file every harness loads, such as AGENTS.md, does not make a row one the target uses."""
+
+    own, others = _scope([harness]), _scope([name for name in names if name != harness])
+    return any(own.wants(path) and not others.wants(path) for path in present)
+
+
 def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) -> Report:
     """Select the harnesses, find what they load under `target`, and check it."""
 
@@ -1356,7 +1364,7 @@ def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) 
     unused = frozenset(
         harness
         for harness in names
-        if selected_by == "table" and not any(_scope([harness]).wants(p) for p in present)
+        if selected_by == "table" and not _only(harness, names, present)
     )
     ordered = tuple(sorted(_audit(root, files, names, base, own, unused), key=_order))
     if notes:

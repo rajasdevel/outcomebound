@@ -106,9 +106,9 @@ def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
             raise FragmentError(f"{source}:{number}: edge {item!r} must be one line")
         if EDGE_SEPARATOR in item:
             raise FragmentError(
-                f"{source}:{number}: edge {item!r} holds {EDGE_SEPARATOR!r}, which the project "
-                "facts join edges with, so it would read as two edges; give each edge as its "
-                "own list item, or word it with a comma"
+                f"{source}:{number}: edge {item!r} holds {EDGE_SEPARATOR!r}, which would read "
+                "as two edges in the project facts; fix: split it into two list items, or put a "
+                "comma in place of the ';'"
             )
     return tuple(item.strip() for item in parsed)
 

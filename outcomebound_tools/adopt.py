@@ -874,6 +874,12 @@ class Run:
             self._keep_hook(want, record)
         elif want.kind in FILE_KINDS:
             before = self._before(want.path)
+            if want.path == LOCAL_IGNORE and record is None and before not in (None, want.data):
+                raise AdoptError(
+                    f"adopt now writes {LOCAL_IGNORE} whole, and this one is the project's own, "
+                    "which --force would not keep either: move its lines to the root .gitignore, "
+                    "delete the file, then run adopt again"
+                )
             self._judge(want.path, before, want.data, record)
             self.files[want.path] = (before, want.data)
         else:
@@ -1412,15 +1418,26 @@ def ignored_notes(target: Path, planned: Planned) -> Notes:
     for source, line, pattern, path in zip(*[iter(fields)] * 4, strict=False):
         if pattern.startswith("!"):
             continue
+        rule = _printable(f"{source}:{line}: {pattern}")
         notes.append(
             (
                 "warning",
-                f"{path}: Git ignores it ({source}:{line}: {pattern}), so it stays out of "
+                f"{_printable(path)}: Git ignores it ({rule}), so it stays out of "
                 f"every commit while {MANIFEST} records it, and another clone reads it missing "
                 "in adopt --check; un-ignore it, or choose a harness whose files Git keeps",
             )
         )
     return notes
+
+
+def _printable(text: str) -> str:
+    """`text` with each character outside printable ASCII escaped, so text a target's files
+    hold, such as a `.gitignore` pattern, cannot steer the terminal."""
+
+    return "".join(
+        char if " " <= char <= "~" else char.encode("unicode_escape").decode("ascii")
+        for char in text
+    )
 
 
 def uncommitted_notes(target: Path, planned: Planned) -> Notes:
