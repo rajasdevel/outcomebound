@@ -30,10 +30,12 @@ that may resume it needs it, and remove it only when the task is finished, its c
 reachable from a kept branch, and nothing uncommitted or ignored in it is still needed. A
 worktree's commits land as the project's instructions or the goal envelope say work lands, the
 rule the tickets fragment also states; where none says, they stay on the worktree's branch, which
-the handoff names. Work in another repository in a session started there, so that its hooks and
-sandbox apply; where the person asks this session to change it, ask once for it as a writable
-root, run its Done commands yourself, and say so in your report, since its hooks do not run in
-this session.
+the handoff names. The finish-check hook checks the checkout at the session's working directory,
+never a worktree the session did not start in: before you land work from a worktree, run the Done
+commands in that worktree and report their verdict. Work in another repository in a session
+started there, so that its hooks and sandbox apply; where the person asks this session to change
+it, ask once for it as a writable root, run its Done commands yourself, and say so in your report,
+since its hooks do not run in this session.
 **Mechanisms** — `goal-envelope` when work spans sessions.
 **Completion bar** — a handoff names what landed with each check's verdict, what is in flight,
 what is blocked and why, the next step, the choices made, what is still owed, and the user's
