@@ -404,6 +404,8 @@ def comment(text: str) -> str:
 
 SPACED = 'x = "a"  '
 LINT_BASELINE = floor.BASELINE_DIR + "/python.lint.baseline"
+F401 = "src/a.py:F401:`os` imported but unused"
+F841 = "src/a.py:F841:Local variable `x` is assigned to but never used"
 BEFORE = {
     "run.sh": "#!/bin/sh\necho ok\n",
     "ruff.toml": "line-length = 100\n",
@@ -412,14 +414,12 @@ BEFORE = {
     "pyproject.toml": '[project]\nname = "p"\n\n[tool.ruff]\nline-length = 100\n',
     "setup.cfg": "[metadata]\nname = p\n\n[mypy]\nstrict = True\n",
     "src/app.py": "import os  " + comment("noqa: F401") + "\n",
-    LINT_BASELINE: "src/a.py:F401:one\nsrc/a.py:F841:two\n",
+    LINT_BASELINE: F401 + "\n" + F841 + "\n",
 }
 
 
 LOOSENINGS = {
-    "a baseline gains a line": {
-        LINT_BASELINE: "src/a.py:F401:one\nsrc/a.py:F401:one\nsrc/a.py:F841:two\n"
-    },
+    "a baseline gains a line": {LINT_BASELINE: F401 + "\n" + F401 + "\n" + F841 + "\n"},
     "floor.json drops a claim": {floor.FLOOR_PATH: '{"version": 1, "claims": []}\n'},
     "floor.json narrows a claim": {
         floor.FLOOR_PATH: json.dumps(
@@ -456,8 +456,8 @@ LOOSENINGS = {
 }
 TIGHTENINGS = {
     "nothing changes": {},
-    "a baseline loses a line": {LINT_BASELINE: "src/a.py:F841:two\n"},
-    "a baseline line drops its message": {LINT_BASELINE: "src/a.py:F401\nsrc/a.py:F841:two\n"},
+    "a baseline loses a line": {LINT_BASELINE: F841 + "\n"},
+    "a baseline line drops its message": {LINT_BASELINE: "src/a.py:F401\n" + F841 + "\n"},
     "a baseline is deleted": {LINT_BASELINE: ""},
     "pyproject.toml changes outside its tool tables": {
         "pyproject.toml": BEFORE["pyproject.toml"].replace('"p"', '"q"')
@@ -520,7 +520,8 @@ def test_a_claim_floor_json_adds_with_its_first_baseline_loosens_nothing(
         tmp_path,
         {
             floor.FLOOR_PATH: json.dumps({"version": 1, "claims": claims}),
-            floor.BASELINE_DIR + "/python.types.baseline": "src/a.py:misc:one\n",
+            floor.BASELINE_DIR
+            + "/python.types.baseline": "src/a.py:misc:Unused section in config\n",
         },
     )
 
@@ -1425,10 +1426,19 @@ FLOOR_CHANGES = {
         {floor.FLOOR_PATH: floor_text(shipped("shell.syntax", timeout_seconds=1800))},
         "PASS",
     ),
-    "a claim is dropped once the last file it reads is deleted": (
+    "a claim is dropped after the last file it reads is deleted": (
         {floor.FLOOR_PATH: floor_text(shipped("shell.syntax"), shipped("shell.injection"))},
         {floor.FLOOR_PATH: floor_text(shipped("shell.injection")), "run.sh": ""},
-        "PASS",
+        "FAIL",
+    ),
+    "a claim is dropped after its script is renamed out of its pattern": (
+        {floor.FLOOR_PATH: floor_text(shipped("shell.syntax"), shipped("shell.injection"))},
+        {
+            floor.FLOOR_PATH: floor_text(shipped("shell.injection")),
+            "run.sh": "",
+            "run": "echo ok\n",
+        },
+        "FAIL",
     ),
     "a renamed file carries its baselined finding, an earlier floor's line included": (
         {
@@ -1535,6 +1545,30 @@ def test_every_new_finding_is_printed() -> None:
     assert not any("more" in line for line in listed)
 
 
+@pytest.mark.parametrize(
+    ("line", "key"),
+    [
+        ("a:b:c.py:E501", "a:b:c.py:E501"),
+        ("src/a.py:F401", "src/a.py:F401"),
+        ("src/a.py:F401:`os` imported but unused", "src/a.py:F401"),
+        ("src/x.py:misc:Bad: very bad", "src/x.py:misc"),
+    ],
+)
+def test_a_baseline_line_reads_its_code_as_the_last_field_or_an_earlier_floors_message(
+    line: str, key: str
+) -> None:
+    assert floor._key(line) == key
+
+
+def test_a_path_with_colons_matches_its_baseline_line() -> None:
+    claim = floor.parse_claim(shipped("python.lint"))
+    finding = floor.Finding("a:b:c.py", "E501", "Line too long")
+
+    outcome = floor.judge(claim, [finding], floor._lines(finding.key + "\n"), None)
+
+    assert outcome.status == "PASS", outcome
+
+
 def test_a_baselined_finding_stays_baselined_when_the_tool_rewords_its_message() -> None:
     claim = floor.parse_claim(shipped("python.lint"))
     held = floor._lines("src/a.py:F401:`os` imported but unused\n")
@@ -1595,7 +1629,7 @@ def test_an_adoption_record_added_to_a_floor_the_fork_holds_does_not_move_the_ra
 RECORDING_GITLEAKS = """#!/bin/sh
 [ "$1" = version ] && { echo 8.21.2; exit 0; }
 here=$(dirname "$0")
-echo "$@" > "$here/argv"
+echo "$@" >> "$here/argv"
 find . -type f | sort > "$here/listing"
 while [ $# -gt 0 ]; do [ "$1" = --report-path ] && report=$2; shift; done
 printf '[]' > "$report"
@@ -1625,7 +1659,60 @@ def test_the_secrets_range_starts_at_the_adoption_when_the_floor_was_adopted_on_
     verdicts = run(capsys, "check", str(root), "--base", fork)[1]
 
     assert verdicts == {"python.secrets": "PASS", "loosening": "PASS"}
-    assert (tools / "argv").read_text(encoding="utf-8").split()[1] == f"--log-opts={adopted}..HEAD"
+    runs = [line.split() for line in (tools / "argv").read_text(encoding="utf-8").splitlines()]
+    assert [words[:2] for words in runs] == [
+        ["git", f"--log-opts={adopted}..HEAD"],
+        ["dir", "--redact"],
+    ]
+    listing = (tools / "listing").read_text(encoding="utf-8").split()
+    assert listing == ["./.outcomebound/floor.json", "./app.py"]
+
+
+def test_a_secret_committed_before_an_adoption_on_the_branch_still_fails_the_secrets_claim(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The range skips the commits before the adoption, but the secret is still in the tree."""
+
+    on_path(monkeypatch, "gitleaks")
+    root = repository(tmp_path, {"README": "x\n"})
+    fork = git(root, "rev-parse", "HEAD")
+    adopted = commit(root, "a secret before the floor", {"app.py": f'aws = "{OLD_LEAK}"\n'})
+    record = {"commit": adopted, "on": "2026-01-15"}
+    commit(root, "adopt", {floor.FLOOR_PATH: floor_text(shipped("python.secrets"), adopted=record)})
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", fork)
+
+    assert (status, verdicts["python.secrets"]) == (1, "FAIL"), output
+    assert "app.py:1: aws-access-token" in output and OLD_LEAK not in output
+
+
+def test_a_floor_removed_and_adopted_again_does_not_move_the_range_past_a_loosening(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Re-adopting at the commit that deleted the floor would otherwise hide the noqa added
+    while the first floor held."""
+
+    root = repository(tmp_path, BEFORE)
+    fork = git(root, "rev-parse", "HEAD")
+    first = commit(root, "work", {"src/c.py": "z = 3\n"})
+    claims = shipped("shell.injection")
+    commit(
+        root,
+        "adopt",
+        {floor.FLOOR_PATH: floor_text(claims, adopted={"commit": first, "on": "2026-01-15"})},
+    )
+    commit(root, "widen", LOOSENINGS["a noqa is added"])
+    deleted = commit(root, "remove the floor", {floor.FLOOR_PATH: ""})
+    commit(
+        root,
+        "adopt again",
+        {floor.FLOOR_PATH: floor_text(claims, adopted={"commit": deleted, "on": "2026-01-16"})},
+    )
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", fork)
+
+    assert (status, verdicts["loosening"]) == (1, "FAIL"), output
+    assert "src/b.py adds" in output
 
 
 def test_secrets_without_a_base_or_an_adoption_read_only_the_files_git_tracks(
@@ -1647,6 +1734,24 @@ def test_secrets_without_a_base_or_an_adoption_read_only_the_files_git_tracks(
     assert verdicts == {"python.secrets": "PASS"}
     listing = (tools / "listing").read_text(encoding="utf-8").split()
     assert listing == ["./.gitignore", "./.gitleaksignore", "./app.py"]
+
+
+def test_the_tracked_files_scan_never_follows_a_symlinked_folder_out_of_the_root(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    tools = recording_gitleaks(tmp_path, monkeypatch)
+    root = repository(tmp_path, {"app.py": "x = 1\n", "dir/file.txt": "inside\n"})
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "file.txt").write_text("outside\n", encoding="utf-8")
+    shutil.rmtree(root / "dir")
+    (root / "dir").symlink_to(outside, target_is_directory=True)
+    install(root, shipped("python.secrets"))
+
+    assert run(capsys, "check", str(root), "--claim", "python.secrets")[1] == {
+        "python.secrets": "PASS"
+    }
+    assert (tools / "listing").read_text(encoding="utf-8").split() == ["./app.py"]
 
 
 # --- A claim's tool may run through a prefix: a container, uv run, poetry run ---------------

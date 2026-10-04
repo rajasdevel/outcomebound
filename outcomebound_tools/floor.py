@@ -532,9 +532,11 @@ class Finding:
         return f"{place}: {self.code} {self.message}" if place else f"{self.code} {self.message}"
 
 
-# A baseline line: the path, then the first `:code` that ends the line or opens a message. An
-# earlier floor wrote `path:code:message`; it reads as `path:code`.
-KEY = re.compile(r"(?P<path>.*?):(?P<code>[A-Za-z][A-Za-z0-9_-]*)(?::.*)?")
+# A baseline line: the path, then the code, the last field, so a path may hold a colon. An
+# earlier floor wrote `path:code:message`, whose message is not a code: it reads as the path to
+# the first `:code:` and that code.
+KEY = re.compile(r"(?P<path>.*):(?P<code>[A-Za-z][A-Za-z0-9_-]*)")
+EARLIER_KEY = re.compile(r"(?P<path>.*?):(?P<code>[A-Za-z][A-Za-z0-9_-]*):.*")
 SPACE = re.compile(r"\s+")
 REFORMAT = re.compile(r"^(?:Would reformat: |\s*--> )(?P<path>.+?)(?::\d+:\d+)?$", re.MULTILINE)
 REFORMAT_COUNT = re.compile(r"^(\d+) files? would be reformatted", re.MULTILINE)
@@ -801,7 +803,8 @@ def _argv(claim: Claim, executable: str, context: Context, report: str) -> list[
         argv = claim.argv_without_base
     elif _ranged(argv) and start is None:
         raise Unreadable(context.base_problem or "no base commit")
-    elif _ranged(argv) and start is not None:
+    elif _ranged(argv) and start is not None and claim.argv_without_base is not None:
+        # Only a claim that can also scan the tracked files moves its start to the adoption.
         start = _since(context.root, start, context.adopted)
     span = f"{start}..HEAD"
     parts = [part.replace("{range}", span).replace("{report}", report) for part in argv]
@@ -814,11 +817,18 @@ GITLEAKS_FILES = (".gitleaks.toml", ".gitleaksignore")
 def _mirror(root: Path, paths: Iterable[str], into: Path) -> None:
     """The tracked regular files `paths` under `into`, at the same relative paths, linked where
     the file system allows and copied where it does not; and gitleaks' own config and
-    allowlist from the root, tracked or not, since gitleaks reads them from where it runs."""
+    allowlist from the root, tracked or not, since gitleaks reads them from where it runs. A
+    path that is a symlink, or that a symlinked folder leads outside the root, is skipped."""
 
+    inside = os.path.realpath(root)
     for path in {*paths, *(name for name in GITLEAKS_FILES if (root / name).is_file())}:
         source = root / path
-        if not source.is_file() or source.is_symlink():
+        real = os.path.realpath(source)
+        if (
+            not source.is_file()
+            or source.is_symlink()
+            or os.path.commonpath([inside, real]) != inside
+        ):
             continue
         target = into / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -828,23 +838,54 @@ def _mirror(root: Path, paths: Iterable[str], into: Path) -> None:
             shutil.copyfile(source, target)
 
 
-def _secrets(claim: Claim, executable: str, context: Context) -> list[Finding]:
-    """gitleaks over `<base>..HEAD`, or without a base over the commits since adoption, or
-    without either over the tracked files alone: gitleaks scans a directory whole, ignored
-    folders included, so it runs in a scratch copy that holds only the files Git tracks."""
+def _gitleaks(
+    claim: Claim, root: Path, command: Callable[[str], list[str]], tracked: frozenset[str] | None
+) -> list[Finding]:
+    """One gitleaks run, `command` given its report path. With `tracked`, it runs in a scratch
+    copy that holds only those files: gitleaks scans a directory whole, ignored folders
+    included."""
 
-    working_tree = context.base is None and context.adopted is None and _ranged(claim.argv)
-    tracked = frozenset(_tracked(context.root, ())) if working_tree else None
     with tempfile.TemporaryDirectory(prefix="outcomebound-floor-") as scratch:
         report = Path(scratch) / "report.json"
-        where = context.root
+        where = root
         if tracked is not None:
             where = Path(os.path.realpath(scratch)) / "tracked"
             where.mkdir()
-            _mirror(context.root, tracked, where)
-        status, _ = _run(claim, _argv(claim, executable, context, str(report)), where)
+            _mirror(root, tracked, where)
+        status, _ = _run(claim, command(str(report)), where)
         text = report.read_text(encoding="utf-8", errors="replace") if report.is_file() else ""
         return parse_gitleaks(status, text, where, tracked)
+
+
+def _secrets(claim: Claim, executable: str, context: Context) -> list[Finding]:
+    """gitleaks over `<base>..HEAD`, or without a base over the commits since adoption, or
+    without either over the tracked files alone. Where the range starts at an adoption after
+    the merge base, the tracked files are scanned too: a secret committed before the floor
+    is still in the tree."""
+
+    root, whole = context.root, claim.argv_without_base
+    ranged = _ranged(claim.argv)
+
+    def history(report: str) -> list[str]:
+        return _argv(claim, executable, context, report)
+
+    def tree(report: str) -> list[str]:
+        return _command(
+            claim, executable, [part.replace("{report}", report) for part in whole or ()]
+        )
+
+    if context.base is None and context.adopted is None and ranged:
+        return _gitleaks(claim, root, history, frozenset(_tracked(root, ())))
+    found = _gitleaks(claim, root, history, None)
+    base = context.base_commit
+    if (
+        base is not None
+        and whole is not None
+        and ranged
+        and _since(root, base, context.adopted) != base
+    ):
+        found += _gitleaks(claim, root, tree, frozenset(_tracked(root, ())))
+    return found
 
 
 def findings_for(claim: Claim, context: Context) -> tuple[list[Finding], int | None]:
@@ -879,8 +920,9 @@ def _key(line: str) -> str:
     """A baseline line as `path:code`; `path:code:message`, as an earlier floor wrote it,
     reads the same."""
 
-    found = KEY.fullmatch(line.strip())
-    return line.strip() if found is None else f"{found['path']}:{found['code']}"
+    text = line.strip()
+    found = KEY.fullmatch(text) or EARLIER_KEY.fullmatch(text)
+    return text if found is None else f"{found['path']}:{found['code']}"
 
 
 def _lines(text: str | None) -> Counter[str]:
@@ -1028,32 +1070,18 @@ def _kept(before: Claim, after: Claim | None) -> bool:
     return after == before or (before.mode == BASELINE and after == replace(before, mode=GATE))
 
 
-def _floor_change(
-    before: Floor | None, after: Floor | None, emptied: Callable[[Claim], bool]
-) -> str | None:
+def _floor_change(before: Floor | None, after: Floor | None) -> str | None:
     """A claim floor.json drops or changes, or an adoption record it changes or removes,
-    loosens the floor; a claim it adds, a baseline claim it makes a gate, an adoption record
-    where there was none, and a claim it drops whose files are all gone (`emptied`) do not."""
+    loosens the floor; a claim it adds, a baseline claim it makes a gate, and an adoption
+    record where there was none do not."""
 
     if before is None or after is None:
         return f"{FLOOR_PATH} changed"
     now = {claim.name: claim for claim in after.claims}
-    altered = sorted(
-        c.name
-        for c in before.claims
-        if not _kept(c, now.get(c.name)) and not (c.name not in now and emptied(c))
-    )
+    altered = sorted(c.name for c in before.claims if not _kept(c, now.get(c.name)))
     if before.adopted is not None and after.adopted != before.adopted:
         altered.append("its adoption record")
     return f"{FLOOR_PATH} drops or changes {', '.join(altered)}" if altered else None
-
-
-def _matches_none(root: Path, head: str, patterns: Sequence[str]) -> bool:
-    """Whether `head` tracks no file matching `patterns`."""
-
-    empty = _git(root, "hash-object", "-t", "tree", os.devnull).decode("ascii").strip()
-    listed = _git(root, "diff", "--name-only", "-z", "--relative", empty, head, "--", *patterns)
-    return not listed.strip(b"\0")
 
 
 def _renames(root: Path, fork: str, head: str) -> dict[str, str]:
@@ -1109,11 +1137,7 @@ def _policy_change(
 
     root, name = span.root, path.rsplit("/", 1)[-1]
     if path == FLOOR_PATH:
-        return _floor_change(
-            _floor_at(root, old),
-            _floor_at(root, new),
-            lambda claim: bool(claim.files) and _matches_none(root, span.head, claim.files),
-        )
+        return _floor_change(_floor_at(root, old), _floor_at(root, new))
     if name in WHOLE_CONFIGS:
         return f"{path} changed"
     if path.startswith(f"{BASELINE_DIR}/") and path.endswith(".baseline"):
@@ -1232,18 +1256,20 @@ def _is_ancestor(root: Path, older: str, newer: str) -> bool:
 
 def _adopted_after(root: Path, fork: str, adopted: Adoption | None) -> str | None:
     """The adoption commit, where the floor was adopted after `fork`: `fork` holds no
-    floor.json, and the adoption commit descends from `fork` and is in HEAD's history. The
-    commits before it come from before the floor existed. Where `fork` holds a floor, the range
-    starts at `fork`, so an adoption record added or moved later hides nothing before it."""
+    floor.json, no commit from `fork` to the adoption commit touches it, and the adoption
+    commit descends from `fork` and is in HEAD's history. The commits before it come from
+    before the floor existed. Otherwise the range starts at `fork`: an adoption record added to
+    a floor `fork` holds, or a floor removed and adopted again, hides nothing before it."""
 
     if adopted is None:
         return None
     try:
         commit = _commit(root, adopted.commit)
         held = _git(root, "ls-tree", "-z", "--name-only", fork, "--", FLOOR_PATH)
+        touched = _git(root, "rev-list", "--count", f"{fork}..{commit}", "--", FLOOR_PATH)
     except FloorError:
         return None
-    if held.strip(b"\0") or commit == fork:
+    if held.strip(b"\0") or commit == fork or touched.strip() != b"0":
         return None
     if _is_ancestor(root, fork, commit) and _is_ancestor(root, commit, "HEAD"):
         return commit
@@ -1653,11 +1679,11 @@ an adoption record it changes or removes; a change to ruff.toml, .ruff.toml, myp
 [tool.mypy] and [mypy] settings; an added noqa, type ignore, mypy, shellcheck-disable or
 gitleaks-allow comment (in a document, only gitleaks-allow).
 None of these loosens: a claim floor.json adds, with its first baseline; a claim's move
-from baseline to gate; a claim's timeout_seconds; a claim it drops whose files are all
-gone; an adoption record where there was none; a baseline line that moves with its file,
-where Git reports the file renamed.
-Where the floor was adopted after the merge base (the merge base holds no floor.json), both
-ranges start at the adoption commit instead, so commits from before the floor never fail.
+from baseline to gate; a claim's timeout_seconds; an adoption record where there was none;
+a baseline line that moves with its file, where Git reports the file renamed.
+Where the floor was adopted after the merge base (the merge base holds no floor.json and no
+commit before the adoption touches it), both ranges start at the adoption commit instead, so
+commits from before the floor never fail; gitleaks then also scans the files Git tracks.
 A commit in the range whose message has the line
 'Floor-Loosening: <what>; ruled <decision id>' lets it pass, the id being whatever names
 the decision in the project: an issue or pull request (#123), a decision record, a link.
