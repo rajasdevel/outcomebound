@@ -90,22 +90,24 @@ def _exit(code: int) -> list[str]:
 # --- where a relative `cwd` starts ------------------------------------------------
 
 
-def test_cwd_resolves_against_the_checkout_not_the_plan_directory(tmp_path: Path) -> None:
-    """The plan's `cwd` resolves against the checkout root.
+def test_cwd_resolves_against_the_plan_folder_as_validation_does(tmp_path: Path) -> None:
+    """A relative `cwd` starts at the plan file's folder, where `validation` starts it.
 
-    `work` exists only at the checkout root, never under `.outcomebound/`, so a
-    reader that started from the plan file's own directory resolves a directory
-    that is not there.
+    `"cwd": ".."` from `.outcomebound/` is the checkout root, and both readers
+    name that same directory, so one plan runs in one place under both verbs.
     """
 
     root = _repository(tmp_path)
     (root / "work").mkdir()
-    _write_plan(root, _plan_document([_claim("here", _exit(0))], cwd="work"))
+    document = _plan_document([_claim("here", _exit(0))], cwd="../work")
+    _write_plan(root, document)
 
     plan = load_claims(root, _declaration())
 
     assert plan.cwd_inside is True
     assert plan.cwd_resolved == (root / "work").resolve()
+    ran = validation.load_plan(root / PLAN)
+    assert ran.cwd == plan.cwd_resolved, "both verbs resolve the one plan to one directory"
 
 
 def test_cwd_outside_the_checkout_is_reported(tmp_path: Path) -> None:
@@ -114,7 +116,7 @@ def test_cwd_outside_the_checkout_is_reported(tmp_path: Path) -> None:
     root = _repository(tmp_path)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    _write_plan(root, _plan_document([_claim("out", _exit(0))], cwd="../elsewhere"))
+    _write_plan(root, _plan_document([_claim("out", _exit(0))], cwd="../../elsewhere"))
 
     plan = load_claims(root, _declaration())
 
@@ -133,7 +135,7 @@ def test_an_empty_readable_plan_still_answers_containment(tmp_path: Path) -> Non
     root = _repository(tmp_path)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    _write_plan(root, {"version": 1, "claims": [], "cwd": "../elsewhere"})
+    _write_plan(root, {"version": 1, "claims": [], "cwd": "../../elsewhere"})
 
     plan = load_claims(root, _declaration())
 
@@ -149,7 +151,7 @@ def test_a_symlinked_checkout_is_inside_itself(tmp_path: Path) -> None:
     (real / "work").mkdir()
     link = tmp_path / "link"
     link.symlink_to(real, target_is_directory=True)
-    _write_plan(real, _plan_document([_claim("here", _exit(0))], cwd="."))
+    _write_plan(real, _plan_document([_claim("here", _exit(0))], cwd=".."))
 
     through_link = load_claims(link, _declaration())
     assert through_link.cwd_inside is True
@@ -157,14 +159,14 @@ def test_a_symlinked_checkout_is_inside_itself(tmp_path: Path) -> None:
 
     # A link *inside* the checkout, pointing inside it, is inside it too.
     (real / "linked-work").symlink_to(real / "work", target_is_directory=True)
-    _write_plan(real, _plan_document([_claim("here", _exit(0))], cwd="linked-work"))
+    _write_plan(real, _plan_document([_claim("here", _exit(0))], cwd="../linked-work"))
     followed = load_claims(real, _declaration())
     assert followed.cwd_inside is True
     assert followed.cwd_resolved == (real / "work").resolve()
 
 
-def test_cwd_absent_is_the_checkout_root(tmp_path: Path) -> None:
-    """The key omitted is the checkout root."""
+def test_cwd_absent_is_the_plan_folder(tmp_path: Path) -> None:
+    """The key omitted is the plan file's folder, as `validation` reads it."""
 
     root = _repository(tmp_path)
     _write_plan(root, _plan_document([_claim("here", _exit(0))]))
@@ -172,7 +174,21 @@ def test_cwd_absent_is_the_checkout_root(tmp_path: Path) -> None:
     plan = load_claims(root, _declaration())
 
     assert plan.cwd_inside is True
-    assert plan.cwd_resolved == root.resolve()
+    assert plan.cwd_resolved == (root / ".outcomebound").resolve()
+    assert validation.load_plan(root / PLAN).cwd == plan.cwd_resolved
+
+
+def test_required_paths_are_named_relative_to_the_checkout(tmp_path: Path) -> None:
+    """A claim's required paths resolve against the plan's directory, and one
+    outside the checkout reads as None, which no `bounds` entry can cover."""
+
+    root = _repository(tmp_path)
+    claim = _claim("reads", _exit(0), required_paths=["src/feature", ".", "../../outside"])
+    _write_plan(root, _plan_document([claim], cwd=".."))
+
+    plan = load_claims(root, _declaration())
+
+    assert plan.claims["reads"].required_paths == ("src/feature", ".", None)
 
 
 def test_a_claim_name_the_ticket_grammar_forbids_is_still_readable(tmp_path: Path) -> None:

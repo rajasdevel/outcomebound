@@ -1,5 +1,6 @@
 {
  "version": 1,
+ "cwd": "..",
  "timeout_seconds": 1500,
  "claims": [
   {

@@ -275,7 +275,8 @@ def _cwd_messages(plan: ClaimsPlan, target: Path) -> tuple[Message, ...]:
             f"the claims plan {plan.path} names the working directory {plan.cwd_resolved}, "
             f"which resolves outside the checkout {target.resolve()}",
             "point the plan's cwd inside the checkout, because this engine runs a claim "
-            "nowhere else",
+            "nowhere else; a relative cwd starts at the plan file's folder, as "
+            "`outcomebound validation` reads it",
         ),
     )
 
