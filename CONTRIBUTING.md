@@ -43,9 +43,13 @@ What happens next:
 - A maintainer lands it by rebasing it onto `main`. If its history is not worth keeping, the
   maintainer squashes it. `main` has no merge commits.
 
-Review goes where no check reaches. When a change alters what the kernel or the contract tells
-a model (its bounds, its stops, or what it asks for), a person who did not write the change reads
-it once before it lands. Every other change lands when its checks pass.
+Review goes where no check reaches. When a change alters what the kernel, the contract, a skill,
+a fragment or a template tells a model (its bounds, its holds, or what it asks for), the pull
+request carries the label `needs-maintainer` and an independent review, and a maintainer approves
+and lands it. Every other change lands when its checks pass.
+
+`main` accepts changes only through a pull request: a ruleset requires both CI checks, a linear
+history, and no force push or deletion. This holds for maintainers and agents alike.
 
 ## Local checks
 
@@ -201,10 +205,11 @@ text of OutcomeBound did in an evaluation, in [docs/evaluations.md](docs/evaluat
 ## Agents and releases
 
 Coding agents also work in this repository, under the contract that its own `AGENTS.md` installs.
-Their changes land the same way as anyone's changes. A person directs the agent, reviews its
-commits and signs them off under the DCO; the sign-off is that person's certification. An agent
-pushes to `main` only where a goal envelope that a maintainer wrote allows it and the checks above
-pass. Otherwise, the agent asks.
+Their changes land the same way as anyone's changes: an agent opens a pull request from its own
+branch and never pushes to `main`. A person directs the agent, reviews its commits and signs them
+off under the DCO; the sign-off is that person's certification. An agent may land its own pull
+request once CI is green, unless the pull request carries `needs-maintainer`. Issues are the
+backlog, and a milestone names what a release waits for.
 
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)
