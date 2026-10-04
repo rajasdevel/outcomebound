@@ -1260,8 +1260,8 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
         notes.append(
             (
                 "UNVERIFIED",
-                "finish-check: the Git directory did not take the record of known failures, so "
-                "every failure holds a turn",
+                "finish-check: the Git common directory did not take the record of known "
+                "failures, so every failure holds a turn",
             )
         )
     return notes
@@ -1843,8 +1843,9 @@ that takes longer needs a larger value, and re-running adopt with a new value re
 After its writes, an install with --finish-check named runs every Done command once, to its end
 and past each failure: it prints each command's verdict and seconds and the total against the
 timeout less 30 seconds, proposes a larger --finish-timeout where Done took longer, and keeps
-each failing command with its exit code, and the failure ids its output names, as a known
-failure in the Git directory, which holds no turn while it fails the same way. An install
+each failing command, with its exit code and the failure ids its output names, as a known
+failure in the Git common directory; it holds no turn while it fails with the same exit code and
+names no new failure id. An install
 without --finish-check runs no Done command: it names the record of known failures that applies
 here, or says that none does; a dry run does not run Done. adopt writes the document back with
 its keys, their order and its indentation kept, rewriting only its whitespace, and refuses one
