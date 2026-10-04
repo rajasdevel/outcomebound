@@ -192,8 +192,9 @@ release carries `hand-off-tickets`. They measure the hand-off package on one imp
 kernel. So they are measured under `current` only, and they run only when `--fixtures` names them.
 The runner does not enforce the arm. Another arm runs, and its result is not this comparison.
 
-The comparison ran on 2026-10-03. It has 63 runs. Its results are in
-[`docs/evaluations.md`](../docs/evaluations.md). The `full` arm ran and did not beat `spec` (rule 3
+The comparison ran on 2026-10-03. It has 63 runs. It ran again, with the same cells, on 2026-10-04
+for the 1.1.0 release. The results of both passes are in
+[`docs/evaluations.md`](../docs/evaluations.md), E17 and E18. The `full` arm ran and did not beat `spec` (rule 3
 below). By rule 3, `--detail full` would go. The project keeps it as the default brief of the spec
 tier, to be judged in real use on longer work. The rules below are as they were written before the
 runs.
