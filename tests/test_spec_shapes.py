@@ -217,7 +217,10 @@ def test_new_spec_rejects_more_than_one_target(tmp_path):
 
 
 def test_every_current_design_stays_within_1500_words():
-    """The contract and docs/specs/README.md hold a design to 1,500 words; this holds them."""
+    """docs/specs/README.md holds this repository's own designs to 1,500 words; this holds them.
+
+    The rule is local to this repository: the contract and the spec template adopters install
+    set no word limit on a spec."""
 
     over = {
         str(path.relative_to(ROOT)): len(path.read_text(encoding="utf-8").split())

@@ -33,7 +33,7 @@ changes no decision and reduces no risk — in process and in code alike. Size t
 not only each step: its specs, tickets, reviews and records are engineering too, and a plan
 whose process outweighs the change it governs is overengineered.
 
-## Proceed and stop
+## Proceed and hold
 
 Preserve unrelated work. Before relying on instructions or other prose, reconcile them with what
 Git, tests, runtime, and external state show.
@@ -44,9 +44,14 @@ ask, check everything within reach that could change the answer. Each decision g
 brief: an id and the question in one line; every way forward, with what it leads to and its
 downside; your recommendation first, with why; the evidence; and whether it can be undone; a
 diagram where order or flow is the point. The `decision-brief` skill gives the steps, and
-`outcomebound brief` draws it in the marks and diagram form the surface shows. Stop and ask only
-before an act your authority does not grant, such as destroying others' work, an irreversible act,
-an external write, spending money, or widening scope.
+`outcomebound brief` draws it in the marks and diagram form the surface shows. Hold only an act
+your authority does not grant, such as destroying others' work, an irreversible act, an external
+write, spending money, or widening scope beyond the granted authority; a path outside one item's
+file list but inside that authority is not widening, so name it in the commit and go on. A held
+act, a check you cannot make green inside your authority, and a decision brief not yet answered
+each hold only the items that depend on them, never the run: record each where the person will
+read it, with what would settle it, and continue every item that does not depend on it. A run
+ends only when its completion bar holds or nothing left can proceed.
 
 ## Validate and report
 
@@ -79,10 +84,12 @@ a default.
 No fixed document shape, mandatory evidence artifact, sign-off matrix, or recursive review
 belongs to the default method. Process a project requires is a bound; process its documents only
 suggest or recommend, such as a design note, a record, the full suite or a second reader for
-every change, is sized like any mechanism here. A document someone must read stays readable: a spec within 1,500
-words; past the limit, cut the text or split the spec. A ticket is sized by its outcome, never by
-its length: its brief states the decisions its implementer needs, however many words that takes,
-and leaves how the work is carried, and which tests prove it along the way, to the implementer.
+every change, is sized like any mechanism here. A document someone must read stays readable: a
+spec holds only the decisions the code cannot show and points to the file that defines a contract
+instead of restating it; never drop a decision to shorten it. A ticket is sized by its outcome,
+never by its length: its brief states the decisions its implementer needs, however many words that
+takes, and leaves how the work is carried, and which tests prove it along the way, to the
+implementer.
 
 ## Specs, goals, and delegation
 
@@ -90,11 +97,12 @@ A spec records what the code cannot show: the outcome, the chosen design and the
 it rejected, and the edges that cannot be undone. Keep one current spec per area and edit it in
 place when a decision changes; version control is its history.
 
-A goal envelope is optional. It records the outcome, the size of the whole plan, the checks that
-end it, the actions it authorizes and those it excludes, and the few conditions that stop it.
-Its authorized actions may include an edge, such as landing on the default branch once those
-checks pass: the envelope is the person's go for what it names. Resource limits appear only when
-the operator set them.
+A goal envelope is optional. It records the outcome, the checks that end it, the actions it
+authorizes and those it excludes, the follow-ups it accepts, and the judgments the person
+reserved. Its authorized actions may include an edge, such as landing on the default branch once
+those checks pass: the envelope is the person's go for what it names. The run starts without the
+person's answers; each unanswered brief holds only the work that waits on it. A limit on size,
+duration, runs or spending appears only when the operator set it.
 
 For substantial work, the orchestrator keeps authority over the outcome, the decomposition, and
 integration, and delegates bounded implementation or mechanical work where a delegate can

@@ -23,7 +23,7 @@ What becomes observably true, and for whom, in one sentence. Where accepting set
 The decisions the implementer would otherwise get wrong, and `Follow:` naming an existing file that already has the right shape.
 
 ## Limits
-What must not change, when to stop and ask, and what this slice leaves out.
+What must not change; any act this slice holds for the person because the granted authority does not reach it (the implementer records it as a decision brief and finishes the rest); and what this slice leaves out.
 
 <!-- outcomebound:begin id=ticket v=1 -->
 reads:

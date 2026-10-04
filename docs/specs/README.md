@@ -23,11 +23,14 @@ the same change.
 - [research](research/design.md): the research repository. How the engine finds, prints and
   updates its clone, and how it takes findings back.
 
-## The rules for a design
+## The rules for a design in this repository
+
+These rules are for the maintainers of this repository and its own designs only. The contract and
+the spec template that adopting projects install do not set a word limit on a spec.
 
 - There is one current design for each area. Edit it in place. Git holds every earlier version,
   and the commit that changes a decision says why.
-- A design has at most 1,500 words, and it names no model.
+- A design in this repository has at most 1,500 words, and it names no model.
 - The table of decisions has the columns Decision, Rejected alternative, Owner and Status. The
   Owner column holds `user` or `agent`. It says whose decision the row is. The Status column
   holds `open`, `assumed` or `decided`.

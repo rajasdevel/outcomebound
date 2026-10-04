@@ -1,7 +1,6 @@
 {
   "version": 1,
   "cwd": ".",
-  "timeout_seconds": 120,
   "claims": [
     {
       "name": "focused-regression",
