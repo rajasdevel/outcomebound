@@ -847,6 +847,8 @@ changes for 1.1.0, and in the workspace commit that each brief names:
   verdict runs its own command, so `project-tests-pass` is not affected. Three gpt-6-astra
   `ticket` answers named the directory as wrong. Two of those runs also ran the tests in
   `.outcomebound`, found none, and reported that line `FAIL`. No other run ran them there.
+  #39 then set the fixture to `"cwd": ".."`, so the next pass's check line names `.` again, as in
+  E17: a comparison of that pass with E18 must allow for this one line.
 
 The counts below are verdict PASSes, with the E17 count after the slash. The per-base counts follow
 in brackets, in the order `duration`, `invoice`, `tags`.

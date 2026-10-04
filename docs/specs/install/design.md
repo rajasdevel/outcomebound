@@ -106,6 +106,21 @@ adopt created or extended to what it held before: the fragment copies, the skill
 `.agents/.gitignore` and `.outcomebound/.gitignore` go, the project's own `local.md` stays. Reading a fact runs nothing from the
 target.
 
+One case still needs `--force` (open). A project edits a rendered block and its source in the same
+way, and the release also changes how that block renders:
+
+| Block bytes on disk | adopt |
+| --- | --- |
+| equal to the record | updates it |
+| equal to the new render | records it, on a `kept` line |
+| equal to neither: a person's edit | refuses without `--force` |
+| equal to neither: the source's edit, rendered by the previous release | refuses without `--force` |
+
+The last two rows look the same to adopt, because the manifest holds only digests. It is seen on an
+upgrade from 1.0.0 with the `workspace` fragment, whose pointer line changed. Telling them apart
+needs the previous render's inputs in the manifest, a change of its format.
+`tests/test_upgrade_corpus.py` holds the case with the local fragment alone.
+
 ## Validation
 
 `tests/test_adopt.py`, `tests/test_facts.py`, `tests/test_fragments.py`,
