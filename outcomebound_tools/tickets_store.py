@@ -7,6 +7,7 @@ handed none. The reader itself is `tickets_github`'s.
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 
 from outcomebound_tools.tickets_declaration import Declaration
@@ -27,11 +28,17 @@ def read_store(target: Path, declaration: Declaration, source: str | None) -> Re
 
     del target
     if source is None:
+        owner, _, name = declaration.repo.partition("/")
+        command = (
+            f"gh api graphql --paginate --slurp -F owner={shlex.quote(owner)} "
+            f"-F name={shlex.quote(name)} "
+            '-f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" '
+            "> issues.json"
+        )
         raise PlanningError(
             "INPUT_REQUIRED",
             f"this project declares the github store ({declaration.repo}), which is read "
-            "from an export: run the pinned query, templates/tickets/github-export.graphql, "
-            "and pass its output "
-            "as --input <file>, or - for standard input",
+            f"from an export: run `{command}`, then pass the file as --input issues.json, "
+            "or - for standard input",
         )
     return read_github_export(source, declaration)

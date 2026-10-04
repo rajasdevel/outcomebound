@@ -18,6 +18,9 @@ you. The flags of each verb are in its `--help`.
 5. Run `outcomebound tickets brief --input issues.json <ticket>` to see what an implementer
    receives.
 
+To publish drafts as tickets, `outcomebound tickets publish --draft <file>…` prints the `gh`
+commands. See [`publish`](#publish).
+
 Before you publish tickets, you can check drafts that are only files:
 `outcomebound tickets check --draft <file>…`. This reads no store, but it still needs the
 declaration. Without it, the verb refuses with `DECLARATION_MISSING`.
@@ -46,6 +49,8 @@ names no test plan, because which tests to write is the implementer's decision.
 - **It calls no tracker.** It opens no network connection, reads no credential and writes
   nothing. Every report is about the export that it was given, and the report states the age of
   that export. For an export read from standard input, the report says that the age is unknown.
+  To publish drafts, `publish` prints the `gh` commands, and `gh` runs them with the login of
+  the person or agent who runs the script.
 - **It runs nothing.** A `done-when` item names a claim of the committed claims plan. The
   project's own gate runs the claim where the work lands.
 - **It shapes the hand-off to the implementer.** A ticket is the same whoever builds it. A
@@ -143,6 +148,39 @@ its exact command.
 `brief` exits with `0` when it printed the brief. It exits with `1` for a refusal. It exits with
 `2` for a planning error or a usage error.
 
+### `publish`
+
+`publish --draft <file>…` prints a POSIX shell script that publishes the drafts as tickets with
+`gh`. It runs nothing and writes nothing. First it runs `check --draft` on all the drafts, and
+it refuses with `PUBLISH_REFUSED` if `check` reports an error. The script:
+
+- creates the issues in an order where each draft comes after each sibling draft that it names in
+  `blocked-by`, `parent` or `discovered-from`;
+- gives each issue its relations as `gh issue create --parent` and `--blocked-by`, with the new
+  number of a sibling draft, or the number or URL of a published ticket;
+- writes each body as the draft without its `# <title>` line and without the `blocked-by` and
+  `parent` lines of its block, which the tracker holds. A `discovered-from` that names a sibling
+  draft becomes the issue number of that draft;
+- applies the declared label, and also `human_label` for `human-only: yes` or `request_label`
+  for `human-only: requested`.
+
+The header of the script names the `writes` grant of the declaration. An agent runs the script
+only where that grant allows. Without a grant, a person reviews the script and runs it. A name of
+a sibling draft in the prose of a body is not changed, because a word is not always a reference
+to a draft. After the script runs, make a new export and run `check` on it.
+
+These steps stay manual:
+
+- Create the three labels once, when a person chooses the store. The `slice-tickets` skill gives
+  the three `gh label create` commands.
+- To change what an accepted ticket asks, get the word of a person who can accept it, in a
+  comment. An edit does not lapse the label, and the tracker keeps the history of each edit.
+- Acceptance is the label. A standing request of a person that accepts a breakdown in advance is
+  recorded where the person wrote it, for example a Follow-ups line in a goal envelope.
+
+`publish` exits with `0` when it printed the script. It exits with `1` for a refusal. It exits
+with `2` for a usage error.
+
 ## Producing the export for the `github` store
 
 Run the pinned query from your project, and give the engine the file:
@@ -153,7 +191,9 @@ gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
 outcomebound tickets check --input issues.json
 ```
 
-The query is shipped unedited, so you can pipe it straight in. The engine refuses a file that is
+When you run `check` or `brief` without `--input`, the refusal `INPUT_REQUIRED` prints this
+command with the owner and the name of the declared repository. The query is shipped unedited,
+so you can pipe it straight in. The engine refuses a file that is
 not the output of this query for the declared repository. Where a page or a connection reports
 more than it returned, the reader says UNVERIFIED. It does not guess. Make a new export after you
 change a ticket yourself.

@@ -234,8 +234,7 @@ def _reads_messages(ticket: Ticket, sections: _Sections) -> Iterator[Message]:
             yield message(
                 refused.code,
                 ticket.id,
-                f"{ticket.id} reads {entry.cited()}, which resolves to no one "
-                f"section: {refused}",
+                f"{ticket.id} reads {entry.cited()}, which resolves to no one section: {refused}",
             )
 
 
