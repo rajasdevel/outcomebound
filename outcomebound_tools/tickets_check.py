@@ -273,11 +273,13 @@ def _reach_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
         definition = None if item.human else plan.claims.get(item.claim)
         if definition is None:
             continue
-        outside = [
-            "a path outside the checkout" if path is None else path
-            for path in definition.required_paths
-            if path is None or not any(covers(entry, path) for entry in ticket.bounds)
-        ]
+        outside = list(
+            dict.fromkeys(
+                "a path outside the checkout" if path is None else path
+                for path in definition.required_paths
+                if path is None or not any(covers(entry, path) for entry in ticket.bounds)
+            )
+        )
         if not outside:
             continue
         yield message(
@@ -328,7 +330,15 @@ def _relation_messages(
     """
 
     yield from given.relations.get(ticket.id, ())
-    if ticket.discovered_from and ticket.discovered_from not in given.known:
+    if ticket.discovered_from == ticket.id:
+        yield message(
+            "VALUE_INVALID",
+            ticket.id,
+            f"{ticket.id} names itself in `discovered-from`; a ticket is found during other "
+            "work, never during its own",
+            "name the ticket or issue during which this one was found, or drop the key",
+        )
+    elif ticket.discovered_from and ticket.discovered_from not in given.known:
         yield message(
             "DISCOVERED_FROM_ABSENT",
             ticket.id,

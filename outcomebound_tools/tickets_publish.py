@@ -89,6 +89,12 @@ def _read(paths: Sequence[str], declaration: Declaration) -> list[_Draft]:
         if ticket is None:
             raise Refusal(_REFUSED, f"no draft could be read at {path}")
         text = Path(path).read_text(encoding="utf-8")
+        if "\0" in text:
+            raise Refusal(
+                _REFUSED,
+                f"the draft at {path} holds a NUL byte, which no shell argument can carry, so "
+                "the tracker would not receive what the draft says; remove it",
+            )
         drafts.append(_Draft(ticket, Path(path).as_posix(), text.removeprefix(_BOM)))
     return drafts
 
@@ -231,7 +237,12 @@ def _create(
     return "\n".join(
         [
             f"# {_comment(draft.path)}",
-            f'url=$( {{ {body}; }} | gh issue create --repo "$repo" {" ".join(flags)} '
+            # The body is built in an assignment, not on the left of a pipe, so a part
+            # that fails stops the script under `set -e` before `gh` runs; the closing
+            # `x` keeps the body's final line ends, which a substitution drops.
+            f"body=$( {body}; printf x )",
+            "body=${body%x}",
+            f'url=$( printf \'%s\' "$body" | gh issue create --repo "$repo" {" ".join(flags)} '
             "--body-file - )",
             f'{variable}=$(ob_number "$url")',
             f'echo {shlex.quote(f"{draft.path} -> #")}"${variable}"',

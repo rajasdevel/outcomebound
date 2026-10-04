@@ -37,7 +37,7 @@ from types import MappingProxyType
 from typing import Any
 
 from outcomebound_tools import identity, paths
-from outcomebound_tools.tickets_bounds import folder, whole_repository
+from outcomebound_tools.tickets_bounds import compiles, folder, whole_repository
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_report import Message, message
 
@@ -509,6 +509,12 @@ _BOUNDS_RULES: tuple[tuple[Callable[[str], bool], str, str, str], ...] = (
         "is not a repository-relative path or glob",
         "name paths inside the repository, without a leading `/`, a `..` or an empty "
         "segment; a folder is written `src`, `src/` or `src/**`",
+    ),
+    (
+        lambda entry: not compiles(entry),
+        "BOUNDS_INVALID",
+        "holds a `[...]` class that no glob can hold",
+        "write a class with at least one character, such as `[ab]`, or drop the `[`",
     ),
     (
         whole_repository,

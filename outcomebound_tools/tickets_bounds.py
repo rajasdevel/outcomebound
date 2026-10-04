@@ -11,20 +11,20 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["covers", "folder", "whole_repository"]
+__all__ = ["compiles", "covers", "folder", "whole_repository"]
 
 # The glob characters a `bounds` entry may carry, and the one place they are named.
 _GLOBS = "*?["
 
 
 def folder(entry: str) -> str:
-    """The entry with a folder's trailing `/` dropped; `src/` is `src`.
+    """The entry with a folder's one trailing `/` dropped; `src/` is `src`.
 
-    An entry that is only slashes keeps them, so the path rules still refuse it.
+    Only one is dropped, so `src//` keeps an empty segment and the path rules
+    refuse it, as they refuse `a//b`.
     """
 
-    stripped = entry.rstrip("/")
-    return stripped if stripped else entry
+    return entry[:-1] if entry.endswith("/") else entry
 
 
 def _literal_prefix(entry: str) -> str:
@@ -40,9 +40,9 @@ def whole_repository(entry: str) -> bool:
     return _literal_prefix(folder(entry)) in ("", ".")
 
 
-def _pattern(glob: str) -> re.Pattern[str]:
-    """A glob as a regular expression: `**` spans folders, `*` and `?` stay in one,
-    and a `[...]` class is kept as written."""
+def _source(glob: str) -> str:
+    """A glob as the source of a regular expression: `**` spans folders, `*` and `?`
+    stay in one, and a `[...]` class is kept as written."""
 
     out, index = [], 0
     while index < len(glob):
@@ -65,7 +65,28 @@ def _pattern(glob: str) -> re.Pattern[str]:
         else:
             out.append(re.escape(glob[index]))
             index += 1
-    return re.compile("".join(out) + r"\Z")
+    return "".join(out) + r"\Z"
+
+
+def compiles(entry: str) -> bool:
+    """Whether every `[...]` class in an entry is one a glob can hold; `src/[]` and
+    `src/[^]` are not, and `tickets_model` refuses them as `BOUNDS_INVALID`."""
+
+    try:
+        re.compile(_source(folder(entry)))
+    except re.error:
+        return False
+    return True
+
+
+def _pattern(glob: str) -> re.Pattern[str]:
+    """The glob as a regular expression. An entry `compiles` refuses is read as
+    literal text here, so that no pass over a refused entry can end the run."""
+
+    try:
+        return re.compile(_source(glob))
+    except re.error:
+        return re.compile(re.escape(glob) + r"\Z")
 
 
 def _ancestors(path: str) -> list[str]:

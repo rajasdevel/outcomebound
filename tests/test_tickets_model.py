@@ -387,7 +387,7 @@ def test_an_item_with_nothing_after_the_dash_is_the_keys_to_refuse() -> None:
 def test_bounds_validity() -> None:
     assert _fields({"bounds": ""}).bounds == ()
 
-    for offending in ("/etc/passwd", "../other", "a//b", "/", "a\\b", "c:/x"):
+    for offending in ("/etc/passwd", "../other", "a//b", "src//", "/", "a\\b", "c:/x"):
         fields, messages = parse_block(_block({"bounds": offending}))
         assert [item.code for item in messages] == ["BOUNDS_INVALID"], offending
         assert repr(offending) in messages[0].text
@@ -402,6 +402,10 @@ def test_bounds_validity() -> None:
     assert folders.bounds == ("docs/", "src/app/"), "what is written is what is hashed"
     refused = parse_block(_block({"bounds": "a//b"}))[1][0]
     assert "a folder is written" in refused.next, "the remedy says how to write a folder"
+    for unclosed in ("src/[]", "src/[^]"):
+        said = parse_block(_block({"bounds": unclosed}))[1]
+        assert [item.code for item in said] == ["BOUNDS_INVALID"], unclosed
+        assert "class" in said[0].text
 
 
 # --- decision-content identity -----------------------------------------------------
@@ -613,6 +617,8 @@ def test_a_bounds_entry_covers_itself_and_what_is_under_it() -> None:
     ]
     assert [pair for pair in inside if not covers(*pair)] == []
     assert [pair for pair in outside if covers(*pair)] == []
+    assert not covers("src/[]", "src/a.py"), "a class that does not compile never raises"
+    assert covers("src/[ab].py", "src/a.py")
 
 
 def test_tests_import_only_public_names() -> None:

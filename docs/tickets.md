@@ -100,7 +100,9 @@ ticket waits for a person to confirm it. A fact that a command can read is a cla
 judgment for each plan is a person's go on the plan or goal, and it happens outside the engine.
 The engine refuses a `human:` item, with one exception. On a ticket that a person does, whose
 block says `human-only: yes`, an item `<name>: human: <observation>` names the check of that
-person. The plan does not define it, and the brief shows it as a person's check:
+person. The engine reads the value in the block, not the labels: a ticket with `human-only: no`
+in its block and the `human_label` applied still gets the error. The plan does not define the
+check, and the brief shows it as a person's check:
 
 ```text
 human-only: yes
@@ -168,6 +170,12 @@ The header of the script names the `writes` grant of the declaration. An agent r
 only where that grant allows. Without a grant, a person reviews the script and runs it. A name of
 a sibling draft in the prose of a body is not changed, because a word is not always a reference
 to a draft. After the script runs, make a new export and run `check` on it.
+
+The script stops at the first command that fails. The issues that it made before that command
+stay in the tracker, and the script prints each one as `<draft> -> #<number>`. Do not run the
+same script again, because it makes those issues a second time. To continue, make a new export.
+In the drafts that are not published yet, change each name of a published sibling to its
+`#<number>`. Then run `publish` again with only those drafts.
 
 These steps stay manual:
 
