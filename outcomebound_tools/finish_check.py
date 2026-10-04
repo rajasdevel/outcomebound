@@ -625,16 +625,16 @@ def check(
 DESCRIPTION = """\
 Run at a harness's stop hook, from the entry `outcomebound adopt --finish-check` writes. It reads
 the hook's JSON input on stdin, finds the target (the nearest directory holding
-.outcomebound/manifest.json upward from the input's cwd, else from its own), and runs the
-manifest's Done commands from the target's root, in order, stopping at the first that does not
-pass, only while their digest is --done, and stopping them 30 seconds before --timeout. A working
-tree they were already checked on runs nothing: after a pass it prints {}, after a failure or an
-UNVERIFIED it repeats that verdict; a command the environment could not run is not remembered. A failure while the input's stop_hook_active is false holds
-the finish, its report the reason the agent reads; a pass, a failure after that, a repeated
-verdict, a digest that no longer matches, a missing manifest, a command stopped at the time limit
-and one the hook's environment could not run (exit 126 or 127) go to the person as systemMessage
-and hold nothing. On claude-code nothing runs while background_tasks or session_crons is
-non-empty."""
+.outcomebound/manifest.json upward from the input's cwd, else from its own), and runs the manifest's
+Done commands from the target's root, in order, stopping at the first that does not pass, only while
+their digest is --done, and stopping them 30 seconds before --timeout. A working tree they were
+already checked on runs nothing: after a pass it prints {}, after a failure or an UNVERIFIED it
+repeats that verdict; a command the environment could not run is not remembered. A failure while the
+input's stop_hook_active is false holds the finish, its report the reason the agent reads; a pass, a
+failure after that, a repeated verdict, a digest that no longer matches, a missing manifest, a
+command stopped at the time limit and one the hook's environment could not run (exit 126 or 127) go
+to the person as systemMessage and hold nothing. On claude-code nothing runs while background_tasks
+or session_crons is non-empty."""
 EPILOG = """\
 exit: 0 whenever it ran, its verdict as JSON on stdout; 1 on a usage error, never 2, which a
 harness reads as holding the finish."""

@@ -101,8 +101,8 @@ _USING_BODY = (
     "Read the sections named above, and source as needed in and around the bounds. Decide\n"
     "nothing the ticket or those sections already decide. When Limits holds a part for the\n"
     "person, finish every part it does not block, then hand over with that part as a decision\n"
-    "brief naming what it waits on. Hand the work over saying what changed, each check's verdict, what you decided\n"
-    "beyond the ticket, and the follow-ups you found."
+    "brief naming what it waits on. Hand the work over saying what changed, each check's\n"
+    "verdict, what you decided beyond the ticket, and the follow-ups you found."
 )
 
 # The two check lines, and a third: a claim the plan defines with nothing
