@@ -25,12 +25,13 @@ the same change.
 
 ## The rules for a design in this repository
 
-These rules are for the maintainers of this repository and its own designs only. The contract and
-the spec template that adopting projects install do not set a word limit on a spec.
+These rules are for the maintainers of this repository and its own designs only.
 
 - There is one current design for each area. Edit it in place. Git holds every earlier version,
   and the commit that changes a decision says why.
-- A design in this repository has at most 1,500 words, and it names no model.
+- A design holds only the decisions that the code cannot show, and it names no model. It has no
+  word limit: a design that grows is split by area, and no decision is cut to make it shorter
+  (maintainer, 2026-10-04).
 - The table of decisions has the columns Decision, Rejected alternative, Owner and Status. The
   Owner column holds `user` or `agent`. It says whose decision the row is. The Status column
   holds `open`, `assumed` or `decided`.

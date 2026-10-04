@@ -34,6 +34,7 @@ block, `id=ticket v=1`. The block holds these keys:
 | `human-only` | Whether a person must do the ticket: `yes` (a person must), `requested` (an agent asks for a person) or `no`. |
 | `done-when` | The checks that say the ticket is done. Each item names one claim. |
 | `discovered-from` | Optional. The ticket or issue during which this one was found. |
+| `waits-on` | Optional. The decision briefs that the ticket waits on, as ids on one line separated by commas, for example `waits-on: D82, D83`. Other tickets do not wait. |
 
 `templates/tickets/issue-template.md` is the skeleton to copy into an issue body. It has three
 headings, `## Outcome`, `## Design` and `## Limits`, and the block. Only `## Outcome` and the

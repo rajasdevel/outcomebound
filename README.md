@@ -160,8 +160,8 @@ With `adopt --finish-check`, your Done commands decide when a turn can end:
 
 ```mermaid
 flowchart TD
-    turn(["The agent ends its turn"]) --> changed{"Has the working tree changed<br/>since Done last passed?"}
-    changed -- no --> idle["The turn ends.<br/>Nothing runs."]
+    turn(["The agent ends its turn"]) --> changed{"Has the working tree changed<br/>since Done last ran?"}
+    changed -- no --> idle["The turn ends. Nothing runs.<br/>A failure is shown to you again."]
     changed -- yes --> cmds["Your Done commands run"]
     cmds -- PASS --> pass["The turn ends. You see PASS:<br/>not reviewed, not landed."]
     cmds -- FAIL --> retry{"Sent back<br/>once already?"}
@@ -175,7 +175,9 @@ flowchart TD
 ```
 
 It is observed in Claude Code. It is built for Codex, but not yet observed there. The install
-report itself says `UNVERIFIED` for the hook, until you see its PASS message end a run.
+report itself says `UNVERIFIED` for the hook, until you see its PASS message end a run. The Done
+commands may take up to 600 seconds, the harnesses' default; `adopt --finish-timeout <seconds>` sets
+a longer time.
 
 ### Hand off to a smaller model
 

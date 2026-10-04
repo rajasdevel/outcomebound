@@ -214,17 +214,3 @@ def test_new_spec_rejects_more_than_one_target(tmp_path):
     assert result.returncode == 1
     assert "one target" in result.stderr
     assert not (tmp_path / "docs").exists()
-
-
-def test_every_current_design_stays_within_1500_words():
-    """docs/specs/README.md holds this repository's own designs to 1,500 words; this holds them.
-
-    The rule is local to this repository: the contract and the spec template adopters install
-    set no word limit on a spec."""
-
-    over = {
-        str(path.relative_to(ROOT)): len(path.read_text(encoding="utf-8").split())
-        for path in sorted((ROOT / "docs" / "specs").glob("*/design.md"))
-        if len(path.read_text(encoding="utf-8").split()) > 1500
-    }
-    assert not over, over
