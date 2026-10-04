@@ -235,6 +235,16 @@ Do these steps first:
   - `tickets brief`: at a limit, the implementer finishes every part that the limit does not
     block. Without `CONTRIBUTING.md`, the implementer commits on its own branch. The brief has no
     size line. A claim with no timeout shows "no timeout".
+- Designs and the prompt standard:
+  - Rule S23 in `docs/prompt-standard.md`: a number or a stop in text that a model reads names
+    its evidence. A test holds this rule over the contract, the kernel, the templates, the
+    fragments and the skills.
+  - Each gate design (floor, finish check, instructions, tickets) states the invariant that its
+    gate holds, which data each verdict reads, and who can write that data.
+- For contributors: the floor claim `public-text` fails on a home path in a tracked file or in a
+  commit message of the range. `make scrub` also applies a local list of private terms, which
+  `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it. `CONTRIBUTING.md` says what public
+  text leaves out.
 
 ### Fixed
 
