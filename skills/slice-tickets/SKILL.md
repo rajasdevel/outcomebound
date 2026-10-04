@@ -143,6 +143,10 @@ parent: #41
   tickets run in parallel: a file the work needs just outside them holds that work when nothing is
   wrong. Empty bounds grant no path, right for a person's ticket and for a parent that only
   gathers its children.
+- A `done-when` claim whose command reads more than the ticket's own paths, such as a type, lint,
+  format or shell gate over the whole tree, or a runner script a suite needs, needs `bounds` that
+  cover what it reads; otherwise a repair ticket that makes that command green outside them comes
+  first, named in `blocked-by`.
 - `human-only: yes` marks a ticket a person will do; `requested` is an agent's, never a draft's.
 - A `done-when` item is a claim a command settles; a fact a command can read is one, and so is
   an agent's own act, read from the artifact it left. A judgment only the user can make is no
