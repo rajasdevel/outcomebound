@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from outcomebound_tools import adapters
-from outcomebound_tools.finish_check import canonical
+from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 __all__ = [
@@ -131,8 +131,9 @@ MANIFEST = ".outcomebound/manifest.json"
 # session's record, and the next session can work without it.
 NOTES = (".agents/handoffs", ".agents/shared-memory")
 # adopt's own harness entries: a manifest `hook` record holds the sha256 of the entry's
-# canonical JSON, and such an entry runs one of these verbs with plain arguments only, so a
-# recognised entry can run nothing else whatever the manifest says.
+# canonical JSON, and such an entry runs one of these verbs with plain arguments only. The
+# manifest is the target's own data, and the finish check runs the Done commands it records, so a
+# recognised entry stays a review hit: its fact quotes those commands for the person to confirm.
 OWN_VERBS = frozenset({"finish-check"})
 _PLAIN_ARGUMENT = re.compile(r"[A-Za-z0-9._=-]+")
 # adopt's route for a harness the table does not list: it reads AGENTS.md and nothing known else.
@@ -801,10 +802,14 @@ def _without_own(
 
 
 def _config_hits(
-    path: str, text: str, keys: Mapping[str, Any], own: frozenset[str] = frozenset()
+    path: str,
+    text: str,
+    keys: Mapping[str, Any],
+    own: frozenset[str] = frozenset(),
+    done: Sequence[str] | None = None,
 ) -> list[tuple[int, str, str]]:
     """(line, verdict, fact) for each listed key present, or each value left unsettled; each
-    entry adopt wrote, its digest in `own`, reads PASS and leaves the rest of its key."""
+    entry adopt wrote, its digest in `own`, is one review hit quoting the Done commands it runs."""
 
     specs = [(category, spec) for category in _CATEGORIES for spec in keys.get(category) or []]
     if path.endswith(".toml"):
@@ -819,12 +824,18 @@ def _config_hits(
             if category == "hooks" and own and isinstance(value, dict):
                 value, recognised = _without_own(value, own)
                 key = ".".join(path_keys)
+                commands = (
+                    _quote(json.dumps(list(done)), 240)
+                    if done is not None
+                    else "unreadable from the manifest"
+                )
                 hits.extend(
                     (
                         _line_of(text, (*path_keys, event)),
-                        PASS,
-                        f"adopt's own entry {key}.{event}[{index}], its digest the manifest's "
-                        f"record: {_quote(command, 120)}",
+                        UNVERIFIED,
+                        f"adopt's finish-check entry {key}.{event}[{index}] "
+                        f"({_quote(command, 120)}) runs the Done commands the manifest records: "
+                        f"{commands}",
                     )
                     for event, index, command in recognised
                 )
@@ -837,10 +848,14 @@ def _config_hits(
 
 
 def _harness_config(
-    path: str, text: str, harnesses: Sequence[str], own: frozenset[str] = frozenset()
+    path: str,
+    text: str,
+    harnesses: Sequence[str],
+    own: frozenset[str] = frozenset(),
+    done: Sequence[str] | None = None,
 ) -> list[Finding]:
     """Secret-shaped values (a gate) and each listed key present (a review), per harness; an
-    entry adopt wrote, its digest in `own`, reads PASS."""
+    entry adopt wrote, its digest in `own`, is a review hit that quotes its Done commands."""
 
     findings: list[Finding] = [
         _finding(
@@ -863,7 +878,7 @@ def _harness_config(
             f"carry this to your handoff, where a person confirms that {harness} should load "
             f"it, and go on with the work; its permissions and hooks documentation: {docs}"
         )
-        hits = _config_hits(path, text, keys, own)
+        hits = _config_hits(path, text, keys, own, done)
         findings.extend(
             _finding(
                 "harness-config", path, number, verdict, fact, next="" if verdict == PASS else step
@@ -1037,7 +1052,13 @@ def _file_findings(
     owners = [h for h in scope.config.get(relative, ()) if h in harnesses]
     if owners:
         found.extend(
-            _harness_config(relative, text, owners, (own or {}).get(relative, frozenset()))
+            _harness_config(
+                relative,
+                text,
+                owners,
+                (own or {}).get(relative, frozenset()),
+                recorded_done(root) if (own or {}).get(relative) else None,
+            )
             or [
                 _finding(
                     "harness-config", relative, 0, PASS, "no listed key and no secret-shaped value"
@@ -1131,9 +1152,9 @@ def _artifacts(root: Path) -> list[Any]:
 def _manifest_entries(root: Path) -> dict[str, frozenset[str]]:
     """Per configuration file, the digests of the harness entries adopt recorded writing there.
 
-    The manifest is the target's own data, so a digest alone exempts nothing: `_own_entry` also
-    requires the entry to run only adopt's verb, and with `--base` a changed manifest is itself
-    an `instruction-change` hit."""
+    The manifest is the target's own data, so a digest exempts nothing: a recognised entry is
+    still a review hit, its fact the Done commands it runs, and with `--base` a changed manifest
+    is itself an `instruction-change` hit."""
 
     entries: dict[str, set[str]] = {}
     for artifact in _artifacts(root):

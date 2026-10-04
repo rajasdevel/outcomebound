@@ -1262,8 +1262,9 @@ def install(
     done = recorded_done(own) if selection.done is None else selection.done
     style = recorded_style(own) if selection.style is None else selection.style
     run = Run(target, force)
+    table = harness_table(source)
     wants = desired(run, source, found, ids, done, style)
-    wants += finish_hooks(run, harness_table(source), found, done, selection, own)
+    wants += finish_hooks(run, table, found, done, selection, own)
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
         run.keep(want, recorded.pop(want.key(), None))
