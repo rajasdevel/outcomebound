@@ -11,6 +11,8 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-04
+
 A patch release. adopt now reports a `tickets` claims plan whose claims run in a folder that the
 plan was not written for, and it no longer reads a block that holds what it writes as an edit.
 
@@ -430,6 +432,7 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
 [1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
 [1.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.0.0

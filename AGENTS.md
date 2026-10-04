@@ -1,4 +1,4 @@
-<!-- outcomebound:begin id=operating-contract v=1.1.0 -->
+<!-- outcomebound:begin id=operating-contract v=1.1.1 -->
 **OutcomeBound** — neither underengineer nor overengineer: exactly the engineering the
 outcome requires.
 
