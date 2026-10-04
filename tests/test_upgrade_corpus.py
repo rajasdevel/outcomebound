@@ -1,0 +1,434 @@
+"""The upgrade corpus: a project that a released engine installed, in a shape that adopting
+projects showed, is upgraded with this checkout's engine.
+
+Each case builds a small synthetic Git project, installs it with a previous release's engine,
+taken from this repository's tag by `git archive`, commits that install as an adopter would, adds
+its shape, and then runs `adopt <project>` with the candidate engine, as the changelog's upgrade
+step does. The shape comes after the previous install, so that one install for each release and
+each set of install options serves every case that shares it, and so that a previous engine
+that stops on the shape cannot keep the candidate from being tested.
+
+The previous releases are two. `v1.0.0` is the oldest install that an adopter can hold, so it
+has the most records, blocks and defaults to move. The newest tag at or below the candidate's
+`VERSION` is the release that most adopters upgrade from. A tag that this clone does not hold
+(a shallow clone, a fork) skips with its name; CI fetches the whole history, so it runs there.
+
+The assertions are outcomes, not report bytes: `adopt --check` before the upgrade reads no
+record `edited` that the project did not change, the upgrade does not stop and refuses nothing
+that it must not (a block edited apart from its source is refused, as the negative control),
+`adopt --check` reads every record current after it, the kinds of `warning` lines equal the
+case's expected set, and nothing outside the install's own records changed: not the bytes of a
+file, not `git status`, not the index.
+
+`OB_UPGRADE_CANDIDATE` names another engine tree to upgrade with, such as `git archive` of an
+older commit, so that a case can be shown to fail on the engine before the fix it guards. Every
+canary finding becomes a case here, in the pull request that fixes it (docs/specs/README.md).
+"""
+
+from __future__ import annotations
+
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import zipfile
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from outcomebound_tools import adopt
+
+ROOT = Path(__file__).resolve().parent.parent
+GIT = shutil.which("git") or "git"
+CANDIDATE = Path(os.environ.get("OB_UPGRADE_CANDIDATE") or ROOT).resolve()
+OLDEST = "v1.0.0"
+IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
+# The scripts/outcomebound launcher's own run of a checkout, under this test's Python, so that
+# every engine runs on the Python the suite runs on.
+LAUNCH = """import runpy, sys
+sys.path.insert(0, sys.argv[1])
+sys.argv = ["outcomebound", *sys.argv[2:]]
+runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)
+"""
+# What each case's previous install selects: both harnesses with a byte cap or a hook, the
+# project's own local fragment, the workspace fragment (whose .agents/.gitignore ignores
+# .agents/work/) and the tickets fragment, and a Done command.
+INSTALL = (
+    *("--harness", "claude-code,codex"),
+    *("--fragments", "local,workspace,tickets"),
+    *("--done", "true"),
+)
+# The pointers block then holds the local fragment and the skill lines only, so that an edit
+# made to the fragment and to the block alike leaves the block as the candidate writes it.
+LOCAL_ONLY = ("--harness", "claude-code,codex", "--fragments", "local", "--done", "true")
+FINISH = (*INSTALL, "--finish-check")
+# Past codex's byte cap, a session's instructions get a byte-cap warning.
+CAP = adopt.harness_table(ROOT)["codex"]["doc_byte_cap"]
+BLOCK = re.compile(
+    r"<!-- outcomebound:begin id=(\S+) [^>]*-->.*?<!-- outcomebound:end id=\1 -->", re.DOTALL
+)
+# The stable start of each kind of `warning` line adopt prints; a line that matches none is its
+# own kind, so a new warning fails the case that shows it, with its text.
+KINDS = (
+    (re.compile(r"(\S+): a session in "), "{}: a session in"),
+    (re.compile(r"(\S+): a session here also loads "), "{}: a session here also loads"),
+    (re.compile(r"tickets: the claim `"), "tickets: the claim"),
+    (re.compile(r"tickets: the claims plan "), "tickets: the claims plan"),
+    (re.compile(r".+: Git ignores it "), "Git ignores it"),
+    (re.compile(r"AGENTS\.md holds changes that are not committed"), "AGENTS.md uncommitted"),
+)
+TICKETS = {
+    "version": 1,
+    "store": "github",
+    "repo": "example/project",
+    "label": "ticket",
+    "human_label": "human-only",
+    "request_label": "human-requested",
+    "claims": ".outcomebound/ticket-claims.json",
+}
+CWD_WARNINGS = frozenset({"tickets: the claim", "tickets: the claims plan"})
+
+needs_permissions = pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="mode 000 keeps a folder unreadable only for a POSIX user that is not root",
+)
+
+
+def git(cwd: Path, *argv: str, check: bool = True) -> str:
+    done = subprocess.run(
+        [GIT, "-C", str(cwd), *argv], check=check, capture_output=True, text=True, errors="replace"
+    )
+    return done.stdout
+
+
+def commit(project: Path, message: str) -> None:
+    git(project, "add", "-A")
+    git(project, *IDENTITY, "commit", "-q", "--allow-empty", "-m", message)
+
+
+def engine(tree: Path, *argv: str) -> subprocess.CompletedProcess[str]:
+    """`outcomebound <argv>` run by the engine in `tree`."""
+
+    return subprocess.run(
+        [sys.executable, "-I", "-c", LAUNCH, str(tree), *argv],
+        capture_output=True,
+        text=True,
+        errors="replace",
+        check=False,
+    )
+
+
+def version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.strip().lstrip("v").split("."))
+
+
+def released_tags() -> list[str]:
+    """This repository's release tags, oldest first; none where it is no Git checkout."""
+
+    try:
+        listed = git(ROOT, "tag", "--list", "v*")
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    tags = [tag for tag in listed.split() if re.fullmatch(r"v\d+\.\d+\.\d+", tag)]
+    return sorted(tags, key=version)
+
+
+def previous_tag(which: str) -> str:
+    """The release that `which` names for the candidate, or a skip that says why none."""
+
+    tags = released_tags()
+    if which == "oldest":
+        if OLDEST not in tags:
+            pytest.skip(f"the tag {OLDEST} is not in this clone (a shallow clone or a fork)")
+        return OLDEST
+    ceiling = version((CANDIDATE / "VERSION").read_text(encoding="utf-8"))
+    below = [tag for tag in tags if version(tag) <= ceiling]
+    if not below:
+        pytest.skip("no release tag at or below the candidate's VERSION is in this clone")
+    if below[-1] == OLDEST:
+        pytest.skip(f"the newest release tag at or below the candidate is {OLDEST}, run as oldest")
+    return below[-1]
+
+
+@dataclass(frozen=True)
+class Case:
+    """One adopter shape: the previous install's options, what the project then holds, the
+    warning kinds the upgrade prints, and, for the negative control, the refusal it gives."""
+
+    shape: Callable[[Path], None]
+    expected: frozenset[str] = frozenset()
+    install: tuple[str, ...] = INSTALL
+    locks: tuple[str, ...] = ()
+    unnamed: tuple[str, ...] = ()
+    refusal: str = ""
+
+
+def plain(project: Path) -> None:
+    """The install as the previous release left it, committed."""
+
+
+def claims(cwd: str | None, planned: bool = False) -> Callable[[Path], None]:
+    """A tickets claims plan in `.outcomebound/`, written for the checkout root, with the given
+    `cwd`: its claim declares `app.py`, which the root holds, and where `planned`,
+    `tests/test_new.py`, which an open ticket will add and no folder holds yet."""
+
+    def shape(project: Path) -> None:
+        claim: dict[str, object] = {
+            "name": "unit",
+            "command": ["true"],
+            "required_paths": ["app.py", *(["tests/test_new.py"] if planned else [])],
+        }
+        plan: dict[str, object] = {"version": 1, "claims": [claim]}
+        if cwd is not None:
+            plan["cwd"] = cwd
+        (project / ".outcomebound/ticket-claims.json").write_text(json.dumps(plan) + "\n")
+        (project / ".outcomebound/tickets.json").write_text(json.dumps(TICKETS) + "\n")
+        commit(project, "plan")
+
+    return shape
+
+
+def edit_alike(text: str) -> str:
+    assert text.count("does not tell you") == 1
+    return text.replace("does not tell you", "does not show here")
+
+
+def local_edited_alike(project: Path) -> None:
+    """The project's local fragment and the pointers block that inlines it, edited the same way
+    and committed: the block is what the candidate writes from the fragment, not its record."""
+
+    for name in (".outcomebound/fragments/local.md", "AGENTS.md"):
+        path = project / name
+        path.write_text(edit_alike(path.read_text(encoding="utf-8")), encoding="utf-8")
+    commit(project, "local fragment")
+
+
+def local_edited_in_block_only(project: Path) -> None:
+    """The negative control: the same edit in the block alone, so the block is neither its
+    record nor what the candidate writes."""
+
+    path = project / "AGENTS.md"
+    path.write_text(edit_alike(path.read_text(encoding="utf-8")), encoding="utf-8")
+    commit(project, "block edit")
+
+
+def unreadable_folder(project: Path) -> None:
+    """A folder that holds a `.git`, as a nested repository does; the test makes it mode 000."""
+
+    (project / "locked/.git").mkdir(parents=True)
+
+
+def ignored_copies(project: Path) -> None:
+    """Two scratch copies of the project under the ignored `.agents/work/`, each with an
+    AGENTS.md that alone is past codex's cap; another clone does not get them."""
+
+    text = (project / "AGENTS.md").read_text(encoding="utf-8")
+    for name in ("copy-a", "copy-b"):
+        copy = project / ".agents/work" / name
+        copy.mkdir(parents=True)
+        (copy / "AGENTS.md").write_text(text + "x" * CAP, encoding="utf-8")
+        (copy / "app.py").write_text("", encoding="utf-8")
+    assert git(project, "check-ignore", ".agents/work/copy-a/AGENTS.md").strip()
+
+
+def nested_repository(project: Path) -> None:
+    """A nested Git repository with its own AGENTS.md past codex's cap: it is its own project."""
+
+    nested = project / "vendor/lib"
+    nested.mkdir(parents=True)
+    git(nested, "init", "-q")
+    (nested / "AGENTS.md").write_text("n" * CAP, encoding="utf-8")
+    commit(nested, "nested")
+
+
+def staged_change(project: Path) -> None:
+    """A change and a new file staged, and a change not staged, all to the project's files."""
+
+    (project / "app.py").write_text("print('staged')\n", encoding="utf-8")
+    (project / "src").mkdir()
+    (project / "src/new.py").write_text("NEW = 1\n", encoding="utf-8")
+    git(project, "add", "app.py", "src/new.py")
+    (project / "README.md").write_text("# Project\n\nNot staged.\n", encoding="utf-8")
+
+
+CASES = {
+    "plain": Case(plain),
+    "plan-no-cwd": Case(claims(None), CWD_WARNINGS),
+    "plan-dot": Case(claims("."), CWD_WARNINGS),
+    "plan-dotdot": Case(claims("..")),
+    "plan-dot-planned": Case(claims(".", planned=True), CWD_WARNINGS, unnamed=("test_new.py",)),
+    "plan-dotdot-planned": Case(claims("..", planned=True)),
+    "local-edited-alike": Case(local_edited_alike, install=LOCAL_ONLY),
+    "local-edited-in-block-only": Case(
+        local_edited_in_block_only,
+        install=LOCAL_ONLY,
+        refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
+    ),
+    "unreadable-folder": Case(unreadable_folder, locks=("locked",)),
+    "ignored-copies": Case(ignored_copies),
+    "nested-repository": Case(nested_repository),
+    "staged-change": Case(staged_change),
+    "finish-check": Case(plain, install=FINISH),
+}
+MARKS = {"unreadable-folder": needs_permissions}
+
+
+@pytest.fixture(scope="session")
+def installed(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str, tuple[str, ...]], Path]:
+    """The project as the engine of a release tag installed it with given options, committed;
+    each engine and each install is built once per test process."""
+
+    engines: dict[str, Path] = {}
+    installs: dict[tuple[str, tuple[str, ...]], Path] = {}
+
+    def engine_of(tag: str) -> Path:
+        if tag not in engines:
+            tree = tmp_path_factory.mktemp(f"engine-{tag}")
+            archive = subprocess.run(
+                [GIT, "-C", str(ROOT), "archive", "--format=zip", tag],
+                check=True,
+                capture_output=True,
+            ).stdout
+            with zipfile.ZipFile(io.BytesIO(archive)) as files:
+                files.extractall(tree)
+            engines[tag] = tree
+        return engines[tag]
+
+    def install(tag: str, options: tuple[str, ...]) -> Path:
+        key = (tag, options)
+        if key not in installs:
+            tree = engine_of(tag)
+            project = tmp_path_factory.mktemp("installed") / "project"
+            project.mkdir()
+            git(project, "init", "-q")
+            (project / "AGENTS.md").write_text("# Project\n\nThe project's own words.\n")
+            (project / "README.md").write_text("# Project\n")
+            (project / "app.py").write_text("print('app')\n")
+            local = project / ".outcomebound/fragments/local.md"
+            local.parent.mkdir(parents=True)
+            shutil.copyfile(tree / "templates/fragment-local.md", local)
+            commit(project, "project")
+            done = engine(tree, "adopt", str(project), *options)
+            assert done.returncode == 0, f"{tag} install: {done.stdout}{done.stderr}"
+            commit(project, f"OutcomeBound {tag}")
+            installs[key] = project
+        return installs[key]
+
+    return install
+
+
+@pytest.fixture
+def unlock() -> Iterator[list[Path]]:
+    """Folders a case made mode 000, given their mode back at teardown so pytest removes them."""
+
+    locked: list[Path] = []
+    yield locked
+    for folder in reversed(locked):
+        folder.chmod(0o755)
+
+
+def warnings(out: str) -> list[str]:
+    return [line.split(None, 1)[1] for line in out.splitlines() if line.startswith("warning ")]
+
+
+def edited(out: str) -> list[str]:
+    """The records `adopt --check` reads `edited`: bytes the project changed, which an upgrade
+    refuses to replace without --force."""
+
+    return [line for line in out.splitlines() if line.startswith("edited ")]
+
+
+def kind(text: str) -> str:
+    for pattern, label in KINDS:
+        found = pattern.match(text)
+        if found:
+            return label.format(*found.groups())
+    return text
+
+
+def own_paths(project: Path) -> tuple[set[str], set[str]]:
+    """The paths the install records, and of them those that hold blocks in a project's file."""
+
+    manifest = project / ".outcomebound/manifest.json"
+    if not manifest.is_file():
+        return set(), set()
+    records = json.loads(manifest.read_text(encoding="utf-8"))["artifacts"]
+    paths = {record["path"] for record in records} | {".outcomebound/manifest.json"}
+    return paths, {record["path"] for record in records if record["kind"] == "block"}
+
+
+def state(project: Path, skip: set[str], blocks: set[str]) -> dict[str, object]:
+    """What the project holds outside `skip`: each file's bytes, a block file with its blocks
+    taken out, `git status` and the index. os.walk passes over a folder it cannot list."""
+
+    files: dict[str, bytes] = {}
+    for here, folders, names in os.walk(project):
+        folders[:] = [name for name in folders if name != ".git"]
+        for name in names:
+            path = Path(here, name)
+            relative = path.relative_to(project).as_posix()
+            if relative in blocks:
+                files[relative] = BLOCK.sub(
+                    r"<block \1>", path.read_text(encoding="utf-8")
+                ).encode()
+            elif relative not in skip:
+                files[relative] = path.read_bytes()
+    status = git(project, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored")
+    return {
+        "files": files,
+        "status": sorted(entry for entry in status.split("\0") if entry[3:] not in skip),
+        "index": git(project, "ls-files", "--stage"),
+    }
+
+
+@pytest.mark.parametrize("previous", ["oldest", "latest"])
+@pytest.mark.parametrize("name", [pytest.param(name, marks=MARKS.get(name, ())) for name in CASES])
+def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
+    tmp_path: Path,
+    installed: Callable[[str, tuple[str, ...]], Path],
+    unlock: list[Path],
+    name: str,
+    previous: str,
+) -> None:
+    """The candidate reads no project edit where there is none, upgrades each shape without
+    stopping, refuses only the block that differs from both its record and its render, reads
+    every record current after, warns of exactly the kinds the case expects, and leaves every
+    file, status and index entry it does not record as it found them."""
+
+    case = CASES[name]
+    project = tmp_path / "project"
+    shutil.copytree(installed(previous_tag(previous), case.install), project, symlinks=True)
+    case.shape(project)
+    for folder in case.locks:
+        (project / folder).chmod(0)
+        unlock.append(project / folder)
+    own_before, blocks = own_paths(project)
+    before = state(project, own_before, blocks)
+    whole = state(project, set(), set()) if case.refusal else {}
+
+    first = engine(CANDIDATE, "adopt", str(project), "--check")
+    upgrade = engine(CANDIDATE, "adopt", str(project))
+    check = engine(CANDIDATE, "adopt", str(project), "--check")
+
+    assert bool(edited(first.stdout)) == bool(case.refusal), first.stdout
+    report = f"{upgrade.stdout}{upgrade.stderr}"
+    assert "Traceback" not in upgrade.stderr, report
+    if case.refusal:
+        assert upgrade.returncode == 1, report
+        assert case.refusal in upgrade.stderr, report
+        assert state(project, set(), set()) == whole, "a refusal writes nothing"
+        assert check.returncode != 0, check.stdout
+        return
+    assert upgrade.returncode == 0, report
+    lines = warnings(upgrade.stdout)
+    assert {kind(line) for line in lines} == case.expected, lines
+    assert not [line for line in lines for word in case.unnamed if word in line], lines
+    assert check.returncode == 0, check.stdout
+    own_after, blocks_after = own_paths(project)
+    assert blocks_after == blocks
+    assert state(project, own_before | own_after, blocks) == before
