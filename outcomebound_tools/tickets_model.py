@@ -37,7 +37,7 @@ from types import MappingProxyType
 from typing import Any
 
 from outcomebound_tools import identity, paths
-from outcomebound_tools.tickets_bounds import whole_repository
+from outcomebound_tools.tickets_bounds import folder, whole_repository
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_report import Message, message
 
@@ -101,10 +101,16 @@ class ModelError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Reads:
-    """One `reads` entry, split as `<path>#<anchor>`."""
+    """One `reads` entry, split as `<path>#<anchor>`; `anchor` is empty where the
+    entry is a path alone, which names the whole file."""
 
     path: str
     anchor: str
+
+    def cited(self) -> str:
+        """The entry as a ticket writes it."""
+
+        return f"{self.path}#{self.anchor}" if self.anchor else self.path
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,11 +193,15 @@ def _closed_set(allowed: tuple[str, ...]) -> Callable[[str, tuple[str, ...]], st
 
 
 def _reads_entry(entry: str) -> Reads:
-    """`<path>#<anchor>`; resolving the section is the links module's."""
+    """`<path>#<anchor>`, or `<path>` alone for the whole file; resolving it is the
+    links module's."""
 
     path, separator, anchor = entry.partition("#")
-    if not (separator and anchor) or not paths.admits(path):
-        raise ModelError(f"entry {entry!r} is not `<repository-relative markdown path>#<anchor>`")
+    if (separator and not anchor) or not paths.admits(path):
+        raise ModelError(
+            f"entry {entry!r} is neither `<repository-relative markdown path>#<anchor>` "
+            "nor `<repository-relative path>` for the whole file"
+        )
     return Reads(path, anchor)
 
 
@@ -474,10 +484,11 @@ def _read_keys(
 # will not accept at all, then one whose literal prefix grants everything.
 _BOUNDS_RULES: tuple[tuple[Callable[[str], bool], str, str, str], ...] = (
     (
-        lambda entry: not paths.admits(entry, allow_root=True),
+        lambda entry: not paths.admits(folder(entry), allow_root=True),
         "BOUNDS_INVALID",
         "is not a repository-relative path or glob",
-        "name paths inside the repository, without a leading `/` or a `..`",
+        "name paths inside the repository, without a leading `/`, a `..` or an empty "
+        "segment; a folder is written `src`, `src/` or `src/**`",
     ),
     (
         whole_repository,

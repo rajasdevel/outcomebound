@@ -277,11 +277,14 @@ def test_a_key_that_names_one_ticket_refuses_a_list(key: str, offending: str) ->
 
 
 def test_reads_are_split() -> None:
-    """Every reader hands over `{path, anchor}`."""
+    """Every reader hands over `{path, anchor}`; a path alone names the whole file."""
 
     fields = _fields({"reads": "docs/specs/tickets/design.md#outcome"})
     assert fields.reads == (Reads(path="docs/specs/tickets/design.md", anchor="outcome"),)
-    for offending in ("no-anchor.md", "#anchor-only", "../escapes.md#x"):
+    whole = _fields({"reads": "schemas/ticket-store.schema.json"})
+    assert whole.reads == (Reads(path="schemas/ticket-store.schema.json", anchor=""),)
+    assert whole.reads[0].cited() == "schemas/ticket-store.schema.json"
+    for offending in ("empty-anchor.md#", "#anchor-only", "../escapes.md#x", "../escapes.md"):
         assert _codes(_block({"reads": offending})) == ["VALUE_INVALID"], offending
 
 
@@ -360,16 +363,21 @@ def test_an_item_with_nothing_after_the_dash_is_the_keys_to_refuse() -> None:
 def test_bounds_validity() -> None:
     assert _fields({"bounds": ""}).bounds == ()
 
-    for offending in ("/etc/passwd", "../other", "docs/", "a\\b", "c:/x"):
+    for offending in ("/etc/passwd", "../other", "a//b", "/", "a\\b", "c:/x"):
         fields, messages = parse_block(_block({"bounds": offending}))
         assert [item.code for item in messages] == ["BOUNDS_INVALID"], offending
         assert repr(offending) in messages[0].text
         assert fields.bounds == (offending,), "what is written is what is hashed"
 
-    for whole in (".", "**", "*.py"):
+    for whole in (".", "./", "**", "*.py"):
         assert _codes(_block({"bounds": whole})) == ["BOUNDS_WHOLE_REPOSITORY"], whole
 
     assert _codes(_block({"bounds": "docs/*, src/app"})) == []
+    folders = _fields({"bounds": "docs/, src/app/"})
+    assert _codes(_block({"bounds": "docs/, src/app/"})) == [], "a folder may end in `/`"
+    assert folders.bounds == ("docs/", "src/app/"), "what is written is what is hashed"
+    refused = parse_block(_block({"bounds": "a//b"}))[1][0]
+    assert "a folder is written" in refused.next, "the remedy says how to write a folder"
 
 
 # --- decision-content identity -----------------------------------------------------
@@ -416,11 +424,11 @@ def test_content_identity_moves_with_every_decision_key() -> None:
 def test_a_refused_entry_is_still_what_the_ticket_says() -> None:
     """The list keys are hashed as written, whether or not the engine read them."""
 
-    one, messages = parse_block(_block({"reads": "rubbish-one"}))
+    one, messages = parse_block(_block({"reads": "rubbish-one#"}))
     assert [item.code for item in messages] == ["VALUE_INVALID"]
     assert one.reads == (), "nothing was parsed"
-    assert one.written["reads"] == ("rubbish-one",), "what was written is still there"
-    two, _ = parse_block(_block({"reads": "rubbish-two"}))
+    assert one.written["reads"] == ("rubbish-one#",), "what was written is still there"
+    two, _ = parse_block(_block({"reads": "rubbish-two#"}))
     absent, _ = parse_block(_block({"reads": None}))
     digests = [content_identity(TITLE, BRIEF, item) for item in (one, two, absent)]
     assert len(set(digests)) == 3, "two refused values are two contents, and neither is absent"
@@ -552,6 +560,35 @@ def test_tickets_bounds_module_is_importable_directly() -> None:
             reached.add(node.module)
     engine = sorted(name for name in reached if name.split(".")[0] == "outcomebound_tools")
     assert engine == [], engine
+
+
+def test_a_bounds_entry_covers_itself_and_what_is_under_it() -> None:
+    """A literal entry, a folder written with `/` and a glob each grant what they
+    name and everything under it; a path that reads more than the entry grants is
+    outside it."""
+
+    from outcomebound_tools.tickets_bounds import covers
+
+    inside = [
+        ("src/feature", "src/feature"),
+        ("src/feature", "src/feature/a.py"),
+        ("src/feature/", "src/feature/a.py"),
+        ("src/feature/**", "src/feature"),
+        ("src/feature/**", "src/feature/deep/a.py"),
+        ("src/*.py", "src/a.py"),
+        ("src/*/tests", "src/x/tests/test_a.py"),
+        ("**", "."),
+        (".", "anything/at/all"),
+    ]
+    outside = [
+        ("src/feature", "src"),
+        ("src/feature", "src/feature-two/a.py"),
+        ("src/feature/**", "."),
+        ("src/*.py", "src/sub/a.py"),
+        ("src/feature", "tests/test_feature.py"),
+    ]
+    assert [pair for pair in inside if not covers(*pair)] == []
+    assert [pair for pair in outside if covers(*pair)] == []
 
 
 def test_tests_import_only_public_names() -> None:

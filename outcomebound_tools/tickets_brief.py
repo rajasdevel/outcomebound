@@ -83,6 +83,7 @@ _TREE: Mapping[bool, str] = {True: "clean", False: "dirty"}
 # exists to prevent.
 _NO_BRIEF = "This ticket's body is empty, so nothing here says what the work is."
 _NO_READS = "This ticket cites no section to read."
+_WHOLE_FILE = "the whole file"
 _NO_BOUNDS = "This ticket grants no path, so nothing here says where the work may go."
 _NO_WORKFLOW = (
     f"No {_WORKFLOW} is at the root of this checkout. Land as AGENTS.md or the goal envelope "
@@ -168,9 +169,21 @@ def _drafted(paths: Sequence[str], declaration: Declaration, wanted: str) -> Tic
     return ticket
 
 
-def _from_store(read: ReadResult, wanted: str) -> Ticket:
+def _store_id(wanted: str) -> str:
+    """The id a store ticket is named by: a bare issue number is `#<n>`.
+
+    A shell reads `#20` as the start of a comment unless it is quoted, so a
+    person types `20`; the tracker's own ids are all `#<n>`, and a bare number
+    names nothing else.
+    """
+
+    return f"#{wanted}" if wanted.isdecimal() and wanted.isascii() else wanted
+
+
+def _from_store(read: ReadResult, given: str) -> Ticket:
     """The one ticket this run is about. A reader holds at most one per id."""
 
+    wanted = _store_id(given)
     for ticket in read.tickets:
         if ticket.id == wanted:
             return ticket
@@ -395,13 +408,23 @@ def _header(compiled: _Compiled) -> str:
     return "".join(_terminated(line) for line in lines)
 
 
+def _cited(found: Section) -> str:
+    """A section as its ticket cites it: `path#anchor`, or the path alone for a file."""
+
+    return f"{found.path}#{found.anchor}" if found.anchor else found.path
+
+
+def _heading(found: Section) -> str:
+    """What a cited section is called: its heading, or what a whole-file citation names."""
+
+    return found.heading if found.anchor else _WHOLE_FILE
+
+
 def _read(compiled: _Compiled) -> str:
     """One line per `reads` entry, in written order: its path and anchor, then the
     heading it names, as the file writes it."""
 
-    named = "\n".join(
-        f"- {found.path}#{found.anchor} — {found.heading}" for found in compiled.sections
-    )
+    named = "\n".join(f"- {_cited(found)} — {_heading(found)}" for found in compiled.sections)
     return _part(_READ, named or _NO_READS)
 
 
@@ -494,7 +517,7 @@ def _steps(compiled: _Compiled) -> str:
     ticket = compiled.ticket
     steps = []
     if compiled.sections:
-        read = ", ".join(f"`{found.path}#{found.anchor}`" for found in compiled.sections)
+        read = ", ".join(f"`{_cited(found)}`" for found in compiled.sections)
         steps.append(f"Read the sections named above: {read}.")
     if ticket.bounds:
         paths = ", ".join(f"`{entry}`" for entry in ticket.bounds)

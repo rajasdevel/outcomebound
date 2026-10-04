@@ -257,7 +257,9 @@ def test_a_path_that_names_no_draft_is_the_engines_own_error() -> None:
 
 def test_relations_resolve_by_file_name_or_by_ticket_id() -> None:
     """A draft names another by file name, or an existing ticket by id; a
-    cross-repository id is a ticket id too, and anything else is refused."""
+    cross-repository id is a ticket id too, and anything else is refused. A
+    ticket id is accepted and said to be unchecked, since a draft run reads no
+    store."""
 
     tickets = [
         as_draft("one", blocked_by=("two", "#42", "owner/project#7"), parent=""),
@@ -269,10 +271,13 @@ def test_relations_resolve_by_file_name_or_by_ticket_id() -> None:
     found = draft_relations(tickets)
 
     assert named(tickets) == {
+        "one": ["RELATION_UNCHECKED", "RELATION_UNCHECKED"],
         "three": ["VALUE_INVALID", "VALUE_INVALID"],
         "four": ["VALUE_INVALID"],
     }
-    assert "one" not in found and "two" not in found, "written and empty relations are accepted"
+    assert {item.level.name for item in found["one"]} == {"INFO"}, "no verdict moves"
+    assert "#42" in said(found["one"]) and "not checked" in said(found["one"])
+    assert "two" not in found, "a relation to a draft of this run and an empty one are accepted"
     assert "tk-99-thing" in said(found["three"])
     assert "also-missing" in said(found["three"])
     assert "drafts/three.md" in said(found["three"]), "the file is named beside the rule"

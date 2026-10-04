@@ -211,6 +211,17 @@ def _refused(ticket: Ticket, key: str, entry: str) -> Message:
     )
 
 
+def _unchecked(ticket: Ticket, key: str, entry: str) -> Message:
+    return message(
+        "RELATION_UNCHECKED",
+        ticket.id,
+        f"{ticket.path} names the published ticket {entry} in `{key}`; not checked: a draft "
+        "run reads no store, so nothing here says that it exists or is open",
+        "run `check` on the store export once the drafts are published, where this relation "
+        "resolves against the tickets the export holds",
+    )
+
+
 def _entries(ticket: Ticket) -> list[tuple[str, str]]:
     """One draft's relation entries, by key, in written order."""
 
@@ -228,7 +239,8 @@ def draft_relations(tickets: Sequence[Ticket]) -> Mapping[str, tuple[Message, ..
     draft's `blocked-by` and `parent` entries: one naming a draft of this same
     run is a relation, and one that is a well-formed ticket id is accepted and
     takes no part in anything here, because no store is read on a draft run and
-    there is nothing to check it against. Anything else is refused by name.
+    there is nothing to check it against; `RELATION_UNCHECKED` says so, at INFO,
+    so a wrong number is not passed in silence. Anything else is refused by name.
 
     Only the ids given are relations, so a caller that keeps one draft per id
     still reads one graph; what a relation then closes is `tickets_graph`'s.
@@ -242,11 +254,13 @@ def draft_relations(tickets: Sequence[Ticket]) -> Mapping[str, tuple[Message, ..
         id: [_duplicate(id, sorted(paths))] for id, paths in where.items() if len(paths) > 1
     }
     for ticket in tickets:
-        refused = [
+        said = [
             _refused(ticket, key, entry)
+            if _TICKET_ID.fullmatch(entry) is None
+            else _unchecked(ticket, key, entry)
             for key, entry in _entries(ticket)
-            if entry not in given and _TICKET_ID.fullmatch(entry) is None
+            if entry not in given
         ]
-        if refused:
-            found.setdefault(ticket.id, []).extend(refused)
+        if said:
+            found.setdefault(ticket.id, []).extend(said)
     return MappingProxyType({id: tuple(messages) for id, messages in found.items()})

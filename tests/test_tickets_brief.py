@@ -431,6 +431,24 @@ def test_a_cited_section_is_named_and_never_quoted(tmp_path: Path) -> None:
     assert "outcomebound:begin" not in document
 
 
+def test_a_whole_file_read_is_named_by_its_path(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A `reads` entry with no anchor names the whole file, by path alone and never
+    quoted; one naming a file the checkout does not hold is refused like a section."""
+
+    root = store(tmp_path, ticket_document(reads=[CONTRACTS]))
+
+    document = compiled(root, TICKET, "--detail", "full")
+
+    assert under(document, "## Read") == [f"- {CONTRACTS} — the whole file"]
+    assert f"`{CONTRACTS}`" in document.split("## Steps", 1)[1]
+    body = section(root, CONTRACTS, "32-the-block").text.split("\n", 1)[1].strip()
+    assert body.split("\n")[0] not in document
+
+    missing = store(tmp_path, ticket_document(reads=["docs/not-here.md"]), name="missing")
+    line = refused(missing, TICKET, capsys=capsys)
+    assert "READS_UNRESOLVED" in line and "whole-file citation" in line
+
+
 def test_a_ticket_citing_nothing_says_so(tmp_path: Path) -> None:
     """An absent `reads` gets the heading and one line."""
 
@@ -779,6 +797,15 @@ def test_a_draft_naming_a_sibling_it_was_not_given_with_is_refused(
     line = refused(root, "a-new-ticket", "--draft", str(path), capsys=capsys)
 
     assert line.startswith("BRIEF_REFUSED") and "gathers" in line
+
+
+def test_a_bare_issue_number_names_the_store_ticket(tmp_path: Path) -> None:
+    """`20` is `#20`: a shell reads an unquoted `#` as a comment, so a person types
+    the number alone, and it names the same ticket with the same document."""
+
+    root = store(tmp_path)
+
+    assert compiled(root, TICKET.lstrip("#")) == compiled(root, TICKET)
 
 
 def test_a_draft_is_named_by_its_own_file(

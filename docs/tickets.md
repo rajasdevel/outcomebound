@@ -29,8 +29,8 @@ block, `id=ticket v=1`. The block holds these keys:
 
 | Key | Meaning |
 | --- | --- |
-| `reads` | The sections of the tree that the implementer must read. It can be empty. |
-| `bounds` | The paths that the work may write. An empty value grants no path. |
+| `reads` | The sections of the tree that the implementer must read, each written `<path>#<anchor>`. A path with no anchor names the whole file. It can be empty. |
+| `bounds` | The paths that the work may write. A folder is written `src`, `src/` or `src/**`. An empty value grants no path. |
 | `human-only` | Whether a person must do the ticket: `yes` (a person must), `requested` (an agent asks for a person) or `no`. |
 | `done-when` | The checks that say the ticket is done. Each item names one claim. |
 | `discovered-from` | Optional. The ticket or issue during which this one was found. |
@@ -106,7 +106,9 @@ Every verb takes the checkout to read. The default is `.`. Every verb takes the 
 is well formed, that each `reads` section resolves, that each claim is defined, and that the
 relations hold no cycle. The links of a closed or dropped ticket are history, and `check` does
 not resolve them. `--draft` lints local draft files together, relations included, and reads no
-store. `--json` prints one JSON object instead of text.
+store. On a draft run, a `blocked-by` or `parent` entry that names a published ticket, such as
+`#12`, is not checked, because no store is read. `check` says so in an INFO message,
+`RELATION_UNCHECKED`. `--json` prints one JSON object instead of text.
 
 `check` exits with `0` for PASS. It exits with `1` for FAIL or a refusal. It exits with `2` for
 UNVERIFIED, a planning error or a usage error.
@@ -114,8 +116,9 @@ UNVERIFIED, a planning error or a usage error.
 ### `brief`
 
 `brief <ticket> [--draft <file>…] [--detail full]` prints the document that an implementer
-receives. The document holds the ticket, each section that its `reads` cite (named by path and
-heading), its checks and its bounds. It quotes no section and writes nothing. `--detail full`
+receives. For the `github` store, `<ticket>` is `#20` or the number alone, `20`, which a shell
+does not read as a comment. The document holds the ticket, each section that its `reads` cite (named by path and
+heading, or by path alone for a whole file), its checks and its bounds. It quotes no section and writes nothing. `--detail full`
 adds a `## Steps` section after `## Bounds`. It gives the same facts as numbered steps, each with
 its exact command.
 
