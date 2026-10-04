@@ -79,17 +79,17 @@ The floor needs ruff and mypy. Get them in one of three ways:
   then gets the same verdict as your shell.
 - Run `scripts/outcomebound floor provision . --accept`. It pip-installs ruff and mypy, at the
   versions the floor names, into the `python3` on `PATH`. Use a virtual environment, because pip
-  refuses a system Python.
+  refuses a system Python. A tool that is on `PATH` at that version or later is not installed.
 
 `scripts/outcomebound floor provision .` also prints the command that installs gitleaks. A missing
 or older tool reads `UNVERIFIED`, and the check fails.
 
 The floor lists the findings that existed before it in `.outcomebound/floor/`. Any other finding
 fails. Fix a finding. Do not list it. These changes make the floor weaker, so they fail the check:
-a new baseline line, a changed tool configuration, and a new suppression comment. A commit
-between the base and your tip can allow one with this line:
-`Floor-Loosening: <what>; ruled #123`. After `ruled`, write one word that says where a maintainer
-agreed to the change. It can be an issue or pull request (`#123`), a decision record, or a link. `scripts/outcomebound floor ratchet .` deletes the baseline
+a new baseline line, a changed tool configuration, and a new suppression comment. The commit
+that makes the change can allow it with this line:
+`Floor-Loosening: <what>; ruled #123`. The line allows only the changes of its own commit. After
+`ruled`, write one word that says where a maintainer agreed to the change. It can be an issue or pull request (`#123`), a decision record, or a link. `scripts/outcomebound floor ratchet .` deletes the baseline
 lines that no finding matches any more.
 
 In a Git worktree of this repository, `.agents/tools/runner <command>` runs a command with that

@@ -253,17 +253,17 @@ FAIL python.types (1 new, 46 baselined)
 ```
 
 An agent that hides a finding instead of fixing it fails too. A new suppression comment, a
-baseline that grows or a changed tool config is a loosening, and it passes only when a commit
-names the decision that allowed it:
+baseline that grows or a changed tool config is a loosening, and it passes only when the commit
+that makes it names the decision that allowed it:
 
 ```text
-FAIL loosening (1 in origin/main..HEAD; no commit carries Floor-Loosening: <what>; ruled <id>)
-  outcomebound_tools/tickets.py adds # noqa: s307
+FAIL loosening (1 in origin/main..HEAD, 1 not ruled; the commit that makes a loosening carries Floor-Loosening: <what>; ruled <id>)
+  outcomebound_tools/tickets.py adds # noqa: s307 (not ruled: <commit> carries no Floor-Loosening line)
 ```
 
-`outcomebound floor propose . > floor.json` prints the claims for your stack (Python and shell),
-and `outcomebound floor apply . --floor floor.json --accept` fits them to the findings you have
-today. It runs your own ruff, mypy, gitleaks and shellcheck with your own configs. The floor makes
+`outcomebound floor propose . > floor.json` prints the claims for your stack (Python and shell)
+and a secrets claim for every project, and `outcomebound floor apply . --floor floor.json --accept`
+fits them to the findings you have today. It runs your own ruff, mypy, gitleaks and shellcheck with your own configs. The floor makes
 a loosening visible; your branch protection is what holds it to a person's decision.
 
 ### Also optional
