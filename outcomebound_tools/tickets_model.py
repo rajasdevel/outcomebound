@@ -78,11 +78,14 @@ BLOCK_VERSIONS: tuple[str, ...] = ("1",)
 # A marker a `done-when` item may carry after its claim: accepted, and read as nothing,
 # so the item is its claim alone.
 _RED_FIRST = "red-first"
-# A form of `done-when` item this engine does not read: named where it stands.
+# A person's check, `<name>: human: <observation>`: read on a ticket a person does
+# (`human-only: yes`), and named where it stands on any other.
 _HUMAN = "human:"
+_HUMAN_ONLY = "yes"
 _HUMAN_RETIRED = (
     "make it a command claim where a command can read the fact, or drop it: the one "
-    "human judgment is a person's go on the plan"
+    "human judgment on an agent's ticket is a person's go on the plan; a ticket a person "
+    "does, `human-only: yes`, may name a person's check this way"
 )
 
 
@@ -115,9 +118,16 @@ class Reads:
 
 @dataclass(frozen=True, slots=True)
 class DoneWhen:
-    """One `done-when` item: a claim the plan defines. No text here is ever executed."""
+    """One `done-when` item: a claim the plan defines, or, on a ticket a person does,
+    a person's check. No text here is ever executed.
+
+    `human` is the observation a person's check names, `<claim>: human: <observation>`,
+    and empty for a claim of the plan. `claim` is then only the check's name, which
+    the plan need not define.
+    """
 
     claim: str
+    human: str = ""
 
 
 def _message(code: str, text: str, next: str = "") -> Message:
@@ -214,27 +224,37 @@ _CLAIM_NAME = re.compile(r"[a-z][a-z0-9-]*")
 
 
 def _retired(item: str) -> bool:
-    """Whether a `done-when` item is the `human:` form this engine does not read."""
+    """Whether a `done-when` item is the `human:` form, a person's check."""
 
     return item.partition(":")[2].strip().startswith(_HUMAN)
 
 
+def _observation(item: str) -> str:
+    """What a person's check says a person observes; empty where it says nothing."""
+
+    return item.partition(":")[2].strip()[len(_HUMAN) :].strip()
+
+
 def _done_when_item(item: str) -> DoneWhen:
-    """A claim name, alone or with the `red-first` marker it is read without."""
+    """A claim name, alone or with the `red-first` marker it is read without, or a
+    person's check: the name, `human:` and the observation."""
     name, _, rest = item.partition(":")
     claim = name.strip()
     if _CLAIM_NAME.fullmatch(claim) is None:
         raise ModelError(
             f"item {item!r} does not begin with a claim name matching {_CLAIM_NAME.pattern}"
         )
+    if _retired(item):
+        return DoneWhen(claim, _observation(item))
     if rest.strip() not in ("", _RED_FIRST):
         raise ModelError(f"item {item!r} is neither `<claim>` nor `<claim>: {_RED_FIRST}`")
     return DoneWhen(claim)
 
 
 def _read_done_when(value: str, items: tuple[str, ...]) -> tuple[DoneWhen, ...]:
-    """The claims, in written order. A `human:` item is passed over here and named by
-    `parse_block`, so the claims beside it are still read."""
+    """The checks, in written order. A person's check is read here too; `parse_block`
+    keeps it only on a ticket a person does and names it on any other, so the claims
+    beside it are still read."""
 
     if value.strip():
         raise ModelError(f"is a list of `- ` items, not the value {value.strip()!r}")
@@ -243,7 +263,7 @@ def _read_done_when(value: str, items: tuple[str, ...]) -> tuple[DoneWhen, ...]:
     read: list[DoneWhen] = []
     seen: set[str] = set()
     for item in items:
-        if _retired(item):
+        if _retired(item) and not _observation(item):
             continue
         entry = _done_when_item(item)
         if entry.claim in seen:
@@ -508,18 +528,42 @@ def _bounds_messages(bounds: tuple[str, ...]) -> list[Message]:
     ]
 
 
-def _retired_messages(written: Mapping[str, tuple[str, ...]]) -> list[Message]:
-    """One `VALUE_INVALID` per `human:` item, as written."""
+def _retired_messages(fields: BlockFields) -> list[Message]:
+    """One `VALUE_INVALID` per `human:` item, as written, on a ticket a person does not do.
 
+    On a ticket whose block says `human-only: yes` a person's check is what done
+    means, and nothing waits on a person who is not already doing the work.
+    """
+
+    human = [item for item in fields.written.get("done-when", ()) if _retired(item)]
+    if fields.human_only == _HUMAN_ONLY:
+        return [
+            _message(
+                "VALUE_INVALID",
+                f"`done-when` item {item!r} is a person's check that names no observation",
+                next="write what the person observes after `human:`",
+            )
+            for item in human
+            if not _observation(item)
+        ]
     return [
         _message(
             "VALUE_INVALID",
-            f"`done-when` item {item!r} is a `human:` claim, which this engine does not read",
+            f"`done-when` item {item!r} is a `human:` claim, which this engine reads only on "
+            f"a ticket whose block says `human-only: {_HUMAN_ONLY}`",
             next=_HUMAN_RETIRED,
         )
-        for item in written.get("done-when", ())
-        if _retired(item)
+        for item in human
     ]
+
+
+def _kept_checks(fields: BlockFields) -> tuple[DoneWhen, ...]:
+    """The `done-when` items this ticket keeps: a person's check only where a person
+    does the ticket."""
+
+    if fields.human_only == _HUMAN_ONLY:
+        return fields.done_when
+    return tuple(item for item in fields.done_when if not item.human)
 
 
 def parse_block(text: str) -> tuple[BlockFields, tuple[Message, ...]]:
@@ -556,7 +600,9 @@ def parse_block(text: str) -> tuple[BlockFields, tuple[Message, ...]]:
     fields = dataclasses.replace(
         found, present=present, written=MappingProxyType(written), **values
     )
-    return fields, tuple(messages + _retired_messages(written) + _bounds_messages(fields.bounds))
+    retired = _retired_messages(fields)
+    fields = dataclasses.replace(fields, done_when=_kept_checks(fields))
+    return fields, tuple(messages + retired + _bounds_messages(fields.bounds))
 
 
 # --- decision content and its identity ---------------------------------------------

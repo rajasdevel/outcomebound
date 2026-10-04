@@ -93,7 +93,15 @@ done-when:
 Each item names one claim. An item written `<claim>: red-first` is read as the claim alone. No
 ticket waits for a person to confirm it. A fact that a command can read is a claim. The one human
 judgment for each plan is a person's go on the plan or goal, and it happens outside the engine.
-The engine refuses a `human:` item.
+The engine refuses a `human:` item, with one exception. On a ticket that a person does, whose
+block says `human-only: yes`, an item `<name>: human: <observation>` names the check of that
+person. The plan does not define it, and the brief shows it as a person's check:
+
+```text
+human-only: yes
+done-when:
+- signed-off: human: the release notes read correctly to the operator
+```
 
 ## The verbs
 
@@ -109,6 +117,10 @@ not resolve them. `--draft` lints local draft files together, relations included
 store. On a draft run, a `blocked-by` or `parent` entry that names a published ticket, such as
 `#12`, is not checked, because no store is read. `check` says so in an INFO message,
 `RELATION_UNCHECKED`. `--json` prints one JSON object instead of text.
+
+In text, the warnings for claims that the plan does not define yet (`CLAIM_PLANNED`) are one
+row after the other findings. The row gives their number and their tickets. `--json` lists each
+claim on its ticket.
 
 `check` exits with `0` for PASS. It exits with `1` for FAIL or a refusal. It exits with `2` for
 UNVERIFIED, a planning error or a usage error.

@@ -110,6 +110,8 @@ _USING_BODY = (
 # this engine could run.
 _PLANNED = "planned: the plan does not define it yet; this ticket's work adds it"
 _UNRUNNABLE = "the plan defines it with no command this engine could run"
+# A person's check, on a ticket a person does: what the person observes.
+_PERSON = "a person's check: {observation}"
 _COMMAND_LINE = "`{command}` in `{cwd}`, {timeout}"
 _TIMEOUT = "timeout {seconds}s"
 _NO_TIMEOUT = "no timeout"
@@ -444,11 +446,14 @@ def _check_body(item: DoneWhen, compiled: _Compiled) -> str:
     """What one `done-when` claim says it takes to be done.
 
     The definition of a claim the plan defines, and the planned line for one it
-    does not, which is the ticket's own work to add. A claim the plan defines
+    does not, which is the ticket's own work to add. A person's check, on a
+    ticket a person does, says what the person observes. A claim the plan defines
     with no command this engine could run is the third case, which reads as what
     it is rather than as an empty command.
     """
 
+    if item.human:
+        return _PERSON.format(observation=item.human)
     definition = compiled.plan.claims.get(item.claim)
     if definition is None:
         return _PLANNED

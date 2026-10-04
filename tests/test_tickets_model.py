@@ -342,6 +342,30 @@ def test_a_human_item_is_named_and_the_claims_beside_it_still_read() -> None:
     assert [item.code for item in said] == ["VALUE_INVALID"]
 
 
+def test_a_ticket_a_person_does_names_a_persons_check() -> None:
+    """On `human-only: yes` a `human:` item is a person's check: read, with no
+    message and no planned claim, beside the claims of the plan. One that names no
+    observation is refused where it stands."""
+
+    written = ["reads-well: human: legible at 80 columns", "tickets-model"]
+    fields, messages = parse_block(_block({"human-only": "yes", "done-when": written}))
+
+    assert messages == ()
+    assert fields.done_when == (
+        DoneWhen("reads-well", human="legible at 80 columns"),
+        DoneWhen("tickets-model"),
+    )
+
+    empty, said = parse_block(_block({"human-only": "yes", "done-when": ["b: human:", "gate"]}))
+    assert empty.done_when == (DoneWhen("gate"),)
+    assert [item.code for item in said] == ["VALUE_INVALID"]
+    assert "names no observation" in said[0].text
+
+    asked, refused = parse_block(_block({"human-only": "requested", "done-when": written}))
+    assert asked.done_when == (DoneWhen("tickets-model"),), "only a person's own ticket"
+    assert [item.code for item in refused] == ["VALUE_INVALID"]
+
+
 def test_an_item_with_nothing_after_the_dash_is_the_keys_to_refuse() -> None:
     """An empty item is a value its key refuses, never a line the parser cannot place."""
 
