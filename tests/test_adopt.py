@@ -1914,7 +1914,8 @@ def test_a_codex_install_names_the_sandbox_route_for_unattended_sessions(
     tmp_path: Path, capsys: Capture
 ) -> None:
     """Codex's default sandbox keeps .agents and .git read-only and a Desktop or IDE session
-    cannot pass --add-dir, so the report names the configuration route, UNVERIFIED."""
+    is reported to have no --add-dir flag (not in the research), so the report names the
+    configuration route, UNVERIFIED."""
 
     target = repo(tmp_path / "t")
 

@@ -1162,7 +1162,7 @@ def review_again(name: str, data: bytes, own: Sequence[Record]) -> Notes:
 
 def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
     """Measure Done once after the writes where --finish-check is named, so that no install runs
-    the project's Done unasked (the orchestrator's ruling, 2026-10-04); otherwise name the
+    the project's Done unasked (docs/specs/finish-check/design.md); otherwise name the
     record that applies here and whether Done outlasts the timeout by its measured time, or that
     none does."""
 
@@ -1222,12 +1222,19 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
             why = result.why.split(":")[0]
             notes.append(("UNVERIFIED", f"finish-check: `{shown}` could not run here, {why}"))
         else:
+            known_by = (
+                "A turn end where it fails with the same exit code and none but these failure "
+                "ids holds nothing, and a new failure id holds the turn"
+                if finish_check.failure_ids(result.output)
+                else "Its output names no failure ids, so it is known by its exit code alone: a "
+                "turn end where it fails with the same exit code holds nothing, and a new failure "
+                "inside it is not told apart"
+            )
             notes.append(
                 (
                     "known",
                     f"finish-check: `{shown}` failed, {result.why}, on the tree as installed. "
-                    "A turn end where it fails with the same exit code holds nothing; a new "
-                    "failure inside it is not told apart; once it passes, it leaves the record",
+                    f"{known_by}; once it passes, it leaves the record",
                 )
             )
     if measured.previous is not None and measured.added:
@@ -1407,8 +1414,9 @@ def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     """Where the install includes codex, the configuration route that lets an unattended
     session write the workspace folders and commit. Codex's default `workspace-write` sandbox
     keeps `<root>/.agents` and the Git directory read-only (research harnesses/codex.md section
-    9), and a Desktop or IDE session cannot pass `--add-dir`. The `writable_roots` key is not in
-    the research, and whether the harness can write the folders is not something adopt sees."""
+    9), and a Desktop or IDE session is reported to have no `--add-dir` flag, which the research
+    does not record. The `writable_roots` key is not in the research either, and whether the
+    harness can write the folders is not something adopt sees."""
 
     if not any(route.harness == "codex" for route in found):
         return []
@@ -1418,12 +1426,13 @@ def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     return [
         (
             "UNVERIFIED",
-            "codex: a Desktop or IDE session cannot pass --add-dir, and the default "
-            "workspace-write sandbox keeps .agents and the Git directory read-only (research "
-            f"harnesses/codex.md section 9); for unattended sessions add {roots} to "
-            "writable_roots under [sandbox_workspace_write] in your Codex config.toml (the CLI "
-            "can pass --add-dir for each); the key is not in the research, so check it against "
-            "your Codex release, and adopt cannot see whether the harness can write them",
+            "codex: the default workspace-write sandbox keeps .agents and the Git directory "
+            "read-only (research harnesses/codex.md section 9), and a Desktop or IDE session is "
+            "reported to have no --add-dir flag, which the research does not record; for "
+            f"unattended sessions add {roots} to writable_roots under [sandbox_workspace_write] "
+            "in your Codex config.toml (the CLI can pass --add-dir for each); the key is not in "
+            "the research either, so check both against your Codex release, and adopt cannot "
+            "see whether the harness can write them",
         )
     ]
 
@@ -1831,15 +1840,17 @@ the hook until a person sees its PASS message end a run, and names each other se
 as not available yet. The entry's timeout is --finish-timeout, default 600 seconds, the documented
 default of both harnesses; finish-check stops the Done commands 30 seconds before it, so a Done
 that takes longer needs a larger value, and re-running adopt with a new value rewrites the entry.
-After its writes, an install with --finish-check named, or with no record of known failures for
-this Done list, runs every Done command once, to its end and past each failure: it prints each
-command's verdict and seconds and the total against the timeout less 30 seconds, proposes a
-larger --finish-timeout where Done took longer, and keeps each failing command with its exit code
-as a known failure in the Git directory, which holds no turn while it fails the same way; a dry
-run does not run Done. adopt writes the document back with its keys, their order and its
-indentation kept, rewriting only its whitespace, and refuses one with comments. A Done change
-rewrites the entry, and Codex skips a changed entry until each person trusts it again in /hooks,
-which the install report says; --no-finish-check or --remove takes it out."""
+After its writes, an install with --finish-check named runs every Done command once, to its end
+and past each failure: it prints each command's verdict and seconds and the total against the
+timeout less 30 seconds, proposes a larger --finish-timeout where Done took longer, and keeps
+each failing command with its exit code, and the failure ids its output names, as a known
+failure in the Git directory, which holds no turn while it fails the same way. An install
+without --finish-check runs no Done command: it names the record of known failures that applies
+here, or says that none does; a dry run does not run Done. adopt writes the document back with
+its keys, their order and its indentation kept, rewriting only its whitespace, and refuses one
+with comments. A Done change rewrites the entry, and Codex skips a changed entry until each
+person trusts it again in /hooks, which the install report says; --no-finish-check or --remove
+takes it out."""
 EPILOG = """\
 exit: 0 done, 1 refused or failed, 2 usage; --check exits with the number of records that are
 not current, at most 100."""
