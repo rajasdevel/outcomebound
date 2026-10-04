@@ -11,6 +11,8 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-04
+
 A patch release. adopt and `tickets check` no longer tell a person to change the `cwd` of a claims
 plan that already runs its claims at the checkout root when a claim declares a path that a ticket
 will add.
@@ -446,7 +448,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.2
 [1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
 [1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
 [1.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.0.0
