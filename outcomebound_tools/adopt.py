@@ -1499,9 +1499,15 @@ def detect(target: Path, source: Path) -> int:
     words.append(harnesses)
     if ids:
         words += ["--fragments", ",".join(ids)]
-    for command in proposed_done(target):
+    done = proposed_done(target)
+    for command in done:
         words += ["--done", command]
     line = " ".join(map(shlex.quote, words))
+    if FLOOR_RUNNER in done:
+        line += (
+            "  # no default branch resolves: the floor runs without --base, so its loosening "
+            "check does not run"
+        )
     if not found:
         line += (
             f"  # no harness file found; or one of: {', '.join(loadable(harness_table(source)))}"

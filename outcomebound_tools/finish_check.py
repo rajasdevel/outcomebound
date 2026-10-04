@@ -606,8 +606,11 @@ def check(
     # changed while they ran was checked part-way through a change. Reading it again and
     # remembering it stop at their own deadline inside the margin, so the report is never what
     # the harness cuts off.
+    # A command the hook's environment could not run says nothing about the tree: once the
+    # environment is fixed, the same tree must run again, so that verdict is not remembered.
     book = deadline + REMEMBER_SECONDS
-    if before is not None and tree_digest(target, digest, book) == before:
+    environment = results[-1].cause == ENVIRONMENT
+    if before is not None and not environment and tree_digest(target, digest, book) == before:
         kept = () if verdict == PASS else tuple(results)
         remember(target, Checked(before, timeout, verdict, kept), book)
     if verdict == PASS:
@@ -626,7 +629,7 @@ the hook's JSON input on stdin, finds the target (the nearest directory holding
 manifest's Done commands from the target's root, in order, stopping at the first that does not
 pass, only while their digest is --done, and stopping them 30 seconds before --timeout. A working
 tree they were already checked on runs nothing: after a pass it prints {}, after a failure or an
-UNVERIFIED it repeats that verdict. A failure while the input's stop_hook_active is false holds
+UNVERIFIED it repeats that verdict; a command the environment could not run is not remembered. A failure while the input's stop_hook_active is false holds
 the finish, its report the reason the agent reads; a pass, a failure after that, a repeated
 verdict, a digest that no longer matches, a missing manifest, a command stopped at the time limit
 and one the hook's environment could not run (exit 126 or 127) go to the person as systemMessage

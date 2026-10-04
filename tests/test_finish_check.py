@@ -332,6 +332,14 @@ def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_noth
         f"finish-check UNVERIFIED: `{line}` could not run in the hook's environment"
     )
     assert f"UNVERIFIED {line}: exit {code} after " in message
+    # Not remembered: once the environment is fixed, the same tree runs again.
+    (root / "not-executable").chmod(0o755)
+    if code == 127:
+        assert hook("codex", digest, root)[1]["systemMessage"].startswith(
+            "finish-check UNVERIFIED: `no-such-tool-here --check` could not run"
+        )
+    else:
+        assert hook("codex", digest, root)[1]["systemMessage"].startswith("finish-check PASS: ")
 
 
 def test_a_record_1_0_0_wrote_reads_as_a_pass_and_an_unreadable_one_as_none() -> None:

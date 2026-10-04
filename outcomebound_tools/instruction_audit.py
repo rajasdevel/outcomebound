@@ -9,7 +9,8 @@ hidden characters, concealed content, override phrases, harness configuration, w
 facts are verified and current. Each check answers to one rule of the prompt standard
 (`docs/prompt-standard.md`) and carries that rule's severity; the security family runs
 first and is reported first. A harness entry adopt wrote, its digest the manifest's record and
-its command only adopt's verb, reads PASS; a hidden character in an agents' note reads
+its command only adopt's verb, is a review hit that quotes the Done commands it runs, since the
+manifest is the target's own data; a hidden character in an agents' note reads
 UNVERIFIED for that note, where in an instruction file it is a FAIL.
 
 What it does not decide: whether a flagged line is benign, which a person decides.

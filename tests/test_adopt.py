@@ -1173,7 +1173,9 @@ def test_detect_proposes_the_floors_runner_then_the_projects_test_command(
     assert proposed(bare) == []
 
 
-def test_the_floors_base_is_the_remotes_default_branch(tmp_path: Path) -> None:
+def test_the_floors_base_is_the_remotes_default_branch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """`--base` names the branch `origin/HEAD` points at, else `origin/main` where it resolves,
     and is left out where neither does, so the proposed Done never fails on a missing ref."""
 
@@ -1188,6 +1190,9 @@ def test_the_floors_base_is_the_remotes_default_branch(tmp_path: Path) -> None:
     git(target, "add", "-A")
     git(target, *identity_flags, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "one")
     assert floor_line(target) == adopt.FLOOR_RUNNER
+    # With no base the loosening check does not run, and --detect says so beside its proposal.
+    assert adopt.main([str(target), "--detect"], source=ROOT) == 0
+    assert "its loosening check does not run" in capsys.readouterr().out
 
     git(target, "update-ref", "refs/remotes/origin/main", "HEAD")
     assert floor_line(target) == f"{adopt.FLOOR_RUNNER} --base origin/main"
