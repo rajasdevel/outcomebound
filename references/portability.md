@@ -50,6 +50,15 @@ The refusal lists the harnesses that can.
 - With `--add-dir <repository>/.agents`, a session can write them. This is observed with
   codex-cli 0.159.2 on 2026-10-01. To commit, add `--add-dir <repository>/.git` as well.
 - The finish check is built for Codex. It is not yet observed there.
+- The hooks page says that the `reason` of a hold becomes a new user prompt, which the model sees,
+  and that a `systemMessage` is shown as a warning in the UI or event stream. Thus the model sees a
+  hold, and only the person sees a PASS, a known failure or an `UNVERIFIED`.
+- Codex keeps the trust of a hook against the hash of the hook, and it skips a new or changed hook
+  until a person trusts it in `/hooks`. A change to Done or to `--finish-timeout` changes the
+  entry, and `adopt` then tells you to trust the entry again. Which fields the hash covers is
+  `UNVERIFIED`. Whether a trust carries to a worktree path is `UNVERIFIED`.
+- A Codex hook runs in the working directory of the session. If the session starts in the main
+  checkout and the agent works in a worktree, the hook checks the main checkout, not the worktree.
 
 ### Amp
 

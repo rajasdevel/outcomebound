@@ -71,6 +71,12 @@ All four are under `.agents/`. Every agent on the machine shares them.
 The agent keeps these files here and not in a temporary or session directory, because the system
 can clear such a directory without warning.
 
+The finish check (`adopt --finish-check`) checks the checkout at the working directory of the
+session, not a worktree under `worktrees/`. If the agent works in a worktree and the session stays
+in the main checkout, as in a Codex session, a PASS tells you nothing about that worktree. Thus,
+before the agent lands work from a worktree, it runs the Done commands in that worktree and reports
+their verdict.
+
 The main checkout, and the worktrees of other agents, are not the agent's to change. A new task
 starts like this:
 

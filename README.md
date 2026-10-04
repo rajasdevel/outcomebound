@@ -164,20 +164,38 @@ flowchart TD
     changed -- no --> idle["The turn ends. Nothing runs.<br/>A failure is shown to you again."]
     changed -- yes --> cmds["Your Done commands run"]
     cmds -- PASS --> pass["The turn ends. You see PASS:<br/>not reviewed, not landed."]
-    cmds -- FAIL --> retry{"Sent back<br/>once already?"}
+    cmds -- FAIL --> known{"Did it fail in the same way<br/>when adopt measured Done?"}
+    known -- yes --> told["The turn ends.<br/>You see the known failure."]
+    known -- no --> retry{"Sent back<br/>once already?"}
     retry -- no --> back["The failure goes back to the agent.<br/>It keeps working."]
     back --> turn
     retry -- yes --> report["The turn ends.<br/>The report goes to you."]
     classDef ok fill:#d5f5e3,stroke:#1e8449,color:#0b3d1f
     classDef bad fill:#fadbd8,stroke:#c0392b,color:#641e16
     class pass ok
-    class back,report bad
+    class back,report,told bad
 ```
 
+When it installs the finish check, `adopt` runs your Done commands one time. It shows the verdict
+and the time of each command. It records each command that fails now, with its exit code, as a
+known failure. A known failure does not send the agent back while it fails with the same exit
+code. All other failures send the agent back. When a known command passes, the check removes it from
+the record, and its next failure sends the agent back. The check reads exit codes only. Thus, while
+a command fails in a known way, a new failure in that same command does not send the agent back.
+Split your Done into smaller commands to make this gap smaller. `adopt --finish-check` measures
+Done again.
+
+The hook checks the checkout at the working directory of the session. If the agent works in a
+worktree and the session stays in the main checkout, a PASS tells you nothing about the worktree.
+In that flow, the agent runs the Done commands in the worktree before it lands the work.
+
 It is observed in Claude Code. It is built for Codex, but not yet observed there. The install
-report itself says `UNVERIFIED` for the hook, until you see its PASS message end a run. The Done
-commands may take up to 600 seconds, the harnesses' default; `adopt --finish-timeout <seconds>` sets
-a longer time.
+report itself says `UNVERIFIED` for the hook, until you see its PASS message end a run. In Codex,
+the agent sees the reason of a hold; you see the other messages. Codex runs a new or changed hook
+only after you trust it in `/hooks`. A change to Done or to the timeout changes the entry, so trust
+it again; `adopt` tells you when. The Done commands may take up to 600 seconds, the harnesses'
+default. If Done takes longer when `adopt` measures it, `adopt` tells you, and
+`adopt --finish-timeout <seconds>` sets a longer time.
 
 ### Hand off to a smaller model
 
