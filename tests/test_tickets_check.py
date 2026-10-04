@@ -552,6 +552,44 @@ def test_claim_planned_on_an_open_ticket(
     assert codes(found, "#3") == []
 
 
+def test_planned_claims_fold_into_one_text_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Text prints the planned claims of a breakdown as one row naming their count
+    and tickets, after the findings that need action; `--json` keeps each one."""
+
+    root = checkout(
+        tmp_path,
+        document("#1", done_when=["first-planned", "second-planned"]),
+        document("#2", done_when=["third-planned"]),
+        document("#3", reads=["docs/gone.md#nowhere"]),
+    )
+
+    code, out, _ = run(root, capsys=capsys)
+
+    assert code == 1
+    planned = [line for line in out.splitlines() if "CLAIM_PLANNED" in line]
+    assert len(planned) == 1, out
+    assert planned[0].startswith("WARNING\t-\tCLAIM_PLANNED: 3 ")
+    assert "#1, #2" in planned[0] and "--json" in planned[0]
+    assert out.index("READS_UNRESOLVED") < out.index("CLAIM_PLANNED"), "action first"
+    assert codes(report(root, capsys=capsys, expect=1), "#1") == ["CLAIM_PLANNED"] * 2
+
+
+def test_a_ticket_a_person_does_names_a_persons_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """On `human-only: yes` a `human:` item is a person's check: no error, and no
+    planned claim the plan must define."""
+
+    item = "seen: human: a person sees it"
+    root = checkout(tmp_path, document("#1", human_only="yes", done_when=[CLAIM, item]))
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == []
+
+
 def test_closed_and_dropped_tickets_are_history(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

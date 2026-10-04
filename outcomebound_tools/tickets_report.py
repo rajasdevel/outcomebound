@@ -368,11 +368,41 @@ def _message_row(item: Message, subject: str) -> str:
     return f"{item.level.name}\t{subject}\t{reason}"
 
 
+# The codes text folds into one row per run: each is a WARNING a breakdown carries
+# once per planned claim, which buries the findings that need action. `--json`
+# keeps every one on its ticket.
+_FOLDED: tuple[str, ...] = ("CLAIM_PLANNED",)
+
+
+def _folded_rows(folded: Sequence[Message]) -> list[str]:
+    """One row per folded code: how many messages, on which tickets."""
+
+    rows: list[str] = []
+    for code in _FOLDED:
+        found = [item for item in folded if item.code == code]
+        if not found:
+            continue
+        tickets = list(dict.fromkeys(item.ticket for item in found))
+        summary = Message(
+            level=found[0].level,
+            code=code,
+            ticket="",
+            text=f"{len(found)} `done-when` claim(s) on {len(tickets)} ticket(s), "
+            f"{', '.join(tickets)}, are not defined in the claims plan yet; each ticket's "
+            "own work may add them",
+            next="`--json` lists each claim on its ticket",
+        )
+        rows.append(_message_row(summary, "-"))
+    return rows
+
+
 def render_text(report: Report) -> str:
     """The report as text: the run's own lines, then one row per subject.
 
     A row is the verdict, the subject and the reason, tab-separated, which is
-    what a person greps.
+    what a person greps. The codes in `_FOLDED` are one summary row after the
+    run's own messages instead of one row each; the verdicts do not change, since
+    each is a WARNING.
     """
 
     header = [
@@ -382,10 +412,16 @@ def render_text(report: Report) -> str:
         _counts_line(report.counts),
     ]
     rows: list[str] = []
+    folded: list[Message] = []
     for ticket in report.tickets:
         reads = _reads(ticket.messages)
         rows.append(f"{reads}\t{ticket.id}\t{ticket.title} ({ticket.state})")
-        rows.extend(_message_row(item, ticket.id) for item in ticket.messages)
+        for item in ticket.messages:
+            if item.code in _FOLDED:
+                folded.append(item)
+            else:
+                rows.append(_message_row(item, ticket.id))
     rows.extend(_message_row(item, item.ticket or "-") for item in report.messages)
+    rows.extend(_folded_rows(folded))
     blocks = [block for block in (header, rows) if block]
     return "\n\n".join("\n".join(block) for block in blocks) + "\n"

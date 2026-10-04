@@ -163,6 +163,7 @@ def block(
     status: str = "open",
     version: str = "1",
     waits_on: Sequence[str] = (),
+    human_only: str = "no",
 ) -> list[str]:
     """One `id=ticket` block, with the keys these fixtures spell out.
 
@@ -177,7 +178,7 @@ def block(
         f"<!-- outcomebound:begin id=ticket v={version} -->",
         *([f"reads: {', '.join(reads)}"] if reads else ["reads:"]),
         f"bounds: {', '.join(bounds)}",
-        "human-only: no",
+        f"human-only: {human_only}",
         "done-when:",
         *[f"- {item}" for item in done_when],
         *([f"status: {status}"] if status else []),
@@ -447,6 +448,19 @@ def test_a_whole_file_read_is_named_by_its_path(tmp_path: Path, capsys: pytest.C
     missing = store(tmp_path, ticket_document(reads=["docs/not-here.md"]), name="missing")
     line = refused(missing, TICKET, capsys=capsys)
     assert "READS_UNRESOLVED" in line and "whole-file citation" in line
+
+
+def test_a_persons_check_says_what_the_person_observes(tmp_path: Path) -> None:
+    """On a ticket a person does, a `human:` item is rendered as a person's check
+    beside the plan's claims, and runs nothing."""
+
+    item = "seen: human: the page reads well at 80 columns"
+    root = store(tmp_path, ticket_document(human_only="yes", done_when=[CLAIM, item]))
+
+    assert under(compiled(root), "## Checks") == [
+        f"- `{CLAIM}` — `true` in `.`, no timeout",
+        "- `seen` — a person's check: the page reads well at 80 columns",
+    ]
 
 
 def test_a_ticket_citing_nothing_says_so(tmp_path: Path) -> None:

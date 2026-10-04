@@ -243,11 +243,12 @@ def _reads_messages(ticket: Ticket, sections: _Sections) -> Iterator[Message]:
 def _claim_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
     """Each claim the plan does not define, in the ticket's declared order.
 
-    No text from a ticket is executed here or anywhere.
+    A person's check is no claim of the plan and is passed over. No text from a
+    ticket is executed here or anywhere.
     """
 
     for item in ticket.done_when:
-        if item.claim in plan.claims:
+        if item.human or item.claim in plan.claims:
             continue
         yield message(
             "CLAIM_PLANNED",
