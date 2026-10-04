@@ -226,10 +226,13 @@ def draft_document(**keys: object) -> str:
 def plan_document(
     claims: Sequence[Mapping[str, object]] = ({"name": CLAIM, "command": ["true"]},),
     *,
-    cwd: str | None = None,
+    cwd: str | None = "..",
     timeout_seconds: object = None,
 ) -> str:
-    """The v1 validation plan a `done-when` name resolves against."""
+    """The v1 validation plan a `done-when` name resolves against.
+
+    It sits in `.outcomebound/`, and a relative `cwd` starts at the plan's own
+    folder, so `..` is the checkout root."""
 
     document: dict[str, object] = {"version": 1, "claims": [dict(item) for item in claims]}
     if cwd is not None:
@@ -591,7 +594,7 @@ def test_a_claims_plan_working_directory_is_named_relative_to_the_checkout(
 ) -> None:
     """The directory a claim would run in, as this checkout names it."""
 
-    root = store(tmp_path, plan=plan_document(cwd="outcomebound_tools"))
+    root = store(tmp_path, plan=plan_document(cwd="../outcomebound_tools"))
 
     assert under(compiled(root), "## Checks") == [
         f"- `{CLAIM}` — `true` in `outcomebound_tools`, no timeout"
@@ -608,7 +611,7 @@ def test_a_working_directory_outside_the_checkout_is_named_with_dot_dot(
     directory layout into a document written to be passed on.
     """
 
-    root = store(tmp_path, plan=plan_document(cwd="../elsewhere"))
+    root = store(tmp_path, plan=plan_document(cwd="../../elsewhere"))
 
     document = compiled(root)
 

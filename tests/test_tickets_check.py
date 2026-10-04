@@ -159,9 +159,12 @@ def checkout(
     tmp_path: Path,
     *documents: dict[str, object],
     claims: Sequence[str] = (CLAIM,),
-    cwd: str | None = None,
+    cwd: str | None = "..",
 ) -> Path:
-    """A checkout declaring the store and carrying one claims plan, its export beside it."""
+    """A checkout declaring the store and carrying one claims plan, its export beside it.
+
+    The plan sits in `.outcomebound/`, and a relative `cwd` starts at its folder,
+    so `..` is the checkout root."""
 
     root = tmp_path / "repo"
     root.mkdir(parents=True, exist_ok=True)
@@ -600,7 +603,7 @@ def test_claim_cwd_outside_is_an_error(tmp_path: Path, capsys: pytest.CaptureFix
 
     outside = tmp_path / "elsewhere"
     outside.mkdir()
-    root = checkout(tmp_path, document("#1"), cwd="link")
+    root = checkout(tmp_path, document("#1"), cwd="../link")
     (root / "link").symlink_to(outside, target_is_directory=True)
 
     found = report(root, capsys=capsys, expect=1)

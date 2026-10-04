@@ -1,9 +1,11 @@
 """The claims plan a `done-when` name resolves against.
 
 What this module decides: where the one v1 validation plan the declaration names
-is read from, which claims it defines, what command and timeout each carries,
-and where a claim would run and whether that directory lies inside the checkout
-(answered once, so that `check` and `brief` cannot answer it differently).
+is read from, which claims it defines, what command, timeout and required paths
+each carries, and where a claim would run and whether that directory lies inside
+the checkout (answered once, so that `check` and `brief` cannot answer it
+differently). A relative `cwd` starts at the plan file's own folder, as
+`outcomebound validation` resolves it, so one plan runs in one place for both.
 
 What it does not decide: any message, any verdict about a ticket, and what an
 undefined claim means — `CLAIM_PLANNED` and `CLAIM_CWD_OUTSIDE` belong to
@@ -22,6 +24,7 @@ holding a NUL byte.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,11 +61,18 @@ class ClaimDefinition:
     `command` is empty where the claim declares none the runner could use. The
     directory it would run in is the plan's `cwd_resolved`, the same for every
     claim, since a validation claim declares none of its own.
+
+    `required_paths` is each path the claim declares it needs, resolved against
+    that directory and written relative to the checkout as a POSIX path; a path
+    that resolves outside the checkout is None, since no `bounds` entry can
+    cover it. Empty where the claim declares none, which says nothing about what
+    its command reads.
     """
 
     name: str
     command: tuple[str, ...]
     timeout_seconds: float | None
+    required_paths: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +80,8 @@ class ClaimsPlan:
     """The claims plan at one checkout.
 
     `cwd_resolved` is the directory the plan's top-level `cwd` resolves to
-    against the checkout this plan was loaded from, and `cwd_inside` is
+    against the plan file's folder in the checkout this plan was loaded from, the
+    folder `outcomebound validation` starts a relative `cwd` from, and `cwd_inside` is
     whether that directory lies inside the checkout. Both are computed once, in one
     expression, at load: a plan may define no claim at all and still name a
     directory outside the checkout, which `check` must report, so the answer is
@@ -90,20 +101,45 @@ class ClaimsPlan:
 # --- the working directory --------------------------------------------------------
 
 
-def _resolve(root: Path, raw_cwd: str | None) -> tuple[Path, bool]:
-    """The plan's `cwd` against the checkout, and whether it stays inside it.
+def _resolve(root: Path, path: str, raw_cwd: str | None) -> tuple[Path, bool]:
+    """The plan's `cwd` against the plan file's folder, and whether it stays inside
+    the checkout.
 
-    Both sides are resolved with symbolic links followed, because a checkout
-    reached through a symlinked directory -- which is what a temporary directory
-    often is -- otherwise reads as outside its own root. The directory need not
-    exist: a plan naming one that is not there still has a resolved name.
+    A relative `cwd` starts where `validation.load_plan` starts it, at the folder
+    that holds the plan, so a plan at `.outcomebound/ticket-claims.json` writes
+    `"cwd": ".."` to run at the checkout root under both verbs. Both sides are
+    resolved with symbolic links followed, because a checkout reached through a
+    symlinked directory -- which is what a temporary directory often is --
+    otherwise reads as outside its own root. The directory need not exist: a plan
+    naming one that is not there still has a resolved name.
     """
 
     candidate = Path("." if raw_cwd is None else raw_cwd)
     if not candidate.is_absolute():
-        candidate = root / candidate
+        candidate = (root / path).parent / candidate
     resolved = candidate.resolve()
     return resolved, resolved.is_relative_to(root.resolve())
+
+
+def _required(root: Path, cwd: Path, value: object) -> tuple[str | None, ...]:
+    """Each declared required path, relative to the checkout, or None outside it.
+
+    Resolved as `validation.run_claim` resolves it: an absolute path as written,
+    a relative one against the plan's directory. Entries that are not non-empty
+    strings are passed over, because judging a claim is the runner's job.
+    """
+
+    if not isinstance(value, list):
+        return ()
+    base = root.resolve()
+    found: list[str | None] = []
+    for raw in value:
+        if not isinstance(raw, str) or not raw.strip() or "\0" in raw:
+            continue
+        candidate = Path(raw.strip())
+        resolved = Path(os.path.normpath(candidate if candidate.is_absolute() else cwd / candidate))
+        found.append(resolved.relative_to(base).as_posix() if resolved.is_relative_to(base) else None)
+    return tuple(found)
 
 
 # --- reading the plan -------------------------------------------------------------
@@ -157,7 +193,9 @@ def _timeout(claim_value: object, plan_value: object) -> float | None:
     return None
 
 
-def _definitions(raw_claims: list[object], plan_timeout: object) -> Mapping[str, ClaimDefinition]:
+def _definitions(
+    raw_claims: list[object], plan_timeout: object, root: Path, cwd: Path
+) -> Mapping[str, ClaimDefinition]:
     """The plan's claims, in written order, over one namespace of unique names.
 
     Names are stripped as `validation.parse_plan` strips them, so a name looked
@@ -180,6 +218,7 @@ def _definitions(raw_claims: list[object], plan_timeout: object) -> Mapping[str,
             name=name,
             command=_command(item.get("command")),
             timeout_seconds=_timeout(item.get("timeout_seconds"), plan_timeout),
+            required_paths=_required(root, cwd, item.get("required_paths")),
         )
     return MappingProxyType(definitions)
 
@@ -189,7 +228,7 @@ def _plan(root: Path, path: str, document: object) -> ClaimsPlan:
 
     The two top-level values are type-checked because containment and every
     timeout are computed from them; a claim is read for its name, command and
-    timeout alone, because judging a claim is `validation.parse_plan`'s job
+    timeout and required paths alone, because judging a claim is `validation.parse_plan`'s job
     wherever the plan is actually run.
     """
 
@@ -206,12 +245,12 @@ def _plan(root: Path, path: str, document: object) -> ClaimsPlan:
     raw_claims = document.get("claims")
     if not isinstance(raw_claims, list):
         raise _Unreadable("claims must be a list of claim objects")
-    cwd, inside = _resolve(root, raw_cwd)
+    cwd, inside = _resolve(root, path, raw_cwd)
     return ClaimsPlan(
         path=path,
         cwd_resolved=cwd,
         cwd_inside=inside,
-        claims=_definitions(raw_claims, raw_timeout),
+        claims=_definitions(raw_claims, raw_timeout, root, cwd),
     )
 
 

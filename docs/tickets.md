@@ -77,7 +77,10 @@ names no test plan, because which tests to write is the implementer's decision.
   `"writes": {"granted_by": "<username>", "on": "<date>"}`. The tracker's operator gives this
   grant. Without it, an agent prints the tracker commands and a person runs them.
 - `claims` names one v1 validation plan that is committed in the repository, so all claim names
-  are in one namespace. The plan's format is `schemas/validation-plan.schema.json`.
+  are in one namespace. The plan's format is `schemas/validation-plan.schema.json`. A relative
+  `cwd` in the plan starts at the folder of the plan file, as `outcomebound validation` reads
+  it. Thus a plan at `.outcomebound/ticket-claims.json` writes `"cwd": ".."` to run its claims
+  at the root of the checkout. Without `cwd`, the claims run in `.outcomebound/`.
 
 A ticket's `done-when` names claims from that plan:
 
