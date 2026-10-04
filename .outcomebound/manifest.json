@@ -74,6 +74,12 @@
       "sha256": "a6f84c6e2212baaca339efffc76791b702d3f0cc650ff50c8af1906436e2c642"
     },
     {
+      "kind": "ignore",
+      "path": ".outcomebound/.gitignore",
+      "id": "local-records",
+      "sha256": "a891e7494629a79490591a930e9289f641c542afdf71b5ec820e31f1e4e54bc6"
+    },
+    {
       "kind": "skill",
       "path": ".claude/skills/decision-brief/SKILL.md",
       "id": "decision-brief",

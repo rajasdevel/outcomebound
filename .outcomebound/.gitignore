@@ -1,0 +1,4 @@
+# OutcomeBound's local records: written on this machine, never committed. adopt writes this
+# file whole; put any other ignore in the root .gitignore.
+/research-inbox/
+.outcomebound-checks/
