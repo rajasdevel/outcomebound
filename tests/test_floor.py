@@ -763,27 +763,84 @@ def test_a_merges_own_line_does_not_rule_what_a_side_commit_made(
     ("argv", "loosens"),
     [
         (["mypy", "--output", "json", "src/pkg", "other"], False),
+        (["mypy", "--output", "json", "src/pkg", "tool.py"], False),
         (["mypy", "--output", "json"], True),
         (["mypy", "--output", "json", "src/pkg", "--follow-imports=skip"], True),
+        (["mypy", "--output", "json", "src/pkg", "@flags.txt"], True),
+        (["mypy", "--output", "json", "src/pkg", "docs"], True),
+        (["mypy", "--output", "json", "src/pkg", "missing"], True),
     ],
-    ids=["a folder added", "the folders dropped", "an option added"],
+    ids=[
+        "a folder added",
+        "a python file added",
+        "the folders dropped",
+        "an option added",
+        "an argument file added",
+        "a folder with no python file added",
+        "an untracked folder added",
+    ],
 )
 def test_a_folder_the_types_claim_adds_tightens_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], argv: list[str], loosens: bool
 ) -> None:
     types = shipped("python.types", argv=["mypy", "--output", "json", "src/pkg"])
-    root = repository(tmp_path, {"run.sh": "echo\n"})
+    files = {"src/pkg/__init__.py": "\n", "other/a.py": "\n", "tool.py": "\n", "docs/a.md": "x\n"}
+    root = repository(tmp_path, {"run.sh": "echo\n", **files})
     install(root, shipped("shell.injection"), types)
     base = commit(root, "floor", {})
-    commit(
-        root,
-        "widen",
-        {floor.FLOOR_PATH: claims_text(shipped("shell.injection"), {**types, "argv": argv})},
-    )
+    flags = "--disable-error-code=assignment\n"
+    claims = claims_text(shipped("shell.injection"), {**types, "argv": argv})
+    commit(root, "widen", {floor.FLOOR_PATH: claims, "flags.txt": flags})
 
     verdict, output = ranged(capsys, root, base)
 
     assert verdict == ("FAIL" if loosens else "PASS"), output
+
+
+@pytest.mark.parametrize(
+    "pyproject",
+    [
+        'tool.ruff.lint.ignore = ["F401"]\n[project]\nname = "p"\n',
+        '[project]\nname = "p"\n\n[tool]\nruff.lint.ignore = ["F401"]\n',
+        '[project]\nname = "p"\n\n[tool]\nruff = { lint = { ignore = ["F401"] } }\n',
+    ],
+    ids=["a dotted key before any header", "a dotted key in [tool]", "an inline table in [tool]"],
+)
+def test_a_ruff_setting_written_outside_a_tool_ruff_header_loosens(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], pyproject: str
+) -> None:
+    root = repository(tmp_path, {"run.sh": "echo\n", "pyproject.toml": '[project]\nname = "p"\n'})
+    install(root, shipped("shell.injection"))
+    base = commit(root, "floor", {})
+    commit(root, "ignore", {"pyproject.toml": pyproject})
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == "FAIL", output
+    assert "pyproject.toml changed its [tool.ruff] or [tool.mypy] settings" in output
+
+
+@pytest.mark.parametrize("rename_first", [False, True])
+def test_a_ruled_loosening_reads_the_same_whatever_order_a_parallel_rename_merges_in(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], rename_first: bool
+) -> None:
+    root, base = ruled_range(tmp_path)
+    commit(root, "add b", {"src/b.py": "x = 1\n"})
+    base = git(root, "rev-parse", "HEAD")
+    git(root, "checkout", "-q", "-b", "loosen")
+    commit(root, "keep\n\nFloor-Loosening: keep import; ruled E2", {"src/b.py": IMPORT})
+    git(root, "checkout", "-q", "main")
+    git(root, "checkout", "-q", "-b", "rename")
+    git(root, "mv", "src/b.py", "src/q.py")
+    commit(root, "rename", {})
+    git(root, "checkout", "-q", "main")
+    for branch in ("rename", "loosen") if rename_first else ("loosen", "rename"):
+        git(root, "merge", "-q", "--no-ff", "--no-edit", branch)
+
+    verdict, output = ranged(capsys, root, base)
+
+    assert verdict == "PASS", output
+    assert f"src/q.py adds {comment('noqa: f401')} (ruled in " in output
 
 
 def test_applying_a_proposal_over_a_floor_with_python_secrets_keeps_its_name(

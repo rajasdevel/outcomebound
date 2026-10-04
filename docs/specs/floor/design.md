@@ -29,7 +29,7 @@ which opens with what it decides, and `outcomebound floor --help`.
 | A claim whose tool is missing or older than its `min_version` reads `UNVERIFIED`, and `check` fails | an exact version pin, which turns a patch release into a skipped claim | agent | decided |
 | Recipes for python and shell only; a project's own check joins as one more `exit` claim | recipes for stacks no adopter runs | user | decided |
 | The secrets claim, `secrets`, is its own recipe, which `propose` offers to every project Git tracks a file in. Where Git tracks TypeScript, `propose` says on stderr why it proposes no type or lint claim (no recipe, and no parser that reads tsc's or ESLint's findings into a baseline) and prints `tsc --noEmit` and `eslint .` as `exit` claims through `npx --no` to add once the project passes them. A floor that holds `python.secrets` keeps it: the name changes nothing it does, and `apply` keeps the name of an installed claim that the proposal holds under another name, equal but for its name and mode, so applying a new proposal drops nothing | the secrets claim in the python stack, which left a project without Python with no secrets claim; TypeScript recipes, which the decision above leaves out | agent | decided |
-| Where the project's mypy config names no `files`, the proposed types claim names each outermost folder whose `__init__.py` Git tracks, so mypy reads each module under one name. Where mypy stops (exit 2), the floor names the error with no code, the one that stopped it, with mypy's own hint; where that hint is mypy's module-mapping hint, it adds that `files` or `exclude` in the config, or folders after the claim's argv, decide what mypy reads. A folder a types claim adds after the folders it already names loosens nothing: mypy reads more | a bare `mypy .`, which maps a file in a folder without `__init__.py` to a top-level module and stops where two such folders hold files of one name; naming the first error, often an import mypy cannot find, which did not stop it | agent | decided |
+| Where the project's mypy config names no `files`, the proposed types claim names each outermost folder whose `__init__.py` Git tracks, so mypy reads each module under one name. Where mypy stops (exit 2), the floor names the error with no code, the one that stopped it, with mypy's own hint; where that hint is mypy's module-mapping hint, it adds that `files` or `exclude` in the config, or folders after the claim's argv, decide what mypy reads. A tracked folder or Python file a types claim adds after the folders it already names loosens nothing: mypy reads more. Any other word added there loosens, since mypy reads a bare word its own way (`@flags.txt` is a file of options that can turn error codes off) | a bare `mypy .`, which maps a file in a folder without `__init__.py` to a top-level module and stops where two such folders hold files of one name; naming the first error, often an import mypy cannot find, which did not stop it | agent | decided |
 | `shell.lint`: shellcheck 0.9.0 or later, `-f json1`, one run a script over the files the other shell claims cover, in baseline mode; `provision` prints its install command and never downloads it | no shell lint beyond syntax and injection | user | decided |
 | This repository gates secrets: gitleaks is a pinned dev tool, installed by CI at a pinned version and checksum, and on each developer's machine | secrets left out of this repository's floor | user | decided |
 | `apply` fits the floor to what the project holds: each claim runs once; one with findings records them in its baseline and becomes a baseline claim, except an `exit` claim, which stays a gate with its failure named; one whose tool runs but cannot read the project is left out, with why | a floor adopted strict, which fails a real project on hundreds of old findings before any change | user | decided |
@@ -53,10 +53,14 @@ adoption commit where the floor was adopted after the merge base (Decisions). Th
   (one new at HEAD, not one the range drops and brings back), and a line whose path Git reports renamed (`git diff -M`) in that range, which nets against the
   line with the same code at the old path that the same baseline loses;
 - a claim `floor.json` drops or changes, a move from `gate` to `baseline` included, but not a
-  change to its `timeout_seconds`, and not a folder a types claim adds after the folders it names;
+  change to its `timeout_seconds`, and not a folder or Python file Git tracks that a types claim adds after the folders it
+  names;
 - an adoption record changed or removed;
 - a line a tool config the floor runs under gains, loses or moves, `.gitleaksignore` included
-  (`check --help` lists them), but not a blank line or the spaces at a line's end;
+  (`check --help` lists them), but not a blank line or the spaces at a line's end. In
+  `pyproject.toml` that is a line in a `[tool.ruff…]` or `[tool.mypy…]` table, in the `[tool]`
+  table, or before the first header, where a dotted key (`tool.ruff.lint.ignore = …`) sets a
+  setting; a dotted key there for another tool reads as a change too;
 - an added suppression comment for a tool the floor runs (`check --help` names each kind); in a
   document (`.md`, `.rst`, `.txt`), which only gitleaks reads, only gitleaks' allow comment counts.
 
@@ -85,6 +89,16 @@ the adoption record, are kept. Rotation is the fix for a secret: an allowlist en
 that a person looked.
 
 ## Edges
+
+The loosening check counts loosenings; it does not see which statement a suppression covers or
+what a config line means. So: a suppression a ruled commit added and an unruled commit moves to
+another line of the same file, or onto a file renamed over it, passes under the first ruling; a
+config edit that changes no setting (a comment, a reorder, a list split across lines, spaces
+inside a value or at a line's start) needs the line, as any changed line does; and a suppression
+an unruled commit added, a later commit removed and a ruled commit added again still names the
+unruled commit, which a squash or a line on each commit that added it resolves. A rename on a
+parallel branch is attributed the same whatever order the branches merge in; a path HEAD still
+holds is never read as renamed away.
 
 The loosening check makes a loosening visible; it cannot prevent one, because the agent that
 loosens can also edit the check. Prevention needs branch protection on the server, which the
@@ -117,11 +131,12 @@ file's, decides what a claim reads; the fit on scratch repositories with finding
 each loosening rule, with a rename, a dropped claim whose files are gone and a range that starts
 at the adoption; a prefix through a stand-in container; no time limit unless a claim sets one;
 a secrets scan without a base that reads only tracked files; a ruling that covers only its own
-commit, with a merge's own edit, a rename and a claim dropped and brought back; a folder the types
-claim adds; the proposal for a TypeScript project, over a floor with `python.secrets`, and the
-packages the types claim names; the error that stopped mypy; `provision` with tools already on
-`PATH`; the adopt step after `apply` and `remove`; and the caches of a tree or a cache folder that
-cannot be written. A test that needs a
+commit, with a merge's own edit, a rename and a claim dropped and brought back; a folder, a file
+and an argument file the types claim adds; a ruff setting outside a `[tool.ruff]` header; a
+parallel rename merged in either order; the proposal for a TypeScript project, over a floor with
+`python.secrets`, and the packages the types claim names; the error that stopped mypy;
+`provision` with tools already on `PATH`; the adopt step after `apply` and `remove`; and the
+caches of a tree or a cache folder that cannot be written. A test that needs a
 real ruff, mypy, gitleaks or shellcheck skips as `UNVERIFIED` where it is not installed. This
 repository's own floor runs in `make check` and in CI. Observed by hand: in a tree its user
 cannot write, ruff 0.16.7 stops with "Failed to initialize cache" and mypy 2.3.1 with an internal
