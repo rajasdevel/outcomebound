@@ -9,7 +9,11 @@ status: ratified
 
 Before a model reads a project's instruction files, a person can see what in them, or in the
 harness settings beside them, could steer an agent unseen, and whether the loading facts behind
-that reading are current. The command reads and reports; what a hit means is the person's call.
+that reading are current. The invariant the command holds: each file or setting in scope that
+could steer an agent unseen is reported on every run, as a FAIL, a review hit or `UNVERIFIED`,
+and data in the target can decide only whether a review hit changes the result, as the rows below
+say, never whether it is reported. The command reads and reports; what a hit means is the
+person's call.
 How: `outcomebound instructions check --help` and `outcomebound_tools/instruction_audit.py`.
 
 ## Decisions

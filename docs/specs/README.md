@@ -39,6 +39,15 @@ These rules are for the maintainers of this repository and its own designs only.
   restate that file.
 - A draft has `status: draft`. The top of a draft says what must happen before it lands. The rules
   above do not bind a draft until it lands.
+- A design for a gate (a check whose verdict holds a turn, fails a run or refuses a write: the
+  floor, the instruction audit, the finish check, a tickets refusal) states in its Outcome the
+  one invariant the gate holds, in one sentence, and lists in its Edges the data each verdict
+  reads and who can write it. A verdict rests on data the gated change can write only where the
+  Edges say so. An exemption names what it exempts by its exact bytes or identity, never by one
+  field, a shape or a syntax; a tightening is judged by its effect on what the gate catches. Each
+  exemption row says which invariant it keeps and how. A change that adds an exemption or narrows
+  a finding carries the independent review the `local` fragment names, and the pull request links
+  it.
 
 ## Write a new design
 
