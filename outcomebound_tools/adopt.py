@@ -10,7 +10,9 @@ installs `.agents/.gitignore`, which keeps its four folders out of Git. `--finis
 entry to the settings document of each selected harness whose table row has a `finish_hook`
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
-kept. It installs each skill for
+kept; once its writes are made, it runs Done once to measure it (`finish_check.measure`), where
+`--finish-check` is named or no record of known failures matches the Done list. It installs each
+skill for
 every harness, and an `@AGENTS.md` import into each harness file that would not load
 AGENTS.md otherwise: none where the harness table says the harness reads AGENTS.md
 itself unless one of its files exists, and none exists. A harness outside
@@ -809,6 +811,8 @@ class Run:
         self.records: list[Record] = []
         self.edited: list[str] = []
         self.notes: Notes = []
+        # The Done commands and the timeout the install measures once its writes are made.
+        self.measure: tuple[list[str], int] | None = None
 
     def present(self, relative: str) -> bool:
         """Whether `relative` is in the target; a symlink counts whatever it points at, and so
@@ -1099,6 +1103,7 @@ def finish_hooks(
         data = finish_check.canonical(entry)
         extra: dict[str, Any] = {"harness": name, "timeout": timeout}
         wants.append(HookWant(HOOK, hook["file"], FINISH_CHECK, data, extra, hook["event"], entry))
+        run.notes.extend(review_again(name, data, own))
         caution = f"; {finish_check.CAUTION[name]}" if name in finish_check.CAUTION else ""
         run.notes.append(
             (
@@ -1109,7 +1114,103 @@ def finish_hooks(
                 f"desktop may not share with the shell{caution}",
             )
         )
+    if wants:
+        plan_measure(run, done, timeout, bool(asked))
     return wants
+
+
+def review_again(name: str, data: bytes, own: Sequence[Record]) -> Notes:
+    """The line asking each person to trust `name`'s entry again, where its harness skips a
+    changed entry until then and this install changes the one recorded."""
+
+    before = [r["sha256"] for r in own if r["kind"] == HOOK and r.get("harness") == name]
+    if name not in finish_check.REVIEW_AGAIN or not before or sha256(data) in before:
+        return []
+    return [
+        (
+            "action",
+            f"{name} finish-check: the entry changed, since its Done commands or its timeout "
+            f"changed; {finish_check.REVIEW_AGAIN[name]}",
+        )
+    ]
+
+
+def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
+    """Measure Done once after the writes where --finish-check is named or no record of known
+    failures matches this Done list; otherwise name the record and whether Done outlasts the
+    timeout by its measured time."""
+
+    known = finish_check.known_record(run.target, finish_check.done_digest(done))
+    if asked or known is None:
+        run.measure = (list(done), timeout)
+        return
+    failing = ", ".join(f"`{line}` (exit {code})" for line, code in known.failing.items())
+    run.notes.append(
+        (
+            "skip",
+            f"finish-check: Done was measured on {known.measured} in {known.seconds:.0f} s, "
+            f"known failures: {failing or 'none'}; --finish-check measures it again",
+        )
+    )
+    run.notes.extend(slow_done(run.target, known.seconds, timeout))
+
+
+def slow_done(target: Path, seconds: float, timeout: int) -> Notes:
+    """A note where Done took longer than the hook gives it: the timeout less the margin."""
+
+    limit = timeout - finish_check.MARGIN_SECONDS
+    if seconds <= limit:
+        return []
+    least = int(seconds) + 1 + finish_check.MARGIN_SECONDS
+    return [
+        (
+            "UNVERIFIED",
+            f"finish-check: Done took {seconds:.0f} s, longer than the {limit} s the hook's "
+            f"{timeout} s timeout gives it, so a turn end would stop it; re-run `outcomebound "
+            f"adopt {shlex.quote(str(target))} --finish-timeout <seconds>` with more than {least}, "
+            f"for example {2 * least}",
+        )
+    ]
+
+
+def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) -> Notes:
+    """The install report's lines for the one Done run an install makes."""
+
+    notes: Notes = []
+    for result in measured.results:
+        shown = finish_check.shorten(result.command)
+        if result.verdict == finish_check.PASS:
+            notes.append(("PASS", f"finish-check: `{shown}` in {result.seconds:.0f} s"))
+        elif result.cause == finish_check.ENVIRONMENT:
+            why = result.why.split(":")[0]
+            notes.append(("UNVERIFIED", f"finish-check: `{shown}` could not run here, {why}"))
+        else:
+            notes.append(
+                (
+                    "known",
+                    f"finish-check: `{shown}` failed, {result.why}, on the tree as installed. "
+                    "A turn end where it fails with the same exit code holds nothing; a new "
+                    "failure inside it is not told apart; once it passes, it leaves the record",
+                )
+            )
+    limit = timeout - finish_check.MARGIN_SECONDS
+    notes.append(
+        (
+            "measured",
+            f"finish-check: Done ran once in {measured.seconds:.0f} s; the hook gives it "
+            f"{limit} s of its {timeout} s timeout",
+        )
+    )
+    notes.extend(slow_done(target, measured.seconds, timeout))
+    if not measured.kept:
+        notes.append(
+            (
+                "UNVERIFIED",
+                "finish-check: the Git directory did not take the record of known failures, so "
+                "every failure holds a turn",
+            )
+        )
+    return notes
 
 
 def require_work_tree(target: Path) -> None:
@@ -1250,8 +1351,9 @@ class Selection:
 
 def install(
     target: Path, source: Path, selection: Selection, force: bool
-) -> tuple[Planned, list[str], Notes]:
-    """Plan an install or upgrade."""
+) -> tuple[Planned, list[str], Notes, tuple[list[str], int] | None]:
+    """Plan an install or upgrade; with it, the Done commands and timeout to measure once the
+    writes are made, or None."""
 
     require_work_tree(target)
     manifest = load_manifest(target)
@@ -1272,7 +1374,7 @@ def install(
         run.drop(record)
     run.notes.append(footprint(wants))
     run.notes.extend(nested_bytes(run, table, found))
-    return run.planned(manifest, engine_version(source)), run.edited, run.notes
+    return run.planned(manifest, engine_version(source)), run.edited, run.notes, run.measure
 
 
 def remove(target: Path, source: Path, force: bool) -> tuple[Planned, list[str], Notes]:
@@ -1553,9 +1655,15 @@ the hook until a person sees its PASS message end a run, and names each other se
 as not available yet. The entry's timeout is --finish-timeout, default 600 seconds, the documented
 default of both harnesses; finish-check stops the Done commands 30 seconds before it, so a Done
 that takes longer needs a larger value, and re-running adopt with a new value rewrites the entry.
-adopt writes the document back with its keys, their order and its indentation kept, rewriting
-only its whitespace, and refuses one with comments. A Done change rewrites the entry;
---no-finish-check or --remove takes it out."""
+After its writes, an install with --finish-check named, or with no record of known failures for
+this Done list, runs every Done command once, to its end and past each failure: it prints each
+command's verdict and seconds and the total against the timeout less 30 seconds, proposes a
+larger --finish-timeout where Done took longer, and keeps each failing command with its exit code
+as a known failure in the Git directory, which holds no turn while it fails the same way; a dry
+run does not run Done. adopt writes the document back with its keys, their order and its
+indentation kept, rewriting only its whitespace, and refuses one with comments. A Done change
+rewrites the entry, and Codex skips a changed entry until each person trusts it again in /hooks,
+which the install report says; --no-finish-check or --remove takes it out."""
 EPILOG = """\
 exit: 0 done, 1 refused or failed, 2 usage; --check exits with the number of records that are
 not current, at most 100."""
@@ -1690,6 +1798,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         return detect(target, source)
     if args.check:
         return check(target, source)
+    measure = None
     if args.remove:
         planned, edited, notes = remove(target, source, args.force)
     else:
@@ -1701,9 +1810,11 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             None if args.human_style is None else [args.human_style] if args.human_style else [],
             args.finish_timeout,
         )
-        planned, edited, notes = install(target, source, selection, args.force)
+        planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
         _report(planned, edited, notes)
+        if measure is not None:
+            print(f"{'skip':<8} finish-check: a dry run does not run Done; an install runs it once")
         print("dry run: nothing written")
         return 0
     fileplan.write(
@@ -1712,6 +1823,12 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         {path: before for path, (before, _) in planned.items()},
     )
     _report(planned, edited, notes)
+    if measure is not None:
+        done, timeout = measure
+        print(f"{'running':<8} finish-check: the Done commands, once, to measure them", flush=True)
+        measured = finish_check.measure(target, done, timeout)
+        for verb, text in measured_notes(target, measured, timeout):
+            print(f"{verb:<8} {text}")
     return 0
 
 

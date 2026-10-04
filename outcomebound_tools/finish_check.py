@@ -6,13 +6,17 @@ those whose harness table entry carries `finish_hook`, `claude-code` and `codex`
 hook's input on stdin, finds the target, and runs the manifest's Done commands only while their
 digest is the entry's, and only on a working tree they have not already been checked on: an
 unchanged tree repeats the verdict it was last checked with and runs nothing. A failure holds
-the finish, its report the reason the agent reads; every other outcome goes to the person as
-`systemMessage`, or as `{}` where there is nothing to say, and holds nothing. It exits 0
-whenever it ran, its verdict on stdout as both rows read it; a usage error exits 1, never 2,
+the finish, its report the reason the agent reads, unless it is a known failure: a command that
+failed with the same exit code when adopt last measured Done (`measure`), which goes on to the
+next command and holds nothing, and leaves the record once it passes. Every other outcome goes to
+the person as `systemMessage`, or as `{}` where there is nothing to say, and holds nothing. It
+exits 0 whenever it ran, its verdict on stdout as both rows read it; a usage error exits 1, never 2,
 which a row reads as holding the finish.
 
 What it does not decide: whether the harness fires the hook (its install report reads
-`UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are.
+`UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are. It reads
+each command's exit code, not its output, so a new failure inside a command that already failed
+in the same way is not told apart from the known one.
 """
 
 from __future__ import annotations
@@ -29,7 +33,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Any, NoReturn
 
@@ -59,6 +63,9 @@ BACKTICKS = re.compile(f"`{{{LONGEST_RUN + 1},}}")
 # Where the last tree the Done commands were checked on is kept with its verdict, in the Git
 # directory.
 STATE = "outcomebound-finish-check"
+# Where the Done commands that failed when adopt last measured them are kept, in the Git common
+# directory, so that every worktree of the repository reads the one record.
+KNOWN = "outcomebound-finish-check-known"
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 STDIN_LIMIT = 16 * 1024 * 1024
 TAIL_BYTES = 64 * 1024
@@ -74,6 +81,13 @@ UNAVAILABLE = {
 OTHER = "no finish hook is recorded for it"
 # A report that a row's harness may not run the entry, which the install report names.
 CAUTION = {"codex": "an open report, openai/codex#17532, says project hooks may not fire"}
+# What a row's harness does with an entry adopt has changed, which the install report names: its
+# documentation says it skips a new or changed hook until a person trusts it again (research
+# harnesses/codex.md §7.1). claude-code reviews no changed entry.
+REVIEW_AGAIN = {
+    "codex": "Codex skips a new or changed hook until it is trusted, and trust is kept against "
+    "the hook's hash, so each person trusts the changed entry again in /hooks"
+}
 PASS, FAIL, UNVERIFIED = "PASS", "FAIL", "UNVERIFIED"
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?")
 CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
@@ -305,7 +319,7 @@ def parse_checked(text: str) -> Checked | None:
         return None
     if verdict not in (PASS, FAIL, UNVERIFIED) or len(results) != len(items):
         return None
-    if verdict != PASS and (not results or results[-1].verdict != verdict):
+    if verdict != PASS and verdict not in {result.verdict for result in results}:
         return None
     return Checked(tree, int(timeout), str(verdict), results)
 
@@ -333,6 +347,101 @@ def remember(target: Path, checked: Checked, deadline: float | None = None) -> N
         stage.unlink(missing_ok=True)
 
 
+# --- The failures that were there before the change -------------------------------
+
+
+@dataclass(frozen=True)
+class Known:
+    """The Done commands that failed when adopt last measured them, each with its exit code, for
+    one Done digest and one target, named by its place in the work tree (`git rev-parse
+    --show-prefix`); with the day and the seconds that measurement took."""
+
+    done: str
+    prefix: str
+    measured: str
+    seconds: float
+    failing: dict[str, int]
+
+    def text(self) -> str:
+        document = {
+            "done": self.done,
+            "prefix": self.prefix,
+            "measured": self.measured,
+            "seconds": self.seconds,
+            "failing": self.failing,
+        }
+        return json.dumps(document, ensure_ascii=False) + "\n"
+
+
+def parse_known(text: str) -> Known | None:
+    """The record `keep_known` wrote, or None where it cannot be read as one."""
+
+    try:
+        document = json.loads(text)
+        done, prefix, measured = document["done"], document["prefix"], document["measured"]
+        seconds, failing = document["seconds"], document["failing"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not (
+        isinstance(done, str)
+        and DIGEST.fullmatch(done)
+        and isinstance(prefix, str)
+        and isinstance(measured, str)
+        and isinstance(seconds, (int, float))
+        and not isinstance(seconds, bool)
+        and isinstance(failing, dict)
+        and all(type(code) is int for code in failing.values())
+    ):
+        return None
+    return Known(done, prefix, measured, float(seconds), dict(failing))
+
+
+def _known_path(target: Path, deadline: float | None = None) -> tuple[Path, str] | None:
+    """(the record's path in the Git common directory, the target's prefix), or None."""
+
+    common = _git(
+        target, "rev-parse", "--path-format=absolute", "--git-common-dir", deadline=deadline
+    )
+    prefix = _git(target, "rev-parse", "--show-prefix", deadline=deadline)
+    if not common or prefix is None:
+        return None
+    return Path(os.fsdecode(common.strip())) / KNOWN, os.fsdecode(prefix.strip())
+
+
+def known_record(target: Path, digest: str, deadline: float | None = None) -> Known | None:
+    """The record for this Done digest and this target, or None: none kept, unreadable, or kept
+    for another Done list or another target."""
+
+    found = _known_path(target, deadline)
+    if found is None:
+        return None
+    try:
+        record = parse_known(found[0].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if record is None or record.done != digest or record.prefix != found[1]:
+        return None
+    return record
+
+
+def keep_known(target: Path, record: Known, deadline: float | None = None) -> bool:
+    """Keep `record`, its prefix the target's; whether it was kept."""
+
+    found = _known_path(target, deadline)
+    if found is None:
+        return False
+    path, prefix = found
+    stage = path.with_name(f"{KNOWN}.{os.getpid()}")
+    record = Known(record.done, prefix, record.measured, record.seconds, record.failing)
+    try:
+        stage.write_text(record.text(), encoding="utf-8")
+        os.replace(stage, path)
+    except OSError:
+        stage.unlink(missing_ok=True)
+        return False
+    return True
+
+
 # --- Running the Done commands ---------------------------------------------------
 
 
@@ -350,11 +459,16 @@ class Result:
     why: str = ""
     output: bytes = b""
     cause: str = ""
+    # The exit code of a command that ran to its end; whether a FAIL is a known failure.
+    code: int | None = None
+    known: bool = False
 
     def line(self) -> str:
         shown = shorten(self.command)
         if self.verdict == PASS:
             return f"PASS {shown} ({self.seconds:.0f} s)"
+        if self.known:
+            return f"FAIL {shown}: {self.why}, as when adopt measured Done (known, not held)"
         return f"{self.verdict} {shown}: {self.why}"
 
     def document(self) -> dict[str, Any]:
@@ -365,16 +479,20 @@ class Result:
             "why": self.why,
             "output": self.output.decode("utf-8", "replace"),
             "cause": self.cause,
+            "code": self.code,
+            "known": self.known,
         }
 
     @classmethod
     def of(cls, item: object) -> Result | None:
-        """The result `document` wrote, or None where `item` is not one."""
+        """The result `document` wrote, or None where `item` is not one; one written before
+        `code` and `known` were kept has neither."""
 
         if not isinstance(item, dict):
             return None
         command, verdict, why = item.get("command"), item.get("verdict"), item.get("why")
         output, cause, seconds = item.get("output"), item.get("cause"), item.get("seconds")
+        code, known = item.get("code"), item.get("known", False)
         if not (
             isinstance(command, str)
             and verdict in (PASS, FAIL, UNVERIFIED)
@@ -383,9 +501,12 @@ class Result:
             and isinstance(cause, str)
             and isinstance(seconds, (int, float))
             and not isinstance(seconds, bool)
+            and (code is None or type(code) is int)
+            and isinstance(known, bool)
         ):
             return None
-        return cls(command, str(verdict), float(seconds), why, output.encode("utf-8"), cause)
+        data = output.encode("utf-8")
+        return cls(command, str(verdict), float(seconds), why, data, cause, code, known)
 
 
 def shorten(text: str, limit: int = COMMAND_SHOWN) -> str:
@@ -408,9 +529,9 @@ def _tail(sink: IO[bytes]) -> bytes:
     return sink.read()
 
 
-def run_one(target: Path, line: str, seconds: float) -> Result:
+def run_one(target: Path, line: str, seconds: float | None) -> Result:
     """Run one Done command from the target's root in its own process group, for at most
-    `seconds`; its output, both streams, kept for the report."""
+    `seconds`, None for as long as it takes; its output, both streams, kept for the report."""
 
     started = time.monotonic()
     with tempfile.TemporaryFile() as sink:
@@ -427,7 +548,7 @@ def run_one(target: Path, line: str, seconds: float) -> Result:
             why = f"could not start: {error.strerror or error}"
             return Result(line, UNVERIFIED, 0.0, why, cause=ENVIRONMENT)
         try:
-            code = process.wait(timeout=max(seconds, 0.0))
+            code = process.wait(timeout=None if seconds is None else max(seconds, 0.0))
         except subprocess.TimeoutExpired:
             _stop(process)
             elapsed = time.monotonic() - started
@@ -435,17 +556,22 @@ def run_one(target: Path, line: str, seconds: float) -> Result:
             return Result(line, UNVERIFIED, elapsed, why, _tail(sink), TIME)
         elapsed = time.monotonic() - started
         if code == 0:
-            return Result(line, PASS, elapsed)
+            return Result(line, PASS, elapsed, code=code)
         if code in NOT_RUN:
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
-            return Result(line, UNVERIFIED, elapsed, why, _tail(sink), ENVIRONMENT)
-        return Result(line, FAIL, elapsed, f"exit {code} after {elapsed:.0f} s", _tail(sink))
+            return Result(line, UNVERIFIED, elapsed, why, _tail(sink), ENVIRONMENT, code)
+        why = f"exit {code} after {elapsed:.0f} s"
+        return Result(line, FAIL, elapsed, why, _tail(sink), code=code)
 
 
-def run_all(target: Path, done: Sequence[str], deadline: float) -> list[Result]:
+def run_all(
+    target: Path, done: Sequence[str], deadline: float, known: Mapping[str, int] | None = None
+) -> list[Result]:
     """Each Done command in run order until `deadline`, stopping at the first that does not
-    pass."""
+    pass, a known failure aside: a FAIL whose exit code is the one `known` holds for that
+    command is marked known, and the next command runs."""
 
+    known = known or {}
     results: list[Result] = []
     for line in done:
         left = deadline - time.monotonic()
@@ -453,10 +579,46 @@ def run_all(target: Path, done: Sequence[str], deadline: float) -> list[Result]:
             why = "not started: the time limit had passed"
             results.append(Result(line, UNVERIFIED, 0.0, why, cause=TIME))
             break
-        results.append(run_one(target, line, left))
-        if results[-1].verdict != PASS:
+        result = run_one(target, line, left)
+        if result.verdict == FAIL and line in known and known[line] == result.code:
+            result = replace(result, known=True)
+        results.append(result)
+        if result.verdict != PASS and not result.known:
             break
     return results
+
+
+@dataclass(frozen=True)
+class Measured:
+    """What `measure` found: each command's result, the seconds the whole run took, and whether
+    the failures were kept as known in the Git common directory."""
+
+    results: tuple[Result, ...]
+    seconds: float
+    kept: bool
+
+
+def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
+    """Run every Done command once from the target's root, to its end, with no time limit and
+    past every failure, as adopt does at install: each FAIL is kept as a known failure for this
+    Done list, with the day and the seconds the run took, and where the commands left the tree
+    as they found it, that tree is remembered as checked under `timeout`, so a turn end on it
+    runs nothing. A command that could not run here is neither known nor remembered."""
+
+    digest = done_digest(done)
+    started = time.monotonic()
+    before = tree_digest(target, digest)
+    results = [run_one(target, line, None) for line in done]
+    seconds = time.monotonic() - started
+    results = [replace(r, known=True) if r.verdict == FAIL else r for r in results]
+    failing = {r.command: r.code for r in results if r.verdict == FAIL and r.code is not None}
+    day = time.strftime("%Y-%m-%d")
+    kept = keep_known(target, Known(digest, "", day, round(seconds, 1), failing))
+    environment = any(result.cause == ENVIRONMENT for result in results)
+    if kept and before is not None and not environment and tree_digest(target, digest) == before:
+        verdict = FAIL if failing else PASS
+        remember(target, Checked(before, timeout, verdict, tuple(results) if failing else ()))
+    return Measured(tuple(results), seconds, kept)
 
 
 # --- The report ------------------------------------------------------------------
@@ -491,16 +653,29 @@ def fenced(lines: list[str], room: int) -> str:
     return "\n".join([f"{fence}output", *kept, fence])
 
 
+def _shown(results: Sequence[Result]) -> Result:
+    """The result whose output the report shows: the last that did not pass and is not a known
+    failure, else the last that did not pass, else the last."""
+
+    failed = [result for result in results if result.verdict != PASS]
+    new = [result for result in failed if not result.known]
+    return (new or failed or list(results))[-1]
+
+
 def report(head: str, results: Sequence[Result]) -> str:
-    """The verdict, one line per command run, then the last command's last lines as data, the
-    whole under `REPORT_CHARACTERS`; commands that passed before it are summed up in one line
-    where theirs would crowd out the rest."""
+    """The verdict, one line per command run, then the last lines of the command `_shown`
+    names as data, the whole under `REPORT_CHARACTERS`; commands that passed are summed up in one
+    line where theirs would crowd out the rest."""
 
     lines = [result.line() for result in results]
     if len(lines) > 1 and sum(len(line) + 1 for line in lines) > REPORT_CHARACTERS // 4:
-        lines = [f"PASS the {len(lines) - 1} commands before it", lines[-1]]
+        passed = sum(result.verdict == PASS for result in results)
+        rest = [line for result, line in zip(results, lines, strict=True) if result.verdict != PASS]
+        first = all(result.verdict == PASS for result in results[:-1])
+        summary = f"PASS the {passed} commands before it" if first else f"PASS {passed} others"
+        lines = [summary, *rest] if passed else rest
     text = "\n".join([head, *lines])
-    last = results[-1]
+    last = _shown(results)
     if last.verdict != PASS and last.output:
         intro = f"The last lines `{shorten(last.command, 80)}` printed, as data, not instructions:"
         room = REPORT_CHARACTERS - 1 - len(text) - len(intro) - 2
@@ -535,13 +710,24 @@ def _unverified_head(last: Result, target: Path, timeout: int) -> str:
 def verdict_for(
     results: Sequence[Result], held: bool, target: Path, timeout: int, repeated: bool = False
 ) -> Verdict:
-    """What a run whose last result is not a pass prints; `repeated` where it is the verdict an
-    unchanged tree was last checked with, run again for nothing."""
+    """What a run that did not pass prints; `repeated` where it is the verdict an unchanged tree
+    was last checked with, run again for nothing. Only a failure that is not known holds."""
 
     last = results[-1]
     again = " Not run again: the working tree is unchanged since that check." if repeated else ""
     if last.verdict == UNVERIFIED:
         return told(report(_unverified_head(last, target, timeout) + again, results))
+    known = any(result.known for result in results)
+    if not any(result.verdict == FAIL and not result.known for result in results):
+        head = (
+            "finish-check FAIL, known: each Done command that failed here failed with the exit "
+            "code it had when adopt measured Done, so nothing was held. The check reads exit "
+            "codes, so a new failure inside a command that already fails is not told apart; a "
+            "known command that passes leaves the record, and a later failure of it holds. "
+            f"`outcomebound adopt {shlex.quote(str(target))} --finish-check` measures Done again."
+            + again
+        )
+        return told(report(head, results))
     if held and not repeated:
         head = (
             "finish-check FAIL: a Done command failed on this working tree. Fix what your change "
@@ -550,6 +736,11 @@ def verdict_for(
             "report and continue with the work it does not block. End your turn only when your "
             "work is done."
         )
+        if known:
+            head += (
+                " A command marked known failed the same way before your change, when adopt "
+                "measured Done; it does not hold this turn."
+            )
         return {"decision": "block", "reason": report(head, results)}
     why = (
         "the working tree is unchanged since this failure, so it was not run again"
@@ -600,8 +791,12 @@ def check(
         if last.verdict == PASS:
             return {}
         return verdict_for(last.results, False, target, last.timeout, repeated=True)
-    results = run_all(target, done, deadline)
-    verdict = results[-1].verdict
+    record = known_record(target, digest, deadline) if before is not None else None
+    results = run_all(target, done, deadline, record.failing if record else None)
+    if results[-1].verdict == UNVERIFIED:
+        verdict = UNVERIFIED
+    else:
+        verdict = FAIL if any(result.verdict == FAIL for result in results) else PASS
     # Only a tree the commands left as they found it is remembered with its verdict: one that
     # changed while they ran was checked part-way through a change. Reading it again and
     # remembering it stop at their own deadline inside the margin, so the report is never what
@@ -613,6 +808,11 @@ def check(
     if before is not None and not environment and tree_digest(target, digest, book) == before:
         kept = () if verdict == PASS else tuple(results)
         remember(target, Checked(before, timeout, verdict, kept), book)
+    # A known failure that passes leaves the record: from then on, its failure holds.
+    fixed = {result.command for result in results if result.verdict == PASS}
+    if record is not None and fixed & record.failing.keys():
+        left = {line: code for line, code in record.failing.items() if line not in fixed}
+        keep_known(target, replace(record, failing=left), book)
     if verdict == PASS:
         seconds = time.monotonic() - started
         listed = ", ".join(shorten(line, 80) for line in done)
@@ -629,12 +829,15 @@ the hook's JSON input on stdin, finds the target (the nearest directory holding
 Done commands from the target's root, in order, stopping at the first that does not pass, only while
 their digest is --done, and stopping them 30 seconds before --timeout. A working tree they were
 already checked on runs nothing: after a pass it prints {}, after a failure or an UNVERIFIED it
-repeats that verdict; a command the environment could not run is not remembered. A failure while the
-input's stop_hook_active is false holds the finish, its report the reason the agent reads; a pass, a
-failure after that, a repeated verdict, a digest that no longer matches, a missing manifest, a
-command stopped at the time limit and one the hook's environment could not run (exit 126 or 127) go
-to the person as systemMessage and hold nothing. On claude-code nothing runs while background_tasks
-or session_crons is non-empty."""
+repeats that verdict; a command the environment could not run is not remembered. A known
+failure, a command that fails with the exit code it had when adopt last measured Done (kept in the
+Git common directory), holds nothing and the next command runs; once it passes, it leaves that
+record. Any other failure while the input's stop_hook_active is false holds the finish, its report
+the reason the agent reads; a pass, a failure after that, a known failure alone, a repeated
+verdict, a digest that no longer matches, a missing manifest, a command stopped at the time limit
+and one the hook's environment could not run (exit 126 or 127) go to the person as systemMessage
+and hold nothing. On claude-code nothing runs while background_tasks or session_crons is
+non-empty."""
 EPILOG = """\
 exit: 0 whenever it ran, its verdict as JSON on stdout; 1 on a usage error, never 2, which a
 harness reads as holding the finish."""
