@@ -130,6 +130,10 @@ claim declares a path that the ticket's `bounds` do not cover, `check` gives a W
 `CLAIM_READS_OUTSIDE_BOUNDS`. A finding in that path is one that the ticket's work may not
 repair. Widen `bounds`, or put a ticket that repairs it first in `blocked-by`. A claim that
 declares no paths is not examined, because the plan does not say what its command reads.
+When a declared path is not in the checkout, as it resolves from the plan's `cwd`, `check` gives
+a WARNING about the plan, `CLAIM_PATH_ABSENT`, with no ticket id. A run of that claim reads
+`UNVERIFIED`. The usual cause is a plan in `.outcomebound/` with `"cwd": "."`, written before a
+relative `cwd` started at the plan file's folder: there, the checkout root is `"cwd": ".."`.
 
 In text, the warnings for claims that the plan does not define yet (`CLAIM_PLANNED`) are one
 row after the other findings. The row gives their number and their tickets. `--json` lists each

@@ -628,7 +628,7 @@ JSON
 cat > .outcomebound/ticket-claims.json <<'JSON'
 {
  "version": 1,
- "cwd": ".",
+ "cwd": "..",
  "claims": [
   {
    "name": "timelog-tests",

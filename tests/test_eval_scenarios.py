@@ -729,6 +729,14 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
         skill = target / root / "using-outcomebound" / "SKILL.md"
         assert skill.read_bytes() == (ROOT / "skills/using-outcomebound/SKILL.md").read_bytes()
         assert f"{root}/using-outcomebound/SKILL.md" in protected
+    # A claims plan the fixture declares names paths that its working directory holds, so a
+    # brief built from it sends the implementer to the folder its tests run in.
+    if (target / ".outcomebound/tickets.json").is_file():
+        from outcomebound_tools.tickets_claims import absent_paths, load_claims
+        from outcomebound_tools.tickets_declaration import load_declaration
+
+        plan = load_claims(target, load_declaration(target))
+        assert absent_paths(plan, target) == {}, plan.cwd_resolved
 
 
 @pytest.mark.parametrize("name", NAMES)

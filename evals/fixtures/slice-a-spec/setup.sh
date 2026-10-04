@@ -174,7 +174,7 @@ EOF
 cat > .outcomebound/ticket-claims.json <<'EOF'
 {
  "version": 1,
- "cwd": ".",
+ "cwd": "..",
  "claims": [
   {
    "name": "report-tests",
