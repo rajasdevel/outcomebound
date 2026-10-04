@@ -41,7 +41,7 @@ check: gate
 # The public-text check with the local list of private names that OB_SCRUB_LIST names, over
 # the tracked files and the commit messages since OB_BASE. The list stays outside this
 # repository; without it, the check reads UNVERIFIED and fails. `make check` runs the part
-# that needs no list: home paths.
+# that needs no list: home paths and email addresses.
 scrub:
 	$(PYTHON) scripts/check-public-text.py --private --base $(OB_BASE)
 
