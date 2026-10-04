@@ -87,6 +87,9 @@ Do these steps first:
   section. Other tickets stay startable.
 - `tickets check` gives the warning `CLAIM_READS_OUTSIDE_BOUNDS` when a `done-when` claim declares
   `required_paths` that the ticket's `bounds` do not cover.
+- `tickets check` gives the warning `CLAIM_PATH_ABSENT` when a claim declares a `required_paths`
+  entry that the checkout does not hold, as it resolves from the plan's `cwd`. A plan in
+  `.outcomebound/` with `"cwd": "."`, written for 1.0.0, gets this warning (step 6 above).
 - A floor claim can set `timeout_seconds`, and `prefix` for a container or environment runner such
   as `docker compose run --rm app` or `uv run`. The tool still comes first in the argv. A change
   to `timeout_seconds` is not a loosening.
