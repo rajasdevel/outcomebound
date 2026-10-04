@@ -807,18 +807,18 @@ def test_a_ticket_waiting_on_a_brief_reads_waiting_and_holds_no_other(
     passes, the run exits 0, and a ticket beside it reads exactly as it would alone.
     A draft is read the same way."""
 
-    root = checkout(tmp_path, document("#1", waits_on="D82, D83"), document("#2"))
+    root = checkout(tmp_path, document("#1", waits_on="D1, D2"), document("#2"))
 
     found = report(root, capsys=capsys, expect=0)
 
     assert codes(found, "#1") == ["WAITS_ON_BRIEF"]
     [waits] = messages_of(about(found, "#1"))
-    assert waits["level"] == "INFO" and "D82, D83" in str(waits["text"])
+    assert waits["level"] == "INFO" and "D1, D2" in str(waits["text"])
     assert about(found, "#1")["result"] == "PASS"
     assert codes(found, "#2") == [] and about(found, "#2")["result"] == "PASS"
     assert validate(found, json.loads(REPORT_SCHEMA.read_text(encoding="utf-8"))) == []
 
-    _, paths = drafts(tmp_path, waiting=draft_text(waits_on="D82"))
+    _, paths = drafts(tmp_path, waiting=draft_text(waits_on="D1"))
     drafted = report(tmp_path / "repo", "--draft", *paths, capsys=capsys, expect=0)
     assert codes(drafted, "waiting") == ["WAITS_ON_BRIEF"]
 

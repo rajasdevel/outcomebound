@@ -543,16 +543,16 @@ def test_a_ticket_that_waits_on_a_brief_says_so(tmp_path: Path) -> None:
     """`waits-on` gets its own section after `## Bounds`, naming each brief and what
     to do meanwhile, and a step in the full form; a ticket waiting on none has neither."""
 
-    waiting = store(tmp_path, ticket_document(waits_on=["D82", "D83"]), name="waiting")
+    waiting = store(tmp_path, ticket_document(waits_on=["D1", "D2"]), name="waiting")
     free = store(tmp_path, name="free")
 
     document = compiled(waiting)
     lines = document.splitlines()
     assert lines.index("## Bounds") < lines.index("## Waits on") < lines.index("## How work lands")
     [said] = under(document, "## Waits on")
-    assert "D82, D83" in said and "Do every part the answer does not decide" in said, said
+    assert "D1, D2" in said and "Do every part the answer does not decide" in said, said
     full = compiled(waiting, TICKET, "--detail", "full")
-    assert "decision brief(s) D82, D83" in "\n".join(_steps_of(full))
+    assert "decision brief(s) D1, D2" in "\n".join(_steps_of(full))
     assert "## Waits on" not in compiled(free)
 
 
