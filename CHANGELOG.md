@@ -13,8 +13,7 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 OutcomeBound now lets an agent work for many hours inside clear bounds. A stop holds one item, never
 the run, and no limit applies to size, count, length or time unless you set it, a harness documents
-it, or a measurement supports it. The overnight runs of 2026-10-04 in six adopting projects showed
-the problems that this release removes. Run `outcomebound adopt .` again to get the changes.
+it, or a measurement supports it. Run `outcomebound adopt .` again to get the changes.
 
 ### Changed
 
