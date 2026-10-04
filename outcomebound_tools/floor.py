@@ -1114,10 +1114,16 @@ TRAILER = re.compile(
 
 
 def _tool_table(name: str) -> bool:
-    return [part.strip("\"' ") for part in name.split(".")][:2] in (
-        ["tool", "ruff"],
-        ["tool", "mypy"],
-    )
+    """Where pyproject.toml can hold a ruff or mypy setting: a `[tool.ruff…]` or `[tool.mypy…]`
+    table, and also the `[tool]` table and the lines before the first header (""), where a
+    dotted key (`ruff.lint.ignore = …`, `tool.ruff.lint.ignore = …`) sets one. A dotted key
+    for another tool there reads as a change too: the scan stays on the side that fails."""
+
+    parts = [part.strip("\"' ") for part in name.split(".")]
+    return parts == [""] or (parts[0] == "tool" and (len(parts) == 1 or parts[1] in TOOLS))
+
+
+TOOLS = ("ruff", "mypy")
 
 
 def _mypy_section(name: str) -> bool:
@@ -1131,10 +1137,11 @@ SECTIONED: dict[str, tuple[str, Callable[[str], bool]]] = {
 
 
 def _section_lines(text: str | None, wanted: Callable[[str], bool]) -> list[str]:
-    """The non-blank lines inside the sections `wanted` accepts, each stripped."""
+    """The non-blank lines inside the sections `wanted` accepts, each stripped; the lines
+    before the first header are the section named ""."""
 
     kept: list[str] = []
-    inside = False
+    inside = wanted("")
     for line in (text or "").splitlines():
         header = HEADER.match(line)
         if header is not None:
@@ -1166,10 +1173,31 @@ def _target(argv: Sequence[str]) -> bool:
     return len(argv) >= 2 and not argv[-1].startswith("-") and not argv[-2].startswith("-")
 
 
-def _kept(before: Claim, after: Claim | None) -> bool:
+def _python_path(root: Path, commit: str | None, word: str) -> bool:
+    """`word` names, at `commit`, a Python file Git tracks or a folder that holds one. Any
+    other word mypy reads its own way: `@flags.txt` is a file of options, which can turn
+    error codes off."""
+
+    path = PurePosixPath(word)
+    if commit is None or path.is_absolute() or ".." in path.parts or word.startswith(("-", "@")):
+        return False
+    folder = path.as_posix()
+    try:
+        listed = _git(root, "ls-tree", "-r", "-z", "--name-only", commit, "--", folder)
+    except FloorError:
+        return False
+    return any(
+        name.endswith((".py", ".pyi"))
+        and (folder == "." or name == folder or name.startswith(f"{folder}/"))
+        for name in listed.decode("utf-8", "surrogateescape").split("\0")
+    )
+
+
+def _kept(before: Claim, after: Claim | None, root: Path, commit: str | None) -> bool:
     """`after` is `before`, or `before` with its mode moved from baseline to gate, or a types
-    claim that names folders with more folders after them, which mypy then reads too. Its
-    `timeout_seconds` may differ: a claim that times out reads UNVERIFIED, which fails too."""
+    claim that names folders with more after them, each a Python file or a folder holding
+    one that Git tracks at `commit`, which mypy then reads too. Its `timeout_seconds` may
+    differ: a claim that times out reads UNVERIFIED, which fails too."""
 
     if after is None:
         return False
@@ -1180,7 +1208,7 @@ def _kept(before: Claim, after: Claim | None) -> bool:
         and extra
         and after.argv[: len(before.argv)] == before.argv
         and _target(before.argv)
-        and not any(word.startswith("-") for word in extra)
+        and all(_python_path(root, commit, word) for word in extra)
     ):
         after = replace(after, argv=before.argv)
     return after == before or (before.mode == BASELINE and after == replace(before, mode=GATE))
@@ -1189,7 +1217,9 @@ def _kept(before: Claim, after: Claim | None) -> bool:
 ADOPTION_RECORD = "its adoption record"
 
 
-def _floor_change(before: Floor | None, after: Floor | None) -> list[str]:
+def _floor_change(
+    before: Floor | None, after: Floor | None, root: Path, commit: str | None
+) -> list[str]:
     """The claims floor.json drops or changes, and its adoption record where it changes or
     removes one; "" where either side cannot be read. A claim it adds, a baseline claim it
     makes a gate, and an adoption record where there was none loosen nothing."""
@@ -1197,7 +1227,7 @@ def _floor_change(before: Floor | None, after: Floor | None) -> list[str]:
     if before is None or after is None:
         return [""]
     now = {claim.name: claim for claim in after.claims}
-    altered = sorted(c.name for c in before.claims if not _kept(c, now.get(c.name)))
+    altered = sorted(c.name for c in before.claims if not _kept(c, now.get(c.name), root, commit))
     if before.adopted is not None and after.adopted != before.adopted:
         altered.append(ADOPTION_RECORD)
     return altered
@@ -1290,7 +1320,7 @@ def _policy_change(
 
     root, name = span.root, path.rsplit("/", 1)[-1]
     if path == FLOOR_PATH:
-        altered = _floor_change(_floor_at(root, old), _floor_at(root, new))
+        altered = _floor_change(_floor_at(root, old), _floor_at(root, new), root, span.head)
         return Counter({("floor", path, claim): 1 for claim in altered})
     if name in WHOLE_CONFIGS:
         lines = _changed_lines(*(_config_lines(_blob(root, sha)) for sha in (old, new)))
@@ -1430,18 +1460,31 @@ def _made(
         for kind, _, what in wanted
         if kind == "baseline" and (found := KEY.fullmatch(what)) is not None
     }
+    commits = [line.split() for line in listed.decode("ascii", "replace").splitlines()]
+    at_head = set(
+        _git(root, "ls-tree", "-r", "-z", "--name-only", head)
+        .decode("utf-8", "surrogateescape")
+        .split("\0")
+    )
+    # First every rename in the range, newest first, so a loosening reads the same whatever
+    # order its branch and a parallel branch's rename were merged in. A path HEAD still holds
+    # is a file of its own, not one renamed away.
     forward: dict[str, str] = {}
+    touched: dict[str, set[str]] = {}
+    for commit, *parents in commits:
+        if len(parents) == 1:
+            touched[commit], renamed = _name_status(root, parents[0], commit)
+            for new, old in renamed.items():
+                if old not in at_head:
+                    forward[old] = forward.get(new, new)
     made: dict[str, Counter[Unit]] = {}
-    for line in listed.decode("ascii", "replace").splitlines():
-        commit, *parents = line.split()
+    for commit, *parents in commits:
         if not parents:
             continue
-        if len(parents) == 1:
-            touched, renamed = _name_status(root, parents[0], commit)
-            for new, old in renamed.items():
-                forward[old] = forward.get(new, new)
-            if not any(forward.get(path, path) in relevant for path in touched):
-                continue
+        if len(parents) == 1 and not any(
+            forward.get(path, path) in relevant for path in touched[commit]
+        ):
+            continue
         own: Counter[Unit] | None = None
         for parent in parents:
             against = _loosenings(root, parent, commit, added)[0]
@@ -2085,14 +2128,16 @@ With --base REF, gitleaks scans the commits REF..HEAD (without it, the commits s
 floor's adoption record or, where there is none, the files Git tracks in the working tree,
 never an ignored one), and a loosening since the merge base with REF fails: an added
 baseline line; a claim floor.json drops or changes, a move from gate to baseline included;
-an adoption record it changes or removes; a change to ruff.toml, .ruff.toml, mypy.ini,
-.mypy.ini, .gitleaks.toml, .gitleaksignore, .shellcheckrc, shellcheckrc or the [tool.ruff],
-[tool.mypy] and [mypy] settings; an added noqa, type ignore, mypy, shellcheck-disable or
+an adoption record it changes or removes; a line changed in ruff.toml, .ruff.toml, mypy.ini,
+.mypy.ini, .gitleaks.toml, .gitleaksignore, .shellcheckrc, shellcheckrc, setup.cfg's [mypy]
+or pyproject.toml's [tool.ruff], [tool.mypy] and [tool] tables and the lines before its first
+header (a comment or a reorder too); an added noqa, type ignore, mypy, shellcheck-disable or
 gitleaks-allow comment (in a document, only gitleaks-allow).
 None of these loosens: a claim floor.json adds, with its first baseline; a claim's move
-from baseline to gate; a claim's timeout_seconds; a folder a types claim adds after the
-folders it names; an adoption record where there was none; a baseline line that moves with
-its file, where Git reports the file renamed; a blank line in a tool config.
+from baseline to gate; a claim's timeout_seconds; a tracked folder or Python file a types
+claim adds after the folders it names; an adoption record where there was none; a
+baseline line that moves with its file, where Git reports the file renamed; a blank line in
+a tool config.
 Where the floor was adopted after the merge base (the merge base holds no floor.json and no
 commit before the adoption touches it), both ranges start at the adoption commit instead, so
 commits from before the floor never fail; gitleaks then also scans the files Git tracks.
