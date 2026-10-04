@@ -134,3 +134,53 @@ jobs:
       # job its own temporary tree, so jobs sharing a host never collide in it.
       - name: Run test suite
         run: python -m pytest -o addopts="" -q -rs -n auto --basetemp="$RUNNER_TEMP/pytest-${{ matrix.python-version }}"
+
+  # A release tag that passed every leg of `test` is published, and nothing else is: the job
+  # needs `test`, so a failing tag publishes nothing. It builds the wheel and the source archive
+  # from the tagged commit (reproducible: dated from the commit), attests them with signed build
+  # provenance, and attaches them to a draft release whose notes are the tag's changelog
+  # section. Then it publishes the draft. Where the repository has immutable releases on, the
+  # published release, its tag and its files cannot change. Only this job can write, and only
+  # here: the release, the provenance signature and its record.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Build the wheel and the source archive
+        run: |
+          SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" python3 scripts/build_backend.py --sdist --out dist
+          ls -l dist
+
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+
+      # The notes are the changelog section of the tag's version: from its `## [<version>]`
+      # heading to the next `## [` heading. scripts/release-check.py has already checked in
+      # `test` that the section exists and names this version.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          awk -v head="## [$version]" 'index($0, head) == 1 { found = 1; next } found && /^## \[/ { exit } found' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          test -s "$RUNNER_TEMP/notes.md"
+          gh release create "$RELEASE_TAG" dist/* --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release edit "$RELEASE_TAG" --draft=false
