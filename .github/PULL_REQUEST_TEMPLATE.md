@@ -1,5 +1,6 @@
 Thank you for your pull request. Fill in the sections below. If a line does not apply, say why
-in a few words.
+in a few words. The title and this description become the commit on `main` at the squash
+merge, so remove this note and the comments before you mark the pull request ready.
 
 ## What changed and why
 

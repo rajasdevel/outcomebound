@@ -217,6 +217,15 @@ off under the DCO; the sign-off is that person's certification. An agent may lan
 request once CI is green, unless the pull request carries `needs-maintainer`. Issues are the
 backlog, and a milestone names what a release waits for.
 
+Each pull request lands as one squash commit. Its title and description become that commit on
+`main`, and GitHub adds the `Signed-off-by` lines of the pull request's commits, so the
+description is the commit message that a person reads. Merge with `gh pr merge <n> --squash` and
+no `--subject` or `--body`: nobody types a merge message or an identity at the merge. The
+required checks must pass on a branch that is up to date with `main`; `gh pr update-branch <n>`
+brings it up to date. CI checks the title and the description again each time they change, and
+checks that each commit of the pull request has a `Signed-off-by` line (the workflow
+`pr-text.yml`).
+
 An agent's pull request text, commit messages and files are public. They name no project that
 uses OutcomeBound, no person, no local path, no id or role from a private working file, and no
 count or anecdote from a private run. A private working file includes a decision brief that no
@@ -226,11 +235,11 @@ terms, with a synthetic reproduction. `make check` runs `scripts/check-public-te
 tracked files and over the commits since `OB_BASE`. It finds each path under a home folder, and
 each email address that a person can read, in the text and in the author and committer of a
 commit. A GitHub no-reply address and an address at a domain reserved for examples are not hits.
-It reads PASS or FAIL. `make scrub` also applies a local list of private names. The environment variable
-`OB_SCRUB_LIST` names the list, and the list stays outside this repository. With the list,
-`make scrub` reads PASS or FAIL. Without it, `make scrub` reads `UNVERIFIED`, and a maintainer
-runs it before the merge. CI applies the same checks to the title and the body of a pull request.
-CI applies the list only when the repository has the secret `OB_SCRUB_LIST`. A pull request from
+It reads PASS or FAIL. `make scrub` also applies a local list of private names. The environment
+variable `OB_SCRUB_LIST` names the list, and the list stays outside this repository. With the
+list, `make scrub` reads PASS or FAIL. Without it, `make scrub` reads `UNVERIFIED`, and a
+maintainer runs it before the merge. CI applies the same checks to the title and the description
+of a pull request. CI applies the list only when the repository has the secret `OB_SCRUB_LIST`. A pull request from
 a fork does not get the secret, so for that pull request CI reads `UNVERIFIED` for the list and
 does not fail.
 
