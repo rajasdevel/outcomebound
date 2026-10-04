@@ -256,15 +256,15 @@ def test_waits_on_names_decision_briefs_and_moves_no_identity() -> None:
     id leaves the identity where it was."""
 
     assert WAIT_KEYS == ("waits-on",)
-    assert _fields({"waits-on": "D82"}).waits_on == ("D82",)
-    assert _fields({"waits-on": "D82, brief-3"}).waits_on == ("D82", "brief-3")
+    assert _fields({"waits-on": "D1"}).waits_on == ("D1",)
+    assert _fields({"waits-on": "D1, brief-3"}).waits_on == ("D1", "brief-3")
     assert _fields().waits_on == ()
-    for offending in ("", "#41", "D82 D83", "3D"):
+    for offending in ("", "#41", "D1 D2", "3D"):
         fields, messages = parse_block(_block({"waits-on": offending}))
         assert [item.code for item in messages] == ["VALUE_INVALID"], offending
         assert "waits-on" in messages[0].text and fields.waits_on == (), offending
-    assert _codes(_block({"waits-on": ["D82"]})) == ["VALUE_INVALID"]
-    assert _identity(keys={"waits-on": "D82"}) == _identity()
+    assert _codes(_block({"waits-on": ["D1"]})) == ["VALUE_INVALID"]
+    assert _identity(keys={"waits-on": "D1"}) == _identity()
 
 
 @pytest.mark.parametrize("key", ["discovered-from", "parent"])

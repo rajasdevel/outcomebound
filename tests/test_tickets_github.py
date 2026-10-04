@@ -619,11 +619,11 @@ def test_waits_on_in_a_github_block_is_read_onto_the_ticket(tmp_path: Path) -> N
         target = node(loaded, 2)
         target["body"] = target["body"].replace(
             "<!-- outcomebound:end id=ticket -->",
-            "waits-on: D82\n<!-- outcomebound:end id=ticket -->",
+            "waits-on: D1\n<!-- outcomebound:end id=ticket -->",
         )
 
     result = read(variant(tmp_path, change))
-    assert ticket(result, "#2").waits_on == ("D82",)
+    assert ticket(result, "#2").waits_on == ("D1",)
     assert codes(result, "#2") == []
 
 
