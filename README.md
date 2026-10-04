@@ -87,7 +87,7 @@ Another harness can use `--harness generic`, and then you check that it loads th
 not verified yet, so `adopt` refuses it ([references/portability.md](references/portability.md)).
 
 ```sh
-uv tool install git+https://github.com/rajasdevel/outcomebound@v1.0.0
+uv tool install git+https://github.com/rajasdevel/outcomebound@v1.1.0
 cd your-repo
 outcomebound adopt . --detect
 ```
