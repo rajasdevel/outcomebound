@@ -11,9 +11,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
+import signal
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -1551,9 +1554,9 @@ def test_a_mixed_selection_installs_where_a_row_has_one_and_names_the_rest(
 def test_an_install_measures_done_once_and_records_the_failures_there_now(
     tmp_path: Path, capsys: Capture
 ) -> None:
-    """Breaks if an install with the finish check does not run Done once and report its time and
-    each failure, if it does not keep the failures as known, if a dry run or a later install that
-    keeps the record runs Done again, or if --finish-check does not measure it again."""
+    """Breaks if an install with --finish-check does not run Done once and report its time and
+    each failure, if it does not keep the failures as known, if a dry run or an install that
+    does not name --finish-check runs Done, or if --finish-check does not measure it again."""
 
     count = tmp_path / "count"
     failing = f"echo run >> {count}; exit 3"
@@ -1566,12 +1569,11 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     code, out, err = run(capsys, str(target), *arguments)
     assert code == 0, err
     assert f"known    finish-check: `{failing}` failed, exit 3 after " in out
-    assert "PASS     finish-check: `true` in " in out
-    assert "measured finish-check: Done ran once in " in out
-    assert "the hook gives it 570 s of its 600 s timeout" in out
+    assert re.search(r"PASS     finish-check: `true` in \d+ s", out)
+    assert re.search(r"measured finish-check: Done ran once in \d+ s; the hook gives it 570 s", out)
     digest = finish_check.done_digest([failing, "true"])
     known = finish_check.known_record(target, digest)
-    assert known is not None and known.failing == {failing: 3}
+    assert known is not None and {k: v.code for k, v in known.failing.items()} == {failing: 3}
     assert len(count.read_text(encoding="utf-8").splitlines()) == 1
 
     code, out, _ = run(capsys, str(target), "--fragments", "")
@@ -1579,6 +1581,11 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     assert "finish-check: Done was measured on " in out and f"`{failing}` (exit 3)" in out
     assert len(count.read_text(encoding="utf-8").splitlines()) == 1
     assert run(capsys, str(target), "--finish-check")[0] == 0
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+
+    code, out, _ = run(capsys, str(target), "--done", failing)
+    assert code == 0 and "running " not in out
+    assert "finish-check: Done was not measured, so no record of known failures applies" in out
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
 
 
@@ -1595,10 +1602,50 @@ def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(
     code, out, err = run(capsys, str(target), *arguments, "--finish-timeout", str(timeout))
 
     assert code == 0, err
-    assert "PASS     finish-check: `sleep 2` in 2 s" in out
-    assert "UNVERIFIED finish-check: Done took 2 s, longer than the 1 s" in out
-    assert f"--finish-timeout <seconds>` with more than {3 + finish_check.MARGIN_SECONDS}" in out
+    assert re.search(r"PASS     finish-check: `sleep 2` in \d+ s", out)
+    took = re.search(r"UNVERIFIED finish-check: Done took (\d+) s, longer than the 1 s", out)
+    assert took is not None and int(took.group(1)) >= 2
+    least = int(took.group(1)) + 1 + finish_check.MARGIN_SECONDS
+    assert f"--finish-timeout <seconds>` with more than {least}" in out
     assert "UNVERIFIED finish-check: Done took" in run(capsys, str(target))[1]
+
+
+def test_a_stopped_measurement_stops_done_keeps_nothing_and_exits_130(tmp_path: Path) -> None:
+    """Breaks if Ctrl-C during the install's Done run leaves the command running, which runs in
+    its own session where the terminal's signal does not reach it, ends in a traceback, or
+    keeps a record of known failures."""
+
+    target = repo(tmp_path / "t")
+    pid = tmp_path / "pid"
+    done = f"echo $$ > {pid}; exec sleep 300"
+    process = subprocess.Popen(
+        [
+            str(LAUNCHER),
+            "adopt",
+            str(target),
+            "--harness",
+            "codex",
+            "--done",
+            done,
+            "--finish-check",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    started = time.monotonic()
+    while not (pid.exists() and pid.read_text(encoding="utf-8").strip()):
+        assert time.monotonic() - started < 60 and process.poll() is None
+        time.sleep(0.05)
+    process.send_signal(signal.SIGINT)
+    out, err = process.communicate(timeout=60)
+
+    assert process.returncode == 130, err
+    assert "Traceback" not in err
+    assert "UNVERIFIED finish-check: the measurement was stopped" in out
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid.read_text(encoding="utf-8")), 0)
+    assert finish_check.known_record(target, finish_check.done_digest([done])) is None
 
 
 def test_a_changed_codex_entry_names_the_new_trust_in_hooks(

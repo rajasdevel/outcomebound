@@ -349,55 +349,151 @@ def remember(target: Path, checked: Checked, deadline: float | None = None) -> N
 
 # --- The failures that were there before the change -------------------------------
 
+# How each runner names a failing test or target in its own summary lines, one pattern per
+# runner, matched against each line of a command's kept output, terminal escapes stripped. A
+# command whose output matches none yields no failure ids, and its exit code alone decides.
+FAILURE_IDS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("pytest", re.compile(r"^(?:FAILED|ERROR) (\S+)")),
+    ("unittest", re.compile(r"^(?:FAIL|ERROR): (\S+ \(\S+\))")),
+    ("go", re.compile(r"^\s*--- FAIL: (\S+)")),
+    ("cargo", re.compile(r"^test (\S+) \.\.\. FAILED$")),
+    # The marks jest and vitest print before a failing test: ✕, the multiplication sign, ✗.
+    ("jest", re.compile(r"^\s*[\u2715\u00d7\u2717] (.+?)(?: \(?\d+(?:\.\d+)? ?m?s\)?)?$")),
+    ("make", re.compile(r"^g?make(?:\[\d+\])?: \*\*\* \[(.+?)\] Error \d+$")),
+)
+HEAD = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})?")
+
+
+def failure_ids(output: bytes) -> frozenset[str]:
+    """The failing tests or targets a command's output names in a runner's summary lines, each
+    as `<runner> <id>`; none where no line matches."""
+
+    found: set[str] = set()
+    for line in clean(output).split("\n"):
+        for runner, pattern in FAILURE_IDS:
+            match = pattern.match(line)
+            if match:
+                found.add(f"{runner} {match.group(1)}")
+    return frozenset(found)
+
+
+@dataclass(frozen=True)
+class Failure:
+    """A Done command's failure when adopt measured Done: its exit code, and the failure ids its
+    output named, None where it named none."""
+
+    code: int
+    ids: frozenset[str] | None = None
+
+    def tolerates(self, result: Result) -> tuple[bool, str]:
+        """(whether `result` is this failure again, why): the same exit code, and where either
+        side names failure ids, ids that are all among the recorded ones."""
+
+        if result.verdict != FAIL or result.code != self.code:
+            return False, ""
+        now = failure_ids(result.output)
+        if self.ids is None and not now:
+            return True, "known by its exit code only, since its output names no failure ids"
+        if self.ids is None:
+            return False, "not known: its output now names failure ids, and adopt measured none"
+        if not now:
+            return False, "not known: its output names none of the failure ids adopt measured"
+        new = sorted(now - self.ids)
+        if new:
+            shown = ", ".join(shorten(item, 80) for item in new[:5])
+            more = f" and {len(new) - 5} more" if len(new) > 5 else ""
+            return False, f"not known: new failure ids {shown}{more}"
+        return True, "known by its failure ids"
+
 
 @dataclass(frozen=True)
 class Known:
-    """The Done commands that failed when adopt last measured them, each with its exit code, for
-    one Done digest and one target, named by its place in the work tree (`git rev-parse
-    --show-prefix`); with the day and the seconds that measurement took."""
+    """The Done commands that failed when adopt last measured them on commit `head` (empty on a
+    branch with no commit), each with its `Failure`, for one Done digest and one target, named by
+    its place in the work tree (`git rev-parse --show-prefix`); with the day and the seconds
+    that measurement took."""
 
     done: str
     prefix: str
+    head: str
     measured: str
     seconds: float
-    failing: dict[str, int]
+    failing: dict[str, Failure]
 
-    def text(self) -> str:
-        document = {
+    def document(self) -> dict[str, Any]:
+        failing = {
+            line: {"code": item.code, "ids": None if item.ids is None else sorted(item.ids)}
+            for line, item in self.failing.items()
+        }
+        return {
             "done": self.done,
             "prefix": self.prefix,
+            "head": self.head,
             "measured": self.measured,
             "seconds": self.seconds,
-            "failing": self.failing,
+            "failing": failing,
         }
-        return json.dumps(document, ensure_ascii=False) + "\n"
+
+    def key(self) -> tuple[str, str, str]:
+        return self.done, self.prefix, self.head
 
 
-def parse_known(text: str) -> Known | None:
-    """The record `keep_known` wrote, or None where it cannot be read as one."""
+def _failure(item: object) -> Failure | None:
+    """A recorded failure: `{code, ids}`, or a bare exit code, read as naming no ids."""
 
-    try:
-        document = json.loads(text)
-        done, prefix, measured = document["done"], document["prefix"], document["measured"]
-        seconds, failing = document["seconds"], document["failing"]
-    except (ValueError, KeyError, TypeError):
+    if type(item) is int:
+        return Failure(item)
+    if not isinstance(item, dict) or type(item.get("code")) is not int:
         return None
+    ids = item.get("ids")
+    if ids is None:
+        return Failure(item["code"])
+    if not isinstance(ids, list) or not all(isinstance(one, str) for one in ids):
+        return None
+    return Failure(item["code"], frozenset(ids))
+
+
+def _known(document: object) -> Known | None:
+    if not isinstance(document, dict):
+        return None
+    done, prefix, head = document.get("done"), document.get("prefix"), document.get("head")
+    measured, seconds, failing = (document.get(k) for k in ("measured", "seconds", "failing"))
     if not (
         isinstance(done, str)
         and DIGEST.fullmatch(done)
         and isinstance(prefix, str)
+        and isinstance(head, str)
+        and HEAD.fullmatch(head)
         and isinstance(measured, str)
         and isinstance(seconds, (int, float))
         and not isinstance(seconds, bool)
         and isinstance(failing, dict)
-        and all(type(code) is int for code in failing.values())
     ):
         return None
-    return Known(done, prefix, measured, float(seconds), dict(failing))
+    items = {line: _failure(item) for line, item in failing.items()}
+    kept = {line: item for line, item in items.items() if item is not None}
+    if len(kept) != len(items):
+        return None
+    return Known(done, prefix, head, measured, float(seconds), kept)
+
+
+def parse_known(text: str) -> list[Known] | None:
+    """The records `keep_known` wrote, or None where the file cannot be read as them."""
+
+    try:
+        document = json.loads(text)
+    except ValueError:
+        return None
+    records = document.get("records") if isinstance(document, dict) else None
+    if not isinstance(records, list):
+        return None
+    parsed = [_known(item) for item in records]
+    kept = [record for record in parsed if record is not None]
+    return kept if len(kept) == len(parsed) else None
 
 
 def _known_path(target: Path, deadline: float | None = None) -> tuple[Path, str] | None:
-    """(the record's path in the Git common directory, the target's prefix), or None."""
+    """(the records' path in the Git common directory, the target's prefix), or None."""
 
     common = _git(
         target, "rev-parse", "--path-format=absolute", "--git-common-dir", deadline=deadline
@@ -408,33 +504,74 @@ def _known_path(target: Path, deadline: float | None = None) -> tuple[Path, str]
     return Path(os.fsdecode(common.strip())) / KNOWN, os.fsdecode(prefix.strip())
 
 
+def _head(target: Path, deadline: float | None = None) -> str | None:
+    """The target's HEAD commit; empty on a branch with no commit; None where Git cannot say."""
+
+    if _git(target, "rev-parse", "--absolute-git-dir", deadline=deadline) is None:
+        return None
+    head = _git(target, "rev-parse", "--verify", "-q", "HEAD^{commit}", deadline=deadline)
+    return head.strip().decode() if head else ""
+
+
+def _records(path: Path) -> list[Known]:
+    try:
+        return parse_known(path.read_text(encoding="utf-8")) or []
+    except (OSError, ValueError):
+        return []
+
+
 def known_record(target: Path, digest: str, deadline: float | None = None) -> Known | None:
-    """The record for this Done digest and this target, or None: none kept, unreadable, or kept
-    for another Done list or another target."""
+    """The newest record for this Done digest and this target whose commit is in the history of
+    the target's HEAD, or None: none kept, unreadable, or measured on a commit this checkout does
+    not descend from, where a failure it names may be new here."""
 
     found = _known_path(target, deadline)
     if found is None:
         return None
-    try:
-        record = parse_known(found[0].read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    path, prefix = found
+    candidates = [r for r in _records(path) if r.done == digest and r.prefix == prefix]
+    if not candidates:
         return None
-    if record is None or record.done != digest or record.prefix != found[1]:
-        return None
-    return record
+    head = _head(target, deadline)
+    for record in reversed(candidates):
+        if head is None:
+            return None
+        if not record.head or not head:
+            if record.head == head:
+                return record
+            continue
+        merge = ("merge-base", "--is-ancestor", record.head, "HEAD")
+        if _git(target, *merge, deadline=deadline) is not None:
+            return record
+    return None
 
 
 def keep_known(target: Path, record: Known, deadline: float | None = None) -> bool:
-    """Keep `record`, its prefix the target's; whether it was kept."""
+    """Keep `record` beside the others, its prefix the target's; whether it was kept. It replaces
+    the record for its Done digest, target and commit, and the target's records for another Done
+    list or for a commit its own descends from, which it supersedes."""
 
     found = _known_path(target, deadline)
     if found is None:
         return False
     path, prefix = found
+    record = replace(record, prefix=prefix)
+
+    def superseded(other: Known) -> bool:
+        if other.prefix != prefix:
+            return False
+        if other.done != record.done or other.head == record.head:
+            return True
+        if not other.head or not record.head:
+            return False
+        merge = ("merge-base", "--is-ancestor", other.head, record.head)
+        return _git(target, *merge, deadline=deadline) is not None
+
+    records = [other for other in _records(path) if not superseded(other)] + [record]
+    text = json.dumps({"records": [r.document() for r in records]}, ensure_ascii=False) + "\n"
     stage = path.with_name(f"{KNOWN}.{os.getpid()}")
-    record = Known(record.done, prefix, record.measured, record.seconds, record.failing)
     try:
-        stage.write_text(record.text(), encoding="utf-8")
+        stage.write_text(text, encoding="utf-8")
         os.replace(stage, path)
     except OSError:
         stage.unlink(missing_ok=True)
@@ -459,16 +596,20 @@ class Result:
     why: str = ""
     output: bytes = b""
     cause: str = ""
-    # The exit code of a command that ran to its end; whether a FAIL is a known failure.
+    # The exit code of a command that ran to its end; whether a FAIL is a known failure; and,
+    # for a command with a known failure recorded, why it is known or not.
     code: int | None = None
     known: bool = False
+    note: str = ""
 
     def line(self) -> str:
         shown = shorten(self.command)
         if self.verdict == PASS:
             return f"PASS {shown} ({self.seconds:.0f} s)"
         if self.known:
-            return f"FAIL {shown}: {self.why}, as when adopt measured Done (known, not held)"
+            return f"FAIL {shown}: {self.why}, as when adopt measured Done ({self.note}; not held)"
+        if self.note:
+            return f"{self.verdict} {shown}: {self.why} ({self.note})"
         return f"{self.verdict} {shown}: {self.why}"
 
     def document(self) -> dict[str, Any]:
@@ -481,18 +622,19 @@ class Result:
             "cause": self.cause,
             "code": self.code,
             "known": self.known,
+            "note": self.note,
         }
 
     @classmethod
     def of(cls, item: object) -> Result | None:
         """The result `document` wrote, or None where `item` is not one; one written before
-        `code` and `known` were kept has neither."""
+        `code`, `known` and `note` were kept has none of them."""
 
         if not isinstance(item, dict):
             return None
         command, verdict, why = item.get("command"), item.get("verdict"), item.get("why")
         output, cause, seconds = item.get("output"), item.get("cause"), item.get("seconds")
-        code, known = item.get("code"), item.get("known", False)
+        code, known, note = item.get("code"), item.get("known", False), item.get("note", "")
         if not (
             isinstance(command, str)
             and verdict in (PASS, FAIL, UNVERIFIED)
@@ -503,10 +645,11 @@ class Result:
             and not isinstance(seconds, bool)
             and (code is None or type(code) is int)
             and isinstance(known, bool)
+            and isinstance(note, str)
         ):
             return None
         data = output.encode("utf-8")
-        return cls(command, str(verdict), float(seconds), why, data, cause, code, known)
+        return cls(command, str(verdict), float(seconds), why, data, cause, code, known, note)
 
 
 def shorten(text: str, limit: int = COMMAND_SHOWN) -> str:
@@ -554,6 +697,12 @@ def run_one(target: Path, line: str, seconds: float | None) -> Result:
             elapsed = time.monotonic() - started
             why = f"stopped at the time limit after {elapsed:.0f} s"
             return Result(line, UNVERIFIED, elapsed, why, _tail(sink), TIME)
+        except BaseException:
+            # Stopped from outside, by a KeyboardInterrupt or a signal handler's exception: the
+            # command's group goes too, since it runs in its own session and the terminal's
+            # signal never reaches it.
+            _stop(process)
+            raise
         elapsed = time.monotonic() - started
         if code == 0:
             return Result(line, PASS, elapsed, code=code)
@@ -565,11 +714,11 @@ def run_one(target: Path, line: str, seconds: float | None) -> Result:
 
 
 def run_all(
-    target: Path, done: Sequence[str], deadline: float, known: Mapping[str, int] | None = None
+    target: Path, done: Sequence[str], deadline: float, known: Mapping[str, Failure] | None = None
 ) -> list[Result]:
     """Each Done command in run order until `deadline`, stopping at the first that does not
-    pass, a known failure aside: a FAIL whose exit code is the one `known` holds for that
-    command is marked known, and the next command runs."""
+    pass, a known failure aside: a FAIL that the command's `Failure` in `known` tolerates is
+    marked known, and the next command runs."""
 
     known = known or {}
     results: list[Result] = []
@@ -580,8 +729,9 @@ def run_all(
             results.append(Result(line, UNVERIFIED, 0.0, why, cause=TIME))
             break
         result = run_one(target, line, left)
-        if result.verdict == FAIL and line in known and known[line] == result.code:
-            result = replace(result, known=True)
+        if result.verdict == FAIL and line in known:
+            tolerated, note = known[line].tolerates(result)
+            result = replace(result, known=tolerated, note=note)
         results.append(result)
         if result.verdict != PASS and not result.known:
             break
@@ -601,19 +751,29 @@ class Measured:
 def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
     """Run every Done command once from the target's root, to its end, with no time limit and
     past every failure, as adopt does at install: each FAIL is kept as a known failure for this
-    Done list, with the day and the seconds the run took, and where the commands left the tree
-    as they found it, that tree is remembered as checked under `timeout`, so a turn end on it
-    runs nothing. A command that could not run here is neither known nor remembered."""
+    Done list and the target's HEAD commit, with its exit code and the failure ids its output
+    names, the day and the seconds the run took; and where the commands left the tree as they
+    found it, that tree is remembered as checked under `timeout`, so a turn end on it runs
+    nothing. A command that could not run here is neither known nor remembered. A
+    KeyboardInterrupt, or any exception that stops the wait, stops the running command's group
+    and is raised again, with nothing kept."""
 
     digest = done_digest(done)
     started = time.monotonic()
+    head = _head(target)
     before = tree_digest(target, digest)
     results = [run_one(target, line, None) for line in done]
     seconds = time.monotonic() - started
-    results = [replace(r, known=True) if r.verdict == FAIL else r for r in results]
-    failing = {r.command: r.code for r in results if r.verdict == FAIL and r.code is not None}
+    failing: dict[str, Failure] = {}
+    for index, result in enumerate(results):
+        if result.verdict == FAIL and result.code is not None:
+            ids = failure_ids(result.output)
+            failing[result.command] = Failure(result.code, ids or None)
+            note = "known by its failure ids" if ids else "known by its exit code only"
+            results[index] = replace(result, known=True, note=note)
     day = time.strftime("%Y-%m-%d")
-    kept = keep_known(target, Known(digest, "", day, round(seconds, 1), failing))
+    record = Known(digest, "", head or "", day, round(seconds, 1), failing)
+    kept = head is not None and keep_known(target, record)
     environment = any(result.cause == ENVIRONMENT for result in results)
     if kept and before is not None and not environment and tree_digest(target, digest) == before:
         verdict = FAIL if failing else PASS
@@ -719,10 +879,17 @@ def verdict_for(
         return told(report(_unverified_head(last, target, timeout) + again, results))
     known = any(result.known for result in results)
     if not any(result.verdict == FAIL and not result.known for result in results):
+        coarse = any(result.known and "exit code only" in result.note for result in results)
+        limit = (
+            " A command known by its exit code only names no failure ids in its output, so a new "
+            "failure inside it is not told apart."
+            if coarse
+            else ""
+        )
         head = (
-            "finish-check FAIL, known: each Done command that failed here failed with the exit "
-            "code it had when adopt measured Done, so nothing was held. The check reads exit "
-            "codes, so a new failure inside a command that already fails is not told apart; a "
+            "finish-check FAIL, known: each Done command that failed here failed as it did when "
+            "adopt measured Done on a commit this checkout descends from: the same exit code, "
+            "and no failure id its output names is new; so nothing was held." + limit + " A "
             "known command that passes leaves the record, and a later failure of it holds. "
             f"`outcomebound adopt {shlex.quote(str(target))} --finish-check` measures Done again."
             + again
@@ -739,7 +906,8 @@ def verdict_for(
         if known:
             head += (
                 " A command marked known failed the same way before your change, when adopt "
-                "measured Done; it does not hold this turn."
+                "measured Done; it does not hold this turn. One that names new failure ids, or a "
+                "new exit code, does."
             )
         return {"decision": "block", "reason": report(head, results)}
     why = (

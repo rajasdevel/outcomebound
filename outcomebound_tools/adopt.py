@@ -10,8 +10,8 @@ installs `.agents/.gitignore`, which keeps its four folders out of Git. `--finis
 entry to the settings document of each selected harness whose table row has a `finish_hook`
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
-kept; once its writes are made, it runs Done once to measure it (`finish_check.measure`), where
-`--finish-check` is named or no record of known failures matches the Done list. It installs each
+kept; once its writes are made, it runs Done once to measure it (`finish_check.measure`) where
+`--finish-check` is named, and only then. It installs each
 skill for
 every harness, and an `@AGENTS.md` import into each harness file that would not load
 AGENTS.md otherwise: none where the harness table says the harness reads AGENTS.md
@@ -36,6 +36,7 @@ import json
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -1136,15 +1137,26 @@ def review_again(name: str, data: bytes, own: Sequence[Record]) -> Notes:
 
 
 def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
-    """Measure Done once after the writes where --finish-check is named or no record of known
-    failures matches this Done list; otherwise name the record and whether Done outlasts the
-    timeout by its measured time."""
+    """Measure Done once after the writes where --finish-check is named, so that no install runs
+    the project's Done unasked (the orchestrator's ruling, 2026-10-04); otherwise name the
+    record that applies here and whether Done outlasts the timeout by its measured time, or that
+    none does."""
 
-    known = finish_check.known_record(run.target, finish_check.done_digest(done))
-    if asked or known is None:
+    if asked:
         run.measure = (list(done), timeout)
         return
-    failing = ", ".join(f"`{line}` (exit {code})" for line, code in known.failing.items())
+    known = finish_check.known_record(run.target, finish_check.done_digest(done))
+    if known is None:
+        run.notes.append(
+            (
+                "skip",
+                "finish-check: Done was not measured, so no record of known failures applies "
+                "to this Done list and checkout, and every failure holds a turn; `outcomebound "
+                f"adopt {shlex.quote(str(run.target))} --finish-check` measures it once",
+            )
+        )
+        return
+    failing = ", ".join(f"`{line}` (exit {item.code})" for line, item in known.failing.items())
     run.notes.append(
         (
             "skip",
@@ -1824,11 +1836,42 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
     )
     _report(planned, edited, notes)
     if measure is not None:
-        done, timeout = measure
-        print(f"{'running':<8} finish-check: the Done commands, once, to measure them", flush=True)
+        return _measure(target, *measure)
+    return 0
+
+
+class _Stopped(Exception):
+    """A signal that stops the install's Done run: SIGTERM, as SIGINT stops it."""
+
+
+def _measure(target: Path, done: list[str], timeout: int) -> int:
+    """Run Done once and print what it found; stopped by SIGINT or SIGTERM, the running command's
+    group is stopped too, nothing is kept, and the exit is 128 plus the signal's number."""
+
+    def stopped(number: int, frame: object) -> None:
+        raise _Stopped(number)
+
+    print(
+        f"{'running':<8} finish-check: the Done commands, once, to measure them; Ctrl-C stops "
+        "them, and nothing is then kept",
+        flush=True,
+    )
+    previous = signal.signal(signal.SIGTERM, stopped)
+    try:
         measured = finish_check.measure(target, done, timeout)
-        for verb, text in measured_notes(target, measured, timeout):
-            print(f"{verb:<8} {text}")
+    except (KeyboardInterrupt, _Stopped) as error:
+        number = error.args[0] if isinstance(error, _Stopped) else signal.SIGINT
+        print(
+            f"{'UNVERIFIED':<8} finish-check: the measurement was stopped, and no known failures "
+            "are kept, so every failure holds a turn; `outcomebound adopt "
+            f"{shlex.quote(str(target))} --finish-check` measures Done again",
+            flush=True,
+        )
+        return 128 + int(number)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+    for verb, text in measured_notes(target, measured, timeout):
+        print(f"{verb:<8} {text}")
     return 0
 
 
