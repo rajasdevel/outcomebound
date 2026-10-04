@@ -1789,21 +1789,6 @@ def test_an_unknown_human_style_is_refused_and_check_takes_none(tmp_path: Path) 
 # --- what an install warns about ---------------------------------------------------
 
 
-def commit_all(target: Path) -> None:
-    flags = (
-        "-c",
-        "user.name=t",
-        "-c",
-        "user.email=t@example.invalid",
-        "-c",
-        "commit.gpgsign=false",
-    )
-    subprocess.run([GIT, "add", "-A"], cwd=target, check=True, capture_output=True)
-    subprocess.run(
-        [GIT, *flags, "commit", "-q", "-m", "c"], cwd=target, check=True, capture_output=True
-    )
-
-
 def warnings(out: str) -> list[str]:
     return [line for line in out.splitlines() if line.startswith("warning")]
 
@@ -1923,3 +1908,20 @@ def test_the_ignored_path_warning_escapes_the_rule_it_quotes(
 
     assert warnings(out) and "\x1b" not in out
     assert "[\\x1b.]claude/" in warnings(out)[0]
+
+
+def test_a_codex_install_names_the_sandbox_route_for_unattended_sessions(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Codex's default sandbox keeps .agents and .git read-only and a Desktop or IDE session
+    cannot pass --add-dir, so the report names the configuration route, UNVERIFIED."""
+
+    target = repo(tmp_path / "t")
+
+    _, out, _ = run(capsys, str(target), "--harness", "codex")
+    [line] = [line for line in out.splitlines() if "writable_roots" in line]
+    assert line.startswith("UNVERIFIED codex:")
+    resolved = target.resolve()
+    assert f'"{resolved / ".agents"}"' in line and f'"{resolved / ".git"}"' in line
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code")
+    assert "writable_roots" not in out

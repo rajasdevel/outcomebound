@@ -1403,6 +1403,31 @@ def ancestor_notes(target: Path, found: Sequence[Route]) -> Notes:
     return notes
 
 
+def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
+    """Where the install includes codex, the configuration route that lets an unattended
+    session write the workspace folders and commit. Codex's default `workspace-write` sandbox
+    keeps `<root>/.agents` and the Git directory read-only (research harnesses/codex.md section
+    9), and a Desktop or IDE session cannot pass `--add-dir`. The `writable_roots` key is not in
+    the research, and whether the harness can write the folders is not something adopt sees."""
+
+    if not any(route.harness == "codex" for route in found):
+        return []
+    common = (discovery.git_read(target, "rev-parse", "--git-common-dir") or b"").strip()
+    git_dir = (target / os.fsdecode(common)).resolve() if common else target / ".git"
+    roots = ", ".join(_printable(f'"{path}"') for path in (target / ".agents", git_dir))
+    return [
+        (
+            "UNVERIFIED",
+            "codex: a Desktop or IDE session cannot pass --add-dir, and the default "
+            "workspace-write sandbox keeps .agents and the Git directory read-only (research "
+            f"harnesses/codex.md section 9); for unattended sessions add {roots} to "
+            "writable_roots under [sandbox_workspace_write] in your Codex config.toml (the CLI "
+            "can pass --add-dir for each); the key is not in the research, so check it against "
+            "your Codex release, and adopt cannot see whether the harness can write them",
+        )
+    ]
+
+
 def ignored_notes(target: Path, planned: Planned) -> Notes:
     """A warning for each path this run writes that Git ignores: the manifest records it, so
     every other clone, which never gets it, reads it missing in `--check`. A tracked path is
@@ -1501,6 +1526,7 @@ def install(
     run.notes.append(footprint(wants))
     run.notes.extend(nested_bytes(run, table, found))
     run.notes.extend(ancestor_notes(target, found))
+    run.notes.extend(codex_sandbox_notes(target, found))
     planned = run.planned(manifest, engine_version(source))
     run.notes.extend(ignored_notes(target, planned))
     run.notes.extend(uncommitted_notes(target, planned))
