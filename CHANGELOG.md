@@ -241,8 +241,8 @@ Do these steps first:
     fragments and the skills.
   - Each gate design (floor, finish check, instructions, tickets) states the invariant that its
     gate holds, which data each verdict reads, and who can write that data.
-- For contributors: the floor claim `public-text` fails on a home path in a tracked file or in a
-  commit message of the range. `make scrub` also applies a local list of private terms, which
+- For contributors: the floor claim `public-text` fails on a home path or a person's email
+  address in a tracked file, or in a commit of the range (its message, author and committer). `make scrub` also applies a local list of private terms, which
   `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it. `CONTRIBUTING.md` says what public
   text leaves out.
 
