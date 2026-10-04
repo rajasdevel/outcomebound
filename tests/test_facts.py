@@ -293,6 +293,19 @@ def test_the_edges_the_shipped_stack_fragments_share_read_once(tmp_path: Path) -
     assert len(acts) == len(set(acts)) and sum("publish" in act for act in acts) == 2
 
 
+def test_a_stack_fragment_alone_adds_no_publishing_edge(tmp_path: Path) -> None:
+    """An application that publishes nothing selects a stack fragment, not `ci-release`, so
+    its facts carry no publishing edge; the edge comes with the release fragment's signs."""
+
+    catalog = load_all(ROOT)
+    selected = [catalog[name] for name in ("node-typescript", "python")]
+
+    rendered = facts.render(tmp_path, selected, [], ["AGENTS.md"], [])
+
+    assert "publish" not in rendered.facts and "registry tag" not in rendered.facts
+    assert any(line.startswith("Irreversible edges:") for line in rendered.unverified)
+
+
 def test_done_names_every_command_in_run_order(tmp_path: Path) -> None:
     for done, line in [
         (["make test"], "- Done: `make test`"),
