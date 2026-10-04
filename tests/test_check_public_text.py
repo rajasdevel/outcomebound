@@ -7,6 +7,7 @@ The home paths below are built from parts, so that this file does not hold one."
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,8 @@ PRIVATE = "Zanzibarco"
 TWO_WORDS = "Quillfeather Labs"
 WINDOWS_HOME = "C:" + "\\" + "Users" + "\\someone"
 BASE = "OUTCOMEBOUND_BASE"
+# A person's address, built from parts so that this file does not hold one.
+PERSON = "someone" + "@" + "mail.co"
 
 
 def repository(path: Path, files: dict[str, str]) -> Path:
@@ -37,9 +40,9 @@ def repository(path: Path, files: dict[str, str]) -> Path:
     return path
 
 
-def commit(path: Path, message: str) -> None:
+def commit(path: Path, message: str, email: str = "t@example.org") -> None:
     subprocess.run([GIT, "-C", str(path), "add", "-A"], check=True)
-    who = ["-c", "user.name=t", "-c", "user.email=t@example.org"]
+    who = ["-c", "user.name=t", "-c", f"user.email={email}"]
     subprocess.run(
         [GIT, "-C", str(path), *who, "commit", "-qm", message, "--allow-empty"], check=True
     )
@@ -98,7 +101,9 @@ def test_a_clean_tree_passes_and_the_range_comes_from_the_environment(tmp_path: 
     )
 
     assert done.returncode == 0
-    assert done.stdout.splitlines() == ["PASS public-text: no home path (1 file, 1 commit)"]
+    assert done.stdout.splitlines() == [
+        "PASS public-text: no home path, no email address (1 file, 1 commit)"
+    ]
 
 
 def test_the_local_list_matches_whole_words_and_never_prints_the_term(tmp_path: Path) -> None:
@@ -109,9 +114,14 @@ def test_the_local_list_matches_whole_words_and_never_prints_the_term(tmp_path: 
         {"a.md": f"Seen at {PRIVATE.lower()} once.\n", "b.md": f"Not {PRIVATE}ish.\n"},
     )
 
-    unlisted = "UNVERIFIED public-text: no local list (OB_SCRUB_LIST); no home path"
+    unlisted = (
+        "UNVERIFIED public-text: no local list (OB_SCRUB_LIST); no home path, no email address"
+    )
     assert check(root, "--private") == (2, [f"{unlisted} (2 files, 0 commits)"])
-    assert check(root) == (0, ["PASS public-text: no home path (2 files, 0 commits)"])
+    assert check(root) == (
+        0,
+        ["PASS public-text: no home path, no email address (2 files, 0 commits)"],
+    )
 
     code, lines = check(root, "--private", listed=listed)
 
@@ -139,7 +149,7 @@ def test_stdin_reads_only_what_it_is_given(tmp_path: Path) -> None:
     ]
     assert check(root, "--stdin", given="A clean title\n") == (
         0,
-        ["PASS public-text: no home path (standard input)"],
+        ["PASS public-text: no home path, no email address (standard input)"],
     )
 
 
@@ -198,3 +208,33 @@ def test_a_file_name_is_read_and_a_hit_in_it_is_not_printed(tmp_path: Path) -> N
         "  tracked file 2:1: a home path",
     ]
     assert not any(PRIVATE.lower() in line.lower() for line in lines)
+
+
+def test_a_persons_email_address_fails_and_addresses_no_person_reads_pass(tmp_path: Path) -> None:
+    root = repository(
+        tmp_path / "r",
+        {
+            "AGENTS.md": "x\n",
+            "a.md": (
+                "Signed-off-by: R <1+r@users.noreply.github.com>\n"
+                "Committer: noreply@github.com, t@example.com, a@b.invalid, n@AGENTS.md\n"
+                "Install `git+https://github.com/o/outcomebound@v1.0.0` and pnpm@9.7.0.\n"
+            ),
+            "b.md": f"one\nWrite to {PERSON.upper()}.\n",
+        },
+    )
+    commit(root, f"Fix it\n\nSigned-off-by: R <{PERSON}>", email=PERSON)
+
+    code, lines = check(root, "--base", "HEAD~1")
+
+    assert code == 1
+    assert lines[0] == "FAIL public-text: 4 hits (3 files, 1 commit)"
+    places = [line.strip() for line in lines[1:]]
+    assert places[0] == "b.md:2: an email address"
+    commits = [re.sub(r"^commit [0-9a-f]+ ?", "", place) for place in places[1:]]
+    assert commits == [
+        "identity:1: an email address",
+        "identity:2: an email address",
+        ":3: an email address",
+    ]
+    assert not any("someone" in line.lower() for line in lines)

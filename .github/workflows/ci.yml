@@ -96,7 +96,7 @@ jobs:
             scripts/outcomebound floor check .
           fi
 
-      # The floor's public-text claim reads home paths with no list. This step adds the local
+      # The floor's public-text claim reads home paths and email addresses with no list. This step adds the local
       # list of private names, from the repository secret OB_SCRUB_LIST, over the tracked files
       # and the commit messages since the same base; and, on a pull request, reads its title and
       # body with each part it has. A run without the secret, such as a fork's pull request,

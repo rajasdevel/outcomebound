@@ -221,10 +221,12 @@ An agent's pull request text, commit messages and files are public. They name no
 uses OutcomeBound, no person, no local path, no id or role from a private working file, and no
 count or anecdote from a private run. A private working file includes a decision brief that no
 public issue or pull request holds. If a commit or a `ruled` line cites a brief, a public issue or
-pull request holds that brief, and the citation uses its number. Describe a behavior in general terms, with a synthetic
-reproduction. `make check` runs `scripts/check-public-text.py` over the tracked files and over
-the commit messages since `OB_BASE`. It finds each path under a home folder, and it reads PASS or
-FAIL. `make scrub` also applies a local list of private names. The environment variable
+pull request holds that brief, and the citation uses its number. Describe a behavior in general
+terms, with a synthetic reproduction. `make check` runs `scripts/check-public-text.py` over the
+tracked files and over the commits since `OB_BASE`. It finds each path under a home folder, and
+each email address that a person can read, in the text and in the author and committer of a
+commit. A GitHub no-reply address and an address at a domain reserved for examples are not hits.
+It reads PASS or FAIL. `make scrub` also applies a local list of private names. The environment variable
 `OB_SCRUB_LIST` names the list, and the list stays outside this repository. With the list,
 `make scrub` reads PASS or FAIL. Without it, `make scrub` reads `UNVERIFIED`, and a maintainer
 runs it before the merge. CI applies the same checks to the title and the body of a pull request.

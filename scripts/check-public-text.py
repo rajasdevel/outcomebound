@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """The `public-text` gate of this repository's floor: text that leaves this machine names no
-local path, and, with the local list, no private name.
+local path and no person's email address, and, with the local list, no private name.
 
 Two parts:
 
-1. Home paths, with no list: a path under `/Users` or `/home`, a Windows `Users` folder, or
-   a leading home-relative path, in the name and the text of every file Git tracks and in
-   each commit message of the range, line by line. A home-relative path that this
-   repository documents on purpose is in `DOCUMENTED`, with its reason. The floor runs this
-   part, so it reads PASS or FAIL wherever it runs.
+1. Home paths and email addresses, with no list: a path under `/Users` or `/home`, a Windows
+   `Users` folder, or a leading home-relative path, in the name and the text of every file Git
+   tracks and in each commit message of the range, line by line. A home-relative path that
+   this repository documents on purpose is in `DOCUMENTED`, with its reason. In the same
+   text, and in the author and committer of each commit of the range, an email address is a
+   hit unless it is one that no person reads: a GitHub no-reply address, an address at a
+   domain reserved for examples (RFC 2606, RFC 6761), or an address in `ADDRESSES`, with its
+   reason. A match whose domain is the name of a tracked file, such as `n@AGENTS.md`, is a
+   path, not an address. The floor runs this part, so it reads PASS or FAIL wherever it runs.
 2. The local list, with `--private`: each term of the file that `OB_SCRUB_LIST` names, one
    term a line, `#` for a comment, matched whole-word and case-insensitively in the same
    names and text. The words of a term match across spaces and one line break, with the
@@ -60,6 +64,21 @@ DOCUMENTED = {
     "~/x.md": "a synthetic home-relative path that a test shows as refused",
     "~/empty": "a synthetic clone destination in a test",
 }
+# An email address: the local part, then a domain of two or more labels whose last label is a
+# name of letters, as each top-level domain is. The domain is group 1. A version after an `@`,
+# as in `outcomebound@v1.0.0` or `pnpm@9.7.0`, ends in a number, so it is not one.
+EMAIL = re.compile(r"(?<![\w.%+-])[\w.%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})(?![\w-])")
+# Domains whose addresses no person reads: GitHub's no-reply domains, and the domains and
+# top-level names reserved for examples and tests. A domain matches an entry exactly, or as a
+# name below it.
+NO_PERSON = (
+    *("users.noreply.github.com", "noreply.github.com"),
+    *("example.com", "example.net", "example.org", "example", "invalid", "test", "localhost"),
+)
+# The addresses this repository names on purpose, each with its reason.
+ADDRESSES = {
+    "noreply@github.com": "the committer GitHub writes on a merge made on github.com",
+}
 # What may stand between two words of a term: spaces or tabs, or one line break with the spaces
 # and the comment or quote marker (`#`, `>`, `//`, `*`) that starts a wrapped line. A blank line
 # ends a paragraph, so two words on either side of one are not a term.
@@ -106,13 +125,14 @@ def tracked(root: Path) -> Iterator[tuple[int, str, str | None]]:
         yield number, path, text
 
 
-def commit_messages(root: Path, span: str) -> Iterator[tuple[str, str]]:
-    """Each commit message in `span`, as (`commit <short id>`, message)."""
+def commit_messages(root: Path, span: str) -> Iterator[tuple[str, str, str]]:
+    """Each commit in `span`, as (`commit <short id>`, its author and committer addresses on
+    two lines, its message)."""
 
-    raw = _git(root, "log", "-z", "--format=%h%n%B", span).decode("utf-8", "replace")
+    raw = _git(root, "log", "-z", "--format=%h%n%ae%n%ce%n%B", span).decode("utf-8", "replace")
     for entry in filter(None, raw.split("\0")):
-        short, _, message = entry.partition("\n")
-        yield f"commit {short}", message
+        short, author, committer, message = [*entry.split("\n", 3), "", "", ""][:4]
+        yield f"commit {short}", f"{author}\n{committer}", message
 
 
 def load_list(path: Path | None) -> list[re.Pattern[str]]:
@@ -144,15 +164,29 @@ def _documented(path: str) -> bool:
     return any(token == entry or token.startswith(entry + "/") for entry in DOCUMENTED)
 
 
-def kinds(text: str, terms: list[re.Pattern[str]]) -> list[tuple[int, str]]:
-    """Each (line, kind) of a hit in `text`, in line order: a home path line by line, and a term
-    of the local list over the whole text, at the line where its match starts."""
+def _personal(match: re.Match[str], names: frozenset[str]) -> bool:
+    """Whether an `EMAIL` match is an address that a person may read."""
+
+    address, domain = match.group(0).lower().rstrip("."), match.group(1).lower().rstrip(".")
+    if address in ADDRESSES or match.group(1) in names:
+        return False
+    return not any(domain == entry or domain.endswith("." + entry) for entry in NO_PERSON)
+
+
+def kinds(
+    text: str, terms: list[re.Pattern[str]], names: frozenset[str] = frozenset()
+) -> list[tuple[int, str]]:
+    """Each (line, kind) of a hit in `text`, in line order: a home path and an email address
+    line by line, and a term of the local list over the whole text, at the line where its match
+    starts. `names` are the names of the tracked files, which an address's domain is not."""
 
     found = set()
     for number, line in enumerate(text.splitlines(), start=1):
         tilde = (match.group(0) for match in TILDE.finditer(line))
         if HOME.search(line) or any(not _documented(path) for path in tilde):
             found.add((number, "a home path"))
+        if any(_personal(match, names) for match in EMAIL.finditer(line)):
+            found.add((number, "an email address"))
     visible = _visible(text)
     for term in terms:
         for match in term.finditer(visible):
@@ -160,11 +194,23 @@ def kinds(text: str, terms: list[re.Pattern[str]]) -> list[tuple[int, str]]:
     return sorted(found)
 
 
-def hits(where: str, text: str, terms: list[re.Pattern[str]]) -> Iterator[str]:
+def hits(
+    where: str, text: str, terms: list[re.Pattern[str]], names: frozenset[str] = frozenset()
+) -> Iterator[str]:
     """One line per hit in `text`: its place and its kind, never the matched text."""
 
-    for number, kind in kinds(text, terms):
+    for number, kind in kinds(text, terms, names):
         yield f"{where}:{number}: {kind}"
+
+
+def _names(root: Path) -> frozenset[str]:
+    """The base names of the tracked files, or none where Git cannot list them."""
+
+    try:
+        listed = _git(root, "ls-files", "-z").decode("utf-8", "surrogateescape").split("\0")
+    except Unreadable:
+        return frozenset()
+    return frozenset(Path(path).name for path in listed if path)
 
 
 def _plural(count: int, word: str) -> str:
@@ -190,8 +236,9 @@ def _span(root: Path, given_range: str | None, base: str | None) -> tuple[str | 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Check that the text Git tracks, the commit messages of a range and, with "
-        "--stdin, the given text name no home path; with --private, also no term of the local "
+        description="Check that the text Git tracks, the commits of a range and, with --stdin, "
+        "the given text name no home path and no person's email address; with --private, also "
+        "no term of the local "
         f"list that {LIST_ENV} names. Exit 0: no hit; 1: a hit; 2: UNVERIFIED (no local list "
         "for --private), or Git cannot read the files or the range."
     )
@@ -211,30 +258,32 @@ def main(argv: list[str] | None = None) -> int:
     named = os.environ.get(LIST_ENV, "").strip()
     terms = load_list(Path(named).expanduser()) if args.private and named else []
     found: list[str] = []
+    names = _names(root)
     try:
         if args.stdin:
-            found += hits("stdin", sys.stdin.read(), terms)
+            found += hits("stdin", sys.stdin.read(), terms, names)
             read, note = "standard input", ""
         else:
             files = commits = 0
             for number, path, text in tracked(root):
-                named_hits = sorted({kind for _, kind in kinds(path, terms)})
+                named_hits = sorted({kind for _, kind in kinds(path, terms, names)})
                 where = f"tracked file {number}" if named_hits else path
                 found += [f"{where}: {kind} in its name" for kind in named_hits]
                 if text is not None:
                     files += 1
-                    found += hits(where, text, terms)
+                    found += hits(where, text, terms, names)
             chosen, note = _span(root, args.range, args.base)
-            for where, message in commit_messages(root, chosen) if chosen else ():
+            for where, identity, message in commit_messages(root, chosen) if chosen else ():
                 commits += 1
-                found += hits(where, message, terms)
+                found += hits(f"{where} identity", identity, terms, names)
+                found += hits(where, message, terms, names)
             read = f"{_plural(files, 'file')}, {_plural(commits, 'commit')}"
     except Unreadable as error:
         print(f"UNVERIFIED {NAME}: {error}")
         return 2
 
     missing = args.private and not terms
-    what = "no home path" + (" and no term of the local list" if terms else "")
+    what = "no home path, no email address" + (" and no term of the local list" if terms else "")
     if found:
         print(f"FAIL {NAME}: {_plural(len(found), 'hit')} ({read}{note})")
         print("\n".join(f"  {line}" for line in found))

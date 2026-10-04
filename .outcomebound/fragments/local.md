@@ -4,7 +4,7 @@ family: setup
 applies: the OutcomeBound engine repository itself
 edges: ["pushing a release tag"]
 detect: []
-version: 4
+version: 5
 ---
 **Context** — this repository is both the contract and the engine that ships it, so an edit to
 `OutcomeBound.md`, `templates/managed-block.agents.md.tmpl`, `skills/` or `fragments/` changes
@@ -31,7 +31,7 @@ it requires, and the pull request links it; `broad-suite` once at each landing, 
 delegate.
 **Completion bar** — `make gate`, `make check` and `make test`, green at the tip that lands;
 at a release, `make release-check` passes on the release commit. `make check` runs the
-public-text claim (home paths); before a pull request opens, `make scrub` also applies the local
+public-text claim (home paths and email addresses); before a pull request opens, `make scrub` also applies the local
 list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
