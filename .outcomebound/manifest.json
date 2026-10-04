@@ -30,7 +30,7 @@
         ".outcomebound/fragments/local.md": "7211d9fc3cb62a52b3180d2ad23828a487b492898888ce23fe6dda9f8fa90ac7",
         ".outcomebound/fragments/multi-agent.md": "3262ae5071dc184672df36015b211dd2a959e7a3c8ea8a3aaf12b79cf6df7eec",
         ".outcomebound/fragments/research.md": "6c9009492b287148950cb4252ac4f04858dc4c852cd43556029e964494d45d4e",
-        ".outcomebound/fragments/workspace.md": "6fef2fd7753693e205e0112131f82672817244ca4924627034a61ec6ea10dfc1"
+        ".outcomebound/fragments/workspace.md": "449355e9f087ff00c481369c7047d25c94d3ff656115ab98fb74af287bc9383e"
       },
       "style": [
         "ste"
@@ -41,7 +41,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "sha256": "99f8271bab87e0f1f05b90d382a7f6739639da5f8295c8c61708e1ff64cec167"
+      "sha256": "975ce606452227b07ff8739c3d7f9bb33d23e537ecf4c602c1daad068d11e4d3"
     },
     {
       "kind": "fragment",
@@ -53,7 +53,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "6fef2fd7753693e205e0112131f82672817244ca4924627034a61ec6ea10dfc1"
+      "sha256": "449355e9f087ff00c481369c7047d25c94d3ff656115ab98fb74af287bc9383e"
     },
     {
       "kind": "fragment",
@@ -86,7 +86,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "75778bf178cc6f13501e33e359b2d8e7b3a15075e2b3e8fb6a78355d5f726e96"
+      "sha256": "fff83812c332c6572bbc4e30ffbba9983a083a65a65faf3300f2686a4fcb773c"
     },
     {
       "kind": "skill",

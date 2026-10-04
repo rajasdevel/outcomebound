@@ -40,7 +40,7 @@ Read the diff, then commit it. `adopt` writes:
 
 | Path | What it is |
 | --- | --- |
-| `AGENTS.md` | One more pointer line: when an agent creates a worktree or a working file, resumes or hands off work, or keeps a fact for later sessions, it reads the fragment |
+| `AGENTS.md` | One more pointer line: when an agent creates a worktree or a working file, resumes or hands off work, keeps a fact for later sessions, or works in another repository, it reads the fragment |
 | `.outcomebound/fragments/workspace.md` | The fragment: the agent's rules for the four folders |
 | `.agents/.gitignore` | Keeps the four folders out of Git. It comes from `templates/workspace.gitignore` |
 
@@ -95,8 +95,21 @@ flowchart TD
     check --> wt
 ```
 
+A worktree's commits land in the way that your instructions or the goal envelope say work lands.
+The `tickets` fragment states the same rule. If nothing says how, the commits stay on the
+worktree's branch, and the handoff names that branch.
+
 For work that takes more than one session, the fragment also points the agent to the goal
 envelope: the bounds that you grant in advance.
+
+## Work in another repository
+
+Start a session in each repository that you change. The hooks and the sandbox of a repository
+apply only to a session that starts in it. If you ask one session to change a different
+repository, the agent asks you one time to add that repository as a writable root. Until you do,
+it holds the items that write there. It runs
+the Done commands of that repository itself, and it says so in its report, because the hooks of
+that repository do not run in the session.
 
 ## What Git sees
 
@@ -107,6 +120,13 @@ and Amp read ([the harness table](../adapters/harnesses.json) records the path),
 skills. Commit `.agents/.gitignore` too. Then every clone ignores the four folders in the same way.
 
 The four folders are not committed. They are not in a clone, and they do not reach CI.
+
+Some scanners walk folders that Git ignores, for example `gitleaks dir .` or a content gate that
+does not read `.gitignore`. Such a scanner reads each worktree under `.agents/worktrees/` as a
+second copy of the repository, so a gate that was green can fail. Make the scan skip the four
+folders at its root. This is your change, not the agent's. The fragment tells the agent to run
+such a scan from the root of its worktree, and that a finding only in those folders is not a
+finding in its work.
 
 ## Handoffs and shared memory
 
@@ -149,6 +169,12 @@ clone needs does not belong in `shared-memory/`. Put it in committed guidance, s
 These folders stay on the machine. A handoff that another machine or a cloud session must read
 goes in the ticket or the pull request.
 
+A handoff that starts a run gives you one block to paste as the first message of the run: the
+goal envelope itself. Then the grants of the envelope are in your own words, and a harness that
+accepts authority only from your messages sees them. Text that is for you, such as how to start
+the run, is outside that block. A handoff does not name a copy of itself in a different
+repository. If a copy exists, it is a snapshot, and the run does not update it.
+
 ## Check the notes before you rely on them
 
 Notes are text that the next session reads, as it reads your instruction files. A note that
@@ -187,13 +213,21 @@ Then, before the agent uses a fact from a note, it checks that fact against its 
   names each such file, and `adopt` warns about it. With `--harness generic`, you check that your harness loads
   the file.
 - Codex's default sandbox keeps `.agents/` and `.git` read-only. The fragment tells the agent to
-  ask for each write there through the approval path of the harness. Where Codex refuses the
-  write, the agent continues with the work that does not need that write, and it keeps that work
-  in the writable part of the checkout. It never moves the work to a temporary directory. In its
-  handoff, or in its report when it cannot write the handoff, it names how you start Codex the
-  next time: with `--add-dir <repository>/.agents`, and `--add-dir <repository>/.git` so that it
-  can commit. The harness table does not record this sandbox behavior, so check it against your
-  Codex version.
+  ask you one time to make two folders writable roots, and not to ask for each write. The two
+  folders are `<repository>/.agents` and the Git common directory, which is `<repository>/.git`
+  in a plain clone (`git rev-parse --path-format=absolute --git-common-dir` prints it). Every
+  worktree commits into the Git common directory.
+  - In the Codex CLI, start Codex with `--add-dir <repository>/.agents` and
+    `--add-dir <repository>/.git`.
+  - The Codex desktop app and the IDE extension are reported to have no such flag. Add both
+    paths to `writable_roots` under `[sandbox_workspace_write]` in your own Codex `config.toml`. A
+    project's `.codex/config.toml` does not apply sandbox keys. The research for Codex does not
+    record this key or the flags of these two surfaces, so check both against your Codex release.
+
+  Until both folders are writable, the agent holds each item that must write there: make a
+  worktree, edit in one, commit or write a handoff. It continues with the work that does not
+  write there, such as reads and checks. It never moves the work to a temporary directory or into
+  the main checkout. In its report, it names what you must set.
 
 ## What it gives you, and what it does not
 

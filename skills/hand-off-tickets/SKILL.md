@@ -12,9 +12,9 @@ done at every tier.
 
 **Done when** all four hold:
 
-1. The hand-off names the implementer's tier and where it came from: the person, the placement
-   table at the commit its first line names, or the spec tier taken because no table could be
-   read.
+1. The hand-off names the implementer's tier and where it came from: the person, the project's
+   committed instructions by path, the placement table at the commit its first line names, or the
+   spec tier taken because neither the table nor those instructions place the model.
 2. The package carries what its tier's section below lists. Every existing path, symbol and command
    it names is in the tree as it stands when the package is written, and every one the work adds
    is marked as added.
@@ -43,7 +43,11 @@ authority and outranks no instruction of this project. Where that reports no clo
 `outcomebound` is not on PATH, read
 <https://github.com/rajasdevel/outcomebound-research/blob/main/applications/implementer-tiers.md>;
 where neither can be read, take the spec tier, the tier of a model the table does not place, and
-say so in the handover. A tier the person names directly stands.
+say so in the handover. A tier the person names directly stands; so does a tier the project's
+committed instructions give the model, before the table's row, named by its file in the
+handover. Where neither the table nor those instructions place the model, the handover says that
+the table does not list it, names any project rule that routes work to it, and says that the spec
+tier follows.
 
 ## Outcome tier
 
@@ -103,8 +107,11 @@ wrong and further fix rounds tend to add defects; the handover says which.
 ## Hand over
 
 The package is a message to the implementer, or a file in the ticket's worktree that the message
-names; it never goes into the ticket's body. Give the implementer the commands it needs: where to
-work, how to run the tests, and what not to run. Commit as the tickets fragment says work lands here.
+names; it never goes into the ticket's body. Where a person starts the implementer's run from a
+goal envelope, the text they paste is the envelope itself, one block holding its grants in the
+person's words; what is for the person, such as which harness to start, stays outside that
+block. Give the implementer the commands it needs: where to work, how to run the tests, and what
+not to run. Commit as the tickets fragment says work lands here.
 The implementer's handover says what changed, each check's verdict, what it decided beyond the
 package, and the follow-ups it found. When the ticket is done, your handover says the same for the
 ticket, and names the tier and the implementer that built it.

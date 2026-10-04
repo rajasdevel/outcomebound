@@ -38,6 +38,12 @@ way forward leads to and what its downside is, so the evidence chooses your reco
 - whether it can be undone;
 - a diagram only when order, dependency, flow or before/after is the point.
 
+Give each brief an id no other session or record can take. Where the project's instructions keep one
+numbering for briefs, take the next id from it; otherwise put your task's or worktree's name, in
+letters, digits and hyphens, before the number (`fix-login-D1`), so that two sessions on one
+machine, and the project's own decision numbers, never share an id. Cite a brief by that whole id
+wherever it goes outside its document: a commit subject, a ticket, a handoff.
+
 Explain every internal id or term in plain words where you use it, or leave it out. A step the
 user types or checks by eye names a version, branch, tag or path, never a commit hash or other
 digest. Claim no check that did not run: a verdict you give is your report of a command you ran.
@@ -51,7 +57,8 @@ need `--form mermaid`. Show its output as markdown, never inside a code block. A
 command refuses is fixed and drawn again, never hand-written. Without `outcomebound` on PATH,
 write the same shape by hand, options lettered.
 
-A drawn brief, fenced here only to show its lines:
+A drawn brief, fenced here only to show its lines; its bare `D1` is right only where the
+project's instructions number briefs:
 
 ````markdown
 ### D1 · Keep the old flag for one release?

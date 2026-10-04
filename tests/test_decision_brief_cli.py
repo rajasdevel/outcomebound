@@ -303,6 +303,23 @@ def test_the_id_is_joined_to_the_heading_by_the_symbols_separator(
     assert heading == f"### C3{sep}#3 — Issue 3"
 
 
+def test_a_scoped_id_is_drawn_whole_in_the_heading_and_the_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The decision-brief skill scopes an id with the task's name, `fix-login-D1`, so that
+    two sessions never share one; the renderer keeps that whole id wherever it draws it."""
+
+    briefs = [
+        {"id": f"fix-login-D{n}", "heading": f"Question {n}?", "undo": UNDO, **EVIDENCE}
+        for n in (1, 2)
+    ]
+    path = _write(tmp_path, {"briefs": briefs, "order": [["fix-login-D1", "fix-login-D2"]]})
+    code, out, _ = _main(capsys, str(path), "--symbols", "ascii", "--form", "ascii")
+    assert code == 0
+    assert "### fix-login-D1 | Question 1?" in out.splitlines()
+    assert "fix-login-D1 --> fix-login-D2" in out.splitlines()
+
+
 def test_nothing_to_put_says_nothing_waits(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

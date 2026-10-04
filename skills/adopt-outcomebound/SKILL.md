@@ -55,7 +55,16 @@ as one brief (`outcomebound brief --help`).
   report names; any other harness is named as not available yet. The Done commands get the
   entry's timeout less 30 seconds: 600 by default, the harnesses' documented default; for a Done
   that takes longer, add `--finish-timeout <seconds>`, which a later adopt can also change.
-  `--no-finish-check` takes it out.
+  `--no-finish-check` takes it out. Only with `--finish-check` named does adopt run the Done
+  commands, once after its writes, each to its end and past each failure: it reports each
+  command's verdict and seconds, proposes a larger `--finish-timeout` where Done takes longer than
+  the timeout less 30 seconds, and keeps each failing command as a known failure; without the
+  flag, it prints the record that applies, or says that Done was not measured and how to measure
+  it. A known failure applies only on commits that descend from the measured commit, and holds no
+  turn only while its exit code matches and every failure id it prints is in the record; where
+  neither side prints ids, the exit code alone decides. When an install changes the `codex` entry
+  (its Done or its timeout), each person trusts it again in Codex `/hooks`, and the install report
+  says so.
 
 ## Check and remove
 
