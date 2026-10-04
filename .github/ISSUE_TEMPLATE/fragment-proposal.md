@@ -2,7 +2,7 @@
 name: Fragment proposal
 about: Propose a new stack or setup fragment for fragments/
 title: "fragment: "
-labels: fragment
+labels: area:fragments
 ---
 
 Thank you for proposing a fragment. A fragment applies the operating contract to the facts of one

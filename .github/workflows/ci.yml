@@ -96,19 +96,18 @@ jobs:
             scripts/outcomebound floor check .
           fi
 
-      # The floor's public-text claim reads home paths and email addresses with no list. This step adds the local
-      # list of private names, from the repository secret OB_SCRUB_LIST, over the tracked files
-      # and the commit messages since the same base; and, on a pull request, reads its title and
-      # body with each part it has. A run without the secret, such as a fork's pull request,
-      # reads UNVERIFIED for the list and does not fail on it: a maintainer runs `make scrub`
-      # before the merge. Each value reaches the shell through the environment.
+      # The floor's public-text claim reads home paths and email addresses with no list. This
+      # step adds the local list of private names, from the repository secret OB_SCRUB_LIST, over
+      # the tracked files and the commit messages since the same base. A run without the secret, such as a fork's
+      # pull request, reads UNVERIFIED for the list and does not fail on it: a maintainer runs
+      # `make scrub` before the merge. A pull request's title and body are checked by the
+      # workflow pr-text.yml, which runs again when they are edited. Each value reaches the
+      # shell through the environment.
       - name: Public text
         if: matrix.python-version == '3.14'
         env:
           OB_SCRUB_LIST_TEXT: ${{ secrets.OB_SCRUB_LIST }}
           OUTCOMEBOUND_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           if [ -n "$OB_SCRUB_LIST_TEXT" ]; then
             printf '%s\n' "$OB_SCRUB_LIST_TEXT" > "$RUNNER_TEMP/scrub-list.txt"
@@ -122,9 +121,6 @@ jobs:
             fi
           else
             echo "UNVERIFIED public-text: no local list (no OB_SCRUB_LIST secret in this run); a maintainer runs make scrub before the merge"
-          fi
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | python3 scripts/check-public-text.py --stdin ${OB_SCRUB_LIST:+--private}
           fi
 
       # -o addopts="" clears pytest.ini's defaults, so -rs has to be repeated

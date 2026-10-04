@@ -1,0 +1,64 @@
+name: PR text
+
+# A squash merge writes the pull request's title and description as the commit on main, so they
+# are public text that lands: this workflow checks them when the pull request opens, and again
+# each time they are edited or the branch moves. It also checks that each commit of the pull
+# request carries a Signed-off-by line (the Developer Certificate of Origin in CONTRIBUTING.md),
+# because the squash commit keeps the description, not the commits' own messages; the commits
+# stay readable at refs/pull/<n>/head.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+# The job reads the repository and writes nothing back to it.
+permissions:
+  contents: read
+
+jobs:
+  pr-text:
+    runs-on: ubuntu-latest
+    steps:
+      # Each action is pinned by commit, the only reference that cannot move; the comment names
+      # the release it is.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The sign-off check reads each commit since the base.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The title and the description, with no list: home paths and email addresses. With the
+      # repository secret OB_SCRUB_LIST, also the local list of private names. A fork's pull
+      # request gets no secret, so the list reads UNVERIFIED there and a maintainer runs it.
+      # Each value reaches the shell through the environment.
+      - name: Title and description
+        env:
+          OB_SCRUB_LIST_TEXT: ${{ secrets.OB_SCRUB_LIST }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ -n "$OB_SCRUB_LIST_TEXT" ]; then
+            printf '%s\n' "$OB_SCRUB_LIST_TEXT" > "$RUNNER_TEMP/scrub-list.txt"
+            export OB_SCRUB_LIST="$RUNNER_TEMP/scrub-list.txt"
+          else
+            echo "UNVERIFIED public-text: no local list (no OB_SCRUB_LIST secret in this run); a maintainer applies it before the merge"
+          fi
+          printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" | python3 scripts/check-public-text.py --stdin ${OB_SCRUB_LIST:+--private}
+
+      - name: Sign-off of each commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          missing=0
+          for commit in $(git rev-list "$BASE..$HEAD"); do
+            if ! git log -1 --format=%B "$commit" | git interpret-trailers --parse | grep -q '^Signed-off-by: '; then
+              echo "FAIL sign-off: commit $(git rev-parse --short "$commit") has no Signed-off-by line (git commit -s)"
+              missing=1
+            fi
+          done
+          if [ "$missing" = 0 ]; then
+            echo "PASS sign-off: every commit of the pull request is signed off"
+          fi
+          exit "$missing"
