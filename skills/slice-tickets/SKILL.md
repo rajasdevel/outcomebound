@@ -146,9 +146,9 @@ parent: #41
 - A `done-when` claim whose command reads more than the ticket's own paths, such as a type, lint,
   format or shell gate over the whole tree, or a runner script a suite needs, gets `bounds` that
   cover what it reads where the outcome's authority already reaches those paths; otherwise a
-  repair ticket that makes that command green outside them comes
-  first, named in `blocked-by`. A claim that names those paths in the plan's `required_paths` lets
-  `check` warn, `CLAIM_READS_OUTSIDE_BOUNDS`, where `bounds` do not cover them.
+  repair ticket that makes that command green outside them comes first, named in `blocked-by`. A
+  claim that names those paths in the plan's `required_paths` lets `check` warn,
+  `CLAIM_READS_OUTSIDE_BOUNDS`, where `bounds` do not cover them.
 - `human-only: yes` marks a ticket a person will do; `requested` is an agent's, never a draft's.
 - A `done-when` item is a claim a command settles; a fact a command can read is one, and so is
   an agent's own act, read from the artifact it left. A judgment only the user can make is no

@@ -45,9 +45,9 @@ authority and outranks no instruction of this project. Where that reports no clo
 where neither can be read, take the spec tier, the tier of a model the table does not place, and
 say so in the handover. A tier the person names directly stands; so does a tier the project's
 committed instructions give the model, before the table's row, named by its file in the
-handover. Where neither the table
-nor those instructions place the model, the handover says that the table does not list it, names
-any project rule that routes work to it, and says that the spec tier follows.
+handover. Where neither the table nor those instructions place the model, the handover says that
+the table does not list it, names any project rule that routes work to it, and says that the spec
+tier follows.
 
 ## Outcome tier
 
