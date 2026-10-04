@@ -222,3 +222,38 @@ def test_publish_needs_drafts_and_reads_no_store(
             main(argv)
         assert raised.value.code == 2
         assert "usage:" in capsys.readouterr().err
+
+
+def test_a_draft_holding_a_nul_byte_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """No shell argument carries a NUL byte, so the tracker would get other text."""
+
+    root = checkout(tmp_path)
+    path = write(tmp_path, "drafts/nul.md", draft("Nul", prose="a\0b"))
+
+    code = main(["publish", str(root), "--draft", str(path)])
+    captured = capsys.readouterr()
+
+    assert (code, captured.out) == (1, "")
+    assert captured.err.startswith("PUBLISH_REFUSED: ") and "NUL" in captured.err
+
+
+@pytest.mark.skipif(os.name != "posix", reason="the script is POSIX shell")
+def test_a_body_that_cannot_be_built_stops_the_script_before_gh(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The body is built in an assignment, so a part that fails under `set -u` stops
+    the run before `gh issue create` is asked; it is never on the left of a pipe."""
+
+    root = checkout(tmp_path)
+    found = write(tmp_path, "drafts/found.md", draft("Found"))
+    later = write(tmp_path, "drafts/later.md", draft("Later", "discovered-from: found"))
+    text = script(root, later, found, capsys=capsys)
+    broken = "\n".join(line for line in text.splitlines() if not line.startswith("ob_1="))
+
+    ran, calls = run(tmp_path, broken)
+
+    assert ran.returncode != 0
+    titles = [flag(call["argv"], "--title") for call in calls if "--help" not in call["argv"]]
+    assert titles == [["Found"]], "the issue whose body failed was never created"

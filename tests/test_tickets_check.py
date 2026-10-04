@@ -581,6 +581,39 @@ def test_a_claim_that_reads_outside_the_bounds_is_a_warning(
     assert "`whole-tree`" in text and "reads ., which" in text, text
 
 
+def test_a_bounds_class_no_glob_holds_is_a_finding_and_not_a_crash(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`src/[]` is `BOUNDS_INVALID`, and the pass that asks whether a claim's declared
+    paths are inside the bounds still reports instead of ending the run."""
+
+    root = checkout(tmp_path, document("#1", bounds=["src/[]"], done_when=["reads"]))
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"].append(
+        {"name": "reads", "command": ["true"], "required_paths": ["src/a.py", "src/./a.py"]}
+    )
+    write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+
+    found = report(root, capsys=capsys, expect=1)
+
+    assert codes(found, "#1") == ["BOUNDS_INVALID", "CLAIM_READS_OUTSIDE_BOUNDS"]
+    [text] = said(found, "CLAIM_READS_OUTSIDE_BOUNDS")
+    assert text.count("src/a.py") == 1, "one path is named once"
+
+
+def test_a_ticket_found_during_its_own_work_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`discovered-from` naming the ticket itself is an error."""
+
+    drafted, written = drafts(tmp_path, me=draft_text(discovered_from="me"))
+
+    found = report(drafted, "--draft", *written, capsys=capsys, expect=1)
+
+    assert codes(found, "me") == ["VALUE_INVALID"]
+    assert any("names itself" in one for one in said(found, "VALUE_INVALID"))
+
+
 def test_planned_claims_fold_into_one_text_row(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
