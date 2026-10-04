@@ -50,35 +50,29 @@ and the date of their word, and `claims` naming the project's committed validati
 ```
 
 and commit the declaration alone, the message quoting what they said. Where the project has no
-validation plan yet, commit `{"version": 1, "claims": []}` at the `claims` path in the same
-commit; the tickets add claims to it. Without the yes: create nothing, write no `writes` entry,
-commit nothing, and print the three commands and the declaration for a person; a person who
-chooses the store but withholds the grant gets the same.
+validation plan yet, commit `{"version": 1, "cwd": "..", "claims": []}` at the `claims` path in
+the same commit; the tickets add claims to it. A relative `cwd` starts at the plan file's folder,
+so `..` runs the claims of `.outcomebound/ticket-claims.json` at the checkout's root. Without
+the yes: create nothing, write no `writes` entry, commit nothing, and print the three commands
+and the declaration for a person; a person who chooses the store but withholds the grant gets the
+same.
 
 ## Publishing
 
-The body of an issue is the draft without its `# <title>` line, which becomes the title, and
-without the `blocked-by` and `parent` lines of its block, which the tracker holds natively and
-the reader refuses in a block. A `discovered-from` stays in the block, rewritten to the issue
-number it names. A draft with `human-only: yes` also gets the hold label, so the block and the
-labels say one thing.
+`outcomebound tickets publish --draft <file>...`, given every accepted draft, prints a POSIX
+shell script that publishes them with `gh`, and runs nothing itself. It runs `check --draft` on
+the drafts first and refuses with `PUBLISH_REFUSED` where that reports an error. The script
+creates the issues in an order that lets each relation name an issue that exists, sets each
+issue's `--parent` and `--blocked-by` as it creates it, applies the ticket label, and the hold
+label to a draft with `human-only: yes`, and writes each body as the draft without its
+`# <title>` line, which becomes the title, and without the `blocked-by` and `parent` lines of its
+block, which the tracker holds. A `discovered-from` naming a sibling draft becomes that draft's
+issue number; a sibling's name in a body's prose is left as written.
 
-First pass, one issue per accepted ticket, in an order that lets each relation name an issue
-that exists:
-
-```sh
-gh issue create --repo <repo> --title "<title>" --label <label> --body-file <body>
-```
-
-Note the number each returns. Second pass, the relations, each written on the ticket that depends:
-
-```sh
-gh issue edit <n> --repo <repo> --parent <p>
-gh issue edit <n> --repo <repo> --add-blocked-by <b1>,<b2>
-```
-
-A `gh` that lacks these flags sets neither: print each relation for a person, and name it in the
-report as not set, since agents read what can start from these relations. The ticket label is
+Run the script only where the declaration records the `writes` grant, which its header names;
+otherwise print it for a person and report the breakdown as waiting on them. A `gh` that lacks
+the relation flags fails on them: print each relation for a person, and name it in the report
+as not set, since agents read what can start from these relations. The ticket label is
 applied at creation, to the issues the user accepted in the breakdown and to a follow-up a goal
 envelope's Follow-ups line accepts, and to nothing that already exists; removing it is the user's
 act alone. Where a command fails, produce the export again to see what was created, and run again

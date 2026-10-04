@@ -146,11 +146,14 @@ parent: #41
 - A `done-when` claim whose command reads more than the ticket's own paths, such as a type, lint,
   format or shell gate over the whole tree, or a runner script a suite needs, needs `bounds` that
   cover what it reads; otherwise a repair ticket that makes that command green outside them comes
-  first, named in `blocked-by`.
+  first, named in `blocked-by`. A claim that names those paths in the plan's `required_paths` lets
+  `check` warn, `CLAIM_READS_OUTSIDE_BOUNDS`, where `bounds` do not cover them.
 - `human-only: yes` marks a ticket a person will do; `requested` is an agent's, never a draft's.
 - A `done-when` item is a claim a command settles; a fact a command can read is one, and so is
   an agent's own act, read from the artifact it left. A judgment only the user can make is no
-  claim, and `check` reports a `human:` item as an error.
+  claim, and `check` reports a `human:` item as an error, except on a `human-only: yes` ticket,
+  where `<name>: human: <observation>` names the person's own check, which the plan does not
+  define.
 - `blocked-by`, `parent` and `discovered-from` name a sibling draft by its file name without the
   extension, or a published ticket by `#N`. The first two leave the block at publishing and
   become the tracker's relations; `discovered-from` stays, rewritten to the issue number.
@@ -173,9 +176,10 @@ its neighbours; then the relations, and the implementer the work is for. Compile
 
 ## Publish
 
-Publish in two passes, as `references/github.md` says: create each accepted ticket carrying the
-ticket label, then set parent and blocking relations, and comment on each ticket with the
-implementer it is for, where one was named. What you find that is not this
+Publish with the script `outcomebound tickets publish --draft <every accepted draft>` prints, as
+`references/github.md` says: it creates each accepted ticket with the ticket label and its parent
+and blocking relations, and runs nothing itself. Then comment on each ticket with the implementer
+it is for, where one was named. What you find that is not this
 breakdown's work is a follow-up for the next one, or, where it is a slice by the rules above, a
 draft with `discovered-from` naming the ticket whose work surfaced it. A goal envelope the person
 wrote whose Follow-ups line accepts follow-ups is their acceptance of each issue a run files under
