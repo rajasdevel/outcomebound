@@ -3,7 +3,8 @@
 What this module decides: which tickets are judged — the open ones, and every
 draft — the order in which one ticket is judged and where that pass stops, when
 a body is too thin to be a brief, what a `reads` entry that will not resolve
-reads, what a claim the plan does not define reads, and what is said about a
+reads, what a claim the plan does not define reads, what a claim that declares
+it needs a path outside the ticket's `bounds` reads, and what is said about a
 knot of the waiting graph, about a `discovered-from` the input does not hold,
 and about a ticket whose work waits on a person's decision brief.
 A closed or dropped ticket's links are history and are not resolved: it is read,
@@ -33,6 +34,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
+from outcomebound_tools.tickets_bounds import covers
 from outcomebound_tools.tickets_claims import ClaimsPlan, load_claims
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_draft import draft_relations, read_draft
@@ -259,6 +261,37 @@ def _claim_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
         )
 
 
+def _reach_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
+    """Each defined claim that declares it needs a path the ticket's `bounds` do not cover.
+
+    Decided only where the plan makes it decidable: from a claim's
+    `required_paths`. A claim that declares none says nothing about what its
+    command reads, and nothing is said about it. A path outside the checkout is
+    covered by no entry.
+    """
+
+    for item in ticket.done_when:
+        definition = None if item.human else plan.claims.get(item.claim)
+        if definition is None:
+            continue
+        outside = [
+            "a path outside the checkout" if path is None else path
+            for path in definition.required_paths
+            if path is None or not any(covers(entry, path) for entry in ticket.bounds)
+        ]
+        if not outside:
+            continue
+        yield message(
+            "CLAIM_READS_OUTSIDE_BOUNDS",
+            ticket.id,
+            f"the claim `{item.claim}` of {ticket.id} declares in {plan.path} that it reads "
+            f"{', '.join(outside)}, which the ticket's `bounds` do not cover, so a finding "
+            "there is one this ticket's work may not repair",
+            "widen `bounds` to cover what the claim reads, or put a ticket that repairs it "
+            "first in `blocked-by`",
+        )
+
+
 def _cwd_messages(plan: ClaimsPlan, target: Path) -> tuple[Message, ...]:
     """A plan whose working directory resolves outside the checkout.
 
@@ -377,6 +410,7 @@ def _judge(ticket: Ticket, run: _Run) -> TicketResult:
         *_brief_messages(ticket),
         *_reads_messages(ticket, run.sections),
         *_claim_messages(ticket, run.plan),
+        *_reach_messages(ticket, run.plan),
         *_relation_messages(ticket, run.given, run.knots),
         *_wait_messages(ticket),
     )

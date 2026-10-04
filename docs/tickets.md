@@ -118,6 +118,12 @@ store. On a draft run, a `blocked-by` or `parent` entry that names a published t
 `#12`, is not checked, because no store is read. `check` says so in an INFO message,
 `RELATION_UNCHECKED`. `--json` prints one JSON object instead of text.
 
+A claim can declare the paths that it needs, as `required_paths` in the plan. When a ticket's
+claim declares a path that the ticket's `bounds` do not cover, `check` gives a WARNING,
+`CLAIM_READS_OUTSIDE_BOUNDS`. A finding in that path is one that the ticket's work may not
+repair. Widen `bounds`, or put a ticket that repairs it first in `blocked-by`. A claim that
+declares no paths is not examined, because the plan does not say what its command reads.
+
 In text, the warnings for claims that the plan does not define yet (`CLAIM_PLANNED`) are one
 row after the other findings. The row gives their number and their tickets. `--json` lists each
 claim on its ticket.

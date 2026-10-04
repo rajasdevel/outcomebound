@@ -128,6 +128,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
     Level.WARNING: (
         "BRIEF_THIN",
         "CLAIM_PLANNED",
+        "CLAIM_READS_OUTSIDE_BOUNDS",
         "BOUNDS_WHOLE_REPOSITORY",
         "DISCOVERED_FROM_ABSENT",
     ),
