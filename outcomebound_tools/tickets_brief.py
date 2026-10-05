@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import os.path
+import re
 import shlex
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -52,7 +53,7 @@ from outcomebound_tools.tickets_model import (
     ReadResult,
     Ticket,
 )
-from outcomebound_tools.tickets_report import Level, Refusal
+from outcomebound_tools.tickets_report import Level, Refusal, held
 from outcomebound_tools.tickets_store import read_store
 
 __all__ = ["brief"]
@@ -171,21 +172,52 @@ def _drafted(paths: Sequence[str], declaration: Declaration, wanted: str) -> Tic
     return ticket
 
 
-def _store_id(wanted: str) -> str:
+# `<owner>/<name>#<n>`, the form the tracker itself writes a reference in.
+_QUALIFIED = re.compile(r"(?P<repo>[^/\s#]+/[^/\s#]+)#(?P<number>[0-9]+)", re.ASCII)
+
+
+def _store_id(wanted: str, declaration: Declaration) -> str:
     """The id a store ticket is named by: a bare issue number is `#<n>`.
 
     A shell reads `#20` as the start of a comment unless it is quoted, so a
     person types `20`; the tracker's own ids are all `#<n>`, and a bare number
-    names nothing else.
+    names nothing else. `<owner>/<name>#<n>` is how the tracker writes a
+    reference, and it is `#<n>` where it names the declared repository, which
+    the tracker compares without case. Another repository's issue is not in
+    this store, so it is refused by name rather than reported as missing.
     """
 
-    return f"#{wanted}" if wanted.isdecimal() and wanted.isascii() else wanted
+    if wanted.isdecimal() and wanted.isascii():
+        return f"#{wanted}"
+    qualified = _QUALIFIED.fullmatch(wanted)
+    if qualified is None:
+        return wanted
+    if qualified["repo"].casefold() != declaration.repo.casefold():
+        raise Refusal(
+            "TICKET_NOT_FOUND",
+            f"{wanted} names the repository {qualified['repo']}; this project's declaration "
+            f"names {declaration.repo}, and its store holds that repository's tickets only",
+        )
+    return f"#{qualified['number']}"
 
 
-def _from_store(read: ReadResult, given: str) -> Ticket:
+def _export_said(read: ReadResult) -> str:
+    """The export a run read, as a refusal names it: path, time, age and id range."""
+
+    source = read.input
+    if source is None:
+        return ""
+    if source.modified is None or source.age_seconds is None:
+        written = "written at a time standard input does not carry"
+    else:
+        written = f"written {source.modified} ({source.age_seconds}s ago)"
+    return f"; the export {source.path}, {written}, {held(source)}"
+
+
+def _from_store(read: ReadResult, given: str, declaration: Declaration) -> Ticket:
     """The one ticket this run is about. A reader holds at most one per id."""
 
-    wanted = _store_id(given)
+    wanted = _store_id(given, declaration)
     for ticket in read.tickets:
         if ticket.id == wanted:
             return ticket
@@ -198,8 +230,10 @@ def _from_store(read: ReadResult, given: str) -> Ticket:
         )
     raise Refusal(
         "TICKET_NOT_FOUND",
-        f"the declared store holds no ticket {wanted}; name a ticket the store carries, "
-        "because a brief is compiled from the ticket it names and from no other",
+        f"the declared store holds no ticket {wanted}{_export_said(read)}; a ticket newer "
+        "than the export needs a new export (`outcomebound tickets export` prints the "
+        "command); name a ticket the store carries, because a brief is compiled from the "
+        "ticket it names and from no other",
     )
 
 
@@ -224,7 +258,7 @@ def _subject(root: Path, declaration: Declaration, options: argparse.Namespace) 
     if options.draft:
         return _Subject(_drafted(options.draft, declaration, options.ticket), None)
     read = read_store(root, declaration, options.input)
-    return _Subject(_from_store(read, options.ticket), read)
+    return _Subject(_from_store(read, options.ticket, declaration), read)
 
 
 # --- what is refused ---------------------------------------------------------------

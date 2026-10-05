@@ -759,16 +759,21 @@ class Ticket:
 
 @dataclass(frozen=True, slots=True)
 class InputInfo:
-    """The export a verb was given, when it was written and how old it is.
+    """The export a verb was given, when it was written, how old it is, what it holds.
 
     `modified` and `age_seconds` are None for input read from standard input,
-    whose age a report says is unknown. It satisfies `tickets_report.InputSource`
-    structurally, so that module imports nothing from this one.
+    whose age a report says is unknown. `ids` is the lowest and the highest
+    issue number the export holds, tickets and other issues alike, and None
+    where it holds none or was not read yet: a ticket newer than the export is
+    one above that range, which is what a reader is told when it names one. It
+    satisfies `tickets_report.InputSource` structurally, so that module imports
+    nothing from this one.
     """
 
     path: str
     modified: str | None = None
     age_seconds: int | None = None
+    ids: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

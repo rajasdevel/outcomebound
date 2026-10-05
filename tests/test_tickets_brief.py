@@ -824,6 +824,47 @@ def test_a_bare_issue_number_names_the_store_ticket(tmp_path: Path) -> None:
     assert compiled(root, TICKET.lstrip("#")) == compiled(root, TICKET)
 
 
+def test_a_repository_qualified_id_of_the_declared_repository_names_the_store_ticket(
+    tmp_path: Path,
+) -> None:
+    """`owner/project#1` is how the tracker writes a reference; naming the declared
+    repository, in any case, it is `#1` and compiles the same document."""
+
+    root = store(tmp_path)
+
+    assert compiled(root, f"{REPO}{TICKET}") == compiled(root, TICKET)
+    assert compiled(root, f"{REPO.upper()}{TICKET}") == compiled(root, TICKET)
+
+
+def test_a_repository_qualified_id_of_another_repository_is_refused_by_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Another repository's issue is not in this store: the refusal names both
+    repositories, so the reader sees which one the declaration reads."""
+
+    line = refused(store(tmp_path), f"someone/else{TICKET}", capsys=capsys)
+
+    assert line.startswith("TICKET_NOT_FOUND: ")
+    assert "someone/else" in line and REPO in line
+
+
+def test_ticket_not_found_names_the_export_its_time_and_the_ids_it_holds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A ticket newer than the export is above the range the refusal names, beside
+    the export's path, written time and age; the age alone refuses nothing."""
+
+    root, source = tracked(tmp_path)
+
+    line = refused(root, "#3", capsys=capsys)
+
+    assert line.startswith("TICKET_NOT_FOUND: ")
+    assert source in line
+    assert re.search(r"written \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ \(\d+s ago\)", line), line
+    assert "holds #1 to #2" in line
+    assert "tickets export" in line
+
+
 def test_a_draft_is_named_by_its_own_file(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

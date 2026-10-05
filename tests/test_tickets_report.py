@@ -58,6 +58,7 @@ class _Export:
     path: str
     modified: str | None
     age_seconds: int | None
+    ids: tuple[int, int] | None = None
 
 
 def _schema() -> dict[str, object]:
@@ -288,6 +289,31 @@ def test_input_read_from_standard_input_has_no_modification_time() -> None:
     assert "age unknown" in render_text(report)
 
 
+def test_the_input_line_names_the_ids_the_export_holds() -> None:
+    """A ticket newer than the export is above the range the line names; the JSON
+    report keeps its schema's three `input` keys."""
+
+    held = Report(
+        verb="check",
+        store="github",
+        input=_Export(
+            path="issues.json", modified="2026-09-20T09:00:00Z", age_seconds=120, ids=(3, 42)
+        ),
+    )
+    empty = Report(
+        verb="check",
+        store="github",
+        input=_Export(path="issues.json", modified="2026-09-20T09:00:00Z", age_seconds=120),
+    )
+
+    assert (
+        "input: issues.json; modified 2026-09-20T09:00:00Z; age 120s; holds #3 to #42"
+        in render_text(held)
+    )
+    assert "age 120s; holds no issue" in render_text(empty)
+    assert validate(json.loads(render_json(held)), _schema()) == []
+
+
 def test_text_report_is_stable_and_names_every_subject() -> None:
     report = _text_subject()
     text = render_text(report)
@@ -313,8 +339,8 @@ def test_a_report_key_the_schema_does_not_declare_is_refused() -> None:
 # --- the command skeleton --------------------------------------------------------
 
 
-def test_verbs_are_check_brief_and_publish() -> None:
-    assert tuple(VERBS) == ("check", "brief", "publish")
+def test_verbs_are_check_brief_publish_and_export() -> None:
+    assert tuple(VERBS) == ("check", "brief", "publish", "export")
     parser = build_parser()
     for name in VERBS:
         assert parser.parse_args([name, "."]).verb == name
@@ -336,11 +362,20 @@ def test_the_target_defaults_to_the_current_directory() -> None:
     assert build_parser().parse_args(["check"]).target == "."
 
 
-def test_every_verb_takes_the_export_as_input() -> None:
+def test_every_verb_that_reads_the_store_takes_the_export_as_input(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`export` prints the command that makes an export and reads none, so it
+    refuses `--input` as a usage error rather than ignoring it."""
+
     parser = build_parser()
-    for name in VERBS:
+    for name in ("check", "brief", "publish"):
         assert parser.parse_args([name, ".", "--input", "issues.json"]).input == "issues.json"
     assert parser.parse_args(["check", "."]).input is None
+    with pytest.raises(SystemExit) as raised:
+        parser.parse_args(["export", ".", "--input", "issues.json"])
+    assert raised.value.code == 2
+    assert "--input" in capsys.readouterr().err
 
 
 def test_every_verbs_options_are_total() -> None:
