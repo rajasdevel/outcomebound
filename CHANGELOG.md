@@ -12,43 +12,89 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-05
+
+A minor release. Tickets that land together now pass the project's merge gate once, at their
+landing, and the goal envelope names the landing grain (#71, #74). The finish check no longer holds
+a turn when a Done command cannot find a tool, and `adopt --finish-check` now measures Done as a
+hook runs it, with no activated virtual environment (#72, #74). #70 and #73 change only this
+repository's tests and release process; they change nothing that an install receives.
+
+Do these steps first:
+
+1. If you upgrade from 1.1.1 or earlier, do the steps of the 1.2.0 section first.
+2. Install the release:
+   `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.3.0`. Then run
+   `outcomebound adopt .` in each project again, and commit all that it writes, with
+   `.outcomebound/manifest.json`. The manifest stays at format 2.
+3. If your CI installs a pinned release and runs `outcomebound adopt . --check`, change the pin to
+   `v1.3.0` in the same change as step 2. With the old pin and the new install, the check fails.
+   With the new pin and the old install, the check also fails.
+4. If you edited a copy of a shipped fragment that this release changes
+   (`.outcomebound/fragments/tickets.md` or `python.md`), adopt refuses it as before. Move the edit
+   to `.outcomebound/fragments/local.md` or to your own instructions, and run adopt again.
+5. Make sure that each Done command names the project's interpreter, for example
+   `.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH. A
+   hook runs Done with no activated virtual environment, so a bare `pytest` that only an activated
+   environment holds cannot run at a turn end. A Makefile target that runs `pytest` has the same
+   problem: make it run `$(PYTHON) -m pytest`, with `PYTHON` set to the project's interpreter.
+6. If the project has a finish-check hook and adopt gives a note that the known-failure record was
+   measured with the PATH of the agent that ran adopt, do step 5 first. Then run
+   `outcomebound adopt . --finish-check`. It keeps each failure that it finds as known, so read the
+   failures that it reports before you accept them.
+7. When you next write a goal envelope that runs tickets, state the landing grain on its
+   `Authorized` line: per ticket, or per batch of tickets. Where neither the envelope nor the
+   project's instructions state it, each ticket is its own landing. An envelope that runs now
+   stays as it is.
+8. In Codex, trust the finish-check hook again in `/hooks` only if the install report gives an
+   `action` line for it. Then run `outcomebound adopt . --check` with the new engine, and run the
+   project's Done checks.
+
 ### Changed
 
-- The `tickets` fragment (version 9): tickets that land together pass the project's gate once, at
-  their landing. The Done commands, the broad suite and a review that the project requires before a
-  merge run once for each landing, not once for each ticket. The `done-when` claims of each ticket
-  still run, and the handover still reports them for each ticket. Before, nothing said that a
-  landing can hold several tickets, so a project rule such as "a review before every merge" ran once
-  for each ticket of a breakdown.
+- The `tickets` fragment (version 10): tickets that land together pass the project's merge gate
+  once, at their landing (#71, #74). The merge gate is the project's Done commands, the broad suite
+  and a review that the project requires before a merge. The `done-when` claims of each ticket
+  still run, and the handover still reports them for each ticket. The implementer still runs Done
+  before each commit, as for any change. The landing grain is per ticket or per batch of tickets,
+  as the project's instructions or the goal envelope state it. Where neither states it, each ticket
+  is its own landing. Before, nothing said that a landing can hold several tickets, so a project
+  rule such as "a review before every merge" ran once for each ticket of a breakdown.
 - The goal template: the `Authorized` line names the landing grain, per ticket or per batch of
-  tickets, so the person states it in the envelope.
-  Where neither the project's instructions nor the envelope set the grain, the agent chooses it
-  and names it in the handover.
-- `make canary` runs before each pull request that changes `adopt`, `tickets`, `floor`,
-  `instructions` or `discovery` lands, as before, but one run on a commit that holds several such
-  pull requests now covers all of them. It also runs on the release commit, as before.
+  tickets, and says that an unstated grain is per ticket (#71, #74).
+- The `hand-off-tickets` skill: a ticket lands through the project's gate alone or with the batch
+  that it lands with (#74).
+- The `python` fragment (version 7): a Done command names the project's interpreter, such as
+  `.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH,
+  because a hook runs it with no activated virtual environment (#72, #74).
 
 ### Fixed
 
 - The finish check held a turn when a Done command such as `make test` could not find a tool,
-  for example `make: pytest: No such file or directory`. make, a script or a Python launcher
-  between the hook and the tool turns the shell's exit 127 into its own exit code, so the engine
-  read a failure that the agent's change caused. Now a failing command whose last line of output
-  says that a tool is not on the PATH, in one of the forms that the finish-check design lists
-  (make's, a script's, a shell's and a Python launcher's), reads `UNVERIFIED` and holds nothing,
-  and the report names the tool. A test's own `FileNotFoundError` or `ModuleNotFoundError`
-  message still fails. So does a missing path of the project, such as a script that the change
-  removed (`make: ./scripts/lint.sh: No such file or directory`), and a missing module that is in
-  the project or in its last commit, because no PATH finds those.
+  for example `make: pytest: No such file or directory` (#72, #74). make, a script or a Python
+  launcher between the hook and the tool turns the shell's exit 127 into its own exit code, so the
+  engine read a failure that the agent's change caused. Now such a line reads `UNVERIFIED` and
+  holds nothing, and the report names the tool, only when all of these are true:
+  - the line is the last line of the command's output, in one of the forms that the finish-check
+    design lists (make's, a script's, a shell's and a Python launcher's);
+  - the tool is not on the PATH that the command runs with, or the Python launcher cannot find the
+    module;
+  - the tool is not a part of the project: not a path in the project, not an executable file that
+    Git tracks, and not a module at the project root or under `src/`;
+  - the output shows no other failure: no failure id, no count of failed tests or errors, and no
+    second failed make target.
+  In all other cases, the command fails as before. A test's own `FileNotFoundError` or
+  `ModuleNotFoundError` message still fails. So does a missing path of the project, such as a
+  script that the change removed (`make: ./scripts/lint.sh: No such file or directory`).
 - `adopt --finish-check` measured Done with the PATH of the agent that ran it, so a Done that
   needs an activated virtual environment was recorded as passing and then could not run at any
-  turn end. Now the measurement leaves out each PATH entry inside the project and each virtual
-  environment's `bin`, and `VIRTUAL_ENV`, as the hook of a desktop harness runs Done. A command
-  that fails without them runs once more with them; where it then passes, it reads `UNVERIFIED`,
-  and adopt keeps no known failure for it. The install report names the entries it left out.
-- The `python` fragment (version 7) says that a Done command names the project's interpreter,
-  such as `.venv/bin/python -m pytest` or `uv run pytest`, because a hook runs it with no
-  activated virtual environment.
+  turn end (#72, #74). Now the measurement leaves out `VIRTUAL_ENV`, each PATH entry inside the
+  project (an empty or relative entry is read from the project root), and each virtual
+  environment's `bin`, as the hook of a desktop harness runs Done. A command that fails without
+  them runs once more with them. Where it then passes, runs differently or cannot run, it reads
+  `UNVERIFIED`, and adopt keeps no known failure for it. The install report names the entries that
+  it left out. A known-failure record now holds the field `as_hook`. For a record without it, adopt
+  gives a note, and step 6 above says what to do. An engine of 1.2.0 or earlier ignores the field.
 
 ## [1.2.0] - 2026-10-05
 
@@ -644,7 +690,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.3.0
 [1.2.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.2.0
 [1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
 [1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
