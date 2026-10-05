@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -495,11 +496,14 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
 ) -> None:
     """Breaks if a slow check is left for the harness to cut off, if the commands do not stop
     the margin before the entry's own timeout, if a process it started keeps running, or if the
-    report offers shortening Done before a longer limit: the entry's timeout is one second past
-    the margin."""
+    report offers shortening Done before a longer limit. The commands get the seconds of
+    `limit` past the margin, less what the hook's Git reads take before they start: enough that a
+    loaded machine still starts the command, and the elapsed seconds the report names are read,
+    not assumed."""
 
     root, digest = target(tmp_path / "t", ["sleep 60 & echo $! > child.pid; wait"])
-    timeout = finish_check.MARGIN_SECONDS + 1
+    limit = 5
+    timeout = finish_check.MARGIN_SECONDS + limit
     started = time.monotonic()
 
     _, verdict = hook("codex", digest, root, cwd=root, timeout=timeout)
@@ -509,11 +513,13 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     message = verdict["systemMessage"]
     assert message.startswith(
         f"finish-check UNVERIFIED: `sleep 60 & echo $! > child.pid; wait` did not finish within "
-        f"1 s, {finish_check.MARGIN_SECONDS} s before the hook's {timeout} s timeout"
+        f"{limit} s, {finish_check.MARGIN_SECONDS} s before the hook's {timeout} s timeout"
     )
     assert f"--finish-timeout <seconds>`, for example {2 * timeout}" in message
     assert message.index("--finish-timeout") < message.index("--no-finish-check")
-    assert "stopped at the time limit after 1 s" in message
+    stopped = re.search(r"stopped at the time limit after (\d+) s", message)
+    assert stopped is not None and int(stopped.group(1)) <= limit, message
+    assert (root / "child.pid").exists(), f"the command never started: {message}"
     child = int((root / "child.pid").read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and _alive(child):
