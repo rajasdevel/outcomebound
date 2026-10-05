@@ -7,7 +7,7 @@
 # this from whatever your CI already runs -- a script step, a shell job, a
 # task/tox/nox target.
 # `outcomebound` must be on PATH: install it at a pinned release with
-#   uv tool install "git+https://github.com/rajasdevel/outcomebound@v1.1.1"
+#   uv tool install "git+https://github.com/rajasdevel/outcomebound@v1.2.0"
 # (or `pipx install` of the same, or `pip install` of it into a virtual
 # environment), or link a checkout's scripts/outcomebound. If you install from a
 # fork, change the URL to your fork's.
