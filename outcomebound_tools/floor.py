@@ -1111,6 +1111,11 @@ TRAILER = re.compile(
     r"^Floor-Loosening:[ \t]*(?P<what>[^\n]*?[^;\s])[ \t]*;[ \t]*ruled[ \t]+(?P<ruling>\S+)[ \t]*$",
     re.MULTILINE,
 )
+TRAILER_START = re.compile(r"^Floor-Loosening:[^\n]*$", re.MULTILINE)
+UNPARSED = (
+    "a Floor-Loosening line that does not parse: it reads `<what>; ruled <id>`, "
+    "the id one word (`Project-D31`, not `Project D31`)"
+)
 
 
 def _tool_table(name: str) -> bool:
@@ -1496,8 +1501,9 @@ def _made(
     return made
 
 
-def _messages(root: Path, start: str, head: str) -> dict[str, list[str]]:
-    """Each commit in `start..head` with the `Floor-Loosening` lines its message carries."""
+def _messages(root: Path, start: str, head: str) -> tuple[dict[str, list[str]], frozenset[str]]:
+    """Each commit in `start..head` with the `Floor-Loosening` lines its message carries, and
+    the commits whose message holds a line that starts `Floor-Loosening:` and does not parse."""
 
     log = _git(
         root,
@@ -1509,12 +1515,15 @@ def _messages(root: Path, start: str, head: str) -> dict[str, list[str]]:
         f"{start}..{head}",
     ).decode("utf-8", "replace")
     ruled: dict[str, list[str]] = {}
+    unparsed: set[str] = set()
     for record in log.split("\x1e"):
         commit, _, message = record.strip().partition("\x1f")
         lines = [f"{found['what']}; ruled {found['ruling']}" for found in TRAILER.finditer(message)]
         if commit and lines:
             ruled[commit] = lines
-    return ruled
+        if commit and any(not TRAILER.match(line) for line in TRAILER_START.findall(message)):
+            unparsed.add(commit)
+    return ruled, frozenset(unparsed)
 
 
 def _shown(kind: str, path: str, units: Counter[Unit]) -> str:
@@ -1544,7 +1553,7 @@ def _rulings(
     `<what>` is free text, so a line written before this rule reads as it did."""
 
     made = _made(root, start, head, units, added)
-    ruled = _messages(root, start, head)
+    ruled, unparsed = _messages(root, start, head)
     groups: dict[tuple[str, ...], Counter[Unit]] = {}
     for unit, n in sorted(units.items(), key=lambda item: (item[0][0] == "directive", item[0])):
         kind, path, what = unit
@@ -1559,11 +1568,12 @@ def _rulings(
             by = [commit for commit, own in made.items() if own[unit] > 0]
             makers.update(dict.fromkeys(by))
             short = short or sum(made[commit][unit] for commit in by) < n
-        unruled = [commit[:12] for commit in makers if commit not in ruled]
         reasons = []
-        if unruled:
-            verb = "carries" if len(unruled) == 1 else "carry"
-            reasons.append(f"{', '.join(unruled)} {verb} no Floor-Loosening line")
+        for misread, what in ((False, "no Floor-Loosening line"), (True, UNPARSED)):
+            unruled = [c[:12] for c in makers if c not in ruled and (c in unparsed) == misread]
+            if unruled:
+                verb = "carries" if len(unruled) == 1 else "carry"
+                reasons.append(f"{', '.join(unruled)} {verb} {what}")
         if short:
             reasons.append("no commit's own diff makes all of it")
         text = _shown(kind, path, group)

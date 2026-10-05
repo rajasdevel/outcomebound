@@ -44,7 +44,8 @@ folder or a file whose `gitdir:` names one; `HEAD`'s ref is read from the loose 
 `commondir` for a worktree), then `packed-refs`; a detached `HEAD` as it is; else `unknown`.
 Refusals go to standard error as `research: <PATH>: <why>`, exit 1, nothing on standard output:
 not a bounded path; a symlink on the way; a folder; not in the clone (`INDEX.md` lists every
-document).
+document; for a path under `models/`, `models/README.md` says which models have a file, and a
+model with no file takes the spec tier, `applications/implementer-tiers.md`).
 
 **Not configured** (exit 3, standard error): `research: no clone configured: <why>`, then
 `read it at <public blob URL of PATH>` and `clone it once per machine, with the person's yes:

@@ -291,6 +291,11 @@ def _why_not(root: Path, path: str, message: str) -> str:
     target = root / path
     if target.is_dir():
         return "a folder, not a document"
+    if not target.exists() and path.startswith("models/"):
+        return (
+            "not in the clone; models/README.md says which models have a file, and a model "
+            "with no file takes the spec tier (applications/implementer-tiers.md)"
+        )
     if not target.exists():
         return f"not in the clone; {INDEX} lists every document"
     return message

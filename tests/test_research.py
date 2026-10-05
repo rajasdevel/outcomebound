@@ -248,9 +248,19 @@ def test_a_folder_and_a_missing_file_are_refused_and_the_missing_one_points_at_t
     status, out, err = run(capsys, "models")
     assert (status, out) == (1, "")
     assert "a folder" in err
-    status, out, err = run(capsys, "models/absent.md")
+    status, out, err = run(capsys, "practices/absent.md")
     assert (status, out) == (1, "")
     assert "not in the clone; INDEX.md lists every document" in err
+
+
+def test_a_missing_model_file_names_the_models_readme_and_the_default_tier(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    link_to(home, make_clone(tmp_path / "clone"))
+    status, out, err = run(capsys, "models/maker/absent-model.md")
+    assert (status, out) == (1, "")
+    assert "models/README.md says which models have a file" in err
+    assert "takes the spec tier (applications/implementer-tiers.md)" in err
 
 
 def test_the_variable_overrides_the_link(
