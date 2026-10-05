@@ -4,8 +4,10 @@
 `VERSION`, the dated `CHANGELOG.md` section, its link and the `[Unreleased]` compare link that
 starts at it, and the release the README and the
 shipped CI template install name one version, on a tree that matches HEAD. With `--tag`, the
-tag is `v<VERSION>`, annotated, and on HEAD. One line per check; exit 1 when any fails.
-`make release-check` runs this before the tag is pushed, and CI runs it again on the tag.
+tag is `v<VERSION>`, annotated, and on HEAD, and HEAD has a passing CI run of a push to main, so
+no release is cut from a main that failed. One line per check; exit 1 when any fails.
+`make release-check TAG=v<VERSION>` runs this on the tag made locally, before it is pushed, and CI
+runs it again on the tag.
 
 A last line says whether a grant in `.outcomebound/tag-grants.json` lets an agent push the tag
 today; it is no check, since a maintainer's own tag needs none.
@@ -14,7 +16,9 @@ today; it is no check, since a maintainer's own tag needs none.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
+import os
 import re
 import subprocess
 import sys
@@ -42,7 +46,59 @@ def _pins(root: Path) -> dict[str, list[str]]:
     return {name: PIN.findall((root / name).read_text(encoding="utf-8")) for name in files}
 
 
-def checks(root: Path, tag: str | None) -> list[tuple[bool, str]]:
+API_HOST = "api.github.com"
+API_PATH = "/repos/rajasdevel/outcomebound"
+
+
+def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
+    """The CI runs of `head`, from GitHub (with `GH_TOKEN` or `GITHUB_TOKEN` where set) or, for a
+    check with no network, from the JSON file `source` that holds GitHub's answer."""
+
+    if source is not None:
+        answer = json.loads(source.read_text(encoding="utf-8"))
+    else:
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "outcomebound-release-check",
+        }
+        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        connection = http.client.HTTPSConnection(API_HOST, timeout=30)
+        try:
+            connection.request(
+                "GET",
+                f"{API_PATH}/actions/workflows/ci.yml/runs?head_sha={head}&per_page=100",
+                headers=headers,
+            )
+            response = connection.getresponse()
+            body = response.read()
+        finally:
+            connection.close()
+        if response.status != 200:
+            raise OSError(f"GitHub answered {response.status}")
+        answer = json.loads(body)
+    runs = answer.get("workflow_runs", []) if isinstance(answer, dict) else []
+    return [run for run in runs if isinstance(run, dict)]
+
+
+def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
+    """Whether a CI run of a push to main passed on `head`."""
+
+    try:
+        runs = ci_runs(head, source)
+    except (OSError, ValueError) as error:
+        return False, f"HEAD's CI run on main could not be read: {error}"
+    on_main = [
+        run for run in runs if run.get("event") == "push" and run.get("head_branch") == "main"
+    ]
+    if any(run.get("conclusion") == "success" for run in on_main):
+        return True, "HEAD has a passing CI run of a push to main"
+    seen = ", ".join(sorted({str(run.get("conclusion") or run.get("status")) for run in on_main}))
+    return False, f"HEAD has no passing CI run of a push to main ({seen or 'none'})"
+
+
+def checks(root: Path, tag: str | None, runs: Path | None = None) -> list[tuple[bool, str]]:
     version = (root / "VERSION").read_text(encoding="utf-8").strip()
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8").splitlines()
     pins = _pins(root)
@@ -90,6 +146,7 @@ def checks(root: Path, tag: str | None) -> list[tuple[bool, str]]:
                 head is not None and _git(root, "rev-parse", f"refs/tags/{tag}^{{commit}}") == head,
                 f"{tag} points at HEAD",
             ),
+            main_ci(head or "", runs),
         ]
     return results
 
@@ -120,8 +177,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--tag", help="the release tag to check as well, e.g. v1.0.0")
     parser.add_argument("--root", type=Path, default=Path("."), help="the checkout (default .)")
+    parser.add_argument(
+        "--ci-runs",
+        type=Path,
+        help="with --tag: a JSON file holding GitHub's list of HEAD's CI runs, read in place of "
+        "GitHub, for a check with no network",
+    )
     args = parser.parse_args(argv)
-    results = checks(args.root, args.tag)
+    results = checks(args.root, args.tag, args.ci_runs)
     for passed, what in results:
         print(f"{'PASS' if passed else 'FAIL'} {what}")
     print(grant(args.root, date.today()))

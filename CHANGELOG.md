@@ -7,7 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 The bump comes from what an adopter must do, not from the commit type; see
 [docs/VERSIONING.md](docs/VERSIONING.md). Released sections are not edited.
 
-`[Unreleased]` is the staging area for accepted changes.
+Each release section is written when the release is prepared, from the pull requests that
+landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 

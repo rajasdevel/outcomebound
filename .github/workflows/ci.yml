@@ -7,12 +7,18 @@ on:
   pull_request:
     branches: [main]
 
-# No concurrency group: a waiting run that a newer push cancelled would leave its push's changes
-# unread by the floor's loosening check, whose base is the commit that push replaced.
+# A newer push to a pull request cancels the run on its older head, which can never merge; the
+# new run reads the whole pull request from its base, so the floor's loosening check reads every
+# commit. A push to main or a tag is never cancelled: each run's group is its own commit, since the
+# loosening check of a push reads the commits since the commit that push replaced.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# The job reads the repository and writes nothing back to it.
+# The job reads the repository, and on a tag the runs of CI, and writes nothing back to it.
 permissions:
   contents: read
+  actions: read
 
 jobs:
   test:
@@ -41,6 +47,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           RELEASE_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # A checkout can leave the tag lightweight (actions/checkout before v6.0.2 did); fetch
           # the annotated tag before reading it.
