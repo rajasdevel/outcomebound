@@ -229,7 +229,9 @@ those checks ran is not tested with the pull request until the run on `main` aft
 that run fails, the required status `main-green` (the workflow `main-green.yml`) fails on every
 open pull request, so nothing lands until `main` passes again, except a pull request labelled
 `main-fix`: the fix, or the revert of the merge that broke `main`. Fix or revert first, and land
-nothing else while `main` is red. CI checks the title and the description
+nothing else while `main` is red. The label goes only on a pull request whose change is that fix or
+revert, and its description names the commit that broke `main`. A status belongs to a commit, not
+to a pull request, so the label lets every pull request whose head is the same commit through. CI checks the title and the description
 again each time they change, and checks that each commit of the pull request, except a merge
 commit, has a `Signed-off-by` line (the workflow `pr-text.yml`).
 

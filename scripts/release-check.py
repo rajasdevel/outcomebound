@@ -48,6 +48,7 @@ def _pins(root: Path) -> dict[str, list[str]]:
 
 API_HOST = "api.github.com"
 WORKFLOW = ".github/workflows/ci.yml"
+REPOSITORY_NAME = "rajasdevel/outcomebound"
 API_PATH = "/repos/rajasdevel/outcomebound"
 
 
@@ -101,10 +102,15 @@ def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
         and run.get("path") == WORKFLOW
         and run.get("event") in ("push", "workflow_dispatch")
         and run.get("head_branch") == "main"
+        and isinstance(run.get("repository"), dict)
+        and run["repository"].get("full_name") == REPOSITORY_NAME
     ]
-    if any(
-        run.get("status") == "completed" and run.get("conclusion") == "success" for run in on_main
-    ):
+    # The newest completed run decides: an older pass does not outweigh a newer failure.
+    completed = sorted(
+        (run for run in on_main if run.get("status") == "completed"),
+        key=lambda run: str(run.get("created_at") or ""),
+    )
+    if completed and completed[-1].get("conclusion") == "success":
         return True, "HEAD has a passing CI run on main"
     seen = ", ".join(sorted({str(run.get("conclusion") or run.get("status")) for run in on_main}))
     return False, f"HEAD has no passing CI run on main ({seen or 'none'})"

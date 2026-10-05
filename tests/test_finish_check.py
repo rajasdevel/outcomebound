@@ -550,6 +550,14 @@ def test_the_install_report_names_the_entries_the_measurement_left_out(tmp_path:
             "make -k a b",
             id="make-k",
         ),
+        pytest.param(
+            {},
+            f"{sys.executable} -c 'assert 1 == 2'; no-such-tool-here; exit 2",
+            id="traceback",
+        ),
+        pytest.param(
+            {}, "printf 'FAILED tests/a.py::t\\n'; no-such-tool-here", id="exit-127-after-failure"
+        ),
     ],
 )
 def test_a_missing_tool_after_another_failure_still_holds(
@@ -649,6 +657,20 @@ def test_a_module_is_the_projects_only_at_its_root_or_under_src(tmp_path: Path) 
     subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "docs"], check=True)
 
     assert not finish_check.project_owned(root, "python -m pytest")
+
+
+def test_the_absence_check_reads_a_relative_path_entry_from_the_target(tmp_path: Path) -> None:
+    """Breaks if a relative PATH entry is read from the engine's own folder, though Done runs
+    from the target's root, so a tool in the target's `bin` reads absent."""
+
+    root = tmp_path / "project"
+    (root / "bin").mkdir(parents=True)
+    (root / "bin/mytool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (root / "bin/mytool").chmod(0o755)
+    line = b"run.sh: line 3: mytool: command not found\n"
+
+    assert not finish_check.confirmed_absent(root, line, {"PATH": "bin"})
+    assert finish_check.confirmed_absent(root, line, {"PATH": "/nowhere"})
 
 
 def test_a_record_1_0_0_wrote_reads_as_a_pass_and_an_unreadable_one_as_none() -> None:

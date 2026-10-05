@@ -32,10 +32,18 @@ CASES = {
     "main-other-commit": "no passing CI run on main (none)",
     "main-other-workflow": "no passing CI run on main (none)",
     "main-by-hand": None,
+    "main-fork": "no passing CI run on main (none)",
+    "main-pass-then-fail": "no passing CI run on main (failure, success)",
 }
 
 # GitHub's answer for HEAD's CI runs in each case; every other case has a passing run on main.
-MAIN = {"path": ".github/workflows/ci.yml", "event": "push", "head_branch": "main"}
+MAIN = {
+    "path": ".github/workflows/ci.yml",
+    "event": "push",
+    "head_branch": "main",
+    "repository": {"full_name": "rajasdevel/outcomebound"},
+    "created_at": "2026-10-05T10:00:00Z",
+}
 RUNS = {
     "main-red": [{**MAIN, "status": "completed", "conclusion": "failure"}],
     "main-unrun": [
@@ -49,6 +57,18 @@ RUNS = {
     ],
 }
 PASSING = [{**MAIN, "status": "completed", "conclusion": "success"}]
+RUNS["main-fork"] = [
+    {
+        **MAIN,
+        "repository": {"full_name": "someone/outcomebound"},
+        "status": "completed",
+        "conclusion": "success",
+    }
+]
+RUNS["main-pass-then-fail"] = [
+    {**MAIN, "status": "completed", "conclusion": "success"},
+    {**MAIN, "created_at": "2026-10-05T11:00:00Z", "status": "completed", "conclusion": "failure"},
+]
 RUNS["main-by-hand"] = [
     {**MAIN, "event": "workflow_dispatch", "status": "completed", "conclusion": "success"}
 ]

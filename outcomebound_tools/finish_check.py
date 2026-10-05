@@ -617,10 +617,23 @@ _MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: (?:\*\*\* |(?:Leaving|Entering) di
 
 
 def _missing_line(output: bytes) -> re.Match[str] | None:
+    """The runner's not-found line, where it is the command's only word: the last line, make's
+    own lines after it aside, with nothing before it but make's directory lines and the echo of a
+    command that starts with the missing tool. Output before it means something else ran, and a
+    missing last tool does not show that it passed."""
+
     lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
     while lines and _MAKE_ERROR.match(lines[-1]):
         lines.pop()
-    return _MISSING.match(lines[-1]) if lines else None
+    found = _MISSING.match(lines[-1]) if lines else None
+    if found is None:
+        return None
+    tool = found["made"] or found["scripted"] or found["shelled"] or found["launcher"] or ""
+    for before in lines[:-1]:
+        echoed = before.split(" ", 1)[0] in (tool, Path(tool).name)
+        if not (echoed or _MAKE_ERROR.match(before)):
+            return None
+    return found
 
 
 def missing_tool(output: bytes) -> str | None:
@@ -650,7 +663,9 @@ def confirmed_absent(
     found = _missing_line(output)
     if found is None:
         return False
-    path = (environment if environment is not None else os.environ).get("PATH", "")
+    # Done runs from the target's root, so an empty or relative entry names a folder of it.
+    entries = (environment if environment is not None else os.environ).get("PATH", "")
+    path = os.pathsep.join(str((target / entry).resolve()) for entry in entries.split(os.pathsep))
     if not found["module"]:
         tool = found["made"] or found["scripted"] or found["shelled"]
         return shutil.which(tool, path=path) is None
@@ -911,7 +926,7 @@ def run_one(
         if code == 0:
             return Result(line, PASS, elapsed, code=code)
         tail = _tail(sink)
-        if code in NOT_RUN:
+        if code in NOT_RUN and not other_failure(tail):
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
         missing = missing_tool(tail)
