@@ -81,10 +81,11 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ### Changed
 
-- `floor --help` and the `python` fragment (version 6) now say that a check which runs only in a
-  container or a managed environment keeps its floor claim and its baseline, through the claim's
-  `prefix`, such as `["docker", "compose", "run", "--rm", "app"]`. The engine already did this, but
-  no document that an agent reads said so. Agents believed that the floor runs host tools only,
+- `floor --help` and the `python` and `node-typescript` fragments (version 6 each) now say that a
+  check which runs only in a container or a managed environment keeps its floor claim and its
+  baseline, through the claim's `prefix`, such as `["docker", "compose", "run", "--rm", "app"]`.
+  The engine already did this, and `floor check --help` said so, but the top-level `floor --help`
+  and the fragments that agents read did not. Agents believed that the floor runs host tools only,
   and held work for an engine change that was not necessary.
 
 ### Fixed
