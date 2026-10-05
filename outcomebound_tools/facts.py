@@ -461,14 +461,16 @@ def render(
     )
 
 
+def inline(fragment: Fragment) -> str:
+    """A fragment's text as the pointers block inlines it: its heading line, then its body."""
+
+    return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
+
+
 def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) -> str | None:
     """The `local` fragment inline, then one pointer line per fragment and skill; None if empty."""
 
-    parts = [
-        f"**{item.id}** ({item.family}) — {item.applies}\n\n{item.body}"
-        for item in selected
-        if item.id == LOCAL
-    ]
+    parts = [inline(item) for item in selected if item.id == LOCAL]
     lines = [
         f"- {item.condition or 'for ' + item.applies}: read {FRAGMENT_DIR}/{item.id}.md"
         for item in selected

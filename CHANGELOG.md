@@ -31,6 +31,16 @@ The bump comes from what an adopter must do, not from the commit type; see
   `slice-tickets` skill already tells the slicer to keep such guidance out of the tickets, because
   the tickets fragment says it one time. The warning does not change the result of the run.
 
+### Changed
+
+- adopt now records one more field in `.outcomebound/manifest.json`, which stays at format 2:
+  where the `local` fragment is selected, the `guidance-pointers` record holds `frame`, the sha256
+  of the block with the inline text of the local fragment replaced by the mark `\0local\0` (a NUL
+  character, `local`, a NUL character). The first install with this release adds the field, so
+  `git status` shows the manifest as changed. Commit it. No other step is necessary. An engine of
+  1.1.1 or earlier keeps working with this manifest: it ignores the field, and it removes the field
+  when it writes the manifest again. adopt reads a record with or without the field.
+
 ### Fixed
 
 - `tickets brief owner/name#20` refused with `TICKET_NOT_FOUND`, also when the export held `#20`
@@ -42,7 +52,17 @@ The bump comes from what an adopter must do, not from the commit type; see
   and tells you that a ticket newer than the export needs a new export. Before, the refusal did
   not show that the export was older than the ticket. No verb refuses an export because of its
   age.
-
+- adopt refused to upgrade a `guidance-pointers` block without `--force` when a commit had changed
+  the local fragment and made the same change in the block, and the new release also renders the
+  block in a different way. For example, a release that changes the condition of a selected
+  fragment changes its pointer line. The block was then neither its record nor the new render, so
+  adopt read it as a person's edit. Now adopt finds that the block is the render of the previous
+  release with only the edit of the local fragment in it. It writes the block again without
+  `--force`, and it names the block on a `render` line. `adopt --check` reads the block `stale`,
+  not `edited`. A record with a `frame` decides this with the `frame`. A record without it, as
+  1.1.1 and earlier write, makes adopt read the earlier texts of `.outcomebound/fragments/local.md`
+  from the Git history of the project. If Git does not hold the text of the fragment that the previous install rendered,
+  or if the block holds a different edit too, adopt refuses as before.
 - `floor check --base` reported a commit as "carries no Floor-Loosening line" when the commit
   had a `Floor-Loosening:` line that did not parse, for example `Floor-Loosening: baseline; ruled
   Project D31`, where the id has a space in it. Now the reason says that the commit "carries a

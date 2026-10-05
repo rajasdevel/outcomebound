@@ -91,6 +91,8 @@ TICKETS = {
     "request_label": "human-requested",
     "claims": ".outcomebound/ticket-claims.json",
 }
+TEST_LINE = "- when writing, changing or judging a test"
+TICKETS_CONDITION = "or their declaration"
 CWD_WARNINGS = frozenset({"tickets: the claim", "tickets: the claims plan"})
 
 needs_permissions = pytest.mark.skipif(
@@ -166,6 +168,7 @@ class Case:
     locks: tuple[str, ...] = ()
     unnamed: tuple[str, ...] = ()
     refusal: str = ""
+    release: Callable[[Path], None] | None = None
 
 
 def plain(project: Path) -> None:
@@ -215,6 +218,29 @@ def local_edited_in_block_only(project: Path) -> None:
     path = project / "AGENTS.md"
     path.write_text(edit_alike(path.read_text(encoding="utf-8")), encoding="utf-8")
     commit(project, "block edit")
+
+
+def local_and_pointer_line_edited(project: Path) -> None:
+    """The negative control for a block rendered anew: the local fragment and the block edited
+    the same way, and a pointer line in the block edited too, so the block is not the previous
+    render of the fragment as it is now."""
+
+    local_edited_alike(project)
+    path = project / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    assert text.count(TEST_LINE) == 1
+    path.write_text(text.replace(TEST_LINE, "- when writing or judging a test"), encoding="utf-8")
+    commit(project, "pointer line")
+
+
+def tickets_condition_reworded(tree: Path) -> None:
+    """A release that renders the pointers block anew: the tickets fragment's condition, which
+    its pointer line carries, says it in other words."""
+
+    path = tree / "fragments/setup/tickets.md"
+    text = path.read_text(encoding="utf-8")
+    assert text.count(TICKETS_CONDITION) == 1
+    path.write_text(text.replace(TICKETS_CONDITION, f"{TICKETS_CONDITION} file"), encoding="utf-8")
 
 
 def unreadable_folder(project: Path) -> None:
@@ -269,6 +295,14 @@ CASES = {
         install=LOCAL_ONLY,
         refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
     ),
+    "local-edited-alike-rendered-anew": Case(
+        local_edited_alike, release=tickets_condition_reworded
+    ),
+    "local-and-pointer-line-edited-rendered-anew": Case(
+        local_and_pointer_line_edited,
+        refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
+        release=tickets_condition_reworded,
+    ),
     "unreadable-folder": Case(unreadable_folder, locks=("locked",)),
     "ignored-copies": Case(ignored_copies),
     "nested-repository": Case(nested_repository),
@@ -279,12 +313,10 @@ MARKS = {"unreadable-folder": needs_permissions}
 
 
 @pytest.fixture(scope="session")
-def installed(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str, tuple[str, ...]], Path]:
-    """The project as the engine of a release tag installed it with given options, committed;
-    each engine and each install is built once per test process."""
+def tag_engine(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path]:
+    """The engine of a release tag, from `git archive`, built once per test process."""
 
     engines: dict[str, Path] = {}
-    installs: dict[tuple[str, tuple[str, ...]], Path] = {}
 
     def engine_of(tag: str) -> Path:
         if tag not in engines:
@@ -299,10 +331,22 @@ def installed(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str, tuple[
             engines[tag] = tree
         return engines[tag]
 
+    return engine_of
+
+
+@pytest.fixture(scope="session")
+def installed(
+    tmp_path_factory: pytest.TempPathFactory, tag_engine: Callable[[str], Path]
+) -> Callable[[str, tuple[str, ...]], Path]:
+    """The project as the engine of a release tag installed it with given options, committed;
+    each install is built once per test process."""
+
+    installs: dict[tuple[str, tuple[str, ...]], Path] = {}
+
     def install(tag: str, options: tuple[str, ...]) -> Path:
         key = (tag, options)
         if key not in installs:
-            tree = engine_of(tag)
+            tree = tag_engine(tag)
             project = tmp_path_factory.mktemp("installed") / "project"
             project.mkdir()
             git(project, "init", "-q")
@@ -320,6 +364,24 @@ def installed(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str, tuple[
         return installs[key]
 
     return install
+
+
+@pytest.fixture(scope="session")
+def released(tmp_path_factory: pytest.TempPathFactory) -> Callable[[Callable[[Path], None]], Path]:
+    """The candidate engine as a release changed by `release`, copied once per test process."""
+
+    trees: dict[Callable[[Path], None], Path] = {}
+
+    def build(release: Callable[[Path], None]) -> Path:
+        if release not in trees:
+            tree = tmp_path_factory.mktemp("candidate") / "engine"
+            ignored = shutil.ignore_patterns(".git", ".agents", "__pycache__", "dist")
+            shutil.copytree(CANDIDATE, tree, ignore=ignored)
+            release(tree)
+            trees[release] = tree
+        return trees[release]
+
+    return build
 
 
 @pytest.fixture
@@ -391,6 +453,7 @@ def state(project: Path, skip: set[str], blocks: set[str]) -> dict[str, object]:
 def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     tmp_path: Path,
     installed: Callable[[str, tuple[str, ...]], Path],
+    released: Callable[[Callable[[Path], None]], Path],
     unlock: list[Path],
     name: str,
     previous: str,
@@ -398,7 +461,8 @@ def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     """The candidate reads no project edit where there is none, upgrades each shape without
     stopping, refuses only the block that differs from both its record and its render, reads
     every record current after, warns of exactly the kinds the case expects, and leaves every
-    file, status and index entry it does not record as it found them."""
+    file, status and index entry it does not record as it found them. A case with a `release`
+    upgrades with the candidate changed as that release would change it."""
 
     case = CASES[name]
     project = tmp_path / "project"
@@ -411,9 +475,10 @@ def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     before = state(project, own_before, blocks)
     whole = state(project, set(), set()) if case.refusal else {}
 
-    first = engine(CANDIDATE, "adopt", str(project), "--check")
-    upgrade = engine(CANDIDATE, "adopt", str(project))
-    check = engine(CANDIDATE, "adopt", str(project), "--check")
+    candidate = released(case.release) if case.release else CANDIDATE
+    first = engine(candidate, "adopt", str(project), "--check")
+    upgrade = engine(candidate, "adopt", str(project))
+    check = engine(candidate, "adopt", str(project), "--check")
 
     assert bool(edited(first.stdout)) == bool(case.refusal), first.stdout
     report = f"{upgrade.stdout}{upgrade.stderr}"
@@ -432,3 +497,55 @@ def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     own_after, blocks_after = own_paths(project)
     assert blocks_after == blocks
     assert state(project, own_before | own_after, blocks) == before
+
+
+def pointers_record(project: Path) -> dict[str, object]:
+    artifacts = json.loads((project / ".outcomebound/manifest.json").read_text(encoding="utf-8"))
+    (record,) = [r for r in artifacts["artifacts"] if r["id"] == "guidance-pointers"]
+    return dict(record)
+
+
+@pytest.mark.parametrize("previous", ["oldest", "latest"])
+def test_a_previous_release_reads_the_candidates_manifest_and_the_candidate_reads_its_rewrite(
+    tmp_path: Path,
+    installed: Callable[[str, tuple[str, ...]], Path],
+    tag_engine: Callable[[str], Path],
+    released: Callable[[Callable[[Path], None]], Path],
+    previous: str,
+) -> None:
+    """The `frame` field needs no new manifest format: the candidate's upgrade adds it, the
+    previous release's engine reads that manifest and drops the field when it writes the
+    manifest again, and the candidate then decides an edit of the local fragment alone from the
+    fragment's history in Git. Breaks if the candidate writes no frame, if the previous release
+    refuses the candidate's manifest, or if the candidate refuses the block after the rewrite."""
+
+    tag = previous_tag(previous)
+    project = tmp_path / "project"
+    shutil.copytree(installed(tag, INSTALL), project, symlinks=True)
+
+    upgrade = engine(CANDIDATE, "adopt", str(project))
+    assert upgrade.returncode == 0, f"{upgrade.stdout}{upgrade.stderr}"
+    assert "frame" in pointers_record(project)
+    commit(project, "candidate")
+
+    older = tag_engine(tag)
+    # The candidate renders some blocks and files anew, so the previous release reads them stale;
+    # what matters is that it reads the manifest, and reads no record edited.
+    check = engine(older, "adopt", str(project), "--check")
+    assert "Traceback" not in check.stderr and "manifest" not in check.stderr, check.stderr
+    assert check.stdout.startswith(("current ", "stale ")), check.stdout
+    assert not edited(check.stdout), check.stdout
+    rewrite = engine(older, "adopt", str(project))
+    assert rewrite.returncode == 0, f"{rewrite.stdout}{rewrite.stderr}"
+    assert "frame" not in pointers_record(project)
+    commit(project, f"OutcomeBound {tag} again")
+
+    local_edited_alike(project)
+    candidate = released(tickets_condition_reworded)
+    first = engine(candidate, "adopt", str(project), "--check")
+    assert not edited(first.stdout), first.stdout
+    upgrade = engine(candidate, "adopt", str(project))
+    assert upgrade.returncode == 0, f"{upgrade.stdout}{upgrade.stderr}"
+    assert any(line.startswith("render ") for line in upgrade.stdout.splitlines()), upgrade.stdout
+    assert "frame" in pointers_record(project)
+    assert engine(candidate, "adopt", str(project), "--check").returncode == 0
