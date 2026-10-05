@@ -21,6 +21,11 @@ The bump comes from what an adopter must do, not from the commit type; see
   for each ticket of a breakdown.
 - The goal template: the `Authorized` line names the landing grain, per ticket or per batch of
   tickets, so the person states it in the envelope.
+  Where neither the project's instructions nor the envelope set the grain, the agent chooses it
+  and names it in the handover.
+- `make canary` runs before each pull request that changes `adopt`, `tickets`, `floor`,
+  `instructions` or `discovery` lands, as before, but one run on a commit that holds several such
+  pull requests now covers all of them. It also runs on the release commit, as before.
 
 ## [1.2.0] - 2026-10-05
 

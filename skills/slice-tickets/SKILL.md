@@ -63,7 +63,7 @@ A ticket is one outcome the user accepts as a whole: a change whose end state it
 claims prove. How it is carried, in milestones, sessions, commits and tests, is its
 implementer's. An outcome is one thing that becomes true, said in one sentence; results joined
 only by an order of work are several. Every ticket carries the same overhead whatever its size
-(context rebuilt, an acceptance, a seam, a landing), so cut as few as the outcome allows.
+(context rebuilt, an acceptance, a seam, a landing or a share of one), so cut as few as the outcome allows.
 
 **Merge.** Outcomes whose parts must agree with each other, text loaded together in one voice, a
 format and the code that reads it, are one ticket however many files they span; following the

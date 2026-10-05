@@ -259,9 +259,10 @@ command that prints no valid report, or a change to a project's tree (ignored en
 is FAIL. If the installed release fails and the candidate does not, the report says
 `no baseline: installed engine failed`, and it does not compare that command. The report also gives the warning and finding kinds that the candidate adds or
 removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIED`. Run
-`make canary` once for each set of pull requests that change `adopt`, `tickets`, `floor`,
-`instructions` or `discovery` and land together, on one commit that holds all of them, before the
-first of them lands; and on the committed release commit. Adopters install from tags, so the
+`make canary` before a pull request that changes `adopt`, `tickets`, `floor`, `instructions` or
+`discovery` lands. One run covers several such pull requests when it runs on a commit that holds
+every change of all of them, before the first of them lands; a pull request with no such companion
+gets its own run. Run it also on the committed release commit. Adopters install from tags, so the
 release canary is the one that blocks a release; the earlier run finds a crash on a real project
 before it reaches `main`. Each of those pull requests gives the summary in counts.
 
