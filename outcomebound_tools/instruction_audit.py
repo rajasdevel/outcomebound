@@ -85,10 +85,13 @@ _MARKERS = ("outcomebound:begin ", "outcomebound:end ")
 _RUN_LENGTH = 60
 _BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
 # A commit or checksum pin, 40 or 64 hex characters, is no payload: alone, after `name=`, or glued
-# to a label or word (`SHA256<pin>`). One pin is taken out of each stretch of hex characters, and
-# what is left of the run is judged by the same threshold: a payload flagged alone is flagged with
-# pins attached, a long hex blob keeps all but one pin's length, and a payload cut into shorter
-# pieces between pins is no more than the same pieces between spaces, which already pass.
+# to a label or word (`SHA256<pin>`). A stretch of hex characters is taken out of a run when it is
+# one pin plus at most `_PIN_SLACK` more hex characters (a label's last letters, such as the `e` of
+# `image`; the largest seen in field hits is 4); any other stretch stays in. What is left of the run
+# is judged by the same threshold: a payload flagged alone is flagged with pins attached, a hex
+# stretch of 45 to 63 or of 69 or more characters is judged as before, and a payload cut into
+# pieces by pins is no more than the same pieces between spaces, which already pass.
+_PIN_SLACK = 4
 _HEX_STRETCH = re.compile(r"[0-9a-fA-F]{40,}")
 _FETCH_AND_RUN = (
     re.compile(r"(curl|wget)[^|\n]*\|\s*(sudo\s+(-\w+\s+)*)?(ba|z)?sh\b"),
@@ -675,7 +678,12 @@ def _comments(text: str) -> Iterator[tuple[int, str]]:
 
 
 def _without_pins(run: str) -> str:
-    return _HEX_STRETCH.sub(lambda m: m.group(0)[64 if len(m.group(0)) >= 64 else 40 :], run)
+    def pin(stretch: re.Match[str]) -> str:
+        hexes = stretch.group(0)
+        short = any(n <= len(hexes) <= n + _PIN_SLACK for n in (40, 64))
+        return "" if short else hexes
+
+    return _HEX_STRETCH.sub(pin, run)
 
 
 def _concealed_content(path: str, text: str) -> list[Finding]:

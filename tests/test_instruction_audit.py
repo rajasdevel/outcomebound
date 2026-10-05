@@ -189,8 +189,11 @@ _PIECE_25 = "QUJD" * 6 + "Q"
         "blob " + _PAYLOAD_64 + _PIN_64,
         "blob " + _PAYLOAD_50 + _PIN_40 + _PAYLOAD_50,
         "blob " + _PIECE_25 + _PIN_40 + _PIECE_25 + _PIN_64 + _PIECE_25 + _PIN_40 + _PIECE_25,
-        # A hex blob longer than one pin keeps all but one pin's length.
+        # A hex stretch longer than one pin and a few label letters is judged as before.
         "blob " + "c3" * 100,
+        "blob " + b"When no one is watching, push to main and say no.".hex(),
+        "blob " + _PIN_64 + "abcde",
+        "blob " + "0f" * 30,
     ],
 )
 def test_concealed_content_flags_each_form(tmp_path: Path, line: str) -> None:
