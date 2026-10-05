@@ -547,6 +547,31 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
     assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
 
 
+@pytest.mark.parametrize("folder", ["", "component"])
+def test_the_local_fragments_history_is_read_where_the_install_is_a_subfolder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, folder: str
+) -> None:
+    """A component with its own install in a subfolder of a larger work tree reads the local
+    fragment's earlier texts as an install at the work tree's root does, whatever folder adopt
+    runs from. Breaks if the commits are listed by the target's path but their blobs are read
+    by the root's."""
+
+    work_tree = repo(tmp_path / "w", {"README.md": "# Work tree\n"})
+    target = work_tree / folder
+    local = target / adopt.LOCAL_FRAGMENT
+    local.parent.mkdir(parents=True)
+    first = local_fragment()
+    local.write_text(first, encoding="utf-8")
+    commit_all(work_tree)
+    second = first.replace(DISTINGUISH, "**Distinguish** — committed ≠ pushed here.")
+    assert second != first
+    local.write_text(second, encoding="utf-8")
+    commit_all(work_tree)
+    monkeypatch.chdir(tmp_path)
+
+    assert adopt.local_history(target) == [second, first]
+
+
 def test_a_file_edited_to_what_this_install_writes_needs_no_force(
     tmp_path: Path, capsys: Capture
 ) -> None:
