@@ -82,9 +82,17 @@ CHECKS: dict[str, tuple[str, str, str]] = {
 }
 
 _MARKERS = ("outcomebound:begin ", "outcomebound:end ")
-_BASE64_RUN = re.compile(r"[A-Za-z0-9+/=]{60,}")
-# A commit or checksum pin, 40 or 64 hex characters after an optional `name=`, is no payload.
-_HEX_PIN = re.compile(r"(?:[A-Za-z0-9]+=)?(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})")
+_RUN_LENGTH = 60
+_BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
+# A commit or checksum pin, 40 or 64 hex characters, is no payload: alone, after `name=`, or glued
+# to a label or word (`SHA256<pin>`). A stretch of hex characters is taken out of a run when it is
+# one pin plus at most `_PIN_SLACK` more hex characters (a label's last letters, such as the `e` of
+# `image`; the largest seen in field hits is 4); any other stretch stays in. What is left of the run
+# is judged by the same threshold: a payload flagged alone is flagged with pins attached, a hex
+# stretch of 45 to 63 or of 69 or more characters is judged as before, and a payload cut into
+# pieces by pins is no more than the same pieces between spaces, which already pass.
+_PIN_SLACK = 4
+_HEX_STRETCH = re.compile(r"[0-9a-fA-F]{40,}")
 _FETCH_AND_RUN = (
     re.compile(r"(curl|wget)[^|\n]*\|\s*(sudo\s+(-\w+\s+)*)?(ba|z)?sh\b"),
     re.compile(r"((ba|z)?sh\s+-c|eval)\s+[\"']?\$\(\s*(curl|wget)"),
@@ -669,6 +677,15 @@ def _comments(text: str) -> Iterator[tuple[int, str]]:
         yield number, match.group(0)
 
 
+def _without_pins(run: str) -> str:
+    def pin(stretch: re.Match[str]) -> str:
+        hexes = stretch.group(0)
+        short = any(n <= len(hexes) <= n + _PIN_SLACK for n in (40, 64))
+        return "" if short else hexes
+
+    return _HEX_STRETCH.sub(pin, run)
+
+
 def _concealed_content(path: str, text: str) -> list[Finding]:
     found = [
         _finding("concealed-content", path, n, UNVERIFIED, f"an HTML comment: {_quote(c)}")
@@ -678,7 +695,7 @@ def _concealed_content(path: str, text: str) -> list[Finding]:
         if _is_marker(line):
             continue
         for run in _BASE64_RUN.finditer(line):
-            if _HEX_PIN.fullmatch(run.group(0)):
+            if len(_without_pins(run.group(0))) < _RUN_LENGTH:
                 continue
             fact = f"a base64-shaped run with no space: {_quote(run.group(0)[:40] + '...')}"
             found.append(_finding("concealed-content", path, number, UNVERIFIED, fact))
