@@ -6,10 +6,10 @@ description: Use when a decision must go to the user — an act your authority d
 # Decision brief
 
 Put each decision that is the user's so they can make it quickly and make it well. You are done
-when each one is a drawn brief where the user will read it (the handoff, the goal's Progress
-section, a comment on the ticket it holds, or your final message, when every remaining item waits
-on an answer), and each reversible choice you made yourself is noted in one line where
-the work is recorded.
+when each one is a drawn brief in the text the user reads (your message to them, the handoff, the
+goal's Progress section, or a comment on the ticket it holds), and each reversible choice you made
+yourself is noted in one line where the work is recorded. A link to a file that holds the brief
+never stands in for it: the brief itself is in the text.
 
 ## Decide what is yours
 
@@ -79,3 +79,8 @@ config --old_flag--> warning --> new flag
 
 Several decisions go in one message; where one waits on another, the document's `order` draws
 which comes first.
+
+Where the harness asks the user through a question tool, with choices to pick, draw the brief in
+your message first, then ask with what `outcomebound brief --ask -` prints from the same document:
+each brief's title and options as one line each, which is all such a tool shows. Never put a drawn
+brief's lines into the tool's fields; the tool shows them as one line.

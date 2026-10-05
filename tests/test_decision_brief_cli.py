@@ -741,3 +741,60 @@ def test_a_fact_with_its_own_label_is_drawn(
     )
     code, out, _ = _main(capsys, str(path), "--symbols", "emoji")
     assert (code, out) == (0, "### D1 · Q\n- Grant: none\n- ↩️ Undo: revert the commit\n")
+
+
+def test_ask_prints_each_brief_as_one_line_fields_for_a_question_tool(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A harness's question tool shows each field on one line, so `--ask` gives one title
+    per brief, the heading and the recommended letter and why, and one line per lettered
+    option; a brief with no options gets none, so the person answers in words."""
+
+    path = _write(tmp_path, DOCUMENT)
+    code, out, err = _main(capsys, str(path), "--ask", "--symbols", "emoji")
+
+    assert (code, err) == (0, "")
+    assert json.loads(out) == {
+        "questions": [
+            {
+                "title": "D1 · Keep the old flag for one release? · Recommend: B — "
+                "two adopters still set it",
+                "options": [
+                    "A drop it now — the code path goes today",
+                    "B keep it one release — adopters get a warning first",
+                ],
+            },
+            {
+                "title": "D2 · Tag the release once D1 is settled? · Recommend: "
+                "tag it, since every release check passes",
+                "options": [],
+            },
+        ]
+    }
+    assert all(
+        "\n" not in field
+        for question in json.loads(out)["questions"]
+        for field in [question["title"], *question["options"]]
+    )
+
+
+def test_ask_refuses_what_the_drawing_refuses(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write(
+        tmp_path,
+        {
+            "briefs": [
+                {
+                    "id": "D1",
+                    "heading": "Q",
+                    "undo": UNDO,
+                    "options": [["a", "b", "c"], ["d", "e", "f"]],
+                    **EVIDENCE,
+                }
+            ]
+        },
+    )
+    code, out, _ = _main(capsys, str(path), "--ask")
+
+    assert (code, out) == (1, "")

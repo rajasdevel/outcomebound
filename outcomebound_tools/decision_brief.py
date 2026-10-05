@@ -445,6 +445,37 @@ def render(
     return "\n\n".join(blocks) + "\n"
 
 
+def questions(briefs: Sequence[Brief], symbols: str) -> dict[str, list[dict[str, Any]]]:
+    """Every brief as one question for a harness's question tool, whose fields are
+    each drawn on one line: `title` is the heading, then the recommended Option's
+    letter and why; `options` is each lettered Option and what it leads to, in order.
+
+    A brief with no Options has an empty `options`, so the person answers in words.
+    The drawn brief, with its downsides and evidence, goes in the message before the
+    question: a title holds no line break. A brief `render` refuses is refused here
+    by the same `ValueError`.
+    """
+
+    sep, dash = SEPARATORS[symbols]
+    asked: list[dict[str, Any]] = []
+    for brief in briefs:
+        refused = _refused(brief)
+        if refused:
+            raise ValueError(refused)
+        title = brief.heading
+        if brief.recommend:
+            letter = ""
+            if brief.recommend_way:
+                letter = f"{string.ascii_uppercase[_ways(brief).index(brief.recommend_way)]}{dash}"
+            title += f"{sep}Recommend: {letter}{brief.recommend}"
+        options = [
+            f"{string.ascii_uppercase[index]} {way}{dash}{leads_to}"
+            for index, (way, leads_to, *_) in enumerate(brief.options)
+        ]
+        asked.append({"title": title, "options": options})
+    return {"questions": asked}
+
+
 def symbols_for(stream: TextIO) -> str:
     """`ascii` where `stream`'s encoding cannot carry every `emoji` mark and
     separator, `emoji` otherwise.
@@ -537,8 +568,13 @@ cannot; --symbols names them. The diagrams are Mermaid where
 OUTCOMEBOUND_DIAGRAMS=mermaid, or, where that variable names neither form,
 where adapters/surfaces.json records this session's surface as rendering
 Mermaid; they are ASCII everywhere else, an unknown surface included; --form
-names them. Posting to a GitHub issue, discussion or pull request, or from the
-Codex app, pass --form mermaid: those surfaces set no variable. Show the output
+names them. With --ask, the command prints instead one JSON object,
+{{"questions": [{{"title": ..., "options": [...]}}]}}, for a harness's question
+tool, which shows each field on one line: the title is the heading and the
+recommendation, each option its letter, way and what it leads to. Put the drawn
+brief in the message first, and the question after it. Posting to a GitHub issue,
+discussion or pull request, or from the Codex app, pass --form mermaid: those
+surfaces set no variable. Show the output
 as markdown, never inside a code block. Exit 0 when drawn; exit 1 when a brief
 is refused, naming which: one option or more than 26, two or more options with
 no recommend or recommend_way, a confidence or a recommended way with no
@@ -773,6 +809,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="the diagrams' form; by default the one OUTCOMEBOUND_DIAGRAMS or "
         "adapters/surfaces.json names for this session, and ascii where neither does",
     )
+    parser.add_argument(
+        "--ask",
+        action="store_true",
+        help="print the briefs as JSON questions for a harness's question tool, each field "
+        "on one line, instead of drawing them",
+    )
     args = parser.parse_args(argv)
     symbols = args.symbols or symbols_for(sys.stdout)
     source = "standard input" if args.document == "-" else args.document
@@ -789,6 +831,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+    if args.ask:
+        text = json.dumps(questions([brief for _, brief in briefs], symbols), ensure_ascii=False)
+        sys.stdout.write(text + "\n")
+        return 0
     drawn = bool(order) or any(brief.diagram is not None for _, brief in briefs)
     form = args.form or (_session_form() if drawn else "ascii")
     text = render([brief for _, brief in briefs], symbols, order, form)

@@ -49,6 +49,12 @@ The bump comes from what an adopter must do, not from the commit type; see
   the old install, the check also fails. docs/VERSIONING.md now says this under "How to take a
   release".
 
+### Changed
+
+- The `decision-brief` skill: the brief itself is in the text the person reads. A link to a file
+  that holds the brief does not stand in for it. Where the harness asks through a question tool,
+  the agent draws the brief in its message first, and then asks with what `brief --ask` prints.
+
 ### Fixed
 
 - Ctrl-C, or SIGTERM during `adopt --finish-check`, that arrived just after a Done command had
