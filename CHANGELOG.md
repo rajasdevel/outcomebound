@@ -11,6 +11,41 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-05
+
+A minor release. An implementer now makes, without a question, an edit outside a ticket's
+`bounds` that only carries the ticket's own change, and names it in the handover. Slicing no longer
+merges tickets that only touch a shared file in passing. A decision brief is always in the text the
+person reads, and `brief --ask` gives a question tool its own fields. adopt now upgrades a block
+that holds an edit of the local fragment without `--force`.
+
+Do these steps first:
+
+1. If you upgrade from 1.0.0, do the steps of the 1.1.0 and 1.1.1 sections first.
+2. Install the release:
+   `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.2.0`. Then run
+   `outcomebound adopt .` in each project again, and commit all that it writes, with
+   `.outcomebound/manifest.json`. The manifest stays at format 2. Its `guidance-pointers` record
+   gets the field `frame`, which needs no edit. An engine of 1.1.1 or 1.0.0 reads this manifest,
+   ignores the field, and removes it when it writes the manifest again.
+3. If your CI installs a pinned release and runs `outcomebound adopt . --check`, change the pin to
+   `v1.2.0` in the same change as step 2. With the old pin and the new install, the check fails.
+   With the new pin and the old install, the check also fails.
+4. If you edited a copy of a shipped fragment that this release changes
+   (`.outcomebound/fragments/tickets.md`, `python.md` or `node-typescript.md`), adopt refuses it as
+   before. Move the edit to `.outcomebound/fragments/local.md` or to your own instructions, and run
+   adopt again. If adopt reports an edited block, examine the difference before you use `--force`.
+   For a manifest without `frame`, adopt finds a local-fragment edit only when Git holds the text
+   of the fragment that the previous install rendered.
+5. If your own instructions say that every edit outside a ticket's `bounds` goes to the person,
+   make them agree with the tickets fragment (version 8): an edit that only carries the ticket's
+   own change is the implementer's, named in the handover, and not written into the ticket's body.
+6. When you next write a goal envelope that runs tickets, add its `Tickets:` line: one line for
+   each accepted ticket, with its number and its outcome. An envelope that runs now stays as it is.
+7. In Codex, trust the finish-check hook again in `/hooks` only if the install report gives an
+   `action` line for it. Then run `outcomebound adopt . --check` with the new engine, and run the
+   project's Done checks.
+
 ### Added
 
 - `outcomebound brief --ask` prints the briefs as JSON questions for a harness's question tool.
@@ -47,12 +82,9 @@ The bump comes from what an adopter must do, not from the commit type; see
   `git status` shows the manifest as changed. Commit it. No other step is necessary. An engine of
   1.1.1 or earlier keeps working with this manifest: it ignores the field, and it removes the field
   when it writes the manifest again. adopt reads a record with or without the field.
-- Upgrade step for the release: if your CI installs a pinned release and runs
-  `outcomebound adopt . --check`, change the pin and commit the result of `outcomebound adopt .`
-  in the same change. An engine reads an install that a different release wrote as stale, in the
-  two directions: with the old pin and the new install, the check fails, and with the new pin and
-  the old install, the check also fails. docs/VERSIONING.md now says this under "How to take a
-  release".
+- docs/VERSIONING.md, under "How to take a release", now says that a CI job which installs a
+  pinned release and runs `outcomebound adopt . --check` changes the pin and commits the result of
+  `outcomebound adopt .` in the same change.
 - The `decision-brief` skill: a link to a file that holds the brief does not stand in for the
   brief. The brief itself is in the text the person reads. Where the harness asks through a
   question tool, the agent draws the brief in its message first, and then fills the tool's fields
@@ -78,9 +110,6 @@ The bump comes from what an adopter must do, not from the commit type; see
   mechanism which an earlier ticket moved into a new file names that file in its `bounds`.
 - The goal template has a `Tickets:` line: one line for each accepted ticket, with its number and
   its outcome, so that the block the person pastes is the breakdown they accept.
-
-### Changed
-
 - `floor --help` and the `python` and `node-typescript` fragments (version 6 each) now say that a
   check which runs only in a container or a managed environment keeps its floor claim and its
   baseline, through the claim's `prefix`, such as `["docker", "compose", "run", "--rm", "app"]`.
@@ -576,7 +605,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.2.0
 [1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
 [1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
 [1.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.0.0
