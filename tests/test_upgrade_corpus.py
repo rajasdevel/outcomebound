@@ -587,14 +587,17 @@ def test_a_previous_release_reads_the_candidates_manifest_and_the_candidate_read
     previous: str,
 ) -> None:
     """The `frame` field needs no new manifest format: the candidate's upgrade adds it, the
-    previous release's engine reads that manifest and drops the field when it writes the
-    manifest again, and the candidate then decides an edit of the local fragment alone from the
-    fragment's history in Git. Breaks if the candidate writes no frame, if the previous release
-    refuses the candidate's manifest, or if the candidate refuses the block after the rewrite."""
+    previous release's engine reads that manifest and, when it writes the manifest again, keeps
+    the field if it writes `frame` itself and drops it if it predates the field, and the candidate
+    then decides an edit of the local fragment alone, from the fragment's history in Git where the
+    field was dropped. Breaks if the candidate writes no frame, if the previous release refuses the
+    candidate's manifest, or if the candidate refuses the block after the rewrite."""
 
     tag = previous_tag(previous)
     project = tmp_path / "project"
     shutil.copytree(installed(tag, INSTALL, ""), project, symlinks=True)
+    # A release from 1.2.0 on writes `frame` itself; an earlier one predates it.
+    older_writes_frame = "frame" in pointers_record(project)
 
     upgrade = engine(CANDIDATE, "adopt", str(project))
     assert upgrade.returncode == 0, f"{upgrade.stdout}{upgrade.stderr}"
@@ -610,7 +613,7 @@ def test_a_previous_release_reads_the_candidates_manifest_and_the_candidate_read
     assert not edited(check.stdout), check.stdout
     rewrite = engine(older, "adopt", str(project))
     assert rewrite.returncode == 0, f"{rewrite.stdout}{rewrite.stderr}"
-    assert "frame" not in pointers_record(project)
+    assert ("frame" in pointers_record(project)) == older_writes_frame
     commit(project, f"OutcomeBound {tag} again")
 
     local_edited_alike(project)
