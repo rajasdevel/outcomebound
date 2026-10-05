@@ -84,6 +84,14 @@ def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
     return [run for run in runs if isinstance(run, dict)]
 
 
+def _repository(run: dict[str, object]) -> str | None:
+    """The full name of the repository a run belongs to, or None where the run does not say."""
+
+    repository = run.get("repository")
+    name = repository.get("full_name") if isinstance(repository, dict) else None
+    return name if isinstance(name, str) else None
+
+
 def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
     """Whether a run of this repository's CI workflow on main, of a push or started by hand,
     completed and passed on exactly `head`. A run that names another commit, another workflow
@@ -102,8 +110,7 @@ def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
         and run.get("path") == WORKFLOW
         and run.get("event") in ("push", "workflow_dispatch")
         and run.get("head_branch") == "main"
-        and isinstance(run.get("repository"), dict)
-        and run["repository"].get("full_name") == REPOSITORY_NAME
+        and _repository(run) == REPOSITORY_NAME
     ]
     # The newest completed run decides: an older pass does not outweigh a newer failure.
     completed = sorted(
