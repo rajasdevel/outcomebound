@@ -429,7 +429,9 @@ def test_a_draft_run_reads_no_export(tmp_path: Path, capsys: pytest.CaptureFixtu
     draft run never asks for one, and its report names no input."""
 
     root, written = drafts(
-        tmp_path, only=draft_text(blocked_by=["other"], parent=""), other=draft_text()
+        tmp_path,
+        only=draft_text(blocked_by=["other"], parent="", brief=outcome("One thing is true.")),
+        other=draft_text(brief=outcome("Another thing is true.")),
     )
 
     found = report(root, "--draft", *written, capsys=capsys, expect=0)
@@ -453,6 +455,110 @@ def test_a_draft_that_cannot_be_read_is_reported(
 
     assert "TICKET_UNREADABLE" in every_code(found)
     assert [row["id"] for row in rows(found)] == ["good"], "the unreadable file is no ticket"
+
+
+# --- guidance every draft repeats --------------------------------------------------
+
+LIMITS = "Root must approve this packet before builder dispatch."
+TEMPLATE = REPOSITORY / "templates/tickets/issue-template.md"
+
+
+def outcome(sentence: str, *rest: str) -> list[str]:
+    """A brief whose `## Outcome` is this draft's own, and then the lines given."""
+
+    return ["## Outcome", sentence, "", *rest]
+
+
+def repeated(found: Mapping[str, object]) -> list[str]:
+    """The text of every REPEATED_GUIDANCE message, each about the run and not a ticket."""
+
+    assert all("REPEATED_GUIDANCE" not in codes_of(row) for row in rows(found))
+    return [str(item["text"]) for item in messages_of(found) if item["code"] == "REPEATED_GUIDANCE"]
+
+
+def test_a_paragraph_in_every_draft_is_one_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """One paragraph in each draft's `## Limits`, wrapped differently, warns once, by its
+    first words and its section, and the run still passes."""
+
+    root, files = drafts(
+        tmp_path,
+        one=draft_text(brief=outcome("One is true.", "## Limits", LIMITS, "")),
+        two=draft_text(
+            brief=outcome(
+                "Two is true.",
+                "## Limits",
+                "Root must approve this",
+                "packet before  builder dispatch.",
+                "",
+            )
+        ),
+        three=draft_text(brief=outcome("Three is true.", "## Limits", f"  {LIMITS}", "")),
+    )
+
+    found = report(root, "--draft", *files, capsys=capsys, expect=0)
+
+    texts = repeated(found)
+    assert len(texts) == 1, texts
+    assert '"Root must approve this packet before builder dispatch."' in texts[0]
+    assert "`## Limits`" in texts[0]
+    assert found["result"] == "PASS"
+
+
+def test_a_paragraph_one_draft_lacks_is_not_repeated(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The condition is "in every draft": a paragraph two of three drafts share is not said,
+    while the one all three share is."""
+
+    shared = "Keep the public names as they are."
+    root, files = drafts(
+        tmp_path,
+        one=draft_text(brief=outcome("One is true.", "## Limits", LIMITS, "", shared, "")),
+        two=draft_text(brief=outcome("Two is true.", "## Limits", LIMITS, "", shared, "")),
+        three=draft_text(
+            brief=outcome("Three is true.", "## Limits", "Leave the CLI alone.", "", shared)
+        ),
+    )
+
+    found = report(root, "--draft", *files, capsys=capsys, expect=0)
+
+    texts = repeated(found)
+    assert len(texts) == 1 and '"Keep the public names as they are."' in texts[0], texts
+
+
+def test_the_templates_placeholder_text_is_not_repeated_guidance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Drafts left with the template's own comment and placeholder text repeat the
+    template, which no slicer chose; only the paragraph they added is said."""
+
+    template = TEMPLATE.read_text(encoding="utf-8")
+    body = template[: template.index("<!-- outcomebound:begin")].rstrip().split("\n")
+    root, files = drafts(
+        tmp_path,
+        one=draft_text(brief=[*body, "", LIMITS, ""]),
+        two=draft_text(brief=[*body, "", LIMITS, ""]),
+    )
+
+    found = report(root, "--draft", *files, capsys=capsys, expect=0)
+
+    texts = repeated(found)
+    assert len(texts) == 1 and LIMITS in texts[0], texts
+
+
+def test_a_single_draft_repeats_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A breakdown is two drafts or more: the pair warns, either draft alone does not."""
+
+    root, files = drafts(
+        tmp_path,
+        one=draft_text(brief=outcome("One is true.", "## Limits", LIMITS, "")),
+        two=draft_text(brief=outcome("Two is true.", "## Limits", LIMITS, "")),
+    )
+
+    assert len(repeated(report(root, "--draft", *files, capsys=capsys, expect=0))) == 1
+    assert repeated(report(root, "--draft", files[0], capsys=capsys, expect=0)) == []
 
 
 def test_draft_with_input_is_a_usage_error(

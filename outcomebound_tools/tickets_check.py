@@ -37,7 +37,7 @@ from types import MappingProxyType
 from outcomebound_tools.tickets_bounds import covers
 from outcomebound_tools.tickets_claims import ClaimsPlan, load_claims, placement
 from outcomebound_tools.tickets_declaration import Declaration
-from outcomebound_tools.tickets_draft import draft_relations, read_draft
+from outcomebound_tools.tickets_draft import draft_relations, read_draft, repeated_guidance
 from outcomebound_tools.tickets_graph import cycles
 from outcomebound_tools.tickets_links import LinksError, section
 from outcomebound_tools.tickets_model import (
@@ -167,7 +167,9 @@ def _from_drafts(paths: Sequence[str], declaration: Declaration) -> _Input:
     Every file named is read, and `draft_relations` is asked about all of them,
     so an id two files claim is reported. Only the first draft of each id
     is then judged, which is the promise both store readers make: an index by id
-    is total, and the knot detector reads one graph.
+    is total, and the knot detector reads one graph. A paragraph every judged
+    draft repeats is the run's warning, `REPEATED_GUIDANCE`, since it is about the
+    breakdown and not about any one draft.
     """
 
     read = [read_draft(given, declaration) for given in paths]
@@ -186,7 +188,7 @@ def _from_drafts(paths: Sequence[str], declaration: Declaration) -> _Input:
         tickets=tickets,
         known=frozenset(seen),
         reported=reported,
-        run_level=run_level,
+        run_level=(*run_level, *repeated_guidance(tickets)),
         relations=relations,
     )
 

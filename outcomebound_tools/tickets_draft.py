@@ -3,13 +3,15 @@
 What this module decides: what a draft is — a file whose first line is
 `# <title>`, its id the file name without the extension, which is how other
 drafts name it — what its `blocked-by` and `parent` entries may name, and which
-drafts given together claim one id. It is the one place a draft is read, so
+drafts given together claim one id, and which paragraph every draft of a
+breakdown repeats. It is the one place a draft is read, so
 `check --draft` and `brief --draft` cannot come to differ about what a draft is.
 
 What it does not decide: what a block says (`tickets_model`), whether a relation
 closes a knot (`tickets_graph`), or what a message does to a verdict
 (`tickets_report`). **It makes no git call, reads no store and reads no claims
-plan:** a draft is a file and nothing else, which is what lets a breakdown be
+plan:** a draft is a file and nothing else (the engine's own issue template is
+read too, to know its placeholder text), which is what lets a breakdown be
 reviewed before anything is published.
 
 A file this module will not read is a finding about that draft and never the end
@@ -21,11 +23,13 @@ id to stamp, and that is `DraftError`.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
 
+from outcomebound_tools.home import ROOT
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_model import (
     STATES,
@@ -36,7 +40,7 @@ from outcomebound_tools.tickets_model import (
 )
 from outcomebound_tools.tickets_report import EngineError, Message, message
 
-__all__ = ["DraftError", "draft_relations", "read_draft"]
+__all__ = ["DraftError", "draft_relations", "read_draft", "repeated_guidance"]
 
 _OPEN = STATES[0]
 
@@ -264,3 +268,103 @@ def draft_relations(tickets: Sequence[Ticket]) -> Mapping[str, tuple[Message, ..
         if said:
             found.setdefault(ticket.id, []).extend(said)
     return MappingProxyType({id: tuple(messages) for id, messages in found.items()})
+
+
+# --- what every draft repeats ------------------------------------------------------
+
+# A Markdown heading line: it opens a section and is no paragraph.
+_HEADING_LINE = re.compile(r"#{1,6}[ \t]+\S.*")
+# The template a draft is written from; its own text is a placeholder, not guidance.
+_TEMPLATE = ROOT / "templates/tickets/issue-template.md"
+# How much of a repeated paragraph a message shows: enough to find it, not a measure.
+_SHOWN_WORDS = 8
+
+
+def _paragraphs(text: str) -> list[tuple[str, str]]:
+    """Each paragraph of `text` with the heading it sits under, whitespace normalised.
+
+    A paragraph is the lines between blank lines; a heading line ends one and is
+    not part of any. A paragraph with no letter or digit, a rule or a lone fence,
+    says nothing and is not returned.
+    """
+
+    found: list[tuple[str, str]] = []
+    heading = ""
+    lines: list[str] = []
+
+    def close() -> None:
+        joined = " ".join(" ".join(lines).split())
+        if any(character.isalnum() for character in joined):
+            found.append((heading, joined))
+        lines.clear()
+
+    for line in text.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            close()
+        elif _HEADING_LINE.fullmatch(stripped):
+            close()
+            heading = stripped
+        else:
+            lines.append(stripped)
+    close()
+    return found
+
+
+@functools.cache
+def _placeholders() -> frozenset[str]:
+    """The issue template's own paragraphs, split as a draft's are.
+
+    A draft written from the template and left with its comment or a section's
+    placeholder text repeats that text in every draft; that is the template's
+    text, which no slicer chose to repeat. A template this engine cannot read
+    leaves nothing to exclude.
+    """
+
+    try:
+        text = _TEMPLATE.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return frozenset()
+    return frozenset(paragraph for _, paragraph in _paragraphs(text))
+
+
+def _repeated(paragraph: str, headings: Sequence[str], drafts: int) -> Message:
+    words = paragraph.split()
+    shown = " ".join(words[:_SHOWN_WORDS]) + (" ..." if len(words) > _SHOWN_WORDS else "")
+    where = " and ".join(f"`{heading}`" for heading in headings) or "no heading"
+    return message(
+        "REPEATED_GUIDANCE",
+        "",
+        f'the paragraph "{shown}" under {where} is in each of the {drafts} drafts given, '
+        "word for word",
+        "drop it from the drafts: guidance every ticket would repeat is said once, in the "
+        "tickets fragment or the project's own instructions, and a paragraph that carries no "
+        "decision is not written",
+    )
+
+
+def repeated_guidance(tickets: Sequence[Ticket]) -> tuple[Message, ...]:
+    """One warning for each paragraph every draft's brief holds, about the run.
+
+    Only a breakdown of two or more drafts is asked, and the condition is "in every
+    draft": no count of drafts and no length of a paragraph enters it. The block
+    is not part of a brief and a heading is no paragraph, so neither is compared.
+    A paragraph of the issue template itself is its placeholder text and is passed
+    over. Each paragraph is said once, in the order the first draft holds them,
+    naming every heading it sits under across the drafts.
+    """
+
+    if len(tickets) < 2:
+        return ()
+    placeholders = _placeholders()
+    read = [_paragraphs(ticket.brief) for ticket in tickets]
+    held = [{paragraph for _, paragraph in found} for found in read]
+    said: list[Message] = []
+    for paragraph in dict.fromkeys(paragraph for _, paragraph in read[0]):
+        if paragraph in placeholders or not all(paragraph in each for each in held):
+            continue
+        headings = dict.fromkeys(
+            heading for found in read for heading, text in found if text == paragraph
+        )
+        said.append(_repeated(paragraph, [heading for heading in headings if heading], len(read)))
+    return tuple(said)

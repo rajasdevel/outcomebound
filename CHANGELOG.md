@@ -21,6 +21,15 @@ The bump comes from what an adopter must do, not from the commit type; see
 - The `input:` line of the `tickets check` text report now gives the lowest and the highest issue
   number that the export holds, for example `input: issues.json; modified 2026-09-20T09:00:00Z;
   age 120s; holds #1 to #42`. The JSON report does not change.
+- `tickets check --draft` gives the warning `REPEATED_GUIDANCE`, about the run and with no ticket
+  id, when two or more drafts are given and a paragraph is in the body of every draft. An example
+  is the same paragraph under `## Limits` in each draft of a breakdown. The warning gives the
+  first words of the paragraph and the heading that it is under, one time for each paragraph. A
+  paragraph is the lines between blank lines, and the comparison ignores the spaces and line
+  breaks in it. Headings, the block and the placeholder text of the issue template are not
+  compared. No number of drafts and no length of a paragraph is part of the condition. The
+  `slice-tickets` skill already tells the slicer to keep such guidance out of the tickets, because
+  the tickets fragment says it one time. The warning does not change the result of the run.
 
 ### Fixed
 
