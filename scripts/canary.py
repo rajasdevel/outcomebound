@@ -19,8 +19,11 @@ not the command's documented verdict), an exception adopt reports (`adopt: [Errn
 refusal (another `adopt:` reason), a changed verdict or exit code, and the report lines added
 or removed by kind: a `warning` or `UNVERIFIED` line by its first four words, each word that is
 not a plain word shown as `<...>`, and any other line by its first word. The verdict is the last
-line. A crash, an exception or a refusal of the candidate, a project tree that changed, or a
-project that is not a Git work tree is FAIL; anything else is PASS, and the kinds added and
+line. A crash, an exception or a refusal of the candidate, a command of the candidate that
+printed no valid report (`instructions check --json` with no JSON, a required field missing or of
+the wrong type, or a result that disagrees with its exit), a project tree that changed, or a
+project that is not a Git work tree is FAIL; a valid report whose result is UNVERIFIED is a
+verdict, compared as any other; anything else is PASS, and the kinds added and
 removed are printed for a person to judge.
 
 The verdict is recorded in the Git common directory, under `outcomebound-canary/`, keyed by the
@@ -65,6 +68,9 @@ COMMANDS = (
     ("adopt --check", ("adopt", "{p}", "--check"), frozenset(range(101))),
     ("instructions check", ("instructions", "check", "{p}", "--json"), frozenset({0, 1, 2})),
 )
+# The exit `instructions check` gives for each result of its report.
+RESULTS = {"PASS": 0, "FAIL": 1, "UNVERIFIED": 2}
+VERDICTS = frozenset(RESULTS)
 # A word a report line may show as it is; any other word (a path, a number, quoted text) is
 # shown as `<...>`, so no project's path or name reaches the report.
 PLAIN = re.compile(r"[A-Za-z][A-Za-z-]*[:,;]?")
@@ -86,6 +92,7 @@ class Outcome:
     crash: str | None = None
     exception: str | None = None
     refusals: int = 0
+    unreported: str | None = None
     verdict: str = ""
     kinds: Counter[str] = field(default_factory=Counter)
 
@@ -96,6 +103,8 @@ class Outcome:
             return f"exception: {self.exception}"
         if self.refusals:
             return f"refusal: {self.refusals} reason(s)"
+        if self.unreported:
+            return f"no report: {self.unreported}"
         return None
 
 
@@ -140,19 +149,45 @@ def read(label: str, exit: int, out: str, err: str) -> Outcome:
         outcome.verdict = f"exit {exit}"
         outcome.kinds = Counter(kind for line in out.splitlines() if (kind := _kind(line)))
         return outcome
-    try:
-        report = json.loads(out)
-        findings = list(report["findings"])
-        outcome.verdict = str(report["result"])
-    except (ValueError, KeyError, TypeError):
-        outcome.verdict = f"exit {exit}, no JSON report"
+    report, problem = _report(exit, out)
+    if report is None:
+        outcome.unreported = problem
+        outcome.verdict = f"exit {exit}, no valid report"
         return outcome
+    outcome.verdict = report["result"]
     outcome.kinds = Counter(
-        f"{_word(str(item.get('check')))} {_word(str(item.get('verdict')))}"
-        for item in findings
-        if isinstance(item, dict) and item.get("verdict") != "PASS"
+        f"{_word(item['check'])} {_word(item['verdict'])}"
+        for item in report["findings"]
+        if item["verdict"] != "PASS"
     )
     return outcome
+
+
+def _report(exit: int, out: str) -> tuple[dict | None, str]:
+    """The `instructions check --json` report, or None and what made it no valid report."""
+
+    try:
+        report = json.loads(out)
+    except ValueError:
+        return None, f"exit {exit}, no JSON report"
+    if not isinstance(report, dict):
+        return None, "the JSON report is not an object"
+    result = report.get("result")
+    if result not in VERDICTS:
+        return None, "the report has no result PASS, FAIL or UNVERIFIED"
+    if RESULTS[result] != exit:
+        return None, f"the report's result {result} disagrees with exit {exit}"
+    findings = report.get("findings")
+    if not isinstance(findings, list):
+        return None, "the report has no list of findings"
+    for item in findings:
+        if not (
+            isinstance(item, dict)
+            and isinstance(item.get("check"), str)
+            and item.get("verdict") in VERDICTS
+        ):
+            return None, "a finding has no check or no verdict PASS, FAIL or UNVERIFIED"
+    return report, ""
 
 
 def load_list(path: Path) -> list[Path]:

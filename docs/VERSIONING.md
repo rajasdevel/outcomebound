@@ -24,6 +24,11 @@ section is never edited.
 Until you do step 2, `outcomebound adopt . --check` reads the operating-contract block as stale.
 The block carries the version that wrote it.
 
+If your CI installs a pinned release and runs `outcomebound adopt . --check`, change the pin and
+commit the result of step 2 in the same change. An engine reads an install that a different
+release wrote as stale, in the two directions: with the old pin and the new install, the check
+fails, and with the new pin and the old install, the check also fails.
+
 From 1.1.0, each release is also a GitHub release with the wheel and the source archive. CI
 builds them from the tagged commit and attests them with signed build provenance. To verify a
 file that you downloaded, run `gh attestation verify <file> -R rajasdevel/outcomebound`.
@@ -39,17 +44,38 @@ At a release, these places name the same version:
 - the `v=` of the operating-contract block that `adopt` installs
 - every install line in the README and in `templates/ci/` (`…/outcomebound@v<VERSION>`)
 
-Before the release commit, the person runs `make canary`, as CONTRIBUTING.md says: the engine
-of the release beside the installed release, on the local list of projects, with no change to
-them. A pull request that changes `adopt`, `tickets`, `floor`, `instructions` or `discovery` also
-runs it before it opens.
+`make canary` runs the engine of the release beside the installed release, on the local list of
+projects, with no change to them, as CONTRIBUTING.md says. It records its verdict for the tree of
+the commit that it ran on, and it records nothing while the checkout holds changes that are not
+committed. `make release-check` fails unless a PASS record exists for the tree of the commit that
+it checks. Thus `make canary` runs on the committed release commit, after every change to the
+release tree. A pull request that changes `adopt`, `tickets`, `floor`, `instructions` or
+`discovery` also runs it before it opens.
 
-The person who prepares the release commit runs `make release-check` on it. A maintainer or an
-agent can prepare it. The command first reads the record of `make canary` and fails unless that
-record is PASS for the tree of the release commit. A squash merge keeps the tree of the branch,
-so a record from the branch applies. The command then checks that these places agree and that
-this repository's own install is current. It also runs the gate, the quality floor and the test
-suite, and they must pass.
+A maintainer or an agent can prepare the release. Do these steps in this sequence:
+
+1. On a branch from `main`, prepare the complete release tree: `VERSION`, the dated changelog
+   section with its "Do these steps first" list, the tag link of the section, the `[Unreleased]`
+   compare link from `v<VERSION>`, the install lines in the README and in `templates/ci/`, and
+   this repository's own install (`scripts/outcomebound adopt .`). Commit all of it, and keep no
+   change that is not committed.
+2. Run `make canary` on that commit. If you change the tree after this step, commit the change
+   and run `make canary` again.
+3. Run `make scrub`.
+4. Run `make release-check`. It first reads the record of `make canary`. It then checks that the
+   places above agree and that this repository's own install is current. It also runs the gate,
+   the quality floor and the test suite, and they must pass.
+5. Land the release commit through its pull request, as one squash commit. A squash merge keeps
+   the tree of the branch, so the record from the branch applies to the commit on `main`.
+6. Make sure that the tree of the new commit on `main` is the tree of the release branch, for
+   example with `git diff <branch> origin/main` that shows no difference. If the trees are
+   different (for example, because a conflict was resolved in a different way), the record does
+   not apply: run `make canary` and `make release-check` on the commit on `main`.
+7. A maintainer pushes the annotated tag `v<VERSION>` on the commit on `main`, or an agent where
+   a grant covers it (below).
+8. Run `make release-check TAG=v<VERSION>`.
+9. CI on the tag publishes the release (below).
+10. Move all projects that use OutcomeBound to the release.
 
 You cannot undo the push of a tag. A maintainer pushes it. An agent can push it only where a
 grant of a maintainer in `.outcomebound/tag-grants.json` covers that version on that day. The last
