@@ -125,6 +125,17 @@ store. On a draft run, a `blocked-by` or `parent` entry that names a published t
 `#12`, is not checked, because no store is read. `check` says so in an INFO message,
 `RELATION_UNCHECKED`. `--json` prints one JSON object instead of text.
 
+On a draft run of two or more drafts, `check` gives a WARNING about the run,
+`REPEATED_GUIDANCE`, with no ticket id, for each paragraph that is in the body of every draft. The
+WARNING gives the first words of the paragraph and the heading that it is under. A paragraph is
+the lines between blank lines, and the comparison ignores the spaces and line breaks in it.
+`check` does not compare headings, the block, or a paragraph with no letter or digit, such as a rule. It also does not compare a paragraph of the issue
+template (`templates/tickets/issue-template.md`), because that text is a placeholder that the
+draft kept from the template. No number of drafts and no length of a paragraph is part of the
+condition. Thus, a short paragraph such as `None.` under `## Limits` in every draft also gets the
+WARNING: a section that carries no decision is not written. Guidance that every ticket repeats is
+said one time, in the tickets fragment or in the project's own instructions.
+
 A claim can declare the paths that it needs, as `required_paths` in the plan. When a ticket's
 claim declares a path that the ticket's `bounds` do not cover, `check` gives a WARNING,
 `CLAIM_READS_OUTSIDE_BOUNDS`. A finding in that path is one that the ticket's work may not

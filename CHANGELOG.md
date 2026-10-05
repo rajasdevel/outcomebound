@@ -75,6 +75,18 @@ The bump comes from what an adopter must do, not from the commit type; see
   base64 payload of 60 or more characters that a hash touches. A run cut into pieces by hashes, or
   by any base64 character that is not hex, is read as the same pieces between spaces were before.
 
+### Added
+
+- `tickets check --draft` gives the warning `REPEATED_GUIDANCE`, about the run and with no ticket
+  id, when two or more drafts are given and a paragraph is in the body of every draft. An example
+  is the same paragraph under `## Limits` in each draft of a breakdown. The warning gives the
+  first words of the paragraph and the heading that it is under, one time for each paragraph. A
+  paragraph is the lines between blank lines, and the comparison ignores the spaces and line
+  breaks in it. Headings, the block and the placeholder text of the issue template are not
+  compared. No number of drafts and no length of a paragraph is part of the condition. The
+  `slice-tickets` skill already tells the slicer to keep such guidance out of the tickets, because
+  the tickets fragment says it one time. The warning does not change the result of the run.
+
 ## [1.1.1] - 2026-10-04
 
 A patch release. adopt now reports a `tickets` claims plan whose claims run in a folder that the

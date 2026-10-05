@@ -134,6 +134,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "CLAIM_CWD_PLAN_FOLDER",
         "BOUNDS_WHOLE_REPOSITORY",
         "DISCOVERED_FROM_ABSENT",
+        "REPEATED_GUIDANCE",
     ),
     Level.INFO: ("HOLD_SURFACES_DIFFER", "WAITS_ON_BRIEF", "RELATION_UNCHECKED"),
 }

@@ -307,7 +307,9 @@ def test_the_module_reads_no_store_no_git_and_no_plan() -> None:
     A git call, a store read or a claims plan here would make a draft depend on a
     project it is written before, which is the whole point of linting one. The
     declaration is a value handed in, never loaded: the effective hold needs its type
-    and nothing else. The set is exact, so the next import has to be argued for.
+    and nothing else. `home` locates the engine's own issue template, whose
+    placeholder text a repeated paragraph is not warned about; it is the engine's
+    file, not the project's. The set is exact, so the next import has to be argued for.
     """
 
     tree = ast.parse(MODULE.read_text(encoding="utf-8"), filename=str(MODULE))
@@ -319,6 +321,7 @@ def test_the_module_reads_no_store_no_git_and_no_plan() -> None:
             reached.update(alias.name for alias in node.names)
     engine = {name for name in reached if name.startswith("outcomebound_tools")}
     assert engine == {
+        "outcomebound_tools.home",
         "outcomebound_tools.tickets_declaration",
         "outcomebound_tools.tickets_model",
         "outcomebound_tools.tickets_report",
