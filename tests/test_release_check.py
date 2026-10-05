@@ -27,16 +27,51 @@ CASES = {
     "lightweight": "is annotated",
     "wrong-tag": "names VERSION",
     "tag-behind": "points at HEAD",
-    "main-red": "no passing CI run of a push to main",
-    "main-unrun": "no passing CI run of a push to main (none)",
+    "main-red": "no passing CI run on main",
+    "main-unrun": "no passing CI run on main (none)",
+    "main-other-commit": "no passing CI run on main (none)",
+    "main-other-workflow": "no passing CI run on main (none)",
+    "main-by-hand": None,
+    "main-fork": "no passing CI run on main (none)",
+    "main-pass-then-fail": "no passing CI run on main (failure, success)",
 }
 
 # GitHub's answer for HEAD's CI runs in each case; every other case has a passing run on main.
-RUNS = {
-    "main-red": [{"event": "push", "head_branch": "main", "conclusion": "failure"}],
-    "main-unrun": [{"event": "pull_request", "head_branch": "x", "conclusion": "success"}],
+MAIN = {
+    "path": ".github/workflows/ci.yml",
+    "event": "push",
+    "head_branch": "main",
+    "repository": {"full_name": "rajasdevel/outcomebound"},
+    "created_at": "2026-10-05T10:00:00Z",
 }
-PASSING = [{"event": "push", "head_branch": "main", "conclusion": "success"}]
+RUNS = {
+    "main-red": [{**MAIN, "status": "completed", "conclusion": "failure"}],
+    "main-unrun": [
+        {**MAIN, "event": "pull_request", "status": "completed", "conclusion": "success"}
+    ],
+    "main-other-commit": [
+        {**MAIN, "head_sha": "0" * 40, "status": "completed", "conclusion": "success"}
+    ],
+    "main-other-workflow": [
+        {**MAIN, "path": ".github/workflows/x.yml", "status": "completed", "conclusion": "success"}
+    ],
+}
+PASSING = [{**MAIN, "status": "completed", "conclusion": "success"}]
+RUNS["main-fork"] = [
+    {
+        **MAIN,
+        "repository": {"full_name": "someone/outcomebound"},
+        "status": "completed",
+        "conclusion": "success",
+    }
+]
+RUNS["main-pass-then-fail"] = [
+    {**MAIN, "status": "completed", "conclusion": "success"},
+    {**MAIN, "created_at": "2026-10-05T11:00:00Z", "status": "completed", "conclusion": "failure"},
+]
+RUNS["main-by-hand"] = [
+    {**MAIN, "event": "workflow_dispatch", "status": "completed", "conclusion": "success"}
+]
 
 
 # The files a release commit holds, and the one each disagreeing case makes stale.
@@ -78,11 +113,11 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
     git("init", "-q")
     git("add", ".")
     git("commit", "-qm", "release")
+    git("tag", "-a", "v1.0.0", "-m", "an older release's tag")
     if case == "lightweight":
         git("tag", "v1.1.0")
     else:
         git("tag", "-a", "v1.1.0", "-m", "release")
-        git("tag", "-a", "v1.0.0", "-m", "an older release's tag")
     if case == "tag-behind":
         git("commit", "--allow-empty", "-qm", "later")
     elif case == "dirty":
@@ -90,7 +125,11 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
 
     tag = "v1.0.0" if case == "wrong-tag" else "v1.1.0"
     runs = tmp_path.parent / f"{tmp_path.name}-runs.json"
-    runs.write_text(json.dumps({"workflow_runs": RUNS.get(case, PASSING)}))
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    answer = [{"head_sha": head, **run} for run in RUNS.get(case, PASSING)]
+    runs.write_text(json.dumps({"workflow_runs": answer}))
     result = subprocess.run(
         [
             sys.executable,
@@ -142,3 +181,45 @@ def test_the_grant_line_names_a_grant_only_in_scope_and_in_time(
     (tmp_path / ".outcomebound/tag-grants.json").write_text(json.dumps({"grants": grants}))
     line = module.grant(tmp_path, today)
     assert line.startswith(f"GRANT v{version}:" if covered else f"GRANT none covers v{version}")
+
+
+@pytest.mark.parametrize("named", [True, False])
+def test_the_section_names_each_pull_request_since_the_previous_release(
+    tmp_path: Path, named: bool
+) -> None:
+    """Breaks if a release section leaves out a pull request that landed since the previous
+    release, now that the section is written at release and not by each pull request."""
+
+    def git(*args: str) -> None:
+        identity = ("-c", "user.name=Release", "-c", "user.email=release@example.test")
+        subprocess.run(["git", *identity, *args], cwd=tmp_path, check=True, capture_output=True)
+
+    files = release_files("agreeing")
+    for name, text in files.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text.replace("1.1.0", "1.0.0"))
+    (tmp_path / "VERSION").write_text("1.0.0\n")
+    git("init", "-q")
+    git("add", ".")
+    git("commit", "-qm", "release: 1.0.0")
+    git("tag", "-a", "v1.0.0", "-m", "release")
+    (tmp_path / "src.txt").write_text("x\n")
+    git("add", ".")
+    git("commit", "-qm", "fix: a change (#5)")
+    for name, text in files.items():
+        entry = "- A change (#5).\n\n" if named else ""
+        (tmp_path / name).write_text(text.replace(" - 2026-09-28\n\n", f" - 2026-09-28\n\n{entry}"))
+    (tmp_path / "VERSION").write_text("1.1.0\n")
+    git("add", ".")
+    git("commit", "-qm", "release: 1.1.0 (#6)")
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(tmp_path)], capture_output=True, text=True
+    )
+
+    line = next(x for x in result.stdout.splitlines() if "names each pull request" in x)
+    if named:
+        assert line.startswith("PASS "), result.stdout
+    else:
+        assert line.startswith("FAIL ") and "not named: #5" in line, result.stdout
+        assert "#6" not in line, "the release commit itself is not counted"

@@ -537,6 +537,142 @@ def test_the_install_report_names_the_entries_the_measurement_left_out(tmp_path:
     assert ("note", notes[0][1]) == notes[0] and "/p/.venv/bin" in notes[0][1]
 
 
+@pytest.mark.parametrize(
+    ("files", "line"),
+    [
+        pytest.param(
+            {},
+            "printf 'FAILED tests/a.py::t\\n1 failed in 0.1s\\n'; no-such-tool-here; exit 2",
+            id="compound",
+        ),
+        pytest.param(
+            {"Makefile": "a:\n\tfalse\nb:\n\tno-such-tool-here\n"},
+            "make -k a b",
+            id="make-k",
+        ),
+        pytest.param(
+            {},
+            f"{sys.executable} -c 'assert 1 == 2'; no-such-tool-here; exit 2",
+            id="traceback",
+        ),
+        pytest.param(
+            {}, "printf 'FAILED tests/a.py::t\\n'; no-such-tool-here", id="exit-127-after-failure"
+        ),
+    ],
+)
+def test_a_missing_tool_after_another_failure_still_holds(
+    tmp_path: Path, files: dict[str, str], line: str
+) -> None:
+    """Breaks if a missing tool at the end of a command hides a failure earlier in it: a failed
+    test before it, or another make target that failed under `make -k`."""
+
+    if "make" in line and shutil.which("make") is None:
+        pytest.skip("make is not installed here")
+    root, digest = target(tmp_path / "t", [line])
+    for name, text in files.items():
+        (root / name).write_text(text, encoding="utf-8")
+
+    _, verdict = hook("codex", digest, root)
+
+    assert verdict.get("decision") == "block", verdict
+
+
+def test_a_rerun_that_fails_another_way_keeps_no_known_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a command that fails one way without the virtual environment's bin and another
+    way with it is kept as a known failure, which would hide a later regression."""
+
+    done = ["faketool"]
+    root, _ = target(tmp_path / "t", done)
+    venv = root / ".venv/bin"
+    venv.mkdir(parents=True)
+    (venv / "faketool").write_text("#!/bin/sh\necho 'FAILED tests/b.py::t'\nexit 2\n")
+    other = tmp_path / "other/bin"
+    other.mkdir(parents=True)
+    (other / "faketool").write_text("#!/bin/sh\necho 'FAILED tests/a.py::t'\nexit 2\n")
+    for tool in (venv / "faketool", other / "faketool"):
+        tool.chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), "/usr/bin", "/bin"]))
+
+    measured = finish_check.measure(root, done, 600)
+
+    (result,) = measured.results
+    assert result.verdict == finish_check.UNVERIFIED and "runs differently" in result.note
+    record = finish_check.known_record(root, finish_check.done_digest(done))
+    assert record is None or not record.failing
+
+
+def test_empty_and_relative_path_entries_name_folders_of_the_target(tmp_path: Path) -> None:
+    """Breaks if an empty PATH entry (the current folder) or a relative one is kept, though Done
+    runs from the target's root, so they name the target's own folders."""
+
+    root = tmp_path / "project"
+    root.mkdir()
+    path = os.pathsep.join(["", "bin", "/usr/bin"])
+
+    environment, dropped = finish_check.hook_environment(root, {"PATH": path})
+
+    assert environment["PATH"] == "/usr/bin" and dropped == ("", "bin")
+
+
+def test_a_record_says_whether_it_was_measured_as_a_hook_runs_done() -> None:
+    """Breaks if a record an older engine wrote, with the agent's PATH, reads as measured as a
+    hook runs Done, or a new record loses that mark."""
+
+    tree = "a" * 40
+    old = {"done": "b" * 64, "prefix": "", "head": tree, "measured": "2026-10-05", "seconds": 1.0}
+    old_text = json.dumps({"records": [{**old, "failing": {}}]})
+    new_text = json.dumps({"records": [{**old, "failing": {}, "as_hook": True}]})
+    (older,) = finish_check.parse_known(old_text) or []
+    (newer,) = finish_check.parse_known(new_text) or []
+    assert not older.as_hook and newer.as_hook
+    assert newer.document()["as_hook"] is True
+
+
+def test_a_not_found_line_the_command_prints_itself_still_holds(tmp_path: Path) -> None:
+    """Breaks if a command that prints a runner's not-found line for a tool that is on the PATH
+    reads as a tool the hook's environment lacks: the exemption is for an absent tool, not for a
+    line of that shape."""
+
+    for line in (
+        "echo 'make: sh: No such file or directory'; exit 2",
+        "echo '/no/such/bin/python3: No module named pytest'; exit 2",
+    ):
+        root, digest = target(tmp_path / str(len(line)), [line])
+
+        _, verdict = hook("codex", digest, root)
+
+        assert verdict.get("decision") == "block", (line, verdict)
+
+
+def test_a_module_is_the_projects_only_at_its_root_or_under_src(tmp_path: Path) -> None:
+    """Breaks if a folder deep in the tree that shares a module's name makes a missing
+    third-party module read as the project's own."""
+
+    root, _ = target(tmp_path / "t", ["true"])
+    (root / "docs/pytest").mkdir(parents=True)
+    (root / "docs/pytest/notes.md").write_text("x\n", encoding="utf-8")
+    subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "docs"], check=True)
+
+    assert not finish_check.project_owned(root, "python -m pytest")
+
+
+def test_the_absence_check_reads_a_relative_path_entry_from_the_target(tmp_path: Path) -> None:
+    """Breaks if a relative PATH entry is read from the engine's own folder, though Done runs
+    from the target's root, so a tool in the target's `bin` reads absent."""
+
+    root = tmp_path / "project"
+    (root / "bin").mkdir(parents=True)
+    (root / "bin/mytool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (root / "bin/mytool").chmod(0o755)
+    line = b"run.sh: line 3: mytool: command not found\n"
+
+    assert not finish_check.confirmed_absent(root, line, {"PATH": "bin"})
+    assert finish_check.confirmed_absent(root, line, {"PATH": "/nowhere"})
+
+
 def test_a_record_1_0_0_wrote_reads_as_a_pass_and_an_unreadable_one_as_none() -> None:
     """Breaks if an install upgraded from 1.0.0 reruns or misreads the pass it remembered, or if
     a damaged record is trusted as a verdict."""
@@ -867,13 +1003,13 @@ def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path
         message
     )
     assert "a new failure inside it is not told apart" in message
-    assert f"PASS {done[1]}" in message
+    assert f"PASS {finish_check.shorten(done[1])}" in message
 
     broken.write_text("", encoding="utf-8")
     (root / "src.txt").write_text("three\n", encoding="utf-8")
     reason = hook("codex", digest, root)[1]["reason"]
     assert "FAIL echo old; exit 1: exit 1 after " in reason and "; not held)" in reason
-    assert f"FAIL {done[1]}: exit 4 after " in reason
+    assert f"FAIL {finish_check.shorten(done[1])}: exit 4 after " in reason
     assert "A command marked known failed the same way before your change" in reason
     assert reason.endswith("```output\nnew\n```")
 

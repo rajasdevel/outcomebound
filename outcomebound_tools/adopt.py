@@ -1327,6 +1327,16 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
             f"known failures: {failing or 'none'}; --finish-check measures it again",
         )
     )
+    if not known.as_hook:
+        run.notes.append(
+            (
+                "note",
+                "finish-check: that record was measured with the PATH of the agent that ran "
+                "adopt; a hook runs Done with the harness's PATH and no activated virtual "
+                "environment, and --finish-check now measures it that way. It keeps each failure "
+                "it finds as known, so read them before you run it",
+            )
+        )
     run.notes.extend(slow_done(run.target, known.seconds, timeout))
 
 
@@ -1359,7 +1369,9 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
                 "note",
                 f"finish-check: Done was measured without {entries} on PATH, as a hook may run it "
                 "with the harness's PATH and no activated virtual environment; a command that "
-                "failed ran once more with them, to tell a missing tool from a failure",
+                "failed ran once more with them, to tell a missing tool from a failure. Where a "
+                "command needs them, name the project's interpreter in Done (for example "
+                "`.venv/bin/python -m pytest`), then run --finish-check again",
             )
         )
     for result in measured.results:

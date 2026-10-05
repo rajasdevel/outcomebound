@@ -59,6 +59,6 @@ canary:
 # scripts/release-check.py on the tag, with no list, so the canary is checked only here.
 release-check:
 	$(PYTHON) scripts/canary.py --verify
-	$(PYTHON) scripts/release-check.py $(if $(TAG),--tag $(TAG))
+	$(PYTHON) scripts/release-check.py $(if $(TAG),--tag $(TAG)) $(if $(CI_RUNS),--ci-runs $(CI_RUNS))
 	scripts/outcomebound adopt . --check
 	$(MAKE) check test

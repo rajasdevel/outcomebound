@@ -4,7 +4,7 @@
 `VERSION`, the dated `CHANGELOG.md` section, its link and the `[Unreleased]` compare link that
 starts at it, and the release the README and the
 shipped CI template install name one version, on a tree that matches HEAD. With `--tag`, the
-tag is `v<VERSION>`, annotated, and on HEAD, and HEAD has a passing CI run of a push to main, so
+tag is `v<VERSION>`, annotated, and on HEAD, and HEAD has a passing CI run on main, so
 no release is cut from a main that failed. One line per check; exit 1 when any fails.
 `make release-check TAG=v<VERSION>` runs this on the tag made locally, before it is pushed, and CI
 runs it again on the tag.
@@ -47,6 +47,8 @@ def _pins(root: Path) -> dict[str, list[str]]:
 
 
 API_HOST = "api.github.com"
+WORKFLOW = ".github/workflows/ci.yml"
+REPOSITORY_NAME = "rajasdevel/outcomebound"
 API_PATH = "/repos/rajasdevel/outcomebound"
 
 
@@ -68,7 +70,7 @@ def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
         try:
             connection.request(
                 "GET",
-                f"{API_PATH}/actions/workflows/ci.yml/runs?head_sha={head}&per_page=100",
+                f"{API_PATH}/actions/workflows/ci.yml/runs?head_sha={head}&branch=main&per_page=100",
                 headers=headers,
             )
             response = connection.getresponse()
@@ -82,20 +84,82 @@ def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
     return [run for run in runs if isinstance(run, dict)]
 
 
-def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
-    """Whether a CI run of a push to main passed on `head`."""
+def _repository(run: dict[str, object]) -> str | None:
+    """The full name of the repository a run belongs to, or None where the run does not say."""
 
+    repository = run.get("repository")
+    name = repository.get("full_name") if isinstance(repository, dict) else None
+    return name if isinstance(name, str) else None
+
+
+def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
+    """Whether a run of this repository's CI workflow on main, of a push or started by hand,
+    completed and passed on exactly `head`. A run that names another commit, another workflow
+    file or no such fields, from GitHub or from a saved file, does not count."""
+
+    if not head:
+        return False, "HEAD's CI run on main could not be read: no HEAD commit"
     try:
         runs = ci_runs(head, source)
     except (OSError, ValueError) as error:
         return False, f"HEAD's CI run on main could not be read: {error}"
     on_main = [
-        run for run in runs if run.get("event") == "push" and run.get("head_branch") == "main"
+        run
+        for run in runs
+        if run.get("head_sha") == head
+        and run.get("path") == WORKFLOW
+        and run.get("event") in ("push", "workflow_dispatch")
+        and run.get("head_branch") == "main"
+        and _repository(run) == REPOSITORY_NAME
     ]
-    if any(run.get("conclusion") == "success" for run in on_main):
-        return True, "HEAD has a passing CI run of a push to main"
+    # The newest completed run decides: an older pass does not outweigh a newer failure.
+    completed = sorted(
+        (run for run in on_main if run.get("status") == "completed"),
+        key=lambda run: str(run.get("created_at") or ""),
+    )
+    if completed and completed[-1].get("conclusion") == "success":
+        return True, "HEAD has a passing CI run on main"
     seen = ", ".join(sorted({str(run.get("conclusion") or run.get("status")) for run in on_main}))
-    return False, f"HEAD has no passing CI run of a push to main ({seen or 'none'})"
+    return False, f"HEAD has no passing CI run on main ({seen or 'none'})"
+
+
+def unnamed_pulls(root: Path, version: str, changelog: list[str]) -> list[str] | None:
+    """The pull requests that landed since the previous release (`(#N)` in a first-parent
+    subject) and that the section of `version` does not name; None where no previous release
+    tag is found. The release commit itself, the one that sets VERSION, is not counted."""
+
+    previous = _git(
+        root,
+        "describe",
+        "--tags",
+        "--abbrev=0",
+        "--match",
+        "v*",
+        "--exclude",
+        f"v{version}",
+        "HEAD",
+    )
+    if not previous:
+        return None
+    log = _git(root, "log", "--first-parent", "--format=%H%x00%s", f"{previous}..HEAD") or ""
+    head = _git(root, "rev-parse", "HEAD")
+    release = "VERSION" in (_git(root, "diff", "--name-only", "HEAD~1", "HEAD") or "").split()
+    heading = re.compile(rf"## \[{re.escape(version)}\] - ")
+    start = next((i for i, line in enumerate(changelog) if heading.match(line)), None)
+    if start is None:
+        return []
+    end = next(
+        (i for i in range(start + 1, len(changelog)) if changelog[i].startswith("## [")),
+        len(changelog),
+    )
+    section = "\n".join(changelog[start:end])
+    numbers = [
+        number
+        for commit, _, subject in (line.partition("\x00") for line in log.splitlines())
+        if not (release and commit == head)
+        for number in re.findall(r"\(#(\d+)\)$", subject)
+    ]
+    return [f"#{number}" for number in numbers if not re.search(rf"#{number}\b", section)]
 
 
 def checks(root: Path, tag: str | None, runs: Path | None = None) -> list[tuple[bool, str]]:
@@ -137,6 +201,16 @@ def checks(root: Path, tag: str | None, runs: Path | None = None) -> list[tuple[
         ),
         (not stale, "every other install line pins it" + "".join(f"; {line}" for line in stale)),
     ]
+    unnamed = unnamed_pulls(root, version, changelog)
+    what = f"CHANGELOG.md's {version} section names each pull request since the previous release"
+    if unnamed is None:
+        # No release tag below this version in this clone (a shallow clone, or the first
+        # release): nothing to compare, which is not a pass.
+        results.append((False, f"{what}: UNVERIFIED, no previous release tag in this clone"))
+    else:
+        results.append(
+            (not unnamed, what + (f"; not named: {', '.join(unnamed)}" if unnamed else ""))
+        )
     if tag is not None:
         head = _git(root, "rev-parse", "HEAD")
         results += [
