@@ -133,8 +133,10 @@ the lines between blank lines, and the comparison ignores the spaces and line br
 template (`templates/tickets/issue-template.md`), because that text is a placeholder that the
 draft kept from the template. No number of drafts and no length of a paragraph is part of the
 condition. Thus, a short paragraph such as `None.` under `## Limits` in every draft also gets the
-WARNING: a section that carries no decision is not written. Guidance that every ticket repeats is
-said one time, in the tickets fragment or in the project's own instructions.
+WARNING: a section that carries no decision is not written. Process guidance that every ticket
+repeats is said one time, in the tickets fragment or in the project's own instructions. A
+behaviour that each ticket must meet is not guidance: keep it, or move it to a contract section
+that each ticket names in `reads`. The WARNING says which to do for each kind.
 
 A claim can declare the paths that it needs, as `required_paths` in the plan. When a ticket's
 claim declares a path that the ticket's `bounds` do not cover, `check` gives a WARNING,

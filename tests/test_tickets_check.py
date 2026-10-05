@@ -506,6 +506,30 @@ def test_a_paragraph_in_every_draft_is_one_warning(
     assert found["result"] == "PASS"
 
 
+def test_the_warning_keeps_a_repeated_behaviour_and_drops_only_process_guidance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Repetition alone does not make a paragraph guidance: two tickets may each have to meet
+    the same behaviour, so the next action drops process guidance and keeps a behaviour or
+    moves it to a contract both tickets read."""
+
+    root, files = drafts(
+        tmp_path,
+        one=draft_text(
+            brief=outcome("One is true.", "## Design", "Return 409 on a stale revision.", "")
+        ),
+        two=draft_text(
+            brief=outcome("Two is true.", "## Design", "Return 409 on a stale revision.", "")
+        ),
+    )
+    found = report(root, "--draft", *files, capsys=capsys, expect=0)
+    nexts = [str(m["next"]) for m in messages_of(found) if m["code"] == "REPEATED_GUIDANCE"]
+
+    assert len(nexts) == 1, nexts
+    assert "where it is process guidance, drop it" in nexts[0]
+    assert "behaviour each ticket must meet, keep it" in nexts[0]
+
+
 def test_a_paragraph_one_draft_lacks_is_not_repeated(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
