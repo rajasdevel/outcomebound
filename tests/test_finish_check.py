@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -402,6 +404,52 @@ def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path) ->
     assert "UNVERIFIED ./check.sh: exit 126" in verdict["systemMessage"]
 
 
+@pytest.mark.parametrize("number", [signal.SIGINT, signal.SIGTERM])
+def test_a_stop_that_arrives_while_a_command_starts_stops_the_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, number: int
+) -> None:
+    """Breaks if Ctrl-C, or SIGTERM where adopt maps it, that arrives after the command has
+    started but before `subprocess.Popen` returns leaves the command running with no process
+    left to stop it: the signal is sent from inside `Popen`, once the command has written its
+    pid."""
+
+    pid = tmp_path / "pid"
+    real = subprocess.Popen
+
+    def late(*arguments: Any, **options: Any) -> subprocess.Popen[bytes]:
+        process = real(*arguments, **options)
+        deadline = time.monotonic() + 30
+        while not (pid.exists() and pid.read_text(encoding="utf-8").strip()):
+            assert time.monotonic() < deadline, "the command never wrote its pid"
+            time.sleep(0.01)
+        os.kill(os.getpid(), number)
+        return process
+
+    class Stop(Exception):
+        pass
+
+    def stop(got: int, frame: object) -> None:
+        raise Stop(got)
+
+    # SIGINT at Python's default, as a terminal's foreground job has it: a suite started as a
+    # background job of a shell has SIGINT ignored, and an ignored signal is left ignored.
+    previous = {
+        signal.SIGINT: signal.signal(signal.SIGINT, signal.default_int_handler),
+        signal.SIGTERM: signal.signal(signal.SIGTERM, stop),
+    }
+    monkeypatch.setattr(finish_check.subprocess, "Popen", late)
+    try:
+        with pytest.raises((KeyboardInterrupt, Stop)):
+            finish_check.run_one(tmp_path, f"echo $$ > {pid}; exec sleep 300", None)
+        assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+        assert signal.getsignal(signal.SIGTERM) is stop
+    finally:
+        for got, handler in previous.items():
+            signal.signal(got, handler)
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid.read_text(encoding="utf-8")), 0)
+
+
 def test_a_command_is_not_started_once_the_limit_has_passed(tmp_path: Path) -> None:
     """Breaks if a Done command starts with no time left, to be cut off by the harness."""
 
@@ -495,11 +543,14 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
 ) -> None:
     """Breaks if a slow check is left for the harness to cut off, if the commands do not stop
     the margin before the entry's own timeout, if a process it started keeps running, or if the
-    report offers shortening Done before a longer limit: the entry's timeout is one second past
-    the margin."""
+    report offers shortening Done before a longer limit. The commands get the seconds of
+    `limit` past the margin, less what the hook's Git reads take before they start: enough that a
+    loaded machine still starts the command, and the elapsed seconds the report names are read,
+    not assumed."""
 
     root, digest = target(tmp_path / "t", ["sleep 60 & echo $! > child.pid; wait"])
-    timeout = finish_check.MARGIN_SECONDS + 1
+    limit = 5
+    timeout = finish_check.MARGIN_SECONDS + limit
     started = time.monotonic()
 
     _, verdict = hook("codex", digest, root, cwd=root, timeout=timeout)
@@ -509,11 +560,13 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     message = verdict["systemMessage"]
     assert message.startswith(
         f"finish-check UNVERIFIED: `sleep 60 & echo $! > child.pid; wait` did not finish within "
-        f"1 s, {finish_check.MARGIN_SECONDS} s before the hook's {timeout} s timeout"
+        f"{limit} s, {finish_check.MARGIN_SECONDS} s before the hook's {timeout} s timeout"
     )
     assert f"--finish-timeout <seconds>`, for example {2 * timeout}" in message
     assert message.index("--finish-timeout") < message.index("--no-finish-check")
-    assert "stopped at the time limit after 1 s" in message
+    stopped = re.search(r"stopped at the time limit after (\d+) s", message)
+    assert stopped is not None and int(stopped.group(1)) <= limit, message
+    assert (root / "child.pid").exists(), f"the command never started: {message}"
     child = int((root / "child.pid").read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and _alive(child):

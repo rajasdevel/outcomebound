@@ -16,6 +16,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -1902,21 +1903,33 @@ def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(
     assert re.search(r"PASS     finish-check: `sleep 2` in \d+ s", out)
     took = re.search(r"UNVERIFIED finish-check: Done took (\d+) s, longer than the 1 s", out)
     assert took is not None and int(took.group(1)) >= 2
-    least = int(took.group(1)) + 1 + finish_check.MARGIN_SECONDS
-    assert f"--finish-timeout <seconds>` with more than {least}" in out
+    # The report rounds the seconds Done took, and the least timeout is the whole seconds plus
+    # one past the margin: 2.4 s reads "2 s" and 33, 2.6 s reads "3 s" and 33 too.
+    least = re.search(r"--finish-timeout <seconds>` with more than (\d+), for example (\d+)", out)
+    assert least is not None, out
+    seconds = int(least.group(1)) - 1 - finish_check.MARGIN_SECONDS
+    assert seconds in (int(took.group(1)) - 1, int(took.group(1))), out
+    assert int(least.group(2)) == 2 * int(least.group(1))
     assert "UNVERIFIED finish-check: Done took" in run(capsys, str(target))[1]
 
 
 def test_a_stopped_measurement_stops_done_keeps_nothing_and_exits_130(tmp_path: Path) -> None:
     """Breaks if Ctrl-C during the install's Done run leaves the command running, which runs in
     its own session where the terminal's signal does not reach it, ends in a traceback, or
-    keeps a record of known failures."""
+    keeps a record of known failures. The install starts with SIGINT at its default, as a
+    terminal's foreground job has it: a suite started as a background job of a shell (`make
+    test &`) has SIGINT ignored, and a Python started that way, as the install is, never raises
+    KeyboardInterrupt."""
 
     target = repo(tmp_path / "t")
     pid = tmp_path / "pid"
     done = f"echo $$ > {pid}; exec sleep 300"
     process = subprocess.Popen(
         [
+            sys.executable,
+            "-c",
+            "import os, signal, sys; signal.signal(signal.SIGINT, signal.SIG_DFL); "
+            "os.execv(sys.argv[1], sys.argv[1:])",
             str(LAUNCHER),
             "adopt",
             str(target),

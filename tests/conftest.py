@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -14,8 +17,23 @@ import pytest
 GIT_CONFIG = (("maintenance.auto", "false"), ("gc.auto", "0"))
 
 
+# Without --basetemp, every pytest run of this user shares one folder, pytest-of-<user> in the
+# system's temporary folder, and each run that ends unlinks the dead `pytest-current` link there.
+# Two runs that end together, such as suites in two worktrees, race on that unlink, and the loser
+# ends in FileNotFoundError after every test passed. So a run that names no base folder gets one
+# of its own, removed when the run passes and kept, as pytest keeps it, when a test fails.
+OWN_BASE = pytest.StashKey[Path]()
+
+
+@pytest.hookimpl(tryfirst=True)
 def pytest_configure(config: pytest.Config) -> None:
-    """Append `GIT_CONFIG` to the environment's Git configuration, once per process."""
+    """Give the run its own base folder before pytest reads the option, then append
+    `GIT_CONFIG` to the environment's Git configuration, once per process."""
+
+    if config.option.basetemp is None and not hasattr(config, "workerinput"):
+        root = Path(tempfile.mkdtemp(prefix="outcomebound-pytest-"))
+        config.option.basetemp = str(root / "base")
+        config.stash[OWN_BASE] = root
 
     count = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
     present = {
@@ -28,3 +46,12 @@ def pytest_configure(config: pytest.Config) -> None:
             os.environ[f"GIT_CONFIG_VALUE_{count}"] = value
             count += 1
     os.environ["GIT_CONFIG_COUNT"] = str(count)
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Remove the run's own base folder when every test passed."""
+
+    root = session.config.stash.get(OWN_BASE, None)
+    if root is not None and exitstatus == 0:
+        shutil.rmtree(root, ignore_errors=True)
