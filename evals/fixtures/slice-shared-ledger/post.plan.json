@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "drafts-pass-the-ticket-lint",
+      "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "lint"],
+      "required_paths": ["checks/drafts.py", ".outcomebound/tickets.json"]
+    },
+    {
+      "name": "draft-count-within-the-sizing-rule",
+      "risk": "the design, two unrelated outcomes for two implementers at once, was cut into other than two tickets",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "count", "2", "2"],
+      "required_paths": ["checks/drafts.py"]
+    },
+    {
+      "name": "outcomes-not-merged-by-the-shared-file",
+      "risk": "one draft holds both outcomes because both touch the status table, or an outcome has no draft",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3", "-B", "checks/ticket_cut.py", "apart",
+        "expenses/categories.py", "expenses/money.py"
+      ],
+      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+    },
+    {
+      "name": "shared-file-granted-or-ordered",
+      "risk": "the two drafts neither both hold the status table in bounds nor are ordered one after the other",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3", "-B", "checks/ticket_cut.py", "ordered", "docs/status.md",
+        "expenses/categories.py", "expenses/money.py"
+      ],
+      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+    }
+  ]
+}

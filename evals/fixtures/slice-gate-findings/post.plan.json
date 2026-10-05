@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "drafts-pass-the-ticket-lint",
+      "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "lint"],
+      "required_paths": ["checks/drafts.py", ".outcomebound/tickets.json"]
+    },
+    {
+      "name": "gate-ticket-can-turn-green",
+      "risk": "a draft that adds the gate cannot make it pass: neither its bounds nor a draft it is blocked by cover the files the check already reports",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3", "-B", "checks/ticket_cut.py", "gate", "Makefile",
+        "src/ledger/entries.py", "src/ledger/totals.py"
+      ],
+      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+    }
+  ]
+}

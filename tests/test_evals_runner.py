@@ -288,7 +288,12 @@ def test_the_ticket_fixtures_select_the_tickets_fragment_and_the_others_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     selecting = {name for name in RUN.fixture_names() if RUN.selected_fragments(name)}
-    assert selecting == {"slice-a-spec"}
+    assert selecting == {
+        "slice-a-spec",
+        "slice-gate-findings",
+        "slice-parity-registry",
+        "slice-shared-ledger",
+    }
     for name in selecting:
         assert RUN.selected_fragments(name) == ("tickets",)
     fixtures = tmp_path / "fixtures"
@@ -539,7 +544,7 @@ def test_the_hand_off_fixtures_run_only_when_named() -> None:
     handoff = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
     assert len(handoff) == 12
     assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in handoff]
-    assert len(RUN.default_fixtures()) == 11
+    assert len(RUN.default_fixtures()) == 14
     assert RUN._parser().parse_args([]).fixtures.split(",") == RUN.default_fixtures()
 
 

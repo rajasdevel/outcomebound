@@ -1,0 +1,15 @@
+# The project note, the design, the workflow document, the ticket template, the store
+# declaration and claims plan, the graders, the installed core skill and repository exclusion
+# state copied into the candidate-writable fixture.
+AGENTS.md
+CONTRIBUTING.md
+docs/specs/doc-gate.md
+.github/ISSUE_TEMPLATE/ticket.md
+.outcomebound/tickets.json
+.outcomebound/ticket-claims.json
+checks/drafts.py
+checks/ticket_cut.py
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude
