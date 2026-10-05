@@ -592,6 +592,65 @@ def keep_known(target: Path, record: Known, deadline: float | None = None) -> bo
 TIME, ENVIRONMENT = "time", "environment"
 # The exit codes of a shell that could not run the command: 126 not executable, 127 not found.
 NOT_RUN = (126, 127)
+# A tool the command names that this PATH does not hold, as the last line of output says it when a
+# runner between the hook and the tool turns the shell's 127 into its own exit code: make's
+# `make: pytest: No such file or directory`, a script's `run.sh: line 3: pytest: command not
+# found` or `run.sh: 3: pytest: not found`, a shell's `sh: pytest: command not found`, and a
+# Python launcher's `python3: No module named pytest`. A test's own message (`FileNotFoundError:
+# [Errno 2] No such file or directory: 'x'`, `ModuleNotFoundError: No module named 'x'`) has no
+# such form. make's own `make: *** [test] Error 1` lines after it are passed over.
+_MISSING = re.compile(
+    r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
+    r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
+    r"|(?:\S*/)?(?:ba|da|z)?sh: (?P<shelled>[^\s:]+): command not found"
+    r"|(?:\S*/)?python[\d.]*: No module named (?P<module>[\w.]+))$"
+)
+# make's own lines after the tool's: its error line, and a nested make's directory lines.
+_MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: (?:\*\*\* |(?:Leaving|Entering) directory )")
+
+
+def missing_tool(output: bytes) -> str | None:
+    """The tool a failing command's last line of output says this PATH does not hold, as the
+    command line names it (`pytest`, or `python -m pytest`), or None."""
+
+    lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
+    while lines and _MAKE_ERROR.match(lines[-1]):
+        lines.pop()
+    found = _MISSING.match(lines[-1]) if lines else None
+    if found is None:
+        return None
+    if found["module"]:
+        return f"python -m {found['module']}"
+    return found["made"] or found["scripted"] or found["shelled"]
+
+
+def project_owned(target: Path, tool: str) -> bool:
+    """Whether a tool `missing_tool` names is the project's own, so that its absence is the
+    work's and not the hook's environment's: a path inside the target, relative or absolute, which
+    no PATH resolves (a script the change removed or renamed); a bare name that an executable file
+    in the target's HEAD commit carries, which a recipe puts on PATH itself; or a `python -m`
+    module whose top package or module is in the target's tree or its HEAD commit, a namespace
+    package's folder included."""
+
+    root = target.resolve()
+    if "/" in tool and not tool.startswith("python -m "):
+        path = Path(tool)
+        if not path.is_absolute():
+            return True
+        resolved = path.resolve(strict=False)
+        return resolved == root or root in resolved.parents
+    listed = _git(target, "ls-tree", "-r", "HEAD")
+    entries = [
+        line.split("\t", 1) for line in (listed or b"").decode("utf-8", "replace").splitlines()
+    ]
+    tracked = [(entry[0].split(" ", 1)[0], entry[1]) for entry in entries if len(entry) == 2]
+    if not tool.startswith("python -m "):
+        return any(mode == "100755" and path.rsplit("/", 1)[-1] == tool for mode, path in tracked)
+    top = tool.removeprefix("python -m ").split(".")[0]
+    for folder in (target, target / "src"):
+        if (folder / top).is_dir() or (folder / f"{top}.py").is_file():
+            return True
+    return any(f"/{path}".endswith(f"/{top}.py") or f"/{top}/" in f"/{path}" for _, path in tracked)
 
 
 @dataclass(frozen=True)
@@ -724,7 +783,9 @@ def _release(previous: Handlers, held: Sequence[int]) -> None:
             os.kill(os.getpid(), number)
 
 
-def run_one(target: Path, line: str, seconds: float | None) -> Result:
+def run_one(
+    target: Path, line: str, seconds: float | None, environment: Mapping[str, str] | None = None
+) -> Result:
     """Run one Done command from the target's root in its own process group, for at most
     `seconds`, None for as long as it takes; its output, both streams, kept for the report. A
     stopping signal that arrives while the command starts is acted on once it has started, so
@@ -742,6 +803,7 @@ def run_one(target: Path, line: str, seconds: float | None) -> Result:
                 stdout=sink,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
+                env=environment,
             )
         except OSError as error:
             _release(previous, held)
@@ -767,11 +829,17 @@ def run_one(target: Path, line: str, seconds: float | None) -> Result:
         elapsed = time.monotonic() - started
         if code == 0:
             return Result(line, PASS, elapsed, code=code)
+        tail = _tail(sink)
         if code in NOT_RUN:
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
-            return Result(line, UNVERIFIED, elapsed, why, _tail(sink), ENVIRONMENT, code)
+            return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
+        missing = missing_tool(tail)
+        if missing is not None and not project_owned(target, missing):
+            why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
+            note = f"its output says `{missing}` is not on this PATH"
+            return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code, note=note)
         why = f"exit {code} after {elapsed:.0f} s"
-        return Result(line, FAIL, elapsed, why, _tail(sink), code=code)
+        return Result(line, FAIL, elapsed, why, tail, code=code)
 
 
 def run_all(
@@ -815,6 +883,8 @@ class Measured:
     # not hold: a command, or a failure id of a command it held.
     previous: Known | None = None
     added: tuple[str, ...] = ()
+    # The PATH entries the measurement ran without, as a hook may: see `hook_environment`.
+    dropped: tuple[str, ...] = ()
 
 
 def added_since(previous: Known, failing: Mapping[str, Failure]) -> list[str]:
@@ -846,7 +916,18 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
     started = time.monotonic()
     head = _head(target)
     before = tree_digest(target, digest)
-    results = [run_one(target, line, None) for line in done]
+    as_hook, dropped = hook_environment(target, os.environ)
+    results = [run_one(target, line, None, as_hook) for line in done]
+    if dropped:
+        # A command that fails without the entries a hook may lack, and passes with them, needs
+        # those entries: a hook would fail it, and a known failure would hide its real failures.
+        for index, result in enumerate(results):
+            if result.verdict == FAIL and run_one(target, result.command, None).verdict == PASS:
+                why = f"{result.why}: could not run in the hook's environment"
+                note = f"it passes only with {', '.join(dropped)} on PATH"
+                results[index] = replace(
+                    result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note
+                )
     seconds = time.monotonic() - started
     failing: dict[str, Failure] = {}
     for index, result in enumerate(results):
@@ -864,7 +945,33 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
     if kept and before is not None and not environment and tree_digest(target, digest) == before:
         verdict = FAIL if failing else PASS
         remember(target, Checked(before, timeout, verdict, tuple(results) if failing else ()))
-    return Measured(tuple(results), seconds, kept, previous, added)
+    return Measured(tuple(results), seconds, kept, previous, added, dropped)
+
+
+def hook_environment(
+    target: Path, environ: Mapping[str, str]
+) -> tuple[dict[str, str], tuple[str, ...]]:
+    """`environ` as a hook may see it, and the PATH entries taken out: a hook has the harness's
+    PATH, which a desktop harness starts without the project's tools, so the measurement runs
+    without an entry inside the target and without a virtual environment's `bin` (a folder whose
+    parent holds `pyvenv.cfg`), and without `VIRTUAL_ENV`. A Done that passes only with those
+    entries then reads `UNVERIFIED` at install, where a person sees it, and not at each turn end:
+    `measure` runs a command that fails without them once more with them. A conda environment's
+    `bin` holds no `pyvenv.cfg` and is not told apart."""
+
+    root = target.resolve()
+    kept: list[str] = []
+    dropped: list[str] = []
+    for entry in environ.get("PATH", "").split(os.pathsep):
+        folder = Path(entry).resolve() if entry else None
+        inside = folder is not None and (folder == root or root in folder.parents)
+        if folder is not None and (inside or (folder.parent / "pyvenv.cfg").is_file()):
+            dropped.append(entry)
+        else:
+            kept.append(entry)
+    environment = {key: value for key, value in environ.items() if key != "VIRTUAL_ENV"}
+    environment["PATH"] = os.pathsep.join(kept)
+    return environment, tuple(dropped)
 
 
 # --- The report ------------------------------------------------------------------

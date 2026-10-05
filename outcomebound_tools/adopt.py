@@ -1352,12 +1352,24 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
     """The install report's lines for the one Done run an install makes."""
 
     notes: Notes = []
+    if measured.dropped:
+        entries = ", ".join(measured.dropped)
+        notes.append(
+            (
+                "note",
+                f"finish-check: Done was measured without {entries} on PATH, as a hook may run it "
+                "with the harness's PATH and no activated virtual environment; a command that "
+                "failed ran once more with them, to tell a missing tool from a failure",
+            )
+        )
     for result in measured.results:
         shown = finish_check.shorten(result.command)
         if result.verdict == finish_check.PASS:
             notes.append(("PASS", f"finish-check: `{shown}` in {result.seconds:.0f} s"))
         elif result.cause == finish_check.ENVIRONMENT:
             why = result.why.split(":")[0]
+            if result.note:
+                why = f"{why}; {result.note}"
             notes.append(("UNVERIFIED", f"finish-check: `{shown}` could not run here, {why}"))
         else:
             known_by = (
