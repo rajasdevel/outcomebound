@@ -337,9 +337,10 @@ def _repeated(paragraph: str, headings: Sequence[str], drafts: int) -> Message:
         "",
         f'the paragraph "{shown}" under {where} is in each of the {drafts} drafts given, '
         "word for word",
-        "drop it from the drafts: guidance every ticket would repeat is said once, in the "
-        "tickets fragment or the project's own instructions, and a paragraph that carries no "
-        "decision is not written",
+        "where it is process guidance, drop it from the drafts: guidance every ticket would "
+        "repeat is said once, in the tickets fragment or the project's own instructions; where it "
+        "is a behaviour each ticket must meet, keep it, or move it to a contract section that "
+        "each ticket names in `reads`",
     )
 
 

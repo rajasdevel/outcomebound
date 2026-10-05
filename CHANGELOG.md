@@ -29,7 +29,9 @@ The bump comes from what an adopter must do, not from the commit type; see
   breaks in it. Headings, the block and the placeholder text of the issue template are not
   compared. No number of drafts and no length of a paragraph is part of the condition. The
   `slice-tickets` skill already tells the slicer to keep such guidance out of the tickets, because
-  the tickets fragment says it one time. The warning does not change the result of the run.
+  the tickets fragment says it one time. The warning tells the slicer to drop repeated process
+  guidance, and to keep a repeated behaviour that each ticket must meet or move it to a contract
+  section that each ticket names in `reads`. The warning does not change the result of the run.
 
 ### Changed
 
