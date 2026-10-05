@@ -19,9 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # A push or pull request runs the oldest and newest Python this project
-        # supports; a release tag runs every version between them as well.
-        python-version: ${{ startsWith(github.ref, 'refs/tags/v') && fromJSON('["3.10", "3.11", "3.12", "3.13", "3.14"]') || fromJSON('["3.10", "3.14"]') }}
+        # Every push, pull request and release tag runs each Python this project
+        # supports: the standard library differs between them (Path.exists raises
+        # PermissionError under an unreadable folder up to 3.13 and returns False on 3.14).
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       # Each action is pinned by commit, the only reference that cannot move; the comment names
       # the release it is.
