@@ -4,6 +4,7 @@ what fails it, that no project path reaches the report, and the record keyed by 
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -123,6 +124,28 @@ def test_a_candidate_that_writes_into_a_project_fails(tmp_path: Path, projects: 
     assert_no_path(done.stdout + done.stderr, tmp_path)
 
 
+def test_an_instructions_check_that_refuses_with_no_report_fails(
+    tmp_path: Path, projects: list[Path]
+) -> None:
+    """The instruction CLI's refusal: exit 2, a reason on stderr, no JSON on stdout."""
+
+    refusing = stub(
+        tmp_path,
+        'if [ "$5" = instructions ]; then\n'
+        '  echo "outcomebound instructions: cannot read $6/.outcomebound/manifest.json" >&2\n'
+        "  exit 2\n"
+        "fi\n"
+        f'exec "{sys.executable}" "$@"',
+    )
+
+    done = canary(tmp_path, projects[:1], refusing)
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "no report: exit 2, no JSON report" in done.stdout
+    assert done.stdout.splitlines()[-1].startswith("FAIL canary: 1 of 1 project(s) failed")
+    assert_no_path(done.stdout + done.stderr, tmp_path)
+
+
 def test_without_a_list_it_reads_unverified(tmp_path: Path) -> None:
     env = {key: value for key, value in os.environ.items() if key != "OB_CANARY_LIST"}
 
@@ -180,3 +203,49 @@ def test_the_record_is_keyed_by_tree_and_verify_reads_it(
     assert module.verify(repo, folder) == 1
     module.write_record(repo, folder, "FAIL", {})
     assert module.verify(repo, folder) == 1
+
+
+def report_text(result: str = "UNVERIFIED", **changes: object) -> str:
+    finding = {"check": "loading-ancestors", "verdict": "UNVERIFIED"}
+    document: dict[str, object] = {"result": result, "findings": [finding], **changes}
+    return json.dumps(document)
+
+
+@pytest.mark.parametrize(
+    ("exit", "out", "problem"),
+    [
+        (2, "", "exit 2, no JSON report"),
+        (2, "[]", "not an object"),
+        (2, report_text(result="SKIPPED"), "no result PASS, FAIL or UNVERIFIED"),
+        (0, report_text(), "result UNVERIFIED disagrees with exit 0"),
+        (2, report_text(findings="none"), "no list of findings"),
+        (2, report_text(findings=[{"check": "x"}]), "a finding has no check or no verdict"),
+    ],
+)
+def test_an_instructions_report_that_is_missing_or_malformed_fails(
+    exit: int, out: str, problem: str
+) -> None:
+    outcome = load_canary().read("instructions check", exit, out, "")
+
+    assert outcome.failed() is not None
+    assert outcome.failed().startswith("no report: ")
+    assert problem in outcome.failed()
+
+
+def test_a_valid_unverified_report_is_a_verdict_and_no_report_is_a_failure() -> None:
+    module = load_canary()
+    valid = module.read("instructions check", 2, report_text(), "")
+    missing = module.read("instructions check", 2, "", "refused\n")
+
+    assert valid.failed() is None
+    assert valid.verdict == "UNVERIFIED"
+    assert valid.kinds == {"loading-ancestors UNVERIFIED": 1}
+
+    # The installed release with no report and a candidate with a valid one is no failure.
+    result = module.Result(1)
+    module._compare(result, "instructions check", missing, valid, "python 3")
+    assert not result.failures
+    # The reverse is a failure of the candidate.
+    result = module.Result(1)
+    module._compare(result, "instructions check", valid, missing, "python 3")
+    assert result.failures == {"no report": 1}

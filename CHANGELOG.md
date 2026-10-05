@@ -42,6 +42,12 @@ The bump comes from what an adopter must do, not from the commit type; see
   `git status` shows the manifest as changed. Commit it. No other step is necessary. An engine of
   1.1.1 or earlier keeps working with this manifest: it ignores the field, and it removes the field
   when it writes the manifest again. adopt reads a record with or without the field.
+- Upgrade step for the release: if your CI installs a pinned release and runs
+  `outcomebound adopt . --check`, change the pin and commit the result of `outcomebound adopt .`
+  in the same change. An engine reads an install that a different release wrote as stale, in the
+  two directions: with the old pin and the new install, the check fails, and with the new pin and
+  the old install, the check also fails. docs/VERSIONING.md now says this under "How to take a
+  release".
 
 ### Fixed
 
@@ -531,7 +537,7 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.1...HEAD
 [1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
 [1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
 [1.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.0.0

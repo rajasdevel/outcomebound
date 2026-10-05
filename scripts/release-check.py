@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check that a release commit agrees with itself, and with its tag when one is named.
 
-`VERSION`, the dated `CHANGELOG.md` section and its link, and the release the README and the
+`VERSION`, the dated `CHANGELOG.md` section, its link and the `[Unreleased]` compare link that
+starts at it, and the release the README and the
 shipped CI template install name one version, on a tree that matches HEAD. With `--tag`, the
 tag is `v<VERSION>`, annotated, and on HEAD. One line per check; exit 1 when any fails.
 `make release-check` runs this before the tag is pushed, and CI runs it again on the tag.
@@ -65,6 +66,10 @@ def checks(root: Path, tag: str | None) -> list[tuple[bool, str]]:
         (
             f"[{version}]: {REPOSITORY}/releases/tag/v{version}" in changelog,
             f"CHANGELOG.md links {version} to its tag",
+        ),
+        (
+            f"[Unreleased]: {REPOSITORY}/compare/v{version}...HEAD" in changelog,
+            f"CHANGELOG.md compares Unreleased from v{version}",
         ),
         (
             pins.get(GITHUB_TEMPLATE, []) != [] and set(pins[GITHUB_TEMPLATE]) == {version},

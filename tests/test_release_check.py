@@ -12,6 +12,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "release-check.py"
 LINK = "[1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0"
+COMPARE = "[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.0...HEAD"
 
 # Each case, and the one check it fails.
 CASES = {
@@ -19,6 +20,7 @@ CASES = {
     "dirty": "the tree matches HEAD",
     "undated": "dated 1.1.0 section",
     "wrong-link": "links 1.1.0",
+    "stale-compare": "compares Unreleased from v1.1.0",
     "stale-pin": "pins v1.1.0",
     "stale-readme": "README.md installs v1.1.0",
     "stale-gitlab": "every other install line pins it",
@@ -32,6 +34,7 @@ CASES = {
 STALE = {
     "undated": ("CHANGELOG.md", " - 2026-09-28", ""),
     "wrong-link": ("CHANGELOG.md", "tag/v1.1.0", "tag/v1.0.0"),
+    "stale-compare": ("CHANGELOG.md", "compare/v1.1.0", "compare/v1.0.1"),
     "stale-pin": ("templates/ci/github-actions.yml", "v1.1.0", "v1.0.0"),
     "stale-readme": ("README.md", "v1.1.0", "v1.0.0"),
     "stale-gitlab": ("templates/ci/gitlab-ci.yml", "v1.1.0", "v1.0.0"),
@@ -40,7 +43,7 @@ STALE = {
 
 def release_files(case: str) -> dict[str, str]:
     files = {
-        "CHANGELOG.md": f"## [Unreleased]\n\n## [1.1.0] - 2026-09-28\n\n{LINK}\n",
+        "CHANGELOG.md": f"## [Unreleased]\n\n## [1.1.0] - 2026-09-28\n\n{COMPARE}\n{LINK}\n",
         "templates/ci/github-actions.yml": (
             '        run: python -m pip install "git+https://github.com/example/outcomebound@v1.1.0"\n'
         ),

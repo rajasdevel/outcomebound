@@ -9,9 +9,13 @@ each set of install options serves every case that shares it, and so that a prev
 that stops on the shape cannot keep the candidate from being tested.
 
 The previous releases are two. `v1.0.0` is the oldest install that an adopter can hold, so it
-has the most records, blocks and defaults to move. The newest tag at or below the candidate's
-`VERSION` is the release that most adopters upgrade from. A tag that this clone does not hold
-(a shallow clone, a fork) skips with its name; CI fetches the whole history, so it runs there.
+has the most records, blocks and defaults to move. The release before the candidate is the one
+that most adopters upgrade from: the newest tag at or below the candidate's `VERSION` that is not
+the candidate itself. Between releases `VERSION` still names the previous release, so its tag is
+that release; at a release `VERSION` names the release under test, and once its tag exists (the
+tag's pipeline) that tag holds the candidate's own tree, so the tag before it is taken. A tag
+that this clone does not hold (a shallow clone, a fork) skips with its name; CI fetches the whole
+history, so it runs there.
 
 The assertions are outcomes, not report bytes: `adopt --check` before the upgrade reads no
 record `edited` that the project did not change, the upgrade does not stop and refuses nothing
@@ -140,6 +144,34 @@ def released_tags() -> list[str]:
     return sorted(tags, key=version)
 
 
+def tag_tree(tag: str) -> str | None:
+    """The tree that a tag of this repository names; None where Git cannot read it."""
+
+    done = subprocess.run(
+        [GIT, "-C", str(ROOT), "rev-parse", "--verify", "-q", f"{tag}^{{tree}}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
+
+
+def candidate_tree() -> str | None:
+    """The tree of the candidate: HEAD's tree where the candidate is this checkout, else None,
+    since another engine tree (an archive) names no commit."""
+
+    return tag_tree("HEAD") if ROOT.resolve() == CANDIDATE else None
+
+
+def before_candidate(
+    tags: list[str], ceiling: tuple[int, ...], own: str | None, tree_of: Callable[[str], str | None]
+) -> list[str]:
+    """The release tags the candidate can upgrade from, oldest first: at or below its `VERSION`,
+    less a tag whose tree is the candidate's own, which is the release under test."""
+
+    return [tag for tag in tags if version(tag) <= ceiling and (own is None or tree_of(tag) != own)]
+
+
 def previous_tag(which: str) -> str:
     """The release that `which` names for the candidate, or a skip that says why none."""
 
@@ -149,12 +181,39 @@ def previous_tag(which: str) -> str:
             pytest.skip(f"the tag {OLDEST} is not in this clone (a shallow clone or a fork)")
         return OLDEST
     ceiling = version((CANDIDATE / "VERSION").read_text(encoding="utf-8"))
-    below = [tag for tag in tags if version(tag) <= ceiling]
+    below = before_candidate(tags, ceiling, candidate_tree(), tag_tree)
     if not below:
-        pytest.skip("no release tag at or below the candidate's VERSION is in this clone")
+        pytest.skip("no release tag before the candidate is in this clone")
     if below[-1] == OLDEST:
-        pytest.skip(f"the newest release tag at or below the candidate is {OLDEST}, run as oldest")
+        pytest.skip(f"the release tag before the candidate is {OLDEST}, run as oldest")
     return below[-1]
+
+
+TAGS = ["v1.0.0", "v1.1.0", "v1.1.1"]
+TREES = {"v1.0.0": "tree-100", "v1.1.0": "tree-110", "v1.1.1": "tree-111", "v1.2.0": "tree-120"}
+
+
+@pytest.mark.parametrize(
+    ("tags", "candidate_version", "own", "expected"),
+    [
+        # Between releases: VERSION still names the previous release, whose tree is not HEAD's.
+        pytest.param(TAGS, "1.1.1", "tree-dev", "v1.1.1", id="development"),
+        # The release commit, before its tag exists.
+        pytest.param(TAGS, "1.2.0", "tree-120", "v1.1.1", id="release-before-tag"),
+        # The tag's pipeline: the tag exists and names the candidate's own tree.
+        pytest.param([*TAGS, "v1.2.0"], "1.2.0", "tree-120", "v1.1.1", id="release-after-tag"),
+        # After the release, VERSION names it and HEAD has moved on.
+        pytest.param([*TAGS, "v1.2.0"], "1.2.0", "tree-dev", "v1.2.0", id="after-release"),
+        # Another engine tree names no commit: the newest tag at or below its VERSION.
+        pytest.param([*TAGS, "v1.2.0"], "1.2.0", None, "v1.2.0", id="archive-candidate"),
+    ],
+)
+def test_the_release_before_the_candidate_is_the_one_it_upgrades_from(
+    tags: list[str], candidate_version: str, own: str | None, expected: str
+) -> None:
+    below = before_candidate(tags, version(candidate_version), own, TREES.get)
+
+    assert below[-1] == expected
 
 
 @dataclass(frozen=True)
