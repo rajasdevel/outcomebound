@@ -48,7 +48,10 @@ diagram where order or flow is the point. The `decision-brief` skill gives the s
 your authority does not grant, such as destroying others' work, an irreversible act, an external
 write, spending money, or widening scope beyond the granted authority. Where a ticket, a package or a delegation names the
 paths an item may write, those paths are that item's authority: a file it needs outside them holds
-that item, through the follow-up the envelope accepts or a decision brief, and no other. Where
+that item, through the follow-up the envelope accepts or a decision brief, and no other, unless
+the edit only carries the item's own change: one the work would not need without that change and
+that changes nothing else a user, a test or a check observes, such as an import, a registration or
+an inventory entry for the item's own files. That edit is the item's, named in its handover. Where
 nothing names an item's paths, a path inside your owned scope is not widening: name it in the
 commit and go on. A held
 act, a check you cannot make green inside your authority, and a decision brief not yet answered

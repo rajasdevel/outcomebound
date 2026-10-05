@@ -11,6 +11,7 @@
 - Not authorized: <such as tags, releases, other repositories, force pushes>; and every credential act, which is the person's: unlocking a keychain or other credential store, adding a key to an SSH agent, logging in, and reading or printing a secret. On such a need, ask the person and do not do it.
 - Decide yourself: every choice inside Authorized, one line each in its commit message.
 - Decisions: <id: answer, or none>. The run starts without answers: an item whose brief is unanswered does every part the answer does not decide and stays open with the brief named; every other item proceeds.
+- Tickets: <none, or one line per accepted ticket: its number and its outcome in one sentence, so that this block is the breakdown the person accepts>.
 - Order: <none, or the order the items are built in, such as the tracker's blocked-by order>.
 - Follow-ups: <none, or: issues you file, with `discovered-from`, for work an accepted item or the Done when checks need, inside Authorized, are accepted by this envelope; build one before the item it unblocks, else after the accepted items>.
 - Hold an item, never the run, for: an act outside Authorized<; a judgment the person reserved>; a check you cannot make green inside Authorized. Record the hold when it starts, on that item and under Progress, and not again on a later turn, with the output, what you tried and what would settle it; where the person decides, name the brief by its id there and put the brief itself in the handoff. Then continue with every item that does not depend on it.

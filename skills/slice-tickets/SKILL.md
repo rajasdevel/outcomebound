@@ -67,8 +67,10 @@ only by an order of work are several. Every ticket carries the same overhead wha
 
 **Merge.** Outcomes whose parts must agree with each other, text loaded together in one voice, a
 format and the code that reads it, are one ticket however many files they span; following the
-same rule is not agreeing. So are outcomes that touch the same files, or that the user would
-accept in one reading. A change no one would accept on its own, a step an implementer carries in
+same rule is not agreeing. So are outcomes whose edits to one file must agree with each other,
+and outcomes the user would accept in one reading. A file tickets touch only in passing, such as
+a ledger, an index, a parity count or a status table, merges none of them: its edits are ordered,
+not reconciled. A change no one would accept on its own, a step an implementer carries in
 passing, rides in a ticket that touches its files, or lands as a commit. A spec that names a grain is giving an order of work; the rules here decide the cut.
 
 **Split.** A ticket's size follows its outcome, never a count or a length: a large outcome
@@ -140,8 +142,13 @@ parent: #41
   directory grants everything under it (`src/export` and `src/export/**` grant the same tree).
   Include the files its tests live in, and the claims plan where it adds a claim. Draw `bounds`
   as wide as the outcome's authority, a directory before a list of files, and disjoint only where
-  tickets run in parallel: a file the work needs just outside them holds that work when nothing is
-  wrong. Empty bounds grant no path, right for a person's ticket and for a parent that only
+  tickets run in parallel: a file the work must change just outside them holds that work when
+  nothing is wrong, unless the edit only carries the ticket's own change, which the tickets fragment
+  leaves to the implementer. Where the project keeps an inventory that every added module must enter, such as a
+  registry, a parity count, an import census or a public-surface digest, put that file in
+  `bounds` all the same, so that no implementer has to judge it: the last change that added a module shows which files it touched. Where an earlier
+  ticket of the same breakdown moves a mechanism into a new file, a later ticket that changes the
+  mechanism names that file in its `bounds`. Empty bounds grant no path, right for a person's ticket and for a parent that only
   gathers its children.
 - A `done-when` claim whose command reads more than the ticket's own paths, such as a type, lint,
   format or shell gate over the whole tree, or a runner script a suite needs, gets `bounds` that
@@ -172,7 +179,8 @@ together.
 Lint the whole breakdown in one run, `check --draft <file>...` with every draft, so relations
 and cycles are judged across them. Then show the user the breakdown in one message they can accept in one reading: for each ticket
 its outcome sentence, its `Accepting this decides:` line, the boundary that separates it from
-its neighbours; then the relations, and the implementer the work is for. Compile any ticket they open with
+its neighbours; then the relations, and the implementer the work is for. Where the run starts
+from a goal envelope, its `Tickets:` line carries the same outcome lines. Compile any ticket they open with
 `brief <id> --draft <file>...`, given every draft.
 
 ## Publish

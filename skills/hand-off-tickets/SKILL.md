@@ -25,7 +25,9 @@ done at every tier.
 
 **Bounds.** Writing a package, with its tests and stubs, inside the ticket's `bounds` and on the
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
-`done-when` stay the person's: a package adds to them and never changes them. Where the ticket
+`done-when` stay the person's: a package adds to them and never changes them. An edit outside `bounds`
+that only carries the ticket's own change, such as an import or an inventory entry for its own
+files, is inside the ticket's authority, as the tickets fragment says, and is no change to them. Where the ticket
 cannot be built as written, file the follow-up that makes it buildable where a goal envelope the
 person wrote accepts follow-ups, since that line is their acceptance of it; otherwise put the
 change to the person as a decision brief in a comment on the ticket. Either way, go on with the
@@ -85,7 +87,8 @@ Each step's package is executable first:
    names.
 2. Stubs with the exact signatures, types and docstrings, in the files they belong in.
 
-Then, in this order: the files the step may write; each existing symbol it uses, with its shape;
+Then, in this order: the files the step may write, with any file outside them that the step's
+change forces an edit in, such as an import, a registration or an inventory entry; each existing symbol it uses, with its shape;
 the algorithm and data structure to use, with a test that checks the bound where one matters;
 any text a person or a record will read, verbatim; the edge cases the tests cover, and any they
 leave out; the existing file whose shape to follow; and the acts outside the step's files and
