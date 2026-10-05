@@ -4,7 +4,7 @@ family: stack
 applies: Python projects
 condition: when choosing the checks for a Python change, or changing its dependencies or environment
 detect: ["pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"]
-version: 6
+version: 7
 ---
 **Context** — the actual interpreter, resolved dependencies, and collected tests are the
 evidence. Use the project's dependency records when present; a version pin in `pyproject.toml`
@@ -17,7 +17,9 @@ irreversible edge, which the `ci-release` fragment, or this project's local frag
 `broad-suite` when the changed module is imported across packages.
 **Completion bar** — the affected project-native tests and existing static checks; where a check
 runs only in a container or a managed environment, its floor claim runs there through the claim's
-`prefix` and keeps its baseline;
+`prefix` and keeps its baseline; a Done command runs where a hook runs, with the harness's PATH
+and no activated virtual environment, so it names the project's interpreter (`.venv/bin/python -m
+pytest`, `uv run pytest`) rather than a tool only an activated environment holds;
 import-time behavior stays unverified until the
 package is imported in a clean interpreter.
 **Distinguish** — edited ≠ tests collected ≠ passing ≠ installed in the target environment.

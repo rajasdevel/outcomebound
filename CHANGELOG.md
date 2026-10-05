@@ -27,6 +27,23 @@ The bump comes from what an adopter must do, not from the commit type; see
   `instructions` or `discovery` lands, as before, but one run on a commit that holds several such
   pull requests now covers all of them. It also runs on the release commit, as before.
 
+### Fixed
+
+- The finish check held a turn when a Done command such as `make test` could not find a tool,
+  for example `make: pytest: No such file or directory`. make, a script or a Python launcher
+  between the hook and the tool turns the shell's exit 127 into its own exit code, so the engine
+  read a failure that the agent's change caused. Now a failing command whose last line of output
+  says that a tool is not on the PATH reads `UNVERIFIED` and holds nothing, and the report names
+  the tool. A test's own `FileNotFoundError` or `ModuleNotFoundError` message still fails.
+- `adopt --finish-check` measured Done with the PATH of the agent that ran it, so a Done that
+  needs an activated virtual environment was recorded as passing and then could not run at any
+  turn end. Now the measurement leaves out each PATH entry inside the project and each virtual
+  environment's `bin`, and `VIRTUAL_ENV`, as the hook of a desktop harness runs Done. The install
+  report names the entries it left out.
+- The `python` fragment (version 7) says that a Done command names the project's interpreter,
+  such as `.venv/bin/python -m pytest` or `uv run pytest`, because a hook runs it with no
+  activated virtual environment.
+
 ## [1.2.0] - 2026-10-05
 
 A minor release. An implementer now makes, without a question, an edit outside a ticket's

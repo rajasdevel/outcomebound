@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -342,6 +343,92 @@ def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_noth
         )
     else:
         assert hook("codex", digest, root)[1]["systemMessage"].startswith("finish-check PASS: ")
+
+
+@pytest.mark.parametrize(
+    ("files", "line", "tool"),
+    [
+        pytest.param(
+            {"Makefile": "test:\n\tno-such-tool-here --check\n"},
+            "make test",
+            "no-such-tool-here",
+            id="make",
+        ),
+        pytest.param(
+            {"run.sh": "#!/bin/sh\nno-such-tool-here --check || exit 2\n"},
+            "sh run.sh",
+            "no-such-tool-here",
+            id="script",
+        ),
+        pytest.param(
+            {},
+            f"{sys.executable} -m no_such_module_here",
+            "python -m no_such_module_here",
+            id="module",
+        ),
+    ],
+)
+def test_a_runner_that_cannot_find_its_tool_is_unverified_and_holds_nothing(
+    tmp_path: Path, files: dict[str, str], line: str, tool: str
+) -> None:
+    """Breaks if a tool missing from the hook's PATH holds the finish as a failure when a runner
+    between the hook and the tool (make, a script, a Python launcher) exits with its own code."""
+
+    if line.startswith("make") and shutil.which("make") is None:
+        pytest.skip("make is not installed here")
+    root, digest = target(tmp_path / "t", [line])
+    for name, text in files.items():
+        (root / name).write_text(text, encoding="utf-8")
+
+    _, verdict = hook("codex", digest, root)
+
+    assert list(verdict) == ["systemMessage"]
+    message = verdict["systemMessage"]
+    assert message.startswith("finish-check UNVERIFIED: "), message
+    assert "could not run in the hook's environment" in message
+    assert f"`{tool}` is not on this PATH" in message
+
+
+@pytest.mark.parametrize(
+    "printed",
+    [
+        "FileNotFoundError: [Errno 2] No such file or directory: 'fixtures/x.json'",
+        "E   ModuleNotFoundError: No module named 'missing_dependency'",
+        "lookup: user not found",
+    ],
+)
+def test_a_tests_own_not_found_message_still_holds(tmp_path: Path, printed: str) -> None:
+    """Breaks if a failing test whose output ends with its own not-found message reads as a tool
+    the hook's environment lacks, and so holds nothing."""
+
+    root, digest = target(tmp_path / "t", [f"echo {shlex.quote(printed)}; exit 1"])
+
+    _, verdict = hook("codex", digest, root)
+
+    assert verdict.get("decision") == "block", verdict
+
+
+def test_measuring_runs_without_the_projects_and_a_virtual_environments_path(
+    tmp_path: Path,
+) -> None:
+    """Breaks if adopt measures Done with a PATH entry inside the project or a virtual
+    environment's bin, which a desktop harness's hook does not have, so the record says PASS
+    and every turn end then fails."""
+
+    root = tmp_path / "project"
+    (root / ".venv" / "bin").mkdir(parents=True)
+    elsewhere = tmp_path / "other-venv"
+    (elsewhere / "bin").mkdir(parents=True)
+    (elsewhere / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    path = os.pathsep.join([str(root / ".venv" / "bin"), str(elsewhere / "bin"), "/usr/bin"])
+
+    environment, dropped = finish_check.hook_environment(
+        root, {"PATH": path, "VIRTUAL_ENV": str(elsewhere), "LANG": "C.UTF-8"}
+    )
+
+    assert environment["PATH"] == "/usr/bin"
+    assert "VIRTUAL_ENV" not in environment and environment["LANG"] == "C.UTF-8"
+    assert dropped == (str(root / ".venv" / "bin"), str(elsewhere / "bin"))
 
 
 def test_a_record_1_0_0_wrote_reads_as_a_pass_and_an_unreadable_one_as_none() -> None:
