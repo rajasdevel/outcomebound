@@ -13,6 +13,15 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ### Fixed
 
+- `floor check --base` reported a commit as "carries no Floor-Loosening line" when the commit
+  had a `Floor-Loosening:` line that did not parse, for example `Floor-Loosening: baseline; ruled
+  Project D31`, where the id has a space in it. Now the reason says that the commit "carries a
+  Floor-Loosening line that does not parse", and it shows the correct form: `<what>; ruled <id>`,
+  with an id of one word (`Project-D31`, not `Project D31`). The verdict does not change: a line
+  that does not parse does not rule a loosening.
+- `research <path>` for a file under `models/` that is not in the clone said only that `INDEX.md`
+  lists every document. Now it says that `models/README.md` tells which models have a file, and
+  that a model with no file takes the spec tier (`applications/implementer-tiers.md`).
 - A claims plan can declare a `required_paths` entry that an open ticket will add, such as a test
   file. Before, adopt gave one `warning  tickets:` line for each such claim at each install, and
   `tickets check` gave `CLAIM_PATH_ABSENT`. Each told the person to point the plan's `cwd` at the

@@ -550,6 +550,23 @@ def test_a_floor_loosening_line_in_the_range_lets_it_pass_and_is_named(
     assert (f"{ruling[:12]} Floor-Loosening:" in output) == passes
 
 
+@pytest.mark.parametrize("ruling", ["Project D31", "Project-D31"])
+def test_a_ruling_line_whose_id_holds_a_space_is_named_as_unparsed_and_rules_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], ruling: str
+) -> None:
+    message = f"widen\n\nFloor-Loosening: baseline; ruled {ruling}"
+    root, base = loosen(tmp_path, LOOSENINGS["a noqa is added"], message)
+    widened = git(root, "rev-parse", "HEAD")
+    passes = " " not in ruling
+
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+
+    assert (status, verdicts.get("loosening")) == ((0, "PASS") if passes else (1, "FAIL")), output
+    unparsed = f"not ruled: {widened[:12]} carries a Floor-Loosening line that does not parse"
+    assert (unparsed in output) != passes, output
+    assert "carries no Floor-Loosening line" not in output
+
+
 def test_a_ruling_at_or_before_the_base_does_not_cover_the_range(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
