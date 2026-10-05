@@ -445,6 +445,60 @@ def render(
     return "\n\n".join(blocks) + "\n"
 
 
+# The longest header a harness's question tool shows: Codex's request_user_input describes its
+# header as 12 or fewer characters (request_user_input_spec.rs, read 2026-10-05), and Claude Code's
+# AskUserQuestion as at most 12; a longer id is left to the question text.
+_HEADER = 12
+
+
+def questions(briefs: Sequence[Brief], ids: Sequence[str], symbols: str) -> dict[str, Any]:
+    """Every brief as one question for a harness's question tool, each field on one line.
+
+    A question holds `id`, the brief's id; `header`, the id where it fits a tool's short header,
+    else empty; `question` and `title`, the same text, the heading and then the recommended
+    Option's letter and why; and `options`, the recommended Option first, as the tools ask, then
+    the rest in letter order. Each option holds `label`, its letter and way, with
+    " (Recommended)" on the recommended one; `description`, what it leads to and its downside;
+    and `line`, the label and what it leads to, for a tool whose options are plain strings. A
+    brief with no Options has an empty `options`. The drawn brief, with its evidence, goes in the
+    message before the question. A brief `render` refuses is refused here by the same
+    `ValueError`.
+    """
+
+    sep, dash = SEPARATORS[symbols]
+    asked: list[dict[str, Any]] = []
+    for brief, brief_id in zip(briefs, ids, strict=True):
+        refused = _refused(brief)
+        if refused:
+            raise ValueError(refused)
+        text = brief.heading
+        recommended = _ways(brief).index(brief.recommend_way) if brief.recommend_way else None
+        if brief.recommend:
+            letter = "" if recommended is None else f"{string.ascii_uppercase[recommended]}{dash}"
+            text += f"{sep}Recommend: {letter}{brief.recommend}"
+        options = []
+        for index, (way, leads_to, *downside) in enumerate(brief.options):
+            label = f"{string.ascii_uppercase[index]} {way}"
+            if index == recommended:
+                label += " (Recommended)"
+            description = leads_to + "".join(f"; downside: {risk}" for risk in downside)
+            options.append(
+                {"label": label, "description": description, "line": f"{label}{dash}{leads_to}"}
+            )
+        if recommended is not None:
+            options.insert(0, options.pop(recommended))
+        asked.append(
+            {
+                "id": brief_id,
+                "header": brief_id if len(brief_id) <= _HEADER else "",
+                "question": text,
+                "title": text,
+                "options": options,
+            }
+        )
+    return {"questions": asked}
+
+
 def symbols_for(stream: TextIO) -> str:
     """`ascii` where `stream`'s encoding cannot carry every `emoji` mark and
     separator, `emoji` otherwise.
@@ -537,8 +591,15 @@ cannot; --symbols names them. The diagrams are Mermaid where
 OUTCOMEBOUND_DIAGRAMS=mermaid, or, where that variable names neither form,
 where adapters/surfaces.json records this session's surface as rendering
 Mermaid; they are ASCII everywhere else, an unknown surface included; --form
-names them. Posting to a GitHub issue, discussion or pull request, or from the
-Codex app, pass --form mermaid: those surfaces set no variable. Show the output
+names them. With --ask, the command prints instead one JSON object for a harness's
+question tool, {{"questions": [{{"id", "header", "question", "title", "options":
+[{{"label", "description", "line"}}]}}]}}, each field on one line: the question (also
+as title) is the heading and the recommendation; the recommended option comes first,
+its label ending (Recommended); line is the label and what it leads to, for a tool
+whose options are plain strings; header is the id where it has 12 characters or
+fewer. The order is not printed. Fill the tool's fields by name, after the drawn
+brief in the message. Posting to a GitHub issue, discussion or pull request, or from
+the Codex app, pass --form mermaid: those surfaces set no variable. Show the output
 as markdown, never inside a code block. Exit 0 when drawn; exit 1 when a brief
 is refused, naming which: one option or more than 26, two or more options with
 no recommend or recommend_way, a confidence or a recommended way with no
@@ -773,6 +834,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="the diagrams' form; by default the one OUTCOMEBOUND_DIAGRAMS or "
         "adapters/surfaces.json names for this session, and ascii where neither does",
     )
+    parser.add_argument(
+        "--ask",
+        action="store_true",
+        help="print the briefs as JSON questions for a harness's question tool, each field "
+        "on one line, instead of drawing them",
+    )
     args = parser.parse_args(argv)
     symbols = args.symbols or symbols_for(sys.stdout)
     source = "standard input" if args.document == "-" else args.document
@@ -789,6 +856,11 @@ def main(argv: Sequence[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+    if args.ask:
+        asked = questions([b for _, b in briefs], [i for i, _ in briefs], symbols)
+        text = json.dumps(asked, ensure_ascii=False)
+        sys.stdout.write(text + "\n")
+        return 0
     drawn = bool(order) or any(brief.diagram is not None for _, brief in briefs)
     form = args.form or (_session_form() if drawn else "ascii")
     text = render([brief for _, brief in briefs], symbols, order, form)

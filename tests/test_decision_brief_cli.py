@@ -741,3 +741,79 @@ def test_a_fact_with_its_own_label_is_drawn(
     )
     code, out, _ = _main(capsys, str(path), "--symbols", "emoji")
     assert (code, out) == (0, "### D1 · Q\n- Grant: none\n- ↩️ Undo: revert the commit\n")
+
+
+def test_ask_prints_each_brief_as_one_line_fields_for_a_question_tool(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A harness's question tool shows each field on one line and puts the recommended
+    option first, so `--ask` gives per brief its id, a short header, the heading and the
+    recommendation as question and title, and each option as label, description and line,
+    the recommended one first and marked; a brief with no options gets none."""
+
+    path = _write(tmp_path, DOCUMENT)
+    code, out, err = _main(capsys, str(path), "--ask", "--symbols", "emoji")
+
+    assert (code, err) == (0, "")
+    first, second = json.loads(out)["questions"]
+    assert first["id"] == first["header"] == "D1"
+    assert (
+        first["question"]
+        == first["title"]
+        == ("D1 · Keep the old flag for one release? · Recommend: B — two adopters still set it")
+    )
+    assert first["options"] == [
+        {
+            "label": "B keep it one release (Recommended)",
+            "description": "adopters get a warning first; downside: one more release carries"
+            " the old code path",
+            "line": "B keep it one release (Recommended) — adopters get a warning first",
+        },
+        {
+            "label": "A drop it now",
+            "description": "the code path goes today; downside: an adopter setting it is"
+            " refused on upgrade",
+            "line": "A drop it now — the code path goes today",
+        },
+    ]
+    assert second["options"] == []
+    assert all(
+        "\n" not in value
+        for question in (first, second)
+        for value in [question["question"], *(v for o in question["options"] for v in o.values())]
+    )
+
+
+def test_ask_leaves_the_header_empty_for_an_id_longer_than_a_tools_header(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write(
+        tmp_path,
+        {"briefs": [{"id": "fix-login-D12", "heading": "Q", "undo": UNDO, **EVIDENCE}]},
+    )
+    code, out, _ = _main(capsys, str(path), "--ask")
+
+    assert code == 0
+    assert json.loads(out)["questions"][0]["header"] == ""
+
+
+def test_ask_refuses_what_the_drawing_refuses(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _write(
+        tmp_path,
+        {
+            "briefs": [
+                {
+                    "id": "D1",
+                    "heading": "Q",
+                    "undo": UNDO,
+                    "options": [["a", "b", "c"], ["d", "e", "f"]],
+                    **EVIDENCE,
+                }
+            ]
+        },
+    )
+    code, out, _ = _main(capsys, str(path), "--ask")
+
+    assert (code, out) == (1, "")

@@ -13,6 +13,11 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ### Added
 
+- `outcomebound brief --ask` prints the briefs as JSON questions for a harness's question tool.
+  For each brief, it gives the id, a short header, the question (the heading and the
+  recommendation), and each option's label, description and one-line form. The recommended option
+  is first, and its label ends with "(Recommended)". Such a tool shows each field on one line. Before, an agent put the drawn
+  brief, with all its lines, into the tool's title, and the person saw it as one long line.
 - `outcomebound tickets export` prints two lines: the absolute path of the pinned query that the
   install ships, as a shell comment, and the `gh` command that writes the export of the declared
   repository to `issues.json`. It runs nothing and writes nothing. Before, this command was only in
@@ -48,6 +53,14 @@ The bump comes from what an adopter must do, not from the commit type; see
   two directions: with the old pin and the new install, the check fails, and with the new pin and
   the old install, the check also fails. docs/VERSIONING.md now says this under "How to take a
   release".
+
+### Changed
+
+- The `decision-brief` skill: a link to a file that holds the brief does not stand in for the
+  brief. The brief itself is in the text the person reads. Where the harness asks through a
+  question tool, the agent draws the brief in its message first, and then fills the tool's fields
+  from what `brief --ask` prints. Where the tool cannot take a brief's options, the drawn brief is
+  the question, and the person answers in words.
 
 ### Fixed
 
