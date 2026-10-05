@@ -395,6 +395,157 @@ def test_a_block_edit_that_differs_from_what_this_install_writes_still_needs_for
     assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
 
 
+COMMANDS_CONDITION = "when running a command whose output you read"
+
+
+def without_frame(target: Path) -> None:
+    """Rewrite the target's manifest as an engine of 1.1.1 or earlier writes it: no `frame` in
+    any record."""
+
+    document = manifest(target)
+    for record in document["artifacts"]:
+        record.pop("frame", None)
+    (target / adopt.MANIFEST).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+
+def render_anew(source: Path) -> None:
+    """Change the engine copy as a release that renders the pointers block anew would: the
+    commands fragment's condition, which its pointer line carries, in other words."""
+
+    path = source / "fragments/setup/commands.md"
+    text = path.read_text(encoding="utf-8")
+    assert text.count(COMMANDS_CONDITION) == 1
+    path.write_text(text.replace(COMMANDS_CONDITION, f"{COMMANDS_CONDITION} later"), "utf-8")
+
+
+def rendered_lines(out: str) -> list[str]:
+    """The labels an install's report names as rendered again from their source's edit."""
+
+    return [
+        line.split(None, 1)[1].split(": ", 1)[0]
+        for line in out.splitlines()
+        if line.startswith("render ")
+    ]
+
+
+def test_an_install_records_the_pointers_frame(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if the manifest is not format 2, or if the pointers record does not hold the
+    digest of its block with the local fragment's inline text replaced by the mark, or holds one
+    where no local fragment is selected."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local,commands")[0] == 0
+
+    document = manifest(target)
+    assert document["format_version"] == 2
+    (record,) = [r for r in document["artifacts"] if r["id"] == adopt.POINTERS]
+    text = (target / "AGENTS.md").read_text(encoding="utf-8")
+    block = adopt.block_text(text, adopt.POINTERS)
+    assert block is not None
+    local = fragments.parse_fragment(local_fragment(), adopt.LOCAL_FRAGMENT)
+    inline = facts.inline(local)
+    assert block.decode("utf-8").count(inline) == 1
+    framed = block.decode("utf-8").replace(inline, "\0local\0")
+    assert record["frame"] == sha(framed.encode("utf-8"))
+
+    assert run(capsys, str(target), "--fragments", "commands")[0] == 0
+    (record,) = [r for r in manifest(target)["artifacts"] if r["id"] == adopt.POINTERS]
+    assert "frame" not in record
+
+
+def test_a_record_without_a_frame_is_read_and_the_install_adds_the_frame(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """An install an engine of 1.1.1 or earlier rewrote, with no `frame`: `--check` reads it
+    current, and the next install adds the frame and changes nothing else. Breaks if a record
+    without the frame is refused, or if the install does not add it."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local,commands")[0] == 0
+    written = manifest(target)
+    without_frame(target)
+
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and set(states(out).values()) == {"current"}, out
+
+    assert run(capsys, str(target))[0] == 0
+    (record,) = [r for r in manifest(target)["artifacts"] if r["id"] == adopt.POINTERS]
+    assert "frame" in record
+    assert manifest(target) == written
+
+
+@pytest.mark.parametrize("recorded", ["frame", "no-frame"])
+def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_release_renders_anew(
+    tmp_path: Path, capsys: Capture, recorded: str
+) -> None:
+    """The case that needed --force: the local fragment and its pointers block are edited the
+    same way, and the release renders the block anew, so the block is neither its record nor
+    this install's render. A record with a frame decides it by the frame, with no Git
+    history; a record without one by the fragment's earlier text in Git. Breaks if `--check`
+    reads the block edited, if the install refuses it or does not name it, or if the edit is
+    lost."""
+
+    source = engine_copy(tmp_path)
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local,commands", source=source)[0] == 0
+    if recorded == "no-frame":
+        without_frame(target)
+        commit_all(target)
+    line = "**Distinguish** — committed ≠ pushed in this project."
+    edit_local(target, line, line)
+    render_anew(source)
+    pointers = f"AGENTS.md ({adopt.POINTERS})"
+
+    code, out, _ = run(capsys, str(target), "--check", source=source)
+
+    assert states(out)[pointers] == "stale", out
+    assert f"stale    {pointers}: {adopt.FROM_SOURCE}" in out.splitlines()
+    assert next_lines(out) == [
+        f"next: outcomebound adopt {shlex.quote(str(target))} makes every record current"
+    ]
+
+    code, out, err = run(capsys, str(target), source=source)
+
+    assert code == 0, err
+    assert rendered_lines(out) == [pointers]
+    text = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert line in text and f"{COMMANDS_CONDITION} later" in text
+    code, out, _ = run(capsys, str(target), "--check", source=source)
+    assert code == 0 and set(states(out).values()) == {"current"}, out
+
+
+@pytest.mark.parametrize("shape", ["frame-edited", "no-frame-no-history"])
+def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
+    tmp_path: Path, capsys: Capture, shape: str
+) -> None:
+    """The negative controls: the block holds an edit beside the fragment's (`frame-edited`),
+    or the record has no frame and Git holds no earlier text of the fragment
+    (`no-frame-no-history`). Breaks if either is rendered again without --force."""
+
+    source = engine_copy(tmp_path)
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local,commands", source=source)[0] == 0
+    line = "**Distinguish** — committed ≠ pushed in this project."
+    edited = edit_local(target, line, line)
+    if shape == "frame-edited":
+        agents = target / "AGENTS.md"
+        edited = edited.replace("- when writing, changing or judging a test", "- when testing")
+        agents.write_text(edited, encoding="utf-8")
+    else:
+        without_frame(target)
+    render_anew(source)
+    pointers = f"AGENTS.md ({adopt.POINTERS})"
+
+    code, out, _ = run(capsys, str(target), "--check", source=source)
+    assert states(out)[pointers] == "edited", out
+
+    code, _, err = run(capsys, str(target), source=source)
+
+    assert code == 1
+    assert f"{pointers} differs from what adopt wrote; restore it, or pass --force" in err
+    assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
+
+
 def test_a_file_edited_to_what_this_install_writes_needs_no_force(
     tmp_path: Path, capsys: Capture
 ) -> None:

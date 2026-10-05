@@ -22,12 +22,14 @@ itself unless one of its files exists, and none exists. A harness outside
 the table is `generic`, the default: its skills go under `.outcomebound/skills/`,
 which the pointers name. Re-running it is the upgrade, and each install prints the
 words an agent always loads, skill descriptions included; no size refuses one. What it
-wrote is recorded in `.outcomebound/manifest.json` (format 2), one `{kind, path, id,
-sha256}` record per block or file, the facts record holding the recorded selection,
-the Done commands and each source a fact was read from with its digest; a record of
-any other kind or id belongs to another route and is kept as it is. Nothing whose
+wrote is recorded in `.outcomebound/manifest.json` (format 2), one
+`{kind, path, id, sha256}` record per block or file, the facts record holding the recorded
+selection, the Done commands and each source a fact was read from with its digest, and the
+pointers record the optional `frame` digest that shows an edit of the local fragment alone; a
+record of any other kind or id belongs to another route and is kept as it is. Nothing whose
 bytes differ from its record is replaced or removed without `--force`, save bytes this
-install writes itself, which are no person's edit and are recorded as they are. Git is the
+install writes itself, which are no person's edit and are recorded as they are, and a pointers
+block that is the recorded render with only the local fragment's own edit in it. Git is the
 undo, so the target must be inside a Git work tree, and every write goes through
 `fileplan.write` with the manifest last.
 """
@@ -43,7 +45,7 @@ import shlex
 import signal
 import subprocess
 import sys
-from collections.abc import Sequence, Set
+from collections.abc import Callable, Sequence, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -69,6 +71,9 @@ from outcomebound_tools.tickets_report import EngineError, Refusal
 ENGINE = home.ROOT
 MANIFEST = ".outcomebound/manifest.json"
 FORMAT_VERSION = 2
+# Stands in for the local fragment's inline text in the pointers record's `frame` digest; no
+# fragment's text holds a NUL.
+FRAME_MARK = "\0local\0"
 AGENTS = "AGENTS.md"
 IMPORT = "@AGENTS.md"
 KERNEL = "operating-contract"
@@ -139,6 +144,11 @@ NOT_V2 = f"{MANIFEST} is not a format 2 manifest; remove the install that wrote 
 UNRECORDED = (
     "differs from its record, but is what this engine writes, so it is no edit; "
     "adopt records it without --force"
+)
+# A pointers block whose bytes differ from its record only by the local fragment's own edit.
+FROM_SOURCE = (
+    f"differs from its record only by the edit in {LOCAL_FRAGMENT}, as the release that wrote "
+    "the record renders it, so it is no edit; adopt renders it again without --force"
 )
 
 Record = dict[str, Any]
@@ -667,6 +677,11 @@ def _check_record(record: Record) -> None:
     inputs = record.get("inputs", {})
     if not (isinstance(inputs, dict) and all(isinstance(v, str) for v in inputs.values())):
         raise AdoptError(f"{MANIFEST}: the inputs recorded for {path} are not paths and digests")
+    frame = record.get("frame")
+    if frame is not None and not (
+        isinstance(frame, str) and len(frame) == 64 and set(frame) <= set("0123456789abcdef")
+    ):
+        raise AdoptError(f"{MANIFEST}: the frame recorded for {path} is not a sha256")
     if not isinstance(record.get("created", False), bool):
         raise AdoptError(
             f"{MANIFEST}: whether adopt created {path} is not recorded as true or false"
@@ -777,6 +792,82 @@ def recorded_style(own: Sequence[Record]) -> list[str]:
     return [name for name in _recorded(own, "style") if name in facts.STYLES]
 
 
+# --- An edit of the local fragment alone ----------------------------------------
+
+
+def framing(block: str, inline: str | None) -> str | None:
+    """`block` with the local fragment's `inline` text, where it first stands, replaced by
+    `FRAME_MARK`; None where there is no inline text, the block does not hold it, or the block
+    already holds the mark."""
+
+    if not inline or inline not in block or FRAME_MARK in block:
+        return None
+    return block.replace(inline, FRAME_MARK, 1)
+
+
+def from_source(
+    target: Path,
+    current: bytes | None,
+    record: Record | None,
+    inline: str | None,
+) -> bool:
+    """Whether a pointers block whose bytes differ from its record is the recorded render with
+    only the local fragment's inline text changed to `inline`, the fragment as it is now: the
+    source's edit, rendered by the release that wrote the record, and no person's edit.
+
+    A record with a `frame` decides it by that digest. A record without one, as an engine of
+    1.1.1 or earlier writes it, has each earlier text of the local fragment that the target's
+    Git history holds put in place of `inline`, and one that gives the record's digest decides
+    it."""
+
+    if current is None or record is None or record["kind"] != "block" or record["id"] != POINTERS:
+        return False
+    try:
+        framed = framing(current.decode("utf-8"), inline)
+    except UnicodeDecodeError:
+        return False
+    if framed is None:
+        return False
+    if "frame" in record:
+        return sha256(framed.encode("utf-8")) == record["frame"]
+    for text in local_history(target):
+        try:
+            earlier = fragments.parse_fragment(text, LOCAL_FRAGMENT)
+        except fragments.FragmentError:
+            continue
+        rebuilt = framed.replace(FRAME_MARK, facts.inline(earlier), 1)
+        if sha256(rebuilt.encode("utf-8")) == record["sha256"]:
+            return True
+    return False
+
+
+def local_history(target: Path) -> list[str]:
+    """Each distinct text of the local fragment that a commit reachable from any ref in the
+    target holds, newest first; none where Git cannot say."""
+
+    listed = _git(target, "rev-list", "--all", "--", LOCAL_FRAGMENT)
+    if not listed:
+        return []
+    specs = "".join(f"{commit}:{LOCAL_FRAGMENT}\n" for commit in listed.decode().split())
+    batch = _git(target, "cat-file", "--batch", stdin=specs.encode())
+    texts: dict[str, str] = {}
+    rest = batch or b""
+    while rest:
+        header, _, rest = rest.partition(b"\n")
+        fields = header.split()
+        if len(fields) != 3 or not fields[2].isdigit():
+            continue
+        size = int(fields[2])
+        data, rest = rest[:size], rest[size + 1 :]
+        if fields[1] != b"blob":
+            continue
+        try:
+            texts.setdefault(fields[0].decode(), data.decode("utf-8"))
+        except UnicodeDecodeError:
+            continue
+    return list(texts.values())
+
+
 # --- One run, planned before anything is written --------------------------------
 
 
@@ -789,6 +880,8 @@ class Want:
     id: str
     data: bytes
     extra: dict[str, Any] = field(default_factory=dict)
+    # The pointers block's local fragment inline text, as this run renders it; not recorded.
+    inline: str | None = None
 
     def key(self) -> tuple[str, str, str]:
         return self.kind, self.path, self.id
@@ -899,7 +992,13 @@ class Run:
                 raise AdoptError(
                     f"{want.path} ends inside an unclosed code fence; close it, then re-run"
                 )
-            self._judge(label(want.path, want.id), current, want.data, record)
+            self._judge(
+                label(want.path, want.id),
+                current,
+                want.data,
+                record,
+                lambda: from_source(self.target, current, record, want.inline),
+            )
             host.text = put(host.text, want.id, want.data.decode("utf-8"), AFTER.get(want.id))
         self.records.append(want.record())
 
@@ -950,13 +1049,20 @@ class Run:
         return self.files[path][0] if path in self.files else _read(self.target, path)
 
     def _judge(
-        self, name: str, current: bytes | None, wanted: bytes | None, record: Record | None
+        self,
+        name: str,
+        current: bytes | None,
+        wanted: bytes | None,
+        record: Record | None,
+        derived: Callable[[], bool] | None = None,
     ) -> None:
         """Note `name` as edited when its bytes are neither wanted nor what adopt recorded.
 
         Bytes that differ from the record but are what this run writes, such as a block a
         person regenerated by hand from the source it renders, are no edit: they are recorded
-        as they are, and the report says so, so that no `--force` is needed to keep them."""
+        as they are, and the report says so, so that no `--force` is needed to keep them. So
+        are bytes that `derived` shows are the recorded render with only its source's edit in
+        it: they are written again, and the report says so."""
 
         if current is None:
             return
@@ -964,6 +1070,9 @@ class Run:
         if current == wanted:
             if unrecorded:
                 self.notes.append(("kept", f"{name}: {UNRECORDED}"))
+            return
+        if unrecorded and wanted is not None and derived is not None and derived():
+            self.notes.append(("render", f"{name}: {FROM_SOURCE}"))
             return
         if record is None or unrecorded:
             self.edited.append(name)
@@ -1050,7 +1159,12 @@ def desired(
         extra["style"] = list(style)
     wants.append(Want("block", AGENTS, FACTS, made.rendered.facts.encode("utf-8"), extra))
     if made.rendered.pointers is not None:
-        wants.append(Want("block", AGENTS, POINTERS, made.rendered.pointers.encode("utf-8")))
+        block = made.rendered.pointers
+        local = found_fragments.get(LOCAL) if LOCAL in ids else None
+        inline = facts.inline(local) if local is not None else None
+        framed = framing(block, inline)
+        frame = {} if framed is None else {"frame": sha256(framed.encode("utf-8"))}
+        wants.append(Want("block", AGENTS, POINTERS, block.encode("utf-8"), frame, inline))
     wants.extend(Want("fragment", path, Path(path).stem, data) for path, data in made.files.items())
     if WORKSPACE in ids:
         wants.append(Want("ignore", WORKSPACE_IGNORE, WORKSPACE, workspace_ignore(source)))
@@ -1146,7 +1260,10 @@ def finish_hooks(
         entry = finish_check.entry(name, digest, timeout)
         data = finish_check.canonical(entry)
         extra: dict[str, Any] = {"harness": name, "timeout": timeout}
-        wants.append(HookWant(HOOK, hook["file"], FINISH_CHECK, data, extra, hook["event"], entry))
+        event = hook["event"]
+        wants.append(
+            HookWant(HOOK, hook["file"], FINISH_CHECK, data, extra, event=event, entry=entry)
+        )
         run.notes.extend(review_again(name, data, own))
         caution = f"; {finish_check.CAUTION[name]}" if name in finish_check.CAUTION else ""
         run.notes.append(
@@ -1700,10 +1817,38 @@ def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> 
     except AdoptError:
         rendered = None
     if sha256(observed) != record["sha256"]:
-        return "stale" if observed == rendered else "edited"
+        if observed == rendered or from_source(
+            target, observed, record, _local_inline(target, source, own)
+        ):
+            return "stale"
+        return "edited"
     if rendered is None:
         return "stale"
     return "current" if sha256(rendered) == record["sha256"] else "stale"
+
+
+def _local_inline(target: Path, source: Path, own: Sequence[Record]) -> str | None:
+    """The local fragment's inline text as the recorded selection renders it now; None where
+    it is not selected or cannot be read."""
+
+    if LOCAL not in recorded_fragments(own):
+        return None
+    try:
+        return facts.inline(_local_fragment(source, target))
+    except AdoptError:
+        return None
+
+
+def unrecorded_detail(target: Path, source: Path, record: Record, own: Sequence[Record]) -> str:
+    """Why a stale record's bytes, which differ from it, are no edit."""
+
+    try:
+        observed = _observed(target, record)
+        if observed is not None and observed == _rendered(target, source, record, own):
+            return UNRECORDED
+    except AdoptError:
+        pass
+    return FROM_SOURCE
 
 
 def unrecorded(target: Path, record: Record) -> bool:
@@ -1761,7 +1906,7 @@ def check(target: Path, source: Path) -> int:
         name = None if record["kind"] in FILE_KINDS else record["id"]
         detail = ""
         if found[-1] == "stale" and unrecorded(target, record):
-            detail = UNRECORDED
+            detail = unrecorded_detail(target, source, record, manifest.own)
         elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
             detail = moved(target, source, record, manifest.own)
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
@@ -1771,9 +1916,9 @@ def check(target: Path, source: Path) -> int:
     return min(sum(state != "current" for state in found), CHECK_CAP)
 
 
-def _git_line(target: Path, *arguments: str) -> str | None:
-    """What one read-only git command printed in `target`, stripped; None where it failed.
-    Git comes from PATH's absolute entries only, so the target cannot supply its own."""
+def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
+    """What one read-only git command printed in `target`; None where it failed. Git comes from
+    PATH's absolute entries only, so the target cannot supply its own."""
 
     inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
@@ -1784,14 +1929,22 @@ def _git_line(target: Path, *arguments: str) -> str | None:
             ["git", *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             env=git_environment(inherited),
-            stdin=subprocess.DEVNULL,
+            input=stdin if stdin is not None else b"",
             capture_output=True,
             check=False,
         )
     except OSError:
         return None
-    text = completed.stdout.decode("utf-8", "replace").strip()
-    return text if completed.returncode == 0 and text else None
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def _git_line(target: Path, *arguments: str) -> str | None:
+    """What one read-only git command printed in `target`, stripped; None where it failed or
+    printed nothing."""
+
+    output = _git(target, *arguments)
+    text = "" if output is None else output.decode("utf-8", "replace").strip()
+    return text or None
 
 
 def default_base(target: Path) -> str | None:
@@ -1909,7 +2062,9 @@ What it writes is recorded in .outcomebound/manifest.json; re-running it upgrade
 prints the words an agent always loads, skill descriptions included, and no size refuses one. It
 refuses a harness that cannot be made to load AGENTS.md and, without --force, to replace or
 remove a block or file whose bytes are not what it recorded, save bytes it writes there itself,
-which it records and names on a kept line. A refusal writes nothing.
+which it records and names on a kept line, and a pointers block that is the recorded render with
+only the local fragment's own edit in it, which it writes again and names on a render line. A
+refusal writes nothing.
 
 --finish-check adds one entry to the settings of each selected harness that has a finish hook,
 claude-code (.claude/settings.json) and codex (.codex/hooks.json): when that harness's agent

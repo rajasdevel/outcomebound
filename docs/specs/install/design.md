@@ -71,8 +71,9 @@ an install carries and the fragment bodies, for a delegate's role prompt.
 | One route, `outcomebound adopt` | a second, modular install route beside it | user | decided |
 | Re-running is the upgrade, and Git is the undo | three-way merges against copies of every release | user | decided |
 | No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records | user | decided |
-| The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last | per-artifact base caches, source receipts and bundle digests | agent | decided |
-| An owned block or file whose bytes differ from its record is refused without `--force`, unless they are byte for byte what this install writes there: such bytes are no person's edit, so the install records them and its report names each on a `kept` line, and `--check` reads the record `stale`, saying so, with a next step that needs no `--force`. Bytes that differ from both are refused as before, so a person's edit is never overwritten without `--force` | overwriting it, or merging; refusing bytes this install writes too, which sends a person who changed the local fragment and its rendered block in one commit to `--force`, which also overrides the refusals that protect an edit; reading the block as `current` while its record is behind, so that the next change to its source reads as an edit | agent | decided |
+| The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last. Where the `local` fragment is selected, the `guidance-pointers` record also holds the optional field `frame`: the sha256 of the block with the local fragment's inline text (its `**local** (<family>) — <applies>` line, a blank line and its body, as the block renders it) replaced by the mark `\0local\0` (a NUL character, `local`, a NUL character). A record is read with or without it; an engine of 1.1.1 or earlier reads a record that holds it, ignores it and drops it when it writes the manifest again | per-artifact base caches, source receipts and bundle digests; a format 3 for the one field, which an engine of 1.1.1 or earlier refuses, so each machine and CI job that pins one breaks once a person upgrades; the local fragment's text in the record, which copies the project's own file into the manifest; the digests of the inputs alone, which show that the source changed but not that nothing else in the block changed; a digest of the render for each source version, which this engine cannot compute for the release that wrote the record | agent | decided |
+| A `guidance-pointers` block whose bytes differ from both its record and what this install writes is no edit where it is the recorded render with only the local fragment's inline text changed to what the fragment holds now: the source's edit, as the release that wrote the record renders it. The install writes it again without `--force` and names it on a `render` line, and `--check` reads it `stale`, saying so. The record's `frame` decides it. A record without `frame`, as an engine of 1.1.1 or earlier writes it, makes adopt read each earlier text of `.outcomebound/fragments/local.md` from the target's Git history (`git rev-list --all`, then `git cat-file --batch`) and takes the block as the source's edit where one of them, put in place of the inline text, gives the record's digest. Where neither decides, the block is refused as before | `frame` alone, which sends every install made before it to `--force` on the upgrade that brings it; the Git history alone, which an install never committed, or a shallow clone, does not hold; the same rule for the facts block, whose lines are derived from their sources, not copied, so no mark can stand in for them | agent | decided |
+| An owned block or file whose bytes differ from its record is refused without `--force`, unless they are byte for byte what this install writes there: such bytes are no person's edit, so the install records them and its report names each on a `kept` line, and `--check` reads the record `stale`, saying so, with a next step that needs no `--force`. Bytes that differ from both are refused as before, save the source's edit the next row decides, so a person's edit is never overwritten without `--force` | overwriting it, or merging; refusing bytes this install writes too, which sends a person who changed the local fragment and its rendered block in one commit to `--force`, which also overrides the refusals that protect an edit; reading the block as `current` while its record is behind, so that the next change to its source reads as an edit | agent | decided |
 | `--check` ends, when a record is not current, with the command that makes it current | one `doctor` verb over every layer, recording each choice declined | agent | decided |
 | A harness that cannot be made to load `AGENTS.md` is refused before any write | a reminder and exit 0, leaving an install nothing loads | agent | decided |
 | A harness's host file gets an `@AGENTS.md` import block, except where the harness table's row records `reads_agents_md` and none of the files it lists is in the target: that harness reads `AGENTS.md` itself | creating the host file for that harness | user | decided |
@@ -106,20 +107,21 @@ adopt created or extended to what it held before: the fragment copies, the skill
 `.agents/.gitignore` and `.outcomebound/.gitignore` go, the project's own `local.md` stays. Reading a fact runs nothing from the
 target.
 
-One case still needs `--force` (open). A project edits a rendered block and its source in the same
-way, and the release also changes how that block renders:
+A project can edit a rendered block and its source in the same way, while the release also
+changes how that block renders. For the `guidance-pointers` block and the `local` fragment it
+inlines, adopt decides each case without `--force`:
 
 | Block bytes on disk | adopt |
 | --- | --- |
 | equal to the record | updates it |
 | equal to the new render | records it, on a `kept` line |
+| equal to neither: the source's edit, rendered by the release that wrote the record | updates it, on a `render` line |
 | equal to neither: a person's edit | refuses without `--force` |
-| equal to neither: the source's edit, rendered by the previous release | refuses without `--force` |
 
-The last two rows look the same to adopt, because the manifest holds only digests. It is seen on an
-upgrade from 1.0.0 with the `workspace` fragment, whose pointer line changed. Telling them apart
-needs the previous render's inputs in the manifest, a change of its format.
-`tests/test_upgrade_corpus.py` holds the case with the local fragment alone.
+The record's `frame`, or for a record without it the local fragment's earlier text in Git, tells
+the last two rows apart. A record without `frame` whose earlier fragment text Git does not hold
+reads as a person's edit, so it is refused without `--force`. `tests/test_upgrade_corpus.py` holds each
+row, from 1.0.0 and from the newest release, with a candidate that renders the block anew.
 
 ## Validation
 

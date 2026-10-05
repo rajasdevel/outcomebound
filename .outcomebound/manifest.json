@@ -24,7 +24,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "bb238e0f7d3db9aaf37fbe3b4c9f0e2b8cd9fccf86eaf058b77e63b86eb3359c",
+        ".github/workflows/ci.yml": "c3ddd43c270f160ee7c0de498b4ae3d74b0fd08dbb90fd007d6f74077c795ddd",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
         ".outcomebound/fragments/commands.md": "ea7969f7104c5cbcb180a272302408478dc6a4618314235fa6c607b12cc8c68a",
@@ -42,6 +42,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
+      "frame": "e4397c4e06273a577d69bdd30388f10744d29a7f820cbc03821150435a8a3855",
       "sha256": "0329cd1d5b4588971504762559fb64ef5669dd64091b01e0ff0807a5bd238cbb"
     },
     {
