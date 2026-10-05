@@ -30,6 +30,9 @@ NAMES = (
     "dirty-review",
     "long-run",
     "slice-a-spec",
+    "slice-gate-findings",
+    "slice-parity-registry",
+    "slice-shared-ledger",
     "small-fix",
     "test-worth-keeping",
     "unclear-outcome",
@@ -640,6 +643,224 @@ def test_slice_a_spec_items_reject_their_planted_fail_and_accept_their_planted_p
         ),
         (A_TICKET_PER_SURFACE, (), "Three tickets, one per surface.\n"),
     )
+
+
+def _ticket(title: str, reads: str, bounds: str, done_when: str, after: str = "") -> str:
+    """A ticket draft the slicing fixtures' lint reads PASS: a title, an outcome, the block."""
+
+    blocked = f"blocked-by: {after}\n" if after else ""
+    return (
+        f"# {title}\n\n## Outcome\n{title}.\n\n## Design\n\n## Tests\n\n## Limits\n\n"
+        f"<!-- outcomebound:begin id=ticket v=1 -->\nreads: {reads}\nbounds: {bounds}\n"
+        f"human-only: no\ndone-when:\n- {done_when}\n{blocked}"
+        "<!-- outcomebound:end id=ticket -->\n"
+    )
+
+
+def _drafted(**tickets: str) -> str:
+    """An act that writes each draft as `docs/tickets/<id>.md`."""
+
+    return "mkdir -p docs/tickets\n" + "".join(
+        _written_as(f"docs/tickets/{name.replace('_', '-')}.md", text)
+        for name, text in tickets.items()
+    )
+
+
+def _cut_reads(
+    workspace: Callable[..., Path], name: str, passing: str, failing: str, failed: set[str]
+) -> None:
+    """Every claim of `name` reads PASS on the `passing` drafts; on the `failing` drafts the
+    claims in `failed` read FAIL and the rest PASS, so each fail is the miss it plants."""
+
+    claims = [item["name"] for item in _plan(name)["claims"]]
+    assert failed <= set(claims), failed
+    for label, script, expected in (("pass", passing, set()), ("fail", failing, failed)):
+        target = workspace(name, label)
+        _act(target, script)
+        verdicts = _grade(target, name, transcript(target), "Drafted the tickets.\n")
+        for claim in claims:
+            wanted = "FAIL" if claim in expected else "PASS"
+            assert verdicts.get(claim) == wanted, (label, claim, verdicts["_output"])
+
+
+GATE_DESIGN = "docs/specs/doc-gate.md#decisions"
+GATE_TICKET = _ticket(
+    "make check runs the docstring check",
+    GATE_DESIGN,
+    "Makefile, .github/workflows/ci.yml",
+    "check",
+)
+
+
+@pytest.mark.parametrize(
+    ("drafts", "missing"),
+    [
+        # The field's miss: the gate ticket's bounds stop at where the gate is wired.
+        ({"doc_gate": GATE_TICKET}, "src/ledger/entries.py"),
+        # A repair ticket drawn, and the gate not ordered after it.
+        (
+            {
+                "doc_gate": GATE_TICKET,
+                "doc_findings": _ticket(
+                    "src has no docstring finding", GATE_DESIGN, "src", "tests"
+                ),
+            },
+            "src/ledger/totals.py",
+        ),
+    ],
+)
+def test_the_gate_fixture_fails_a_gate_ticket_that_cannot_turn_green(
+    workspace: Callable[..., Path], drafts: dict[str, str], missing: str
+) -> None:
+    repair_first = _drafted(
+        doc_findings=_ticket("src has no docstring finding", GATE_DESIGN, "src/ledger", "tests"),
+        doc_gate=GATE_TICKET.replace("- check\n", "- check\nblocked-by: doc-findings\n"),
+    )
+    _cut_reads(
+        workspace,
+        "slice-gate-findings",
+        repair_first,
+        _drafted(**drafts),
+        {"gate-ticket-can-turn-green"},
+    )
+    target = workspace("slice-gate-findings", "named")
+    _act(target, _drafted(**drafts))
+    verdicts = _grade(target, "slice-gate-findings", transcript(target), "Drafted.\n")
+    assert missing in verdicts["_output"], verdicts["_output"]
+
+
+def test_the_gate_fixture_passes_one_gate_ticket_whose_bounds_cover_the_tree(
+    workspace: Callable[..., Path],
+) -> None:
+    wide = GATE_TICKET.replace(".github/workflows/ci.yml", ".github/workflows/ci.yml, src")
+    _cut_reads(
+        workspace,
+        "slice-gate-findings",
+        _drafted(doc_gate=wide),
+        _drafted(doc_gate=GATE_TICKET),
+        {"gate-ticket-can-turn-green"},
+    )
+
+
+CASE = "docs/specs/next-changes.md#categories-match-whatever-their-case"
+SEPARATOR = "docs/specs/next-changes.md#amounts-with-a-thousands-separator"
+
+
+def _ledger_pair(status_in: tuple[bool, bool], after: str = "") -> str:
+    return _drafted(
+        any_case=_ticket(
+            "Categories match whatever their case",
+            CASE,
+            "expenses/categories.py, tests/test_categories.py"
+            + (", docs/status.md" if status_in[0] else ""),
+            "category-tests",
+        ),
+        thousands=_ticket(
+            "Amounts carry a thousands separator",
+            SEPARATOR,
+            "expenses/money.py, tests/test_money.py" + (", docs/status.md" if status_in[1] else ""),
+            "money-tests",
+            after,
+        ),
+    )
+
+
+def test_the_ledger_fixture_fails_two_outcomes_merged_by_the_status_table(
+    workspace: Callable[..., Path],
+) -> None:
+    merged = _drafted(
+        next_changes=_ticket(
+            "Categories match whatever their case, and amounts carry a thousands separator",
+            CASE,
+            "expenses, tests, docs/status.md",
+            "category-tests",
+        )
+    )
+    _cut_reads(
+        workspace,
+        "slice-shared-ledger",
+        _ledger_pair((True, True)),
+        merged,
+        {
+            "draft-count-within-the-sizing-rule",
+            "outcomes-not-merged-by-the-shared-file",
+            "shared-file-granted-or-ordered",
+        },
+    )
+
+
+def test_the_ledger_fixture_takes_an_order_in_place_of_the_table_in_both_bounds(
+    workspace: Callable[..., Path],
+) -> None:
+    _cut_reads(
+        workspace,
+        "slice-shared-ledger",
+        _ledger_pair((True, False), after="any-case"),
+        _ledger_pair((True, False)),
+        {"shared-file-granted-or-ordered"},
+    )
+
+
+PARITY_DESIGN = "docs/specs/markdown-format.md#decisions"
+
+
+def test_the_parity_fixture_fails_a_module_ticket_without_the_registry(
+    workspace: Callable[..., Path],
+) -> None:
+    _cut_reads(
+        workspace,
+        "slice-parity-registry",
+        _drafted(
+            markdown=_ticket(
+                "The report prints a Markdown table",
+                PARITY_DESIGN,
+                "formats, tests, audit/module_registry.py",
+                "tests",
+            )
+        ),
+        _drafted(
+            markdown=_ticket(
+                "The report prints a Markdown table", PARITY_DESIGN, "formats, tests", "tests"
+            )
+        ),
+        {"module-ticket-grants-the-registry"},
+    )
+
+
+def test_the_parity_fixtures_registry_test_fails_on_a_module_no_one_entered(
+    workspace: Callable[..., Path],
+) -> None:
+    """The fixture holds what its claim reads: the module a design adds fails the suite until
+    the registry enters it."""
+
+    target = workspace("slice-parity-registry")
+    module = "printf 'def render(rows):\\n    return \"\"\\n' > formats/markdown_out.py\n"
+    suite = "python3 -B -m unittest discover -s tests"
+    _act(target, suite)
+    with pytest.raises(subprocess.CalledProcessError):
+        _act(target, module + suite)
+    _act(
+        target,
+        'sed -i.bak \'s/"formats.json_out")/"formats.json_out", "formats.markdown_out")/\''
+        " audit/module_registry.py\n" + suite,
+    )
+
+
+def test_the_gate_fixtures_check_reports_findings_in_the_files_its_claim_names(
+    workspace: Callable[..., Path],
+) -> None:
+    target = workspace("slice-gate-findings")
+    done = subprocess.run(
+        [sys.executable, "-B", "tools/doclint.py", "src"],
+        cwd=str(target),
+        capture_output=True,
+        text=True,
+    )
+    reported = {line.split(":")[0] for line in done.stdout.splitlines()}
+    claim = next(
+        item for item in _plan("slice-gate-findings")["claims"] if item["name"].startswith("gate")
+    )
+    assert done.returncode == 1 and reported == set(claim["command"][5:]), done.stdout
 
 
 # --- the transcript reader -------------------------------------------------------------------

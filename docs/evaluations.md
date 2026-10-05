@@ -495,7 +495,8 @@ Each run records its tokens (the count that codex prints for the call) and its s
 - On the hand-off fixtures, the median for one implementer on one fixture (three runs) ranged
   from 16,605 to 55,699 tokens and from 59 to 295 seconds (2026-10-03), and from 16,021 to 47,723
   tokens and from 57 to 323 seconds in the rerun (2026-10-04).
-- All eleven kernel and skill fixtures at three runs are 33 calls an arm. The measurement of the
+- All fourteen kernel and skill fixtures at three runs are 42 calls an arm. Before the three
+  slicing fixtures of 2026-10-05, there were eleven, 33 calls an arm. The measurement of the
   ladder is 36 calls. The hand-off comparison, and each rerun of it, is 63 calls.
 - A failed call is recorded and never retried.
 - A minimal call used 3,887 tokens on gpt-6-sol at low effort in the `workspace-write` sandbox. The
@@ -530,6 +531,9 @@ times are under Results. Subscription usage was not metered.
 | `unclear-outcome` (gather-requirements) | Show the due date of each reminder, and hold each person to five reminders | Due dates shown in UTC. A sixth loses none of the five. A built reading of the cap named as a choice, or a brief. No question about date format | Which gaps to settle, and which to put to the person |
 | `test-worth-keeping` (tests-worth-keeping) | Add the regression test for a committed fix, beside a test that already fails | The new test fails on the code before the fix (a mutation check). The failing calendar test is untouched. The answer says that it failed before | A test that can fail. A failure that predates the work |
 | `slice-a-spec` (slice-tickets) | Break a short design into ticket drafts. Publish nothing | The drafts pass `tickets check --draft`. There is exactly one draft, the count that a one-outcome design gets. The bounds name paths that the seed holds | The ticket cut |
+| `slice-gate-findings` (slice-tickets) | Break a design that makes a docstring check a gate with no baseline into ticket drafts. The check already reports findings in two files the design does not name | The drafts pass `tickets check --draft`. Each draft that covers `Makefile` covers both files, itself or through a draft in its `blocked-by` | A gate ticket whose bounds can make its claim green |
+| `slice-shared-ledger` (slice-tickets) | Break a design of two independent changes, which each set a row of one status table, into ticket drafts, for two implementers at once | The drafts pass `tickets check --draft`. Exactly two drafts, and none covers both changes. Both cover the status table, or one is `blocked-by` the other | A file every ticket touches in passing merges no tickets |
+| `slice-parity-registry` (slice-tickets) | Break a design that adds a module into ticket drafts, where a test holds a registry equal to the modules | The drafts pass `tickets check --draft`. Each draft that covers the new module covers the registry | An inventory every added module enters is in `bounds` |
 | `ladder-1-message` | A misspelled word in a refusal | The refusal reads right. No process document | The smallest change amid documents that invite process |
 | `ladder-2-last-units` | A two-character comparison bug (the overengineering trap) | The last units can be taken and no more. No process document. The slow integration suite did not run | Process and over-testing on a trivial fix |
 | `ladder-3-reorder-list` | A `--below N` option across the command line and the store | The right items are listed. No process document | An ordinary small feature |
@@ -1150,7 +1154,8 @@ tasks buy:
     3 of 3 is worth reading. Compute the power before you choose the repetitions. Give each result
     the smallest difference that it could detect.
 11. **Count the cost before running.** Calls are arms times fixtures times repetitions: 33 an arm
-    for the eleven fixtures, 36 for the three arms of the ladder, 63 for the hand-off comparison.
+    for the eleven fixtures (42 for the fourteen since 2026-10-05), 36 for the three arms of the
+    ladder, 63 for the hand-off comparison.
     The median run of a cell took 8,000 to 56,000 tokens and half a minute to five minutes.
     - A failed call is recorded and never retried, so the count of a pass stays whole. A silent
       retry would also shift what is measured: inputs that fail on a bug and pass on a re-roll get
@@ -1216,9 +1221,12 @@ them. `evals/README.md` gives their cells.
 
 - **Fixtures:** [`evals/fixtures/`](../evals/fixtures/).
   - Kernel and skill fixtures: `small-fix`, `dirty-review`, `long-run`, `decision`,
-    `unclear-outcome`, `test-worth-keeping`, `slice-a-spec`.
+    `unclear-outcome`, `test-worth-keeping`, `slice-a-spec`, `slice-gate-findings`,
+    `slice-shared-ledger`, `slice-parity-registry`.
   - The four `ladder-*` rungs and their shared `ladder/` (`base.sh`, `finish.sh`, `footprint.py`,
     `no_process_document.py`, `cli_probe.py`).
+  - The shared `slicing/` (`store.sh`, `finish.sh`) of the three newer slicing fixtures, and the
+    graders of the four ticket fixtures, `evals/graders/drafts.py` and `ticket_cut.py`.
   - The twelve `handoff-*` fixtures and their shared `handoff/` (`base.sh`, `build.sh`,
     `task.sh`, `export.py`, `grade.py`, `accepting.py`, `handover.md`, and for each base its
     ticket, packages, acceptance tests and reference solution).

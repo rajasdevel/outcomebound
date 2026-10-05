@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "drafts-pass-the-ticket-lint",
+      "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/drafts.py", "lint"],
+      "required_paths": ["checks/drafts.py", ".outcomebound/tickets.json"]
+    },
+    {
+      "name": "module-ticket-grants-the-registry",
+      "risk": "a draft that adds the new module leaves out of its bounds the registry every added module must enter",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3", "-B", "checks/ticket_cut.py", "entered",
+        "formats/markdown_out.py", "audit/module_registry.py"
+      ],
+      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+    }
+  ]
+}

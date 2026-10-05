@@ -198,7 +198,7 @@ Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work her
 NOTE
 
 mkdir -p checks
-cp "$here/checks/drafts.py" checks/drafts.py
+cp "$repo/evals/graders/drafts.py" checks/drafts.py
 chmod +x checks/*
 
 # The core skill, where the note names it and where codex looks for skills;

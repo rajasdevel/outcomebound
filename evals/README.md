@@ -8,8 +8,8 @@ verdict. No model grades another.
 
 There are two families of fixtures:
 
-- **Eleven kernel and skill fixtures.** They measure the kernel and the skills against the task
-  alone. Each arm runs all eleven by default.
+- **Fourteen kernel and skill fixtures.** They measure the kernel and the skills against the
+  task alone. Each arm runs all fourteen by default.
 - **Twelve hand-off fixtures.** They measure the hand-off package for one implementer. They run
   only when `--fixtures` names them.
 
@@ -34,8 +34,8 @@ for repetition in 1 2 3; do
 done
 ```
 
-- With no `--fixtures`, each call runs the eleven fixtures that are not hand-off fixtures. Each
-  fixture is one codex call. The two arms above are 66 runs. Each other arm adds 33 runs.
+- With no `--fixtures`, each call runs the fourteen fixtures that are not hand-off fixtures. Each
+  fixture is one codex call. The two arms above are 84 runs. Each other arm adds 42 runs.
 - The measurement of the ladder is its four fixtures under `current`, `unsized` and `none`, with
   three repetitions each: 36 runs.
 - `--fixtures` narrows the run. `--effort` sets the reasoning effort of codex (default `medium`).
@@ -152,6 +152,28 @@ Each skill has one fixture whose checks read the behavior that the skill is for:
   sizing rule of the skill gives a design of one outcome with no edge, no decision between and one
   implementer. Each draft names bounds, and each bound is a path that the seed holds.
 
+Three more fixtures, also for `slice-tickets`, each plant one way that a cut of real work went
+wrong. Each task is to break a short design into ticket drafts. In each, the drafts read PASS
+under `tickets check --draft`, and a check reads the `bounds` and `blocked-by` of the drafts:
+
+- `slice-gate-findings`. The design makes a docstring check over `src` a gate of `make check`,
+  with no baseline. The check already reports findings in two files of `src`, which the design
+  does not name. Each draft whose bounds cover `Makefile` covers those two files, itself or
+  through a draft that it names in `blocked-by`, at any depth. So a repair ticket comes first,
+  or the gate ticket has bounds that cover the tree.
+- `slice-shared-ledger`. The design has two changes that do not depend on each other. Each sets
+  its own row of one status table, `docs/status.md`. Two implementers work at the same time.
+  There are exactly two drafts. No draft covers the modules of both changes. The two drafts both
+  cover the status table, or one names the other in `blocked-by`.
+- `slice-parity-registry`. The design adds a module to `formats/`. A test holds a registry,
+  `audit/module_registry.py`, equal to the modules of `formats/`, and the last change that added
+  a module shows the registry entry it needed. The design does not name the registry. A draft
+  covers the new module, and each draft that covers it covers the registry too.
+
+The three share their ticket store and their close, `evals/fixtures/slicing/`. The graders of
+the four ticket fixtures are `evals/graders/drafts.py` and `evals/graders/ticket_cut.py`, copied
+into the workspace and protected.
+
 The brief check requires only an id and the question in one line, options A and B, a
 recommendation that names one, and whether it can be undone, in emoji or ASCII marks. Downsides
 and a diagram print as `observed:` lines and never fail a run. The kernel of the `earlier` arm
@@ -181,7 +203,7 @@ The first probe of each rung also prints what the run did beyond its change, as 
 created, test and full-suite runs, migrations run, commits, and questions put to the person. The
 runner records the tokens and seconds of each run, and `--summary` prints their medians.
 
-The graders of the ticket fixture run the engine of this checkout from `PYTHONPATH`, never an
+The graders of the ticket fixtures run the engine of this checkout from `PYTHONPATH`, never an
 `outcomebound` that they find on PATH. To read what a skill does for an adopter, compare the
 `current` arm with the `none` arm, on the fixture of that skill.
 
