@@ -64,9 +64,20 @@ The bump comes from what an adopter must do, not from the commit type; see
   implementer's. The implementer makes it and names it in the handover, and asks the person
   nothing. An edit that changes behaviour, or that touches a path the project protects, still goes
   to the person as a decision brief. Before, every edit outside `bounds` went to the person.
+- The `tickets` fragment (version 8), the `hand-off-tickets` skill and the contract: an edit
+  outside a ticket's `bounds` that only carries the ticket's own change is in the ticket's
+  authority. Such an edit is one that the work would not need without that change, and that
+  changes nothing else that a user, a test or a check sees: for example an import, a
+  registration, an inventory, index, map or parity entry for the ticket's own files, or a test
+  that asserts text the change moved. The implementer makes it, names it and its path in the
+  handover, and asks the person nothing. An edit that changes what anything else does, that
+  repairs what was broken before the ticket, or that is in a path the project keeps for a person,
+  still goes to the person as a decision brief. Before, every edit outside `bounds` went to the
+  person.
 - The `tickets` fragment: an agent names such an edit in the handover, and does not write it into
   the accepted ticket's body. A ticket's handover is one that the tracker shows, the pull request
-  or the closing comment, and not only a file that the tracker cannot show.
+  or the closing comment (printed for a person to run where the declaration grants no tracker
+  write), and not only a file that the tracker cannot show.
 - The `slice-tickets` skill: a file that every ticket changes in passing, such as a ledger, an
   index or a status table, does not merge tickets. An inventory that every added module must
   enter, such as a registry or a parity count, goes in `bounds`. A later ticket that changes a
