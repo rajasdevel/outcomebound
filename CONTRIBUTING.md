@@ -247,8 +247,17 @@ does not fail.
 nothing. It runs on each project of a local list, under Python 3.10 and under the Python of the
 installed release. The environment variable `OB_CANARY_LIST` names the list: one project path on
 each line, and `#` for a comment. The list stays outside this repository, and the report names
-each project by its number only. A crash, an exception, a refusal, a command that prints no
-valid report, or a change to a project's tree is FAIL. The report also gives the warning and finding kinds that the candidate adds or
+each project by its number only. On each project, both engines run `adopt --dry-run`,
+`adopt --check` and `instructions check`. Where the project has `.outcomebound/floor.json`, they
+also run `floor check --base HEAD`, and the report gives the seconds of each floor run. Where
+the claims plan of the project's ticket declaration has a `tickets check --draft` command, they
+run `tickets check --draft` on those draft files. Where `issues.json` is in the project root,
+they run `tickets check` on that export. If a command does not run, the report gives the
+reason; with no export, the report says `UNVERIFIED`, because the canary calls no tracker. The
+caches of the floor's tools go to a temporary folder. A crash, an exception, a refusal, a
+command that prints no valid report, or a change to a project's tree (ignored entries included)
+is FAIL. If the installed release fails and the candidate does not, the report says
+`no baseline: installed engine failed`, and it does not compare that command. The report also gives the warning and finding kinds that the candidate adds or
 removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIED`. Run
 `make canary` before you open a pull request that changes `adopt`, `tickets`, `floor`,
 `instructions` or `discovery`, and on the committed release commit. The pull request gives the

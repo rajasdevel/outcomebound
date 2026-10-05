@@ -9,22 +9,44 @@ number in the list.
 
 For each project, the installed release (`outcomebound` on PATH, less this checkout's launcher)
 and the candidate (this checkout) each run `adopt <p> --dry-run`, `adopt <p> --check` and
-`instructions check <p> --json`. The candidate runs under each `--python`; by default the oldest
-supported Python (3.10, from `uv python find 3.10` or `python3.10` on PATH) and the Python the
-installed release runs under, since a Python version can change what the standard library
-raises. Nothing is written into a project: `git status --porcelain` is read before and after.
+`instructions check <p> --json`, and, where the project holds them:
+
+- `floor check <p> --base HEAD` where `.outcomebound/floor.json` exists. HEAD as the base makes
+  the change range empty, so every claim runs over the tree, the secrets claim scans no commit,
+  and nothing needs the network or the adoption commit. A floor run has no time limit; its
+  seconds are reported.
+- `tickets check <p> --json --draft <files>` for each draft set the project names: each
+  `tickets check --draft` command of the claims plan that `.outcomebound/tickets.json` names,
+  its files read from the plan's cwd and kept only inside the project. The layer has no
+  conventional folder for drafts, and the tree is never searched for them.
+- `tickets check <p> --json --input issues.json` where a readable `issues.json`, the file the
+  export command writes, is in the project root; else the line says UNVERIFIED and why. The
+  canary calls no tracker.
+
+Each command that does not run gets a line that says why. The candidate runs under each
+`--python`; by default the oldest supported Python (3.10, from `uv python find 3.10` or
+`python3.10` on PATH) and the Python the installed release runs under, since a Python version
+can change what the standard library raises. Nothing is written into a project: every run gets
+`RUFF_CACHE_DIR` and `MYPY_CACHE_DIR` in a temporary folder, and `git status --porcelain
+--untracked-files=all` and the ignored entries (a folder Git ignores named once) are read
+before the runs and after each engine's run.
 
 The report names, per project and per run, a crash (a traceback, a signal, or an exit that is
 not the command's documented verdict), an exception adopt reports (`adopt: [Errno N] ...`), a
-refusal (another `adopt:` reason), a changed verdict or exit code, and the report lines added
-or removed by kind: a `warning` or `UNVERIFIED` line by its first four words, each word that is
-not a plain word shown as `<...>`, and any other line by its first word. The verdict is the last
-line. A crash, an exception or a refusal of the candidate, a command of the candidate that
-printed no valid report (`instructions check --json` with no JSON, a required field missing or of
-the wrong type, or a result that disagrees with its exit), a project tree that changed, or a
-project that is not a Git work tree is FAIL; a valid report whose result is UNVERIFIED is a
-verdict, compared as any other; anything else is PASS, and the kinds added and
-removed are printed for a person to judge.
+refusal (another `adopt:` reason, a `floor:` reason, or a ticket verb's named code with no
+report), a changed verdict or exit code, and the report lines added or removed by kind: an adopt
+`warning` or `UNVERIFIED` line by its first four words, each word that is not a plain word shown
+as `<...>`, and any other adopt line by its first word; an instruction finding by its check and
+verdict; a floor claim by its name (a name the engine's recipes do not give shown as `<...>`)
+and its result; a ticket message by its level and its code. The verdict is the last line. A
+crash, an exception or a refusal of the candidate, a command of the candidate that printed no
+valid report (`--json` with no JSON, a required field missing or of the wrong type, a result
+that disagrees with its exit, or a floor exit that its claim lines do not explain), a project
+tree that changed, or a project that is not a Git work tree is FAIL; a valid report whose
+result is UNVERIFIED is a verdict, compared as any other; anything else is PASS, and the kinds
+added and removed are printed for a person to judge. Where the installed release failed and the
+candidate did not, the line says `no baseline: installed engine failed`, and nothing of that
+command is compared.
 
 The verdict is recorded in the Git common directory, under `outcomebound-canary/`, keyed by the
 tree of HEAD: `main` takes squash merges, so the release commit is a new commit with the tree of
@@ -44,6 +66,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -62,22 +86,57 @@ RUNPY = (
     'sys.argv = ["outcomebound", *sys.argv[2:]]\n'
     'runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)\n'
 )
-# Each command: its label, its arguments around the project, and the exits it documents.
+
+
+@dataclass(frozen=True)
+class Command:
+    """One command both engines run on a project: its label in the report, its arguments
+    around the project, the exits it documents, how its output is read, and whether its seconds
+    are reported."""
+
+    label: str
+    arguments: tuple[str, ...]
+    exits: frozenset[int]
+    reader: str
+    timed: bool = False
+
+
+# The commands every project gets.
 COMMANDS = (
-    ("adopt --dry-run", ("adopt", "{p}", "--dry-run"), frozenset({0, 1})),
-    ("adopt --check", ("adopt", "{p}", "--check"), frozenset(range(101))),
-    ("instructions check", ("instructions", "check", "{p}", "--json"), frozenset({0, 1, 2})),
+    Command("adopt --dry-run", ("adopt", "{p}", "--dry-run"), frozenset({0, 1}), "adopt"),
+    Command("adopt --check", ("adopt", "{p}", "--check"), frozenset(range(101)), "adopt"),
+    Command(
+        "instructions check",
+        ("instructions", "check", "{p}", "--json"),
+        frozenset({0, 1, 2}),
+        "instructions",
+    ),
 )
-# The exit `instructions check` gives for each result of its report.
+FLOOR = ".outcomebound/floor.json"
+TICKETS = ".outcomebound/tickets.json"
+# The export `outcomebound tickets export` writes: `issues.json` in the checkout it runs in.
+EXPORT = "issues.json"
+# The exit `instructions check` and `tickets check` give for each result of their report.
 RESULTS = {"PASS": 0, "FAIL": 1, "UNVERIFIED": 2}
 VERDICTS = frozenset(RESULTS)
 # A word a report line may show as it is; any other word (a path, a number, quoted text) is
 # shown as `<...>`, so no project's path or name reaches the report.
 PLAIN = re.compile(r"[A-Za-z][A-Za-z-]*[:,;]?")
+# A ticket message's code, which the engine names, never the project.
+CODE = re.compile(r"[A-Z][A-Z0-9_]*")
+# A floor claim's line, and the claim names the engine's own recipes give; a project's own
+# claim name is shown as `<...>`.
+CLAIM = re.compile(r"(PASS|FAIL|UNVERIFIED) (\S+) \(")
+RECIPE = re.compile(r"(?:python|shell|typescript)\.[a-z]+|secrets|loosening")
+# A refusal's line on stderr: the floor's, and a ticket verb's named code.
+REFUSAL = {"floor": re.compile(r"floor: "), "tickets": re.compile(r"[A-Z][A-Z_]+: ")}
 GROUPED = frozenset({"warning", "UNVERIFIED"})
 ERRNO = re.compile(r"\[Errno (\d+)\]")
 # The last line of a traceback: an exception's name, which is shown; its message is not.
 EXCEPTION = re.compile(r"((?:\w+\.)*\w*(?:Error|Exception|Interrupt|Exit|Warning))(?::|$)")
+# The tools a floor claim runs that keep a cache in the tree they read, and the variable that
+# moves each; the canary moves both out of every project.
+CACHES = ("RUFF_CACHE_DIR", "MYPY_CACHE_DIR")
 
 
 class Unverified(Exception):
@@ -95,6 +154,7 @@ class Outcome:
     unreported: str | None = None
     verdict: str = ""
     kinds: Counter[str] = field(default_factory=Counter)
+    seconds: float = 0.0
 
     def failed(self) -> str | None:
         if self.crash:
@@ -133,14 +193,13 @@ def _crash(exit: int, out: str, err: str, documented: frozenset[int]) -> str | N
     return None
 
 
-def read(label: str, exit: int, out: str, err: str) -> Outcome:
+def read(command: Command, exit: int, out: str, err: str) -> Outcome:
     """One command's outcome, from its exit and what it printed."""
 
-    documented = next(codes for name, _, codes in COMMANDS if name == label)
-    outcome = Outcome(exit, crash=_crash(exit, out, err, documented))
+    outcome = Outcome(exit, crash=_crash(exit, out, err, command.exits))
     if outcome.crash:
         return outcome
-    if label.startswith("adopt"):
+    if command.reader == "adopt":
         reasons = [line for line in err.splitlines() if line.startswith("adopt: ")]
         errnos = sorted({found.group(1) for line in reasons for found in ERRNO.finditer(line)})
         if errnos:
@@ -149,22 +208,27 @@ def read(label: str, exit: int, out: str, err: str) -> Outcome:
         outcome.verdict = f"exit {exit}"
         outcome.kinds = Counter(kind for line in out.splitlines() if (kind := _kind(line)))
         return outcome
-    report, problem = _report(exit, out)
-    if report is None:
-        outcome.unreported = problem
+    if command.reader == "floor":
+        kinds, problem = _floor(exit, out)
+    elif command.reader == "tickets":
+        kinds, problem = _tickets(exit, out)
+    else:
+        kinds, problem = _instructions(exit, out)
+    if kinds is None:
+        refusal = REFUSAL.get(command.reader)
+        outcome.refusals = (
+            sum(1 for line in err.splitlines() if refusal.match(line)) if refusal else 0
+        )
+        outcome.unreported = None if outcome.refusals else problem
         outcome.verdict = f"exit {exit}, no valid report"
         return outcome
-    outcome.verdict = report["result"]
-    outcome.kinds = Counter(
-        f"{_word(item['check'])} {_word(item['verdict'])}"
-        for item in report["findings"]
-        if item["verdict"] != "PASS"
-    )
+    outcome.verdict = next(name for name, code in RESULTS.items() if code == exit)
+    outcome.kinds = kinds
     return outcome
 
 
-def _report(exit: int, out: str) -> tuple[dict | None, str]:
-    """The `instructions check --json` report, or None and what made it no valid report."""
+def _json_report(exit: int, out: str) -> tuple[dict | None, str]:
+    """A `--json` report whose result is PASS, FAIL or UNVERIFIED and agrees with its exit."""
 
     try:
         report = json.loads(out)
@@ -177,6 +241,15 @@ def _report(exit: int, out: str) -> tuple[dict | None, str]:
         return None, "the report has no result PASS, FAIL or UNVERIFIED"
     if RESULTS[result] != exit:
         return None, f"the report's result {result} disagrees with exit {exit}"
+    return report, ""
+
+
+def _instructions(exit: int, out: str) -> tuple[Counter[str] | None, str]:
+    """The kinds of an `instructions check --json` report: each finding that is not PASS."""
+
+    report, problem = _json_report(exit, out)
+    if report is None:
+        return None, problem
     findings = report.get("findings")
     if not isinstance(findings, list):
         return None, "the report has no list of findings"
@@ -187,7 +260,154 @@ def _report(exit: int, out: str) -> tuple[dict | None, str]:
             and item.get("verdict") in VERDICTS
         ):
             return None, "a finding has no check or no verdict PASS, FAIL or UNVERIFIED"
-    return report, ""
+    kinds = Counter(
+        f"{_word(item['check'])} {_word(item['verdict'])}"
+        for item in findings
+        if item["verdict"] != "PASS"
+    )
+    return kinds, ""
+
+
+def _tickets(exit: int, out: str) -> tuple[Counter[str] | None, str]:
+    """The kinds of a `tickets check --json` report: each message, by its level and its code."""
+
+    report, problem = _json_report(exit, out)
+    if report is None:
+        return None, problem
+    tickets = report.get("tickets")
+    if not isinstance(tickets, list) or not all(isinstance(t, dict) for t in tickets):
+        return None, "the report has no list of tickets"
+    messages = [report.get("messages"), *(ticket.get("messages") for ticket in tickets)]
+    if not all(isinstance(group, list) for group in messages):
+        return None, "the report or a ticket has no list of messages"
+    kinds: Counter[str] = Counter()
+    for item in (item for group in messages for item in group):
+        level = item.get("level") if isinstance(item, dict) else None
+        code = item.get("code") if isinstance(item, dict) else None
+        if not (isinstance(level, str) and isinstance(code, str)):
+            return None, "a message has no level or no code"
+        shown = [token if CODE.fullmatch(token) else "<...>" for token in (level, code)]
+        kinds[" ".join(shown)] += 1
+    return kinds, ""
+
+
+def _floor(exit: int, out: str) -> tuple[Counter[str] | None, str]:
+    """The kinds of a `floor check` report: each claim's line, by its name and its result.
+    Exit 0 is every claim PASS, and exit 1 at least one claim that is not."""
+
+    claims = [found.groups() for line in out.splitlines() if (found := CLAIM.match(line))]
+    if exit == 2:
+        return None, "exit 2, the floor could not run"
+    if exit == 0 and any(status != "PASS" for status, _ in claims):
+        return None, "exit 0, but a claim did not pass"
+    if exit == 1 and all(status == "PASS" for status, _ in claims):
+        return None, "exit 1, but no claim failed or read UNVERIFIED"
+    kinds = Counter(
+        f"{name if RECIPE.fullmatch(name) else '<...>'} {status}" for status, name in claims
+    )
+    return kinds, ""
+
+
+def _finding(command: Command, kind: str) -> bool:
+    """Whether a kind is a finding, counted when the candidate adds or removes it."""
+
+    if command.reader == "adopt":
+        return kind.split()[0] in GROUPED
+    if command.reader == "floor":
+        return not kind.endswith(" PASS")
+    return True
+
+
+def _drafts(root: Path) -> tuple[list[list[Path]], str]:
+    """The draft sets the project names: each `tickets check --draft` command of the claims plan
+    its tickets declaration names, its files read from the plan's cwd. None, and why, where the
+    project names none; the tree is never searched for drafts."""
+
+    try:
+        declaration = json.loads((root / TICKETS).read_text(encoding="utf-8"))
+        named = declaration["claims"]
+        plan_path = (root / named).resolve()
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        claims = plan["claims"]
+        cwd = (plan_path.parent / plan.get("cwd", ".")).resolve()
+    except (OSError, ValueError, KeyError, TypeError):
+        return [], "the tickets declaration or its claims plan cannot be read"
+    sets: list[list[Path]] = []
+    for claim in claims if isinstance(claims, list) else []:
+        argv = claim.get("command") if isinstance(claim, dict) else None
+        if not (isinstance(argv, list) and all(isinstance(a, str) for a in argv)):
+            continue
+        if "tickets" not in argv or "--draft" not in argv:
+            continue
+        after = argv[argv.index("--draft") + 1 :]
+        tokens = after[: next((i for i, a in enumerate(after) if a.startswith("-")), len(after))]
+        files: list[Path] = []
+        for token in tokens:
+            try:
+                pattern = any(c in token for c in "*?[")
+                found = sorted(cwd.glob(token)) if pattern else [cwd / token]
+            except (ValueError, NotImplementedError):
+                # An absolute pattern, which glob does not take; the plan's cwd reads none.
+                continue
+            files.extend(
+                path.resolve()
+                for path in found
+                if path.is_file() and path.resolve().is_relative_to(root.resolve())
+            )
+        if files and files not in sets:
+            sets.append(files)
+    if not sets:
+        return [], "the claims plan names no `tickets check --draft` files that exist"
+    return sets, ""
+
+
+def plan(root: Path) -> tuple[list[Command], list[str]]:
+    """The commands both engines run on one project, and a line for each one not run, with
+    why."""
+
+    commands, skipped = list(COMMANDS), []
+    if (root / FLOOR).is_file():
+        commands.append(
+            Command(
+                "floor check",
+                ("floor", "check", "{p}", "--base", "HEAD"),
+                frozenset({0, 1, 2}),
+                "floor",
+                timed=True,
+            )
+        )
+    else:
+        skipped.append(f"floor check: not run, the project has no {FLOOR}")
+    if not (root / TICKETS).is_file():
+        skipped.append(f"tickets check: not run, the project has no {TICKETS}")
+        return commands, skipped
+    sets, why = _drafts(root)
+    for number, files in enumerate(sets, start=1):
+        commands.append(
+            Command(
+                f"tickets check --draft (set {number}, {len(files)} file(s))",
+                ("tickets", "check", "{p}", "--json", "--draft", *map(str, files)),
+                frozenset({0, 1, 2}),
+                "tickets",
+            )
+        )
+    if why:
+        skipped.append(f"tickets check --draft: not run, {why}")
+    if (root / EXPORT).is_file() and os.access(root / EXPORT, os.R_OK):
+        commands.append(
+            Command(
+                "tickets check --input",
+                ("tickets", "check", "{p}", "--json", "--input", str(root / EXPORT)),
+                frozenset({0, 1, 2}),
+                "tickets",
+            )
+        )
+    else:
+        skipped.append(
+            f"tickets check --input: UNVERIFIED, no readable {EXPORT} in the project root, "
+            "and the canary calls no tracker"
+        )
+    return commands, skipped
 
 
 def load_list(path: Path) -> list[Path]:
@@ -202,14 +422,26 @@ def load_list(path: Path) -> list[Path]:
     return projects
 
 
-def _status(project: Path) -> bytes | None:
+def _git_bytes(project: Path, *arguments: str) -> bytes | None:
     done = subprocess.run(
-        ["git", "-C", str(project), "status", "--porcelain", "-z"],
+        ["git", "-C", str(project), *arguments],
         capture_output=True,
         stdin=subprocess.DEVNULL,
         check=False,
     )
     return done.stdout if done.returncode == 0 else None
+
+
+def _status(project: Path) -> tuple[bytes, bytes] | None:
+    """What a run must leave as it was: `git status`, each untracked file named one by one, and
+    the ignored entries, a folder Git ignores named once, so a cache folder a tool makes and
+    ignores itself (ruff's) is seen too."""
+
+    status = _git_bytes(project, "status", "--porcelain", "-z", "--untracked-files=all")
+    ignored = _git_bytes(
+        project, "ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"
+    )
+    return None if status is None or ignored is None else (status, ignored)
 
 
 @dataclass
@@ -220,21 +452,27 @@ class Engine:
     argv: list[str]
     env: dict[str, str]
 
-    def run(self, project: Path) -> dict[str, Outcome]:
+    def run(self, project: Path, commands: list[Command]) -> dict[str, Outcome]:
         outcomes = {}
-        for label, arguments, _ in COMMANDS:
-            argv = [*self.argv, *(a.replace("{p}", str(project)) for a in arguments)]
-            done = subprocess.run(
-                argv,
-                cwd=project,
-                env=self.env,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                stdin=subprocess.DEVNULL,
-                check=False,
-            )
-            outcomes[label] = read(label, done.returncode, done.stdout, done.stderr)
+        # The floor's tools write their caches here, never into the project.
+        with tempfile.TemporaryDirectory(prefix="outcomebound-canary-") as scratch:
+            env = {**self.env, **{name: str(Path(scratch) / name) for name in CACHES}}
+            for command in commands:
+                argv = [*self.argv, *(a.replace("{p}", str(project)) for a in command.arguments)]
+                started = time.monotonic()
+                done = subprocess.run(
+                    argv,
+                    cwd=project,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    errors="replace",
+                    stdin=subprocess.DEVNULL,
+                    check=False,
+                )
+                outcome = read(command, done.returncode, done.stdout, done.stderr)
+                outcome.seconds = time.monotonic() - started
+                outcomes[command.label] = outcome
         return outcomes
 
 
@@ -247,8 +485,11 @@ class Result:
     failures: Counter[str] = field(default_factory=Counter)
     added: set[str] = field(default_factory=set)
     removed: set[str] = field(default_factory=set)
+    not_run: int = 0
+    changes: int = 0
 
-    def add(self, text: str, command: str = "", under: str = "") -> None:
+    def add(self, text: str, command: str = "", under: str = "", change: bool = True) -> None:
+        self.changes += change
         self.lines.setdefault((command, text), []).extend([under] if under else [])
 
     def shown(self) -> list[str]:
@@ -258,31 +499,53 @@ class Result:
         ]
 
 
-def _compare(result: Result, command: str, before: Outcome, after: Outcome, under: str) -> None:
+def _compare(result: Result, command: Command, before: Outcome, after: Outcome, under: str) -> None:
+    label = command.label
+    if command.timed:
+        shown = f"{after.verdict or 'no verdict'}, {after.seconds:.1f} s (installed: "
+        shown += f"{before.verdict or 'no verdict'}, {before.seconds:.1f} s)"
+        result.add(shown, label, under, change=False)
     failed = after.failed()
     if failed:
         known = before.failed()
         installed = f" (installed: {known})" if known else ""
-        result.add(f"{failed}{installed}", command, under)
+        result.add(f"{failed}{installed}", label, under)
         result.failures[failed.split(":")[0]] += 1
         return
     if before.failed():
-        result.add(f"installed: {before.failed()}; candidate: none", command, under)
+        result.add(
+            f"no baseline: installed engine failed ({before.failed()}); the candidate's "
+            f"verdict {after.verdict} was not compared",
+            label,
+            under,
+        )
+        return
     if before.verdict != after.verdict:
-        result.add(f"verdict {before.verdict} -> {after.verdict}", command, under)
+        result.add(f"verdict {before.verdict} -> {after.verdict}", label, under)
     for kind in sorted(set(before.kinds) | set(after.kinds)):
         old, new = before.kinds[kind], after.kinds[kind]
         if old != new:
-            result.add(f"{kind!r} {old} -> {new}", command, under)
-        finding = command.startswith("instructions") or kind.split()[0] in GROUPED
-        if finding and old == 0 and new:
-            result.added.add(f"{command} {kind}")
-        if finding and new == 0 and old:
-            result.removed.add(f"{command} {kind}")
+            result.add(f"{kind!r} {old} -> {new}", label, under)
+        if _finding(command, kind) and old == 0 and new:
+            result.added.add(f"{label} {kind}")
+        if _finding(command, kind) and new == 0 and old:
+            result.removed.add(f"{label} {kind}")
+
+
+def _changed(result: Result, project: Path, before: tuple[bytes, bytes], during: str) -> bool:
+    """Whether the project's tree changed since `before`; a FAIL line where it did."""
+
+    after = _status(project)
+    if after == before:
+        return False
+    what = "git status" if after is None or after[0] != before[0] else "the ignored entries"
+    result.add(f"the project's tree changed during {during} ({what} changed)")
+    result.failures["changed tree"] += 1
+    return True
 
 
 def canary(number: int, project: Path, installed: Engine, candidates: list[Engine]) -> Result:
-    """One project: the installed release, then each candidate, then the tree once more."""
+    """One project: the installed release, then each candidate, the tree read after each."""
 
     result = Result(number)
     before = _status(project) if project.is_dir() else None
@@ -290,13 +553,22 @@ def canary(number: int, project: Path, installed: Engine, candidates: list[Engin
         result.add("not a Git work tree that this user can read")
         result.failures["unreadable project"] += 1
         return result
-    baseline = installed.run(project)
+    commands, skipped = plan(project)
+    result.add("ran: " + ", ".join(command.label for command in commands), change=False)
+    for line in skipped:
+        result.add(line, change=False)
+    result.not_run = len(skipped)
+    baseline = installed.run(project, commands)
+    if _changed(result, project, before, "the installed release's run"):
+        return result
     for candidate in candidates:
-        for command, outcome in candidate.run(project).items():
-            _compare(result, command, baseline[command], outcome, candidate.label)
-    if _status(project) != before:
-        result.add("the project's tree changed during the run (git status differs)")
-        result.failures["changed tree"] += 1
+        outcomes = candidate.run(project, commands)
+        for command in commands:
+            _compare(
+                result, command, baseline[command.label], outcomes[command.label], candidate.label
+            )
+        if _changed(result, project, before, f"the run under {candidate.label}"):
+            return result
     return result
 
 
@@ -433,11 +705,15 @@ def report(results: list[Result], header: str) -> tuple[str, dict, str]:
     print(header)
     for result in results:
         print(f"project {result.number}: " + ("FAIL" if result.failures else "PASS"))
-        print("\n".join(f"  {line}" for line in result.shown()) or "  no change")
+        for line in result.shown():
+            print(f"  {line}")
+        if not result.changes:
+            print("  no change")
     failures: Counter[str] = sum((r.failures for r in results), Counter())
     failed = sum(1 for r in results if r.failures)
     added = sum(len(r.added) for r in results)
     removed = sum(len(r.removed) for r in results)
+    not_run = sum(r.not_run for r in results)
     verdict = "FAIL" if failed else "PASS"
     counts = ", ".join(f"{kind}: {n}" for kind, n in sorted(failures.items())) or "no failure"
     summary = {
@@ -446,10 +722,12 @@ def report(results: list[Result], header: str) -> tuple[str, dict, str]:
         "failures": dict(failures),
         "finding kinds added": added,
         "finding kinds removed": removed,
+        "commands not run": not_run,
     }
     line = (
         f"{verdict} {NAME}: {failed} of {len(results)} project(s) failed ({counts}); "
-        f"warning or finding kinds: {added} added, {removed} removed, for a person to judge"
+        f"warning or finding kinds: {added} added, {removed} removed, for a person to judge; "
+        f"{not_run} command(s) not run, each named with why"
     )
     return verdict, summary, line
 
