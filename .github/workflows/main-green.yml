@@ -7,8 +7,12 @@ name: main-green
 # completed CI run on main failed, so nothing lands but the fix. A pull request labelled
 # `main-fix` passes it, so the fix or the revert can land. When main's CI run passes again, every
 # open pull request passes it again.
+#
+# `pull_request_target` runs this file as main holds it, with a token that can write a status on
+# a fork's pull request too. The job checks out nothing and runs no code from a pull request: it
+# reads the API and writes statuses.
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
     types: [opened, reopened, synchronize, labeled, unlabeled]
   workflow_run:
@@ -16,7 +20,14 @@ on:
     types: [completed]
     branches: [main]
 
-# It reads the runs of CI and writes commit statuses; it reads and writes nothing else.
+# One run at a time, never cancelled: each run reads main's CI and every open pull request afresh
+# when it starts, so the last run to start writes the last statuses, and an older run cannot write
+# over a newer one.
+concurrency:
+  group: main-green
+  cancel-in-progress: false
+
+# It reads the runs of CI and the pull requests, and writes commit statuses; nothing else.
 permissions:
   actions: read
   statuses: write
@@ -27,27 +38,23 @@ jobs:
   set-main-green:
     runs-on: ubuntu-latest
     steps:
-      - name: Set main-green on the open pull requests
+      - name: Set main-green on every open pull request
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          EVENT: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -eu
-          # The last completed CI run of a push to main decides; a run still going changes
-          # nothing until it ends.
-          conclusion="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=1" --jq '.workflow_runs[0].conclusion // "none"')"
-          url="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=1" --jq '.workflow_runs[0].html_url // ""')"
-          if [ "$EVENT" = "pull_request" ]; then
-            numbers="$PR_NUMBER"
-          else
-            numbers="$(gh api "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number')"
-          fi
-          for number in $numbers; do
-            pr="$(gh api "repos/$REPO/pulls/$number")"
-            head="$(printf '%s' "$pr" | jq -r '.head.sha')"
-            fix="$(printf '%s' "$pr" | jq -r '[.labels[].name] | index("main-fix") != null')"
+          # The last completed CI run on main decides; a run still going changes
+          # nothing until it ends. One answer gives both its conclusion and its page.
+          # A run started by hand on main counts as a push's does.
+          last="$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?branch=main&status=completed&per_page=20" \
+            --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0] // {}
+              | [(.conclusion // "none"), (.html_url // "")] | @tsv')"
+          conclusion="${last%%$'\t'*}"
+          url="${last#*$'\t'}"
+          gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" \
+            --jq '.[] | [.number, .head.sha, ([.labels[].name] | index("main-fix") != null)] | @tsv' |
+          while IFS=$'\t' read -r number head fix; do
             if [ "$conclusion" = "success" ]; then
               state=success; text="main's last CI run passed"
             elif [ "$fix" = "true" ]; then

@@ -8,6 +8,7 @@ harness, the `kept` line and the claims plan warning, which exist only as output
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -1886,6 +1887,13 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     assert code == 0 and "running " not in out
     assert re.search(r"finish-check: Done was measured on \S+ on commit [0-9a-f]{12} in ", out)
     assert f"`{failing}` (exit 3)" in out
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert "was measured with the PATH of the agent" not in out
+
+    # A record an engine before the hook-like measurement wrote: the upgrade says so.
+    assert finish_check.keep_known(target, dataclasses.replace(known, as_hook=False))
+    code, out, _ = run(capsys, str(target), "--fragments", "")
+    assert code == 0 and "finish-check: that record was measured with the PATH of the agent" in out
     assert len(count.read_text(encoding="utf-8").splitlines()) == 1
     assert run(capsys, str(target), "--finish-check")[0] == 0
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2

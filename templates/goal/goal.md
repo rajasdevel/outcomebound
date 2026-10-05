@@ -7,7 +7,7 @@
 > run, outside that block.
 
 - Done when: <the checks that end it, such as every accepted item closed and the project's checks green at the default branch's tip>.
-- Authorized: <paths>; commit; <push to the default branch once those checks pass, per ticket or per batch of tickets>; <tracker acts>; <model or eval runs, and the operator's cap on them only if they set one>.
+- Authorized: <paths>; commit; <push to the default branch once those checks pass, per ticket or per batch of tickets; unstated, per ticket>; <tracker acts>; <model or eval runs, and the operator's cap on them only if they set one>.
 - Not authorized: <such as tags, releases, other repositories, force pushes>; and every credential act, which is the person's: unlocking a keychain or other credential store, adding a key to an SSH agent, logging in, and reading or printing a secret. On such a need, ask the person and do not do it.
 - Decide yourself: every choice inside Authorized, one line each in its commit message.
 - Decisions: <id: answer, or none>. The run starts without answers: an item whose brief is unanswered does every part the answer does not decide and stays open with the brief named; every other item proceeds.

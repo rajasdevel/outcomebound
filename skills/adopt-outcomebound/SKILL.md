@@ -52,14 +52,14 @@ as one brief (`outcomebound brief --help`).
   tree the Done commands run and a failure goes back to it. It needs a Done command, and
   `outcomebound` on the harness process's PATH, which a harness launched from a desktop may not
   share with the shell. A Done command names the project's interpreter or runner
-  (`.venv/bin/python -m pytest`, `uv run pytest`), not a tool only an activated environment holds;
-  adopt measures Done without the virtual environment's `bin` and names what it left out. Each
-  person accepts the entry once in their harness, which the install report names; any other
-  harness is named as not available yet. The Done commands get the
-  entry's timeout less 30 seconds: 600 by default, the harnesses' documented default; for a Done
-  that takes longer, add `--finish-timeout <seconds>`, which a later adopt can also change.
-  `--no-finish-check` takes it out. Only with `--finish-check` named does adopt run the Done
-  commands, once after its writes, each to its end and past each failure: it reports each
+  (`.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH),
+  not a tool only an activated environment holds; adopt measures Done without the virtual
+  environment's `bin` and names what it left out. Each person accepts the entry once in their
+  harness, which the install report names; any other harness is named as not available yet. The
+  Done commands get the entry's timeout less 30 seconds: 600 by default, the harnesses' documented
+  default; for a Done that takes longer, add `--finish-timeout <seconds>`, which a later adopt can
+  also change. `--no-finish-check` takes it out. Only with `--finish-check` named does adopt run
+  the Done commands, once after its writes, each to its end and past each failure: it reports each
   command's verdict and seconds, proposes a larger `--finish-timeout` where Done takes longer than
   the timeout less 30 seconds, and keeps each failing command as a known failure; without the
   flag, it prints the record that applies, or says that Done was not measured and how to measure

@@ -29,6 +29,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -425,6 +426,9 @@ class Known:
     measured: str
     seconds: float
     failing: dict[str, Failure]
+    # Whether the measurement ran as a hook runs Done (`hook_environment`); a record an engine
+    # before that wrote, with the PATH of the agent that ran adopt, holds no such mark.
+    as_hook: bool = False
 
     def document(self) -> dict[str, Any]:
         failing = {
@@ -438,6 +442,7 @@ class Known:
             "measured": self.measured,
             "seconds": self.seconds,
             "failing": failing,
+            "as_hook": self.as_hook,
         }
 
     def key(self) -> tuple[str, str, str]:
@@ -480,7 +485,9 @@ def _known(document: object) -> Known | None:
     kept = {line: item for line, item in items.items() if item is not None}
     if len(kept) != len(items):
         return None
-    return Known(done, prefix, head, measured, float(seconds), kept)
+    return Known(
+        done, prefix, head, measured, float(seconds), kept, document.get("as_hook") is True
+    )
 
 
 def parse_known(text: str) -> list[Known] | None:
@@ -603,25 +610,90 @@ _MISSING = re.compile(
     r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
     r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
     r"|(?:\S*/)?(?:ba|da|z)?sh: (?P<shelled>[^\s:]+): command not found"
-    r"|(?:\S*/)?python[\d.]*: No module named (?P<module>[\w.]+))$"
+    r"|(?P<launcher>(?:\S*/)?python[\d.]*): No module named (?P<module>[\w.]+))$"
 )
 # make's own lines after the tool's: its error line, and a nested make's directory lines.
 _MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: (?:\*\*\* |(?:Leaving|Entering) directory )")
+
+
+def _missing_line(output: bytes) -> re.Match[str] | None:
+    lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
+    while lines and _MAKE_ERROR.match(lines[-1]):
+        lines.pop()
+    return _MISSING.match(lines[-1]) if lines else None
 
 
 def missing_tool(output: bytes) -> str | None:
     """The tool a failing command's last line of output says this PATH does not hold, as the
     command line names it (`pytest`, or `python -m pytest`), or None."""
 
-    lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
-    while lines and _MAKE_ERROR.match(lines[-1]):
-        lines.pop()
-    found = _MISSING.match(lines[-1]) if lines else None
+    found = _missing_line(output)
     if found is None:
         return None
     if found["module"]:
         return f"python -m {found['module']}"
     return found["made"] or found["scripted"] or found["shelled"]
+
+
+# Exit code of the probe that finds a module missing; any other non-zero exit says nothing.
+_NO_MODULE = 3
+
+
+def confirmed_absent(
+    target: Path, output: bytes, environment: Mapping[str, str] | None = None
+) -> bool:
+    """Whether the tool the last line names is in fact absent where the command ran, and not only
+    said to be: a name `shutil.which` does not find on that PATH, or a module the named Python
+    launcher cannot find. A command can print the line itself; then the tool is there, and the
+    failure stands."""
+
+    found = _missing_line(output)
+    if found is None:
+        return False
+    path = (environment if environment is not None else os.environ).get("PATH", "")
+    if not found["module"]:
+        tool = found["made"] or found["scripted"] or found["shelled"]
+        return shutil.which(tool, path=path) is None
+    launcher = found["launcher"]
+    program = launcher if "/" in launcher else shutil.which(launcher, path=path)
+    if program is None or not Path(program).exists():
+        return True
+    probe = (
+        "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 3)"
+    )
+    top = found["module"].split(".")[0]
+    try:
+        done = subprocess.run(
+            [program, "-c", probe, top],
+            cwd=target,
+            env=environment,
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return True
+    return done.returncode == _NO_MODULE
+
+
+# A runner's word that something else in the same command failed: pytest's and similar runners'
+# `3 failed`, and make's `Target 'all' not remade because of errors.` after `make -k`.
+_MAKE_TARGET = re.compile(r"^g?(make(?:\[\d+\])?): \*\*\* \[.+?\] Error \d+$", re.M)
+_OTHER_FAILURE = re.compile(r"\b[1-9]\d* (?:failed|errors?)\b|not remade because of errors")
+
+
+def other_failure(output: bytes) -> bool:
+    """Whether a command's output shows a failure besides a missing tool: failure ids a runner's
+    summary names, a count of failed tests, or make's word that a target was not remade."""
+
+    # make's own `*** [target] Error n` lines follow the missing tool itself, so they are not
+    # another failure; a second target that failed under `make -k` says "not remade".
+    text = clean(output)
+    tests = {one for one in failure_ids(output) if not one.startswith("make ")}
+    # Two failed targets of one make (`make -k a b`); a nested make's chain puts its lines at
+    # different levels (`make[1]: *** [test]`, then `make: *** [all]`).
+    levels = [found.group(1) for found in _MAKE_TARGET.finditer(text)]
+    return bool(tests) or bool(_OTHER_FAILURE.search(text)) or len(levels) != len(set(levels))
 
 
 def project_owned(target: Path, tool: str) -> bool:
@@ -650,7 +722,14 @@ def project_owned(target: Path, tool: str) -> bool:
     for folder in (target, target / "src"):
         if (folder / top).is_dir() or (folder / f"{top}.py").is_file():
             return True
-    return any(f"/{path}".endswith(f"/{top}.py") or f"/{top}/" in f"/{path}" for _, path in tracked)
+    # The module's own place: the target's root or `src/`, where a launcher run from the root
+    # imports it; a folder of that name deeper in the tree is another thing.
+    places = [f"{base}{top}" for base in ("", "src/")]
+    return any(
+        path in (f"{place}.py" for place in places)
+        or any(path.startswith(f"{place}/") for place in places)
+        for _, path in tracked
+    )
 
 
 @dataclass(frozen=True)
@@ -834,7 +913,12 @@ def run_one(
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
         missing = missing_tool(tail)
-        if missing is not None and not project_owned(target, missing):
+        if (
+            missing is not None
+            and not project_owned(target, missing)
+            and not other_failure(tail)
+            and confirmed_absent(target, tail, environment)
+        ):
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             note = f"its output says `{missing}` is not on this PATH"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code, note=note)
@@ -922,12 +1006,24 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
         # A command that fails without the entries a hook may lack, and passes with them, needs
         # those entries: a hook would fail it, and a known failure would hide its real failures.
         for index, result in enumerate(results):
-            if result.verdict == FAIL and run_one(target, result.command, None).verdict == PASS:
-                why = f"{result.why}: could not run in the hook's environment"
-                note = f"it passes only with {', '.join(dropped)} on PATH"
-                results[index] = replace(
-                    result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note
-                )
+            if result.verdict != FAIL:
+                continue
+            again = run_one(target, result.command, None)
+            same = (
+                again.verdict == FAIL
+                and again.code == result.code
+                and failure_ids(again.output) == failure_ids(result.output)
+            )
+            if same:
+                continue
+            # Passing with them, or failing another way, or not running: the command depends on
+            # those entries, so neither run is kept as a known failure.
+            how = "passes" if again.verdict == PASS else "runs differently"
+            why = f"{result.why}: could not run in the hook's environment"
+            note = f"it {how} with {', '.join(dropped)} on PATH"
+            results[index] = replace(
+                result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note
+            )
     seconds = time.monotonic() - started
     failing: dict[str, Failure] = {}
     for index, result in enumerate(results):
@@ -937,7 +1033,7 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
             note = "known by its failure ids" if ids else "known by its exit code only"
             results[index] = replace(result, known=True, note=note, commit=head or "")
     day = time.strftime("%Y-%m-%d")
-    record = Known(digest, "", head or "", day, round(seconds, 1), failing)
+    record = Known(digest, "", head or "", day, round(seconds, 1), failing, as_hook=True)
     previous = known_record(target, digest) if head is not None else None
     kept = head is not None and keep_known(target, record)
     added = tuple(added_since(previous, failing)) if previous is not None else ()
@@ -963,9 +1059,16 @@ def hook_environment(
     kept: list[str] = []
     dropped: list[str] = []
     for entry in environ.get("PATH", "").split(os.pathsep):
-        folder = Path(entry).resolve() if entry else None
-        inside = folder is not None and (folder == root or root in folder.parents)
-        if folder is not None and (inside or (folder.parent / "pyvenv.cfg").is_file()):
+        # Done runs from the target's root, so an empty entry (the current folder) and a
+        # relative entry name folders of the target.
+        folder = (root / entry).resolve()
+        inside = folder == root or root in folder.parents
+        try:
+            venv = (folder.parent / "pyvenv.cfg").is_file()
+        except OSError:
+            # A folder this process cannot read is no virtual environment it can tell.
+            venv = False
+        if inside or venv:
             dropped.append(entry)
         else:
             kept.append(entry)

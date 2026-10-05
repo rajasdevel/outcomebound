@@ -79,7 +79,7 @@ Cut the ticket into steps. A step is one behaviour whose tests you can write bef
 fail, touching only the files the step names. Write one step's package at a time, after the
 previous step is done: committed on the ticket's branch with its tests passing, and reviewed. A
 package written ahead describes code that will have changed. The ticket reaches the project's
-default branch at its last step, through the project's gate, as any ticket does.
+default branch at its last step, through the project's gate, alone or with the batch it lands with, as any ticket does.
 
 Each step's package is executable first:
 

@@ -6,6 +6,10 @@ on:
     tags: ["v*"]
   pull_request:
     branches: [main]
+  # A person or an agent starts a run on main by hand (`gh workflow run ci.yml --ref main`) where
+  # a push to main got no run, so a release commit can still show a passing run on main. The
+  # floor's base is then HEAD~1: the one squash commit that HEAD is.
+  workflow_dispatch:
 
 # A newer push to a pull request cancels the run on its older head, which can never merge; the
 # new run reads the whole pull request from its base, so the floor's loosening check reads every

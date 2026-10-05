@@ -20,7 +20,7 @@ unmarked.
 
 - [ ] `outcomebound_tools/` and `scripts/` still import only the Python standard library. This
       change adds no third-party dependency.
-- [ ] This change does not edit `CHANGELOG.md`; the release writes its section.
+- [ ] This change does not edit `CHANGELOG.md` (the release pull request is the one that does).
 - [ ] If this change reaches what a release ships, this description says what changed for an
       adopter, and a step an adopter must do is under a heading `Adopter steps`.
 - [ ] Public text: the title, the body, the commit messages and the files name no private
