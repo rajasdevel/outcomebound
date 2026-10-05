@@ -462,6 +462,18 @@ def test_a_project_script_or_module_the_change_removed_still_holds(tmp_path: Pat
     assert not finish_check.project_owned(root, "python -m pytest")
     assert not finish_check.project_owned(root, "pytest")
     assert not finish_check.project_owned(root, "/opt/tool/bin/pytest")
+    assert finish_check.project_owned(root, str(root / "scripts/lint.sh")), "absolute, inside"
+    (root / "bin").mkdir()
+    (root / "bin/mytool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (root / "bin/mytool").chmod(0o755)
+    (root / "ns").mkdir()
+    (root / "ns/check.py").write_text("", encoding="utf-8")
+    subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "more"], check=True)
+    (root / "bin/mytool").unlink()
+    shutil.rmtree(root / "ns")
+    assert finish_check.project_owned(root, "mytool"), "a tracked executable the change removed"
+    assert finish_check.project_owned(root, "python -m ns.check"), "a namespace package"
 
 
 @pytest.mark.parametrize(

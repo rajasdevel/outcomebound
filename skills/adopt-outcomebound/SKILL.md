@@ -54,7 +54,8 @@ as one brief (`outcomebound brief --help`).
   share with the shell. A Done command names the project's interpreter or runner
   (`.venv/bin/python -m pytest`, `uv run pytest`), not a tool only an activated environment holds;
   adopt measures Done without the virtual environment's `bin` and names what it left out. Each
-  person accepts the entry once in their harness, which the install report names; any other harness is named as not available yet. The Done commands get the
+  person accepts the entry once in their harness, which the install report names; any other
+  harness is named as not available yet. The Done commands get the
   entry's timeout less 30 seconds: 600 by default, the harnesses' documented default; for a Done
   that takes longer, add `--finish-timeout <seconds>`, which a later adopt can also change.
   `--no-finish-check` takes it out. Only with `--finish-check` named does adopt run the Done

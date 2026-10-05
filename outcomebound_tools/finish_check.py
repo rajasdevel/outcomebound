@@ -626,19 +626,31 @@ def missing_tool(output: bytes) -> str | None:
 
 def project_owned(target: Path, tool: str) -> bool:
     """Whether a tool `missing_tool` names is the project's own, so that its absence is the
-    work's and not the hook's environment's: a relative path, which no PATH resolves (a script the
-    change removed or renamed), or a `python -m` module whose top package or module is in the
-    target's tree or in its HEAD commit (one the change removed or renamed)."""
+    work's and not the hook's environment's: a path inside the target, relative or absolute, which
+    no PATH resolves (a script the change removed or renamed); a bare name that an executable file
+    in the target's HEAD commit carries, which a recipe puts on PATH itself; or a `python -m`
+    module whose top package or module is in the target's tree or its HEAD commit, a namespace
+    package's folder included."""
 
+    root = target.resolve()
+    if "/" in tool and not tool.startswith("python -m "):
+        path = Path(tool)
+        if not path.is_absolute():
+            return True
+        resolved = path.resolve(strict=False)
+        return resolved == root or root in resolved.parents
+    listed = _git(target, "ls-tree", "-r", "HEAD")
+    entries = [
+        line.split("\t", 1) for line in (listed or b"").decode("utf-8", "replace").splitlines()
+    ]
+    tracked = [(entry[0].split(" ", 1)[0], entry[1]) for entry in entries if len(entry) == 2]
     if not tool.startswith("python -m "):
-        return "/" in tool and not tool.startswith("/")
+        return any(mode == "100755" and path.rsplit("/", 1)[-1] == tool for mode, path in tracked)
     top = tool.removeprefix("python -m ").split(".")[0]
-    names = (f"{top}/__init__.py", f"{top}.py")
-    if any((folder / name).exists() for folder in (target, target / "src") for name in names):
-        return True
-    listed = _git(target, "ls-tree", "-r", "--name-only", "HEAD")
-    paths = listed.decode("utf-8", "replace").splitlines() if listed else []
-    return any(path == name or path.endswith(f"/{name}") for path in paths for name in names)
+    for folder in (target, target / "src"):
+        if (folder / top).is_dir() or (folder / f"{top}.py").is_file():
+            return True
+    return any(f"/{path}".endswith(f"/{top}.py") or f"/{top}/" in f"/{path}" for _, path in tracked)
 
 
 @dataclass(frozen=True)
