@@ -11,6 +11,17 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+### Changed
+
+- The `tickets` fragment (version 9): tickets that land together pass the project's gate once, at
+  their landing. The Done commands, the broad suite and a review that the project requires before a
+  merge run once for each landing, not once for each ticket. The `done-when` claims of each ticket
+  still run, and the handover still reports them for each ticket. Before, nothing said that a
+  landing can hold several tickets, so a project rule such as "a review before every merge" ran once
+  for each ticket of a breakdown.
+- The goal template: the `Authorized` line names the landing grain, per ticket or per batch of
+  tickets, so the person states it in the envelope.
+
 ## [1.2.0] - 2026-10-05
 
 A minor release. An implementer now makes, without a question, an edit outside a ticket's

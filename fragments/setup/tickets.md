@@ -5,7 +5,7 @@ applies: projects that declare a ticket store
 condition: when reading, working or changing this project's tickets or their declaration
 detect: []
 skills: ["slice-tickets", "hand-off-tickets"]
-version: 8
+version: 9
 ---
 **Context** — `.outcomebound/tickets.json` declares where this project's tickets live; the
 engine reads them and reports, and writes nothing. How work lands here is what `CONTRIBUTING.md`
@@ -29,7 +29,9 @@ and otherwise the commands are printed for a person to run.
 decision something outside the slice relies on is missing.
 **Completion bar** — `check` for a ticket's well-formedness; for its work, the `done-when` checks
 run with each verdict reported, and passing at the project's own gate once the work lands there (a
-ticket that waits on that gate is handed over, not waited on), and a handover the tracker shows, the
+ticket that waits on that gate is handed over, not waited on); tickets that land together pass that
+gate once, at their landing, so the Done commands, the broad suite and a review the project requires
+before a merge run per landing, not per ticket; and a handover the tracker shows, the
 pull request or, where work lands with no pull request, the closing comment on the ticket, never
 only a file the tracker cannot show, saying what changed, each check's verdict, what was decided
 beyond the ticket, and the follow-ups found.

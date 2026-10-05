@@ -50,8 +50,9 @@ and also `floor check` and `tickets check` where a project holds a floor, drafts
 the commit that it ran on, and it records nothing while the checkout holds changes that are not
 committed. `make release-check` fails unless a PASS record exists for the tree of the commit that
 it checks. Thus `make canary` runs on the committed release commit, after every change to the
-release tree. A pull request that changes `adopt`, `tickets`, `floor`, `instructions` or
-`discovery` also runs it before it opens.
+release tree. Pull requests that change `adopt`, `tickets`, `floor`, `instructions` or
+`discovery` and land together also run it once, on a commit that holds all of them, before the first
+of them lands.
 
 A maintainer or an agent can prepare the release. Do these steps in this sequence:
 
