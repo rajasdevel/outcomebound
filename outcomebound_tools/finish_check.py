@@ -605,7 +605,8 @@ _MISSING = re.compile(
     r"|(?:\S*/)?(?:ba|da|z)?sh: (?P<shelled>[^\s:]+): command not found"
     r"|(?:\S*/)?python[\d.]*: No module named (?P<module>[\w.]+))$"
 )
-_MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: \*\*\* ")
+# make's own lines after the tool's: its error line, and a nested make's directory lines.
+_MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: (?:\*\*\* |(?:Leaving|Entering) directory )")
 
 
 def missing_tool(output: bytes) -> str | None:
@@ -621,6 +622,23 @@ def missing_tool(output: bytes) -> str | None:
     if found["module"]:
         return f"python -m {found['module']}"
     return found["made"] or found["scripted"] or found["shelled"]
+
+
+def project_owned(target: Path, tool: str) -> bool:
+    """Whether a tool `missing_tool` names is the project's own, so that its absence is the
+    work's and not the hook's environment's: a relative path, which no PATH resolves (a script the
+    change removed or renamed), or a `python -m` module whose top package or module is in the
+    target's tree or in its HEAD commit (one the change removed or renamed)."""
+
+    if not tool.startswith("python -m "):
+        return "/" in tool and not tool.startswith("/")
+    top = tool.removeprefix("python -m ").split(".")[0]
+    names = (f"{top}/__init__.py", f"{top}.py")
+    if any((folder / name).exists() for folder in (target, target / "src") for name in names):
+        return True
+    listed = _git(target, "ls-tree", "-r", "--name-only", "HEAD")
+    paths = listed.decode("utf-8", "replace").splitlines() if listed else []
+    return any(path == name or path.endswith(f"/{name}") for path in paths for name in names)
 
 
 @dataclass(frozen=True)
@@ -804,7 +822,7 @@ def run_one(
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
         missing = missing_tool(tail)
-        if missing is not None:
+        if missing is not None and not project_owned(target, missing):
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             note = f"its output says `{missing}` is not on this PATH"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code, note=note)
@@ -888,6 +906,16 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
     before = tree_digest(target, digest)
     as_hook, dropped = hook_environment(target, os.environ)
     results = [run_one(target, line, None, as_hook) for line in done]
+    if dropped:
+        # A command that fails without the entries a hook may lack, and passes with them, needs
+        # those entries: a hook would fail it, and a known failure would hide its real failures.
+        for index, result in enumerate(results):
+            if result.verdict == FAIL and run_one(target, result.command, None).verdict == PASS:
+                why = f"{result.why}: could not run in the hook's environment"
+                note = f"it passes only with {', '.join(dropped)} on PATH"
+                results[index] = replace(
+                    result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note
+                )
     seconds = time.monotonic() - started
     failing: dict[str, Failure] = {}
     for index, result in enumerate(results):
@@ -915,7 +943,9 @@ def hook_environment(
     PATH, which a desktop harness starts without the project's tools, so the measurement runs
     without an entry inside the target and without a virtual environment's `bin` (a folder whose
     parent holds `pyvenv.cfg`), and without `VIRTUAL_ENV`. A Done that passes only with those
-    entries then reads `UNVERIFIED` at install, where a person sees it, and not at each turn end."""
+    entries then reads `UNVERIFIED` at install, where a person sees it, and not at each turn end:
+    `measure` runs a command that fails without them once more with them. A conda environment's
+    `bin` holds no `pyvenv.cfg` and is not told apart."""
 
     root = target.resolve()
     kept: list[str] = []

@@ -51,8 +51,10 @@ as one brief (`outcomebound brief --help`).
   adds a stop-hook entry to that harness's settings, so when the agent ends a turn on a changed
   tree the Done commands run and a failure goes back to it. It needs a Done command, and
   `outcomebound` on the harness process's PATH, which a harness launched from a desktop may not
-  share with the shell; each person accepts the entry once in their harness, which the install
-  report names; any other harness is named as not available yet. The Done commands get the
+  share with the shell. A Done command names the project's interpreter or runner
+  (`.venv/bin/python -m pytest`, `uv run pytest`), not a tool only an activated environment holds;
+  adopt measures Done without the virtual environment's `bin` and names what it left out. Each
+  person accepts the entry once in their harness, which the install report names; any other harness is named as not available yet. The Done commands get the
   entry's timeout less 30 seconds: 600 by default, the harnesses' documented default; for a Done
   that takes longer, add `--finish-timeout <seconds>`, which a later adopt can also change.
   `--no-finish-check` takes it out. Only with `--finish-check` named does adopt run the Done

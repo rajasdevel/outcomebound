@@ -33,13 +33,18 @@ The bump comes from what an adopter must do, not from the commit type; see
   for example `make: pytest: No such file or directory`. make, a script or a Python launcher
   between the hook and the tool turns the shell's exit 127 into its own exit code, so the engine
   read a failure that the agent's change caused. Now a failing command whose last line of output
-  says that a tool is not on the PATH reads `UNVERIFIED` and holds nothing, and the report names
-  the tool. A test's own `FileNotFoundError` or `ModuleNotFoundError` message still fails.
+  says that a tool is not on the PATH, in one of the forms that the finish-check design lists
+  (make's, a script's, a shell's and a Python launcher's), reads `UNVERIFIED` and holds nothing,
+  and the report names the tool. A test's own `FileNotFoundError` or `ModuleNotFoundError`
+  message still fails. So does a missing path of the project, such as a script that the change
+  removed (`make: ./scripts/lint.sh: No such file or directory`), and a missing module that is in
+  the project or in its last commit, because no PATH finds those.
 - `adopt --finish-check` measured Done with the PATH of the agent that ran it, so a Done that
   needs an activated virtual environment was recorded as passing and then could not run at any
   turn end. Now the measurement leaves out each PATH entry inside the project and each virtual
-  environment's `bin`, and `VIRTUAL_ENV`, as the hook of a desktop harness runs Done. The install
-  report names the entries it left out.
+  environment's `bin`, and `VIRTUAL_ENV`, as the hook of a desktop harness runs Done. A command
+  that fails without them runs once more with them; where it then passes, it reads `UNVERIFIED`,
+  and adopt keeps no known failure for it. The install report names the entries it left out.
 - The `python` fragment (version 7) says that a Done command names the project's interpreter,
   such as `.venv/bin/python -m pytest` or `uv run pytest`, because a hook runs it with no
   activated virtual environment.

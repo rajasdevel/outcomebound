@@ -431,6 +431,100 @@ def test_measuring_runs_without_the_projects_and_a_virtual_environments_path(
     assert dropped == (str(root / ".venv" / "bin"), str(elsewhere / "bin"))
 
 
+GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+
+def test_a_project_script_or_module_the_change_removed_still_holds(tmp_path: Path) -> None:
+    """Breaks if a script or a module of the project that the change removed reads as a tool the
+    hook's environment lacks, so a broken Done reaches the person and not the agent."""
+
+    if shutil.which("make") is None:
+        pytest.skip("make is not installed here")
+    done = ["make test", f"{sys.executable} -m mypkg"]
+    root, digest = target(tmp_path / "t", done)
+    (root / "Makefile").write_text("test:\n\t./scripts/lint.sh\n", encoding="utf-8")
+    (root / "scripts").mkdir()
+    (root / "scripts/lint.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (root / "scripts/lint.sh").chmod(0o755)
+    (root / "mypkg").mkdir()
+    (root / "mypkg/__main__.py").write_text("", encoding="utf-8")
+    (root / "mypkg/__init__.py").write_text("", encoding="utf-8")
+    subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "tools"], check=True)
+    (root / "scripts/lint.sh").unlink()
+
+    _, verdict = hook("codex", digest, root)
+
+    assert verdict.get("decision") == "block", verdict
+    assert finish_check.project_owned(root, "python -m mypkg")
+    shutil.rmtree(root / "mypkg")
+    assert finish_check.project_owned(root, "python -m mypkg"), "HEAD still holds it"
+    assert not finish_check.project_owned(root, "python -m pytest")
+    assert not finish_check.project_owned(root, "pytest")
+    assert not finish_check.project_owned(root, "/opt/tool/bin/pytest")
+
+
+@pytest.mark.parametrize(
+    ("output", "tool"),
+    [
+        (
+            "make[1]: pytest: No such file or directory\nmake[1]: *** [test] Error 1\n"
+            "make[1]: Leaving directory '/w/sub'\nmake: *** [all] Error 2\n",
+            "pytest",
+        ),
+        ("/bin/sh: pytest: command not found\n", "pytest"),
+        ("run.sh: line 3: pytest: command not found\n", "pytest"),
+        ("run.sh: 3: pytest: not found\n", "pytest"),
+        ("/usr/bin/python3: No module named pytest\n", "python -m pytest"),
+        ("1 failed in 0.2s\n", None),
+    ],
+)
+def test_the_missing_tool_forms(output: str, tool: str | None) -> None:
+    """Breaks if a runner's not-found line is missed after make's own lines, or a form is read
+    that names no tool."""
+
+    assert finish_check.missing_tool(output.encode()) == tool
+
+
+def test_a_tool_found_only_on_a_dropped_entry_is_not_kept_as_a_known_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Done that passes only with the virtual environment's bin on PATH, while a
+    same-named tool elsewhere on PATH fails, is kept as a known failure that hides later ones."""
+
+    done = ["faketool"]
+    root, _ = target(tmp_path / "t", done)
+    venv = root / ".venv/bin"
+    venv.mkdir(parents=True)
+    (venv / "faketool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    other = tmp_path / "other/bin"
+    other.mkdir(parents=True)
+    (other / "faketool").write_text(
+        "#!/bin/sh\necho 'ERROR tests/x.py::t'\nexit 2\n", encoding="utf-8"
+    )
+    for tool in (venv / "faketool", other / "faketool"):
+        tool.chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), "/usr/bin", "/bin"]))
+
+    measured = finish_check.measure(root, done, 600)
+
+    (result,) = measured.results
+    assert result.verdict == finish_check.UNVERIFIED, result
+    assert str(venv) in result.note and measured.dropped == (str(venv),)
+    record = finish_check.known_record(root, finish_check.done_digest(done))
+    assert record is None or not record.failing
+
+
+def test_the_install_report_names_the_entries_the_measurement_left_out(tmp_path: Path) -> None:
+    """Breaks if the person is not told that Done was measured without part of their PATH."""
+
+    from outcomebound_tools import adopt
+
+    measured = finish_check.Measured((), 0.0, False, dropped=("/p/.venv/bin",))
+    notes = adopt.measured_notes(tmp_path, measured, 600)
+    assert ("note", notes[0][1]) == notes[0] and "/p/.venv/bin" in notes[0][1]
+
+
 def test_a_record_1_0_0_wrote_reads_as_a_pass_and_an_unreadable_one_as_none() -> None:
     """Breaks if an install upgraded from 1.0.0 reruns or misreads the pass it remembered, or if
     a damaged record is trusted as a verdict."""
@@ -976,12 +1070,16 @@ def test_two_targets_and_two_branches_keep_their_own_records(tmp_path: Path) -> 
 
 
 def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Breaks if the install's one run stops at a failure, keeps a command the environment could
     not run as a known failure, or makes the first turn end on the tree it measured run Done
     again."""
 
+    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs once.
+    environment, _ = finish_check.hook_environment(tmp_path, os.environ)
+    monkeypatch.setenv("PATH", environment["PATH"])
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     count = tmp_path / "count"
     done = [f"echo run >> {count}; exit 2", "true"]
     root, digest = target(tmp_path / "t", done)

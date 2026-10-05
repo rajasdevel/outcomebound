@@ -1853,12 +1853,16 @@ def test_a_mixed_selection_installs_where_a_row_has_one_and_names_the_rest(
 
 
 def test_an_install_measures_done_once_and_records_the_failures_there_now(
-    tmp_path: Path, capsys: Capture
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Breaks if an install with --finish-check does not run Done once and report its time and
     each failure, if it does not keep the failures as known, if a dry run or an install that
     does not name --finish-check runs Done, or if --finish-check does not measure it again."""
 
+    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs once.
+    environment, _ = finish_check.hook_environment(tmp_path, os.environ)
+    monkeypatch.setenv("PATH", environment["PATH"])
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     count = tmp_path / "count"
     failing = f"echo run >> {count}; exit 3"
     target = repo(tmp_path / "t")

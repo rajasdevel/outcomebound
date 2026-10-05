@@ -1358,7 +1358,8 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
             (
                 "note",
                 f"finish-check: Done was measured without {entries} on PATH, as a hook may run it "
-                "with the harness's PATH and no activated virtual environment",
+                "with the harness's PATH and no activated virtual environment; a command that "
+                "failed ran once more with them, to tell a missing tool from a failure",
             )
         )
     for result in measured.results:
