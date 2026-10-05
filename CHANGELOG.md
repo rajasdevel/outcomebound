@@ -58,12 +58,6 @@ The bump comes from what an adopter must do, not from the commit type; see
   question tool, the agent draws the brief in its message first, and then fills the tool's fields
   from what `brief --ask` prints. Where the tool cannot take a brief's options, the drawn brief is
   the question, and the person answers in words.
-- The `tickets` fragment (version 8) and the `hand-off-tickets` skill: an edit outside a ticket's
-  `bounds` that the work itself forces and that changes no behaviour, such as an import, a
-  registration, an inventory or index entry, or a test that asserts text the change moved, is the
-  implementer's. The implementer makes it and names it in the handover, and asks the person
-  nothing. An edit that changes behaviour, or that touches a path the project protects, still goes
-  to the person as a decision brief. Before, every edit outside `bounds` went to the person.
 - The `tickets` fragment (version 8), the `hand-off-tickets` skill and the contract: an edit
   outside a ticket's `bounds` that only carries the ticket's own change is in the ticket's
   authority. Such an edit is one that the work would not need without that change, and that
