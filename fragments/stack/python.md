@@ -4,7 +4,7 @@ family: stack
 applies: Python projects
 condition: when choosing the checks for a Python change, or changing its dependencies or environment
 detect: ["pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"]
-version: 5
+version: 6
 ---
 **Context** — the actual interpreter, resolved dependencies, and collected tests are the
 evidence. Use the project's dependency records when present; a version pin in `pyproject.toml`
@@ -15,7 +15,9 @@ can be cleaned within their ownership. Where the project publishes, publishing t
 irreversible edge, which the `ci-release` fragment, or this project's local fragment, declares.
 **Mechanisms** — `failing-test-first` when a focused regression adds useful signal;
 `broad-suite` when the changed module is imported across packages.
-**Completion bar** — the affected project-native tests and existing static checks;
+**Completion bar** — the affected project-native tests and existing static checks; where a check
+runs only in a container or a managed environment, its floor claim runs there through the claim's
+`prefix` and keeps its baseline;
 import-time behavior stays unverified until the
 package is imported in a clean interpreter.
 **Distinguish** — edited ≠ tests collected ≠ passing ≠ installed in the target environment.
