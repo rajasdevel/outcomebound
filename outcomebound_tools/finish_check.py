@@ -33,6 +33,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -687,12 +688,52 @@ def _tail(sink: IO[bytes]) -> bytes:
     return sink.read()
 
 
+# The signals that stop a Done run from outside: Ctrl-C, and SIGTERM where adopt maps it.
+STOPPING = (signal.SIGINT, signal.SIGTERM)
+Handlers = dict[int, Any]
+
+
+def _hold(held: list[int]) -> Handlers:
+    """Record, rather than act on, each stopping signal that arrives from now on, and return the
+    handlers to put back. Python acts on a signal between any two steps, so one that arrives after
+    the command has started and before `subprocess.Popen` returns would leave no process to stop.
+    A signal this process ignores stays ignored, so the command inherits it as before; outside the
+    main thread nothing can be held, and nothing is."""
+
+    if threading.current_thread() is not threading.main_thread():
+        return {}
+    previous: Handlers = {}
+    for number in STOPPING:
+        handler = signal.getsignal(number)
+        if handler is None or handler == signal.SIG_IGN:
+            continue
+        previous[number] = signal.signal(number, lambda got, frame: held.append(got))
+    return previous
+
+
+def _release(previous: Handlers, held: Sequence[int]) -> None:
+    """Put the handlers back, then act on each signal held as its handler would have."""
+
+    for number, handler in previous.items():
+        signal.signal(number, handler)
+    for number in dict.fromkeys(held):
+        handler = previous[number]
+        if callable(handler):
+            handler(number, None)
+        elif handler == signal.SIG_DFL:
+            os.kill(os.getpid(), number)
+
+
 def run_one(target: Path, line: str, seconds: float | None) -> Result:
     """Run one Done command from the target's root in its own process group, for at most
-    `seconds`, None for as long as it takes; its output, both streams, kept for the report."""
+    `seconds`, None for as long as it takes; its output, both streams, kept for the report. A
+    stopping signal that arrives while the command starts is acted on once it has started, so
+    its group is stopped too."""
 
     started = time.monotonic()
     with tempfile.TemporaryFile() as sink:
+        held: list[int] = []
+        previous = _hold(held)
         try:
             process = subprocess.Popen(
                 ["/bin/sh", "-c", line],
@@ -703,9 +744,14 @@ def run_one(target: Path, line: str, seconds: float | None) -> Result:
                 start_new_session=True,
             )
         except OSError as error:
+            _release(previous, held)
             why = f"could not start: {error.strerror or error}"
             return Result(line, UNVERIFIED, 0.0, why, cause=ENVIRONMENT)
+        except BaseException:
+            _release(previous, ())
+            raise
         try:
+            _release(previous, held)
             code = process.wait(timeout=None if seconds is None else max(seconds, 0.0))
         except subprocess.TimeoutExpired:
             _stop(process)

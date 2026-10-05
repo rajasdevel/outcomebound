@@ -43,6 +43,10 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ### Fixed
 
+- Ctrl-C, or SIGTERM during `adopt --finish-check`, that arrived just after a Done command had
+  started, and before the engine had a handle on it, stopped the engine but left the command
+  running. Now the engine holds the signal while the command starts, then acts on it, and stops
+  the command's process group as at any other time.
 - `tickets brief owner/name#20` refused with `TICKET_NOT_FOUND`, also when the export held `#20`
   of the declared repository `owner/name`. Now `<owner>/<name>#<n>` is `#<n>` when it names the
   declared repository, without case. When it names a different repository, `brief` refuses with
