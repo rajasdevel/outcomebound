@@ -205,6 +205,10 @@ def test_the_record_is_keyed_by_tree_and_verify_reads_it(
     assert module.verify(repo, folder) == 1
 
 
+def instructions(module):
+    return next(c for c in module.COMMANDS if c.label == "instructions check")
+
+
 def report_text(result: str = "UNVERIFIED", **changes: object) -> str:
     finding = {"check": "loading-ancestors", "verdict": "UNVERIFIED"}
     document: dict[str, object] = {"result": result, "findings": [finding], **changes}
@@ -225,7 +229,8 @@ def report_text(result: str = "UNVERIFIED", **changes: object) -> str:
 def test_an_instructions_report_that_is_missing_or_malformed_fails(
     exit: int, out: str, problem: str
 ) -> None:
-    outcome = load_canary().read("instructions check", exit, out, "")
+    module = load_canary()
+    outcome = module.read(instructions(module), exit, out, "")
 
     assert outcome.failed() is not None
     assert outcome.failed().startswith("no report: ")
@@ -234,8 +239,8 @@ def test_an_instructions_report_that_is_missing_or_malformed_fails(
 
 def test_a_valid_unverified_report_is_a_verdict_and_no_report_is_a_failure() -> None:
     module = load_canary()
-    valid = module.read("instructions check", 2, report_text(), "")
-    missing = module.read("instructions check", 2, "", "refused\n")
+    valid = module.read(instructions(module), 2, report_text(), "")
+    missing = module.read(instructions(module), 2, "", "refused\n")
 
     assert valid.failed() is None
     assert valid.verdict == "UNVERIFIED"
@@ -243,9 +248,9 @@ def test_a_valid_unverified_report_is_a_verdict_and_no_report_is_a_failure() -> 
 
     # The installed release with no report and a candidate with a valid one is no failure.
     result = module.Result(1)
-    module._compare(result, "instructions check", missing, valid, "python 3")
+    module._compare(result, instructions(module), missing, valid, "python 3")
     assert not result.failures
     # The reverse is a failure of the candidate.
     result = module.Result(1)
-    module._compare(result, "instructions check", valid, missing, "python 3")
+    module._compare(result, instructions(module), valid, missing, "python 3")
     assert result.failures == {"no report": 1}

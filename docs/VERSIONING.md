@@ -45,7 +45,8 @@ At a release, these places name the same version:
 - every install line in the README and in `templates/ci/` (`…/outcomebound@v<VERSION>`)
 
 `make canary` runs the engine of the release beside the installed release, on the local list of
-projects, with no change to them, as CONTRIBUTING.md says. It records its verdict for the tree of
+projects, with no change to them, as CONTRIBUTING.md says. It runs `adopt`, `instructions check`,
+and also `floor check` and `tickets check` where a project holds a floor, drafts or an export. It records its verdict for the tree of
 the commit that it ran on, and it records nothing while the checkout holds changes that are not
 committed. `make release-check` fails unless a PASS record exists for the tree of the commit that
 it checks. Thus `make canary` runs on the committed release commit, after every change to the
