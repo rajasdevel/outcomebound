@@ -24,8 +24,10 @@ we can agree on the aim before you write the code.
    runs the engine of that checkout, so the code that you edit is the code that runs.
 2. **Branch.** Make one branch from `main` for each change.
 3. **Change.** If the change alters behavior, add or change a test
-   ([Writing a test](#writing-a-test)). If the change reaches what a release ships, add a bullet
-   under `## [Unreleased]` in `CHANGELOG.md`. Do not edit a released section of the changelog.
+   ([Writing a test](#writing-a-test)). Do not edit `CHANGELOG.md`: the release writes its
+   section from the pull requests that landed. If the change reaches what a release ships, the
+   pull request description says what changed for an adopter, and a step that an adopter must do
+   goes under a heading `Adopter steps` in the description.
    Do not add a third-party dependency: `outcomebound_tools/` and `scripts/` import only the
    Python standard library, and `make gate` fails when they import more.
 4. **Check.** Run the [local checks](#local-checks) until all three pass at the tip of your
@@ -221,8 +223,13 @@ Each pull request lands as one squash commit. Its title and description become t
 `main`, and GitHub adds the `Signed-off-by` lines of the pull request's commits, so the
 description is the commit message that a person reads. Merge with `gh pr merge <n> --squash` and
 no `--subject` or `--body`: nobody types a merge message or an identity at the merge. The
-required checks must pass on a branch that is up to date with `main`;
-`gh pr update-branch <n> --rebase` brings it up to date. CI checks the title and the description
+required checks run on the pull request merged onto `main` as `main` is when they run, and the
+branch need not be up to date with `main` when it lands. A commit that landed on `main` after
+those checks ran is not tested with the pull request until the run on `main` after the merge. When
+that run fails, the required status `main-green` (the workflow `main-green.yml`) fails on every
+open pull request, so nothing lands until `main` passes again, except a pull request labelled
+`main-fix`: the fix, or the revert of the merge that broke `main`. Fix or revert first, and land
+nothing else while `main` is red. CI checks the title and the description
 again each time they change, and checks that each commit of the pull request, except a merge
 commit, has a `Signed-off-by` line (the workflow `pr-text.yml`).
 

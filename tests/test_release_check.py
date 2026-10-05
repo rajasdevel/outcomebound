@@ -27,7 +27,16 @@ CASES = {
     "lightweight": "is annotated",
     "wrong-tag": "names VERSION",
     "tag-behind": "points at HEAD",
+    "main-red": "no passing CI run of a push to main",
+    "main-unrun": "no passing CI run of a push to main (none)",
 }
+
+# GitHub's answer for HEAD's CI runs in each case; every other case has a passing run on main.
+RUNS = {
+    "main-red": [{"event": "push", "head_branch": "main", "conclusion": "failure"}],
+    "main-unrun": [{"event": "pull_request", "head_branch": "x", "conclusion": "success"}],
+}
+PASSING = [{"event": "push", "head_branch": "main", "conclusion": "success"}]
 
 
 # The files a release commit holds, and the one each disagreeing case makes stale.
@@ -80,8 +89,19 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
         (tmp_path / "VERSION").write_text("1.1.0\n\n")
 
     tag = "v1.0.0" if case == "wrong-tag" else "v1.1.0"
+    runs = tmp_path.parent / f"{tmp_path.name}-runs.json"
+    runs.write_text(json.dumps({"workflow_runs": RUNS.get(case, PASSING)}))
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--root", str(tmp_path), "--tag", tag],
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--root",
+            str(tmp_path),
+            "--tag",
+            tag,
+            "--ci-runs",
+            str(runs),
+        ],
         capture_output=True,
         text=True,
     )

@@ -57,7 +57,9 @@ covers all of them, before the first of them lands.
 A maintainer or an agent can prepare the release. Do these steps in this sequence:
 
 1. On a branch from `main`, prepare the complete release tree: `VERSION`, the dated changelog
-   section with its "Do these steps first" list, the tag link of the section, the `[Unreleased]`
+   section, written from the title and description of each pull request that landed since the
+   previous release (`git log --first-parent v<previous>..origin/main`), with its "Do these steps
+   first" list from their `Adopter steps`, the tag link of the section, the `[Unreleased]`
    compare link from `v<VERSION>`, the install lines in the README and in `templates/ci/`, and
    this repository's own install (`scripts/outcomebound adopt .`). Commit all of it, and keep no
    change that is not committed.
@@ -73,18 +75,21 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    example with `git diff <branch> origin/main` that shows no difference. If the trees are
    different (for example, because a conflict was resolved in a different way), the record does
    not apply: run `make canary` and `make release-check` on the commit on `main`.
-7. A maintainer pushes the annotated tag `v<VERSION>` on the commit on `main`, or an agent where
-   a grant covers it (below).
-8. Run `make release-check TAG=v<VERSION>`.
-9. CI on the tag publishes the release (below).
-10. Move all projects that use OutcomeBound to the release.
+7. Wait for the CI run of the push to `main` on that commit to pass.
+8. Make the annotated tag `v<VERSION>` on the commit on `main`, locally, and run
+   `make release-check TAG=v<VERSION>`. With a tag, it also checks that the commit has a passing CI
+   run of a push to `main`, so no release is cut from a `main` that failed.
+9. A maintainer pushes the tag, or an agent where a grant covers it (below).
+10. CI on the tag runs the same check, and publishes the release (below).
+11. Move all projects that use OutcomeBound to the release.
 
 You cannot undo the push of a tag. A maintainer pushes it. An agent can push it only where a
 grant of a maintainer in `.outcomebound/tag-grants.json` covers that version on that day. The last
 line of `make release-check` names the grant, or says that none applies.
 
-After the tag exists, `make release-check TAG=v<VERSION>` and the CI run on the tag check that the
-tag is annotated, that it names `VERSION`, and that it points at the release commit.
+Once the tag exists, `make release-check TAG=v<VERSION>` and the CI run on the tag check that the
+tag is annotated, that it names `VERSION`, that it points at the release commit, and that the
+release commit has a passing CI run of a push to `main`.
 
 When every leg of the CI run on the tag passes, its `release` job publishes the release. It
 builds the wheel and the source archive from the tagged commit, attests them, puts them on a
