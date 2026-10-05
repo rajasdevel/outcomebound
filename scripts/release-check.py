@@ -16,12 +16,12 @@ today; it is no check, since a maintainer's own tag needs none.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import os
 import re
 import subprocess
 import sys
-import urllib.request
 from datetime import date
 from pathlib import Path
 
@@ -46,7 +46,8 @@ def _pins(root: Path) -> dict[str, list[str]]:
     return {name: PIN.findall((root / name).read_text(encoding="utf-8")) for name in files}
 
 
-API = "https://api.github.com/repos/rajasdevel/outcomebound"
+API_HOST = "api.github.com"
+API_PATH = "/repos/rajasdevel/outcomebound"
 
 
 def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
@@ -56,16 +57,27 @@ def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
     if source is not None:
         answer = json.loads(source.read_text(encoding="utf-8"))
     else:
-        # A fixed https URL: no scheme comes from input.
-        request = urllib.request.Request(  # noqa: S310
-            f"{API}/actions/workflows/ci.yml/runs?head_sha={head}&per_page=100",
-            headers={"Accept": "application/vnd.github+json"},
-        )
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "outcomebound-release-check",
+        }
         token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
         if token:
-            request.add_header("Authorization", f"Bearer {token}")
-        with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
-            answer = json.load(response)
+            headers["Authorization"] = f"Bearer {token}"
+        connection = http.client.HTTPSConnection(API_HOST, timeout=30)
+        try:
+            connection.request(
+                "GET",
+                f"{API_PATH}/actions/workflows/ci.yml/runs?head_sha={head}&per_page=100",
+                headers=headers,
+            )
+            response = connection.getresponse()
+            body = response.read()
+        finally:
+            connection.close()
+        if response.status != 200:
+            raise OSError(f"GitHub answered {response.status}")
+        answer = json.loads(body)
     runs = answer.get("workflow_runs", []) if isinstance(answer, dict) else []
     return [run for run in runs if isinstance(run, dict)]
 
