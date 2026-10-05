@@ -25,7 +25,9 @@ done at every tier.
 
 **Bounds.** Writing a package, with its tests and stubs, inside the ticket's `bounds` and on the
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
-`done-when` stay the person's: a package adds to them and never changes them. Where the ticket
+`done-when` stay the person's: a package adds to them and never changes them. An edit the work
+forces outside `bounds` that changes no behaviour, such as an import or an inventory entry, is the
+implementer's, as the tickets fragment says, and is no change to them. Where the ticket
 cannot be built as written, file the follow-up that makes it buildable where a goal envelope the
 person wrote accepts follow-ups, since that line is their acceptance of it; otherwise put the
 change to the person as a decision brief in a comment on the ticket. Either way, go on with the

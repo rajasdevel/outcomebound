@@ -53,14 +53,26 @@ The bump comes from what an adopter must do, not from the commit type; see
   two directions: with the old pin and the new install, the check fails, and with the new pin and
   the old install, the check also fails. docs/VERSIONING.md now says this under "How to take a
   release".
-
-### Changed
-
 - The `decision-brief` skill: a link to a file that holds the brief does not stand in for the
   brief. The brief itself is in the text the person reads. Where the harness asks through a
   question tool, the agent draws the brief in its message first, and then fills the tool's fields
   from what `brief --ask` prints. Where the tool cannot take a brief's options, the drawn brief is
   the question, and the person answers in words.
+- The `tickets` fragment (version 8) and the `hand-off-tickets` skill: an edit outside a ticket's
+  `bounds` that the work itself forces and that changes no behaviour, such as an import, a
+  registration, an inventory or index entry, or a test that asserts text the change moved, is the
+  implementer's. The implementer makes it and names it in the handover, and asks the person
+  nothing. An edit that changes behaviour, or that touches a path the project protects, still goes
+  to the person as a decision brief. Before, every edit outside `bounds` went to the person.
+- The `tickets` fragment: an agent names such an edit in the handover, and does not write it into
+  the accepted ticket's body. A ticket's handover is one that the tracker shows, the pull request
+  or the closing comment, and not only a file that the tracker cannot show.
+- The `slice-tickets` skill: a file that every ticket changes in passing, such as a ledger, an
+  index or a status table, does not merge tickets. An inventory that every added module must
+  enter, such as a registry or a parity count, goes in `bounds`. A later ticket that changes a
+  mechanism which an earlier ticket moved into a new file names that file in its `bounds`.
+- The goal template has a `Tickets:` line: one line for each accepted ticket, with its number and
+  its outcome, so that the block the person pastes is the breakdown they accept.
 
 ### Fixed
 
