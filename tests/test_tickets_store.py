@@ -60,3 +60,4 @@ def test_a_github_store_without_an_export_cannot_be_planned(tmp_path: Path) -> N
         raised.value.text
     ), "the refusal carries the export command for the declared repository"
     assert "templates/tickets/github-export.graphql" in raised.value.text
+    assert "outcomebound tickets export" in raised.value.text, "it names the verb that prints it"

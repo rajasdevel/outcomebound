@@ -746,6 +746,8 @@ def read_github_export(source: str | Path, declaration: Declaration) -> ReadResu
     )
     children = Counter(found.parent for found in issues if found.parent)
     others = frozenset(found.id for found in issues if not found.is_ticket)
+    if issues:
+        info = replace(info, ids=(issues[0].number, issues[-1].number))
     run: list[Message] = []
     if more:
         run.append(

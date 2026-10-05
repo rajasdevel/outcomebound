@@ -39,6 +39,7 @@ __all__ = [
     "ReportError",
     "TicketResult",
     "exit_code",
+    "held",
     "message",
     "render_json",
     "render_text",
@@ -209,7 +210,8 @@ class Counts:
 
 
 class InputSource(Protocol):
-    """What the report's `input` object offers: the export, when it was written, its age.
+    """What the report's `input` object offers: the export, when it was written, its age,
+    and the lowest and highest issue number it holds (`ids`, None where it holds none).
 
     The reader's value (`tickets_model.InputInfo`) satisfies this structurally.
     Naming the shape rather than importing the reader is what keeps this module
@@ -226,6 +228,9 @@ class InputSource(Protocol):
 
     @property
     def age_seconds(self) -> int | None: ...
+
+    @property
+    def ids(self) -> tuple[int, int] | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -349,12 +354,27 @@ def render_json(report: Report) -> str:
     return json.dumps(_document(report), indent=2, sort_keys=False) + "\n"
 
 
+def held(source: InputSource) -> str:
+    """What an export holds, as a report and a refusal say it: its id range."""
+
+    if source.ids is None:
+        return "holds no issue"
+    lowest, highest = source.ids
+    return f"holds #{lowest} to #{highest}"
+
+
 def _input_line(source: InputSource | None) -> str:
+    """The export's path, when it was written, its age and the ids it holds.
+
+    The JSON report keeps its schema's three keys; the range is the text line's,
+    where a person reads whether a ticket is newer than the export.
+    """
+
     if source is None:
         return "input: none"
     modified = source.modified or "unknown"
     age = "unknown" if source.age_seconds is None else f"{source.age_seconds}s"
-    return f"input: {source.path}; modified {modified}; age {age}"
+    return f"input: {source.path}; modified {modified}; age {age}; {held(source)}"
 
 
 def _counts_line(counts: Counts) -> str:

@@ -710,6 +710,12 @@ def test_input_age_from_a_file_and_from_standard_input(
     assert from_file.input.modified == "2026-09-01T00:00:00Z"
     assert from_file.input.age_seconds is not None
     assert from_file.input.age_seconds > 0
+    numbers = sorted(
+        node["number"]
+        for page in json.loads(path.read_text(encoding="utf-8"))
+        for node in page["data"]["repository"]["issues"]["nodes"]
+    )
+    assert from_file.input.ids == (numbers[0], numbers[-1]), "the lowest and highest it holds"
 
     monkeypatch.setattr("sys.stdin", __import__("io").StringIO(path.read_text(encoding="utf-8")))
     piped = read("-")

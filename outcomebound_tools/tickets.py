@@ -1,6 +1,6 @@
 """`outcomebound tickets <verb>`: the ticket engine's command line.
 
-What this module decides: the three verbs, every option's name and default,
+What this module decides: the four verbs, every option's name and default,
 which stream a report and a refusal reach, and the exit code of the process. A
 verb reads `options` and parses nothing.
 
@@ -9,8 +9,8 @@ refuses an undeclared or misdeclared project alike and none loads it again.
 
 What it does not decide: anything a verb does. It holds no ticket logic: a verb
 returns a `Report`, this module renders it as text or as JSON and returns the
-report's own exit code; `brief` and `publish` return text, a document and a
-script, which it prints as they are. A verb that
+report's own exit code; `brief`, `publish` and `export` return text, a document, a
+script and a command, which it prints as they are. A verb that
 stops instead raises, and the exception says which exit it carries: a `Refusal`
 is one named line and exit 1, a `PlanningError` one named line and exit 2.
 """
@@ -37,6 +37,7 @@ from outcomebound_tools.tickets_report import (
     render_json,
     render_text,
 )
+from outcomebound_tools.tickets_store import export
 
 __all__ = ["VERBS", "build_parser", "main"]
 
@@ -52,6 +53,7 @@ VERBS: Mapping[str, VerbFunction] = MappingProxyType(
         "check": check,
         "brief": brief,
         "publish": publish,
+        "export": export,
     }
 )
 
@@ -135,6 +137,19 @@ def _publish_usage(options: argparse.Namespace) -> str:
     return ""
 
 
+def _export_options(command: argparse.ArgumentParser) -> None:
+    """`export`: no option of its own; the declaration says which store."""
+
+    del command
+
+
+def _export_usage(options: argparse.Namespace) -> str:
+    """`export` takes nothing that could combine badly: no rule to keep."""
+
+    del options
+    return ""
+
+
 @dataclass(frozen=True, slots=True)
 class _Surface:
     """What one verb's parser offers, in one row.
@@ -151,6 +166,10 @@ class _Surface:
 
     `epilog` is what the verb's `--help` says after its options: what it reads
     beyond the export, and its exits.
+
+    `reads_store`: every verb but `export` reads the declared store, so it
+    offers `--input`. `export` prints the command that makes an export and reads
+    none, so it does not offer the option, and argparse refuses it.
     """
 
     summary: str
@@ -158,6 +177,7 @@ class _Surface:
     usage: Callable[[argparse.Namespace], str]
     epilog: str
     prints_report: bool = True
+    reads_store: bool = True
 
 
 # A report's exits; a usage error is argparse's 2.
@@ -186,6 +206,17 @@ _ROWS: Mapping[str, _Surface] = {
         "where the declaration's `writes` grant allows; otherwise a person does. "
         "Exits: 0 the script printed; 1 a refusal; 2 a usage error.",
         prints_report=False,
+    ),
+    "export": _Surface(
+        "print the command that exports the declared store, and the path of the pinned "
+        "query; run nothing and write nothing",
+        own=_export_options,
+        usage=_export_usage,
+        epilog="The command runs gh under the login of whoever runs it and writes "
+        "issues.json; pass that file to the other verbs as --input. "
+        "Exits: 0 printed; 1 a refusal (no declaration, or an invalid one); 2 a usage error.",
+        prints_report=False,
+        reads_store=False,
     ),
 }
 
@@ -232,11 +263,12 @@ def build_parser() -> _CommandLine:
         # The verb's own arguments come next, so its positionals follow the
         # target in the order a person types them.
         surface.own(command)
-        command.add_argument(
-            "--input",
-            metavar="FILE",
-            help="the tracker export to read; `-` is standard input",
-        )
+        if surface.reads_store:
+            command.add_argument(
+                "--input",
+                metavar="FILE",
+                help="the tracker export to read; `-` is standard input",
+            )
         if surface.prints_report:
             command.add_argument(
                 "--json", action="store_true", help="print one JSON object instead of text"
@@ -280,7 +312,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stderr.write(f"ENGINE_ERROR: {could_not}\n")
         return 1
     if isinstance(outcome, str):
-        # `brief` prints its document, and `publish` its script, and nothing else.
+        # `brief` prints its document, `publish` its script and `export` its
+        # command, and nothing else.
         sys.stdout.write(outcome)
         return 0
     sys.stdout.write(render_json(outcome) if options.json else render_text(outcome))

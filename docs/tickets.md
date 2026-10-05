@@ -112,8 +112,8 @@ done-when:
 
 ## The verbs
 
-Every verb takes the checkout to read. The default is `.`. Every verb takes the export as
-`--input <file>`. The value `-` means standard input.
+Every verb takes the checkout to read. The default is `.`. Every verb except `export` takes the
+export as `--input <file>`. The value `-` means standard input.
 
 ### `check`
 
@@ -157,7 +157,13 @@ UNVERIFIED, a planning error or a usage error.
 
 `brief <ticket> [--draft <file>…] [--detail full]` prints the document that an implementer
 receives. For the `github` store, `<ticket>` is `#20` or the number alone, `20`, which a shell
-does not read as a comment. The document holds the ticket, each section that its `reads` cite (named by path and
+does not read as a comment. `<ticket>` can also be `<owner>/<name>#20`, the form that the tracker
+writes. When `<owner>/<name>` is the `repo` of the declaration (the tracker compares names without
+case), it is `#20`. When it is a different repository, `brief` refuses with `TICKET_NOT_FOUND` and
+names the two repositories. When the export does not hold the ticket, `TICKET_NOT_FOUND` names the
+export, the time that it was written, its age, and the lowest and the highest issue number that it
+holds. A ticket that is newer than the export needs a new export. `brief` does not refuse an export
+because of its age. The document holds the ticket, each section that its `reads` cite (named by path and
 heading, or by path alone for a whole file), its checks and its bounds. It quotes no section and writes nothing. `--detail full`
 adds a `## Steps` section after `## Bounds`. It gives the same facts as numbered steps, each with
 its exact command.
@@ -204,6 +210,24 @@ These steps stay manual:
 `publish` exits with `0` when it printed the script. It exits with `1` for a refusal. It exits
 with `2` for a usage error.
 
+### `export`
+
+`export` prints two lines. The first line is a shell comment that gives the absolute path of the
+pinned query that this install ships. The second line is the `gh` command that writes the export
+of the declared repository to `issues.json`. `export` runs nothing and writes nothing, because
+the engine holds no credential: the command runs `gh` under the login of the person or the agent
+that runs it. `export` does not take `--input`. Example, for a declaration whose `repo` is
+`owner/name`:
+
+```text
+$ outcomebound tickets export
+# the pinned query: <outcomebound home>/templates/tickets/github-export.graphql
+gh api graphql --paginate --slurp -F owner=owner -F name=name -f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" > issues.json
+```
+
+`export` exits with `0` when it printed the command. It exits with `1` for a refusal: no
+declaration, or a declaration that is not valid. It exits with `2` for a usage error.
+
 ## Producing the export for the `github` store
 
 Run the pinned query from your project, and give the engine the file:
@@ -214,8 +238,11 @@ gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
 outcomebound tickets check --input issues.json
 ```
 
-When you run `check` or `brief` without `--input`, the refusal `INPUT_REQUIRED` prints this
-command with the owner and the name of the declared repository. The query is shipped unedited,
+`outcomebound tickets export` prints this command with the owner and the name of the declared
+repository. When you run `check` or `brief` without `--input`, the refusal `INPUT_REQUIRED` prints
+the same command. The `input:` line of the `check` report gives the path of the export, the time
+that it was written, its age, and the lowest and the highest issue number that it holds, for
+example `input: issues.json; modified 2026-09-20T09:00:00Z; age 120s; holds #1 to #42`. The query is shipped unedited,
 so you can pipe it straight in. The engine refuses a file that is
 not the output of this query for the declared repository. Where a page or a connection reports
 more than it returned, the reader says UNVERIFIED. It does not guess. Make a new export after you

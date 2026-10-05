@@ -11,7 +11,28 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
+### Added
+
+- `outcomebound tickets export` prints two lines: the absolute path of the pinned query that the
+  install ships, as a shell comment, and the `gh` command that writes the export of the declared
+  repository to `issues.json`. It runs nothing and writes nothing. Before, this command was only in
+  the text of the `INPUT_REQUIRED` refusal, and `tickets --help` did not show a way to make an
+  export. `INPUT_REQUIRED` now also names the `export` verb.
+- The `input:` line of the `tickets check` text report now gives the lowest and the highest issue
+  number that the export holds, for example `input: issues.json; modified 2026-09-20T09:00:00Z;
+  age 120s; holds #1 to #42`. The JSON report does not change.
+
 ### Fixed
+
+- `tickets brief owner/name#20` refused with `TICKET_NOT_FOUND`, also when the export held `#20`
+  of the declared repository `owner/name`. Now `<owner>/<name>#<n>` is `#<n>` when it names the
+  declared repository, without case. When it names a different repository, `brief` refuses with
+  `TICKET_NOT_FOUND` and names the two repositories.
+- When the export does not hold a ticket, `TICKET_NOT_FOUND` now gives the path of the export, the
+  time that it was written, its age, and the lowest and the highest issue number that it holds,
+  and tells you that a ticket newer than the export needs a new export. Before, the refusal did
+  not show that the export was older than the ticket. No verb refuses an export because of its
+  age.
 
 - `floor check --base` reported a commit as "carries no Floor-Loosening line" when the commit
   had a `Floor-Loosening:` line that did not parse, for example `Floor-Loosening: baseline; ruled
