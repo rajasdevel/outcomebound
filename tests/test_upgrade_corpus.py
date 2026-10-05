@@ -160,7 +160,9 @@ def previous_tag(which: str) -> str:
 @dataclass(frozen=True)
 class Case:
     """One adopter shape: the previous install's options, what the project then holds, the
-    warning kinds the upgrade prints, and, for the negative control, the refusal it gives."""
+    warning kinds the upgrade prints, and, for the negative control, the refusal it gives. A
+    `folder` puts the install in that subfolder of its Git work tree, as a component with its
+    own install in a larger repository has it."""
 
     shape: Callable[[Path], None]
     expected: frozenset[str] = frozenset()
@@ -169,6 +171,7 @@ class Case:
     unnamed: tuple[str, ...] = ()
     refusal: str = ""
     release: Callable[[Path], None] | None = None
+    folder: str = ""
 
 
 def plain(project: Path) -> None:
@@ -298,6 +301,9 @@ CASES = {
     "local-edited-alike-rendered-anew": Case(
         local_edited_alike, release=tickets_condition_reworded
     ),
+    "subfolder-local-edited-alike-rendered-anew": Case(
+        local_edited_alike, release=tickets_condition_reworded, folder="component"
+    ),
     "local-and-pointer-line-edited-rendered-anew": Case(
         local_and_pointer_line_edited,
         refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
@@ -337,19 +343,21 @@ def tag_engine(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path
 @pytest.fixture(scope="session")
 def installed(
     tmp_path_factory: pytest.TempPathFactory, tag_engine: Callable[[str], Path]
-) -> Callable[[str, tuple[str, ...]], Path]:
-    """The project as the engine of a release tag installed it with given options, committed;
-    each install is built once per test process."""
+) -> Callable[[str, tuple[str, ...], str], Path]:
+    """The Git work tree whose `folder` holds the project as the engine of a release tag
+    installed it with given options, committed; each install is built once per test process."""
 
-    installs: dict[tuple[str, tuple[str, ...]], Path] = {}
+    installs: dict[tuple[str, tuple[str, ...], str], Path] = {}
 
-    def install(tag: str, options: tuple[str, ...]) -> Path:
-        key = (tag, options)
+    def install(tag: str, options: tuple[str, ...], folder: str = "") -> Path:
+        key = (tag, options, folder)
         if key not in installs:
             tree = tag_engine(tag)
-            project = tmp_path_factory.mktemp("installed") / "project"
-            project.mkdir()
-            git(project, "init", "-q")
+            work_tree = tmp_path_factory.mktemp("installed") / "project"
+            work_tree.mkdir()
+            git(work_tree, "init", "-q")
+            project = work_tree / folder
+            project.mkdir(exist_ok=True)
             (project / "AGENTS.md").write_text("# Project\n\nThe project's own words.\n")
             (project / "README.md").write_text("# Project\n")
             (project / "app.py").write_text("print('app')\n")
@@ -360,7 +368,7 @@ def installed(
             done = engine(tree, "adopt", str(project), *options)
             assert done.returncode == 0, f"{tag} install: {done.stdout}{done.stderr}"
             commit(project, f"OutcomeBound {tag}")
-            installs[key] = project
+            installs[key] = work_tree
         return installs[key]
 
     return install
@@ -441,9 +449,13 @@ def state(project: Path, skip: set[str], blocks: set[str]) -> dict[str, object]:
             elif relative not in skip:
                 files[relative] = path.read_bytes()
     status = git(project, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored")
+    # Porcelain status names paths from the work tree's root; `skip` names them from `project`.
+    prefix = git(project, "rev-parse", "--show-prefix").strip()
     return {
         "files": files,
-        "status": sorted(entry for entry in status.split("\0") if entry[3:] not in skip),
+        "status": sorted(
+            entry for entry in status.split("\0") if entry[3:].removeprefix(prefix) not in skip
+        ),
         "index": git(project, "ls-files", "--stage"),
     }
 
@@ -452,7 +464,7 @@ def state(project: Path, skip: set[str], blocks: set[str]) -> dict[str, object]:
 @pytest.mark.parametrize("name", [pytest.param(name, marks=MARKS.get(name, ())) for name in CASES])
 def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     tmp_path: Path,
-    installed: Callable[[str, tuple[str, ...]], Path],
+    installed: Callable[[str, tuple[str, ...], str], Path],
     released: Callable[[Callable[[Path], None]], Path],
     unlock: list[Path],
     name: str,
@@ -465,8 +477,10 @@ def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     upgrades with the candidate changed as that release would change it."""
 
     case = CASES[name]
-    project = tmp_path / "project"
-    shutil.copytree(installed(previous_tag(previous), case.install), project, symlinks=True)
+    work_tree = tmp_path / "project"
+    installs = installed(previous_tag(previous), case.install, case.folder)
+    shutil.copytree(installs, work_tree, symlinks=True)
+    project = work_tree / case.folder
     case.shape(project)
     for folder in case.locks:
         (project / folder).chmod(0)
@@ -508,7 +522,7 @@ def pointers_record(project: Path) -> dict[str, object]:
 @pytest.mark.parametrize("previous", ["oldest", "latest"])
 def test_a_previous_release_reads_the_candidates_manifest_and_the_candidate_reads_its_rewrite(
     tmp_path: Path,
-    installed: Callable[[str, tuple[str, ...]], Path],
+    installed: Callable[[str, tuple[str, ...], str], Path],
     tag_engine: Callable[[str], Path],
     released: Callable[[Callable[[Path], None]], Path],
     previous: str,
@@ -521,7 +535,7 @@ def test_a_previous_release_reads_the_candidates_manifest_and_the_candidate_read
 
     tag = previous_tag(previous)
     project = tmp_path / "project"
-    shutil.copytree(installed(tag, INSTALL), project, symlinks=True)
+    shutil.copytree(installed(tag, INSTALL, ""), project, symlinks=True)
 
     upgrade = engine(CANDIDATE, "adopt", str(project))
     assert upgrade.returncode == 0, f"{upgrade.stdout}{upgrade.stderr}"

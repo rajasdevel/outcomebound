@@ -848,7 +848,9 @@ def local_history(target: Path) -> list[str]:
     listed = _git(target, "rev-list", "--all", "--", LOCAL_FRAGMENT)
     if not listed:
         return []
-    specs = "".join(f"{commit}:{LOCAL_FRAGMENT}\n" for commit in listed.decode().split())
+    # `<commit>:<path>` reads from the work tree's root, where the pathspec above reads from
+    # `target`, git's cwd; `./` makes both read from `target`, also in a subfolder install.
+    specs = "".join(f"{commit}:./{LOCAL_FRAGMENT}\n" for commit in listed.decode().split())
     batch = _git(target, "cat-file", "--batch", stdin=specs.encode())
     texts: dict[str, str] = {}
     rest = batch or b""
