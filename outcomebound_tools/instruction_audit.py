@@ -82,9 +82,14 @@ CHECKS: dict[str, tuple[str, str, str]] = {
 }
 
 _MARKERS = ("outcomebound:begin ", "outcomebound:end ")
-_BASE64_RUN = re.compile(r"[A-Za-z0-9+/=]{60,}")
-# A commit or checksum pin, 40 or 64 hex characters after an optional `name=`, is no payload.
-_HEX_PIN = re.compile(r"(?:[A-Za-z0-9]+=)?(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})")
+_RUN_LENGTH = 60
+_BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
+# A commit or checksum pin, 40 or 64 hex characters, is no payload: alone, after `name=`, or glued
+# to a label or word (`SHA256<pin>`). One pin is taken out of each stretch of hex characters, and
+# what is left of the run is judged by the same threshold: a payload flagged alone is flagged with
+# pins attached, a long hex blob keeps all but one pin's length, and a payload cut into shorter
+# pieces between pins is no more than the same pieces between spaces, which already pass.
+_HEX_STRETCH = re.compile(r"[0-9a-fA-F]{40,}")
 _FETCH_AND_RUN = (
     re.compile(r"(curl|wget)[^|\n]*\|\s*(sudo\s+(-\w+\s+)*)?(ba|z)?sh\b"),
     re.compile(r"((ba|z)?sh\s+-c|eval)\s+[\"']?\$\(\s*(curl|wget)"),
@@ -669,6 +674,10 @@ def _comments(text: str) -> Iterator[tuple[int, str]]:
         yield number, match.group(0)
 
 
+def _without_pins(run: str) -> str:
+    return _HEX_STRETCH.sub(lambda m: m.group(0)[64 if len(m.group(0)) >= 64 else 40 :], run)
+
+
 def _concealed_content(path: str, text: str) -> list[Finding]:
     found = [
         _finding("concealed-content", path, n, UNVERIFIED, f"an HTML comment: {_quote(c)}")
@@ -678,7 +687,7 @@ def _concealed_content(path: str, text: str) -> list[Finding]:
         if _is_marker(line):
             continue
         for run in _BASE64_RUN.finditer(line):
-            if _HEX_PIN.fullmatch(run.group(0)):
+            if len(_without_pins(run.group(0))) < _RUN_LENGTH:
                 continue
             fact = f"a base64-shaped run with no space: {_quote(run.group(0)[:40] + '...')}"
             found.append(_finding("concealed-content", path, number, UNVERIFIED, fact))

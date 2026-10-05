@@ -63,6 +63,17 @@ The bump comes from what an adopter must do, not from the commit type; see
   ignored folder got one warning for each copy. Now adopt does not measure a folder that Git
   ignores, as discovery and `instructions check` already do not read it. Another clone does not
   get such a folder.
+- `instructions check` gave an `UNVERIFIED concealed-content` line for a commit or checksum hash
+  that a label or a word touches with no space, such as `SHA256` followed by 64 hex characters, or
+  a word, 40 hex characters and a word. The check reads a run of 60 or more base64 characters with
+  no space as a possible hidden payload. Before, the check did not flag a 40- or 64-character hex
+  hash only when it stood alone or after `name=`. Now the check takes a stretch of hex characters
+  out of the run when the stretch is 40 to 44 or 64 to 68 characters long: one hash, and at most 4
+  more hex characters, such as the last letter of `image`. Then it reads the remaining characters
+  of the run. When fewer than 60 remain, the run is not flagged. A stretch of any other length
+  stays in the run, so a hex run of 60 to 63 characters, or of 69 or more, is still flagged, as is a
+  base64 payload of 60 or more characters that a hash touches. A run cut into pieces by hashes, or
+  by any base64 character that is not hex, is read as the same pieces between spaces were before.
 
 ## [1.1.1] - 2026-10-04
 
