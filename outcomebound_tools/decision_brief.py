@@ -445,8 +445,9 @@ def render(
     return "\n\n".join(blocks) + "\n"
 
 
-# The longest header a harness's question tool shows (Codex's request_user_input and Claude
-# Code's AskUserQuestion both document 12 characters); a longer id is left to the question text.
+# The longest header a harness's question tool shows: Codex's request_user_input describes its
+# header as 12 or fewer characters (request_user_input_spec.rs, read 2026-10-05), and Claude Code's
+# AskUserQuestion as at most 12; a longer id is left to the question text.
 _HEADER = 12
 
 

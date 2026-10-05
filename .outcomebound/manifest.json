@@ -88,7 +88,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "252d931f468a795f93a4450b1144e2748cbdc24a01278781292563ae5d12efea"
+      "sha256": "ba7f2f1f1927e971c48bf6106b400e3e13bf418b0536edceed914b0aa49833f9"
     },
     {
       "kind": "skill",
