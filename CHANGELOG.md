@@ -79,6 +79,14 @@ The bump comes from what an adopter must do, not from the commit type; see
 - The goal template has a `Tickets:` line: one line for each accepted ticket, with its number and
   its outcome, so that the block the person pastes is the breakdown they accept.
 
+### Changed
+
+- `floor --help` and the `python` fragment (version 6) now say that a check which runs only in a
+  container or a managed environment keeps its floor claim and its baseline, through the claim's
+  `prefix`, such as `["docker", "compose", "run", "--rm", "app"]`. The engine already did this, but
+  no document that an agent reads said so. Agents believed that the floor runs host tools only,
+  and held work for an engine change that was not necessary.
+
 ### Fixed
 
 - Ctrl-C, or SIGTERM during `adopt --finish-check`, that arrived just after a Done command had

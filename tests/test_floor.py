@@ -2374,3 +2374,18 @@ def test_an_unwritable_cache_folder_moves_only_its_tool_once_per_run_and_never_a
     }
     assert caches["mypy"] == [""], caches
     assert caches["ruff"][0] == "" and root not in Path(caches["ruff"][1]).parents, caches
+
+
+def test_help_names_the_prefix_route_for_a_tool_in_a_container(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A project whose checks run only in a container reads `floor --help` and finds that its
+    claim keeps a baseline there through a prefix, so it does not hold work on an engine change."""
+
+    with pytest.raises(SystemExit) as exited:
+        floor.main(["--help"])
+    out = " ".join(capsys.readouterr().out.split())
+
+    assert exited.value.code == 0
+    assert "runs only in a container" in out
+    assert "prefix" in out and '"docker", "compose", "run"' in out

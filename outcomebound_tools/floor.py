@@ -2107,8 +2107,10 @@ on any finding, a baseline claim on a finding its .outcomebound/floor/<claim>.ba
 does not hold. No tool or Git read has a time limit unless its claim sets
 timeout_seconds. Where the project root cannot be written, ruff's and mypy's caches go to a
 scratch folder for each run (RUFF_CACHE_DIR, MYPY_CACHE_DIR), unless the environment names
-one. Exit 0: every claim passed; 1: a claim failed or could not be verified;
-2: the floor could not run."""
+one. A tool that runs only in a container or a managed environment keeps its claim and its
+baseline: name the runner in the claim's prefix, such as ["docker", "compose", "run", "--rm",
+"app"]; the claim's argv still starts with the tool. Exit 0: every claim passed; 1: a claim
+failed or could not be verified; 2: the floor could not run."""
 APPLY_DESCRIPTION = """\
 Write FILE to .outcomebound/floor.json, fitted to what the project holds today: each claim
 runs once. A claim with findings records them in its baseline and becomes a baseline claim;
