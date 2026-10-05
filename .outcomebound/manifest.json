@@ -1,12 +1,12 @@
 {
   "format_version": 2,
-  "engine_version": "1.1.2",
+  "engine_version": "1.1.1",
   "artifacts": [
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "48f37f777cd3d045563d491663c326e819ce86baf4d348b3170987a99ca89c49"
+      "sha256": "4810bc1e3e91de039ca02f597003a6df6e6abda4ea55b414ac603c60a021867e"
     },
     {
       "kind": "block",
@@ -25,7 +25,7 @@
       ],
       "inputs": {
         ".github/workflows/ci.yml": "bb238e0f7d3db9aaf37fbe3b4c9f0e2b8cd9fccf86eaf058b77e63b86eb3359c",
-        ".github/workflows/pr-text.yml": "e4573766c428245e7210a169927308429c170c35ee83b82133ac551b2e0329e2",
+        ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
         ".outcomebound/fragments/commands.md": "ea7969f7104c5cbcb180a272302408478dc6a4618314235fa6c607b12cc8c68a",
         ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",

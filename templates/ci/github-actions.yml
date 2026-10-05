@@ -35,7 +35,7 @@ jobs:
       - name: Install OutcomeBound
         # Pinned to a release tag, so the gate changes only when you change the tag; pin a commit for
         # a reference that cannot move.
-        run: python -m pip install "git+https://github.com/rajasdevel/outcomebound@v1.1.2"
+        run: python -m pip install "git+https://github.com/rajasdevel/outcomebound@v1.1.1"
       - name: OutcomeBound install check
         run: outcomebound adopt . --check
 

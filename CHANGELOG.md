@@ -11,13 +11,6 @@ The bump comes from what an adopter must do, not from the commit type; see
 
 ## [Unreleased]
 
-## [1.1.2] - 2026-10-04
-
-A patch release. adopt and `tickets check` no longer tell a person to change the `cwd` of a claims
-plan that already runs its claims at the checkout root when a claim declares a path that a ticket
-will add. adopt and `instructions check` no longer stop on a folder that the user cannot read, and
-adopt no longer gives byte-cap warnings for folders that Git ignores.
-
 ### Fixed
 
 - A claims plan can declare a `required_paths` entry that an open ticket will add, such as a test
@@ -463,7 +456,6 @@ the contract into a repository and keeps it current.
   private vulnerability report and to the research repository.
 
 [Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.2...HEAD
-[1.1.2]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.2
 [1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
 [1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0
 [1.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.0.0
