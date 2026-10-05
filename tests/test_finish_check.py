@@ -627,12 +627,15 @@ def test_a_not_found_line_the_command_prints_itself_still_holds(tmp_path: Path) 
     reads as a tool the hook's environment lacks: the exemption is for an absent tool, not for a
     line of that shape."""
 
-    line = "echo 'make: sh: No such file or directory'; exit 2"
-    root, digest = target(tmp_path / "t", [line])
+    for line in (
+        "echo 'make: sh: No such file or directory'; exit 2",
+        "echo '/no/such/bin/python3: No module named pytest'; exit 2",
+    ):
+        root, digest = target(tmp_path / str(len(line)), [line])
 
-    _, verdict = hook("codex", digest, root)
+        _, verdict = hook("codex", digest, root)
 
-    assert verdict.get("decision") == "block", verdict
+        assert verdict.get("decision") == "block", (line, verdict)
 
 
 def test_a_module_is_the_projects_only_at_its_root_or_under_src(tmp_path: Path) -> None:
@@ -978,13 +981,13 @@ def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path
         message
     )
     assert "a new failure inside it is not told apart" in message
-    assert f"PASS {done[1]}" in message
+    assert f"PASS {finish_check.shorten(done[1])}" in message
 
     broken.write_text("", encoding="utf-8")
     (root / "src.txt").write_text("three\n", encoding="utf-8")
     reason = hook("codex", digest, root)[1]["reason"]
     assert "FAIL echo old; exit 1: exit 1 after " in reason and "; not held)" in reason
-    assert f"FAIL {done[1]}: exit 4 after " in reason
+    assert f"FAIL {finish_check.shorten(done[1])}: exit 4 after " in reason
     assert "A command marked known failed the same way before your change" in reason
     assert reason.endswith("```output\nnew\n```")
 

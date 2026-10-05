@@ -93,11 +93,11 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
     git("init", "-q")
     git("add", ".")
     git("commit", "-qm", "release")
+    git("tag", "-a", "v1.0.0", "-m", "an older release's tag")
     if case == "lightweight":
         git("tag", "v1.1.0")
     else:
         git("tag", "-a", "v1.1.0", "-m", "release")
-        git("tag", "-a", "v1.0.0", "-m", "an older release's tag")
     if case == "tag-behind":
         git("commit", "--allow-empty", "-qm", "later")
     elif case == "dirty":

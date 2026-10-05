@@ -189,13 +189,14 @@ def checks(root: Path, tag: str | None, runs: Path | None = None) -> list[tuple[
         (not stale, "every other install line pins it" + "".join(f"; {line}" for line in stale)),
     ]
     unnamed = unnamed_pulls(root, version, changelog)
-    if unnamed is not None:
+    what = f"CHANGELOG.md's {version} section names each pull request since the previous release"
+    if unnamed is None:
+        # No release tag below this version in this clone (a shallow clone, or the first
+        # release): nothing to compare, which is not a pass.
+        results.append((False, f"{what}: UNVERIFIED, no previous release tag in this clone"))
+    else:
         results.append(
-            (
-                not unnamed,
-                f"CHANGELOG.md's {version} section names each pull request since the previous "
-                "release" + (f"; not named: {', '.join(unnamed)}" if unnamed else ""),
-            )
+            (not unnamed, what + (f"; not named: {', '.join(unnamed)}" if unnamed else ""))
         )
     if tag is not None:
         head = _git(root, "rev-parse", "HEAD")

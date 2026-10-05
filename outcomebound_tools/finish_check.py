@@ -657,7 +657,9 @@ def confirmed_absent(
     launcher = found["launcher"]
     program = launcher if "/" in launcher else shutil.which(launcher, path=path)
     if program is None or not Path(program).exists():
-        return True
+        # A launcher that is not there would have failed before it could print the line, so
+        # the line is the command's own text, not a launcher's word.
+        return False
     probe = (
         "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 3)"
     )
