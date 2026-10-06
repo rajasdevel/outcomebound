@@ -163,6 +163,8 @@ def _tests_contract(value: Any, field: str) -> CountContract:
         isinstance(exit_code_value, bool) or not isinstance(exit_code_value, int)
     ):
         raise PlanError(f"{field}.no_tests_exit must be an integer")
+    if exit_code_value == 0:
+        raise PlanError(f"{field}.no_tests_exit cannot be 0: the claim could never pass")
     pattern = None
     if "ran_output" in value:
         text = _nonempty_string(value["ran_output"], f"{field}.ran_output")
@@ -369,7 +371,12 @@ def _none_ran(
 ) -> Result:
     """The command's own word, and the project's declared contract that it ran no test."""
 
-    detail = f"{observed}; the declared contract says no test executed, so behavior is unverified"
+    consequence = (
+        "so behavior is unverified"
+        if contract.when_none == UNVERIFIED
+        else "which the plan declares a failure"
+    )
+    detail = f"{observed}; the declared contract says no test executed, {consequence}"
     return Result(claim, contract.when_none, detail, log_path)
 
 
@@ -428,6 +435,8 @@ def _waivers(items: Sequence[str], plan: Plan) -> dict[str, str]:
             raise PlanError(f"--waive wants NAME=REASON, got: {item}")
         if name not in names:
             raise PlanError(f"--waive names no claim: {name}")
+        if any(ord(char) < 32 or ord(char) == 127 for char in reason):
+            raise PlanError(f"--waive reason for {name} holds a line break or a control character")
         waivers[name] = reason.strip()
     return waivers
 

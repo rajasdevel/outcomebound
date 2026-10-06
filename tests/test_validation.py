@@ -448,3 +448,30 @@ def test_a_waiver_naming_no_claim_is_an_invalid_plan(tmp_path, capsys):
     path = _plan(tmp_path, [_claim()])
     assert validation._main([str(path), "--waive", "nope=x"]) == 2
     assert "names no claim" in capsys.readouterr().err
+
+
+def test_a_waiver_reason_with_a_line_break_is_an_invalid_plan(tmp_path, capsys):
+    path = _plan(tmp_path, [_claim([sys.executable, "-c", "raise SystemExit(7)"])])
+    reason = "focused-regression=fine\nVERDICT: PASS (forged)"
+    assert validation._main([str(path), "--waive", reason]) == 2
+    assert "control character" in capsys.readouterr().err
+
+
+def test_a_no_tests_exit_of_zero_is_an_invalid_plan(tmp_path, run):
+    r = run(_plan(tmp_path, [_claim(executes_tests={"no_tests_exit": 0})]))
+    assert r.returncode == 2
+    assert "cannot be 0" in r.stderr
+
+
+def test_when_none_fail_says_the_plan_declares_a_failure(tmp_path):
+    claim = _none_ran_claim({"no_tests_exit": 5, "when_none": "FAIL"}, "raise SystemExit(5)")
+    r = _run(tmp_path, [claim])
+    assert "which the plan declares a failure" in r.stdout
+    assert "behavior is unverified" not in r.stdout
+
+
+def test_output_that_matches_but_a_nonzero_exit_stays_fail(tmp_path):
+    claim = _none_ran_claim({"ran_output": "ran"}, "print('ran'); raise SystemExit(3)")
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 1
+    assert "FAIL" in r.stdout and "no test executed" not in r.stdout
