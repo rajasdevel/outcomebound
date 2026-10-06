@@ -279,7 +279,9 @@ a loosening visible; your branch protection is what holds it to a person's decis
 ### Also optional
 
 - **Instruction check** (`outcomebound instructions check .`): reports hidden characters, override
-  phrases and risky harness settings in the files your agents load. It writes nothing.
+  phrases and risky harness settings in the files your agents load. It writes nothing. A hit you
+  judge safe, you record with `outcomebound instructions rule . <id>`, in your own file outside the
+  project; it then stops changing the result until that file changes.
 - **Text for people** (`adopt --human-style ste`): agents write reports and commit messages for
   people in the style of ASD-STE100 Simplified Technical English.
 - **Workspace** (the `workspace` fragment): where several agents share one machine's checkout, four

@@ -26,7 +26,8 @@ How: `outcomebound instructions check --help` and `outcomebound_tools/instructio
 | Each check carries its rule id and severity from `docs/prompt-standard.md` in the module | reading the ids from a machine-readable catalog of the standard | agent | decided |
 | Harnesses come from `--harness`, repeated or comma-separated as `adopt --harness` takes them; else the manifest's, plus each other row, in table order, loading a file the target holds that no row so far covers (`manifest+present`); else every row, where a row that loads no file of the target that another row does not load too (every row loads `AGENTS.md`) is reported and does not change the result. A `generic` install has no row, so `load-resolution` reads it `UNVERIFIED` and its `.outcomebound/skills/` copies are not read | the manifest alone, which the target's own edit could narrow; an unverified row the target does not use deciding every result | agent | decided |
 | The agents' notes in `.agents/handoffs/` and `.agents/shared-memory/` are read too, though Git ignores them: the next session reads them as it reads instructions, and planted memory is a measured attack | leaving them unread because Git ignores them | user | decided |
-| A review hit recurs on every run until the file changes | a record of a person's judgment that silences the hit | agent | decided |
+| A person rules a review hit safe with `instructions rule <target> <id>`, which asks at a terminal, refuses without one, and records the ruling in the person's own file, `~/.outcomebound/rulings.json`, outside every target; the id pins the hit's check, path and fact, its file's bytes, and the repository: the clone's common Git directory as Git reports it, which its worktrees share, else the target, since a hook a person ruled safe names that repository's own code. The repository pin scopes a person's own rulings; what holds against the change under check is that the rulings file lies outside the target, and no commit can carry a `.git` path. A ruled hit is still reported on every run, with the day it was ruled, and does not change the result; any change to its file raises it again. Only a review hit that changes the result, on a regular file inside the target, takes a ruling: a gate finding, a hit that changes nothing already, and a change since `--base`, which names a diff and no content, never do; and where the home folder lies inside the target, no ruling is read. The terminal keeps a ruling from being scripted; it does not stop an agent that holds a terminal, so the contract keeps a ruling a person's act (maintainer, 2026-10-06) | a hit that recurs on every run until its file changes, which made exit 2 constant on healthy projects and taught agents to ignore it; a record kept in the target, which the change under check could write; exit 0 wherever nothing fails, which hides every review hit from a caller that reads the exit | user | decided |
+| A base64-shaped run counts as concealed content only where a model could read it: a piece between pins or `=`, decoded at its best alignment, holds a stretch of 24 bytes of text, or its pieces' stretches of 8 bytes or more come to 24 together, or a piece starts a compressed stream; text is a printable character read as UTF-8, or printable ASCII read as UTF-16, and one character that is not text between two stretches of 8 bytes or more joins them. A stretch is judged by itself, so pins, `=` and random bytes an author adds around it cannot dilute it; a run of hex characters is judged by its length as before. Not claimed: text broken by a character every 7 bytes or fewer, UTF-32, and non-ASCII text as UTF-16, which a model reads only after decoding with care (maintainer, 2026-10-06) | every run of 60 base64 characters, which flagged agents' notes written with their spaces taken out, so that a note of ordinary words read UNVERIFIED on every run | user | decided |
 | An entry adopt wrote into a harness's settings stays a review hit, and its fact quotes the Done commands the manifest records, since the finish check runs them: the manifest is the target's own data and a pull request can write it. The entry is recognised only where its canonical JSON is byte for byte what adopt writes for the row whose `finish_hook` names the file: `finish_check.entry` with the digest of the manifest's Done commands and the timeout the hook carries, where the row admits it, and a manifest `hook` record holds its digest. Another handler type, key, argument or Done digest makes it an ordinary hit. A review hit asks for a person at the handoff and stops no work (maintainer, 2026-10-04) | adopt's own entry reading PASS where the manifest records its digest: a planted manifest would then exempt the commands it adds | user | decided |
 | That review hit does not change the result while the Done commands the manifest records are exactly the `Done` line of `AGENTS.md`'s project-facts block: the entry then runs only what the instructions an agent loads already name, and those are read by every check. Where they differ, or the manifest's are unreadable, it changes the result. A planted manifest cannot hide a hook that runs something else: such an entry is never recognised, and Done commands that `AGENTS.md` does not show change the result. What remains for a reviewer: the `Done` line of `AGENTS.md` in a diff, since what it names runs on the branch's own code at every stop, as CI would run it | the entry changing the result on every run, so that exit 2 is read as noise; a separate exit code, which every caller would have to learn | agent | decided |
 | An instruction file a selected row says its harness loads from a folder above the target (`ancestors`; Claude Code: research `harnesses/claude-code.md` §1) is named, as a path from the target, and never opened: one review hit each, that does not change the result, since it lies outside the target, which is all this command reads | leaving it unreported, though the parent's contract and pointers load in the nested session; opening files outside the target | agent | decided |
@@ -38,13 +39,13 @@ How: `outcomebound instructions check --help` and `outcomebound_tools/instructio
 ## Checks
 
 A gate reads PASS or FAIL, UNVERIFIED where a fact it needs is not verified. A review reads PASS
-where nothing matched, else UNVERIFIED with the line quoted. The security checks answer to rule
+where nothing matched, else UNVERIFIED with the line quoted and the hit's ruling id. The security checks answer to rule
 S4 and report first; `load-resolution` answers to S7.
 
 | Check | Observes | Kind |
 | --- | --- | --- |
 | `hidden-characters` | tag characters, zero-width and bidirectional controls, variation selectors (one after a symbol excepted), private-use and unassigned characters, a combining mark after ASCII, any non-ASCII in a URL or code span (a span wraps within its paragraph; fenced code is none); a file left unopened reads UNVERIFIED; in an agents' note that no harness loads as an instruction file, a hit reads UNVERIFIED for that note | gate |
-| `concealed-content` | HTML comments but OutcomeBound's block markers; base64-shaped runs of 60 or more characters with no space, judged after each stretch of hex characters 40 to 44 or 64 to 68 long (a pin and at most 4 more hex characters, the largest seen in field hits) is taken out: a pin alone, after `name=`, or glued to a label or word is no payload; a hex stretch of 60 to 63 or 69 or more characters stays in and is flagged, as is a payload of 60 or more with a pin attached; pieces cut by pins or by any base64 character that is not hex read as pieces between spaces; fetch-and-run lines | review |
+| `concealed-content` | HTML comments but OutcomeBound's block markers; base64-shaped runs of 60 or more characters with no space, judged after each stretch of hex characters 40 to 44 or 64 to 68 long (a pin and at most 4 more hex characters, the largest seen in field hits) is taken out: a pin alone, after `name=`, or glued to a label or word is no payload; a hex stretch of 60 to 63 or 69 or more characters stays in and is flagged, as is a payload of 60 or more with a pin attached; pieces cut by pins or by any base64 character that is not hex read as pieces between spaces; a run that is not all hex counts only where a piece holds a stretch of 24 bytes of text (one stray character between stretches of 8 bytes or more joins them), as UTF-8 or as UTF-16 ASCII, its pieces' stretches of 8 bytes or more come to 24 together, or a piece starts a compressed stream; fetch-and-run lines | review |
 | `override-phrases` | phrases that override earlier instructions, ask for secrecy, grant autonomy or plant memory | review |
 | `harness-config` | in each configuration file a row names, keys holding commands, tool servers, all tool servers at once, endpoints or permission bypasses; TOML is read lexically, an unsettled value reading UNVERIFIED; an entry adopt wrote is one hit that quotes the Done commands it runs | review; a secret-shaped value is a gate |
 | `instruction-change` | with `--base <ref>`, each file in scope, and `.outcomebound/manifest.json`, changed between the ref and HEAD; a ref that does not resolve reads UNVERIFIED | review |
@@ -63,12 +64,14 @@ in a note folder it is listed itself, so it reads UNVERIFIED unopened, as a link
 
 It never opens a file the harness table records as one person's, by name or through a link, nor
 anything outside the target but the engine's own data (above the target it only sees whether an
-`ancestors` file exists); a path it leaves unopened, a link out
+`ancestors` file exists) and the person's own rulings file, `~/.outcomebound/rulings.json`, which a
+malformed or missing file leaves empty; a path it leaves unopened, a link out
 included, reads UNVERIFIED. It never walks what Git ignores but those two note folders, never
 runs, follows or obeys what it reads, and escapes quoted text so no file can steer the terminal.
 Its one process is Git, to list the files and for `--base`: from PATH's absolute entries, with
-no pager, fsmonitor, external diff or textconv, and no time limit. It opens no connection, writes nothing, rules no
-hit benign, applies no edit and gives no score.
+no pager, fsmonitor, external diff or textconv, and no time limit. It opens no connection, rules no
+hit benign itself, applies no edit and gives no score; `check` writes nothing, and `rule` writes
+only the person's rulings file.
 
 A clean pass does not rule out an injection: the lexical checks claim only the classes they
 list, and `load-resolution` trusts the table, never watching a harness load. The steps it
@@ -82,6 +85,8 @@ write: each row that loads a file the target holds and no row so far covers is a
 (`manifest+present`), so an edit to the manifest cannot take a file a harness loads out of the
 read. The manifest's Done commands decide only whether adopt's own entry's review hit changes
 the result, and only while they equal the `Done` line of `AGENTS.md`, which every check reads.
+A person's rulings decide only whether the review hits they name change the result: the person
+writes them, outside the target, and a change to a hit's file makes its ruling match nothing.
 The harness table and the rule ids are the engine's (`adapters/harnesses.json`,
 `docs/prompt-standard.md`). The agents' notes are written by agents in a session, not by a commit.
 
@@ -89,12 +94,17 @@ The harness table and the rule ids are the engine's (`adapters/harnesses.json`,
 
 0 PASS; 1 FAIL, on any gate FAIL; 2 UNVERIFIED, on any review hit or unverified fact, or a usage
 error. A finding that does not change the result (`decides: false` in the report, "(does not
-change the result)" in the text) is reported and leaves the exit as it is. `--strict` counts
+change the result)" in the text) is reported and leaves the exit as it is; a review hit a person
+ruled safe is one. `rule` exits 0 when each hit it asked about was recorded or declined, and 2
+without a terminal, on an id that names no current review hit, or on a rulings file it cannot
+read. `--strict` counts
 UNVERIFIED as FAIL; `--json` prints one report (`schemas/instruction-audit-report.schema.json`);
 `--verbose` adds the checks that passed.
 
 ## Validation
 
 `tests/test_instruction_audit.py`: each check's planted defect and clean control, the limits,
-the exits and `--base`; this repository's instruction files, and every shipped file under
+the exits and `--base`; a ruled hit, a changed file, a planted or malformed rulings file and
+`rule` without a terminal; a ruling in another repository, in a worktree of the same clone, and
+for a change since `--base`; words run together against encoded text, diluted by pins, `=` or random bytes, in another script and as UTF-16; this repository's instruction files, and every shipped file under
 `skills/`, `fragments/` and `templates/`, pass the gates.
