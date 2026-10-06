@@ -31,11 +31,25 @@ def _git_calls(tree: ast.AST) -> list[ast.Call]:
         ):
             continue
         argv = node.args[0]
-        if isinstance(argv, ast.List) and argv.elts:
-            first = argv.elts[0]
-            if isinstance(first, ast.Constant) and first.value == "git":
-                found.append(node)
+        if isinstance(argv, ast.List) and argv.elts and _names_git(argv.elts[0]):
+            found.append(node)
     return found
+
+
+def _names_git(first: ast.expr) -> bool:
+    """Whether an argv's first word is `"git"`, or `programs.require("git", ...)`, which finds it
+    on PATH's absolute entries."""
+
+    if isinstance(first, ast.Constant):
+        return first.value == "git"
+    return (
+        isinstance(first, ast.Call)
+        and isinstance(first.func, ast.Attribute)
+        and first.func.attr == "require"
+        and bool(first.args)
+        and isinstance(first.args[0], ast.Constant)
+        and first.args[0].value == "git"
+    )
 
 
 def _environment_keyword(call: ast.Call) -> ast.expr | None:
@@ -43,8 +57,9 @@ def _environment_keyword(call: ast.Call) -> ast.expr | None:
 
 
 def test_every_git_subprocess_runs_under_the_git_environment() -> None:
-    """Each `subprocess.run(["git", …])` in the engine passes `env=git_environment(…)`,
-    and none runs git through a shell."""
+    """Each `subprocess.run(["git", …])` in the engine, and each that starts Git through
+    `programs.require("git")`, passes `env=git_environment(…)`, and none runs git through a
+    shell."""
 
     unrouted = []
     shelled = []

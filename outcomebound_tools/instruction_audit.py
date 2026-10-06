@@ -47,7 +47,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import adapters, facts, finish_check, identity, walk
+from outcomebound_tools import adapters, facts, finish_check, identity, programs, walk
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
@@ -991,8 +991,8 @@ def _harness_config(
 
 def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     """One read-only git command's exit status and both streams; a git that cannot run raises
-    `AuditError`. Git comes from PATH's absolute entries only, so the target cannot supply its
-    own."""
+    `AuditError`. Git comes from PATH's absolute entries only (`programs.require`), so the target
+    cannot supply its own, on Windows too."""
 
     inherited = {key: value for key, value in os.environ.items() if key not in _GIT_UNSET}
     inherited["PATH"] = os.pathsep.join(
@@ -1001,7 +1001,7 @@ def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     inherited["GIT_OPTIONAL_LOCKS"] = "0"
     try:
         completed = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            [programs.require("git", inherited), *GIT_READ_CONFIGURATION, *arguments],
             cwd=root,
             env=git_environment(inherited),
             stdin=subprocess.DEVNULL,

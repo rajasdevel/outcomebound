@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from outcomebound_tools import floor
+from outcomebound_tools import floor, programs
 from outcomebound_tools.validation import _execute
 
 STATUSES = ("PASS", "FAIL", "UNVERIFIED")
@@ -99,7 +99,11 @@ def run(capsys: pytest.CaptureFixture[str], *arguments: str) -> tuple[int, dict[
 def on_path(monkeypatch: pytest.MonkeyPatch, tool: str) -> None:
     """Put `tool` on PATH, from PATH or beside this interpreter, or skip as UNVERIFIED."""
 
-    found = shutil.which(tool) or shutil.which(tool, path=str(Path(sys.executable).parent))
+    # Found the way the floor finds it: on Windows not the Subsystem for Linux's `bash`, which
+    # `shutil.which` returns from System32, but Git for Windows'.
+    beside = {"PATH": str(Path(sys.executable).parent)}
+    started = programs.command(tool)
+    found = started[0] if started else programs.find(tool, beside)
     if found is None:
         pytest.skip(f"UNVERIFIED: {tool} is not installed here")
     parent = str(Path(found).resolve().parent)
@@ -1343,8 +1347,9 @@ def modes(root: Path) -> dict[str, str]:
 
 
 def test_apply_records_each_claims_findings_so_check_passes_and_a_new_one_fails(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    on_path(monkeypatch, "bash")
     root = repository(tmp_path, {"run.sh": EVAL, "bad.sh": SYNTAX_ERROR})
     head = git(root, "rev-parse", "HEAD")
     source = proposal(tmp_path, shipped("shell.syntax"), shipped("shell.injection"))
@@ -1399,11 +1404,12 @@ def test_a_claim_whose_tool_is_missing_stays_as_proposed_and_reads_unverified(
 
 
 def test_a_claim_whose_files_match_nothing_passes_on_no_file_at_apply_and_at_check(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A run that deletes the last script it reads leaves the claim nothing to hold: it found
     nothing new, so it passes, and once a matching file is tracked it gates that file."""
 
+    on_path(monkeypatch, "bash")
     root = repository(tmp_path, {"run.sh": EVAL})
     nothing = {**shipped("shell.syntax", files=["*.bash"]), "name": "shell.other"}
     source = proposal(tmp_path, shipped("shell.injection"), nothing)
@@ -1457,8 +1463,9 @@ def test_an_exit_status_claim_stays_a_gate_and_apply_names_its_failure(
 
 
 def test_apply_strict_fits_nothing_and_says_what_each_claim_fails_on_now(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    on_path(monkeypatch, "bash")
     root = repository(tmp_path, {"run.sh": EVAL + EVAL})
     held = {**shipped("shell.injection", mode="baseline"), "name": "shell.held"}
     absent = shipped("shell.lint", tool="floor-absent", argv=["floor-absent", "{file}"])
@@ -2389,3 +2396,45 @@ def test_help_names_the_prefix_route_for_a_tool_in_a_container(
     assert exited.value.code == 0
     assert "runs only in a container" in out
     assert "prefix" in out and '"docker", "compose", "run"' in out
+
+
+def test_a_bash_that_is_only_the_windows_stub_reads_unverified_and_names_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `shell.syntax` runs the Windows Subsystem for Linux launcher and reads its
+    "no installed distributions" as a syntax failure (FAIL), or if the reason hides why `bash`
+    is missing where a `bash` file is there: the person is told to install Git for Windows, not
+    to look for a `bash` that exists. The lookup that skips the stub is tested in
+    `tests/test_programs.py`; here its answer reaches the verdict."""
+
+    stub = r"C:\Windows\System32\bash.exe"
+    root = repository(tmp_path, {"run.sh": "echo ok\n"})
+    install(root, shipped("shell.syntax"))
+    monkeypatch.setattr(floor, "_executable", lambda tool: None)
+    monkeypatch.setattr(floor.programs, "stub_found", lambda *_a, **_k: stub)
+
+    status, verdicts, output = run(capsys, "check", str(root))
+
+    assert (status, verdicts) == (1, {"shell.syntax": "UNVERIFIED"}), output
+    assert f"bash is not on PATH; the only one found is the Windows stub {stub}" in output
+
+
+def test_provision_installs_into_the_python_a_windows_path_holds_in_place_of_python3(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `provision` says there is no Python where `python3` is absent and the `py`
+    launcher is there, or runs `py` without `-3`, which picks no version: the argv it prints
+    is the argv it would run."""
+
+    root = repository(tmp_path, {"a.py": "x = 1\n"})
+    install(root, shipped("python.lint"))
+    monkeypatch.setattr(
+        floor,
+        "_executable",
+        lambda tool: ["C:/Windows/py.exe", "-3"] if tool == "python3" else None,
+    )
+
+    status, _, output = run(capsys, "provision", str(root))
+
+    assert status == 0, output
+    assert "would run: C:/Windows/py.exe -3 -I -m pip install ruff==" in output

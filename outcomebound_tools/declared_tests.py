@@ -16,6 +16,7 @@ person confirms it.
 from __future__ import annotations
 
 import configparser
+import os
 import re
 import stat
 from collections.abc import Mapping, Sequence
@@ -43,9 +44,12 @@ PYTEST_LINE = re.compile(r"^\s*pytest\s*(?:\[[^\]]*\]\s*)?(?:[<>=!~;@#]|$)", re.
 MAKE_TEST = re.compile(r"^(?:[^\s:#=]+[ \t]+)*test(?:[ \t]+[^\s:#=]+)*[ \t]*::?(?!=)", re.MULTILINE)
 JUST_TEST = re.compile(r"^@?test(?:[ \t]+[^:\n=]*)?:(?!=)", re.MULTILINE)
 
-PYTEST = "python3 -m pytest"
+# The Python a proposed command names: python.org and uv install `python` on Windows, and no
+# `python3`, which there is at best a Store alias that does not run.
+PYTHON = "python" if os.name == "nt" else "python3"
+PYTEST = f"{PYTHON} -m pytest"
 TOX = "tox"
-UNITTEST = "python3 -m unittest discover -s tests"
+UNITTEST = f"{PYTHON} -m unittest discover -s tests"
 GO_TEST = "go test ./..."
 MAKEFILES = ("GNUmakefile", "makefile", "Makefile")
 JUSTFILES = ("justfile", "Justfile", ".justfile")
@@ -180,9 +184,9 @@ def runner_options(
 ) -> list[str]:
     """The test options one component root declares, in this order, duplicates dropped.
 
-    python: `python3 -m pytest` for any pytest signal, `tox` for a declared tox
-    environment, then the unittest fallback only where `tests/` is a directory
-    and nothing declares pytest; node: the package scripts; go: `go test ./...`
+    python: `python3 -m pytest` (`python -m pytest` on Windows) for any pytest signal, `tox`
+    for a declared tox environment, then the unittest fallback only where `tests/` is a
+    directory and nothing declares pytest; node: the package scripts; go: `go test ./...`
     where `go.mod` is a marker; every kind: `make test` and `just test` for a
     declared `test` target. `target=None` reads no file.
     """

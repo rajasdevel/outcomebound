@@ -9,9 +9,10 @@ commit it was adopted at), when a change loosens the floor (`loosening`) and whi
 ruling covers it (`_rulings`: only the commit that makes it). Every tool runs
 from the project root through `validation._execute`, so it finds the project's own config:
 nothing here renders, names or shadows a config file, so every rule a check applies is the
-project's own. Tools come from PATH's absolute entries only, so a checkout cannot supply its
-own; a claim's `prefix` (`uv run`, `docker compose run --rm app`) is found there too, and its
-tool runs where the prefix puts it. No run has a time limit unless its claim sets
+project's own. Tools come from PATH's absolute entries only (`programs`), so a checkout cannot
+supply its own, and on Windows a stub for `bash` or `python` is never one; a claim's `prefix`
+(`uv run`, `docker compose run --rm app`) is found there too, and its tool runs where the prefix
+puts it. No run has a time limit unless its claim sets
 `timeout_seconds`.
 
 What it does not decide: which rules hold. Those live in the project's `ruff.toml`,
@@ -40,7 +41,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import facts, fileplan, validation
+from outcomebound_tools import facts, fileplan, programs, validation
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 FLOOR_PATH = facts.FLOOR
@@ -474,9 +475,10 @@ def _commit(root: Path, ref: str) -> str:
 # --- Tools: found on PATH, at or above min_version -----------------------------------------
 
 
-def _executable(tool: str) -> str | None:
-    entries = [part for part in os.environ.get("PATH", "").split(os.pathsep) if os.path.isabs(part)]
-    return shutil.which(tool, path=os.pathsep.join(entries)) if entries else None
+def _executable(tool: str) -> list[str] | None:
+    """What starts `tool`, as the words before its arguments (`programs.command`), or None."""
+
+    return programs.command(tool)
 
 
 def _numbers(text: str) -> tuple[int, ...]:
@@ -488,17 +490,17 @@ def _older(found: tuple[int, ...], least: tuple[int, ...]) -> bool:
     return found + (0,) * (width - len(found)) < least + (0,) * (width - len(least))
 
 
-def _command(claim: Claim, executable: str, argv: Sequence[str]) -> list[str]:
+def _command(claim: Claim, executable: Sequence[str], argv: Sequence[str]) -> list[str]:
     """What runs: the tool found on PATH in place of `argv[0]`, or, with a prefix, the prefix's
     command found on PATH, then the rest of the prefix and the whole argv, so the tool is the
     one where the prefix runs it."""
 
     if claim.prefix:
-        return [executable, *claim.prefix[1:], *argv]
-    return [executable, *argv[1:]]
+        return [*executable, *claim.prefix[1:], *argv]
+    return [*executable, *argv[1:]]
 
 
-def _version(claim: Claim, executable: str, root: Path) -> tuple[int, ...] | None:
+def _version(claim: Claim, executable: Sequence[str], root: Path) -> tuple[int, ...] | None:
     tool = claim.tool or ""
     asked = _command(claim, executable, [tool, "version" if tool == "gitleaks" else "--version"])
     try:
@@ -509,15 +511,19 @@ def _version(claim: Claim, executable: str, root: Path) -> tuple[int, ...] | Non
     return None if status != 0 or found is None else _numbers(found.group(0))
 
 
-def _ready(claim: Claim, root: Path) -> str:
-    """The command the claim starts with (its prefix's, or else its tool) as an absolute path,
+def _ready(claim: Claim, root: Path) -> list[str]:
+    """What the claim starts with (its prefix's command, or else its tool) as an absolute path,
     or `Missing` when it is not on PATH, or the tool, through its prefix, is old or silent."""
 
     tool = claim.tool or ""
     first = claim.prefix[0] if claim.prefix else tool
     executable = _executable(first)
     if executable is None:
-        raise Missing(f"{first} is not on PATH")
+        stub = programs.stub_found(first)
+        raise Missing(
+            f"{first} is not on PATH"
+            + (f"; the only one found is the Windows stub {stub}, which is no use" if stub else "")
+        )
     if claim.min_version is not None:
         found = _version(claim, executable, root)
         through = f" through {' '.join(claim.prefix)}" if claim.prefix else ""
@@ -880,7 +886,7 @@ class Outcome:
         return [f"{self.status} {self.name} ({self.summary})", *(f"  {d}" for d in self.details)]
 
 
-def _argv(claim: Claim, executable: str, context: Context, report: str) -> list[str]:
+def _argv(claim: Claim, executable: Sequence[str], context: Context, report: str) -> list[str]:
     """The argv to run: `{range}` is `<base>..HEAD`, or without a base the commits since the
     adoption record's, or without either `argv_without_base` runs instead."""
 
@@ -955,7 +961,7 @@ def _gitleaks(
         return parse_gitleaks(status, text, where, tracked)
 
 
-def _secrets(claim: Claim, executable: str, context: Context) -> list[Finding]:
+def _secrets(claim: Claim, executable: Sequence[str], context: Context) -> list[Finding]:
     """gitleaks over `<base>..HEAD`, or without a base over the commits since adoption, or
     without either over the tracked files alone. Where the range starts at an adoption after
     the merge base, the tracked files are scanned too: a secret committed before the floor
@@ -2015,7 +2021,7 @@ def provision(root: Path, accept: bool) -> int:
             pass
         else:
             least = f" at {version} or later" if version else ""
-            print(f"{tool} is on PATH{least} ({found}): present, so not installed")
+            print(f"{tool} is on PATH{least} ({' '.join(found)}): present, so not installed")
             present.add(tool)
             continue
         if tool == "gitleaks":
@@ -2039,9 +2045,10 @@ def provision(root: Path, accept: bool) -> int:
 
 
 def _pip_install(root: Path, packages: list[str], accept: bool) -> int:
-    """pip-install `packages` into the python3 PATH names. The floor finds its tools on PATH, so
-    they go into the project's environment, not the one running this engine, which an installed
-    tool keeps to itself."""
+    """pip-install `packages` into the python3 PATH names (on Windows, where `python3` is often
+    not installed, its `python` or `py -3`). The floor finds its tools on PATH, so they go into
+    the project's environment, not the one running this engine, which an installed tool keeps
+    to itself."""
 
     python = _executable("python3")
     if python is None:
@@ -2050,7 +2057,7 @@ def _pip_install(root: Path, packages: list[str], accept: bool) -> int:
         return 1 if accept else 0
     # `-I` keeps the target, which is the working directory, off `sys.path`: a `pip/` package
     # committed there would otherwise run in place of pip.
-    argv = [python, "-I", "-m", "pip", "install", *packages]
+    argv = [*python, "-I", "-m", "pip", "install", *packages]
     print(f"{'runs' if accept else 'would run'}: {' '.join(argv)}")
     if not accept:
         print("nothing installed: pass --accept")
@@ -2059,7 +2066,8 @@ def _pip_install(root: Path, packages: list[str], accept: bool) -> int:
     if status != 0:
         text = output.decode("utf-8", "replace").strip()
         if "externally-managed-environment" in text:
-            print(f"{python} is the system's Python, which pip will not install into: activate")
+            system = " ".join(python)
+            print(f"{system} is the system's Python, which pip will not install into: activate")
             print("the project's virtual environment and run provision again")
         else:
             print(text[-2000:])

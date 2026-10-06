@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -11,6 +12,7 @@ from typing import Any, NamedTuple
 import pytest
 
 from outcomebound_tools import validation
+from tests.processes import running
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -114,6 +116,50 @@ def test_timeout_is_unverified(tmp_path):
     )
     assert r.returncode == 2
     assert "timeout" in r.stdout.lower()
+
+
+def test_a_timeout_ends_the_command_and_everything_it_started(tmp_path):
+    """Breaks if only the command is killed: its child keeps running, holds the output pipe
+    open and keeps changing the tree the caller expects to be left alone, and the verb waits
+    ten more seconds for a pipe nobody closes. The command is a Python process, and so is its
+    child, so that the pid it records is the platform's own on Windows too."""
+
+    parent = (
+        "import subprocess, sys; "
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        "open('child.pid', 'w').write(str(child.pid)); child.wait()"
+    )
+    started = time.monotonic()
+    r = _run(tmp_path, [_claim([sys.executable, "-c", parent], timeout_seconds=2)])
+
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "timeout" in r.stdout.lower()
+    assert time.monotonic() - started < 9, "the verb waited for the child's pipe"
+    child = int((tmp_path / "child.pid").read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and running(child):
+        time.sleep(0.1)
+    assert not running(child)
+
+
+def test_a_program_is_never_found_through_the_folder_the_check_runs_in(tmp_path, monkeypatch, run):
+    """Breaks if a bare command is resolved with PATH's relative entries, as the operating
+    system does for a child: a `.` entry made `git` in the target's own folder answer for the
+    one on PATH, and a check runs what the project supplies. The command is not run, and reads
+    as not found."""
+
+    marker = tmp_path / "ran"
+    planted = tmp_path / "outcomebound-planted"
+    planted.write_text(f"#!/bin/sh\ntouch '{marker}'\n", encoding="utf-8")
+    planted.chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([".", "", os.environ.get("PATH", "")]))
+    path = _plan(tmp_path, [_claim(["outcomebound-planted"])])
+
+    result = run(path)
+
+    assert result.returncode == 2, result.stdout
+    assert "executable not found: outcomebound-planted" in result.stdout
+    assert not marker.exists()
 
 
 def test_a_claim_waits_for_its_command_unless_a_timeout_is_set(tmp_path):

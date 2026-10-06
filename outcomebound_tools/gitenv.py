@@ -4,16 +4,16 @@ What this module decides: that Git is asked in one language. The engine reads
 Git's own output -- the adapters read `git status` and `rev-parse` -- and a
 localized Git rewrites its messages. `LC_ALL=C` and `LANGUAGE=C` pin the messages;
 everything else the caller composed is passed through untouched.
-`tests/test_gitenv.py` holds every `subprocess.run(["git", …])` in the package
-to this helper.
+`tests/test_gitenv.py` holds every `subprocess.run(["git", …])` in the package, and every one
+that names Git as `programs.require("git")`, to this helper.
 
 It also holds the one argv prefix that every Git read of a target uses, `GIT_READ_CONFIGURATION`:
 no pager, no fsmonitor, no untracked cache and no external diff, so that a `core.fsmonitor` or
 `diff.external` setting in the target's own `.git/config` names no command that a read runs.
 
-What it does not decide: which Git runs (PATH resolves it, as every adapter
-here resolves it), or anything the caller puts in the environment for its own
-reasons, such as the Git adapter's `GIT_OPTIONAL_LOCKS`.
+What it does not decide: which Git runs (PATH's absolute entries, as `programs` finds it, so
+that the folder a read runs in never supplies one), or anything the caller puts in the
+environment for its own reasons, such as the Git adapter's `GIT_OPTIONAL_LOCKS`.
 """
 
 from __future__ import annotations
