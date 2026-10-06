@@ -318,11 +318,14 @@ OutcomeBound is not affiliated with them.
 
 ## Acknowledgements
 
-Many of OutcomeBound's ideas come from these projects and standards, named for credit. The text
-is our own, and none of them is affiliated with OutcomeBound or endorses it:
-[agents.md](https://agents.md/), [agentskills/agentskills](https://github.com/agentskills/agentskills),
-[obra/superpowers](https://github.com/obra/superpowers), [mattpocock/skills](https://github.com/mattpocock/skills),
+Ideas in OutcomeBound come from these GitHub repositories, named for credit. The text is our own,
+and none of them is affiliated with OutcomeBound or endorses it:
+[obra/superpowers](https://github.com/obra/superpowers),
+[mattpocock/skills](https://github.com/mattpocock/skills),
 [anthropics/skills](https://github.com/anthropics/skills),
-[UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai),
-[ASD-STE100](https://www.asd-ste100.org/). Each idea, with its exact source, is in the research
-library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
+[agentskills/agentskills](https://github.com/agentskills/agentskills),
+[cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill),
+[cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
+[UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai). Each idea, with its
+exact source, is in the research library's [credited
+ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
