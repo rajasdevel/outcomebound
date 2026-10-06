@@ -252,8 +252,7 @@ declaration, or a declaration that is not valid. It exits with `2` for a usage e
 Run the pinned query from your project, and give the engine the file:
 
 ```sh
-gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
-  -F query=@<outcomebound home>/templates/tickets/github-export.graphql > issues.json
+gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> -F query=@<outcomebound home>/templates/tickets/github-export.graphql > issues.json
 outcomebound tickets check --input issues.json
 ```
 

@@ -6,8 +6,7 @@ and publishing is creating it. Every verb reads an export you produce first and 
 export it was given:
 
 ```sh
-gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
-  -F query=@<home>/templates/tickets/github-export.graphql > issues.json
+gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> -F query=@<home>/templates/tickets/github-export.graphql > issues.json
 ```
 
 `<home>` is the folder `outcomebound home` prints, in forward slashes; `outcomebound tickets
