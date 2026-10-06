@@ -111,6 +111,15 @@
     },
     {
       "kind": "skill",
+      "path": ".claude/skills/explorable/references/runtime.md",
+      "id": "explorable",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "24f975161870f2f6a02753d57ce9e6ad41d6d70069e5fde7d54bec75779e053b"
+    },
+    {
+      "kind": "skill",
       "path": ".claude/skills/gather-requirements/SKILL.md",
       "id": "gather-requirements",
       "harnesses": [
