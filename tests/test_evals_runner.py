@@ -713,3 +713,37 @@ def test_the_summary_gives_median_tokens_and_seconds_reading_a_missing_count_fro
         "small-fix | current | gpt-6-sol medium: PASS 3/3",
         "  median tokens 200, seconds 20",
     ]
+
+
+@needs_posix_bash
+@pytest.mark.parametrize("arm", ["current", "none"])
+def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
+    tmp_path: Path, arm: str
+) -> None:
+    """dirty-review's setup leaves someone else's edits uncommitted and records `git status` as
+    its baseline; folding the install into the seed must commit only the notes it wrote, or the
+    current arm starts from a clean tree and its worktree check fails whatever the model does."""
+
+    loaded = RUN.load_arm(arm, RUN.selected_fragments("dirty-review"))
+    workdir = tmp_path / "w"
+    workdir.mkdir()
+    RUN.install(workdir, loaded.files)
+    env = {**RUN.child_env(), **RUN.HERMETIC_GIT, "OB_EVAL_ARM": arm}
+    fixture = RUN.FIXTURES / "dirty-review"
+    subprocess.run(
+        ["bash", str(fixture / "setup.sh"), str(workdir)],
+        check=True,
+        env=env,
+        capture_output=True,
+        timeout=120,
+    )
+    assert RUN.as_installed(workdir, loaded) == ""
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    ).stdout
+    assert status == (workdir / ".baseline-status").read_text(encoding="utf-8")
