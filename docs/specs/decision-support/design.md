@@ -1,17 +1,38 @@
 ---
-name: explorable
+name: decision-support
 status: draft
 ---
 
-# Explorable — design
+# Decision support — design
 
-This draft lands with the change that adds `outcomebound explorable` and the `explorable` skill.
-Before it lands: an independent review of the skill text and of the contract's count of skills
-(the `review` mechanism, since the change alters what a skill and the contract tell a model), the
-run of the library pins under the policy recorded in the pull request, and the release canary
-(`make canary`), because the change adds a verb and a default skill.
+This design joins the decision brief, whose design was ratified as `docs/specs/decision-brief/`,
+and the explorable, a draft, into one area: every way an agent puts a judgment, a lesson or a
+question to a person. The decision-brief rows below are ratified and keep their meaning; the
+explorable rows are the draft. This draft lands with the change that adds `outcomebound explorable`
+and the `explorable` skill. Before it lands: an independent review of the skill text and of the
+contract's count of skills (the `review` mechanism, since the change alters what a skill and the
+contract tell a model), the run of the library pins under the policy recorded in the pull request,
+and the release canary (`make canary`), because the change adds a verb and a default skill.
 
 ## Outcome
+
+Whenever an agent needs a person's judgment, or needs a person to understand or answer something,
+the person can do it quickly and do it well. Two instruments serve this. The decision brief puts
+every decision in text, always. The explorable adds a page, only where text serves the person
+badly.
+
+### The decision brief
+
+Whenever an agent needs a person's judgment, the person can make it quickly and make it well.
+The agent has done the due diligence first: it checked what could change the answer, and worked
+out what each way forward leads to and what its downside is. It then puts the question as a
+decision brief: concise, direct and visual, with marks the eye can scan, each option's downside in
+view, and a diagram where order or flow is the point. How: the `decision-brief` skill, which
+carries the procedure and which the kernel and the core skill's "Put a decision to the user"
+point to; `outcomebound brief --help`, `decision_brief.py`, `surfaces.py` and
+`adapters/surfaces.json`.
+
+### The explorable
 
 When a person must decide, learn or answer something that text alone shows badly, the agent gives
 them an explorable: one HTML file, opened from disk, in which the person changes values, steps
@@ -49,6 +70,8 @@ exists, the run of the page is `UNVERIFIED`, and the agent says so.
 
 ## Requirements
 
+These come from the request that added the explorable.
+
 - R1 A portable, self-contained HTML file helps a person make a complex decision with confidence:
   interactive diagrams, calculators like a spreadsheet, sliders, charts, timelines and animations,
   whatever the decision needs (maintainer, 2026-10-06).
@@ -67,6 +90,29 @@ exists, the run of the page is `UNVERIFIED`, and the agent says so.
   clear and the page carried material the decision did not need).
 
 ## Decisions
+
+### The decision brief
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| Every decision put to a person — in a session, at a handoff, in a tracker comment — is a decision brief, drawn by one renderer, `outcomebound brief`, and shown as markdown, never inside a code block | prose lists; a shape each skill describes in its own words | user | decided |
+| A brief holds only the work that waits on its answer. A run starts without answers, writing a brief never ends the turn while other work can go on, and the brief goes where the person will read it: the handoff, the goal's Progress, a comment on the ticket it holds, or the final message when every remaining item waits on an answer (maintainer, 2026-10-04) | the turn's final message as the first place for a brief, which in an unattended harness ends the run | user | decided |
+| The procedure — what to decide yourself, the due diligence, the brief's parts, drawing it — lives in one skill, `decision-brief`, a default skill. The kernel's handoff sentence names it, and the core skill keeps only when to ask and a pointer | the procedure inside the core skill, reached only through it | user | decided |
+| Due diligence comes before the brief. The agent checks everything within reach that could change the answer, works out what each way leads to and its downside, and lets the evidence choose the recommendation. `Not checked` names only what could not be checked, why, and what would settle it | a form filled from whatever is already in hand | user | decided |
+| A brief is a floor, not a form. Always: an id and the question in one line; every way forward when there are two or more, each with what it leads to and its downside; the recommendation first, with why; at least one line of evidence (checked, not checked, or a fact); and whether it can be undone. Anything else appears only when it changes the answer | a fixed form with every slot filled; a brief with no evidence line | user | decided |
+| A brief stands on its own. Every internal id or term is explained in plain words where it is used, or left out | ids the person has to look up | user | decided |
+| A brief's id is one no other session or record can take: the next of the project's own numbering for briefs where its instructions keep one, else the task's or worktree's name before the number (`fix-login-D1`); a brief cited outside its document carries that whole id. The renderer already accepts such an id, so the rule lives in the skill | a bare `D<n>`, which two sessions on one machine can both take and which reads as one of the project's own decision numbers; an engine verb that reserves the next id, which needs a shared store the skill does not | agent | decided |
+| For an act a harness's permission check guards, such as a deletion or a write outside the project, the brief names the act so the person's reply can state it, since some harnesses honor authority only from the person's own words | a letter alone, which such a check does not read as the person's authority for the act | agent | decided |
+| The floor gains one line: what happens if no answer comes and the state the held work waits in, as a `facts` pair labelled `If unanswered`; it is a `facts` pair, not a schema field: the renderer already draws a `facts` pair as its own unmarked line, so a new field would add a refusal and a schema version for a line the text can carry. A hold still holds only its own item (field: a held act left a service stopped, with no stated fallback) | an optional `if_unanswered` field in the schema, which adds a wire change and a refusal to settle what one skill sentence settles | agent | decided |
+| A step the person types or checks by eye names a version, branch, tag or path, never a commit hash or other digest: people miss near-matching hex strings more often than words or numbers | a digest to copy or compare by eye | user | decided |
+| Marks are emoji where the output carries them (👉 recommend, ✅ checked, ⚠️ not checked, 🔻 downside, 🧱 debt, ↩️ undo, ⛔ cannot be undone), and ASCII where it cannot; each option's downside sits under its own mark, so the recommended option's downside is its risk | ASCII marks everywhere; consequences in prose only | user | decided |
+| A diagram is drawn when order, dependency, flow or before/after is the point, never as decoration. It is Mermaid where the surface renders Mermaid, and ASCII where the surface does not or is unknown | one ASCII form for every surface; a diagram in every brief | user | decided |
+| The brief itself is in the text the person reads where it goes (the rows above); a link from that text to a file that holds it never stands in for the brief (field: a brief written to a working file and only linked from the message) | a brief kept in a file the message links to | user | decided |
+| Where a harness asks the person through a question tool, which shows each field on one line, the agent draws the brief in its message first and asks with `outcomebound brief --ask`, filling the tool's fields by name: per brief, the id, a short header, the heading and recommendation as question, and each option's label, description and one-line form, the recommended option first as the tools ask; a brief whose options the tool cannot take is asked by the drawn brief alone (field: a drawn brief put whole into a question tool's title, shown as one line) | the drawn brief's lines in the tool's fields; no question tool at all | user | decided |
+| Whether a surface renders Mermaid is read from the session's environment against `adapters/surfaces.json`, which records who observed each capability, and when. `OUTCOMEBOUND_DIAGRAMS` (the person's own observation) outranks the table, and `--form` outranks both | the agent guessing its surface | user | decided |
+| A decision explorable draws its briefs from the same JSON document that `outcomebound brief` reads, with the same refusals, through an HTML drawing in `decision_brief.py` or a module beside it. A brief's diagram and a batch's order become `data-diagram` blocks that the runtime draws with Mermaid, with the ASCII chain form as their fallback text. The reply offers each brief's options by letter and way | a brief that the page code writes by hand, which can disagree with the brief in the message | agent | decided |
+
+### The explorable
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
@@ -95,7 +141,6 @@ exists, the run of the page is `UNVERIFIED`, and the agent says so.
 | An expectation is stated over the page as the person sees it: `explorable.expect(label, inputs, outputs)` names input values and the result each named output must then show. With `#explorable-check` in the address, the runtime sets those inputs, lets the page's own change handlers run, reads each output that `show` wrote, and compares it with the expected value at the output's shown precision. It writes the results, and the count of outputs with and without an expectation, into `<script type="application/json" id="explorable-check-result">`. A pass says that for those inputs the page shows what the agent expected; the expected value is the agent's own claim. The skill asks the agent to work each one out by hand or with another tool and to keep the working beside the page, and that is a rule of the skill | `explorable.expect(label, compute, expected)` over a function the agent writes, which checks only that function, not what the page shows; no expectation at all | agent | decided |
 | The browser check finds a Chromium-family browser: `OUTCOMEBOUND_BROWSER` as a path first, then `google-chrome`, `chromium`, `chromium-browser`, `msedge` and `brave` on the `PATH`, then the install folders of Chrome, Chromium, Edge and Brave on macOS and Windows. It starts the browser headless, in its own process group, with a new profile folder, the page's `file://` address (built with `Path.as_uri()`) and the `#explorable-check` fragment, and `--dump-dom`. It reads the browser's output until the document ends, then stops the whole group it started and removes the profile folder, retrying the removal on Windows. The time limit, which `--timeout` raises, is the failure path: the run then reads `UNVERIFIED` and names the limit. Headless Firefox cannot print the page's document, so a machine with only Firefox, or only Safari, reads `UNVERIFIED` | waiting for the browser to exit, which it does not do after printing the document (observed with Chrome 154 on 2026-10-07); stopping only the main process, which left a helper process running in the same run; a screenshot read by eye; a browser driver such as Playwright, which is not in the standard library | agent | decided |
 | `check` reports separate verdicts, the first output line being the overall verdict: the shell (the policy first and unchanged, the generator and the kind, the library pins equal to the engine's); the hosts (a static read of the attributes, the `style` values and the string literals in script text that could name an address, against what the policy allows); the parts each kind needs (decision: a brief and the reply; learning and interview: at least one `data-question` and the reply); and, with `--browser`, the run (no script error; each expectation passes; each output with no expectation reads `UNVERIFIED`). Exit 0 when nothing fails, with any `UNVERIFIED` named; exit 1 on a `FAIL`; exit 2 when the page cannot be read or on a usage error. There is no `--json`: the agent reads the text, and no other tool reads the report | one verdict for the page, which hides which part failed; a `--json` report with a schema, which no consumer needs yet | agent | decided |
-| A decision explorable draws its briefs from the same JSON document that `outcomebound brief` reads, with the same refusals, through an HTML drawing in `decision_brief.py` or a module beside it. A brief's diagram and a batch's order become `data-diagram` blocks that the runtime draws with Mermaid, with the ASCII chain form as their fallback text. The reply offers each brief's options by letter and way | a brief that the page code writes by hand, which can disagree with the brief in the message | agent | decided |
 | The reply is one block of text that the runtime builds and shows at all times, in a line grammar that `runtime.md` defines and a test holds: a first line with the page's id and build time; one line for each brief's choice (id, letter, way); one line for each input the person moved (name, the agent's value, the person's value, unit); one line for each answer (question id and answer, "I don't know" kept as an answer); and the note. A copy button writes it to the clipboard after a click and falls back to selecting the text | answers sent from the page, which the policy forbids and which needs a server; a downloaded file, whose folder the agent does not know | agent | decided |
 | A chart's fallback is its data table: the runtime builds the table from the chart's own labels and values, shows it when the library does not load, gives it to screen readers, and prints it | three separate forms for offline, screen readers and print | agent | decided |
 | The page saves the person's values and answers in the browser's local storage under a key made of the page's id and build time, wrapped so that a browser that refuses storage still works, with a button that restores the agent's values. A rebuild starts from the agent's values, since a rebuild can change the inputs. The build time comes from `SOURCE_DATE_EPOCH` where it is set, so that tests can build the same page twice | no saved state, so that a reload loses the person's work; state in the address fragment, which a page opened again from disk does not have; a key of the id alone, which carries old values into a rebuilt page whose inputs changed | agent | decided |
@@ -107,6 +152,35 @@ exists, the run of the page is `UNVERIFIED`, and the agent says so.
 | The idea of a document whose numbers the reader changes is credited: the README's acknowledgements link `worrydream/Tangle`, the reactive-document library by the essay's author. The research record names the essay through an entry sent with `outcomebound research ingest`, which is a separate act under the maintainer's grant, since a push to the research repository is an irreversible edge. No text or code is taken from either | no credit; a link to the essay in the README, which links GitHub repositories only | agent | decided |
 
 ## Shape
+
+### A decision brief
+
+In the emoji form, where the session's surface renders Mermaid:
+
+````text
+### D1 · Keep the old flag for one release?
+- 👉 Recommend: A — two adopters still set it · confidence 80% (inferred)
+- Options:
+  - A keep it — adopters get a warning first
+    - 🔻 Downside: one more release carries the old code path
+  - B drop it now — the code path goes today
+    - 🔻 Downside: an adopter who sets it is refused on upgrade
+- ✅ Checked: `grep -r old_flag` finds two adopter configs
+- ↩️ Undo: revert the commit
+
+How an upgrade reads the flag
+```mermaid
+flowchart LR
+  n1["config"] -->|old_flag| n2["warning"]
+  n2["warning"] --> n3["new flag"]
+```
+````
+
+The ASCII form writes `[>]`, `[ok]`, `[!]`, `[-]`, `[debt]`, `[undo]` and `[!!]`, the separators
+` | ` and ` - `, and the diagram as chains in a `text` fence: `config --old_flag--> warning --> new flag`.
+A batch that names an order among its briefs ends with the order drawn the same way.
+
+### An explorable
 
 A decision source, as `outcomebound explorable new --kind decision` starts one:
 
@@ -166,6 +240,20 @@ source's content, the reply section, and the runtime and the source's scripts.
 
 ## Edges
 
+### The decision brief
+
+The command refuses what it can detect — an option without its downside, a single option, two
+or more options with no recommendation, a brief with no evidence line, a mark's glyph inside
+given text, a line break inside a field, a diagram label that would end or split an edge
+(`--help` lists every refusal) — and cannot tell whether the due diligence was done well. The
+verdicts on a `Checked` line are the agent's own report, and the passed mark is drawn only when
+every verdict is PASS. A surface missing from the table gets ASCII. A surface the table records
+as rendering Mermaid but that sets no environment variable is chosen with `--form mermaid`, never
+detected. A person can correct the table with their own observation through
+`OUTCOMEBOUND_DIAGRAMS` until the table records it.
+
+### The explorable
+
 What each verdict reads, and who can write it. `build` reads the source, the brief document the
 header names, and the engine's templates. `check` reads the page file and, with `--browser`, the
 document the browser prints after the page has run. The agent writes the source, the brief
@@ -189,9 +277,6 @@ a page sent to a colleague opens with the agent's values.
 
 ## Other designs this change edits
 
-- `decision-brief`: the Outcome names the explorable as an addition for a brief whose answer turns
-  on values or mechanisms, and a row records the HTML drawing of a brief, with the same refusals as
-  the markdown drawing.
 - `skills`: the set gains `explorable`, installed in every install, with its pain (a decision,
   lesson or interview that text serves badly) and its fixture row.
 - `install`: the count of working skills; `templates/explorable/` ships with the engine and is never
@@ -201,6 +286,14 @@ a page sent to a colleague opens with the agent's values.
   the same count.
 
 ## Validation
+
+### The decision brief
+
+`tests/test_decision_brief.py`, `tests/test_decision_brief_cli.py`, `tests/test_surfaces.py`;
+`outcomebound brief` draws the example in `--help` in both forms. `tests/test_adopt.py` installs,
+checks and removes the skill beside the core skill.
+
+### The explorable
 
 - `tests/test_explorable.py`: `new` writes a starter source for each kind that `build` accepts and
   `check` passes, and never writes over a file; `build` refuses each element, attribute and address
