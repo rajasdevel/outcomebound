@@ -92,7 +92,12 @@ which change lands first, not the length of its brief, not a point where an inte
 could be checked. That is a milestone inside the ticket, and planning it is the implementer's.
 
 **Shape.** A parent gathers children one level deep and exists only where they share an outcome
-the user judges once they have landed; a breakdown of one ticket has no parent. Chart to the next
+the user judges once they have landed; a breakdown of one ticket has no parent. Where the children
+come from one design, the parent's `reads` names the design's sections and its `done-when` the
+claims that check the design's `## Validation`, so the parent closing with them green says the
+design is built, and the tracker's assignees say who builds which part; a child's `reads` names
+the sections it answers to, which another child may share. The parent's claims run when it closes
+and hold no child. Chart to the next
 decision that is the user's by the `decision-brief` skill's test; what the work uncovers arrives
 as follow-ups, not as a tree drawn in advance. The user's go on the breakdown is the one human
 judgment the plan needs; after it, only a ticket that crosses an edge gets a look, and no ticket
