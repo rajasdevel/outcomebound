@@ -37,9 +37,9 @@ way forward leads to and what its downside is, so the evidence chooses your reco
 - at least one line of evidence: what you checked, what you could not check (why, and what
   would settle it), or a fact;
 - whether it can be undone;
-- what happens if no answer comes, and the safe state the held work stays in while it waits, so
-  that a hold never leaves a service, a job or a branch half changed with no stated fallback; give
-  it as a `facts` pair labelled `If unanswered`;
+- what happens if no answer comes, and the state the held work waits in: the side of the held act
+  that is easiest to stay in, never half done; give it as a `facts` pair labelled
+  `If unanswered`;
 - a diagram only when order, dependency, flow or before/after is the point.
 
 Give each brief an id no other session or record can take. Where the project's instructions keep one
@@ -73,6 +73,7 @@ project's instructions number briefs:
   - B drop it now — the code path goes today
     - 🔻 Downside: an adopter who sets it is refused on upgrade
 - ✅ Checked: `grep -r old_flag` finds two adopter configs
+- If unanswered: the flag stays; only this item waits
 - ↩️ Undo: revert the commit
 
 How an upgrade reads the flag

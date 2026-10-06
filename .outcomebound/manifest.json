@@ -25,14 +25,14 @@
       ],
       "inputs": {
         ".github/workflows/ci.yml": "cdec19572d84c06086ac1c5f0d1f228b3c12d50aba92c507380bf2c1d21a8fa0",
-        ".github/workflows/main-green.yml": "b098c9a99132d9eceec29d3be020be4c8be45627dbfedf5b9004e0b06ab0392a",
+        ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
-        ".outcomebound/fragments/commands.md": "8f4d7fa06d675138d6f7cb0a589955c44bf4dfac1b5e21a92f5235e75198d4ca",
+        ".outcomebound/fragments/commands.md": "c0273bb53e64307ce74ccbf2b15e43cf38c0a6ff3d8d6e1a34b3d6b5a126436e",
         ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",
-        ".outcomebound/fragments/multi-agent.md": "f1773e2e0ef958f8b5851bbddbc4344faae238ec3d58836186618ae8edd43bfc",
+        ".outcomebound/fragments/multi-agent.md": "a405914c756844ceef3cad0113d418b0b4423fc3d81336955385e3dea7120326",
         ".outcomebound/fragments/research.md": "6c9009492b287148950cb4252ac4f04858dc4c852cd43556029e964494d45d4e",
-        ".outcomebound/fragments/workspace.md": "1054a86c518e33b7c963e389763a5558f662359c3a5d822acef39e1281d51035"
+        ".outcomebound/fragments/workspace.md": "4f789877bf943eafc97398f0ca1c0d7ceb84165f7e35a40d482b567fe6a21b7f"
       },
       "style": [
         "ste"
@@ -50,13 +50,13 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "f1773e2e0ef958f8b5851bbddbc4344faae238ec3d58836186618ae8edd43bfc"
+      "sha256": "a405914c756844ceef3cad0113d418b0b4423fc3d81336955385e3dea7120326"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "1054a86c518e33b7c963e389763a5558f662359c3a5d822acef39e1281d51035"
+      "sha256": "4f789877bf943eafc97398f0ca1c0d7ceb84165f7e35a40d482b567fe6a21b7f"
     },
     {
       "kind": "fragment",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "8f4d7fa06d675138d6f7cb0a589955c44bf4dfac1b5e21a92f5235e75198d4ca"
+      "sha256": "c0273bb53e64307ce74ccbf2b15e43cf38c0a6ff3d8d6e1a34b3d6b5a126436e"
     },
     {
       "kind": "ignore",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "9fdf35ab609bf3acb760cce4cb17b11c1e9b4c75838d907fcd07caa6956fea0e"
+      "sha256": "71ebc607996559152fd1e459d19d7cef1ab3c770c1fa8f7107dbe7292105a62a"
     },
     {
       "kind": "skill",
@@ -116,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "4de28e21c75e30ea5a9c58809f60f44dad2b26dfc14d907997a8f0f160a7b998"
+      "sha256": "21cf3c507a1aea61887128c799e347ad012579a1d321fafb3e7d096f7b230acb"
     }
   ]
 }

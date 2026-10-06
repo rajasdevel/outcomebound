@@ -18,6 +18,8 @@ across sessions.
 **Completion bar** — the orchestrator verifies reported diffs and check evidence; re-run affected
 checks when their inputs or integration context changed. Human observations remain separately attributed.
 A delegate that reports itself blocked is recorded with its reason, and the work that does not
-depend on it goes on; where none does, end the turn and wait for its report, never poll. A worker
-holds one role and one ticket at a time.
+depend on it goes on. Where every remaining item waits on a delegate that is still running, wait
+once for its report the way the harness waits (one wait with no deadline, or the turn's end where
+the harness wakes you on the report); never a loop of short waits or status reads. A worker holds
+one role at a time, and the tickets of one landing.
 **Distinguish** — a delegate reported ≠ the orchestrator verified ≠ integrated ≠ merged.

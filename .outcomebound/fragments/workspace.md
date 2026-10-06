@@ -41,8 +41,8 @@ this session to change it, ask once for it as a writable root, and until then ho
 write there; run its Done commands yourself, and say so in your report, since its hooks do not run
 in this session.
 The machine is shared: before a heavy command (a full suite, a build, an image pull) check the
-free disk, and run only as many heavy lanes at once as the machine holds, never one for each
-worktree. Clean up only what this task made (its worktree, logs and caches); a process, folder or
+free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
+hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches); a process, folder or
 file of an owner you cannot name stays as it is, and the handoff names it.
 **Mechanisms** — `goal-envelope` when work spans sessions.
 **Completion bar** — a handoff names what landed with each check's verdict, what is in flight,
