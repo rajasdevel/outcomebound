@@ -8,6 +8,7 @@ ends a real tree and that `sh.exe` runs a line, is settled by the Windows CI job
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -322,7 +323,8 @@ def test_a_posix_stop_ends_the_command_and_everything_it_started(tmp_path: Path)
         time.sleep(0.1)
     alive = running(grandchild)
     if alive:
-        os.kill(grandchild, signal.SIGKILL)
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(grandchild, signal.SIGKILL)
     assert not alive, "the grandchild outlived its group"
 
 
