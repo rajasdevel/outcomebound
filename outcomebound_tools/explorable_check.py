@@ -91,8 +91,13 @@ def script_literals(text: str) -> list[str]:
 def hosts(found: explorable_shell.Parts) -> Verdict:
     """The hosts verdict: a static read of the content region."""
 
-    region = found.briefs + "\n" + found.content
-    scanned = explorable_source.scan(region, source=False, first_line=found.region_line)
+    scanned = explorable_source.scan(
+        found.briefs, source=False, first_line=found.region_line, reserved=False
+    )
+    after = found.region_line + found.briefs.count("\n") + 1
+    own = explorable_source.scan(found.content, source=False, first_line=after, reserved=True)
+    scanned.findings.extend(own.findings)
+    scanned.scripts.extend(own.scripts)
     details = [f"line {item.line}: {item.text}" for item in scanned.findings]
     allowed = tuple(explorable_shell.pin_paths())
     details.extend(

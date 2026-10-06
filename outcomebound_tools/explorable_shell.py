@@ -270,6 +270,8 @@ def differences(parts: Parts) -> list[str]:
     if parts.values["runtime"][0] != template("explorable.js"):
         problems.append("the runtime differs from the engine's explorable.js")
     config = _config(parts, problems)
+    if re.search(r"<!--|</|<script", parts.values["config"][0], re.IGNORECASE):
+        problems.append("the configuration holds markup that can end or hide its element")
     if config.get("libraries") != library_config():
         problems.append("the library pins differ from the engine's libraries.json")
     _identity(parts, config, problems)
