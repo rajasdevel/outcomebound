@@ -78,11 +78,11 @@ the passing lines print only under `--verbose` or `--json`.
 | `QUOTE_NOT_FOUND` | FAIL | a stated quote that does not occur in its item |
 | `ITEM_CHANGED` | FAIL | a row's revision is not the manifest's current one |
 | `SOURCE_CHANGED` | FAIL | a source file differs from the one its manifest was made from |
-| `MANIFEST_DIFFERS` | FAIL | a source file that matches its manifest's digest splits into items other than the manifest's: one missing, one added, or one with other text |
+| `MANIFEST_DIFFERS` | FAIL | a source file that matches its manifest's digest splits into items other than the manifest's: one missing, one added, or one with other text, partial flags or suspect flags |
 | `ROW_MALFORMED` | FAIL | a row with the wrong cells, an unknown disposition, a missing Where or Basis, or a range on a disposition but `not requirement-bearing`, or a bad range |
 | `REQUIREMENT_DUPLICATE` | FAIL | a requirement id defined twice |
 | `LEDGER_MISSING` | FAIL | no `## Sources` section |
-| `MANIFEST_INVALID` | FAIL | a manifest that does not read as one, or two with one name |
+| `MANIFEST_INVALID` | FAIL | a manifest that does not read as one, two with one name, or a source `file` that is absolute, holds `..` or resolves outside `--root`, which is never read |
 | `MANIFEST_ABSENT`, `SOURCE_PARTIAL`, `SOURCE_FRESHNESS`, `RANGE_CANDIDATES` | UNVERIFIED | the evidence is not there |
 | `SUSPECT`, `DROP_ASSUMED`, `REQUIREMENT_UNSOURCED`, `SOURCE_CONVERTED` | INFO | a fact the person may want, not a verdict |
 

@@ -324,6 +324,10 @@ class _Run:
                 file_slug = manifest_module.unique(
                     manifest_module.slug(Path(source["file"]).stem, "file"), slugs
                 )
+                if not _inside_root(self.root, source["file"]):
+                    text = "names a file outside the folder the check reads; nothing was read"
+                    self.add("MANIFEST_INVALID", FAIL, display(source["file"]), text)
+                    continue
                 try:
                     data = (self.root / source["file"]).read_bytes()
                 except OSError:
@@ -360,7 +364,10 @@ class _Run:
         for item in expected:
             found = held.get(item.id)
             if found is not None and (
-                found["revision"] != item.revision or found["text"] != item.text
+                found["revision"] != item.revision
+                or found["text"] != item.text
+                or sorted(found["partial"]) != sorted(item.partial)
+                or sorted(found["suspect"]) != sorted(manifest_module.suspect_reasons(item.text))
             ):
                 changed.append(item.id)
                 found["text"] = item.text  # quotes are checked against the file's own text
@@ -370,7 +377,7 @@ class _Run:
                 for label, ids in (
                     ("missing from the manifest", missing),
                     ("not in the file", added),
-                    ("text differs", changed),
+                    ("text or flags differ", changed),
                 )
                 if ids
             ]
@@ -425,6 +432,19 @@ class _Run:
         self.findings.extend(
             Finding(code, PASS, "all", text) for code, text in held.items() if code not in failed
         )
+
+
+def _inside_root(root: Path, name: str) -> bool:
+    """Whether a manifest's `file` names a path under `root`: relative, no `..`, and still under
+    `root` once links are resolved. A manifest is data a person or a tool may have edited."""
+
+    path = Path(name)
+    if path.is_absolute() or path.drive or ".." in path.parts:
+        return False
+    try:
+        return (root / path).resolve().is_relative_to(root.resolve())
+    except (OSError, RuntimeError):
+        return False
 
 
 def check(manifest_paths: Sequence[Path], ledger_path: Path, root: Path) -> list[Finding]:

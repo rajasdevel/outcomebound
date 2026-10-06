@@ -499,7 +499,7 @@ def test_MANIFEST_DIFFERS_a_quote_planted_in_an_items_text_fails_and_is_not_foun
     code, out = run(work, capsys, rows)
 
     assert code == 1
-    assert "text differs: n:notes:export" in lines(out, "FAIL", "MANIFEST_DIFFERS")[0]
+    assert "text or flags differ: n:notes:export" in lines(out, "FAIL", "MANIFEST_DIFFERS")[0]
     assert lines(out, "FAIL", "QUOTE_NOT_FOUND")  # checked against the file, not the manifest
 
 
@@ -556,3 +556,28 @@ def test_the_skeleton_prints_a_range_digest_that_check_accepts(work, capsys):
     digest = range_digest(capsys, "n:notes:preamble", "n:notes:chat")
     rows = {"r": f"| n:notes:preamble..n:notes:chat #{digest} | not requirement-bearing | | x |"}
     assert run(work, capsys, rows)[0] == 2  # candidates, never a range-digest FAIL
+
+
+@pytest.mark.parametrize("name", ["../outside.md", "/etc/hosts", "sub/../../outside.md"])
+def test_MANIFEST_INVALID_a_source_file_outside_the_root_is_not_read(work, capsys, name):
+    rows = good_rows(work)
+    edit_manifest(work, lambda d: d["sources"][0].update(file=name))
+
+    code, out = run(work, capsys, rows)
+
+    found = lines(out, "FAIL", "MANIFEST_INVALID")
+    assert code == 1 and found and "outside the folder the check reads" in found[0]
+
+
+def test_MANIFEST_DIFFERS_a_flag_cleared_by_hand_fails(work, capsys):
+    rows = good_rows(work)
+
+    def plant(document):
+        document["items"][0]["suspect"] = ["planted"]
+
+    edit_manifest(work, plant)
+
+    code, out = run(work, capsys, rows)
+
+    found = lines(out, "FAIL", "MANIFEST_DIFFERS")
+    assert code == 1 and found and "text or flags differ" in found[0]
