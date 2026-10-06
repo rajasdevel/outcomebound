@@ -1265,10 +1265,13 @@ def test_a_write_to_a_closed_pipe_is_a_closed_pipe_on_the_platform_that_reports_
 
     closed = OSError(errno.EINVAL, "Invalid argument")
     assert research._reader_closed(BrokenPipeError(errno.EPIPE, "Broken pipe"))
-    assert not research._reader_closed(closed)
+    # What this platform reports; the emulation below covers the other one.
+    assert research._reader_closed(closed) == WINDOWS
     assert not research._reader_closed(OSError(errno.EACCES, "denied"))
     monkeypatch.setattr("sys.platform", "win32")
     assert research._reader_closed(closed)
+    monkeypatch.setattr("sys.platform", "linux")
+    assert not research._reader_closed(closed)
     assert not research._reader_closed(OSError(errno.EACCES, "denied"))
 
 

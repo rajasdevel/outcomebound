@@ -33,6 +33,19 @@ def engine(*arguments: str | Path) -> list[str]:
     return [sys.executable, "-I", "-c", LAUNCH, str(ROOT), *map(str, arguments)]
 
 
+# What a child process needs from its parent whatever else a test leaves out: where programs and
+# libraries are, and on Windows `SYSTEMROOT` (Python's hash seed and sockets fail to start
+# without it), `SYSTEMDRIVE` and the temporary folders.
+CARRIED = ("PATH", "LD_LIBRARY_PATH", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP", "TMPDIR")
+
+
+def carried_environment(**given: str) -> dict[str, str]:
+    """A minimal child environment: the carried variables of this process, then `given`."""
+
+    carried = {name: os.environ[name] for name in CARRIED if name in os.environ}
+    return {**carried, **given}
+
+
 def home_environment(home: PurePath, windows: bool = WINDOWS) -> dict[str, str]:
     """The variables that name a home: `HOME` for POSIX and Git, `USERPROFILE` for
     `Path.home()` on Windows, and there `HOMEDRIVE` and `HOMEPATH` too."""
