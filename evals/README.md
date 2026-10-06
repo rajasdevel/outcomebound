@@ -83,7 +83,7 @@ establishes only what its check reads, for that model on that day.
   - This checkout's `scripts/outcomebound` is first on the PATH of codex and of the commands of the
     model, as `outcomebound`.
   - Every install carries `using-outcomebound`, `decision-brief`, `gather-requirements`,
-    `tests-worth-keeping`, `explain-spec`, `slice-tickets` and `hand-off-tickets`.
+    `tests-worth-keeping`, `explain-spec`, `slice-tickets`, `hand-off-tickets` and `explorable`.
   - A fixture can have a `fragments` file that names fragments, one id a line. That fixture installs
     as adopt does with those fragments selected.
   - The `AGENTS.md` of the fixture carries the project facts and the guidance pointers that adopt
@@ -275,7 +275,7 @@ Each run also prints `observed:` lines, which never change a verdict: files, lin
 test runs (commands that run a test runner), `guidance_reads` (commands that name the hand-off or
 slicing skills, the model guidance or the implementer tiers), and the tool caches ignored.
 
-Every install carries the seven skills, so the hand-off and slicing skills, which say what a
+Every install carries the eight skills, so the hand-off and slicing skills, which say what a
 package does to a strong model, are in the workspace of a `current` run. A read of them shows in
 `guidance_reads`.
 
