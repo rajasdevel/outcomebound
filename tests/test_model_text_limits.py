@@ -27,6 +27,12 @@ LIMITS = (
         r"(?:once|twice|thrice)\b",
         re.IGNORECASE,
     ),
+    # The same limit as an ordinal: "a second miss", "fails a second time".
+    re.compile(
+        r"\b(?:(?:a|the)\s+(?:second|third)\s+(?:miss|failure|attempt|try|round)"
+        r"|fails?\s+(?:a|the)\s+(?:second|third)\s+time)\b",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:after|up to)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:more\s+)?"
         r"(?:tries|attempts|retries|rounds|passes|failures|misses)\b",
@@ -99,6 +105,8 @@ def test_NEGATIVE_CONTROL_an_attempt_limit_in_words_is_reported() -> None:
         ("A step that fails review goes back once with the finding.", "goes back once"),
         ("A step that fails twice is rewritten.", "fails twice"),
         ("Hand it up after two tries.", "after two tries"),
+        ("A second miss says the tier is wrong.", "A second miss"),
+        ("One that fails a second time goes up a tier.", "fails a second time"),
     ):
         assert [hit for _, hit in limits(sentence + "\n")] == [matched]
     # A cause, not a count, sets no limit.

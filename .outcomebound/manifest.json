@@ -30,7 +30,7 @@
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
         ".outcomebound/fragments/commands.md": "c0273bb53e64307ce74ccbf2b15e43cf38c0a6ff3d8d6e1a34b3d6b5a126436e",
         ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",
-        ".outcomebound/fragments/multi-agent.md": "f7a2e2db8dad1b4b156777b5c38114036ec359f0da297f9a2bae5168ca150cd5",
+        ".outcomebound/fragments/multi-agent.md": "40de11c6663881454e9d3aed269f16a0d44fce1bb745da638559e261f0b174fb",
         ".outcomebound/fragments/research.md": "6c9009492b287148950cb4252ac4f04858dc4c852cd43556029e964494d45d4e",
         ".outcomebound/fragments/workspace.md": "4f789877bf943eafc97398f0ca1c0d7ceb84165f7e35a40d482b567fe6a21b7f"
       },
@@ -50,7 +50,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "f7a2e2db8dad1b4b156777b5c38114036ec359f0da297f9a2bae5168ca150cd5"
+      "sha256": "40de11c6663881454e9d3aed269f16a0d44fce1bb745da638559e261f0b174fb"
     },
     {
       "kind": "fragment",
@@ -98,7 +98,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "eec9264defd2f3cd40c80f530d14b4be50e1737ac4d8fabbe389ff441cc03e52"
+      "sha256": "2c276f95be287ece49d981c08cd99d6166d74a3b42f2cf1eb42b8c15f5a07136"
     },
     {
       "kind": "skill",

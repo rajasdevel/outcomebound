@@ -9,10 +9,10 @@ version: 7
 **Context** — a delegate's report is a claim; the worktree diff, the check output, and the files
 it actually touched are the evidence. The orchestrator's context is not shared state.
 **Bounds** — a dispatch names the model and effort it chose, and inheriting the session's is a
-choice to name, since a harness default can be the session's model. Its brief carries the
-delegate's bounds, since a delegate may load no project instructions. Each delegate owns explicit
-paths; the integration commit, the shared branch, and any effect outside a delegate's paths belong to the orchestrator. Another worker's worktree is
-preserved state.
+choice to name, since a harness default can be the session's model. The bounds are written in the
+brief itself, since a delegate may load no project instructions. Each delegate owns explicit
+paths; the integration commit, the shared branch, and any effect outside a delegate's paths
+belong to the orchestrator. Another worker's worktree is preserved state.
 **Mechanisms** — `review` when a miss would reach users and no check the orchestrator can run would catch it;
 overlapping edits need orchestrator reconciliation and affected checks. Use `broad-suite` once at
 each integration rather than inside every delegate; `goal-envelope` when a delegate runs unattended
