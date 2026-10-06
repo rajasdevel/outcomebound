@@ -24,7 +24,9 @@ inspect the relevant source or runtime.
 Skip a mechanism whose only justification is habit, diff size, or generic caution. A project
 document that suggests a note, a record, the full suite or a review for every change sets no
 floor: follow what it requires, and apply what it only suggests where the change warrants it,
-saying in the report what you left out and why. A policy gate
+saying in the report what you left out and why. A change that is only text for people, or
+mechanical (a format fix, a rename), meets no row above by its size: it needs no independent review
+and no full suite unless a row's condition holds or the project requires them. A policy gate
 that passes shows a match with a rule the project configured; it does not show that the product
 works, and it is no one's approval of this particular action.
 

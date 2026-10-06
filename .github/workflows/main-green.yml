@@ -8,6 +8,11 @@ name: main-green
 # `main-fix` passes it, so the fix or the revert can land. When main's CI run passes again, every
 # open pull request passes it again.
 #
+# The status changes only when a CI run on main ends: between a merge and the end of its run, main
+# is not yet red, and a pull request can land in that gap. Only the author of a fix or a revert
+# applies `main-fix`, to that pull request alone; GitHub does not enforce this, so it is a rule,
+# not a check.
+#
 # `pull_request_target` runs this file as main holds it, with a token that can write a status on
 # a fork's pull request too. The job checks out nothing and runs no code from a pull request: it
 # reads the API and writes statuses.
@@ -22,7 +27,8 @@ on:
 
 # One run at a time, never cancelled: each run reads main's CI and every open pull request afresh
 # when it starts, so the last run to start writes the last statuses, and an older run cannot write
-# over a newer one.
+# over a newer one. Where a newer run waits, GitHub replaces a run that is still pending, and the
+# job of that replaced run can show as cancelled; the newer run sets the statuses.
 concurrency:
   group: main-green
   cancel-in-progress: false
