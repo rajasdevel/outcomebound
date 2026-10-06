@@ -46,7 +46,9 @@ def _find(present: set[str], on_path: dict[str, str]):
 
 def test_the_wsl_stub_on_path_is_never_the_bash() -> None:
     assert _find(set(), {"bash": STUB}) is None
-    windows_apps = r"C:\Users\p\AppData\Local\Microsoft\WindowsApps\bash.exe"
+    windows_apps = "C:\\" + "\\".join(
+        ("Users", "p", "AppData", "Local", "Microsoft", "WindowsApps", "bash.exe")
+    )
     assert _find(set(), {"bash": windows_apps}) is None
 
 

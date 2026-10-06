@@ -44,11 +44,11 @@ def test_a_rename_that_is_refused_for_a_moment_on_windows_is_tried_again(
     real = os.replace
     refused: list[int] = []
 
-    def replace(source: object, destination: object) -> None:
+    def replace(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
         if len(refused) < 2:
             refused.append(1)
             raise PermissionError(13, "in use")
-        real(source, destination)  # type: ignore[arg-type]
+        real(source, destination)
 
     monkeypatch.setattr("sys.platform", "win32")
     monkeypatch.setattr(fileplan, "REPLACE_WAIT", 0)
