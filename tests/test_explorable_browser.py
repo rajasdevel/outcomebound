@@ -7,29 +7,18 @@ skipped, with the reason, where no browser is found.
 """
 
 import html
-import json
 import os
 import re
-import shutil
-import signal
 import subprocess
-import tempfile
-import threading
-import time
+import sys
 from pathlib import Path
 
 import pytest
 
+from outcomebound_tools import explorable_browser
+
 ROOT = Path(__file__).resolve().parent.parent
-LAUNCHER = ROOT / "scripts" / "outcomebound"
 KINDS = ("decision", "learning", "interview")
-NAMES = ("google-chrome", "chromium", "chromium-browser", "msedge", "brave")
-FOLDERS = (
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/Applications/Chromium.app/Contents/MacOS/Chromium",
-    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
-    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
-)
 LINE = re.compile(
     r"^(?:explorable [a-z][a-z0-9-]* built \S+"
     r"|choice [A-Za-z][A-Za-z0-9-]*: (?:none|[A-Z]( .+)?)"
@@ -39,29 +28,20 @@ LINE = re.compile(
 )
 TIME_LIMIT = 90
 
-
-def find_browser() -> str | None:
-    named = os.environ.get("OUTCOMEBOUND_BROWSER")
-    if named and Path(named).exists():
-        return named
-    for name in NAMES:
-        found = shutil.which(name)
-        if found:
-            return found
-    return next((path for path in FOLDERS if Path(path).exists()), None)
-
-
-BROWSER = find_browser()
-needs_browser = pytest.mark.skipif(
-    BROWSER is None, reason="no Chromium-family browser found (set OUTCOMEBOUND_BROWSER)"
-)
+BROWSER, WHERE = explorable_browser.find_browser()
+needs_browser = pytest.mark.skipif(BROWSER is None, reason=WHERE)
 
 
 def cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
-    env = dict(os.environ, SOURCE_DATE_EPOCH="1790000000")
+    env = dict(os.environ, SOURCE_DATE_EPOCH="1790000000", PYTHONPATH=str(ROOT))
     return subprocess.run(
-        [str(LAUNCHER), "explorable", *args],
-        cwd=cwd, env=env, capture_output=True, text=True, timeout=TIME_LIMIT * 2, check=False,
+        [sys.executable, "-m", "outcomebound_tools", "explorable", *args],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=TIME_LIMIT * 2,
+        check=False,
     )
 
 
@@ -69,8 +49,17 @@ def make_page(kind: str, folder: Path, edit=None) -> tuple[Path, Path]:
     """`new` then `build` for one kind; `edit` may change the source text between them."""
 
     source = folder / f"{kind}-page.source.html"
-    made = cli("new", str(source), "--kind", kind, "--id", f"{kind}-page", "--title", "Test page",
-               cwd=folder)
+    made = cli(
+        "new",
+        str(source),
+        "--kind",
+        kind,
+        "--id",
+        f"{kind}-page",
+        "--title",
+        "Test page",
+        cwd=folder,
+    )
     assert made.returncode == 0, made.stdout + made.stderr
     if edit is not None:
         source.write_text(edit(source.read_text(encoding="utf-8")), encoding="utf-8")
@@ -80,51 +69,18 @@ def make_page(kind: str, folder: Path, edit=None) -> tuple[Path, Path]:
 
 
 def dump_dom(page: Path) -> str:
-    """The document the browser prints after the page has run, with the check fragment."""
+    """The document the engine's own runner reads after the page has run with the check fragment."""
 
-    profile = tempfile.mkdtemp(prefix="xp-profile-")
-    command = [
-        BROWSER, "--headless=new", "--disable-gpu", f"--user-data-dir={profile}",
-        "--virtual-time-budget=20000", "--dump-dom", page.resolve().as_uri() + "#explorable-check",
-    ]
-    process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
-        start_new_session=True,
-    )
-    chunks: list[str] = []
-
-    def read() -> None:
-        assert process.stdout is not None
-        for line in process.stdout:
-            chunks.append(line)
-
-    reader = threading.Thread(target=read, daemon=True)
-    reader.start()
-    started = time.time()
-    try:
-        while time.time() - started < TIME_LIMIT and "</html>" not in "".join(chunks[-3:]):
-            if process.poll() is not None:
-                break
-            time.sleep(0.2)
-    finally:
-        try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except (ProcessLookupError, AttributeError):
-            process.terminate()
-        try:
-            process.wait(10)
-        except subprocess.TimeoutExpired:
-            process.kill()
-        shutil.rmtree(profile, ignore_errors=True)
-    return "".join(chunks)
+    assert BROWSER is not None
+    run = explorable_browser.run_page(BROWSER, page, TIME_LIMIT)
+    assert run.document is not None, run.reason
+    return run.document
 
 
 def result_of(dom: str) -> dict:
-    found = re.search(
-        r'<script type="application/json" id="explorable-check-result">(.*?)</script>', dom, re.S
-    )
-    assert found, "the page wrote no check result"
-    return json.loads(html.unescape(found.group(1)))
+    result, reason = explorable_browser.parse_result(dom)
+    assert result is not None, reason
+    return result
 
 
 def reply_of(dom: str) -> list[str]:

@@ -487,7 +487,8 @@ def test_check_fails_a_page_whose_shell_was_changed(tmp_path, capsys, old, new, 
 
 def test_check_fails_a_changed_runtime(tmp_path, capsys):
     page = built(tmp_path)
-    change(page, "placeholder until the runtime milestone lands: the runtime script", "x")
+    runtime = (TEMPLATES / "explorable.js").read_text(encoding="utf-8")
+    change(page, runtime, runtime + "\nwindow.changed = true;")
 
     assert run("check", page) == 1
 

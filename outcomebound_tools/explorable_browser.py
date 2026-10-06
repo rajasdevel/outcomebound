@@ -106,6 +106,10 @@ def _command(browser: str, profile: str, address: str) -> list[str]:
         "--disable-gpu",
         "--no-first-run",
         "--no-default-browser-check",
+        # Without these, Chrome on macOS waits on the login keychain for a new profile, about
+        # thirty seconds where HOME is not the person's own (observed 2026-10-07).
+        "--use-mock-keychain",
+        "--password-store=basic",
         f"--user-data-dir={profile}",
         f"--virtual-time-budget={VIRTUAL_TIME_MS}",
     ]
