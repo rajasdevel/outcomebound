@@ -460,13 +460,36 @@ def test_compose_cli_is_silent_below_the_cap_and_for_a_harness_without_one(sourc
 
 
 def _sentinels_outside_fences(text):
-    in_fence, found = False, []
+    """CommonMark fences: open on 3+ backticks or tildes, close on the same character at
+    least as long and with nothing after it; a shorter fence inside stays inside."""
+
+    fence, found = "", []
     for line in text.splitlines():
-        if line.lstrip().startswith(("```", "~~~")):
-            in_fence = not in_fence
-        elif not in_fence and "<!-- outcomebound:" in line:
+        stripped = line.strip()
+        run = stripped[:1] * (len(stripped) - len(stripped.lstrip(stripped[:1])))
+        if not fence:
+            if run[:1] in ("`", "~") and len(run) >= 3:
+                fence = run
+                continue
+        elif stripped == run and run[:1] == fence[0] and len(run) >= len(fence):
+            fence = ""
+            continue
+        if not fence and "<!-- outcomebound:" in line:
             found.append(line)
     return found
+
+
+def test_a_shorter_fence_inside_a_longer_one_stays_inside():
+    from outcomebound_tools.fragments import _strip_sentinels
+
+    sentinel = "<!-- outcomebound:begin demo -->"
+    text = "\n".join(
+        ["````", "```text", sentinel, "```", sentinel, "````", sentinel, "after"]
+    )
+    kept = _strip_sentinels(text).splitlines()
+    assert kept.count(sentinel) == 2
+    assert kept[-1] == "after" and sentinel not in kept[-2:]
+    assert _sentinels_outside_fences(text) == [sentinel]
 
 
 def test_inline_mode_emits_kernel_skills_and_fragments_with_no_sentinels(source):

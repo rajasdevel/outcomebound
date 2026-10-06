@@ -118,8 +118,9 @@ names; it never goes into the ticket's body. Where a person starts the implement
 goal envelope, the text they paste is the envelope itself, one block holding its grants in the
 person's words; what is for the person, such as which harness to start, stays outside that
 block. Give the implementer the commands it needs: where to work, how to run the tests, and what
-not to run. Commit as the project's instructions or the goal envelope say work lands here; where neither says,
-commit locally on the current branch in the style the history shows.
+not to run. Commit as the project's instructions or the goal envelope say work lands here; where
+neither says, commit locally on the current branch in the style the history shows, and put how it
+should land to the person in the handover as a decision brief.
 The implementer's handover says what changed, each check's verdict, what it decided beyond the
 package, and the follow-ups it found. When the ticket is done, your handover says the same for the
 ticket, and names the tier and the implementer that built it.

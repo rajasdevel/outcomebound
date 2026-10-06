@@ -11,8 +11,9 @@ you. The flags of each verb are in its `--help`.
 ## Set it up
 
 1. [Declare the store](#declaring-a-store) in `.outcomebound/tickets.json`.
-2. Add the `tickets` fragment to the `--fragments` of `outcomebound adopt`. It installs the
-   `slice-tickets` and `hand-off-tickets` skills.
+2. Add the `tickets` fragment to the `--fragments` of `outcomebound adopt`. It carries the
+   project's ticket guidance; every install already carries the `slice-tickets` and
+   `hand-off-tickets` skills.
 3. [Produce an export](#producing-the-export-for-the-github-store) of your issues.
 4. Run `outcomebound tickets check --input issues.json`.
 5. Run `outcomebound tickets brief --input issues.json <ticket>` to see what an implementer

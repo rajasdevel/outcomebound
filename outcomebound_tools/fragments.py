@@ -170,6 +170,11 @@ def _frontmatter(text: str, source: str) -> tuple[dict, str]:
             raise FragmentError(
                 f"{source}:{number}: unknown frontmatter key {key!r}; "
                 f"allowed: {', '.join(FRONTMATTER_KEYS + OPTIONAL_KEYS)}"
+                + (
+                    "; 'skills' was retired because every install carries all seven skills"
+                    if key == "skills"
+                    else ""
+                )
             )
         if key in fields:
             raise FragmentError(f"{source}:{number}: duplicate frontmatter key {key!r}")
@@ -307,12 +312,13 @@ def _strip_sentinels(text: str) -> str:
     kept = []
     fence = ""
     for line in text.splitlines():
-        marker = line.lstrip()[:3]
-        if marker in ("```", "~~~"):
-            if not fence:
-                fence = marker
-            elif marker == fence:
-                fence = ""
+        stripped = line.strip()
+        run = stripped[:1] * (len(stripped) - len(stripped.lstrip(stripped[:1])))
+        if not fence:
+            if run[:1] in ("`", "~") and len(run) >= 3:
+                fence = run
+        elif stripped == run and run[:1] == fence[0] and len(run) >= len(fence):
+            fence = ""
         if fence or not line.startswith("<!-- outcomebound:"):
             kept.append(line)
     return "\n".join(kept).strip()

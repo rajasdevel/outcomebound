@@ -215,7 +215,7 @@ default. If Done takes longer when `adopt` measures it, `adopt` tells you, and
 
 ### Hand off to a smaller model
 
-With the `tickets` fragment, a strong model slices large work into tickets that you accept. The
+Where a project declares a ticket store, a strong model slices large work into tickets that you accept. The
 `hand-off-tickets` skill then gives each implementer what its tier needs: the ticket's brief alone
 at the outcome tier, plus the approach, signatures, invariants, edge cases and milestones at the
 design tier. At the spec tier, the brief comes from `outcomebound tickets brief <id> --detail full`,
