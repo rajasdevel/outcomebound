@@ -31,7 +31,6 @@ import json
 import math
 import os
 import re
-import shlex
 import shutil
 import sys
 import tempfile
@@ -41,7 +40,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import facts, fileplan, programs, validation
+from outcomebound_tools import facts, fileplan, paths, programs, validation
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 FLOOR_PATH = facts.FLOOR
@@ -1887,7 +1886,7 @@ def _adopt_next(root: Path, done: str) -> None:
     floor is installed, so `adopt --check` reads that block stale until adopt runs again."""
 
     if fileplan.current(root, MANIFEST) is not None:
-        command = f"outcomebound adopt {shlex.quote(str(root))}"
+        command = f"outcomebound adopt {paths.shell_path(root)}"
         change = "gain" if done == "installed" else "lose"
         print(f"next: {command}")
         print(f"  the floor is {done}, so the project facts in AGENTS.md {change} the edge")

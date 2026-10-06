@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from outcomebound_tools import facts
+from outcomebound_tools import facts, textio
 from outcomebound_tools.fragments import load_all
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -212,8 +212,32 @@ def test_the_ci_test_line_names_each_settled_file_and_leaves_the_unsettled_one_u
     unsettled = [note for note in rendered.unverified if note.startswith("CI test: ")]
     assert len(unsettled) == 1 and ".github/workflows/matrix.yml" in unsettled[0]
     for path in [*files, ".gitlab-ci.yml"]:
-        digest = hashlib.sha256((target / path).read_bytes()).hexdigest()
+        # A file's digest is of its LF form, so that a checkout that writes CRLF (Windows, with
+        # `core.autocrlf`) holds the digest of one that writes LF: the test writes the platform's
+        # own line ending, and the digest below is of the folded bytes.
+        digest = hashlib.sha256(textio.fold((target / path).read_bytes())).hexdigest()
         assert rendered.inputs[path] == digest
+
+
+def test_a_ci_file_in_crlf_and_the_same_file_in_lf_read_the_same_and_digest_the_same(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a CI file's digest, which drift is judged by, or the commands read from it differ
+    between a checkout that writes CRLF and one that writes LF."""
+
+    files = workflows(node=NODE)
+    lf, crlf = tmp_path / "lf", tmp_path / "crlf"
+    for root, ending in ((lf, b"\n"), (crlf, b"\r\n")):
+        for name, text in files.items():
+            (root / name).parent.mkdir(parents=True)
+            (root / name).write_bytes(text.replace("\n", ending.decode()).encode("utf-8"))
+
+    one = facts.render(lf, [], [], ["AGENTS.md"], [])
+    other = facts.render(crlf, [], [], ["AGENTS.md"], [])
+
+    assert b"\r" in (crlf / ".github/workflows/node.yml").read_bytes()
+    assert one.inputs == other.inputs and one.facts == other.facts
+    assert "npm test -- --coverage" in other.facts
 
 
 UNSETTLED = """\

@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 
 from outcomebound_tools import programs
+from tests.portable import WINDOWS
 from tests.processes import running
 
 # In lower case, so that the files laid out below are found on a case-sensitive file system too.
@@ -36,6 +37,15 @@ def search(*folders: Path, pathext: str = PATHEXT) -> dict[str, str]:
     return {"PATH": os.pathsep.join(str(folder) for folder in folders), "PATHEXT": pathext}
 
 
+# The POSIX branch of `find` is `shutil.which`'s, whose lookup on Windows is another one: it reads
+# PATHEXT, and a file with no extension is no program. The Windows branch is the `windows=True`
+# tests below, which run on every platform.
+posix_lookup = pytest.mark.skipif(
+    WINDOWS, reason="the POSIX branch of find is shutil.which's, which on Windows reads PATHEXT"
+)
+
+
+@posix_lookup
 def test_a_program_is_found_in_the_first_absolute_entry_that_holds_it(tmp_path: Path) -> None:
     """Breaks if a later entry answers before an earlier one, or if the lookup differs from
     `shutil.which` on POSIX."""
@@ -61,7 +71,10 @@ def test_the_current_folder_and_a_relative_entry_never_answer(
         for path in ("", ".", f"{os.pathsep}.{os.pathsep}bin", "bin"):
             where = {"PATH": path, "PATHEXT": PATHEXT}
             assert programs.find("tool", where, windows=windows) is None, (windows, path)
-    assert programs.find("tool", {"PATH": str(tmp_path / "bin")}, windows=False)
+    if not WINDOWS:
+        # `shutil.which` on Windows looks in the current folder first, which holds a `tool` here,
+        # so the answer would say nothing about the entry; the Windows branch is asked above.
+        assert programs.find("tool", {"PATH": str(tmp_path / "bin")}, windows=False)
 
 
 def test_a_name_with_a_folder_in_it_is_the_callers_own_path(tmp_path: Path) -> None:
@@ -89,6 +102,7 @@ def test_a_program_that_is_not_on_path_raises_the_error_every_caller_already_rea
         programs.resolve(["nosuch", "a"], search(tmp_path), windows=False)
 
 
+@posix_lookup
 def test_posix_searches_the_default_path_only_where_the_environment_has_none() -> None:
     """Breaks if a child's environment with no PATH finds nothing, where `execvp` finds
     `/bin/sh`, or if an empty PATH finds anything."""

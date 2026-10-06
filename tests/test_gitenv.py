@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.portable import write
+
 ROOT = Path(__file__).resolve().parent.parent
 RUNNERS = {"run", "Popen", "check_output", "check_call", "call"}
 
@@ -110,16 +112,20 @@ def _hostile_repository(tmp_path: Path) -> tuple[Path, Path]:
 
     root = tmp_path / "target"
     (root / ".claude" / "skills" / "mine").mkdir(parents=True)
-    (root / ".claude" / "skills" / "mine" / "SKILL.md").write_text("x\n", encoding="utf-8")
+    write(root / ".claude" / "skills" / "mine" / "SKILL.md", "x\n")
     marker = tmp_path / "fsmonitor-ran"
     hook = tmp_path / "hook.sh"
-    hook.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    # Git runs the program through its shell, so the program and the file it makes are named with
+    # forward slashes, which Git's shell on Windows reads where it would eat a backslash, and the
+    # script is LF text, since `#!/bin/sh\r` names no shell. The redirection is the shell's own,
+    # so the script needs no tool of the shell's folder.
+    write(hook, f"#!/bin/sh\n: > '{marker.as_posix()}'\n")
     hook.chmod(0o755)
     commands = (
         ["init", "-q", "."],
         ["add", "-A"],
         ["-c", "user.email=a@example.org", "-c", "user.name=a", "commit", "-qm", "i"],
-        ["config", "core.fsmonitor", str(hook)],
+        ["config", "core.fsmonitor", hook.as_posix()],
     )
     for arguments in commands:
         subprocess.run(["git", *arguments], cwd=root, check=True, capture_output=True)

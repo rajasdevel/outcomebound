@@ -14,8 +14,10 @@ from typing import Any
 
 import pytest
 
-from outcomebound_tools import floor, programs
+from outcomebound_tools import floor, paths, programs
 from outcomebound_tools.validation import _execute
+from tests.fake_tools import msys_path, python_tool, shell_tool
+from tests.portable import needs_symlinks, posix_only, write
 
 STATUSES = ("PASS", "FAIL", "UNVERIFIED")
 IDENTITY = {
@@ -54,7 +56,7 @@ def commit(root: Path, message: str, files: dict[str, str]) -> str:
         path = root / relative
         if text:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(text, encoding="utf-8")
+            write(path, text)
         else:
             path.unlink()
     git(root, "add", "-A")
@@ -80,7 +82,7 @@ def install(root: Path, *claims: dict[str, Any], adopted: dict[str, str] | None 
     document: dict[str, Any] = {"version": 1, "claims": list(claims)}
     if adopted is not None:
         document["adopted"] = adopted
-    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    write(path, json.dumps(document, indent=2) + "\n")
 
 
 def run(capsys: pytest.CaptureFixture[str], *arguments: str) -> tuple[int, dict[str, str], str]:
@@ -184,7 +186,7 @@ def test_a_second_identical_finding_fails_a_baseline_that_holds_one(
     status, verdicts, _ = run(capsys, "check", str(root))
     assert (status, verdicts) == (0, {"shell.injection": "PASS"})
 
-    (root / "run.sh").write_text(EVAL + EVAL, encoding="utf-8")
+    write(root / "run.sh", EVAL + EVAL)
     status, verdicts, output = run(capsys, "check", str(root))
 
     assert (status, verdicts) == (1, {"shell.injection": "FAIL"}), output
@@ -221,7 +223,7 @@ def test_baseline_records_only_into_an_empty_or_absent_baseline(
     assert run(capsys, "baseline", str(root), "--accept")[0] == 0
     assert path.read_text(encoding="utf-8") == EVAL_KEY + "\n"
 
-    (root / "run.sh").write_text(EVAL + EVAL, encoding="utf-8")
+    write(root / "run.sh", EVAL + EVAL)
     assert run(capsys, "baseline", str(root), "--accept")[0] == 0
     assert path.read_text(encoding="utf-8") == EVAL_KEY + "\n"
 
@@ -237,10 +239,8 @@ def probe(tmp_path: Path, status: int = 0) -> Path:
     """A directory holding `floor-probe`, a tool that reports version 1.2 and exits `status`."""
 
     directory = tmp_path / "tools"
-    directory.mkdir(exist_ok=True)
-    tool = directory / "floor-probe"
-    tool.write_text(f'#!/bin/sh\n[ "$1" = --version ] && echo "floor-probe 1.2"\nexit {status}\n')
-    tool.chmod(0o755)
+    script = f'#!/bin/sh\n[ "$1" = --version ] && echo "floor-probe 1.2"\nexit {status}\n'
+    shell_tool(directory, "floor-probe", script)
     return directory
 
 
@@ -332,14 +332,12 @@ def test_secrets_scan_the_range_with_base_and_the_tracked_files_without_it(
     the reading: `path:line` and the rule, never the secret, and an untracked file dropped."""
 
     tools = tmp_path / "tools"
-    tools.mkdir()
-    (tools / "gitleaks").write_text(FAKE_GITLEAKS, encoding="utf-8")
-    (tools / "gitleaks").chmod(0o755)
+    shell_tool(tools, "gitleaks", FAKE_GITLEAKS)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     root = repository(tmp_path, {"app.py": "token = 1\n"})
     install(root, shipped("secrets"))
     base = commit(root, "floor", {})
-    (root / "local.env").write_text("untracked\n", encoding="utf-8")
+    write(root / "local.env", "untracked\n")
 
     status, verdicts, output = run(capsys, "check", str(root), "--claim", "secrets")
     scanned = (tools / "argv").read_text(encoding="utf-8").split()
@@ -370,9 +368,7 @@ def test_a_clean_gitleaks_run_passes_through_its_report_file(
     """A clean scan reads PASS through the report file, with a base and without one."""
 
     tools = tmp_path / "tools"
-    tools.mkdir()
-    (tools / "gitleaks").write_text(CLEAN_GITLEAKS, encoding="utf-8")
-    (tools / "gitleaks").chmod(0o755)
+    shell_tool(tools, "gitleaks", CLEAN_GITLEAKS)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     root = repository(tmp_path, {"app.py": "x = 1\n"})
     install(root, shipped("secrets"))
@@ -942,7 +938,7 @@ def test_propose_offers_the_stacks_git_tracks_and_writes_nothing(
     stacks: tuple[str, ...],
 ) -> None:
     root = repository(tmp_path, files)
-    (root / "untracked.py").write_text("x = 1\n", encoding="utf-8")
+    write(root / "untracked.py", "x = 1\n")
     before = tree(root)
 
     status = floor.main(["propose", str(root)])
@@ -1056,7 +1052,7 @@ def test_apply_then_remove_leaves_the_tree_as_it_was(
     root = repository(tmp_path, {"a.py": "x = 1\n", "run.sh": "echo\n"})
     proposal = tmp_path / "floor.json"
     assert floor.main(["propose", str(root)]) == 0
-    proposal.write_text(capsys.readouterr().out, encoding="utf-8")
+    write(proposal, capsys.readouterr().out)
     before = tree(root)
 
     assert run(capsys, "apply", str(root), "--floor", str(proposal))[0] == 0
@@ -1136,8 +1132,13 @@ FIXTURES = Path(__file__).resolve().parent / "fixtures" / "floor"
 
 
 def fixture(name: str, root: Path | None = None) -> str:
+    """What a tool printed. `{root}/` is the project's folder as a JSON string holds it: on
+    Windows the tool names its files with backslashes, and a JSON string escapes each."""
+
     text = (FIXTURES / name).read_text(encoding="utf-8")
-    return text if root is None else text.replace("{root}", str(root))
+    if root is None:
+        return text
+    return text.replace("{root}/", json.dumps(f"{root}{os.sep}")[1:-1])
 
 
 def test_ruff_json_keys_carry_path_and_code_and_the_message_stays_for_the_reader(
@@ -1168,6 +1169,20 @@ def test_a_file_ruff_format_cannot_parse_is_named_by_ruffs_own_error(tmp_path: P
         "ruff format exited 2: bad.py:1:7: invalid-syntax: Expected a parameter or the end of"
         " the parameter list"
     )
+
+
+def test_ruff_json_after_a_warning_is_read_whatever_the_line_endings(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a notice ruff prints first hides its JSON when the lines end in CRLF, as a
+    Windows console writes them. The output is laid out here; no Windows run printed it."""
+
+    root = tmp_path.resolve()
+    text = "warning: a notice ruff printed first\n" + fixture("ruff-check.json", root)
+
+    findings = floor.parse_ruff(1, text.replace("\n", "\r\n"), root)
+
+    assert [finding.key for finding in findings][:2] == ["pkg/core.py:F401", "pkg/core.py:F401"]
 
 
 def test_ruff_format_names_each_file_it_would_rewrite(tmp_path: Path) -> None:
@@ -1281,7 +1296,7 @@ def test_the_injection_scan_reads_code_not_comments(tmp_path: Path) -> None:
         "#!/bin/sh\n# eval is fine in a comment\n"
         'if true; then eval "$x"; fi\ncurl -s x | bash\n. <(cat x)\n'
     )
-    (tmp_path / "a.sh").write_text(script, encoding="utf-8")
+    write(tmp_path / "a.sh", script)
 
     findings = floor.scan_injection(tmp_path, ["a.sh"])
 
@@ -1309,7 +1324,7 @@ def test_the_real_ruff_fails_format_and_new_lint_then_passes_on_a_recorded_basel
     assert "+1 a.py:F401\n    1:8 `os` imported but unused" in output
 
     assert run(capsys, "baseline", str(root), "--accept")[0] == 0
-    (root / "a.py").write_text("import os\n\nx = 1\n", encoding="utf-8")
+    write(root / "a.py", "import os\n\nx = 1\n")
 
     assert run(capsys, "check", str(root))[:2] == (
         0,
@@ -1333,7 +1348,7 @@ def proposal(tmp_path: Path, *claims: dict[str, Any]) -> Path:
     """A floor file outside the project holding `claims`, as `propose` prints one."""
 
     path = tmp_path / "proposal.json"
-    path.write_text(json.dumps({"version": 1, "claims": list(claims)}), encoding="utf-8")
+    write(path, json.dumps({"version": 1, "claims": list(claims)}))
     return path
 
 
@@ -1559,7 +1574,7 @@ def test_the_fingerprint_apply_prints_allowlists_the_secret_in_gitleaksignore(
 
     for allowed, verdict in ((False, "FAIL"), (True, "PASS")):
         if allowed:
-            (root / ".gitleaksignore").write_text(line + "\n", encoding="utf-8")
+            write(root / ".gitleaksignore", line + "\n")
         for extra in ((), ("--base", base)):
             verdicts = run(capsys, "check", str(root), "--claim", "secrets", *extra)[1]
 
@@ -1641,21 +1656,21 @@ def test_provision_installs_no_tool_path_has_at_its_min_version_or_later(
         *(shipped(name) for name in ("python.lint", "python.types", "secrets", "shell.lint")),
     )
     bin_dir = tmp_path / "tools"
-    bin_dir.mkdir()
     versions = {"ruff": "ruff 0.16.7", "mypy": "mypy 2.3.0", "gitleaks": "8.30.1"}
     versions["shellcheck"] = "ShellCheck - shell script analysis tool\nversion: 0.11.0"
-    for tool, text in {**versions, "python3": "Python 3.12.0"}.items():
-        (bin_dir / tool).write_text(f"#!/bin/sh\nprintf '%s\\n' '{text}'\n", encoding="utf-8")
-        (bin_dir / tool).chmod(0o755)
+    places = {
+        tool: shell_tool(bin_dir, tool, f"#!/bin/sh\nprintf '%s\\n' '{text}'\n")
+        for tool, text in {**versions, "python3": "Python 3.12.0"}.items()
+    }
     monkeypatch.setenv("PATH", str(bin_dir))
 
     status, _, output = run(capsys, "provision", str(root))
 
     assert status == 0, output
     for tool, version in (("ruff", "0.16.7"), ("gitleaks", "8.21.2"), ("shellcheck", "0.9.0")):
-        assert f"{tool} is on PATH at {version} or later ({bin_dir / tool}): present" in output
+        assert f"{tool} is on PATH at {version} or later ({places[tool]}): present" in output
     assert "never downloaded" not in output
-    assert f"would run: {bin_dir / 'python3'} -I -m pip install mypy==2.3.1" in output, output
+    assert f"would run: {places['python3']} -I -m pip install mypy==2.3.1" in output, output
     assert "ruff==" not in output
 
 
@@ -1668,10 +1683,7 @@ def test_provision_installs_into_the_python3_on_path(
     root = repository(tmp_path, {"a.py": "x = 1\n"})
     install(root, shipped("python.lint"))
     bin_dir = tmp_path / "project-env" / "bin"
-    bin_dir.mkdir(parents=True)
-    python = bin_dir / "python3"
-    python.write_text("#!/bin/sh\n", encoding="utf-8")
-    python.chmod(0o755)
+    python = shell_tool(bin_dir, "python3", "#!/bin/sh\n")
     monkeypatch.setenv("PATH", str(bin_dir))
 
     status, _, output = run(capsys, "provision", str(root))
@@ -1690,12 +1702,12 @@ def test_provision_runs_pip_isolated_so_a_pip_package_in_the_target_does_not_run
     install(root, shipped("python.lint"))
     marker = tmp_path / "hostile-ran"
     (root / "pip").mkdir()
-    (root / "pip" / "__main__.py").write_text(
-        f"import pathlib\npathlib.Path({str(marker)!r}).write_text('ran')\n", encoding="utf-8"
+    write(
+        root / "pip" / "__main__.py",
+        f"import pathlib\npathlib.Path({str(marker)!r}).write_text('ran')\n",
     )
     bin_dir = tmp_path / "project-env" / "bin"
-    bin_dir.mkdir(parents=True)
-    (bin_dir / "python3").symlink_to(sys.executable)
+    python = python_tool(bin_dir, "python3")
     monkeypatch.setenv("PATH", str(bin_dir))
     seen: list[list[str]] = []
 
@@ -1709,7 +1721,7 @@ def test_provision_runs_pip_isolated_so_a_pip_package_in_the_target_does_not_run
 
     run(capsys, "provision", str(root), "--accept")
 
-    assert seen and seen[0][:4] == [str(bin_dir / "python3"), "-I", "-m", "pip"], seen
+    assert seen and seen[0][:4] == [str(python), "-I", "-m", "pip"], seen
     assert not marker.exists()
 
 
@@ -1737,9 +1749,7 @@ def test_an_adoption_commit_outside_heads_history_leaves_the_secrets_claim_unver
     since adoption, so the scan does not run without --base."""
 
     tools = tmp_path / "tools"
-    tools.mkdir()
-    (tools / "gitleaks").write_text(CLEAN_GITLEAKS, encoding="utf-8")
-    (tools / "gitleaks").chmod(0o755)
+    shell_tool(tools, "gitleaks", CLEAN_GITLEAKS)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     root = repository(tmp_path, {"app.py": "x = 1\n"})
     git(root, "checkout", "-q", "-b", "side")
@@ -1962,9 +1972,7 @@ def test_a_claim_that_runs_past_its_own_timeout_seconds_is_unverified(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tools = tmp_path / "tools"
-    tools.mkdir()
-    (tools / "floor-slow").write_text("#!/bin/sh\nsleep 5\n", encoding="utf-8")
-    (tools / "floor-slow").chmod(0o755)
+    shell_tool(tools, "floor-slow", "#!/bin/sh\nsleep 5\n")
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     root = repository(tmp_path, {"a.txt": "x\n"})
     slow = {"tool": "floor-slow", "argv": ["floor-slow"], "timeout_seconds": 0.2}
@@ -2083,9 +2091,7 @@ exit 0
 
 def recording_gitleaks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     tools = tmp_path / "tools"
-    tools.mkdir()
-    (tools / "gitleaks").write_text(RECORDING_GITLEAKS, encoding="utf-8")
-    (tools / "gitleaks").chmod(0o755)
+    shell_tool(tools, "gitleaks", RECORDING_GITLEAKS)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     return tools
 
@@ -2168,9 +2174,9 @@ def test_secrets_without_a_base_or_an_adoption_read_only_the_files_git_tracks(
     tools = recording_gitleaks(tmp_path, monkeypatch)
     root = repository(tmp_path, {"app.py": "x = 1\n", ".gitignore": ".venv/\n.env\n"})
     (root / ".venv").mkdir()
-    (root / ".venv" / "lib.py").write_text("token = 1\n", encoding="utf-8")
-    (root / ".env").write_text("token = 1\n", encoding="utf-8")
-    (root / ".gitleaksignore").write_text("app.py:generic-api-key:1\n", encoding="utf-8")
+    write(root / ".venv" / "lib.py", "token = 1\n")
+    write(root / ".env", "token = 1\n")
+    write(root / ".gitleaksignore", "app.py:generic-api-key:1\n")
     install(root, shipped("secrets"))
 
     verdicts = run(capsys, "check", str(root), "--claim", "secrets")[1]
@@ -2180,6 +2186,7 @@ def test_secrets_without_a_base_or_an_adoption_read_only_the_files_git_tracks(
     assert listing == ["./.gitignore", "./.gitleaksignore", "./app.py"]
 
 
+@needs_symlinks
 def test_the_tracked_files_scan_never_follows_a_symlinked_folder_out_of_the_root(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2187,7 +2194,7 @@ def test_the_tracked_files_scan_never_follows_a_symlinked_folder_out_of_the_root
     root = repository(tmp_path, {"app.py": "x = 1\n", "dir/file.txt": "inside\n"})
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "file.txt").write_text("outside\n", encoding="utf-8")
+    write(outside / "file.txt", "outside\n")
     shutil.rmtree(root / "dir")
     (root / "dir").symlink_to(outside, target_is_directory=True)
     install(root, shipped("secrets"))
@@ -2211,9 +2218,7 @@ def wrapped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
     inside = probe(tmp_path / "box")
     tools = tmp_path / "host"
-    tools.mkdir()
-    (tools / "floor-wrap").write_text(WRAP.format(inside=inside), encoding="utf-8")
-    (tools / "floor-wrap").chmod(0o755)
+    shell_tool(tools, "floor-wrap", WRAP.format(inside=msys_path(inside)))
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
     return tools
 
@@ -2290,7 +2295,7 @@ def test_apply_and_remove_name_the_adopt_step_where_outcomebound_is_installed(
     manifest = {floor.MANIFEST: "{}\n"} if adopted else {}
     root = repository(tmp_path, {"run.sh": "echo\n", **manifest})
     source = proposal(tmp_path, shipped("shell.injection"))
-    step = f"next: outcomebound adopt {root}\n  the floor is"
+    step = f"next: outcomebound adopt {paths.shell_path(root)}\n  the floor is"
 
     first = run(capsys, "apply", str(root), "--floor", str(source), "--accept")[2]
     again = run(capsys, "apply", str(root), "--floor", str(source), "--accept")[2]
@@ -2300,17 +2305,35 @@ def test_apply_and_remove_name_the_adopt_step_where_outcomebound_is_installed(
     assert "next:" not in again
 
 
-def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_folder(
+def test_the_next_step_apply_prints_names_the_root_as_the_platform_quotes_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Breaks if `outcomebound adopt <root>` is quoted for POSIX alone, so that a person on
+    Windows pastes a word PowerShell and Git Bash read differently: there a single quote inside a
+    quoted word is doubled. Windows is emulated here, as `paths.on_windows` says it."""
+
+    where = tmp_path / "it's here"
+    where.mkdir()
+    root = repository(where, {floor.MANIFEST: "{}\n"})
+    monkeypatch.setattr(paths, "on_windows", lambda: True)
+
+    floor._adopt_next(root, "installed")
+
+    word = "'" + root.as_posix().replace("'", "''") + "'"
+    assert f"next: outcomebound adopt {word}\n" in capsys.readouterr().out
+    assert "it''s here" in word
+
+
+def cache_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    """`ruff` and `mypy` stand-ins on PATH that append the cache variable each is started with
+    to `seen`, and the claims that run them: (the root, `seen`)."""
+
     root = repository(tmp_path, {"README": "x\n"})
     seen = tmp_path / "seen"
     tools = tmp_path / "tools"
-    tools.mkdir()
     for tool, (_, variable) in floor.CACHES.items():
-        script = f'#!/bin/sh\nprintf "%s\\n" "${variable}" >> "{seen}"\n'
-        (tools / tool).write_text(script, encoding="utf-8")
-        (tools / tool).chmod(0o755)
+        script = f'#!/bin/sh\nprintf "%s\\n" "${variable}" >> "{seen.as_posix()}"\n'
+        shell_tool(tools, tool, script)
         monkeypatch.delenv(variable, raising=False)
     claims = [
         {"name": f"project.{tool}", "mode": "gate", "tool": tool, "argv": [tool], "parser": "exit"}
@@ -2318,16 +2341,37 @@ def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_fo
     ]
     install(root, *claims)
     monkeypatch.setenv("PATH", os.pathsep.join([str(tools), os.environ["PATH"]]))
-    passed = (0, {"project.ruff": "PASS", "project.mypy": "PASS"})
+    return root, seen
 
-    assert run(capsys, "check", str(root))[:2] == passed
+
+PASSED = (0, {"project.ruff": "PASS", "project.mypy": "PASS"})
+
+
+def test_a_tree_that_can_be_written_keeps_ruff_and_mypy_caches_where_they_are(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the floor moves a cache the tool can keep in the tree, or sets a variable for a
+    tree it can write."""
+
+    root, seen = cache_tools(tmp_path, monkeypatch)
+
+    assert run(capsys, "check", str(root))[:2] == PASSED
     assert seen.read_text(encoding="utf-8") == "\n\n"
-    seen.unlink()
+
+
+@posix_only
+def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_folder(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A folder mode that forbids a write is a POSIX mechanism: on Windows a read-only folder
+    still takes new files, so there is no tree to make unwritable."""
+
+    root, seen = cache_tools(tmp_path, monkeypatch)
     root.chmod(0o555)
     try:
         if floor._writable(root):
             pytest.skip("UNVERIFIED: this user can write a folder whose mode forbids it")
-        assert run(capsys, "check", str(root))[:2] == passed
+        assert run(capsys, "check", str(root))[:2] == PASSED
     finally:
         root.chmod(0o755)
     caches = seen.read_text(encoding="utf-8").split()
@@ -2335,6 +2379,7 @@ def test_a_tree_that_cannot_be_written_gets_ruff_and_mypy_caches_in_a_scratch_fo
     assert not any(Path(cache).exists() for cache in caches)
 
 
+@posix_only
 def test_an_unwritable_cache_folder_moves_only_its_tool_once_per_run_and_never_a_prefixed_one(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2343,10 +2388,10 @@ def test_an_unwritable_cache_folder_moves_only_its_tool_once_per_run_and_never_a
     tools.mkdir()
     for tool, (_, variable) in floor.CACHES.items():
         script = f'#!/bin/sh\nprintf "%s=%s\\n" "$0" "${variable}" >> "{tmp_path / "seen"}"\n'
-        (tools / tool).write_text(script, encoding="utf-8")
+        write(tools / tool, script)
         (tools / tool).chmod(0o755)
         monkeypatch.delenv(variable, raising=False)
-    (tools / "wrap").write_text('#!/bin/sh\nexec "$@"\n', encoding="utf-8")
+    write(tools / "wrap", '#!/bin/sh\nexec "$@"\n')
     (tools / "wrap").chmod(0o755)
     own = {"mode": "gate", "parser": "exit"}
     install(

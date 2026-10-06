@@ -28,7 +28,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -40,7 +39,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Any, NoReturn
 
-from outcomebound_tools import adapters, programs
+from outcomebound_tools import adapters, paths, programs
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ID = "finish-check"
@@ -1234,7 +1233,7 @@ def _unverified_head(last: Result, target: Path, timeout: int) -> str:
             f"finish-check UNVERIFIED: `{shown}` could not run in the hook's environment, which "
             "has the harness process's PATH and no activated virtual environment; nothing was held."
         )
-    quoted = shlex.quote(str(target))
+    quoted = paths.shell_path(target)
     return (
         f"finish-check UNVERIFIED: `{shown}` did not finish within {timeout - MARGIN_SECONDS} s, "
         f"{MARGIN_SECONDS} s before the hook's {timeout} s timeout; nothing was held. To give the "
@@ -1270,7 +1269,7 @@ def verdict_for(
             f"adopt measured Done {on} this checkout descends from: the same exit code, and no "
             "failure id its output names is new; so nothing was held." + limit + " A "
             "known command that passes leaves the record, and a later failure of it holds. "
-            f"`outcomebound adopt {shlex.quote(str(target))} --finish-check` measures Done again."
+            f"`outcomebound adopt {paths.shell_path(target)} --finish-check` measures Done again."
             + again
         )
         return told(report(head, results))
@@ -1340,7 +1339,7 @@ def check(
         return told(
             f"finish-check UNVERIFIED: the Done commands in {target / MANIFEST} are not the ones "
             "this hook was written for; nothing ran. "
-            f"Re-run `outcomebound adopt {shlex.quote(str(target))}`."
+            f"Re-run `outcomebound adopt {paths.shell_path(target)}`."
         )
     deadline = started + timeout - MARGIN_SECONDS
     before = tree_digest(target, digest, deadline)

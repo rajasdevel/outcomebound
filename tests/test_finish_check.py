@@ -21,12 +21,31 @@ from typing import Any
 
 import pytest
 
-from outcomebound_tools import finish_check
+from outcomebound_tools import finish_check, programs
+from tests.portable import WINDOWS, engine, posix_only, write
 from tests.processes import running
 
 ROOT = Path(__file__).resolve().parent.parent
-LAUNCHER = ROOT / "scripts" / "outcomebound"
 GIT = shutil.which("git") or "git"
+
+
+def q(path: str | Path) -> str:
+    """A file as a Done line, which a POSIX shell runs on every platform, writes it: forward
+    slashes, which Git's shell on Windows reads where it would eat a backslash, and quoted."""
+
+    return shlex.quote(Path(path).as_posix())
+
+
+def system_path() -> list[str]:
+    """The PATH entries a test that replaces PATH keeps so the verb can start Git and its shell:
+    the system's on POSIX, and on Windows the folders of the `git.exe` and `sh.exe` it found."""
+
+    if not WINDOWS:
+        return ["/usr/bin", "/bin"]
+    found = [programs.find("git"), programs.posix_shell()]
+    return [str(Path(path).parent) for path in found if path is not None]
+
+
 # The stop input each row sends, the guard unset, `cwd` added per run; the other fields are the
 # rows' own.
 INPUT: dict[str, dict[str, Any]] = {
@@ -58,8 +77,8 @@ def target(path: Path, done: list[str]) -> tuple[Path, str]:
         "artifacts": [{"kind": "block", "path": "AGENTS.md", "id": "project-facts", "done": done}],
     }
     (path / ".outcomebound").mkdir(parents=True)
-    (path / ".outcomebound/manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (path / "src.txt").write_text("one\n", encoding="utf-8")
+    write(path / ".outcomebound/manifest.json", json.dumps(manifest))
+    write(path / "src.txt", "one\n")
     subprocess.run([GIT, "init", "-q", str(path)], check=True)
     subprocess.run([GIT, "-C", str(path), "add", "."], check=True)
     identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
@@ -95,7 +114,7 @@ def hook(
     if stdin is None:
         stdin = {**INPUT[row], "cwd": str(working)}
     data = stdin if isinstance(stdin, bytes) else json.dumps(stdin).encode()
-    words = [str(LAUNCHER), "finish-check", "--harness", row, "--done", digest]
+    words = engine("finish-check", "--harness", row, "--done", digest)
     if timeout is not None:
         words += ["--timeout", str(timeout)]
     done = subprocess.run(
@@ -247,16 +266,16 @@ def test_an_unchanged_tree_reruns_nothing_and_a_changed_one_runs_again(tmp_path:
     file is missed; the digest stays in the Git directory, out of the working tree."""
 
     count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"echo run >> {count}"])
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
 
     def runs() -> int:
         return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
 
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"] and runs() == 1
     assert hook("codex", digest, root)[1] == {} and runs() == 1
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(root / "src.txt", "two\n")
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"] and runs() == 2
-    (root / "new.txt").write_text("new\n", encoding="utf-8")
+    write(root / "new.txt", "new\n")
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"] and runs() == 3
     assert hook("codex", digest, root)[1] == {} and runs() == 3
 
@@ -275,7 +294,7 @@ def test_an_unchanged_failing_tree_repeats_its_verdict_unheld_and_runs_nothing(
     again and may hold."""
 
     count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"echo run >> {count}; echo boom; exit 1"])
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; echo boom; exit 1"])
 
     def runs() -> int:
         return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
@@ -290,7 +309,7 @@ def test_an_unchanged_failing_tree_repeats_its_verdict_unheld_and_runs_nothing(
         assert "unchanged since this failure, so it was not run again" in message
         assert "```output\nboom\n```" in message
         assert len(message) < finish_check.REPORT_CHARACTERS
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(root / "src.txt", "two\n")
     assert hook("codex", digest, root)[1]["decision"] == "block" and runs() == 2
 
 
@@ -301,7 +320,7 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
     raising the timeout cannot get the same tree checked."""
 
     count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"echo run >> {count}; sleep 3"])
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; sleep 3"])
     short = finish_check.MARGIN_SECONDS + 1
 
     def runs() -> int:
@@ -317,7 +336,18 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
 
 
 @pytest.mark.parametrize(
-    ("line", "code"), [("no-such-tool-here --check", 127), ("./not-executable", 126)]
+    ("line", "code"),
+    [
+        ("no-such-tool-here --check", 127),
+        pytest.param(
+            "./not-executable",
+            126,
+            marks=pytest.mark.skipif(
+                WINDOWS, reason="Git's shell on Windows runs any file that starts with `#!`"
+            ),
+            id="./not-executable-126",
+        ),
+    ],
 )
 def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_nothing(
     tmp_path: Path, line: str, code: int
@@ -326,7 +356,7 @@ def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_noth
     the finish as a failure the agent's change caused."""
 
     root, digest = target(tmp_path / "t", [line])
-    (root / "not-executable").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    write(root / "not-executable", "#!/bin/sh\nexit 0\n")
 
     _, verdict = hook("codex", digest, root)
 
@@ -363,7 +393,7 @@ def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_noth
         ),
         pytest.param(
             {},
-            f"{sys.executable} -m no_such_module_here",
+            f"{q(sys.executable)} -m no_such_module_here",
             "python -m no_such_module_here",
             id="module",
         ),
@@ -377,9 +407,15 @@ def test_a_runner_that_cannot_find_its_tool_is_unverified_and_holds_nothing(
 
     if line.startswith("make") and shutil.which("make") is None:
         pytest.skip("make is not installed here")
+    if line.startswith("make") and WINDOWS:
+        pytest.skip(
+            "UNVERIFIED: GNU make on Windows says a missing tool in its own words "
+            "(`process_begin: CreateProcess ... failed`), which the check does not read; no run "
+            "has shown them, so such a failure holds as a failure (docs/specs/finish-check)"
+        )
     root, digest = target(tmp_path / "t", [line])
     for name, text in files.items():
-        (root / name).write_text(text, encoding="utf-8")
+        write(root / name, text)
 
     _, verdict = hook("codex", digest, root)
 
@@ -420,7 +456,7 @@ def test_measuring_runs_without_the_projects_and_a_virtual_environments_path(
     (root / ".venv" / "bin").mkdir(parents=True)
     elsewhere = tmp_path / "other-venv"
     (elsewhere / "bin").mkdir(parents=True)
-    (elsewhere / "pyvenv.cfg").write_text("home = /usr/bin\n", encoding="utf-8")
+    write(elsewhere / "pyvenv.cfg", "home = /usr/bin\n")
     path = os.pathsep.join([str(root / ".venv" / "bin"), str(elsewhere / "bin"), "/usr/bin"])
 
     environment, dropped = finish_check.hook_environment(
@@ -432,6 +468,29 @@ def test_measuring_runs_without_the_projects_and_a_virtual_environments_path(
     assert dropped == (str(root / ".venv" / "bin"), str(elsewhere / "bin"))
 
 
+def test_a_virtual_environments_scripts_folder_is_left_out_as_its_bin_folder_is(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the measurement leaves out only a folder named `bin`: a virtual environment on
+    Windows keeps its programs in `Scripts`, whose parent holds `pyvenv.cfg` as `bin`'s does, and
+    the rule is that parent, not the name. The folder is laid out here on any platform."""
+
+    root = tmp_path / "project"
+    root.mkdir()
+    venv = tmp_path / "windows-venv"
+    (venv / "Scripts").mkdir(parents=True)
+    write(venv / "pyvenv.cfg", "home = C:/Python\n")
+    system = tmp_path / "system"
+    system.mkdir()
+
+    environment, dropped = finish_check.hook_environment(
+        root, {"PATH": os.pathsep.join([str(venv / "Scripts"), str(system)])}
+    )
+
+    assert dropped == (str(venv / "Scripts"),)
+    assert environment["PATH"] == str(system)
+
+
 GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
 
 
@@ -441,15 +500,15 @@ def test_a_project_script_or_module_the_change_removed_still_holds(tmp_path: Pat
 
     if shutil.which("make") is None:
         pytest.skip("make is not installed here")
-    done = ["make test", f"{sys.executable} -m mypkg"]
+    done = ["make test", f"{q(sys.executable)} -m mypkg"]
     root, digest = target(tmp_path / "t", done)
-    (root / "Makefile").write_text("test:\n\t./scripts/lint.sh\n", encoding="utf-8")
+    write(root / "Makefile", "test:\n\t./scripts/lint.sh\n")
     (root / "scripts").mkdir()
-    (root / "scripts/lint.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    write(root / "scripts/lint.sh", "#!/bin/sh\nexit 0\n")
     (root / "scripts/lint.sh").chmod(0o755)
     (root / "mypkg").mkdir()
-    (root / "mypkg/__main__.py").write_text("", encoding="utf-8")
-    (root / "mypkg/__init__.py").write_text("", encoding="utf-8")
+    write(root / "mypkg/__main__.py", "")
+    write(root / "mypkg/__init__.py", "")
     subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
     subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "tools"], check=True)
     (root / "scripts/lint.sh").unlink()
@@ -465,11 +524,12 @@ def test_a_project_script_or_module_the_change_removed_still_holds(tmp_path: Pat
     assert not finish_check.project_owned(root, "/opt/tool/bin/pytest")
     assert finish_check.project_owned(root, str(root / "scripts/lint.sh")), "absolute, inside"
     (root / "bin").mkdir()
-    (root / "bin/mytool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-    (root / "bin/mytool").chmod(0o755)
+    write(root / "bin/mytool", "#!/bin/sh\nexit 0\n")
     (root / "ns").mkdir()
-    (root / "ns/check.py").write_text("", encoding="utf-8")
+    write(root / "ns/check.py", "")
     subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    # The mode is Git's own, so it holds on a file system with no execute bit.
+    subprocess.run([GIT, "-C", str(root), "add", "--chmod=+x", "bin/mytool"], check=True)
     subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "more"], check=True)
     (root / "bin/mytool").unlink()
     shutil.rmtree(root / "ns")
@@ -509,15 +569,13 @@ def test_a_tool_found_only_on_a_dropped_entry_is_not_kept_as_a_known_failure(
     root, _ = target(tmp_path / "t", done)
     venv = root / ".venv/bin"
     venv.mkdir(parents=True)
-    (venv / "faketool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    write(venv / "faketool", "#!/bin/sh\nexit 0\n")
     other = tmp_path / "other/bin"
     other.mkdir(parents=True)
-    (other / "faketool").write_text(
-        "#!/bin/sh\necho 'ERROR tests/x.py::t'\nexit 2\n", encoding="utf-8"
-    )
+    write(other / "faketool", "#!/bin/sh\necho 'ERROR tests/x.py::t'\nexit 2\n")
     for tool in (venv / "faketool", other / "faketool"):
         tool.chmod(0o755)
-    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), "/usr/bin", "/bin"]))
+    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), *system_path()]))
 
     measured = finish_check.measure(root, done, 600)
 
@@ -553,7 +611,7 @@ def test_the_install_report_names_the_entries_the_measurement_left_out(tmp_path:
         ),
         pytest.param(
             {},
-            f"{sys.executable} -c 'assert 1 == 2'; no-such-tool-here; exit 2",
+            f"{q(sys.executable)} -c 'assert 1 == 2'; no-such-tool-here; exit 2",
             id="traceback",
         ),
         pytest.param(
@@ -571,7 +629,7 @@ def test_a_missing_tool_after_another_failure_still_holds(
         pytest.skip("make is not installed here")
     root, digest = target(tmp_path / "t", [line])
     for name, text in files.items():
-        (root / name).write_text(text, encoding="utf-8")
+        write(root / name, text)
 
     _, verdict = hook("codex", digest, root)
 
@@ -588,13 +646,13 @@ def test_a_rerun_that_fails_another_way_keeps_no_known_failure(
     root, _ = target(tmp_path / "t", done)
     venv = root / ".venv/bin"
     venv.mkdir(parents=True)
-    (venv / "faketool").write_text("#!/bin/sh\necho 'FAILED tests/b.py::t'\nexit 2\n")
+    write(venv / "faketool", "#!/bin/sh\necho 'FAILED tests/b.py::t'\nexit 2\n")
     other = tmp_path / "other/bin"
     other.mkdir(parents=True)
-    (other / "faketool").write_text("#!/bin/sh\necho 'FAILED tests/a.py::t'\nexit 2\n")
+    write(other / "faketool", "#!/bin/sh\necho 'FAILED tests/a.py::t'\nexit 2\n")
     for tool in (venv / "faketool", other / "faketool"):
         tool.chmod(0o755)
-    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), "/usr/bin", "/bin"]))
+    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), *system_path()]))
 
     measured = finish_check.measure(root, done, 600)
 
@@ -653,7 +711,7 @@ def test_a_module_is_the_projects_only_at_its_root_or_under_src(tmp_path: Path) 
 
     root, _ = target(tmp_path / "t", ["true"])
     (root / "docs/pytest").mkdir(parents=True)
-    (root / "docs/pytest/notes.md").write_text("x\n", encoding="utf-8")
+    write(root / "docs/pytest/notes.md", "x\n")
     subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
     subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "docs"], check=True)
 
@@ -666,7 +724,7 @@ def test_the_absence_check_reads_a_relative_path_entry_from_the_target(tmp_path:
 
     root = tmp_path / "project"
     (root / "bin").mkdir(parents=True)
-    (root / "bin/mytool").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    write(root / "bin/mytool", "#!/bin/sh\nexit 0\n")
     (root / "bin/mytool").chmod(0o755)
     line = b"run.sh: line 3: mytool: command not found\n"
 
@@ -695,7 +753,7 @@ def test_two_targets_in_one_repository_never_share_a_pass(tmp_path: Path) -> Non
     """Breaks if a pass remembered for one target lets another in the same repository skip."""
 
     count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"echo run >> {count}"])
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
     inner = root / "inner"
     (inner / ".outcomebound").mkdir(parents=True)
     shutil.copy(root / ".outcomebound/manifest.json", inner / ".outcomebound/manifest.json")
@@ -719,12 +777,13 @@ def test_a_tree_the_commands_changed_is_not_remembered_as_passed(tmp_path: Path)
     assert len((root / "grows.txt").read_text(encoding="utf-8").splitlines()) == 2
 
 
+@posix_only
 def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path) -> None:
     """Breaks if a pass cached for an untracked script survives the script becoming unrunnable."""
 
     root, digest = target(tmp_path / "t", ["./check.sh"])
     script = root / "check.sh"
-    script.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    write(script, "#!/bin/sh\nexit 0\n")
     script.chmod(0o755)
 
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"]
@@ -816,7 +875,7 @@ def test_the_held_report_sends_the_agent_on_with_the_work_a_failure_does_not_blo
 def test_a_long_run_of_backticks_keeps_the_report_under_the_limit(tmp_path: Path) -> None:
     """Breaks if output can widen the report's own fence past the 4,000-character bound."""
 
-    printer = "python3 -c 'print(chr(96) * 10000)'; echo last; exit 1"
+    printer = f"{q(sys.executable)} -c 'print(chr(96) * 10000)'; echo last; exit 1"
     root, digest = target(tmp_path / "t", [printer])
 
     reason = hook("codex", digest, root)[1]["reason"]
@@ -830,7 +889,7 @@ def test_a_pass_too_near_the_limit_is_reported_and_not_remembered(tmp_path: Path
     again."""
 
     count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"sleep 1; echo run >> {count}"])
+    root, digest = target(tmp_path / "t", [f"sleep 1; echo run >> {q(count)}"])
     program = (
         "import sys; sys.path.insert(0, sys.argv[1]); "
         "from outcomebound_tools import finish_check as f; "
@@ -868,7 +927,7 @@ def test_the_tree_is_not_read_once_its_deadline_has_passed(tmp_path: Path) -> No
     """Breaks if a Git read or a file's hash can start after the deadline it was given."""
 
     root, digest = target(tmp_path / "t", ["true"])
-    (root / "new.txt").write_text("new\n", encoding="utf-8")
+    write(root / "new.txt", "new\n")
     assert finish_check.tree_digest(root, digest, time.monotonic() - 1) is None
     assert finish_check.tree_digest(root, digest) is not None
 
@@ -890,8 +949,8 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
         "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
         "open('child.pid', 'w').write(str(child.pid)); child.wait()"
     )
-    (tmp_path / "holder.py").write_text(holder + "\n", encoding="utf-8")
-    line = f"{shlex.quote(sys.executable)} {shlex.quote(str(tmp_path / 'holder.py'))}"
+    write(tmp_path / "holder.py", holder + "\n")
+    line = f"{q(sys.executable)} {q(tmp_path / 'holder.py')}"
     root, digest = target(tmp_path / "t", [line])
     limit = 5
     timeout = finish_check.MARGIN_SECONDS + limit
@@ -949,7 +1008,7 @@ def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str]) -> 
     """Breaks if a malformed entry exits 2, which both rows read as holding the finish."""
 
     done = subprocess.run(
-        [str(LAUNCHER), "finish-check", *arguments],
+        engine("finish-check", *arguments),
         input=b"{}",
         cwd=tmp_path,
         capture_output=True,
@@ -978,12 +1037,12 @@ def runner_script(root: Path, flags: Path) -> str:
     1 where there is any, as a test runner reports its failing tests."""
 
     script = root / "suite.sh"
-    script.write_text(
+    write(
+        script,
         "#!/bin/sh\nrc=0\n"
-        f'for f in "{flags}"/*; do [ -e "$f" ] || continue; '
+        f'for f in {q(flags)}/*; do [ -e "$f" ] || continue; '
         'echo "FAILED tests/$(basename "$f").py::test_x - AssertionError"; rc=1; done\n'
         'echo "short test summary"; exit $rc\n',
-        encoding="utf-8",
     )
     subprocess.run([GIT, "-C", str(root), "add", "suite.sh"], check=True)
     subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "suite"], check=True)
@@ -996,12 +1055,12 @@ def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path
     own output shown and the known one named as such."""
 
     broken = tmp_path / "broken"
-    done = ["echo old; exit 1", f"test ! -e {broken} || {{ echo new; exit 4; }}"]
+    done = ["echo old; exit 1", f"test ! -e {q(broken)} || {{ echo new; exit 4; }}"]
     root, digest = target(tmp_path / "t", done)
     measured = finish_check.measure(root, done, 600)
     assert measured.kept and [r.verdict for r in measured.results] == ["FAIL", "PASS"]
 
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(root / "src.txt", "two\n")
     verdict = hook("codex", digest, root)[1]
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
@@ -1012,8 +1071,8 @@ def test_a_known_failure_holds_nothing_and_a_new_failure_after_it_holds(tmp_path
     assert "a new failure inside it is not told apart" in message
     assert f"PASS {finish_check.shorten(done[1])}" in message
 
-    broken.write_text("", encoding="utf-8")
-    (root / "src.txt").write_text("three\n", encoding="utf-8")
+    write(broken, "")
+    write(root / "src.txt", "three\n")
     reason = hook("codex", digest, root)[1]["reason"]
     assert "FAIL echo old; exit 1: exit 1 after " in reason and "; not held)" in reason
     assert f"FAIL {finish_check.shorten(done[1])}: exit 4 after " in reason
@@ -1028,27 +1087,27 @@ def test_a_new_failing_test_inside_a_known_command_holds(tmp_path: Path) -> None
 
     flags = tmp_path / "flags"
     flags.mkdir()
-    (flags / "test_old").write_text("", encoding="utf-8")
+    write(flags / "test_old", "")
     root, _ = target(tmp_path / "t", ["true"])
     done = [runner_script(root, flags)]
     manifest = root / ".outcomebound/manifest.json"
     document = json.loads(manifest.read_text(encoding="utf-8"))
     document["artifacts"][0]["done"] = done
-    manifest.write_text(json.dumps(document), encoding="utf-8")
+    write(manifest, json.dumps(document))
     digest = finish_check.done_digest(done)
     finish_check.measure(root, done, 600)
     record = finish_check.known_record(root, digest)
     assert record is not None
     assert record.failing[done[0]].ids == {"pytest tests/test_old.py::test_x"}
 
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(root / "src.txt", "two\n")
     message = hook("codex", digest, root)[1]["systemMessage"]
     assert (
         message.startswith("finish-check FAIL, known: ") and "known by its failure ids" in message
     )
 
-    (flags / "test_new").write_text("", encoding="utf-8")
-    (root / "src.txt").write_text("three\n", encoding="utf-8")
+    write(flags / "test_new", "")
+    write(root / "src.txt", "three\n")
     reason = hook("codex", digest, root)[1]["reason"]
     assert "not known: new failure ids pytest tests/test_new.py::test_x" in reason
     assert "FAILED tests/test_new.py::test_x" in reason
@@ -1059,14 +1118,14 @@ def test_a_new_parametrized_case_with_a_space_in_its_id_holds(tmp_path: Path) ->
     known `test_x[hello world]` and hides the new failure."""
 
     lines = tmp_path / "lines"
-    lines.write_text("FAILED tests/test_x.py::test_x[hello world] - assert 0\n", encoding="utf-8")
-    done = [f"cat {lines}; exit 1"]
+    write(lines, "FAILED tests/test_x.py::test_x[hello world] - assert 0\n")
+    done = [f"cat {q(lines)}; exit 1"]
     root, digest = target(tmp_path / "t", done)
     finish_check.measure(root, done, 600)
 
-    with lines.open("a", encoding="utf-8") as handle:
-        handle.write("FAILED tests/test_x.py::test_x[hello mars] - assert 1\n")
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    with lines.open("ab") as handle:
+        handle.write(b"FAILED tests/test_x.py::test_x[hello mars] - assert 1\n")
+    write(root / "src.txt", "two\n")
     reason = hook("codex", digest, root)[1]["reason"]
     assert "new failure ids pytest tests/test_x.py::test_x[hello mars]" in reason
 
@@ -1076,14 +1135,14 @@ def test_a_measurement_that_replaces_a_record_names_what_it_adds(tmp_path: Path)
     naming it apart from the failures the replaced record held."""
 
     lines = tmp_path / "lines"
-    lines.write_text("FAILED tests/test_a.py::test_old - assert 0\n", encoding="utf-8")
-    done = [f"cat {lines}; exit 1", "true"]
+    write(lines, "FAILED tests/test_a.py::test_old - assert 0\n")
+    done = [f"cat {q(lines)}; exit 1", "true"]
     root, _ = target(tmp_path / "t", done)
     first = finish_check.measure(root, done, 600)
     assert first.previous is None and first.added == ()
 
-    with lines.open("a", encoding="utf-8") as handle:
-        handle.write("FAILED tests/test_a.py::test_new - assert 1\n")
+    with lines.open("ab") as handle:
+        handle.write(b"FAILED tests/test_a.py::test_new - assert 1\n")
     second = finish_check.measure(root, done, 600)
     assert second.previous is not None
     shown = finish_check.shorten(done[0], 80)
@@ -1120,13 +1179,13 @@ def test_a_known_command_failing_with_another_exit_code_holds(tmp_path: Path) ->
     """Breaks if a command known to fail hides a different failure of it, read by exit code."""
 
     code = tmp_path / "code"
-    code.write_text("1", encoding="utf-8")
-    done = [f'exit "$(cat {code})"']
+    write(code, "1")
+    done = [f'exit "$(cat {q(code)})"']
     root, digest = target(tmp_path / "t", done)
     finish_check.measure(root, done, 600)
 
-    code.write_text("2", encoding="utf-8")
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(code, "2")
+    write(root / "src.txt", "two\n")
     assert hook("codex", digest, root)[1]["decision"] == "block"
 
 
@@ -1137,19 +1196,19 @@ def test_a_known_failure_that_passes_leaves_the_record_and_holds_when_it_fails_a
     then hide a failure the change caused."""
 
     flag = tmp_path / "flag"
-    flag.write_text("", encoding="utf-8")
-    done = [f"test ! -e {flag}"]
+    write(flag, "")
+    done = [f"test ! -e {q(flag)}"]
     root, digest = target(tmp_path / "t", done)
     finish_check.measure(root, done, 600)
     assert failing(root, digest) == {done[0]: 1}
 
     flag.unlink()
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(root / "src.txt", "two\n")
     assert hook("codex", digest, root)[1]["systemMessage"].startswith("finish-check PASS: ")
     assert failing(root, digest) == {}
 
-    flag.write_text("", encoding="utf-8")
-    (root / "src.txt").write_text("three\n", encoding="utf-8")
+    write(flag, "")
+    write(root / "src.txt", "three\n")
     assert hook("codex", digest, root)[1]["decision"] == "block"
 
 
@@ -1163,7 +1222,7 @@ def test_known_failures_are_shared_by_worktrees_and_kept_for_one_done_list(tmp_p
     tree = tmp_path / "wt"
     subprocess.run([GIT, "-C", str(root), "worktree", "add", "-q", str(tree)], check=True)
 
-    (tree / "src.txt").write_text("two\n", encoding="utf-8")
+    write(tree / "src.txt", "two\n")
     message = hook("codex", digest, tree)[1]["systemMessage"]
     assert message.startswith("finish-check FAIL, known: ")
     assert finish_check.known_record(root, finish_check.done_digest(["make test"])) is None
@@ -1174,11 +1233,11 @@ def test_a_record_measured_on_another_branch_does_not_apply(tmp_path: Path) -> N
     hold that commit: there the failure may be the change's own, so it must hold."""
 
     flag = "bad"
-    done = [f"test ! -e {flag}"]
+    done = [f"test ! -e {q(flag)}"]
     root, digest = target(tmp_path / "t", done)
     subprocess.run([GIT, "-C", str(root), "branch", "-q", "passing"], check=True)
     subprocess.run([GIT, "-C", str(root), "checkout", "-q", "-b", "old"], check=True)
-    (root / flag).write_text("", encoding="utf-8")
+    write(root / flag, "")
     subprocess.run([GIT, "-C", str(root), "add", flag], check=True)
     subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "old failure"], check=True)
     finish_check.measure(root, done, 600)
@@ -1188,9 +1247,9 @@ def test_a_record_measured_on_another_branch_does_not_apply(tmp_path: Path) -> N
     )
 
     assert finish_check.known_record(tree, digest) is None
-    (tree / flag).write_text("", encoding="utf-8")
+    write(tree / flag, "")
     assert hook("codex", digest, tree)[1]["decision"] == "block"
-    (root / "src.txt").write_text("two\n", encoding="utf-8")
+    write(root / "src.txt", "two\n")
     assert hook("codex", digest, root)[1]["systemMessage"].startswith("finish-check FAIL, known: ")
 
 
@@ -1213,10 +1272,10 @@ def test_two_targets_and_two_branches_keep_their_own_records(tmp_path: Path) -> 
     subprocess.run(
         [GIT, "-C", str(root), "worktree", "add", "-q", "-b", "side", str(tree)], check=True
     )
-    (tree / "side.txt").write_text("", encoding="utf-8")
+    write(tree / "side.txt", "")
     subprocess.run([GIT, "-C", str(tree), "add", "side.txt"], check=True)
     subprocess.run([GIT, "-C", str(tree), *IDENTITY, "commit", "-qm", "side"], check=True)
-    (root / "main.txt").write_text("", encoding="utf-8")
+    write(root / "main.txt", "")
     subprocess.run([GIT, "-C", str(root), "add", "main.txt"], check=True)
     subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "main"], check=True)
     finish_check.measure(tree, done, 600)
@@ -1236,7 +1295,7 @@ def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     count = tmp_path / "count"
-    done = [f"echo run >> {count}; exit 2", "true"]
+    done = [f"echo run >> {q(count)}; exit 2", "true"]
     root, digest = target(tmp_path / "t", done)
 
     measured = finish_check.measure(root, done, 600)
@@ -1296,7 +1355,7 @@ def test_something_that_ran_before_a_missing_last_tool_is_a_failure_at_exit_127(
     nothing, though the first command had failed and the missing last tool shows nothing about
     it."""
 
-    python = shlex.quote(sys.executable)
+    python = q(sys.executable)
     failed = _verdict(tmp_path, f"{python} -c 'raise AssertionError(1)'; nosuchtool-zz")
     assert (failed.verdict, failed.code) == (finish_check.FAIL, 127), failed.output
 
@@ -1417,3 +1476,21 @@ def test_a_folder_in_git_bash_form_is_left_alone_off_windows() -> None:
     drive: it is a real folder there."""
 
     assert finish_check.native_path("/c/work/app", windows=False) == "/c/work/app"
+
+
+def test_a_command_the_report_prints_for_a_person_names_the_target_as_the_platform_quotes_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Breaks if a printed `outcomebound adopt <folder>` quotes the folder for POSIX alone, so
+    that a person on Windows pastes a word PowerShell and Git Bash read differently: on Windows
+    a single quote inside a quoted word is doubled, which POSIX quoting does not do. Windows is
+    emulated here, as `paths.on_windows` says it; no Windows run has shown the pasted text."""
+
+    monkeypatch.setattr(finish_check.paths, "on_windows", lambda: True)
+    folder = Path("/work/it's here")
+    results = [finish_check.Result("slow", finish_check.UNVERIFIED, 5.0, "stopped", cause="time")]
+
+    message = finish_check.verdict_for(results, False, folder, 60)["systemMessage"]
+
+    assert "outcomebound adopt '/work/it''s here' --finish-timeout" in message
+    assert "outcomebound adopt '/work/it''s here' --no-finish-check" in message
