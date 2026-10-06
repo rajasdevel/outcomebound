@@ -407,12 +407,6 @@ def test_a_runner_that_cannot_find_its_tool_is_unverified_and_holds_nothing(
 
     if line.startswith("make") and shutil.which("make") is None:
         pytest.skip("make is not installed here")
-    if line.startswith("make") and WINDOWS:
-        pytest.skip(
-            "UNVERIFIED: GNU make on Windows says a missing tool in its own words "
-            "(`process_begin: CreateProcess ... failed`), which the check does not read; no run "
-            "has shown them, so such a failure holds as a failure (docs/specs/finish-check)"
-        )
     root, digest = target(tmp_path / "t", [line])
     for name, text in files.items():
         write(root / name, text)
@@ -424,6 +418,32 @@ def test_a_runner_that_cannot_find_its_tool_is_unverified_and_holds_nothing(
     assert message.startswith("finish-check UNVERIFIED: "), message
     assert "could not run in the hook's environment" in message
     assert f"`{tool}` is not on this PATH" in message
+
+
+WINDOWS_MAKE = (
+    "nosuchtool-zz --version\r\n"
+    "process_begin: CreateProcess(NULL, nosuchtool-zz --version, ...) failed.\r\n"
+    "make (e=2): {sentence}\r\n"
+    "make: *** [D:\\a\\_temp/probe.mk:2: all] Error 2\r\n"
+)
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    ["The system cannot find the file specified.", "Das System kann die Datei nicht finden."],
+)
+def test_gnu_make_on_windows_says_a_missing_tool_by_its_error_code(sentence: str) -> None:
+    """Breaks if the two-line form GNU make prints on Windows (observed on a hosted Windows
+    runner, 2026-10-06) is not read as a missing tool, or is read by its localized sentence."""
+
+    output = WINDOWS_MAKE.format(sentence=sentence).encode()
+
+    assert finish_check.missing_tool(output) == "nosuchtool-zz"
+    assert not finish_check.other_failure(output)
+    other = output.replace(b"e=2", b"e=5")
+    assert finish_check.missing_tool(other) is None
+    ran = b"ran something\r\n" + output
+    assert finish_check.missing_tool(ran) is None
 
 
 @pytest.mark.parametrize(

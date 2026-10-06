@@ -622,10 +622,15 @@ NOT_RUN = (126, 127)
 # `make: *** [test] Error 1` lines after it are passed over.
 _MISSING = re.compile(
     r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
+    r"|process_begin: CreateProcess\(NULL, (?P<winmade>\S+)(?: .*)?\) failed\."
     r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
     r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>[^\s:]+): (?:command )?not found"
     r"|(?P<launcher>(?:\S*[/\\])?python[\d.]*(?:\.exe)?): No module named (?P<module>[\w.]+))$"
 )
+# GNU make on Windows says it in two lines: `process_begin: CreateProcess(NULL, <tool> ...)
+# failed.` and `make (e=2): <sentence>`. `e=2` is ERROR_FILE_NOT_FOUND in every language; the
+# sentence is localized, so only `e=2` is read (observed on a hosted Windows runner, 2026-10-06).
+_MAKE_E2 = re.compile(r"^make(?:\[\d+\])? \(e=2\):")
 # make's own lines after the tool's: its error line, and a nested make's directory lines.
 _MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: (?:\*\*\* |(?:Leaving|Entering) directory )")
 
@@ -637,12 +642,26 @@ def _not_found(output: bytes) -> tuple[re.Match[str] | None, list[str]]:
     lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
     while lines and _MAKE_ERROR.match(lines[-1]):
         lines.pop()
+    if len(lines) >= 2 and _MAKE_E2.match(lines[-1]):
+        found = _MISSING.match(lines[-2])
+        if found is not None and found["winmade"]:
+            return found, lines[:-2]
+        return None, lines[:-1]
     found = _MISSING.match(lines[-1]) if lines else None
+    if found is not None and found["winmade"]:
+        return None, lines[:-1]
     return found, lines[:-1]
 
 
 def _tool_named(found: re.Match[str]) -> str:
-    return found["made"] or found["scripted"] or found["shelled"] or found["launcher"] or ""
+    return (
+        found["made"]
+        or found["winmade"]
+        or found["scripted"]
+        or found["shelled"]
+        or found["launcher"]
+        or ""
+    )
 
 
 def _quiet_before(found: re.Match[str], before: Sequence[str]) -> bool:
@@ -684,7 +703,7 @@ def missing_tool(output: bytes) -> str | None:
         return None
     if found["module"]:
         return f"python -m {found['module']}"
-    return found["made"] or found["scripted"] or found["shelled"]
+    return _tool_named(found)
 
 
 # Exit code of the probe that finds a module missing; any other non-zero exit says nothing.
@@ -708,7 +727,7 @@ def confirmed_absent(
     # What the shell could find: on Windows a script with no extension, which Git's shell runs.
     where = {"PATH": path}
     if not found["module"]:
-        tool = found["made"] or found["scripted"] or found["shelled"]
+        tool = _tool_named(found)
         return programs.find(tool, where, extensionless=True) is None
     launcher = found["launcher"]
     program = launcher if _folder_in(launcher) else programs.find(launcher, where)
@@ -771,7 +790,9 @@ def project_owned(target: Path, tool: str) -> bool:
     root = target.resolve()
     if _folder_in(tool) and not tool.startswith("python -m "):
         path = Path(tool)
-        if not path.is_absolute():
+        # On Windows `/opt/x` has a root and no drive: it is not relative, and it names a place
+        # of the current drive, not a place inside the target.
+        if not (path.is_absolute() or path.root):
             return True
         resolved = path.resolve(strict=False)
         return resolved == root or root in resolved.parents

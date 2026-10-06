@@ -11,7 +11,6 @@ and a flag overrides each.
 from __future__ import annotations
 
 import json
-import os
 import re
 import subprocess
 import sys
@@ -23,7 +22,7 @@ import pytest
 from outcomebound_tools import decision_brief, surfaces
 from outcomebound_tools.decision_brief import Brief
 from outcomebound_tools.textio import universal
-from tests.portable import engine
+from tests.portable import carried_environment, engine
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "schemas" / "decision-briefs.schema.json"
@@ -168,9 +167,6 @@ def _main(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str, str
 
 # What a child needs to start at all: `SYSTEMROOT` is how Python on Windows gets random numbers
 # for its hash seed, and without it Python 3.10 there ends in "Fatal Python error".
-CARRIED = ("PATH", "LD_LIBRARY_PATH", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP")
-
-
 def _run(
     argv: list[str],
     env: dict[str, str],
@@ -183,13 +179,12 @@ def _run(
     platform), in an environment holding only what is given, from `cwd`. `module` runs the
     module itself instead, so that the stream's own encoding is the one `env` names."""
 
-    carried = {name: os.environ[name] for name in CARRIED if name in os.environ}
     command = (
         [sys.executable, "-m", "outcomebound_tools.decision_brief"] if module else engine("brief")
     )
     return subprocess.run(
         [*command, *argv],
-        env={**carried, **({"PYTHONPATH": str(ROOT)} if module else {}), **env},
+        env={**carried_environment(), **({"PYTHONPATH": str(ROOT)} if module else {}), **env},
         cwd=cwd,
         input=stdin.encode("utf-8"),
         capture_output=True,

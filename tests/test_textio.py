@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import textio
+from tests.portable import carried_environment
 
 ROOT = Path(__file__).resolve().parent.parent
 TEXT = "Ёлка — naïve\n"
@@ -79,7 +80,7 @@ def test_a_brief_document_on_standard_input_is_read_in_each_encoding_a_shell_wri
         capture_output=True,
         cwd=ROOT,
         check=False,
-        env={"PATH": "", "PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(ROOT)},
+        env=carried_environment(PYTHONIOENCODING="utf-8", PYTHONPATH=str(ROOT)),
     )
 
     assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")

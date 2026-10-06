@@ -11,12 +11,9 @@ one with LF. Every assertion is about bytes on disk or an exit status.
 from __future__ import annotations
 
 import json
-import os
 import re
 import shutil
 from pathlib import Path
-
-import pytest
 
 from outcomebound_tools import adopt, textio
 from tests.test_adopt import (
@@ -166,7 +163,6 @@ def test_a_local_fragment_with_crlf_and_a_byte_order_mark_installs_as_one_withou
     assert results[0] == results[1] == results[2]
 
 
-@pytest.mark.skipif(os.name == "nt", reason="the measured Done command `true` is a POSIX tool")
 def test_a_settings_file_with_a_byte_order_mark_and_crlf_keeps_both_when_the_hook_goes_in(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -179,7 +175,7 @@ def test_a_settings_file_with_a_byte_order_mark_and_crlf_keeps_both_when_the_hoo
     original = textio.UTF8_BOM + b'{\r\n  "permissions": {}\r\n}\r\n'
     settings.write_bytes(original)
 
-    arguments = (str(target), "--harness", "claude-code", "--done", "true", "--finish-check")
+    arguments = (str(target), "--harness", "claude-code", "--done", ":", "--finish-check")
     code, _, err = run(capsys, *arguments)
 
     assert code == 0, err
