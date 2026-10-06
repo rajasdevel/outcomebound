@@ -483,9 +483,7 @@ def test_a_shorter_fence_inside_a_longer_one_stays_inside():
     from outcomebound_tools.fragments import _strip_sentinels
 
     sentinel = "<!-- outcomebound:begin demo -->"
-    text = "\n".join(
-        ["````", "```text", sentinel, "```", sentinel, "````", sentinel, "after"]
-    )
+    text = "\n".join(["````", "```text", sentinel, "```", sentinel, "````", sentinel, "after"])
     kept = _strip_sentinels(text).splitlines()
     assert kept.count(sentinel) == 2
     assert kept[-1] == "after" and sentinel not in kept[-2:]
