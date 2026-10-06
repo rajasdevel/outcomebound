@@ -53,7 +53,8 @@ the agent reads the fragment only when it runs a command.
     connection to an address that does not answer did not end in 12 seconds; with it, it ended
     after 3 seconds. The `BatchMode` prompt was not seen in the test, so the hang that it
     prevents is not verified.
-- **Standard input.** When a command must not get input, add `< /dev/null`. Use `ssh -n` for
+- **Standard input.** When a command must not get input, add `< /dev/null` (POSIX shell form, as
+  every command on this page is). Use `ssh -n` for
   SSH in a loop or in the background.
   - Fixes: a command that reads standard input waits until the input closes. In some
     harnesses the input does not close.
