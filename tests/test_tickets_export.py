@@ -15,6 +15,7 @@ import pytest
 from outcomebound_tools import home, tickets_store
 from outcomebound_tools.tickets import main
 from outcomebound_tools.tickets_declaration import Declaration
+from tests.portable import write
 
 DECLARATION = {
     "version": 1,
@@ -38,7 +39,7 @@ def test_export_prints_the_pinned_query_path_and_the_command_and_runs_nothing(
 ) -> None:
     declared = tmp_path / ".outcomebound" / "tickets.json"
     declared.parent.mkdir()
-    declared.write_text(json.dumps(DECLARATION), encoding="utf-8")
+    write(declared, json.dumps(DECLARATION))
     before = _tree(tmp_path)
 
     def no_process(*args: object, **kwargs: object) -> None:
@@ -54,7 +55,7 @@ def test_export_prints_the_pinned_query_path_and_the_command_and_runs_nothing(
     assert captured.err == ""
     query, command = captured.out.splitlines()
     pinned = (home.ROOT / "templates/tickets/github-export.graphql").resolve()
-    assert query.startswith("# ") and query.endswith(str(pinned))
+    assert query.startswith("# ") and query.endswith(pinned.as_posix())
     assert pinned.is_file()
     assert command.startswith("gh api graphql --paginate --slurp -F owner=owner -F name=name ")
     assert "templates/tickets/github-export.graphql" in command

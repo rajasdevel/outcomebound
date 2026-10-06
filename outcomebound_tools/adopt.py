@@ -60,6 +60,7 @@ from outcomebound_tools import (
     identity,
     instruction_audit,
     paths,
+    programs,
     textio,
     walk,
 )
@@ -1969,8 +1970,9 @@ def check(target: Path, source: Path) -> int:
 
 
 def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
-    """What one read-only git command printed in `target`; None where it failed. Git comes from
-    PATH's absolute entries only, so the target cannot supply its own."""
+    """What one read-only git command printed in `target`; None where it failed or Git cannot run.
+    Git comes from PATH's absolute entries only (`programs.require`), so the target cannot supply
+    its own, on Windows too."""
 
     inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
@@ -1978,7 +1980,7 @@ def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | N
     )
     try:
         completed = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            [programs.require("git", inherited), *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             env=git_environment(inherited),
             input=stdin if stdin is not None else b"",

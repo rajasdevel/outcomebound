@@ -6,7 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from outcomebound_tools.declared_tests import PYTEST, UNITTEST
 from outcomebound_tools.discovery import DiscoveryError, discover
+from tests.portable import needs_symlinks, write
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -18,14 +20,14 @@ def test_monorepo_observes_markers_scripts_and_workflow_paths_without_runtime_cl
     frontend.mkdir()
     backend.mkdir()
     workflows.mkdir(parents=True)
-    (frontend / "package-lock.json").write_text("{}\n", encoding="utf-8")
-    (frontend / "package.json").write_text(
+    write(frontend / "package-lock.json", "{}\n")
+    write(
+        frontend / "package.json",
         json.dumps({"scripts": {"test": "vitest run", "lint": "eslint ."}}),
-        encoding="utf-8",
     )
-    (backend / "go.mod").write_text("module example.invalid/api\n", encoding="utf-8")
-    (workflows / "check.yml").write_text("name: check\n", encoding="utf-8")
-    (tmp_path / "CONTRIBUTING.md").write_text("Use the existing workflow.\n", encoding="utf-8")
+    write(backend / "go.mod", "module example.invalid/api\n")
+    write(workflows / "check.yml", "name: check\n")
+    write(tmp_path / "CONTRIBUTING.md", "Use the existing workflow.\n")
 
     result = discover(tmp_path, roots=["frontend", "backend"])
 
@@ -61,12 +63,11 @@ def test_monorepo_observes_markers_scripts_and_workflow_paths_without_runtime_cl
     assert components["backend"]["test_options"] == ["go test ./..."]
 
 
+@needs_symlinks
 def test_symlinked_files_and_directories_cannot_escape_the_target(tmp_path):
     outside = tmp_path.parent / f"{tmp_path.name}-outside"
     outside.mkdir()
-    (outside / "package.json").write_text(
-        json.dumps({"scripts": {"test": "would-leak"}}), encoding="utf-8"
-    )
+    write(outside / "package.json", json.dumps({"scripts": {"test": "would-leak"}}))
     os.symlink(outside, tmp_path / "linked-component")
     os.symlink(outside / "package.json", tmp_path / "package.json")
 
@@ -84,7 +85,7 @@ def test_symlinked_files_and_directories_cannot_escape_the_target(tmp_path):
 
 
 def test_malformed_package_json_is_evidence_not_a_crash_or_a_guessed_command(tmp_path):
-    (tmp_path / "package.json").write_text('{"scripts": {"test": ', encoding="utf-8")
+    write(tmp_path / "package.json", '{"scripts": {"test": ')
 
     result = discover(tmp_path)
 
@@ -118,10 +119,7 @@ def test_a_package_json_saved_with_a_byte_order_mark_and_crlf_is_parsed(tmp_path
 
 def test_package_manager_declaration_is_used_and_conflicts_are_unresolved(tmp_path):
     package = tmp_path / "package.json"
-    package.write_text(
-        json.dumps({"packageManager": "pnpm@9.7.0", "scripts": {"test": "vitest run"}}),
-        encoding="utf-8",
-    )
+    write(package, json.dumps({"packageManager": "pnpm@9.7.0", "scripts": {"test": "vitest run"}}))
 
     declared = discover(tmp_path)
     evidence = declared["observed"]["package_scripts"][0]
@@ -132,7 +130,7 @@ def test_package_manager_declaration_is_used_and_conflicts_are_unresolved(tmp_pa
     }
     assert evidence["scripts"][0]["invocation"] == "pnpm test"
 
-    (tmp_path / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    write(tmp_path / "package-lock.json", "{}\n")
     conflicted = discover(tmp_path)
     evidence = conflicted["observed"]["package_scripts"][0]
     assert evidence["manager"] == {
@@ -152,7 +150,7 @@ def test_depth_pruning_is_reported_as_unknown_completeness(tmp_path):
     for name in ("one", "two", "three", "four", "five"):
         deep = deep / name
         deep.mkdir()
-    (deep / "go.mod").write_text("module example.invalid/deep\n", encoding="utf-8")
+    write(deep / "go.mod", "module example.invalid/deep\n")
 
     result = discover(tmp_path)
 
@@ -161,7 +159,7 @@ def test_depth_pruning_is_reported_as_unknown_completeness(tmp_path):
 
 
 def test_cli_emits_json_and_does_not_change_the_target(tmp_path):
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
+    write(tmp_path / "pyproject.toml", "[project]\nname='sample'\n")
     before = sorted(path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*"))
 
     result = subprocess.run(
@@ -179,6 +177,7 @@ def test_cli_emits_json_and_does_not_change_the_target(tmp_path):
     assert after == before
 
 
+@needs_symlinks
 def test_harness_directories_are_observed_and_recommended_not_chosen(tmp_path):
     """Markers are observations; the harness stays an open decision.
 
@@ -229,7 +228,7 @@ def test_harness_directories_are_observed_and_recommended_not_chosen(tmp_path):
     # is never followed — either would credit a harness nothing established.
     files = tmp_path / "files"
     files.mkdir()
-    (files / ".claude").write_text("not a directory", encoding="utf-8")
+    write(files / ".claude", "not a directory")
     outside = tmp_path / "outside"
     (outside / "skills").mkdir(parents=True)
     (files / ".codex").symlink_to(outside, target_is_directory=True)
@@ -265,7 +264,7 @@ def test_every_recognized_marker_maps_to_known_harness_candidates():
 
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    write(path, text)
 
 
 def test_check_candidates_are_allowlisted_and_require_explicit_confirmation(tmp_path):
@@ -338,7 +337,6 @@ def test_check_candidates_are_allowlisted_and_require_explicit_confirmation(tmp_
 
 # --- the test runner the project declares ---------------------------------------------
 
-UNITTEST = "python3 -m unittest discover -s tests"
 PYPROJECT = '[project]\nname = "x"\n'
 
 
@@ -346,7 +344,7 @@ def _write_files(target: Path, files: dict[str, str]) -> None:
     for relative, text in files.items():
         path = target / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        write(path, text)
 
 
 def _test_options(target: Path, root: str = ".") -> list[str]:
@@ -393,7 +391,7 @@ def test_a_python_root_offers_pytest_from_each_declared_signal(tmp_path: Path, s
         # A file over the read limit gives no signal, and raises nothing.
         assert options == [UNITTEST]
     else:
-        assert options[0] == "python3 -m pytest"
+        assert options[0] == PYTEST
         assert UNITTEST not in options
 
 
@@ -428,6 +426,7 @@ def test_tox_is_offered_only_for_a_config_that_declares_an_environment(
     assert ("tox" in _test_options(tmp_path)) is offered
 
 
+@needs_symlinks
 def test_unittest_is_offered_only_where_a_tests_directory_exists(tmp_path: Path) -> None:
     """The unittest fallback names `-s tests`; it is offered only where that directory is."""
 
@@ -475,7 +474,7 @@ def test_a_make_or_just_test_target_is_offered_after_the_stack_runners(tmp_path:
         "conftest.py": "",
         "Makefile": ".PHONY: test\ntest:\n\tpython3 -m pytest\n",
     }
-    assert options("observed", observed) == ["python3 -m pytest", "make test"]
+    assert options("observed", observed) == [PYTEST, "make test"]
 
 
 def test_a_workspace_member_reads_the_lockfile_of_its_workspace(tmp_path: Path) -> None:
@@ -523,7 +522,7 @@ def test_a_go_work_root_without_a_module_offers_no_go_test(tmp_path: Path) -> No
     assert _test_options(tmp_path, "svc") == ["go test ./..."]
 
     # Beside a module, the workspace root is that module's root too.
-    (tmp_path / "go.mod").write_text("module example.com/top\n\ngo 1.22\n", encoding="utf-8")
+    write(tmp_path / "go.mod", "module example.com/top\n\ngo 1.22\n")
     assert _test_options(tmp_path) == ["go test ./..."]
 
 
@@ -539,8 +538,8 @@ def test_discovery_document_roundtrips_against_its_schema(tmp_path):
     ):
         target = tmp_path / name
         (target / marker).mkdir(parents=True)
-        (target / "pyproject.toml").write_text("[project]\nname = 'greeting'\n", encoding="utf-8")
-        (target / "CONTRIBUTING.md").write_text("Keep changes in scope.\n", encoding="utf-8")
+        write(target / "pyproject.toml", "[project]\nname = 'greeting'\n")
+        write(target / "CONTRIBUTING.md", "Keep changes in scope.\n")
         document = {"format_version": 1, "result": "PASS", "observations": discover(target)}
         markers = document["observations"]["observed"]["harness_markers"]
         assert markers == expected == sorted(set(markers))
@@ -559,20 +558,20 @@ def _sample_project(root):
     """A python component at the root, with its scripts under `scripts/`."""
 
     root.mkdir(parents=True, exist_ok=True)
-    (root / "pyproject.toml").write_text("[project]\nname='sample'\n", encoding="utf-8")
+    write(root / "pyproject.toml", "[project]\nname='sample'\n")
     package = root / "sample"
     package.mkdir()
-    (package / "__init__.py").write_text("", encoding="utf-8")
+    write(package / "__init__.py", "")
     scripts = root / "scripts"
     scripts.mkdir()
     entry = scripts / "run.sh"
-    entry.write_text("#!/bin/sh\necho run\n", encoding="utf-8")
+    write(entry, "#!/bin/sh\necho run\n")
     entry.chmod(0o755)
     library = scripts / "helpers.sh"
-    library.write_text("#!/bin/sh\n# library\n", encoding="utf-8")
+    write(library, "#!/bin/sh\n# library\n")
     library.chmod(0o755)
     plain = scripts / "notexec.sh"
-    plain.write_text("#!/bin/sh\necho plain\n", encoding="utf-8")
+    write(plain, "#!/bin/sh\necho plain\n")
     plain.chmod(0o644)
     return root
 
@@ -585,8 +584,8 @@ def test_markers_are_observed_from_the_filesystem_only(tmp_path):
     """
 
     target = _sample_project(tmp_path / "project")
-    (target / "composer.json").write_text("{}\n", encoding="utf-8")
-    (target / "Cargo.toml").write_text("[package]\n", encoding="utf-8")
+    write(target / "composer.json", "{}\n")
+    write(target / "Cargo.toml", "[package]\n")
     (target / "migrations").mkdir()
     before = sorted(path.relative_to(target).as_posix() for path in target.rglob("*"))
 
@@ -606,11 +605,11 @@ def test_shell_markers_only_qualify_roots_other_markers_infer(tmp_path):
 
     target = tmp_path / "project"
     (target / "vendor" / "tools" / "deep").mkdir(parents=True)
-    (target / "vendor" / "tools" / "deep" / "build.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    write(target / "vendor" / "tools" / "deep" / "build.sh", "#!/bin/sh\n")
     api = target / "services" / "api"
     api.mkdir(parents=True)
-    (api / "go.mod").write_text("module example.invalid/api\n", encoding="utf-8")
-    (api / "run.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    write(api / "go.mod", "module example.invalid/api\n")
+    write(api / "run.sh", "#!/bin/sh\n")
 
     components = {row["root"]: row for row in discover(target)["inferred"]["components"]}
 
@@ -627,8 +626,8 @@ def test_a_script_qualifies_only_its_nearest_root(tmp_path):
     target = tmp_path / "project"
     api = target / "api"
     api.mkdir(parents=True)
-    (api / "go.mod").write_text("module example.invalid/api\n", encoding="utf-8")
-    (api / "run.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    write(api / "go.mod", "module example.invalid/api\n")
+    write(api / "run.sh", "#!/bin/sh\n")
 
     observations = discover(target)
     shell = [row for row in observations["observed"]["markers"] if row["kind"] == "shell"]
@@ -638,7 +637,7 @@ def test_a_script_qualifies_only_its_nearest_root(tmp_path):
 
     bin_dir = target / "bin"
     bin_dir.mkdir()
-    (bin_dir / "x.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+    write(bin_dir / "x.sh", "#!/bin/sh\n")
 
     observations = discover(target)
     shell = [row for row in observations["observed"]["markers"] if row["kind"] == "shell"]
@@ -659,9 +658,9 @@ def test_shell_script_collection_reports_its_own_limit(tmp_path):
     target = tmp_path / "project"
     scripts = target / "scripts"
     scripts.mkdir(parents=True)
-    (target / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+    write(target / "pyproject.toml", "[project]\nname='x'\n")
     for index in range(MAX_SHELL_SCRIPTS + 1):
-        (scripts / f"s{index:04d}.sh").write_text("#!/bin/sh\n", encoding="utf-8")
+        write(scripts / f"s{index:04d}.sh", "#!/bin/sh\n")
 
     limits = discover(target)["limits"]
 
@@ -671,18 +670,19 @@ def test_shell_script_collection_reports_its_own_limit(tmp_path):
     ), limits
 
 
+@needs_symlinks
 def test_a_symlinked_script_directory_is_skipped(tmp_path):
     """A symlinked `scripts/` is recorded as skipped and walked by nothing."""
 
     outside = tmp_path / "outside"
     outside.mkdir()
     escape = outside / "escape.sh"
-    escape.write_text("#!/bin/sh\necho escape\n", encoding="utf-8")
+    write(escape, "#!/bin/sh\necho escape\n")
     escape.chmod(0o755)
     target = tmp_path / "project"
     app = target / "app"
     app.mkdir(parents=True)
-    (app / "pyproject.toml").write_text("[project]\nname='app'\n", encoding="utf-8")
+    write(app / "pyproject.toml", "[project]\nname='app'\n")
     (app / "scripts").symlink_to(outside, target_is_directory=True)
 
     observations = discover(target)
@@ -698,11 +698,9 @@ def test_discovery_executes_nothing(tmp_path):
     target = _sample_project(tmp_path / "project")
     marker = tmp_path / "ran.txt"
     saboteur = target / "scripts" / "sabotage.sh"
-    saboteur.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    write(saboteur, f"#!/bin/sh\ntouch {marker}\n")
     saboteur.chmod(0o755)
-    (target / "package.json").write_text(
-        json.dumps({"scripts": {"test": f"touch {marker}"}}), encoding="utf-8"
-    )
+    write(target / "package.json", json.dumps({"scripts": {"test": f"touch {marker}"}}))
 
     observations = discover(target)
 
@@ -721,10 +719,8 @@ def test_discovery_names_a_harness_root_the_project_tracks_and_fills(tmp_path: P
 
     target = tmp_path / "project"
     (target / ".agents" / "skills" / "release-notes").mkdir(parents=True)
-    (target / ".agents/skills/release-notes/SKILL.md").write_text(
-        "---\nname: release-notes\n---\n", encoding="utf-8"
-    )
-    (target / "pyproject.toml").write_text("[project]\nname = 'sample'\n", encoding="utf-8")
+    write(target / ".agents/skills/release-notes/SKILL.md", "---\nname: release-notes\n---\n")
+    write(target / "pyproject.toml", "[project]\nname = 'sample'\n")
     subprocess.run(["git", "-C", str(target), "init", "-q"], check=True)
     untracked = discover(target)
     assert untracked["observed"]["project_skill_roots"] == []
@@ -744,17 +740,15 @@ def test_what_git_ignores_and_nested_repositories_are_not_entered(tmp_path: Path
     target = tmp_path / "project"
     target.mkdir()
     subprocess.run(["git", "init", "-q", str(target)], check=True)
-    (target / ".gitignore").write_text("out/\n*.local.json\n", encoding="utf-8")
+    write(target / ".gitignore", "out/\n*.local.json\n")
     (target / "out" / "big").mkdir(parents=True)
-    (target / "out" / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
-    (target / "package.local.json").write_text("{}\n", encoding="utf-8")
+    write(target / "out" / "pyproject.toml", "[project]\n")
+    write(target / "package.local.json", "{}\n")
     nested = target / "vendor-src" / "tool"
     nested.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(nested)], check=True)
-    (nested / "package.json").write_text(
-        json.dumps({"scripts": {"test": "jest"}}), encoding="utf-8"
-    )
-    (target / "go.mod").write_text("module example.invalid/p\n", encoding="utf-8")
+    write(nested / "package.json", json.dumps({"scripts": {"test": "jest"}}))
+    write(target / "go.mod", "module example.invalid/p\n")
 
     result = discover(target)
 
@@ -768,8 +762,8 @@ def test_what_git_ignores_and_nested_repositories_are_not_entered(tmp_path: Path
 def test_outside_git_the_report_says_no_gitignore_was_applied(tmp_path: Path) -> None:
     target = tmp_path / "plain"
     (target / "out").mkdir(parents=True)
-    (target / ".gitignore").write_text("out/\n", encoding="utf-8")
-    (target / "out" / "go.mod").write_text("module example.invalid/p\n", encoding="utf-8")
+    write(target / ".gitignore", "out/\n")
+    write(target / "out" / "go.mod", "module example.invalid/p\n")
 
     result = discover(target)
 

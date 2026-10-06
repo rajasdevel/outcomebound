@@ -4,12 +4,14 @@ A leading `~` and every code point below 32 plus DEL are refused wherever a path
 is read, and a spelling that reaches `.git` on any filesystem is refused too.
 """
 
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from outcomebound_tools import discovery, paths
+from tests.portable import WINDOWS, needs_symlinks, write
 
 CONTROL_ROOTS = ("a\x01b", "a\x7fb", "pkg\tsrc")
 
@@ -129,6 +131,7 @@ def test_bounded_relative_gives_the_grammar_verdict_on_every_corpus_value():
         assert paths.admits(value) is False
 
 
+@needs_symlinks
 def test_read_bounded_separates_a_hostile_path_from_an_unreadable_file(tmp_path):
     (tmp_path / "doc.md").write_bytes(b"body\n")
     assert paths.read_bounded(tmp_path, "doc.md") == b"body\n"
@@ -153,7 +156,7 @@ def test_read_bounded_separates_a_hostile_path_from_an_unreadable_file(tmp_path)
     # every component and not on the resolved result.
     outside = tmp_path.parent / "outside"
     outside.mkdir(exist_ok=True)
-    (outside / "secret.md").write_text("secret\n", encoding="utf-8")
+    write(outside / "secret.md", "secret\n")
     (tmp_path / "linked").symlink_to(outside, target_is_directory=True)
     with pytest.raises(paths.PathError) as linked:
         paths.read_bounded(tmp_path, "linked/secret.md")
@@ -181,6 +184,7 @@ def test_a_printed_command_word_is_quoted_for_the_shells_that_run_it(monkeypatch
     command, PowerShell and Git Bash, both read a single-quoted word whole, and a path is
     written with forward slashes, which each Windows shell and program takes."""
 
+    monkeypatch.setattr("sys.platform", "linux")
     assert paths.shell_word("plain-word_1.txt") == "plain-word_1.txt"
     assert paths.shell_word("it's here") == "'it'\"'\"'s here'"
     monkeypatch.setattr("sys.platform", "win32")
@@ -203,6 +207,7 @@ def test_windows_refuses_a_name_it_cannot_hold_and_no_other_platform_does(
     relative: str, monkeypatch
 ) -> None:
     assert paths.admits(relative) is True, "the grammar stays as every manifest agrees on it"
+    monkeypatch.setattr("sys.platform", "linux")
     assert paths.windows_refusal(relative) is None
     monkeypatch.setattr("sys.platform", "win32")
     assert paths.windows_refusal(relative)
@@ -235,11 +240,11 @@ def test_a_junction_is_a_way_in_that_a_symlink_is(tmp_path, monkeypatch) -> None
     def lstat(self, **kwargs):
         found = real(self, **kwargs)
         tag = {"linked": paths.REPARSE_TAG_JUNCTION, "cloud": 0x9000001A}.get(self.name, 0)
-        return SimpleNamespace(
-            **{n: getattr(found, n) for n in dir(found) if n.startswith("st_")}, st_reparse_tag=tag
-        )
+        fields = {n: getattr(found, n) for n in dir(found) if n.startswith("st_")}
+        return SimpleNamespace(**{**fields, "st_reparse_tag": tag})
 
     monkeypatch.setattr(Path, "lstat", lstat)
+    monkeypatch.setattr("sys.platform", "linux")
     assert not paths.redirects(folder), "no other platform has a junction"
     monkeypatch.setattr("sys.platform", "win32")
     with pytest.raises(paths.PathError, match="symlink"):
@@ -247,3 +252,26 @@ def test_a_junction_is_a_way_in_that_a_symlink_is(tmp_path, monkeypatch) -> None
     (tmp_path / "cloud").mkdir()
     (tmp_path / "cloud/y.md").write_bytes(b"y\n")
     assert paths.read_bounded(tmp_path, "cloud/y.md") == b"y\n"
+
+
+@pytest.mark.skipif(not WINDOWS, reason="a directory junction exists only on Windows")
+def test_a_real_junction_is_a_way_in_that_a_symlink_is(tmp_path) -> None:
+    """The emulated test above fakes the reparse tag; here `mklink /J`, which a normal account may
+    run, makes the junction, and the check reads what Windows wrote."""
+
+    target = tmp_path / "real"
+    target.mkdir()
+    write(target / "x.md", "x\n")
+    made = subprocess.run(
+        ["cmd", "/c", "mklink", "/J", str(tmp_path / "junction"), str(target)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert made.returncode == 0, made.stdout + made.stderr
+
+    assert paths.redirects(tmp_path / "junction")
+    assert not paths.redirects(target)
+    with pytest.raises(paths.PathError, match="symlink"):
+        paths.read_bounded(tmp_path, "junction/x.md")
+    assert paths.read_bounded(tmp_path, "real/x.md") == b"x\n"
