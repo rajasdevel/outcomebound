@@ -58,6 +58,7 @@ TILDE = re.compile(r"(?<![\w.])~(?=/)[^\s`'\"()<>\[\]{},;]*")
 # matches an entry exactly, or as a path below it.
 DOCUMENTED = {
     "~/.outcomebound/research": "the link `outcomebound research clone` makes, documented",
+    "~/.outcomebound/rulings.json": "the rulings file `instructions rule` writes, documented",
     "~/.claude/CLAUDE.md": "Claude Code's user memory file, named as outside what adopt reads",
     "~/.gitconfig": "Git's user configuration, named in SECURITY.md",
     "~/x": "a synthetic home-relative path that tests and a docstring show as refused",
