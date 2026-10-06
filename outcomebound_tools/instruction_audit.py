@@ -724,11 +724,29 @@ def _split_at_pins(run: str) -> list[str]:
     return pieces
 
 
-def _decoded(piece: str) -> tuple[int, int, bool]:
-    """Printable characters, characters, and whether a compressed stream starts, at the
-    alignment of `piece` that reads most like text."""
+def _share(raw: bytes) -> float:
+    """How much of `raw` reads as text: as UTF-8, any printable character; as UTF-16, printable
+    ASCII only, since random bytes read as UTF-16 give printable characters of other scripts."""
 
-    best = (0, 0, False)
+    def printable(c: str) -> bool:
+        return c != "\ufffd" and (c.isprintable() or c in "\t\n\r")
+
+    shares = []
+    text = raw.decode("utf-8", "replace")
+    if text:
+        shares.append(sum(map(printable, text)) / len(text))
+    for codec in ("utf-16-le", "utf-16-be"):
+        text = raw[: len(raw) // 2 * 2].decode(codec, "replace")
+        if text:
+            shares.append(sum(1 for c in text if c < "\x7f" and printable(c)) / len(text))
+    return max(shares, default=0.0)
+
+
+def _decoded(piece: str) -> tuple[float, int, bool]:
+    """The best share of text over the alignments of `piece`, the bytes it decodes to there,
+    and whether a compressed stream starts at any of them."""
+
+    best, size, compressed = 0.0, 0, False
     for part in piece.split("="):
         for start in range(4):
             usable = part[start:]
@@ -736,35 +754,33 @@ def _decoded(piece: str) -> tuple[int, int, bool]:
             if not usable:
                 continue
             raw = base64.b64decode(usable, validate=True)
-            text = raw.decode("utf-8", "replace")
-            printable = sum(1 for c in text if c != "\ufffd" and (c.isprintable() or c in "\t\n\r"))
-            compressed = raw.startswith(_COMPRESSED)
-            if compressed or printable * max(best[1], 1) > best[0] * len(text):
-                best = (printable, len(text), compressed or best[2])
-    return best
+            compressed = compressed or raw.startswith(_COMPRESSED)
+            share = _share(raw)
+            if share > best:
+                best, size = share, len(raw)
+    return best, size, compressed
 
 
 def _payload(run: str) -> bool:
-    """Whether a base64-shaped run is a payload: see `_TEXT_SHARE`."""
+    """Whether a base64-shaped run is a payload: see `_TEXT_SHARE`. Each piece is judged alone,
+    so pins an author adds cannot dilute a readable piece, and the pieces are judged together,
+    so a payload cut into short pieces is still read."""
 
-    pieces = _split_at_pins(run)
-    rest = "".join(pieces)
-    if len(rest) < _RUN_LENGTH:
+    pieces = [piece for piece in _split_at_pins(run) if piece]
+    if len("".join(pieces)) < _RUN_LENGTH:
         return False
-    if re.fullmatch(r"[0-9a-fA-F]+", rest) or any(
+    if re.fullmatch(r"[0-9a-fA-F]+", "".join(pieces)) or any(
         len(stretch.group(0)) >= 45 and not _is_pin(stretch.group(0))
         for stretch in _HEX_STRETCH.finditer(run)
     ):
         return True
-    printable = characters = 0
+    readable = total = 0.0
     for piece in pieces:
-        if not piece:
-            continue
-        good, total, compressed = _decoded(piece)
-        if compressed:
+        share, size, compressed = _decoded(piece)
+        if compressed or (size >= _TEXT_BYTES and share >= _TEXT_SHARE):
             return True
-        printable, characters = printable + good, characters + total
-    return characters >= _TEXT_BYTES and printable >= _TEXT_SHARE * characters
+        readable, total = readable + share * size, total + size
+    return total >= _TEXT_BYTES and readable >= _TEXT_SHARE * total
 
 
 def _concealed_content(path: str, text: str) -> list[Finding]:
@@ -1496,11 +1512,31 @@ def _rulings() -> dict[str, str]:
         return {}
 
 
-def _ruling_id(root: Path, finding: Finding, digests: dict[str, str | None]) -> str:
-    """The id a ruling on `finding` is recorded under, or "" where no ruling applies: a review
-    hit on a regular file inside the target, pinned to the file's bytes."""
+def _repository(root: Path) -> str:
+    """Where a ruling holds: the clone's common Git directory, which its worktrees share, else
+    the target itself. A hook a person ruled safe names that repository's own code."""
 
-    if finding.kind != "review" or finding.verdict != UNVERIFIED:
+    try:
+        common = _git(root, "rev-parse", "--git-common-dir").decode("utf-8").strip()
+    except (AuditError, OSError, UnicodeDecodeError):
+        return str(root)
+    return str((root / common).resolve()) if common else str(root)
+
+
+def _ruling_id(
+    root: Path, repository: str, finding: Finding, digests: dict[str, str | None]
+) -> str:
+    """The id a ruling on `finding` is recorded under, or "" where no ruling applies: a review
+    hit that changes the result, on a regular file inside the target, pinned to the repository
+    and to the file's bytes. A hit on a change since `--base` takes none: it names a diff, not
+    content to judge."""
+
+    if (
+        finding.kind != "review"
+        or finding.verdict != UNVERIFIED
+        or not finding.decides
+        or finding.check == "instruction-change"
+    ):
         return ""
     if finding.path not in digests:
         candidate = root / finding.path
@@ -1514,7 +1550,7 @@ def _ruling_id(root: Path, finding: Finding, digests: dict[str, str | None]) -> 
     digest = digests[finding.path]
     if digest is None:
         return ""
-    pinned = "\0".join((finding.check, finding.path, finding.fact, digest))
+    pinned = "\0".join((repository, finding.check, finding.path, finding.fact, digest))
     return hashlib.sha256(pinned.encode("utf-8")).hexdigest()[:16]
 
 
@@ -1522,11 +1558,13 @@ def _with_rulings(root: Path, findings: Sequence[Finding]) -> list[Finding]:
     """Each review hit with its ruling id; a hit a person ruled safe is still reported, with
     the day, and does not change the result."""
 
-    recorded = _rulings()
+    # A home inside the target would put the rulings file where a change under check writes.
+    recorded = {} if _inside(root, rulings_path()) else _rulings()
+    repository = _repository(root)
     digests: dict[str, str | None] = {}
     marked = []
     for finding in findings:
-        ruling = _ruling_id(root, finding, digests)
+        ruling = _ruling_id(root, repository, finding, digests)
         day = recorded.get(ruling) if ruling else None
         if day:
             finding = replace(
