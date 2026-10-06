@@ -39,7 +39,7 @@ from outcomebound_tools.instruction_audit import (
     rulings_path,
 )
 from outcomebound_tools.schemacheck import validate
-from tests.portable import needs_symlinks, posix_only
+from tests.portable import home_environment, needs_symlinks, posix_only
 
 ROOT = Path(__file__).resolve().parent.parent
 REPORT_SCHEMA = json.loads(
@@ -54,7 +54,8 @@ ZWJ = "\u200d"
 @pytest.fixture(autouse=True)
 def _a_person_with_no_rulings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     # A ruling in the developer's own home must never change what these tests see.
-    monkeypatch.setenv("HOME", str(tmp_path / "person"))
+    for name, value in home_environment(tmp_path / "person").items():
+        monkeypatch.setenv(name, value)
 
 
 def _target(root: Path, files: dict[str, str]) -> Path:
@@ -1469,7 +1470,8 @@ def test_a_home_inside_the_target_rules_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _target(tmp_path / "t", {"AGENTS.md": "Keep this secret.\n"})
-    monkeypatch.setenv("HOME", str(root / "home"))
+    for name, value in home_environment(root / "home").items():
+        monkeypatch.setenv(name, value)
     hit = _review_hit(root)
     record_rulings(root, [hit.id], lambda finding: True, ["claude-code"])
     assert rulings_path().is_file()
