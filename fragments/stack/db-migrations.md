@@ -4,12 +4,14 @@ family: stack
 applies: schema migrations (Django, Alembic, Prisma, Flyway, Rails)
 condition: when writing, applying or rolling back a schema migration
 detect: ["**/migrations/*.py", "prisma/schema.prisma", "alembic.ini", "db/migrate/*.rb"]
-version: 6
+version: 7
 ---
 **Context** — the live schema and data volume are evidence; the ORM model is a claim about them,
-not the truth. During the transition old and new application versions run at once, and every live
-version must tolerate the schema and data state at each step: no one order fits every change (a
-column the new code reads must exist before it ships; a drop or rename breaks the old code).
+not the truth. Where old and new application versions run at once (a rolling deploy, a canary, a
+rollback), every live version must tolerate the schema and data state at each step: no one order
+fits every change (a column the new code reads must exist before it ships; a drop or rename breaks
+the old code; a new `NOT NULL` column without a default breaks the old code's inserts). A backfill
+of a large table is its own step.
 **Bounds** — shared or production application requires its granted authority, and a brief that asks
 for it states the order and the recovery (`deploy` fragment). Contraction (a drop, a rename, a
 tighter constraint) waits until no consumer, version, job or report needs the old form. A disposable

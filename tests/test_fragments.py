@@ -373,14 +373,30 @@ def test_ci_release_is_proposed_only_where_the_repository_shows_it_releases(
     ("files", "runtime", "deploy"),
     [
         (("pyproject.toml", "package.json"), False, False),
-        (("Procfile",), True, False),
+        (("Procfile",), True, True),
         (("docker-compose.yml",), True, False),
         (("fly.toml",), False, True),
+        (("k8s/kustomization.yaml",), False, True),
+        (("config.ru",), True, False),
+        (("cypress.config.ts",), True, False),
         ((".github/workflows/deploy-prod.yml",), False, True),
+        ((".github/workflows/prod-deploy.yaml",), False, True),
         ((".github/workflows/ci.yml",), False, False),
         (("infra/main.tf",), False, True),
     ],
-    ids=["libraries", "procfile", "compose", "fly", "deploy-workflow", "ci-only", "terraform"],
+    ids=[
+        "libraries",
+        "procfile",
+        "compose",
+        "fly",
+        "kustomize",
+        "rack",
+        "cypress",
+        "deploy-workflow",
+        "named-deploy-workflow",
+        "ci-only",
+        "terraform",
+    ],
 )
 def test_runtime_and_deploy_are_proposed_only_where_the_repository_shows_them(
     tmp_path, files, runtime, deploy
@@ -391,6 +407,10 @@ def test_runtime_and_deploy_are_proposed_only_where_the_repository_shows_them(
     proposed = detect(tmp_path, load_all(ROOT))
     assert ("runtime" in proposed) is runtime
     assert ("deploy" in proposed) is deploy
+
+
+@shipped_catalog
+def test_deploy_declares_no_edges():
     assert load_all(ROOT)["deploy"].edges == ()
 
 
