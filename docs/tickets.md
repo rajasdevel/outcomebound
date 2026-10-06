@@ -238,6 +238,10 @@ $ outcomebound tickets export
 gh api graphql --paginate --slurp -F owner=owner -F name=name -f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" > issues.json
 ```
 
+The command is for a POSIX shell, such as Git Bash. In PowerShell, replace the `-f query=...` part
+with `-F query=@<home>/templates/tickets/github-export.graphql`, where `<home>` is the folder that
+`outcomebound home` prints; `gh api` reads a field that starts with `@` from that file.
+
 `export` exits with `0` when it printed the command. It exits with `1` for a refusal: no
 declaration, or a declaration that is not valid. It exits with `2` for a usage error.
 

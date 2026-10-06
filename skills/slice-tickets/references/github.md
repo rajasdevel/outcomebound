@@ -10,6 +10,10 @@ gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
   -f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" > issues.json
 ```
 
+That line is for a POSIX shell, such as Git Bash. In PowerShell, pass the file itself: `-F
+query=@<home>/templates/tickets/github-export.graphql`, with `<home>` the folder `outcomebound
+home` prints, since `gh api` reads a field that starts with `@` from that file.
+
 The verbs refuse a file that is not this query's `--paginate --slurp` output for the declared
 repository.
 

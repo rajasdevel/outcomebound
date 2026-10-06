@@ -230,8 +230,13 @@ that run fails, the required status `main-green` (the workflow `main-green.yml`)
 open pull request, so nothing lands until `main` passes again, except a pull request labelled
 `main-fix`: the fix, or the revert of the merge that broke `main`. Fix or revert first, and land
 nothing else while `main` is red. The label goes only on a pull request whose change is that fix or
-revert, and its description names the commit that broke `main`. A status belongs to a commit, not
-to a pull request, so the label lets every pull request whose head is the same commit through. CI checks the title and the description
+revert, and its description names the commit that broke `main`. Only an agent that lands a fix or a revert applies the label, and it applies it
+to no other pull request; GitHub does not enforce this, so the rule is the agents' own. A status
+belongs to a commit, not to a pull request, so the label lets every pull request whose head is the
+same commit through. The status lags the event that sets it: a workflow run starts after the
+merge or the CI run ends, so a merge that is in flight is not a closed tree, and a pull request can
+land in that gap. A run that a newer pending run replaced can show as `cancelled`; the newer run
+sets the statuses. CI checks the title and the description
 again each time they change, and checks that each commit of the pull request, except a merge
 commit, has a `Signed-off-by` line (the workflow `pr-text.yml`).
 

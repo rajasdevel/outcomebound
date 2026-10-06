@@ -27,7 +27,9 @@ done at every tier.
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
 `done-when` stay the person's: a package adds to them and never changes them. An edit outside `bounds`
 that only carries the ticket's own change, such as an import or an inventory entry for its own
-files, is inside the ticket's authority, as the tickets fragment says, and is no change to them. Where the ticket
+files, is inside the ticket's authority, as the tickets fragment says, and is no change to them. Where an edge of the ticket holds only on a condition the implementer may
+be unable to settle, the package names the default: the side to take when it cannot be settled,
+the smaller change inside `bounds`, and the implementer's handover says which side it took. Where the ticket
 cannot be built as written, file the follow-up that makes it buildable where a goal envelope the
 person wrote accepts follow-ups, since that line is their acceptance of it; otherwise put the
 change to the person as a decision brief in a comment on the ticket. Either way, go on with the

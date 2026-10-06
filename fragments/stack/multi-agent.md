@@ -4,7 +4,7 @@ family: stack
 applies: repositories where work is delegated to subagents or parallel workers
 condition: when delegating to a subagent or integrating a delegate's work
 detect: [".claude/agents/*.md", ".codex/agents/*.md", ".agents/*.md"]
-version: 5
+version: 6
 ---
 **Context** — a delegate's report is a claim; the worktree diff, the check output, and the files
 it actually touched are the evidence. The orchestrator's context is not shared state.
@@ -18,5 +18,6 @@ across sessions.
 **Completion bar** — the orchestrator verifies reported diffs and check evidence; re-run affected
 checks when their inputs or integration context changed. Human observations remain separately attributed.
 A delegate that reports itself blocked is recorded with its reason, and the work that does not
-depend on it goes on.
+depend on it goes on; where none does, end the turn and wait for its report, never poll. A worker
+holds one role and one ticket at a time.
 **Distinguish** — a delegate reported ≠ the orchestrator verified ≠ integrated ≠ merged.
