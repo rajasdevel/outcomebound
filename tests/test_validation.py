@@ -1,5 +1,7 @@
 """Changed-risk validation executes explicit checks without claiming more than they establish."""
 
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -331,3 +333,118 @@ def test_claim_without_a_command_is_an_invalid_plan(tmp_path, run):
     # which the schema check leaves unreachable, stays as defense in depth.
     assert "missing required field 'command'" in r.stderr
     assert "claims[0]" in r.stderr
+
+
+def _none_ran_claim(contract: dict[str, Any], code: str, **overrides: Any) -> dict[str, Any]:
+    return _claim([sys.executable, "-c", code], executes_tests=contract, **overrides)
+
+
+def test_a_declared_no_tests_exit_reads_unverified_and_keeps_both_facts(tmp_path):
+    claim = _none_ran_claim({"no_tests_exit": 5}, "raise SystemExit(5)")
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 2, r.stdout
+    assert "UNVERIFIED" in r.stdout
+    assert "declared check exit 5" in r.stdout and "no test executed" in r.stdout
+
+
+def test_the_same_exit_without_the_declaration_stays_fail(tmp_path):
+    r = _run(tmp_path, [_claim([sys.executable, "-c", "raise SystemExit(5)"])])
+    assert r.returncode == 1
+    assert "FAIL" in r.stdout and "no test executed" not in r.stdout
+
+
+def test_another_nonzero_exit_stays_fail_under_the_contract(tmp_path):
+    r = _run(tmp_path, [_none_ran_claim({"no_tests_exit": 5}, "raise SystemExit(1)")])
+    assert r.returncode == 1
+    assert "FAIL" in r.stdout and "no test executed" not in r.stdout
+
+
+def test_exit_zero_without_the_declared_output_reads_unverified(tmp_path):
+    claim = _none_ran_claim({"ran_output": r"\d+ passed"}, "print('collected 0 items')")
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 2, r.stdout
+    assert "declared check exited 0" in r.stdout and "no test executed" in r.stdout
+
+
+def test_exit_zero_with_the_declared_output_passes(tmp_path):
+    claim = _none_ran_claim({"ran_output": r"\d+ passed"}, "print('3 passed')")
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 0, r.stdout
+    assert "VERDICT: PASS" in r.stdout
+
+
+def test_exit_zero_with_no_declaration_passes_though_no_test_ran(tmp_path):
+    r = _run(tmp_path, [_claim([sys.executable, "-c", "print('collected 0 items')"])])
+    assert r.returncode == 0
+
+
+def test_when_none_fail_reads_fail(tmp_path):
+    claim = _none_ran_claim({"no_tests_exit": 5, "when_none": "FAIL"}, "raise SystemExit(5)")
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 1
+    assert "FAIL" in r.stdout and "no test executed" in r.stdout
+
+
+def test_a_failing_command_keeps_fail_under_ran_output(tmp_path):
+    claim = _none_ran_claim({"ran_output": "ran"}, "raise SystemExit(3)")
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 1 and "no test executed" not in r.stdout
+
+
+@pytest.mark.parametrize(
+    "contract",
+    [
+        {},
+        {"no_tests_exit": 5, "ran_output": "x"},
+        {"no_tests_exit": "5"},
+        {"ran_output": "("},
+        {"no_tests_exit": 5, "when_none": "PASS"},
+        {"no_tests_exit": 5, "other": 1},
+    ],
+)
+def test_a_malformed_contract_is_an_invalid_plan(tmp_path, run, contract):
+    r = run(_plan(tmp_path, [_claim(executes_tests=contract)]))
+    assert r.returncode == 2
+    assert "invalid plan" in r.stderr.lower()
+
+
+def test_a_waiver_is_recorded_beside_a_fail_and_the_verdict_stays(tmp_path, run):
+    path = _plan(tmp_path, [_claim([sys.executable, "-c", "raise SystemExit(7)"])])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = validation._main([str(path), "--waive", "focused-regression=person said go on"])
+    assert code == 1
+    assert "waived by instruction: person said go on; the observed FAIL stands" in out.getvalue()
+    assert "VERDICT: FAIL" in out.getvalue()
+
+
+def test_a_waiver_leaves_unverified_unverified(tmp_path):
+    path = _plan(tmp_path, [_claim(["outcomebound-no-such-command"])])
+    r = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "outcomebound_tools.validation",
+            str(path),
+            "--waive",
+            "focused-regression=skip it",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONPATH": str(ROOT)},
+        timeout=10,
+    )
+    assert r.returncode == 2
+    assert "the observed UNVERIFIED stands" in r.stdout and "VERDICT: UNVERIFIED" in r.stdout
+
+
+def test_without_a_waiver_no_waiver_line_is_printed(tmp_path):
+    r = _run(tmp_path, [_claim([sys.executable, "-c", "raise SystemExit(7)"])])
+    assert "waived" not in r.stdout
+
+
+def test_a_waiver_naming_no_claim_is_an_invalid_plan(tmp_path, capsys):
+    path = _plan(tmp_path, [_claim()])
+    assert validation._main([str(path), "--waive", "nope=x"]) == 2
+    assert "names no claim" in capsys.readouterr().err

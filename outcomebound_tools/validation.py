@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import dataclasses
 import json
 import math
 import re
@@ -40,8 +41,18 @@ LOG_TAIL_LINES = 20
 
 PLAN_KEYS = frozenset({"version", "cwd", "timeout_seconds", "claims"})
 CLAIM_KEYS = frozenset(
-    {"name", "risk", "kind", "required", "command", "required_paths", "timeout_seconds"}
+    {
+        "name",
+        "risk",
+        "kind",
+        "required",
+        "command",
+        "required_paths",
+        "timeout_seconds",
+        "executes_tests",
+    }
 )
+TESTS_KEYS = frozenset({"no_tests_exit", "ran_output", "when_none"})
 
 _PLAN_SCHEMA_PATH = home.ROOT / "schemas" / "validation-plan.schema.json"
 _PLAN_SCHEMA: dict[str, Any] | None = None
@@ -62,6 +73,20 @@ def _plan_schema() -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
+class CountContract:
+    """What the project declares a run that executed no test looks like.
+
+    Exactly one of `no_tests_exit` (the command's own exit code for "no tests collected",
+    such as pytest's 5) or `ran_output` (a regex the output holds where at least one test
+    ran). `when_none` is the verdict for such a run: UNVERIFIED (default) or FAIL.
+    """
+
+    no_tests_exit: int | None
+    ran_output: re.Pattern[str] | None
+    when_none: str
+
+
+@dataclass(frozen=True)
 class Claim:
     name: str
     risk: str
@@ -70,6 +95,7 @@ class Claim:
     command: tuple[str, ...]
     required_paths: tuple[str, ...]
     timeout_seconds: float | None
+    tests: CountContract | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +111,7 @@ class Result:
     status: str
     detail: str
     log_path: Path | None = None
+    waiver: str | None = None
 
 
 def _nonempty_string(value: Any, field: str) -> str:
@@ -120,6 +147,32 @@ def _optional_seconds(value: Any, field: str) -> float | None:
     return None if value is None else _positive_number(value, field)
 
 
+def _tests_contract(value: Any, field: str) -> CountContract:
+    if not isinstance(value, dict):
+        raise PlanError(f"{field} must be an object")
+    unknown = sorted(set(value) - TESTS_KEYS)
+    if unknown:
+        raise PlanError(f"{field} has unknown field(s): {', '.join(unknown)}")
+    if ("no_tests_exit" in value) == ("ran_output" in value):
+        raise PlanError(f"{field} must name exactly one of no_tests_exit and ran_output")
+    when_none = value.get("when_none", UNVERIFIED)
+    if when_none not in (UNVERIFIED, FAIL):
+        raise PlanError(f"{field}.when_none must be {UNVERIFIED} or {FAIL}")
+    exit_code_value = value.get("no_tests_exit")
+    if "no_tests_exit" in value and (
+        isinstance(exit_code_value, bool) or not isinstance(exit_code_value, int)
+    ):
+        raise PlanError(f"{field}.no_tests_exit must be an integer")
+    pattern = None
+    if "ran_output" in value:
+        text = _nonempty_string(value["ran_output"], f"{field}.ran_output")
+        try:
+            pattern = re.compile(text, re.MULTILINE)
+        except re.error as error:
+            raise PlanError(f"{field}.ran_output is not a regular expression: {error}") from error
+    return CountContract(exit_code_value, pattern, when_none)
+
+
 def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float | None) -> Claim:
     """One claim after its name was read; every other field is checked here."""
 
@@ -143,6 +196,11 @@ def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float 
         ),
         timeout_seconds=_optional_seconds(
             item.get("timeout_seconds", default_timeout), f"{prefix}.timeout_seconds"
+        ),
+        tests=(
+            _tests_contract(item["executes_tests"], f"{prefix}.executes_tests")
+            if "executes_tests" in item
+            else None
         ),
     )
 
@@ -303,9 +361,33 @@ def run_claim(claim: Claim, cwd: Path, log_dir: Path | None) -> Result:
     if timed_out:
         detail = f"timeout after {claim.timeout_seconds:g} seconds"
         return Result(claim, UNVERIFIED, detail, log_path)
-    if status == 0:
-        return Result(claim, PASSED, "declared check exited 0", log_path)
-    return Result(claim, FAIL, f"declared check exit {status}", log_path)
+    return _judge(claim, status, output, log_path)
+
+
+def _none_ran(
+    claim: Claim, contract: CountContract, observed: str, log_path: Path | None
+) -> Result:
+    """The command's own word, and the project's declared contract that it ran no test."""
+
+    detail = f"{observed}; the declared contract says no test executed, so behavior is unverified"
+    return Result(claim, contract.when_none, detail, log_path)
+
+
+def _judge(claim: Claim, status: int | None, output: bytes, log_path: Path | None) -> Result:
+    """A finished command's result: its exit status, and a declared contract that it ran a test."""
+
+    contract = claim.tests
+    if contract is not None and status is not None and status == contract.no_tests_exit:
+        return _none_ran(claim, contract, f"declared check exit {status}", log_path)
+    if status != 0:
+        return Result(claim, FAIL, f"declared check exit {status}", log_path)
+    if (
+        contract is not None
+        and contract.ran_output is not None
+        and not contract.ran_output.search(output.decode("utf-8", errors="replace"))
+    ):
+        return _none_ran(claim, contract, "declared check exited 0", log_path)
+    return Result(claim, PASSED, "declared check exited 0", log_path)
 
 
 def tail(log_path: Path | None, lines: int = LOG_TAIL_LINES) -> str:
@@ -337,6 +419,19 @@ def exit_code(status: str) -> int:
     return {PASSED: 0, FAIL: 1, UNVERIFIED: 2}[status]
 
 
+def _waivers(items: Sequence[str], plan: Plan) -> dict[str, str]:
+    names = {claim.name for claim in plan.claims}
+    waivers: dict[str, str] = {}
+    for item in items:
+        name, separator, reason = item.partition("=")
+        if not separator or not reason.strip():
+            raise PlanError(f"--waive wants NAME=REASON, got: {item}")
+        if name not in names:
+            raise PlanError(f"--waive names no claim: {name}")
+        waivers[name] = reason.strip()
+    return waivers
+
+
 def _main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="outcomebound validation",
@@ -358,21 +453,39 @@ def _main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--cwd", help="override the plan cwd; relative paths use the plan directory"
     )
+    parser.add_argument(
+        "--waive",
+        action="append",
+        default=[],
+        metavar="NAME=REASON",
+        help=(
+            "record, beside a claim's observed result, that a person told you to go on "
+            "without it; the result and the verdict stay as observed"
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
         plan = load_plan(Path(args.plan), cwd_override=args.cwd)
+        waivers = _waivers(args.waive, plan)
     except PlanError as error:
         sys.stderr.write(f"validation: UNVERIFIED — invalid plan: {error}\n")
         return 2
 
-    results = run_plan(plan)
+    results = tuple(
+        dataclasses.replace(result, waiver=waivers.get(result.claim.name))
+        for result in run_plan(plan)
+    )
     for result in results:
         requirement = "required" if result.claim.required else "optional"
         sys.stdout.write(
             f"{result.status} {result.claim.name} [{result.claim.kind}, {requirement}] — "
             f"{result.detail}; addresses: {result.claim.risk}\n"
         )
+        if result.waiver is not None:
+            sys.stdout.write(
+                f"  waived by instruction: {result.waiver}; the observed {result.status} stands\n"
+            )
         excerpt = "" if result.status == PASSED else tail(result.log_path)
         if excerpt and result.log_path is not None:
             sys.stdout.write(f"  last {LOG_TAIL_LINES} lines of {result.log_path.name}:\n")
