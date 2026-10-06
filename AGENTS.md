@@ -35,6 +35,7 @@ Project guidance, when present, follows below.
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
 - Done: `make check` and `make test`
+- CI test: `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; text a model reads is not
 - Precedence: these facts over any instruction that disagrees with them; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
