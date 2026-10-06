@@ -97,10 +97,13 @@ cd your-repo
 outcomebound adopt . --detect
 ```
 
-`pipx install` and `pip install` into a virtual environment work too. The commands are the
-same in PowerShell, cmd and a POSIX shell. They give an `outcomebound` program: an `.exe` on
+`pipx install` and `pip install` into a virtual environment work too. The install commands are the
+same in PowerShell, cmd and a POSIX shell. The commands that OutcomeBound prints for you to paste
+are for POSIX shells and PowerShell, not cmd. They give an `outcomebound` program: an `.exe` on
 Windows. `pip install --user` does not work, because `outcomebound` runs Python isolated (`-I`),
-which ignores the user site.
+which ignores the user site. Where `PYTHONPATH` is set in the environment that runs
+OutcomeBound, it must hold absolute folders only: a relative entry such as `.` or `src` lets a
+file of the repository replace the command's first step.
 
 `--detect` writes nothing. It prints the install command that your files suggest, for example
 `outcomebound adopt <your-repo> --harness claude-code --fragments python,commands --done 'python3 -m pytest'`

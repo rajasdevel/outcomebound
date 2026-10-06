@@ -915,8 +915,9 @@ class Host:
     """A file adopt keeps blocks in: its bytes as read, its text as planned, and the text as read.
 
     The text is LF and has no byte-order mark, whatever the file has. The planned bytes give it
-    back in the file's own line ending and mark, and a host whose text no block changed keeps
-    its bytes as they are, so adopt never rewrites a file's line endings for its own sake.
+    back with each line the blocks did not touch as it was, in its own ending and mark, the lines
+    the blocks wrote in the ending most of its lines use, and a host whose text no block changed
+    keeps its bytes as they are, so adopt never rewrites a file's line endings for its own sake.
     """
 
     before: bytes | None
@@ -933,7 +934,7 @@ class Host:
             return self.before
         if not (self.text or self.before == b""):
             return None
-        data = textio.with_style(self.text.encode("utf-8"), self.before)
+        data = textio.splice(self.before, self.text) if self.before else self.text.encode("utf-8")
         marked = (self.before or b"").startswith(textio.UTF8_BOM)
         return textio.UTF8_BOM + data if marked else data
 
@@ -2072,6 +2073,11 @@ def detect(target: Path, source: Path) -> int:
             "the host, so where the project runs its tests only in a container, give that "
             "command to --done in its place"
         )
+        if done[-1].split()[0] in ("python", "python3"):
+            line += (
+                "  # the python it names is the interpreter of the machine that ran --detect: "
+                "commit the form your hooks run"
+            )
     if FLOOR_RUNNER in done:
         line += (
             "  # no default branch resolves: the floor runs without --base, so its loosening "

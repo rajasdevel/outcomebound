@@ -11,6 +11,8 @@ Standard library only, and no OutcomeBound import.
 
 from __future__ import annotations
 
+import difflib
+import re
 import sys
 from pathlib import Path
 
@@ -62,3 +64,33 @@ def with_style(data: bytes, like: bytes | None) -> bytes:
     """LF-form `data` written in the line ending the file `like` uses; LF where it is new."""
 
     return data.replace(b"\n", b"\r\n") if like is not None and uses_crlf(like) else data
+
+
+_RAW_LINE = re.compile(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+")
+
+
+def splice(before: bytes, text: str) -> bytes:
+    """The bytes of the file `before` once its text is `text`.
+
+    A line the change left alone keeps its bytes, whatever its ending; a line it wrote is in the
+    ending most of the file's lines use, LF where the file is new or empty. The byte-order mark
+    is not part of the result. Raises `UnicodeDecodeError` where `before` is not UTF-8."""
+
+    raw = _RAW_LINE.findall(decode(before))
+    new = _lines(text)
+    ending = "\r\n" if uses_crlf(before) else "\n"
+    out: list[str] = []
+    for tag, a1, a2, b1, b2 in difflib.SequenceMatcher(
+        None, [universal(line) for line in raw], new, autojunk=False
+    ).get_opcodes():
+        if tag == "equal":
+            out.extend(raw[a1:a2])
+        else:
+            out.extend(line[:-1] + ending if line.endswith("\n") else line for line in new[b1:b2])
+    return "".join(out).encode("utf-8")
+
+
+def _lines(text: str) -> list[str]:
+    """`text` split after each LF, the last piece without one where the text has none."""
+
+    return re.findall(r"[^\n]*\n|[^\n]+", text)

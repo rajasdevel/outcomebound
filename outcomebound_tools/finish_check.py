@@ -622,7 +622,7 @@ NOT_RUN = (126, 127)
 # `make: *** [test] Error 1` lines after it are passed over.
 _MISSING = re.compile(
     r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
-    r"|process_begin: CreateProcess\(NULL, (?P<winmade>\S+)(?: .*)?\) failed\."
+    r"|process_begin: CreateProcess\(NULL, (?P<winmade>[^\s,]+),?(?: .*)?\) failed\."
     r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
     r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>[^\s:]+): (?:command )?not found"
     r"|(?P<launcher>(?:\S*[/\\])?python[\d.]*(?:\.exe)?): No module named (?P<module>[\w.]+))$"
@@ -722,12 +722,19 @@ def confirmed_absent(
     if found is None:
         return False
     # Done runs from the target's root, so an empty or relative entry names a folder of it.
-    entries = (environment if environment is not None else os.environ).get("PATH", "")
+    source = environment if environment is not None else os.environ
+    entries = source.get("PATH", "")
     path = os.pathsep.join(str((target / entry).resolve()) for entry in entries.split(os.pathsep))
     # What the shell could find: on Windows a script with no extension, which Git's shell runs.
     where = {"PATH": path}
+    # What a Windows lookup reads besides PATH: the extensions to try, and the system folder.
+    carried = ("PATHEXT", "SYSTEMROOT")
+    where |= {key: value for key, value in source.items() if key.upper() in carried}
     if not found["module"]:
         tool = _tool_named(found)
+        if _folder_in(tool):
+            # A name with a folder is looked up as it stands, from the target's root.
+            return not (target / tool).is_file()
         return programs.find(tool, where, extensionless=True) is None
     launcher = found["launcher"]
     program = launcher if _folder_in(launcher) else programs.find(launcher, where)

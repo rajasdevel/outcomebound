@@ -125,6 +125,26 @@ def test_a_host_with_a_byte_order_mark_and_crlf_comes_back_byte_for_byte_after_a
     assert (target / "AGENTS.md").read_bytes() == original
 
 
+def test_a_host_with_mixed_line_endings_keeps_every_byte_it_had_through_install_and_removal(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    original = b"# Project\r\n\r\nline one\nline two\r\nline three\r\nlone\rcr\nlast"
+    target = repo(tmp_path / "t")
+    (target / "AGENTS.md").write_bytes(original)
+
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
+    written = (target / "AGENTS.md").read_bytes()
+    # The host's own lines are as they were; the block is in the ending most lines use (CRLF).
+    assert written.startswith(b"<!-- outcomebound:begin")
+    assert b"line one\nline two\r\nline three\r\nlone\rcr\nlast" in written
+    assert not BARE_LF.search(written.split(b"line one")[0])
+    assert run(capsys, str(target), "--check")[0] == 0
+
+    assert run(capsys, str(target), "--remove")[0] == 0
+
+    assert (target / "AGENTS.md").read_bytes() == original
+
+
 def test_an_engine_checked_out_with_crlf_installs_the_same_bytes_as_one_with_lf(
     tmp_path: Path, capsys: Capture
 ) -> None:

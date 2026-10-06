@@ -446,6 +446,64 @@ def test_gnu_make_on_windows_says_a_missing_tool_by_its_error_code(sentence: str
     assert finish_check.missing_tool(ran) is None
 
 
+@pytest.mark.parametrize("recipe", ["pytest", "pytest -q"])
+@pytest.mark.parametrize("echoed", [True, False])
+def test_gnu_make_on_windows_reads_a_recipe_of_one_word_or_more(recipe: str, echoed: bool) -> None:
+    """Breaks if the `CreateProcess` line of a one-word recipe, which has a comma straight after
+    the tool, names the tool with the comma or reads as output that ran before it."""
+
+    output = (
+        (f"{recipe}\r\n" if echoed else "")
+        + f"process_begin: CreateProcess(NULL, {recipe}, ...) failed.\r\n"
+        + "make (e=2): The system cannot find the file specified.\r\n"
+        + "make: *** [probe.mk:2: all] Error 2\r\n"
+    ).encode()
+
+    assert finish_check.missing_tool(output) == "pytest"
+    assert not finish_check.other_failure(output)
+
+
+def test_a_missing_tool_line_that_names_a_path_that_is_there_still_fails(tmp_path: Path) -> None:
+    """Breaks if a Done that prints make's not-found line, or the CreateProcess form, for a tool
+    named by a path that is a file reads as absent, so that a fabricated line could excuse it."""
+
+    root = tmp_path / "project"
+    (root / "bin").mkdir(parents=True)
+    write(root / "bin/tool", "#!/bin/sh\nexit 0\n")
+    absolute = str(root / "bin/tool")
+    for named in (absolute, "bin/tool"):
+        made = f"make: {named}: No such file or directory\n".encode()
+        created = (
+            f"process_begin: CreateProcess(NULL, {named} -q, ...) failed.\n"
+            "make (e=2): The system cannot find the file specified.\n"
+        ).encode()
+        for line in (made, created):
+            assert not finish_check.confirmed_absent(root, line, {"PATH": "/nowhere"}), line
+    gone = b"make: bin/none: No such file or directory\n"
+    assert finish_check.confirmed_absent(root, gone, {"PATH": "/nowhere"})
+
+
+def test_the_absence_check_looks_with_the_path_extensions_and_system_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the lookup that confirms a tool absent drops `PATHEXT` or `SYSTEMROOT`, so that
+    on Windows a tool found only through an extension the machine adds reads as absent."""
+
+    seen: list[dict[str, str]] = []
+
+    def find(name: str, environment: dict[str, str], **_: bool) -> None:
+        seen.append(dict(environment))
+
+    monkeypatch.setattr(finish_check.programs, "find", find)
+    line = b"make: npm: No such file or directory\n"
+    environment = {"PATH": "/nowhere", "Pathext": ".EXE;.PY", "SYSTEMROOT": "C:\\Windows", "X": "1"}
+
+    assert finish_check.confirmed_absent(tmp_path, line, environment)
+
+    assert seen[0]["Pathext"] == ".EXE;.PY" and seen[0]["SYSTEMROOT"] == "C:\\Windows"
+    assert "X" not in seen[0]
+
+
 @pytest.mark.parametrize(
     "printed",
     [
