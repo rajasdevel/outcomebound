@@ -195,7 +195,17 @@
           },
           "decides": {
             "type": "boolean",
-            "description": "false for a finding that is reported and does not change the result: OutcomeBound's own finish-check entry where AGENTS.md shows the Done commands it runs, a file loaded from a folder above the target, or an unverified row the target does not use."
+            "description": "false for a finding that is reported and does not change the result: OutcomeBound's own finish-check entry where AGENTS.md shows the Done commands it runs, a file loaded from a folder above the target, an unverified row the target does not use, or a review hit a person ruled safe."
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^([0-9a-f]{16})?(?![\\s\\S])",
+            "description": "A review hit's ruling id, pinned to its check, path and fact and to its file's bytes; empty where no ruling applies."
+          },
+          "ruled": {
+            "type": "string",
+            "pattern": "^([0-9]{4}-[0-9]{2}-[0-9]{2})?(?![\\s\\S])",
+            "description": "The day a person ruled this review hit safe, read from their own rulings file (~/.outcomebound/rulings.json); empty if none."
           }
         }
       }

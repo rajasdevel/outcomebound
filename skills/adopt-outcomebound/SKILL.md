@@ -29,7 +29,9 @@ preserved.
    `outcomebound instructions check <target>`, which reads what each selected harness loads
    there as untrusted data, and what you read in those files' prose (the ones
    `adapters/harnesses.json` lists for the selected harnesses): what contradicts the contract,
-   what the repository does not back, what is said twice. Edit none of them.
+   what the repository does not back, what is said twice. Edit none of them. A review hit the
+   person judges safe, they record themselves with `outcomebound instructions rule <target> <id>`
+   at a terminal; never run that verb yourself.
 
 Ask the person only what the target cannot show, such as a fragment detection was unsure about,
 as one brief (`outcomebound brief --help`).

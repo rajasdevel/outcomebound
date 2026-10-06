@@ -18,14 +18,19 @@ loads from a folder above the target (`ancestors`), which this module names and 
 and, where every row was selected, the loading facts of a row that loads no file of the
 target that another row does not load too.
 
-What it does not decide: whether a flagged line is benign, which a person decides.
+What it does not decide: whether a flagged line is benign, which a person decides. A person
+records that judgment with the `rule` verb in their own rulings file, outside every target
+(`rulings_path`); a review hit it names, pinned to the hit and to its file's bytes, is still
+reported and no longer changes the result. A base64-shaped run counts as concealed content
+only where it decodes to text or starts a compressed stream, or is a long stretch of hex.
 It never executes, follows or obeys anything it reads: the audited files are untrusted
 data. Of a Git work tree it reads only what Git tracks or does not ignore, plus each path a
 harness row names exactly and the agents' notes in `NOTES`, which Git ignores and the next
 session reads; elsewhere it walks every file. It starts no process but Git, under
 configuration that hands the repository no control, and resolves Git from the absolute
 entries of PATH only; it opens no connection
-and writes nothing. It never opens a file outside the target except its own engine data,
+and `check` writes nothing; `rule` writes only the person's rulings file. It never opens a file
+outside the target except its own engine data and the person's rulings file,
 and never opens a file a harness documents as one person's, by name or through a link; a
 path it leaves unopened is reported UNVERIFIED.
 """
@@ -33,6 +38,7 @@ path it leaves unopened is reported UNVERIFIED.
 from __future__ import annotations
 
 import argparse
+import base64
 import bisect
 import hashlib
 import json
@@ -58,8 +64,10 @@ __all__ = [
     "Report",
     "check",
     "main",
+    "record_rulings",
     "render",
     "report_document",
+    "rulings_path",
 ]
 
 PASS, FAIL, UNVERIFIED = "PASS", "FAIL", "UNVERIFIED"
@@ -93,6 +101,26 @@ _BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
 # pieces by pins is no more than the same pieces between spaces, which already pass.
 _PIN_SLACK = 4
 _HEX_STRETCH = re.compile(r"[0-9a-fA-F]{40,}")
+# A run that is not all hex is a payload only where a model could read it: a piece between pins
+# or `=`, decoded at its best alignment, holds a stretch of text of `_TEXT_BYTES` bytes (one
+# character that is not text between two stretches of `_TEXT_PART` bytes or more joins them),
+# its pieces' stretches of `_TEXT_PART` bytes or more come to `_TEXT_BYTES` together, or a piece
+# starts a compressed stream. Text is a printable character read as UTF-8, or printable ASCII read
+# as UTF-16. Words run together (a note written with its spaces taken out) decode to short
+# stretches only, as random bytes do: a stretch of 24 printable bytes is about one in a billion
+# positions of random bytes.
+_TEXT_BYTES = 24
+_TEXT_PART = 8
+_COMPRESSED = (
+    b"\x1f\x8b",  # gzip
+    b"\x78\x01",  # zlib
+    b"\x78\x9c",
+    b"\x78\xda",
+    b"PK\x03\x04",  # zip
+    b"BZh",  # bzip2
+    b"\xfd7zXZ\x00",  # xz
+    b"\x28\xb5\x2f\xfd",  # zstd
+)
 _FETCH_AND_RUN = (
     re.compile(r"(curl|wget)[^|\n]*\|\s*(sudo\s+(-\w+\s+)*)?(ba|z)?sh\b"),
     re.compile(r"((ba|z)?sh\s+-c|eval)\s+[\"']?\$\(\s*(curl|wget)"),
@@ -191,6 +219,11 @@ class Finding:
     next: str
     # False for a finding that is reported and does not change the result; its fact says why.
     decides: bool = True
+    # A review hit's ruling id: its check, path and fact, and its file's bytes. Empty where no
+    # ruling applies.
+    id: str = ""
+    # The day a person ruled this review hit safe, from their rulings file; empty if none.
+    ruled: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -677,13 +710,99 @@ def _comments(text: str) -> Iterator[tuple[int, str]]:
         yield number, match.group(0)
 
 
-def _without_pins(run: str) -> str:
-    def pin(stretch: re.Match[str]) -> str:
-        hexes = stretch.group(0)
-        short = any(n <= len(hexes) <= n + _PIN_SLACK for n in (40, 64))
-        return "" if short else hexes
+def _is_pin(hexes: str) -> bool:
+    return any(n <= len(hexes) <= n + _PIN_SLACK for n in (40, 64))
 
-    return _HEX_STRETCH.sub(pin, run)
+
+def _split_at_pins(run: str) -> list[str]:
+    """The run cut at each pin, pins left out."""
+
+    pieces: list[str] = []
+    last = 0
+    for stretch in _HEX_STRETCH.finditer(run):
+        if _is_pin(stretch.group(0)):
+            pieces.append(run[last : stretch.start()])
+            last = stretch.end()
+    pieces.append(run[last:])
+    return pieces
+
+
+def _printable(c: str) -> bool:
+    return c != "\ufffd" and (c.isprintable() or c in "\t\n\r")
+
+
+def _bridged(marks: Iterator[tuple[bool, int]]) -> int:
+    """The longest stretch of text, in bytes, from (is text, bytes) per character, where one
+    character that is not text between two stretches of `_TEXT_PART` bytes or more joins them:
+    text broken by a byte now and then still reads as text."""
+
+    longest = run = chain = gap = 0
+    for text, size in marks:
+        if text:
+            run += size
+            longest = max(longest, run, chain + run if gap == 1 and run >= _TEXT_PART else 0)
+            continue
+        if run:
+            chain = chain + run if gap == 1 and run >= _TEXT_PART and chain else run
+            chain = chain if run >= _TEXT_PART else 0
+            gap = 0
+        gap += 1
+        run = 0
+    return longest
+
+
+def _stretch(raw: bytes) -> int:
+    """The longest stretch of text in `raw`, in bytes: printable characters read as UTF-8, or
+    printable ASCII read as UTF-16, since random bytes read as UTF-16 give printable characters
+    of other scripts."""
+
+    longest = _bridged(
+        (_printable(c), len(c.encode("utf-8"))) for c in raw.decode("utf-8", "replace")
+    )
+    for codec in ("utf-16-le", "utf-16-be"):
+        for start in (0, 1):
+            body = raw[start:]
+            text = body[: len(body) // 2 * 2].decode(codec, "replace")
+            longest = max(longest, _bridged((c < "\x7f" and _printable(c), 2) for c in text))
+    return longest
+
+
+def _decoded(piece: str) -> tuple[int, bool]:
+    """The longest stretch of text in `piece`'s decode over its alignments, and whether a
+    compressed stream starts at any of them."""
+
+    longest, compressed = 0, False
+    for start in range(4):
+        usable = piece[start:]
+        usable = usable[: len(usable) // 4 * 4]
+        if not usable:
+            continue
+        raw = base64.b64decode(usable, validate=True)
+        compressed = compressed or raw.startswith(_COMPRESSED)
+        longest = max(longest, _stretch(raw))
+    return longest, compressed
+
+
+def _payload(run: str) -> bool:
+    """Whether a base64-shaped run is a payload: see `_TEXT_BYTES`. Pins and `=` cut it into
+    pieces; a stretch of text is judged by itself, so neither pins, `=` nor random bytes an author
+    adds around it can dilute it, and short stretches are judged together."""
+
+    pieces = [part for piece in _split_at_pins(run) for part in piece.split("=") if part]
+    if len("".join(pieces)) < _RUN_LENGTH:
+        return False
+    if re.fullmatch(r"[0-9a-fA-F]+", "".join(pieces)) or any(
+        len(stretch.group(0)) >= 45 and not _is_pin(stretch.group(0))
+        for stretch in _HEX_STRETCH.finditer(run)
+    ):
+        return True
+    together = 0
+    for piece in pieces:
+        longest, compressed = _decoded(piece)
+        if compressed or longest >= _TEXT_BYTES:
+            return True
+        together += longest if longest >= _TEXT_PART else 0
+    return together >= _TEXT_BYTES
 
 
 def _concealed_content(path: str, text: str) -> list[Finding]:
@@ -695,7 +814,7 @@ def _concealed_content(path: str, text: str) -> list[Finding]:
         if _is_marker(line):
             continue
         for run in _BASE64_RUN.finditer(line):
-            if len(_without_pins(run.group(0))) < _RUN_LENGTH:
+            if not _payload(run.group(0)):
                 continue
             fact = f"a base64-shaped run with no space: {_quote(run.group(0)[:40] + '...')}"
             found.append(_finding("concealed-content", path, number, UNVERIFIED, fact))
@@ -1375,7 +1494,9 @@ def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) 
         for harness in names
         if selected_by == "table" and not _only(harness, names, present)
     )
-    ordered = tuple(sorted(_audit(root, files, names, base, own, unused), key=_order))
+    ordered = tuple(
+        sorted(_with_rulings(root, _audit(root, files, names, base, own, unused)), key=_order)
+    )
     if notes:
         listing += "; and the agents' notes in .agents/handoffs/ and .agents/shared-memory/"
     return Report(
@@ -1388,6 +1509,148 @@ def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) 
         counts=_counts(ordered),
         findings=ordered,
     )
+
+
+# --- a person's rulings ---------------------------------------------------------------
+
+
+def rulings_path() -> Path:
+    """The person's rulings file: outside every target, so no change under check writes it."""
+
+    return Path.home() / ".outcomebound" / "rulings.json"
+
+
+def _rulings() -> dict[str, str]:
+    """Each recorded ruling id and its day; none where the file is absent or malformed."""
+
+    try:
+        document = json.loads(rulings_path().read_text(encoding="utf-8"))
+        return {
+            str(entry["id"]): str(entry["ruled"])
+            for entry in document["rulings"]
+            if isinstance(entry, dict)
+        }
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def _repository(root: Path) -> str:
+    """Where a ruling holds: the clone's common Git directory, which its worktrees share, else
+    the target itself. A hook a person ruled safe names that repository's own code."""
+
+    try:
+        common = _git(root, "rev-parse", "--git-common-dir").decode("utf-8").strip()
+    except (AuditError, OSError, UnicodeDecodeError):
+        return str(root)
+    return str((root / common).resolve()) if common else str(root)
+
+
+def _ruling_id(
+    root: Path, repository: str, finding: Finding, digests: dict[str, str | None]
+) -> str:
+    """The id a ruling on `finding` is recorded under, or "" where no ruling applies: a review
+    hit that changes the result, on a regular file inside the target, pinned to the repository
+    and to the file's bytes. A hit on a change since `--base` takes none: it names a diff, not
+    content to judge."""
+
+    if (
+        finding.kind != "review"
+        or finding.verdict != UNVERIFIED
+        or not finding.decides
+        or finding.check == "instruction-change"
+    ):
+        return ""
+    if finding.path not in digests:
+        candidate = root / finding.path
+        digest = None
+        if _inside(root, candidate) and candidate.is_file() and not candidate.is_symlink():
+            try:
+                digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+            except OSError:
+                digest = None
+        digests[finding.path] = digest
+    digest = digests[finding.path]
+    if digest is None:
+        return ""
+    pinned = "\0".join((repository, finding.check, finding.path, finding.fact, digest))
+    return hashlib.sha256(pinned.encode("utf-8")).hexdigest()[:16]
+
+
+def _with_rulings(root: Path, findings: Sequence[Finding]) -> list[Finding]:
+    """Each review hit with its ruling id; a hit a person ruled safe is still reported, with
+    the day, and does not change the result."""
+
+    # A home inside the target would put the rulings file where a change under check writes.
+    recorded = {} if _inside(root, rulings_path()) else _rulings()
+    repository = _repository(root)
+    digests: dict[str, str | None] = {}
+    marked = []
+    for finding in findings:
+        ruling = _ruling_id(root, repository, finding, digests)
+        day = recorded.get(ruling) if ruling else None
+        if day:
+            finding = replace(
+                finding,
+                decides=False,
+                ruled=day,
+                fact=f"{finding.fact}; a person ruled it safe on {day}",
+            )
+        marked.append(replace(finding, id=ruling))
+    return marked
+
+
+def record_rulings(
+    target: Path,
+    ids: Sequence[str],
+    confirm: Any,
+    harnesses: Sequence[str] = (),
+    today: date | None = None,
+) -> list[Finding]:
+    """Record a ruling for each review hit `ids` names that `confirm(finding)` accepts, in the
+    person's rulings file, and return the hits recorded. An id that names no current review hit
+    is an error: the file it was taken from has changed, or it was never a hit."""
+
+    report = check(target, harnesses)
+    by_id = {finding.id: finding for finding in report.findings if finding.id}
+    unknown = [ruling for ruling in ids if ruling not in by_id]
+    if unknown:
+        raise AuditError(
+            f"no current review hit has the id {', '.join(unknown)}; run check again and take "
+            "the id it prints now"
+        )
+    path = rulings_path()
+    try:
+        document = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        entries = list(document.get("rulings", []))
+    except (OSError, ValueError, AttributeError) as error:
+        raise AuditError(f"{path} cannot be read, so nothing was recorded: {error}") from error
+    day = (today or _today()).isoformat()
+    recorded = []
+    for ruling in dict.fromkeys(ids):
+        finding = by_id[ruling]
+        if not confirm(finding):
+            continue
+        entries = [entry for entry in entries if entry.get("id") != ruling]
+        entries.append(
+            {
+                "id": ruling,
+                "check": finding.check,
+                "path": finding.path,
+                "fact": finding.fact,
+                "target": str(Path(target).resolve()),
+                "ruled": day,
+            }
+        )
+        recorded.append(finding)
+    if recorded:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        scratch = path.with_name(f".{path.name}.{os.getpid()}")
+        scratch.write_text(
+            json.dumps({"format": 1, "rulings": entries}, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(scratch, path)
+    return recorded
 
 
 # --- output ------------------------------------------------------------------------
@@ -1411,6 +1674,12 @@ def _steps(report: Report) -> list[str]:
     if unrecorded:
         names = ", ".join(unrecorded)
         steps.append(f"see what {names} loaded: no loading-evidence command is recorded")
+    if any(finding.id and finding.decides for finding in report.findings):
+        steps.append(
+            "judge each review hit that prints an id; one you judge safe, record at a terminal "
+            f"with outcomebound instructions rule {report.target} <id>, and it stops changing the "
+            "result until its file changes"
+        )
     return steps
 
 
@@ -1434,6 +1703,7 @@ def _line(finding: Finding) -> str:
         f"[{finding.severity}]"
     )
     line = line if finding.verdict == PASS else f"{line} next: {finding.next}"
+    line = f"{line} id {finding.id}" if finding.id else line
     return line if finding.decides else f"{line} (does not change the result)"
 
 
@@ -1470,13 +1740,24 @@ _DESCRIPTION = (
     "ignore, each path a harness row names exactly, and the agents' notes in .agents/handoffs/ "
     "and .agents/shared-memory/, which Git ignores and the next session reads. It starts no "
     "process but git, to list the files and for --base, opens no connection, "
-    "runs nothing the files name, and writes nothing. Each finding names the prompt standard's "
-    "rule it answers to (S4 security, S7 loading) and whether it is a gate or asks a person to "
-    "review."
+    "runs nothing the files name, and writes nothing. It reads the person's own rulings, "
+    "~/.outcomebound/rulings.json, which the rule verb writes. Each finding names the prompt "
+    "standard's rule it answers to (S4 security, S7 loading) and whether it is a gate or asks a "
+    "person to review."
 )
 _EXITS = (
     "exits: 0 PASS, 1 FAIL, 2 UNVERIFIED or a usage error. A finding marked (does not change "
-    "the result) is reported and leaves the exit as it is."
+    "the result) is reported and leaves the exit as it is; a review hit a person ruled safe is "
+    "one, until its file changes."
+)
+_RULE = (
+    "Record that a person judged review hits safe. Each <id> is one that check printed for a "
+    "review hit; the ruling is pinned to that hit's check, path and fact and to its file's bytes, "
+    "so any change to the file raises the hit again. A ruled hit is still reported, with the day, "
+    "and does not change the result. The ruling is written to the person's own file, "
+    "~/.outcomebound/rulings.json, outside every target, so no change under check can write it. "
+    "It asks for each hit at a terminal and refuses without one: a ruling is a person's act, and "
+    "an agent never runs this verb."
 )
 
 
@@ -1484,7 +1765,7 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="outcomebound instructions", description=_DESCRIPTION, epilog=_EXITS
     )
-    verbs = parser.add_subparsers(dest="verb", required=True, metavar="check")
+    verbs = parser.add_subparsers(dest="verb", required=True, metavar="check|rule")
     check_parser = verbs.add_parser(
         "check",
         help="run the checks on what the selected harnesses load",
@@ -1516,7 +1797,42 @@ def _parser() -> argparse.ArgumentParser:
     check_parser.add_argument(
         "--verbose", action="store_true", help="also print the checks that passed"
     )
+    rule_parser = verbs.add_parser(
+        "rule",
+        help="record, at a terminal, that a person judged review hits safe",
+        description=_RULE,
+        epilog="exits: 0 when every hit asked for was recorded or declined, 2 on an error",
+    )
+    rule_parser.add_argument("target", help="the checkout the hits were reported for")
+    rule_parser.add_argument("ids", nargs="+", metavar="<id>", help="a review hit's id")
+    rule_parser.add_argument(
+        "--harness",
+        action="append",
+        default=[],
+        metavar="<h>[,<h>]",
+        help="as for check, where check was run with it",
+    )
     return parser
+
+
+def _confirm(finding: Finding) -> bool:
+    print(_plain(_line(finding)))
+    try:
+        return input("rule this hit safe? type yes: ").strip() == "yes"
+    except EOFError:
+        return False
+
+
+def _rule(args: argparse.Namespace, named: Sequence[str]) -> int:
+    if not sys.stdin.isatty():
+        print(
+            "outcomebound instructions rule: a ruling is a person's act; run it at a terminal",
+            file=sys.stderr,
+        )
+        return 2
+    recorded = record_rulings(Path(args.target), args.ids, _confirm, named)
+    print(f"recorded {len(recorded)} of {len(dict.fromkeys(args.ids))} in {rulings_path()}")
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1528,7 +1844,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return stop.code if isinstance(stop.code, int) else 2
     try:
         named = [name.strip() for value in args.harness for name in value.split(",")]
-        report = check(Path(args.target), [name for name in named if name], args.base)
+        named = [name for name in named if name]
+        if args.verb == "rule":
+            return _rule(args, named)
+        report = check(Path(args.target), named, args.base)
     except (AuditError, adapters.AdapterError) as error:
         print(f"outcomebound instructions: {_plain(str(error))}", file=sys.stderr)
         return 2
