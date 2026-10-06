@@ -10,7 +10,8 @@ from pathlib import Path
 def running(pid: int) -> bool:
     """Whether a process is running. A process killed whose parent is gone stays a zombie when
     no init reaps it, as in a container whose first process is not one: it runs nothing, and
-    `os.kill(pid, 0)` still finds it. `os.kill` ends the process it names on Windows, so
+    `os.kill(pid, 0)` still finds it. Where no /proc tells a zombie apart, a process that
+    `os.kill` finds counts as running. `os.kill` ends the process it names on Windows, so
     `tasklist` is asked there."""
 
     if os.name == "nt":
@@ -25,8 +26,12 @@ def running(pid: int) -> bool:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
+    if not Path("/proc/self/stat").exists():
+        return True
     try:
         status = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
     except OSError:
-        return True
+        # This system has /proc, so the entry is gone: the process was reaped after `os.kill`
+        # found it.
+        return False
     return status.rsplit(")", 1)[-1].split()[0] != "Z"
