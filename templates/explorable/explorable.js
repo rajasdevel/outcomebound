@@ -109,11 +109,13 @@
   function isNum(v) { return typeof v === "number" && isFinite(v); }
   function withUnit(text, unit) { return unit ? text + " " + unit : text; }
   function unknownText(waits) {
-    return waits && waits.length ? "Unknown. Needs: " + waits.join(", ") : "Unknown";
+    if (!waits || !waits.length) return "Unknown";
+    var words = waits.map(function (w) { return inputByName[w] ? inputByName[w].label : w; });
+    return "Unknown until you set: " + words.join(", ");
   }
   function emptyInputs() {
     var v = values();
-    return inputs.filter(function (i) { return v[i.name] === null; }).map(function (i) { return i.name; });
+    return inputs.filter(function (i) { return v[i.name] === null; }).map(function (i) { return i.label; });
   }
   function describe(value, opts) {
     opts = opts || {};
@@ -179,6 +181,19 @@
     if (typeof v === "boolean") return v ? "yes" : "no";
     return String(v);
   }
+  // The words a person sees for an input: its label's own text, or a fieldset's legend.
+  function labelText(node, holder) {
+    if (node.tagName === "FIELDSET") {
+      var legend = node.querySelector("legend");
+      return legend ? legend.textContent.replace(/\s+/g, " ").trim() : "";
+    }
+    if (holder === node) return node.getAttribute("aria-label") || "";
+    var words = [];
+    Array.prototype.forEach.call(holder.childNodes, function (child) {
+      if (child.nodeType === 3) words.push(child.textContent);
+    });
+    return words.join(" ").replace(/\s+/g, " ").trim();
+  }
   function decorateInputs() {
     $$("[data-input]").forEach(function (node) {
       var name = node.getAttribute("data-input");
@@ -186,6 +201,7 @@
       if (inputByName[name]) { note("input name " + name + " is used twice"); return; }
       var rec = { name: name, el: node, type: inputKind(node), unit: node.getAttribute("data-unit") || "" };
       var holder = node.closest("label") || node;
+      rec.label = labelText(node, holder) || name;
       var row = el("div", "xp-input-row");
       holder.parentNode.insertBefore(row, holder);
       row.appendChild(holder);
@@ -852,8 +868,8 @@
       tick.style.left = pct(x);
       ticks.appendChild(tick);
     }
-    if (spec.unit) ticks.appendChild(el("span", "xp-tl-unit", spec.unit));
     axis.appendChild(ticks);
+    if (spec.unit) axis.appendChild(el("div", "xp-tl-unit", spec.unit));
     root.appendChild(axis);
     node.appendChild(root);
   }

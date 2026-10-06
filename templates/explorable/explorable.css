@@ -398,7 +398,7 @@ li[data-kind=changed] > .xp-swatch { border-color: var(--xp-changed); border-sty
 .xp-tl-ticks { position: relative; height: 1.4rem; margin-right: 1.5rem; }
 .xp-tl-ticks > span { position: absolute; transform: translateX(-50%); }
 .xp-tl-ticks > span:first-child { transform: none; }
-.xp-tl-ticks > .xp-tl-unit { right: -1.5rem; left: auto; transform: none; top: 1rem; }
+.xp-tl-unit { grid-column: 2; text-align: right; margin-right: 1.5rem; font-size: 0.8rem; color: var(--xp-muted); }
 
 /* Questions */
 fieldset[data-question] {
