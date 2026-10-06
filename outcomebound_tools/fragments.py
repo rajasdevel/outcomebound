@@ -302,9 +302,20 @@ def compose_body(selected) -> str:
 
 
 def _strip_sentinels(text: str) -> str:
-    return "\n".join(
-        line for line in text.splitlines() if not line.startswith("<!-- outcomebound:")
-    ).strip()
+    """Drop sentinel lines outside fenced code; a fenced example keeps its own."""
+
+    kept = []
+    fence = ""
+    for line in text.splitlines():
+        marker = line.lstrip()[:3]
+        if marker in ("```", "~~~"):
+            if not fence:
+                fence = marker
+            elif marker == fence:
+                fence = ""
+        if fence or not line.startswith("<!-- outcomebound:"):
+            kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def _strip_frontmatter(text: str) -> str:

@@ -465,7 +465,13 @@ def test_inline_mode_emits_kernel_skills_and_fragments_with_no_sentinels(source)
 
     result = _cli("compose", "--source", str(source), "--fragments", "python", "--inline")
     assert result.returncode == 0, result.stderr
-    assert "outcomebound:begin" not in result.stdout
+    in_fence, outside = False, []
+    for line in result.stdout.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+        elif not in_fence:
+            outside.append(line)
+    assert not [line for line in outside if "<!-- outcomebound:" in line]
     assert "**OutcomeBound**" in result.stdout and "four inputs" in result.stdout
     assert "`decision-brief` skill" in result.stdout
     for heading in ("# Using OutcomeBound", "# Decision brief"):
@@ -473,6 +479,16 @@ def test_inline_mode_emits_kernel_skills_and_fragments_with_no_sentinels(source)
     for name in SKILLS:
         assert f"name: {name}" not in result.stdout, "skill frontmatter must be stripped"
     assert "**Distinguish**" in result.stdout
+
+
+def test_inline_mode_keeps_the_sentinels_of_the_slice_tickets_example(source):
+    """The filled ticket block is a format the tickets check reads, so an inline reader
+    needs its begin and end lines."""
+
+    result = _cli("compose", "--source", str(source), "--fragments", "python", "--inline")
+    assert result.returncode == 0, result.stderr
+    assert "<!-- outcomebound:begin id=ticket v=1 -->" in result.stdout
+    assert "<!-- outcomebound:end id=ticket -->" in result.stdout
 
 
 def test_unknown_fragment_id_fails_closed(source):

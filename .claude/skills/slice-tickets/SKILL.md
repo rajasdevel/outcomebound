@@ -110,7 +110,7 @@ verbatim.
 Three things stay out: the slice's own implementation, since code in a ticket has run against
 nothing and becomes the user's text, which the implementer may not correct; a restated
 contract section, which `reads` names and the implementer reads where it stands; and guidance
-every ticket would repeat, which the tickets fragment says once.
+every ticket would repeat, which the project's instructions say once.
 
 Everything a brief states is decided; `Suggested order:` and `Hint:` are the two markers that
 make a line advice. `## Limits` names what must not change, the acts outside the ticket's
@@ -143,8 +143,8 @@ parent: #41
   Include the files its tests live in, and the claims plan where it adds a claim. Draw `bounds`
   as wide as the outcome's authority, a directory before a list of files, and disjoint only where
   tickets run in parallel: a file the work must change just outside them holds that work when
-  nothing is wrong, unless the edit only carries the ticket's own change, which the tickets fragment
-  leaves to the implementer. Where the project keeps an inventory that every added module must enter, such as a
+  nothing is wrong, unless the edit only carries the ticket's own change, which the implementer makes and names
+  in its handover. Where the project keeps an inventory that every added module must enter, such as a
   registry, a parity count, an import census or a public-surface digest, put that file in
   `bounds` all the same, so that no implementer has to judge it: the last change that added a module shows which files it touched. Where an earlier
   ticket of the same breakdown moves a mechanism into a new file, a later ticket that changes the

@@ -25,8 +25,10 @@ done at every tier.
 
 **Bounds.** Writing a package, with its tests and stubs, inside the ticket's `bounds` and on the
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
-`done-when` stay the person's: a package adds to them and never changes them. What the tickets
-fragment says of an edit outside `bounds` holds for the package. Where a line of the ticket holds
+`done-when` stay the person's: a package adds to them and never changes them. An edit outside
+`bounds` that only carries the ticket's own change, such as an import or an inventory entry for its
+own files, is the implementer's to make, and its handover names it; any other edit outside
+`bounds` is the person's, put as a decision brief. Where a line of the ticket holds
 only on a condition the implementer may be unable to settle, the package names the side to take
 when it cannot be settled, the smaller change inside `bounds`, and the implementer's handover says
 which side it took. Where the ticket
@@ -116,7 +118,8 @@ names; it never goes into the ticket's body. Where a person starts the implement
 goal envelope, the text they paste is the envelope itself, one block holding its grants in the
 person's words; what is for the person, such as which harness to start, stays outside that
 block. Give the implementer the commands it needs: where to work, how to run the tests, and what
-not to run. Commit as the tickets fragment says work lands here.
+not to run. Commit as the project's instructions or the goal envelope say work lands here; where neither says,
+commit locally on the current branch in the style the history shows.
 The implementer's handover says what changed, each check's verdict, what it decided beyond the
 package, and the follow-ups it found. When the ticket is done, your handover says the same for the
 ticket, and names the tier and the implementer that built it.
