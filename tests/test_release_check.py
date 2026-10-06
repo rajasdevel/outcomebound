@@ -223,3 +223,53 @@ def test_the_section_names_each_pull_request_since_the_previous_release(
     else:
         assert line.startswith("FAIL ") and "not named: #5" in line, result.stdout
         assert "#6" not in line, "the release commit itself is not counted"
+
+
+@pytest.mark.parametrize(
+    ("subject", "counted"),
+    [("release: 1.1.0 (#7)", False), ("release: 1.1.0", False), ("fix: another change (#7)", True)],
+)
+def test_a_release_cut_again_is_known_by_its_subject(
+    tmp_path: Path, subject: str, counted: bool
+) -> None:
+    """Breaks if a release commit that does not change VERSION, because an earlier cut of the
+    same release already set it, is counted as a pull request the section must name; or if an
+    ordinary commit at HEAD escapes the count."""
+
+    def git(*args: str) -> None:
+        identity = ("-c", "user.name=Release", "-c", "user.email=release@example.test")
+        subprocess.run(["git", *identity, *args], cwd=tmp_path, check=True, capture_output=True)
+
+    files = release_files("agreeing")
+    for name, text in files.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text.replace("1.1.0", "1.0.0"))
+    (tmp_path / "VERSION").write_text("1.0.0\n")
+    git("init", "-q")
+    git("add", ".")
+    git("commit", "-qm", "release: 1.0.0")
+    git("tag", "-a", "v1.0.0", "-m", "release")
+    for name, text in files.items():
+        (tmp_path / name).write_text(
+            text.replace(" - 2026-09-28\n\n", " - 2026-09-28\n\n- First cut (#6).\n\n")
+        )
+    (tmp_path / "VERSION").write_text("1.1.0\n")
+    git("add", ".")
+    git("commit", "-qm", "release: 1.1.0 (#6)")
+    (tmp_path / "CHANGELOG.md").write_text(
+        (tmp_path / "CHANGELOG.md")
+        .read_text()
+        .replace("- First cut (#6).", "- First cut (#6), cut again.")
+    )
+    git("add", ".")
+    git("commit", "-qm", subject)
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(tmp_path)], capture_output=True, text=True
+    )
+
+    line = next(x for x in result.stdout.splitlines() if "names each pull request" in x)
+    if counted:
+        assert line.startswith("FAIL ") and "not named: #7" in line, result.stdout
+    else:
+        assert line.startswith("PASS "), result.stdout

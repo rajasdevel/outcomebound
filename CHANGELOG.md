@@ -24,8 +24,9 @@ fragments and the contract close the known issues that a review of agent session
 the skills found (#76, #79, #80, #86).
 
 #70, #73, #84, #85 and #88 change only this repository's tests, designs, evaluations and release
-process; they change nothing that an install receives. #75 was the first release commit of 1.3.0.
-No tag was made from it, and this section replaces the section that it wrote.
+process; they change nothing that an install receives. #75 and #87 were earlier release commits of
+1.3.0. No tag was made from either: this section replaces the section that #75 wrote, and #87 was
+stopped by a fault in `make release-check`, which this release commit fixes.
 
 Do these steps first:
 
