@@ -13,7 +13,7 @@ and the checks that prove it done. The layer is opt-in and inert until `.outcome
 declares a store. The invariant the layer holds: no draft reaches the publish script while
 `check` reports an ERROR about it, and no ticket text runs as a command. How: `outcomebound tickets --help` (`check`, `brief`, `publish` and `export`), the `tickets*.py`
 modules, the `tickets` fragment, and the `slice-tickets` and `hand-off-tickets` skills, which
-selecting the fragment installs. A ticket is the same whoever builds it; what changes with the
+every install carries. A ticket is the same whoever builds it; what changes with the
 implementer is the package the agent handing it over writes, shaped by the implementer's tier.
 
 ## Decisions

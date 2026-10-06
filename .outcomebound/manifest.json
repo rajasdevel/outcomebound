@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "bbfbe0717001716b483439f0691a84acce544cfcf460a3966457d5b1e647e9b2",
-      "sha256": "f28723e22841911c627f1546784bfa0c4e685338e47ece5a3a90ccdad463f35a"
+      "frame": "44a6d5a81cc701aecaba484f8bac16ae226384276d9329667ed87f0aa92b5925",
+      "sha256": "f06137aeea6f00e01fe0b05907704fdc76022eaa96381f5438d910fccee5b211"
     },
     {
       "kind": "fragment",
@@ -108,6 +108,33 @@
         "claude-code"
       ],
       "sha256": "3168a48d866439aea0df89203f4c754eaa70fcbe0ca35a9576bb9f4b10bde651"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/hand-off-tickets/SKILL.md",
+      "id": "hand-off-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "33661510a460c335ef7b36a3884790e23bc743606f227e6d89bf9808aeef75b9"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/slice-tickets/SKILL.md",
+      "id": "slice-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "39bad53c8b4c7ea07f1a821d1e91c746ea12e0c448d6f45092784675b5a4bc36"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/slice-tickets/references/github.md",
+      "id": "slice-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "823bea6b8c954961866cd94595350563207ac790c633a93a7bde94a6ffc88fbb"
     },
     {
       "kind": "skill",

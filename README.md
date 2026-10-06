@@ -112,7 +112,8 @@ the diff, and commit. Your agent's next session reads the contract. The install 
 
 ```text
 AGENTS.md             the contract; Done, CI test and irreversible edges from your files
-.claude/skills/       four skills: sizing, decision briefs, requirements, tests (per harness)
+.claude/skills/       seven skills: sizing, decision briefs, requirements, tests, explaining a spec,
+                      slicing tickets, handing one off (per harness)
 .outcomebound/        the fragments you select, and a manifest of what adopt wrote
 CLAUDE.md, GEMINI.md  an @AGENTS.md import, only where the harness needs one
 ```
@@ -327,6 +328,7 @@ and none of them is affiliated with OutcomeBound or endorses it:
 [agentskills/agentskills](https://github.com/agentskills/agentskills),
 [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill),
 [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
-[UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai). The research
+[UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai),
+[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills). The research
 library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
 page is where sources are recorded.

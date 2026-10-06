@@ -4,8 +4,7 @@
 operating contract; the project facts the engine observes or the adopter records
 (`outcomebound_tools.facts`); and the guidance pointers, the project's own `local`
 fragment inline and then one line per selected fragment, copied under
-`.outcomebound/fragments/`, and per skill: those in `SKILLS`, and those a selected fragment names
-in its `skills:`. Selecting the workspace fragment also
+`.outcomebound/fragments/`, and per skill in `SKILLS`. Selecting the workspace fragment also
 installs `.agents/.gitignore`, which keeps its four folders out of Git; every install writes
 `.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
 report warns where Git ignores a path it writes, where AGENTS.md holds changes not committed, and
@@ -281,7 +280,7 @@ def guidance(
             files[f"{facts.FRAGMENT_DIR}/{item.id}.md"] = _fragment_bytes(item)
     roots = sorted({item.skills for item in found})
     root = GENERIC_SKILLS if GENERIC_SKILLS in roots else roots[0] if roots else None
-    names = fragments.carried(selected)
+    names = fragments.SKILLS
     skills = [
         (CONDITIONS.get(name, f"when the {name} skill applies"), f"{root}/{name}/SKILL.md")
         for name in names
@@ -639,8 +638,7 @@ class Settings:
 
 
 def _engine_skills() -> frozenset[str]:
-    """Every skill this engine ships, which a fragment's `skills:` may add to an install, and
-    every one it retired."""
+    """Every skill this engine ships and every one it retired."""
 
     shipped = (path.parent.name for path in (ENGINE / "skills").glob("*/SKILL.md"))
     return frozenset((*SKILLS, *RETIRED_SKILLS, *shipped))
@@ -2109,8 +2107,7 @@ edges: those the selected fragments declare, and a floor loosening where a floor
 Text for people: with --human-style ste, text an agent writes for a person in the style of
 ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers: the local
 fragment inline, then one line per fragment in --fragments, copied under
-.outcomebound/fragments/, and per skill: the core skills, and those a selected fragment names,
-such as the tickets fragment's slice-tickets. The workspace fragment also gets
+.outcomebound/fragments/, and per skill: the seven working skills. The workspace fragment also gets
 .agents/.gitignore, which keeps its four folders out of Git, and every install gets
 .outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
 validation logs) out of Git. A fact it cannot observe is left out, and the install report names

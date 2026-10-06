@@ -34,8 +34,14 @@ GIT = shutil.which("git") or "git"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 CLAUDE_SKILL = ".claude/skills/using-outcomebound/SKILL.md"
 CLAUDE_BRIEF = ".claude/skills/decision-brief/SKILL.md"
-# One `skill` record per skill an install carries, for each harness directory.
-SKILL_RECORDS = ["skill"] * len(adopt.SKILLS)
+# One `skill` record per file of each skill an install carries, for each harness directory.
+SKILL_FILES = sorted(
+    p.relative_to(ROOT / "skills").as_posix()
+    for name in adopt.SKILLS
+    for p in (ROOT / "skills" / name).rglob("*")
+    if p.is_file()
+)
+SKILL_RECORDS = ["skill"] * len(SKILL_FILES)
 GENERIC_SKILL = ".outcomebound/skills/using-outcomebound/SKILL.md"
 PYTHON_FRAGMENT = ".outcomebound/fragments/python.md"
 LAUNCHER = ROOT / "scripts" / "outcomebound"
@@ -171,6 +177,9 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("skill", CLAUDE_BRIEF, "decision-brief"),
         ("skill", ".claude/skills/explain-spec/SKILL.md", "explain-spec"),
         ("skill", ".claude/skills/gather-requirements/SKILL.md", "gather-requirements"),
+        ("skill", ".claude/skills/hand-off-tickets/SKILL.md", "hand-off-tickets"),
+        ("skill", ".claude/skills/slice-tickets/SKILL.md", "slice-tickets"),
+        ("skill", ".claude/skills/slice-tickets/references/github.md", "slice-tickets"),
         ("skill", ".claude/skills/tests-worth-keeping/SKILL.md", "tests-worth-keeping"),
         ("skill", CLAUDE_SKILL, "using-outcomebound"),
     ]
@@ -279,6 +288,7 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
         *added,
     ]
     after.pop("AGENTS.md")
+    after.pop(".claude/skills/slice-tickets/references/github.md")
     assert after == before
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and all(states(out)[path] == "current" for path in gained.values())
@@ -840,13 +850,13 @@ def test_repeated_harness_flags_accumulate_and_naming_fewer_drops_the_rest(
         r["path"]: r["harnesses"] for r in manifest(target)["artifacts"] if r["kind"] == "skill"
     }
     assert skills == {
-        f"{root}/skills/{name}/SKILL.md": [harness]
+        f"{root}/skills/{file}": [harness]
         for root, harness in (
             (".agents", "codex"),
             (".claude", "claude-code"),
             (".cursor", "cursor"),
         )
-        for name in adopt.SKILLS
+        for file in SKILL_FILES
     }
 
     assert run(capsys, str(target), "--harness", "codex")[0] == 0
@@ -987,6 +997,9 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         CLAUDE_SKILL: "edited",
         ".claude/skills/explain-spec/SKILL.md": "current",
         ".claude/skills/gather-requirements/SKILL.md": "current",
+        ".claude/skills/hand-off-tickets/SKILL.md": "current",
+        ".claude/skills/slice-tickets/SKILL.md": "current",
+        ".claude/skills/slice-tickets/references/github.md": "current",
         ".claude/skills/tests-worth-keeping/SKILL.md": "current",
     }
     assert out.splitlines()[-1] == (
@@ -1334,31 +1347,26 @@ def test_remove_takes_out_the_blocks_and_fragment_files_and_keeps_the_projects_o
     assert snapshot(target) == before
 
 
-def test_the_tickets_fragment_installs_its_skill_and_its_pointer_while_selected(
+def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragment(
     tmp_path: Path, capsys: Capture
 ) -> None:
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     before = snapshot(target)
-    name = "slice-tickets"
 
-    arguments = ("--harness", "claude-code", "--fragments", "tickets")
-    assert run(capsys, str(target), *arguments)[0] == 0
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
 
     agents = (target / "AGENTS.md").read_text(encoding="utf-8")
-    shipped = sorted(p for p in (ROOT / "skills" / name).rglob("*") if p.is_file())
-    assert len(shipped) > 1
-    for file in shipped:
-        relative = file.relative_to(ROOT / "skills").as_posix()
-        assert (target / ".claude/skills" / relative).read_bytes() == file.read_bytes()
-    path = f".claude/skills/{name}/SKILL.md"
-    assert f"{adopt.CONDITIONS[name]}: read {path}" in agents
+    for name in ("slice-tickets", "hand-off-tickets"):
+        shipped = sorted(p for p in (ROOT / "skills" / name).rglob("*") if p.is_file())
+        for file in shipped:
+            relative = file.relative_to(ROOT / "skills").as_posix()
+            assert (target / ".claude/skills" / relative).read_bytes() == file.read_bytes()
+        path = f".claude/skills/{name}/SKILL.md"
+        assert f"{adopt.CONDITIONS[name]}: read {path}" in agents
+    assert len(list((ROOT / "skills/slice-tickets").rglob("*.md"))) > 1
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0
-    assert states(out)[f".claude/skills/{name}/references/github.md"] == "current"
-
-    assert run(capsys, str(target), "--harness", "claude-code", "--fragments", "")[0] == 0
-    assert not (target / ".claude/skills" / name).exists()
-    assert name not in (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert states(out)[".claude/skills/slice-tickets/references/github.md"] == "current"
     assert run(capsys, str(target), "--remove")[0] == 0
     assert snapshot(target) == before
 
@@ -1366,19 +1374,17 @@ def test_the_tickets_fragment_installs_its_skill_and_its_pointer_while_selected(
 def test_a_skill_the_engine_retired_reads_stale_and_an_upgrade_removes_it(
     tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An install whose fragment once named a skill this engine has since retired keeps no copy
+    """An install that carried a skill this engine has since retired keeps no copy
     of it once upgraded."""
 
     older = engine_copy(tmp_path)
     for relative in ("SKILL.md", "references/github.md"):
         (older / "skills/old-skill" / relative).parent.mkdir(parents=True, exist_ok=True)
         write(older / "skills/old-skill" / relative, f"{relative}\n")
-    fragment = older / "fragments/setup/tickets.md"
-    text = fragment.read_text(encoding="utf-8")
-    write(fragment, text.replace('"hand-off-tickets"]', '"hand-off-tickets", "old-skill"]'))
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
-    arguments = ("--harness", "claude-code", "--fragments", "tickets")
-    assert run(capsys, str(target), *arguments, source=older)[0] == 0
+    with monkeypatch.context() as earlier:
+        earlier.setattr(fragments, "SKILLS", (*fragments.SKILLS, "old-skill"))
+        assert run(capsys, str(target), "--harness", "claude-code", source=older)[0] == 0
     retired = [".claude/skills/old-skill/SKILL.md", ".claude/skills/old-skill/references/github.md"]
     assert all((target / path).is_file() for path in retired)
     monkeypatch.setattr(adopt, "RETIRED_SKILLS", ("old-skill",))
@@ -1399,7 +1405,7 @@ def test_a_skill_record_naming_a_file_the_skill_does_not_ship_reads_stale(
     tmp_path: Path, capsys: Capture
 ) -> None:
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
-    assert run(capsys, str(target), "--harness", "claude-code", "--fragments", "tickets")[0] == 0
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
     extra = ".claude/skills/slice-tickets/references/extra.md"
     write(target / extra, "ours\n")
     document = manifest(target)
@@ -1565,7 +1571,9 @@ def test_no_harness_installs_the_skills_where_the_pointers_name_them(
         assert (target / path).read_bytes() == (ROOT / f"skills/{name}/SKILL.md").read_bytes()
     assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == lines
     skills = [r for r in manifest(target)["artifacts"] if r["kind"] == "skill"]
-    assert sorted(r["path"] for r in skills) == sorted(generic.values())
+    assert sorted(r["path"] for r in skills) == sorted(
+        f".outcomebound/skills/{file}" for file in SKILL_FILES
+    )
     assert all(r["harnesses"] == ["generic"] for r in skills)
     assert any(line.startswith("UNVERIFIED generic") for line in out.splitlines())
 

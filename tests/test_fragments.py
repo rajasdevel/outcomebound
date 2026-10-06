@@ -16,7 +16,6 @@ from outcomebound_tools.fragments import (
     SKILLS,
     FragmentError,
     byte_cap,
-    carried,
     compose_body,
     detect,
     inline,
@@ -258,43 +257,23 @@ def test_edges_must_be_a_json_list_of_non_empty_strings(edges):
         parse_fragment(GOOD.replace("version: 1", f"edges: {edges}\nversion: 1"), "x.md")
 
 
-def test_a_fragment_names_the_skills_its_selection_adds_after_the_core_ones():
-    """`skills:` is optional; an install carries the core skills, then each selected fragment's
-    own once, in selection order; every skill a shipped fragment names ships in the engine."""
+def test_every_install_carries_the_seven_working_skills_and_no_fragment_adds_one():
+    """`SKILLS` is the whole set, each in the engine; a `skills:` key is refused as unknown."""
 
-    assert parse_fragment(GOOD, "x.md").skills == ()
-    named = parse_fragment(GOOD.replace("version: 1", 'skills: ["a-b", "c"]\nversion: 1'), "x.md")
-    assert named.skills == ("a-b", "c")
-    catalog = load_all(ROOT)
-    assert catalog["tickets"].skills == ("slice-tickets", "hand-off-tickets")
-    assert carried([catalog["tickets"], named, catalog["tickets"]]) == (
-        *SKILLS,
+    assert SKILLS == (
+        "using-outcomebound",
+        "decision-brief",
+        "gather-requirements",
+        "tests-worth-keeping",
+        "explain-spec",
         "slice-tickets",
         "hand-off-tickets",
-        "a-b",
-        "c",
     )
-    for fragment in catalog.values():
-        for name in fragment.skills:
-            assert (ROOT / "skills" / name / "SKILL.md").is_file(), (fragment.id, name)
-
-
-@pytest.mark.parametrize("skills", ["slice-tickets", '["Bad Name"]', "[1]", '["a", "a"]'])
-def test_skills_must_be_a_json_list_of_distinct_skill_names(skills):
+    for name in SKILLS:
+        assert (ROOT / "skills" / name / "SKILL.md").is_file(), name
+    assert not hasattr(load_all(ROOT)["tickets"], "skills")
     with pytest.raises(FragmentError, match="skills"):
-        parse_fragment(GOOD.replace("version: 1", f"skills: {skills}\nversion: 1"), "x.md")
-
-
-def test_a_shipped_fragment_naming_a_skill_the_engine_lacks_is_refused(tmp_path):
-    for directory in ("fragments", "skills"):
-        shutil.copytree(ROOT / directory, tmp_path / "engine" / directory)
-    tickets = tmp_path / "engine/fragments/setup/tickets.md"
-    write(
-        tickets,
-        tickets.read_text(encoding="utf-8").replace('"slice-tickets"', '"no-such-skill"'),
-    )
-    with pytest.raises(FragmentError, match="no-such-skill"):
-        load_all(tmp_path / "engine")
+        parse_fragment(GOOD.replace("version: 1", 'skills: ["a-b"]\nversion: 1'), "x.md")
 
 
 def test_the_same_selection_composes_the_same_bytes(source):

@@ -44,12 +44,12 @@ so.
 `guidance-pointers` holds the `local` fragment inline first, since only its author knows which of
 it every task needs; then `- <condition>: read <path>` per selected fragment, the path a verbatim
 copy at `.outcomebound/fragments/<id>.md` recorded as kind `fragment`; then one line per skill the
-install carries, naming its `SKILL.md`. A fragment has a five-slot body and three optional
+install carries, naming its `SKILL.md`. A fragment has a five-slot body and two optional
 frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped fragment declaring
 edges only where its text names an act irreversible, in words the fragments share so the union
 names each act once, and only for an act every project that selects it can take: publishing is
 declared by `ci-release`, never by a stack fragment, whose body names it only where the project
-publishes; and `skills:`, a JSON list of the engine skills its selection installs.
+publishes. A fragment has no `skills:` key: no fragment adds a skill.
 
 The same rules hold for the project's own `local` fragment, which starts from
 `templates/fragment-local.md`, and a parse refuses a fragment that breaks one, naming the rule:
@@ -80,7 +80,7 @@ an install carries and the fragment bodies, for a delegate's role prompt.
 | An install prints the words an agent always loads, skill descriptions included, and warns where a folder's root-down instructions pass a row's `doc_byte_cap` (research `harnesses/codex.md` §2); no size refuses it | a size ceiling | user | decided |
 | The byte-cap warning measures the folders another clone gets: it does not enter what Git ignores (`discovery.git_ignored`, as discovery reads it), a nested repository, `.git` or a link, and a folder that cannot be listed is passed over, never an error | measuring every folder, so that each scratch copy of the project in an ignored folder gives its own warning; stopping the install on a folder the user cannot read | agent | decided |
 | One native copy per harness of each skill an install carries | a canonical `.outcomebound/skills/` copy beside the native ones | agent | decided |
-| An install carries the four default skills and each skill a selected fragment's `skills:` names; the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove`, or deselecting its fragment, removes it | every shipped skill in every install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
+| An install carries the seven working skills and no fragment adds one (maintainer, 2026-10-06); the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove` removes it | a fragment's `skills:` that adds skills to the install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
 | Fragment bodies live in their pointer targets, and `AGENTS.md` carries one pointer per fragment | fragment bodies composed into one block every session loads | user | decided |
 | The publishing edges (`publishing a package`, `moving a shared registry tag`) come only from `ci-release`, which a release or publish sign selects; the `python` and `node-typescript` fragments declare none, and a project that publishes without those signs lists the edge in its local fragment's `edges:` | a publishing edge from every stack fragment, which an application that publishes nothing carries too; an engine switch that turns a fragment's edge off | agent | decided |
 | Done is what `--done` records, in run order; `--detect` proposes, where a floor exists, `outcomebound floor check .`, `--base` the remote's default branch or `origin/main` where one resolves; then the CI test fact's first command, else discovery's first root check command; and refuses a target outside a Git work tree | Done read from a profile; discovery's candidate ahead of the command CI already runs | agent | decided |

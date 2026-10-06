@@ -37,12 +37,6 @@ env/
 # repository's own harness are tracked
 .claude/*
 !.claude/skills/
-.claude/skills/*
-!.claude/skills/using-outcomebound/
-!.claude/skills/decision-brief/
-!.claude/skills/gather-requirements/
-!.claude/skills/tests-worth-keeping/
-!.claude/skills/explain-spec/
 CLAUDE.local.md
 
 # Local tool state, not part of the project

@@ -257,6 +257,8 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
         "gather-requirements",
         "tests-worth-keeping",
         "explain-spec",
+        "slice-tickets",
+        "hand-off-tickets",
     }
     assert current.files == _folders(skills, adopt.SKILLS)
     assert next(iter(current.files)) == f"{skills}/using-outcomebound/SKILL.md"
@@ -268,20 +270,18 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
     assert (earlier.kernel, earlier.files, earlier.launcher) == (RUN.kernel("earlier"), {}, None)
 
 
-def test_a_fixtures_fragments_add_their_skills_to_the_current_arm_only() -> None:
+def test_the_current_arm_carries_every_installs_skills_and_the_fixtures_fragments_only() -> None:
     """A fixture's `fragments` file selects fragments as adopt's `--fragments` does: the
-    current arm carries each selected fragment's skills beside every install's, and the
-    earlier and kernel-off arms carry nothing whatever is selected."""
+    current arm carries every install's seven skills and each selected fragment's file, and
+    the earlier and kernel-off arms carry nothing whatever is selected."""
 
     from outcomebound_tools import adopt, fragments
 
     table = json.loads((ROOT / "adapters" / "harnesses.json").read_text(encoding="utf-8"))
     skills = table["codex"]["skill_install_path"].rstrip("/")
-    tickets = fragments.load_all(ROOT)["tickets"].skills
-    assert tickets == ("slice-tickets", "hand-off-tickets")
     selected = RUN.load_arm("current", ("tickets",))
     fragment = ".outcomebound/fragments/tickets.md"
-    assert set(selected.files) - {fragment} == set(_folders(skills, (*adopt.SKILLS, *tickets)))
+    assert set(selected.files) - {fragment} == set(_folders(skills, adopt.SKILLS))
     assert selected.files[fragment] == adopt._fragment_bytes(fragments.load_all(ROOT)["tickets"])
     assert f"{skills}/slice-tickets/references/github.md" in selected.files
     assert (selected.kernel, selected.launcher) == (RUN.kernel("current"), ROOT / LAUNCHER)

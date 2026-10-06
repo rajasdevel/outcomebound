@@ -10,7 +10,7 @@ Four arms: `earlier`, an earlier wording of the operating-contract kernel, kept 
 `evals/arms/earlier-kernel.md`; `current`,
 what `outcomebound adopt --harness codex` installs from this checkout: the kernel rendered as
 adopt renders it, at codex's skill path the whole folder of each skill that install carries
-(every install's, and those of the fragments a fixture's `fragments` file selects), and this
+(the seven every install carries), and this
 checkout's launcher first on the call's PATH; `unsized`, the current arm without the kernel's
 sizing paragraph, which asks whether that paragraph earns its place; and `none`, no kernel,
 skill or launcher, each fixture's note without its pointer to the core skill. The model is
@@ -239,8 +239,7 @@ class Arm(NamedTuple):
 def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     """The arm as it runs, for an install that selects the fragments `selected`. `current`
     mirrors a codex install of this checkout: the whole folder of each skill that install
-    carries, the ones every install carries and those the selected fragments name, at the
-    skill path the harness table gives codex, and this checkout's launcher. The earlier arm
+    carries, which is every install's seven, at the skill path the harness table gives codex, and this checkout's launcher. The earlier arm
     is its kernel alone and the kernel-off arm has nothing, whatever is selected."""
 
     text = kernel(name)
@@ -251,7 +250,7 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     try:
         (route,) = adopt.routes(REPO, [HARNESS])
         chosen = fragments.select(fragments.load_all(REPO), selected) if selected else []
-        carried = fragments.carried(chosen)
+        carried = fragments.SKILLS
         files = {
             f"{route.skills}/{skill}/{relative}": data
             for skill in carried
@@ -801,8 +800,8 @@ def _parser() -> argparse.ArgumentParser:
             f"arms: {EARLIER} is an earlier wording of the kernel ({EARLIER_KERNEL.name}); "
             f"current is what `outcomebound adopt --harness {HARNESS}` installs from this "
             f"checkout: {TEMPLATE} rendered as adopt renders it, the whole folder of each "
-            f"skill that install carries at {HARNESS}'s skill path (every install's, and those "
-            f"of the fragments a fixture's `{FRAGMENTS_FILE}` file selects), and {LAUNCHER} "
+            f"skill that install carries at {HARNESS}'s skill path (the seven every install "
+            f"carries), and {LAUNCHER} "
             f"first on the call's PATH; {UNSIZED} is current without the kernel's sizing "
             f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher. "
             "The model is always named and passed to codex with -m, so codex's configured "

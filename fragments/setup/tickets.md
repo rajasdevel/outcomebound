@@ -4,8 +4,7 @@ family: setup
 applies: projects that declare a ticket store
 condition: when reading, working or changing this project's tickets or their declaration
 detect: []
-skills: ["slice-tickets", "hand-off-tickets"]
-version: 10
+version: 11
 ---
 **Context** — `.outcomebound/tickets.json` declares where this project's tickets live; the
 engine reads them and reports, and writes nothing. How work lands here is what `CONTRIBUTING.md`
