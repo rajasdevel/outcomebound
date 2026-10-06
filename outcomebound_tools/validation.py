@@ -20,9 +20,7 @@ import argparse
 import contextlib
 import json
 import math
-import os
 import re
-import signal
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -30,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import home, schemacheck
+from outcomebound_tools import home, programs, schemacheck
 
 PASSED = "PASS"
 FAIL = "FAIL"
@@ -231,27 +229,6 @@ def _log_path(log_dir: Path, name: str) -> Path:
     return log_dir / f"{safe}.log"
 
 
-def _terminate_group(process: subprocess.Popen[bytes]) -> None:
-    """Kill the command *and everything it started*.
-
-    A timed-out check that spawned children leaves them running, still holding
-    the write end of the captured pipe: the parent then blocks reading a pipe
-    nobody will close, and the descendants keep changing a worktree the caller
-    expects to be left alone. Killing the session the child leads ends both. On a
-    platform without process groups only the direct child is killed; the caller's
-    UNVERIFIED already says descendants were not observed.
-    """
-
-    if hasattr(os, "killpg") and hasattr(os, "getpgid"):
-        try:
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            return
-        except OSError:
-            pass
-    with contextlib.suppress(OSError):
-        process.kill()
-
-
 def _execute(
     command: Sequence[str], cwd: Path, timeout: float | None, env: Mapping[str, str] | None = None
 ) -> tuple[int | None, bytes, bool]:
@@ -261,24 +238,32 @@ def _execute(
     `env` replaces the inherited environment entirely; `None` inherits it. The
     caller composes it, because what belongs in it is the caller's knowledge,
     not this function's.
+
+    A bare program name is looked for in the absolute entries of that environment's
+    PATH (`programs.resolve`), never in `cwd` or in a folder `cwd` supplies; one not
+    found raises `FileNotFoundError`.
+
+    A timed-out check that spawned children leaves them running, still holding the
+    write end of the captured pipe: the parent then blocks reading a pipe nobody
+    will close, and the descendants keep changing a worktree the caller expects to
+    be left alone. So the child leads its own process group, and a timeout ends the
+    whole tree (`programs.stop_tree`).
     """
 
     process = subprocess.Popen(
-        command,
+        programs.resolve(command, env),
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         shell=False,
         env=env,
-        # POSIX: the child leads its own session, so a timeout can end every
-        # descendant rather than orphaning them.
-        start_new_session=os.name == "posix",
+        **programs.new_group(),
     )
     try:
         output, _ = process.communicate(timeout=timeout)
         return process.returncode, output or b"", False
     except subprocess.TimeoutExpired:
-        _terminate_group(process)
+        programs.stop_tree(process)
         try:
             output, _ = process.communicate(timeout=10)
         except subprocess.TimeoutExpired:

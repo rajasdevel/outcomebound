@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 
 from outcomebound_tools import finish_check
+from tests.processes import running
 
 ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = ROOT / "scripts" / "outcomebound"
@@ -733,6 +734,11 @@ def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path) ->
     assert "UNVERIFIED ./check.sh: exit 126" in verdict["systemMessage"]
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="os.kill ends the process it names on Windows, here the test's own, and `$$` is an "
+    "MSYS process id, which os.kill would read as a Windows one",
+)
 @pytest.mark.parametrize("number", [signal.SIGINT, signal.SIGTERM])
 def test_a_stop_that_arrives_while_a_command_starts_stops_the_command(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, number: int
@@ -877,7 +883,16 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     loaded machine still starts the command, and the elapsed seconds the report names are read,
     not assumed."""
 
-    root, digest = target(tmp_path / "t", ["sleep 60 & echo $! > child.pid; wait"])
+    # The command starts a child of its own that outlives it unless the whole tree is stopped: a
+    # Python process, so that the pid it records is the platform's own on Windows too.
+    holder = (
+        "import os, subprocess, sys; "
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        "open('child.pid', 'w').write(str(child.pid)); child.wait()"
+    )
+    (tmp_path / "holder.py").write_text(holder + "\n", encoding="utf-8")
+    line = f"{shlex.quote(sys.executable)} {shlex.quote(str(tmp_path / 'holder.py'))}"
+    root, digest = target(tmp_path / "t", [line])
     limit = 5
     timeout = finish_check.MARGIN_SECONDS + limit
     started = time.monotonic()
@@ -888,7 +903,7 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
     assert message.startswith(
-        f"finish-check UNVERIFIED: `sleep 60 & echo $! > child.pid; wait` did not finish within "
+        f"finish-check UNVERIFIED: `{finish_check.shorten(line, 80)}` did not finish within "
         f"{limit} s, {finish_check.MARGIN_SECONDS} s before the hook's {timeout} s timeout"
     )
     assert f"--finish-timeout <seconds>`, for example {2 * timeout}" in message
@@ -898,17 +913,9 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     assert (root / "child.pid").exists(), f"the command never started: {message}"
     child = int((root / "child.pid").read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10
-    while time.monotonic() < deadline and _alive(child):
+    while time.monotonic() < deadline and running(child):
         time.sleep(0.1)
-    assert not _alive(child)
-
-
-def _alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    return True
+    assert not running(child)
 
 
 @pytest.mark.parametrize("row", ROWS)
@@ -1272,3 +1279,141 @@ def test_a_known_record_is_read_only_in_its_own_shape() -> None:
         json.dumps({"records": [{k: v for k, v in document.items() if k != "head"}]}),
     ):
         assert finish_check.parse_known(text) is None
+
+
+# --- What `run_one` reads at exit 126 and 127, and where the line runs ---------------------
+
+
+def _verdict(tmp_path: Path, line: str) -> finish_check.Result:
+    return finish_check.run_one(tmp_path, line, 60)
+
+
+def test_something_that_ran_before_a_missing_last_tool_is_a_failure_at_exit_127(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the exit-127 branch skips the rule that the not-found line be the command's
+    only word: a Python traceback, and then a tool that is not there, read UNVERIFIED and held
+    nothing, though the first command had failed and the missing last tool shows nothing about
+    it."""
+
+    python = shlex.quote(sys.executable)
+    failed = _verdict(tmp_path, f"{python} -c 'raise AssertionError(1)'; nosuchtool-zz")
+    assert (failed.verdict, failed.code) == (finish_check.FAIL, 127), failed.output
+
+    loud = _verdict(tmp_path, "echo built; nosuchtool-zz")
+    assert (loud.verdict, loud.code) == (finish_check.FAIL, 127), loud.output
+
+
+def test_a_missing_tool_that_is_the_commands_only_word_is_unverified_at_exit_127(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the rule above also fails a command whose only output is the shell's own word
+    that its tool is not there, or an echo of that tool first: the hook's PATH, not the work,
+    is what lacks it."""
+
+    alone = _verdict(tmp_path, "nosuchtool-zz --check")
+    assert (alone.verdict, alone.cause, alone.code) == (
+        finish_check.UNVERIFIED,
+        finish_check.ENVIRONMENT,
+        127,
+    ), alone.output
+    echoed = _verdict(tmp_path, "echo nosuchtool-zz; nosuchtool-zz")
+    assert echoed.verdict == finish_check.UNVERIFIED, echoed.output
+
+
+@pytest.mark.parametrize(
+    ("output", "ran"),
+    [
+        (b"sh: 1: nosuchtool-zz: not found\n", False),
+        (b"sh: nosuchtool-zz: not found\n", False),
+        (b"sh: line 1: nosuchtool-zz: command not found\n", False),
+        (
+            b"Traceback (most recent call last):\nAssertionError: 1\n"
+            b"sh: 1: nosuchtool-zz: not found\n",
+            True,
+        ),
+        (b"built\nsh: nosuchtool-zz: not found\n", True),
+        (b"built\nsh: 1: ./not-executable: Permission denied\n", False),
+    ],
+)
+def test_a_not_found_line_is_told_in_each_shells_words_and_what_ran_before_it(
+    output: bytes, ran: bool
+) -> None:
+    """Breaks if the dash, bash or busybox form of the shell's word is not read (busybox says
+    `sh: tool: not found`, with no line number and no `command`), so that an Alpine hook cannot
+    tell a command that ran before its missing tool, or if a line in no listed form is read as
+    one."""
+
+    assert finish_check.ran_before_missing(output) is ran
+    named = finish_check.missing_tool(output)
+    assert (named is None) is (ran or b"Permission" in output)
+    assert named in (None, "nosuchtool-zz")
+
+
+def test_no_posix_shell_reads_unverified_with_the_reason_and_runs_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Windows machine with no Git for Windows holds the turn, or names no reason,
+    or starts something else: the Done line needs a POSIX shell, and without one the check
+    cannot say anything about it."""
+
+    marker = tmp_path / "ran"
+    monkeypatch.setattr(finish_check.programs, "posix_shell", lambda *a, **k: None)
+
+    result = finish_check.run_one(tmp_path, f"touch {marker}", 60)
+
+    assert (result.verdict, result.cause, result.seconds) == (
+        finish_check.UNVERIFIED,
+        finish_check.ENVIRONMENT,
+        0.0,
+    )
+    assert "no POSIX shell" in result.why and "Git for Windows" in result.why
+    assert not marker.exists()
+
+
+def test_a_signal_that_ends_the_check_never_kills_it_through_os_kill_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Breaks if a held stop on Windows is sent to the process with `os.kill`, which ends it
+    there at once with the signal's number as its exit code and no `finally`: Ctrl-C is the
+    exception Python raises, and another signal exits as a shell reports it, 128 plus its
+    number, so each running command's tree is stopped first."""
+
+    def refused(*_: Any) -> None:
+        raise AssertionError("os.kill sends a signal on Windows that ends the process")
+
+    monkeypatch.setattr(finish_check.os, "kill", refused)
+    with pytest.raises(KeyboardInterrupt):
+        finish_check._die(signal.SIGINT, windows=True)
+    with pytest.raises(SystemExit) as stopped:
+        finish_check._die(signal.SIGTERM, windows=True)
+    assert stopped.value.code == 128 + signal.SIGTERM
+
+
+@pytest.mark.parametrize(
+    ("given", "native"),
+    [
+        ("/c/work/app/work", "C:/work/app/work"),
+        ("/d", "D:/"),
+        ("/cygdrive/e/src", "E:/src"),
+        ("/srv/app", "/srv/app"),
+        ("/opt/app", "/opt/app"),
+        ("C:/work/app", "C:/work/app"),
+        ("sub/dir", "sub/dir"),
+    ],
+)
+def test_a_folder_written_the_way_git_bash_writes_it_is_read_as_a_drive_on_windows(
+    given: str, native: str
+) -> None:
+    """Breaks if a hook input's `cwd` of `/c/work/app` is read, on Windows, as a folder named
+    `c` on the current drive: no manifest is found there, and the finish check holds nothing
+    with a report that names the wrong folder."""
+
+    assert finish_check.native_path(given, windows=True) == native
+
+
+def test_a_folder_in_git_bash_form_is_left_alone_off_windows() -> None:
+    """Breaks if a POSIX folder whose first name is one letter, `/a/work`, is rewritten as a
+    drive: it is a real folder there."""
+
+    assert finish_check.native_path("/c/work/app", windows=False) == "/c/work/app"

@@ -789,7 +789,7 @@ def test_no_process_but_git_and_no_socket(tmp_path: Path, monkeypatch: pytest.Mo
     def only_git(args: Any, *rest: Any, **options: Any) -> Any:
         argv = [str(a) for a in (args if isinstance(args, (list, tuple)) else [args])]
         started.append(argv)
-        if argv[0] != "git":
+        if Path(argv[0]).stem != "git":
             raise AssertionError(f"started a process other than git: {argv}")
         return real(args, *rest, **options)
 
@@ -799,7 +799,7 @@ def test_no_process_but_git_and_no_socket(tmp_path: Path, monkeypatch: pytest.Mo
     monkeypatch.setattr(subprocess, "Popen", only_git)
     monkeypatch.setattr(socket, "socket", no_socket)
     report = check(root, [], base="HEAD~1")
-    assert started and all(argv[0] == "git" for argv in started)
+    assert started and all(Path(argv[0]).stem == "git" for argv in started)
     assert _hits(report, "instruction-change")
 
 

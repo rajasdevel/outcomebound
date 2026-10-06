@@ -21,7 +21,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from outcomebound_tools import declared_tests, home, paths, schemacheck
+from outcomebound_tools import declared_tests, home, paths, programs, schemacheck
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ROOT = home.ROOT
@@ -151,8 +151,9 @@ class DiscoveryError(ValueError):
 
 def git_read(target: Path, *arguments: str, data: bytes | None = None) -> bytes | None:
     """What one read-only git command printed in `target`, or None where it failed or Git
-    cannot run. Git comes from PATH's absolute entries only, so the target cannot supply its
-    own, and nothing the target configures runs (`GIT_READ_CONFIGURATION`)."""
+    cannot run. Git comes from PATH's absolute entries only (`programs.require`), so the target
+    cannot supply its own, on Windows too, and nothing the target configures runs
+    (`GIT_READ_CONFIGURATION`)."""
 
     inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
@@ -160,7 +161,7 @@ def git_read(target: Path, *arguments: str, data: bytes | None = None) -> bytes 
     )
     try:
         completed = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            [programs.require("git", inherited), *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             env=git_environment(inherited),
             input=data,
