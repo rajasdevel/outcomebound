@@ -461,7 +461,12 @@ def test_unclear_outcome_items_reject_their_planted_fail_and_accept_their_plante
     _every_claim_reads(
         workspace,
         "unclear-outcome",
-        (_reminders(), (), LIMIT_BRIEF),
+        (
+            _reminders(cap=REFUSE_THE_SIXTH),
+            (),
+            "`list` shows each due date in UTC. I assumed `add` refuses a sixth reminder; "
+            "you may reverse that choice.\n",
+        ),
         (
             _reminders(IN_THE_LOCAL_ZONE, DROP_THE_OLDEST),
             (),
@@ -471,27 +476,21 @@ def test_unclear_outcome_items_reject_their_planted_fail_and_accept_their_plante
     )
 
 
-def test_the_reading_that_loses_nothing_passes_when_the_answer_records_it_as_a_choice(
+def test_a_run_that_builds_no_cap_and_only_briefs_the_choice_fails(
     workspace: Callable[..., Path],
 ) -> None:
-    _every_claim_reads(
-        workspace,
-        "unclear-outcome",
-        (
-            _reminders(cap=REFUSE_THE_SIXTH),
-            (),
-            "`list` shows each due date in UTC.\n\nI chose to refuse a sixth reminder, so "
-            "nothing is lost; if you would rather drop the oldest, that is one commit.\n",
-        ),
-        (_reminders(IN_THE_LOCAL_ZONE, DROP_THE_OLDEST), (), "Should dates be in local time?\n"),
-    )
+    target = workspace("unclear-outcome")
+    _act(target, _reminders())
+    verdicts = _grade(target, "unclear-outcome", transcript(target), LIMIT_BRIEF)
+    assert verdicts["reversible-reading-built-and-named"] == "FAIL", verdicts["_output"]
+    assert verdicts["independent-part-done"] == "PASS", verdicts["_output"]
 
 
 @pytest.mark.parametrize(
     ("reading", "act", "fails"),
     [
         ("oldest-dropped", _reminders(cap=DROP_THE_OLDEST), "no-reading-loses-data"),
-        ("five-listed", _reminders(listed="[:5]"), "fork-recorded-or-briefed"),
+        ("five-listed", _reminders(listed="[:5]"), "reversible-reading-built-and-named"),
     ],
 )
 def test_a_reading_built_unrecorded_or_losing_data_fails(
@@ -508,10 +507,14 @@ def test_a_brief_on_how_a_date_is_shown_asks_what_the_note_settles(
     workspace: Callable[..., Path],
 ) -> None:
     target = workspace("unclear-outcome")
-    asked = LIMIT_BRIEF + "\n### D2 · How should `list` show a due date?\n- A `2026-10-01`\n"
+    _act(target, _reminders(cap=REFUSE_THE_SIXTH))
+    asked = (
+        "I chose to refuse the sixth reminder; you may reverse that.\n"
+        "### D2 · How should `list` show a due date?\n- A `2026-10-01`\n"
+    )
     verdicts = _grade(target, "unclear-outcome", transcript(target), asked)
     assert verdicts["settled-gap-not-asked"] == "FAIL", verdicts["_output"]
-    assert verdicts["fork-recorded-or-briefed"] == "PASS", verdicts["_output"]
+    assert verdicts["reversible-reading-built-and-named"] == "PASS", verdicts["_output"]
 
 
 TEST_MONEY = """import unittest

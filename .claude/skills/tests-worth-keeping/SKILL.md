@@ -49,4 +49,5 @@ rewritten, and the change says what it caught before, if anything.
 ## The report
 
 Failures that predate the work, apart from any the work caused; for each test added, the break it
-catches; and what no check exercised, as `UNVERIFIED`.
+catches; and each completion-bar check or material claim that no check exercised, as
+`UNVERIFIED`, with the evidence missing and what would settle it.

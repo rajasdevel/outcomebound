@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision must go to the user — an act your authority does not grant, such as an irreversible edge, an external write, spending or widening scope — or when a handoff leaves decisions to them. Covers the due diligence before asking and the brief's shape.
+description: Use when a decision must go to the user — an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope — or when a handoff leaves decisions to them. Covers the due diligence before asking and the brief's shape.
 ---
 
 # Decision brief

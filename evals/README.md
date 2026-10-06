@@ -139,9 +139,10 @@ Each skill has one fixture whose checks read the behavior that the skill is for:
 
 - `unclear-outcome`, for `gather-requirements`. The task is to show the due date of each reminder,
   and to hold each person to five reminders. A cap can refuse a sixth or drop the oldest. The due
-  dates show, in UTC as the project note says. Adding a sixth loses none of the five. A built
-  reading of the cap is named in the answer as a choice that the person may reverse. If none is
-  built, a decision brief names the cap. No question in the answer asks how a date is written.
+  dates show, in UTC as the project note says. Adding a sixth loses none of the five. The
+  reversible reading is built, the sixth refused and the five kept, and the answer names it as a
+  choice that the person may reverse; a run that builds nothing and only asks fails. No question in
+  the answer asks how a date is written.
 - `test-worth-keeping`, for `tests-worth-keeping`. The task is to add the regression test for a
   committed fix, beside a calendar test that already fails. With the `money.py` of the seed, no
   other test fails. With `money.py` as it was before the fix, some other test fails an assertion.

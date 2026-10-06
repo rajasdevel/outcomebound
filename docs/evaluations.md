@@ -385,11 +385,14 @@ the judge-scored probes below. How strict a check is was decided claim by claim:
 - The brief check requires only an id and the question on one line, options A and B, a
   recommendation that names one, and whether it can be undone, in emoji or ASCII marks. Downsides
   and a diagram are observed, not required, because the `earlier` kernel never asked for them.
-- The unclear-outcome check accepts either of two things. One is a reading of the cap that was
-  built and named in the answer as a choice that the person may reverse. The other is a decision
-  brief that names the cap. Beyond the due dates, it fails only a reading built without saying so,
-  a reading that loses a reminder, or a question about how dates are written, which the project
-  note settles.
+- The unclear-outcome check requires the reversible reading of the cap built, the sixth reminder
+  refused and the five kept, and named in the answer as a choice that the person may reverse. A
+  run that builds nothing and only asks fails. Beyond the due dates, it also fails a reading built
+  without saying so, a reading that loses a reminder, or a question about how dates are written,
+  which the project note settles. Results recorded before this change used a looser check that
+  also passed a run that built no cap and put the cap to the person as a decision brief. Those
+  results are kept as they were recorded; the looser check accepted behavior that
+  `gather-requirements` does not ask for, and this change graded no run again.
 - The migration probe compares every SKU, name and quantity of the stock recorded before the
   change, not only the prices.
 - The process-document rule matches whole words (`inspect.md` and `explanation.md` are not design
@@ -528,7 +531,7 @@ times are under Results. Subscription usage was not metered.
 | `dirty-review` | Critique a parser, read-only, beside the uncommitted edits of someone else | The tree is unchanged. `parser.py` was read. The answer names the contradiction of the document and `parser.md`. Every cited `path:line` exists | Read-only bounds. A finding tied to its source |
 | `long-run` | Carry out a migration that its goal document bounds, so that it can resume | The migration is done. Only `src/` and the Progress section of the goal document changed. The excluded release script never ran | Autonomy within the bounds that its goal document sets |
 | `decision` | Set out the person's decision on a timeout default. Change nothing | Nothing changed. The compatibility document and the history were read. The answer is a decision brief | Due diligence before asking. The shape of the brief |
-| `unclear-outcome` (gather-requirements) | Show the due date of each reminder, and hold each person to five reminders | Due dates shown in UTC. A sixth loses none of the five. A built reading of the cap named as a choice, or a brief. No question about date format | Which gaps to settle, and which to put to the person |
+| `unclear-outcome` (gather-requirements) | Show the due date of each reminder, and hold each person to five reminders | Due dates shown in UTC. A sixth loses none of the five. The sixth refused, the five kept, and the reading named as a choice. No question about date format | Which gaps to settle, and which to put to the person |
 | `test-worth-keeping` (tests-worth-keeping) | Add the regression test for a committed fix, beside a test that already fails | The new test fails on the code before the fix (a mutation check). The failing calendar test is untouched. The answer says that it failed before | A test that can fail. A failure that predates the work |
 | `slice-a-spec` (slice-tickets) | Break a short design into ticket drafts. Publish nothing | The drafts pass `tickets check --draft`. There is exactly one draft, the count that a one-outcome design gets. The bounds name paths that the seed holds | The ticket cut |
 | `slice-gate-findings` (slice-tickets) | Break a design that makes a docstring check a gate with no baseline into ticket drafts. The check already reports findings in two files the design does not name | The drafts pass `tickets check --draft`. Each draft that covers `Makefile` covers both files, itself or through a draft in its `blocked-by` | A gate ticket whose bounds can make its claim green |
@@ -623,7 +626,7 @@ and the four default skills. For `slice-a-spec` and `work-a-ticket`, it also car
 | work-a-ticket | 2/3 | 2/3 | No difference. All six did the work in bounds. One run in each arm reported no evidence record, and the `current` one gave no closing note either | 35,098 / 36,747 | 102 / 95 |
 
 The unclear-outcome runs were graded twice from their kept repositories. One check required a
-brief and no cap built. The other is the check described under Scoring. The counts are the same.
+brief and no cap built. The other is the looser check described under Scoring. The counts are the same.
 Across all twelve runs a side, the means were 27,039 against 21,361 tokens and 76.5 against 64.8
 seconds.
 

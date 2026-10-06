@@ -20,12 +20,12 @@
       "required_paths": ["checks/reminders_probe.py", "reminders.py"]
     },
     {
-      "name": "fork-recorded-or-briefed",
-      "risk": "a reading of the cap was built with no line saying it was chosen, or none was built and the person never got the choice",
+      "name": "reversible-reading-built-and-named",
+      "risk": "no reading of the cap was built, a reading other than refusing the sixth was built, or the answer has no line saying the reading was chosen",
       "kind": "runtime",
       "required": true,
       "command": ["python3", "-B", "checks/reminders_probe.py", "fork"],
-      "required_paths": ["checks/brief.py", "checks/reminders_probe.py", "reminders.py"]
+      "required_paths": ["checks/reminders_probe.py", "reminders.py"]
     },
     {
       "name": "settled-gap-not-asked",

@@ -62,9 +62,11 @@ ends only when its completion bar holds or nothing left can proceed.
 ## Validate and report
 
 Name the checks that settle the changed risk, and report each as `PASS`, `FAIL`, or
-`UNVERIFIED`. `PASS` means only that the declared check succeeded. A trusted project policy check
-can establish its declared boundary rule; it cannot prove product behavior. A local change, a passing test, a commit, a push, a deployment, a runtime
-observation, and an operator judgment are each their own state; report none of them as another.
+`UNVERIFIED`. `PASS` means only that the declared check succeeded. A completion-bar check or a material claim
+reported `UNVERIFIED` says what evidence is missing and what would settle it. A trusted project
+policy check can establish its declared boundary rule; it cannot prove product behavior. A local
+change, a passing test, a commit, a push, a deployment, a runtime observation, and an operator
+judgment are each their own state; report none of them as another.
 
 Write the checks down as a plan only when someone else will rerun them.
 `outcomebound validation <plan.json>` runs such a plan's `static`, `test`, `build`, and

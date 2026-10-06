@@ -21,6 +21,23 @@ LIMITS = (
     re.compile(rf"\b\d[\d,]*\s*(?:{UNIT})\b"),
     re.compile(r"\b\d+\s*%"),
     re.compile(r"\b(?:at most|no more than|one page|within \d|past (?:twice|\d))", re.IGNORECASE),
+    # An attempt limit in words: "goes back once", "fails twice", "after two tries".
+    re.compile(
+        r"\b(?:goes back|sent back|fail(?:s|ed)?|retr(?:y|ies)|tr(?:y|ies)|attempts?)\s+"
+        r"(?:once|twice|thrice)\b",
+        re.IGNORECASE,
+    ),
+    # The same limit as an ordinal: "a second miss", "fails a second time".
+    re.compile(
+        r"\b(?:(?:a|the)\s+(?:second|third)\s+(?:miss|failure|attempt|try|round)"
+        r"|fails?\s+(?:a|the)\s+(?:second|third)\s+time)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:after|up to)\s+(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:more\s+)?"
+        r"(?:tries|attempts|retries|rounds|passes|failures|misses)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\b(?:stop and ask|stop (?:only|there|the run)|end the run|re-plan)\b", re.I),
 )
 # (path, matched text): the evidence that allows it.
@@ -81,3 +98,16 @@ def test_NEGATIVE_CONTROL_a_new_limit_and_a_new_stop_are_reported() -> None:
         (8, "within 2"),
         (8, "stop and ask"),
     ]
+
+
+def test_NEGATIVE_CONTROL_an_attempt_limit_in_words_is_reported() -> None:
+    for sentence, matched in (
+        ("A step that fails review goes back once with the finding.", "goes back once"),
+        ("A step that fails twice is rewritten.", "fails twice"),
+        ("Hand it up after two tries.", "after two tries"),
+        ("A second miss says the tier is wrong.", "A second miss"),
+        ("One that fails a second time goes up a tier.", "fails a second time"),
+    ):
+        assert [hit for _, hit in limits(sentence + "\n")] == [matched]
+    # A cause, not a count, sets no limit.
+    assert limits("Where a fix round repeats the same miss, the tier is wrong.\n") == []
