@@ -31,7 +31,6 @@ empty one for whatever did not arrive.
 from __future__ import annotations
 
 import json
-import sys
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -40,6 +39,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from outcomebound_tools import textio
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_model import (
     LIFECYCLE_KEYS,
@@ -164,17 +164,19 @@ def _source_text(source: str | Path) -> tuple[str, InputInfo]:
     """The export's text, with the path, modification time and age the report prints.
 
     Standard input has no modification time, so its age reads unknown: nothing
-    about a stream says when what it carries was written.
+    about a stream says when what it carries was written. Both are read as bytes
+    and decoded here: UTF-8, with or without a byte-order mark, or UTF-16 with
+    one, which is how Windows PowerShell 5.1 saves a redirected file.
     """
 
     if str(source) == _STDIN:
         try:
-            return sys.stdin.read(), InputInfo(path=_STDIN)
+            return textio.stdin_text(), InputInfo(path=_STDIN)
         except (OSError, UnicodeDecodeError) as error:
             raise _unreadable(f"standard input could not be read: {error}") from error
     path = Path(source)
     try:
-        text = path.read_text(encoding="utf-8")
+        text = textio.read_text(path, utf16=True)
         modified = path.stat().st_mtime
     except (OSError, UnicodeDecodeError, ValueError) as error:
         raise _unreadable(f"{path} could not be read: {error}") from error

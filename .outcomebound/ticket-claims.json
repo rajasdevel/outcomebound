@@ -224,10 +224,13 @@
     "pytest",
     "-q",
     "tests/test_adopt.py",
+    "tests/test_adopt_line_endings.py",
     "tests/test_facts.py",
+    "tests/test_fileplan.py",
     "tests/test_fragments.py",
     "tests/test_outcomebound_launcher.py",
-    "tests/test_paths.py"
+    "tests/test_paths.py",
+    "tests/test_textio.py"
    ]
   },
   {

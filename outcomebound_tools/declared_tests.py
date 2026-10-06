@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import paths
+from outcomebound_tools import paths, textio
 
 __all__ = [
     "JUST_TEST",
@@ -97,7 +97,7 @@ class _Root:
         try:
             if path.lstat().st_size > self.limit:
                 return None
-            return path.read_bytes().decode("utf-8")
+            return textio.decode(path.read_bytes())
         except (OSError, UnicodeDecodeError):
             return None
 

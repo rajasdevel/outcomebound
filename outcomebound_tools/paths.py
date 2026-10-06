@@ -10,6 +10,9 @@ this module, so it can afford no dependency of its own.
 
 from __future__ import annotations
 
+import re
+import shlex
+import sys
 from pathlib import Path, PurePosixPath
 
 # The path grammar. A segment equal to any of these is refused wherever it
@@ -21,6 +24,40 @@ FORBIDDEN_PREFIXES = ("/", "~")
 
 class PathError(ValueError):
     """A path this engine will not accept. Callers may translate it."""
+
+
+# What a Windows word may hold unquoted: nothing a PowerShell or Git Bash word treats as syntax.
+_PLAIN_WORD = re.compile(r"[\w@%+=:,./-]+")
+
+
+def on_windows() -> bool:
+    """Whether this process runs on Windows. One function reads the platform, so that a test can
+    say Windows, and a type checker does not fold the other branch away."""
+
+    return sys.platform == "win32"
+
+
+def shell_word(word: str) -> str:
+    """`word` quoted for the shell a person pastes an engine-printed command into.
+
+    POSIX shells take `shlex.quote`. On Windows the shells that run these commands are PowerShell
+    and Git Bash, and both read a word in single quotes whole; PowerShell doubles an apostrophe
+    inside it. cmd takes no single quotes, so a command with a word that needs them is for
+    PowerShell or Git Bash.
+    """
+
+    if not on_windows():
+        return shlex.quote(word)
+    if _PLAIN_WORD.fullmatch(word):
+        return word
+    return "'" + word.replace("'", "''") + "'"
+
+
+def shell_path(path: Path | str) -> str:
+    """`path` as a printed command's word: forward slashes, which every Windows shell and
+    program takes, then quoted."""
+
+    return shell_word(Path(path).as_posix())
 
 
 def is_control(character: str) -> bool:
@@ -43,6 +80,61 @@ def names_git(part: str) -> bool:
     """
 
     return part.casefold().rstrip(". ") == ".git"
+
+
+# What Windows will not make a file of, though the grammar above admits it: a character its file
+# names cannot hold, a device name with any extension (`NUL`, `aux.txt`), and a name that ends in
+# a dot or a space. The grammar stays narrow, as it is what every recorded manifest agrees on;
+# `windows_refusal` is for the one place a name meets the Windows filesystem, the writer.
+_WINDOWS_BAD_CHARACTERS = frozenset('<>"|?*')
+_WINDOWS_DEVICES = frozenset(
+    {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        *(f"COM{n}" for n in range(1, 10)),
+        *(f"LPT{n}" for n in range(1, 10)),
+    }
+)
+
+
+def windows_refusal(relative: str) -> str | None:
+    """Why Windows cannot hold the bounded path ``relative`` as a file, or None.
+
+    It says nothing on another platform, and nothing for a path it can hold.
+    """
+
+    if not on_windows():
+        return None
+    for part in relative.split("/"):
+        if _WINDOWS_BAD_CHARACTERS & set(part):
+            return f"{part!r} holds a character that a Windows file name cannot"
+        if part.split(".", 1)[0].rstrip(" ").upper() in _WINDOWS_DEVICES:
+            return f"{part!r} is a Windows device name"
+        if part.endswith((".", " ")):
+            return f"{part!r} ends in a dot or a space, which Windows drops"
+    return None
+
+
+# IO_REPARSE_TAG_MOUNT_POINT, the tag of a directory junction; the `stat` module names it only on
+# Windows.
+REPARSE_TAG_JUNCTION = 0xA0000003
+
+
+def redirects(path: Path) -> bool:
+    """Whether ``path`` is a symlink, or on Windows a directory junction: a way to reach files
+    elsewhere that Git cannot commit and a normal account can make. Other reparse points, such as
+    a cloud folder's placeholders, are ordinary files and directories."""
+
+    if path.is_symlink():
+        return True
+    if not on_windows():
+        return False
+    try:
+        return getattr(path.lstat(), "st_reparse_tag", 0) == REPARSE_TAG_JUNCTION
+    except OSError:
+        return False
 
 
 def admits(value, *, allow_root=False) -> bool:
@@ -89,7 +181,7 @@ def resolve_bounded(root, relative, *, allow_root=False) -> Path:
     candidate = root
     for part in PurePosixPath(relative).parts:
         candidate = candidate / part
-        if candidate.is_symlink():
+        if redirects(candidate):
             raise PathError(f"path contains a symlink: {relative}")
     if not candidate.absolute().is_relative_to(root.absolute()):
         raise PathError(f"path escapes its root: {relative}")
@@ -106,7 +198,7 @@ def read_bounded(root, relative) -> bytes:
     """
 
     path = resolve_bounded(root, relative)
-    if path.is_symlink() or not path.is_file():
+    if redirects(path) or not path.is_file():
         raise PathError(f"not a readable file: {relative}")
     try:
         return path.read_bytes()

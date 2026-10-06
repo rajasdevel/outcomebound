@@ -30,6 +30,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from outcomebound_tools.home import ROOT
+from outcomebound_tools.textio import read_text
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_model import (
     STATES,
@@ -163,7 +164,7 @@ def read_draft(
         )
     shown = given.as_posix()
     try:
-        text = given.read_text(encoding="utf-8")
+        text = read_text(given)
     except (FileNotFoundError, NotADirectoryError, IsADirectoryError):
         return None, (_absent(id, shown),)
     except (OSError, UnicodeDecodeError) as error:

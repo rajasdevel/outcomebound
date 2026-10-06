@@ -39,6 +39,7 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     folder = tmp_path / "home"
     folder.mkdir()
     monkeypatch.setenv("HOME", str(folder))
+    monkeypatch.setenv("USERPROFILE", str(folder))
     monkeypatch.delenv(research.ENVIRONMENT, raising=False)
     return folder
 
@@ -394,6 +395,99 @@ def test_clone_repoints_a_link_it_made_before(
     assert os.listdir(home / ".outcomebound") == ["research"]
 
 
+def test_on_windows_clone_links_with_a_pointer_file_that_printing_reads(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A symbolic link needs Administrator rights or Developer Mode on Windows; the pointer file
+    needs neither, whoever runs `clone`. Emulated: `sys.platform` says Windows, which the
+    Windows CI job settles for real. A link an earlier release made there is replaced by it."""
+
+    monkeypatch.setattr(research.subprocess, "run", FakeGit())
+    monkeypatch.setattr("sys.platform", "win32")
+    link_to(home, tmp_path / "old")
+    destination = tmp_path / "new"
+    status, out, err = run(capsys, "clone", str(destination), "--accept")
+    assert (status, err) == (0, "")
+
+    link = home / ".outcomebound" / "research"
+    assert not link.is_symlink() and link.is_file()
+    assert link.read_bytes() == destination.as_posix().encode() + b"\n", "UTF-8, LF, a POSIX path"
+    assert out.splitlines()[-1] == f"linked: ~/.outcomebound/research -> {destination.as_posix()}"
+    assert os.listdir(home / ".outcomebound") == ["research"], "no stage file is left"
+
+    make_clone(destination)
+    status, out, err = run(capsys)
+    assert (status, err) == (0, "")
+    assert out == header("INDEX.md", "# Index\n")
+    # A second clone replaces the pointer, which `clone` accepts as the link it made.
+    again = tmp_path / "again"
+    assert run(capsys, "clone", str(again), "--accept")[0] == 0
+    assert link.read_bytes() == again.as_posix().encode() + b"\n"
+
+
+def test_a_pointer_file_that_names_nothing_reads_as_no_clone(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    (home / ".outcomebound").mkdir()
+    link = home / ".outcomebound" / "research"
+    link.write_text(f"{(tmp_path / 'gone').as_posix()}\n", encoding="utf-8")
+    status, out, err = run(capsys)
+    assert (status, out) == (3, "")
+    assert "points at nothing" in err
+
+    link.write_text("not/absolute\n", encoding="utf-8")
+    assert run(capsys)[0] == 3, "a file that names no absolute folder is no pointer"
+    status, _, err = run(capsys, "clone", str(tmp_path / "ok"), "--accept")
+    assert status == 1 and "neither a symlink nor a pointer file" in err
+
+
+def test_a_clone_checked_out_with_crlf_prints_and_digests_the_lf_text(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    """The first line is what a citation quotes, so one file has one digest on every machine."""
+
+    clone = make_clone(tmp_path / "clone")
+    (clone / "models" / "README.md").write_bytes(b"advice\r\nmore\r\n")
+    link_to(home, clone)
+
+    assert run(capsys, "models/README.md")[1] == header("models/README.md", "advice\nmore\n")
+
+
+def test_a_failed_git_names_the_way_to_use_the_persons_own_configuration(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Git runs without the user's and the system's settings, which a proxy or a certificate
+    store may need; the refusal says what the person can do about it."""
+
+    monkeypatch.setattr(research.subprocess, "run", FakeGit(128, "fatal: SSL certificate problem"))
+
+    status, _, err = run(capsys, "clone", str(tmp_path / "new"), "--accept")
+
+    assert status == 1
+    assert "SSL certificate problem" in err
+    assert "clone the repository yourself and set OUTCOMEBOUND_RESEARCH to the folder" in err
+
+
+def test_git_output_that_is_not_utf8_is_read_not_refused(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows the code page decodes Git's output, and a byte it leaves undefined raised
+    inside `subprocess.run`. A child that prints such a byte stands in for Git."""
+
+    real = subprocess.run
+
+    def child(argv: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
+        code = "import sys; sys.stderr.buffer.write(b'bad \\x81\\x8d bytes'); sys.exit(3)"
+        return real([sys.executable, "-c", code], **options)
+
+    monkeypatch.setattr(research.subprocess, "run", child)
+
+    status, _, err = run(capsys, "clone", str(tmp_path / "new"), "--accept")
+
+    assert status == 1
+    assert "git exited 3\nbad " in err and "Traceback" not in err
+
+
 def test_a_failed_git_leaves_the_link_as_it_was(
     home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -443,7 +537,7 @@ def test_clone_refuses_before_anything_runs(
     (home / ".outcomebound" / "research").mkdir()
     status, out, err = run(capsys, "clone", str(tmp_path / "ok"), "--accept")
     assert (status, out) == (1, "")
-    assert "is not a symlink" in err
+    assert "neither a symlink nor a pointer file" in err
 
 
 def test_clone_accepts_an_empty_folder_and_expands_a_tilde(
@@ -929,6 +1023,7 @@ def git_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     for name in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "XDG_CONFIG_HOME"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("HOME", str(folder))
+    monkeypatch.setenv("USERPROFILE", str(folder))
     return folder
 
 
@@ -1097,7 +1192,12 @@ def test_an_argument_that_is_not_utf8_is_refused_not_a_traceback(
 def test_a_closed_pipe_ends_quietly(home: Path, tmp_path: Path) -> None:
     clone = make_clone(tmp_path / "clone")
     (clone / "models" / "README.md").write_text("line\n" * 400_000, encoding="utf-8")
-    environment = {**os.environ, "HOME": str(home), research.ENVIRONMENT: str(clone)}
+    environment = {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        research.ENVIRONMENT: str(clone),
+    }
     environment["PYTHONPATH"] = str(ROOT)
     child = subprocess.Popen(
         [sys.executable, "-m", "outcomebound_tools", "research", "models/README.md"],

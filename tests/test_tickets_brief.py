@@ -666,7 +666,7 @@ def test_an_export_on_standard_input_is_read_once(
     """
 
     root, export = tracked(tmp_path)
-    stream = io.StringIO(Path(export).read_text(encoding="utf-8"))
+    stream = io.TextIOWrapper(io.BytesIO(Path(export).read_bytes()), encoding="utf-8")
     monkeypatch.setattr(sys, "stdin", stream)
 
     document = compiled(root, TICKET, "--input", "-")
@@ -1150,3 +1150,30 @@ def test_steps_follow_bounds_in_the_order_an_implementer_meets_them(tmp_path: Pa
     unbounded = store(tmp_path, ticket_document(bounds=[]), name="unbounded")
     keep = _steps_of(compiled(unbounded, TICKET, "--detail", "full"))
     assert any("This ticket grants no path" in line for line in keep)
+
+
+def test_a_ticket_given_before_the_target_is_refused_with_the_right_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`tickets brief 20 .` takes `20` as the target. Its refusal still names the missing
+    declaration, and now also that a target reads as a ticket and what the order is."""
+
+    monkeypatch.chdir(tmp_path)
+
+    # As a shell reads it: a `#` word is a comment unless it is quoted.
+    for ticket, typed in (("20", "20"), ("#20", "'#20'"), ("owner/name#20", "'owner/name#20'")):
+        assert main(["brief", ticket, "."]) == 1
+        refusal = capsys.readouterr().err
+        assert refusal.startswith("DECLARATION_MISSING: "), refusal
+        assert f"{ticket} is not a folder but reads as a ticket" in refusal
+        assert f"`outcomebound tickets brief . {typed}`" in refusal
+
+    # The right order, and a target that is a folder, name no order: only the missing file.
+    assert main(["brief", ".", "20"]) == 1
+    assert "reads as a ticket" not in capsys.readouterr().err
+    (tmp_path / "20").mkdir()
+    assert main(["brief", "20", "."]) == 1
+    assert "reads as a ticket" not in capsys.readouterr().err
+    # Where the second argument is no folder either, the order is named without a command to copy.
+    assert main(["brief", "21", "22"]) == 1
+    assert "outcomebound tickets brief <target> <ticket>" in capsys.readouterr().err

@@ -101,6 +101,21 @@ def test_malformed_package_json_is_evidence_not_a_crash_or_a_guessed_command(tmp
     assert component["test_options"] == []
 
 
+def test_a_package_json_saved_with_a_byte_order_mark_and_crlf_is_parsed(tmp_path):
+    """PowerShell 5.1's `Set-Content -Encoding UTF8` writes a mark, and `json.loads` refuses a
+    string that starts with one: the file was read as malformed, and no script was observed."""
+
+    document = json.dumps({"scripts": {"test": "vitest run"}}, indent=2)
+    (tmp_path / "package.json").write_bytes(
+        b"\xef\xbb\xbf" + document.replace("\n", "\r\n").encode("utf-8")
+    )
+
+    package = discover(tmp_path)["observed"]["package_scripts"][0]
+
+    assert package["status"] == "parsed"
+    assert [row["name"] for row in package["scripts"]] == ["test"]
+
+
 def test_package_manager_declaration_is_used_and_conflicts_are_unresolved(tmp_path):
     package = tmp_path / "package.json"
     package.write_text(
@@ -760,3 +775,24 @@ def test_outside_git_the_report_says_no_gitignore_was_applied(tmp_path: Path) ->
 
     assert {row["path"] for row in result["observed"]["markers"]} == {"out/go.mod"}
     assert any("no .gitignore was applied" in row for row in result["limits"])
+
+
+def test_a_git_listing_that_is_not_utf8_still_shows_a_tracked_skill_root(tmp_path, monkeypatch):
+    """Git's output was decoded with the ANSI code page on Windows, and a byte that page leaves
+    undefined (0x81) raised inside `subprocess.run`. A child that prints such a byte stands in
+    for Git."""
+
+    from outcomebound_tools import harness_roots
+
+    (tmp_path / ".claude/skills/own").mkdir(parents=True)
+    real = subprocess.run
+
+    def child(argv, **options):
+        code = "import sys; sys.stdout.buffer.write(b'.claude/skills/own/\\x81.md\\n')"
+        return real([sys.executable, "-c", code], **options)
+
+    monkeypatch.setattr(harness_roots.subprocess, "run", child)
+
+    found = harness_roots.project_skill_roots(tmp_path, [".claude/skills"])
+
+    assert found == [{"path": ".claude/skills", "tracked": True, "skills": ["own"]}]

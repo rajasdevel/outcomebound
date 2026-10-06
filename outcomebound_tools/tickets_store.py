@@ -12,10 +12,9 @@ for the person or agent who holds one.
 from __future__ import annotations
 
 import argparse
-import shlex
 from pathlib import Path
 
-from outcomebound_tools import home
+from outcomebound_tools import home, paths
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_github import read_github_export
 from outcomebound_tools.tickets_model import ReadResult
@@ -23,19 +22,23 @@ from outcomebound_tools.tickets_report import PlanningError
 
 __all__ = ["QUERY", "export", "export_command", "read_store"]
 
-# The pinned query, as this engine ships it. The command names it through
-# `outcomebound home`, so the line stays right for whichever install runs it.
+# The pinned query, as this engine ships it. The command names its absolute path in this install,
+# which `gh` reads itself (`-F query=@path`): no shell has to substitute a file's text.
 QUERY = home.ROOT / "templates" / "tickets" / "github-export.graphql"
 
 
 def export_command(declaration: Declaration) -> str:
-    """The `gh` command that writes the declared repository's export to `issues.json`."""
+    """The `gh` command that writes the declared repository's export to `issues.json`.
+
+    It is one command for POSIX shells, PowerShell and Git Bash: the query is read by `gh` from
+    its path. PowerShell 5.1 saves `>` output as UTF-16, which `--input` reads.
+    """
 
     owner, _, name = declaration.repo.partition("/")
     return (
-        f"gh api graphql --paginate --slurp -F owner={shlex.quote(owner)} "
-        f"-F name={shlex.quote(name)} "
-        '-f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" '
+        f"gh api graphql --paginate --slurp -F owner={paths.shell_word(owner)} "
+        f"-F name={paths.shell_word(name)} "
+        f"-F {paths.shell_word(f'query=@{QUERY.resolve().as_posix()}')} "
         "> issues.json"
     )
 
@@ -49,7 +52,7 @@ def export(target: Path, declaration: Declaration, options: argparse.Namespace) 
     """
 
     del target, options
-    return f"# the pinned query: {QUERY.resolve()}\n{export_command(declaration)}\n"
+    return f"# the pinned query: {QUERY.resolve().as_posix()}\n{export_command(declaration)}\n"
 
 
 def read_store(target: Path, declaration: Declaration, source: str | None) -> ReadResult:
