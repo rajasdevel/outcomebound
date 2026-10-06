@@ -85,3 +85,38 @@ def test_a_brief_document_on_standard_input_is_read_in_each_encoding_a_shell_wri
 
     assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
     assert "Ёлка — keep it?" in completed.stdout.decode("utf-8")
+
+
+def test_a_new_line_after_a_kept_lone_cr_does_not_join_it_into_a_crlf() -> None:
+    """`a<CR>` kept, then a line that is only LF: the CR stays its own line ending."""
+
+    out = textio.splice(b"a\r", "a\n\n")
+
+    assert textio.universal(out.decode()) == "a\n\n"
+
+
+def test_splice_reads_back_as_the_new_text_and_returns_an_unchanged_host_byte_for_byte() -> None:
+    """Seeded fuzz over hosts with CRLF, LF, lone CR and no final newline."""
+
+    state = 20261006
+
+    def pick(options: list[str]) -> str:
+        nonlocal state
+        state = (state * 1103515245 + 12345) % 2**31  # fixed-seed generator, no `random` import
+        return options[(state >> 16) % len(options)]
+
+    fragments = ["a", "b", "", "a", "\n", "\r\n", "\r"]
+    texts = ["a", "b", "", "\n", "\n"]
+
+    def host() -> bytes:
+        return "".join(pick(fragments) for _ in range(1 + int(pick(list("01234567"))))).encode()
+
+    def new_text() -> str:
+        return "".join(pick(texts) for _ in range(1 + int(pick(list("01234567")))))
+
+    for _ in range(4000):
+        before, text = host(), new_text()
+        out = textio.splice(before, text)
+        assert textio.universal(out.decode()) == text, (before, text, out)
+        same = textio.splice(before, textio.universal(before.decode()))
+        assert same == before, (before, same)

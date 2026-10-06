@@ -84,9 +84,14 @@ def splice(before: bytes, text: str) -> bytes:
         None, [universal(line) for line in raw], new, autojunk=False
     ).get_opcodes():
         if tag == "equal":
-            out.extend(raw[a1:a2])
+            pieces = raw[a1:a2]
         else:
-            out.extend(line[:-1] + ending if line.endswith("\n") else line for line in new[b1:b2])
+            pieces = [line[:-1] + ending if line.endswith("\n") else line for line in new[b1:b2]]
+        for piece in pieces:
+            # A kept lone CR before an LF piece would read as one CRLF and lose a line.
+            if piece.startswith("\n") and out and out[-1].endswith("\r"):
+                piece = "\r" + piece
+            out.append(piece)
     return "".join(out).encode("utf-8")
 
 
