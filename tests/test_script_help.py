@@ -7,6 +7,7 @@ confusing domain error instead of printing usage, so each has the same shape: ch
 """  # noqa: E501 - the summary line is one line, as written
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -18,11 +19,27 @@ SCRIPTS = sorted((ROOT / "scripts").glob("*.sh"))
 PY_SCRIPTS = sorted(path for path in (ROOT / "scripts").glob("*.py") if os.access(path, os.X_OK))
 
 
+def _bash() -> str | None:
+    """The bash the `.sh` scripts need, or None where there is none to run them with. On
+    Windows `bash` on PATH can be the WSL stub, so Git for Windows' own is taken (UNVERIFIED
+    until the Windows CI job runs it); Alpine has none until it is installed."""
+
+    if os.name != "nt":
+        return shutil.which("bash")
+    git = shutil.which("git")
+    candidate = Path(git).resolve().parent.parent / "bin" / "bash.exe" if git else None
+    return str(candidate) if candidate is not None and candidate.is_file() else None
+
+
 def _run(script: Path, flag: str) -> subprocess.CompletedProcess[str]:
+    bash = _bash()
+    if bash is None:
+        pytest.skip("no bash here to run a .sh script with (the Alpine image has none)")
     return subprocess.run(
-        ["bash", str(script), flag],
+        [bash, str(script), flag],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
 
 
@@ -63,6 +80,7 @@ def test_every_executable_python_script_answers_help_with_usage(
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     combined = result.stdout + result.stderr
