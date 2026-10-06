@@ -211,6 +211,8 @@ def test_every_shipped_fragment_parses_and_names_only_registry_mechanisms():
         "workspace",
         "research",
         "commands",
+        "runtime",
+        "deploy",
     }
     for fragment in catalog.values():
         assert fragment.family in ("stack", "setup")
@@ -364,6 +366,32 @@ def test_ci_release_is_proposed_only_where_the_repository_shows_it_releases(
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         write(tmp_path / name, "x\n")
     assert ("ci-release" in detect(tmp_path, load_all(ROOT))) is proposed
+
+
+@shipped_catalog
+@pytest.mark.parametrize(
+    ("files", "runtime", "deploy"),
+    [
+        (("pyproject.toml", "package.json"), False, False),
+        (("Procfile",), True, False),
+        (("docker-compose.yml",), True, False),
+        (("fly.toml",), False, True),
+        ((".github/workflows/deploy-prod.yml",), False, True),
+        ((".github/workflows/ci.yml",), False, False),
+        (("infra/main.tf",), False, True),
+    ],
+    ids=["libraries", "procfile", "compose", "fly", "deploy-workflow", "ci-only", "terraform"],
+)
+def test_runtime_and_deploy_are_proposed_only_where_the_repository_shows_them(
+    tmp_path, files, runtime, deploy
+):
+    for name in files:
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        write(tmp_path / name, "x\n")
+    proposed = detect(tmp_path, load_all(ROOT))
+    assert ("runtime" in proposed) is runtime
+    assert ("deploy" in proposed) is deploy
+    assert load_all(ROOT)["deploy"].edges == ()
 
 
 @needs_symlinks
