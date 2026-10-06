@@ -102,7 +102,8 @@ _BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
 _PIN_SLACK = 4
 _HEX_STRETCH = re.compile(r"[0-9a-fA-F]{40,}")
 # A run that is not all hex is a payload only where a model could read it: a piece between pins
-# or `=`, decoded at its best alignment, holds an unbroken stretch of text of `_TEXT_BYTES` bytes,
+# or `=`, decoded at its best alignment, holds a stretch of text of `_TEXT_BYTES` bytes (one
+# character that is not text between two stretches of `_TEXT_PART` bytes or more joins them),
 # its pieces' stretches of `_TEXT_PART` bytes or more come to `_TEXT_BYTES` together, or a piece
 # starts a compressed stream. Text is a printable character read as UTF-8, or printable ASCII read
 # as UTF-16. Words run together (a note written with its spaces taken out) decode to short
@@ -730,23 +731,39 @@ def _printable(c: str) -> bool:
     return c != "\ufffd" and (c.isprintable() or c in "\t\n\r")
 
 
-def _stretch(raw: bytes) -> int:
-    """The longest unbroken stretch of text in `raw`, in bytes: printable characters read as
-    UTF-8, or printable ASCII read as UTF-16, since random bytes read as UTF-16 give printable
-    characters of other scripts."""
+def _bridged(marks: Iterator[tuple[bool, int]]) -> int:
+    """The longest stretch of text, in bytes, from (is text, bytes) per character, where one
+    character that is not text between two stretches of `_TEXT_PART` bytes or more joins them:
+    text broken by a byte now and then still reads as text."""
 
-    longest = 0
-    run = 0
-    for c in raw.decode("utf-8", "replace"):
-        run = run + len(c.encode("utf-8")) if _printable(c) else 0
-        longest = max(longest, run)
+    longest = run = chain = gap = 0
+    for text, size in marks:
+        if text:
+            run += size
+            longest = max(longest, run, chain + run if gap == 1 and run >= _TEXT_PART else 0)
+            continue
+        if run:
+            chain = chain + run if gap == 1 and run >= _TEXT_PART and chain else run
+            chain = chain if run >= _TEXT_PART else 0
+            gap = 0
+        gap += 1
+        run = 0
+    return longest
+
+
+def _stretch(raw: bytes) -> int:
+    """The longest stretch of text in `raw`, in bytes: printable characters read as UTF-8, or
+    printable ASCII read as UTF-16, since random bytes read as UTF-16 give printable characters
+    of other scripts."""
+
+    longest = _bridged(
+        (_printable(c), len(c.encode("utf-8"))) for c in raw.decode("utf-8", "replace")
+    )
     for codec in ("utf-16-le", "utf-16-be"):
         for start in (0, 1):
-            run = 0
             body = raw[start:]
-            for c in body[: len(body) // 2 * 2].decode(codec, "replace"):
-                run = run + 2 if c < "\x7f" and _printable(c) else 0
-                longest = max(longest, run)
+            text = body[: len(body) // 2 * 2].decode(codec, "replace")
+            longest = max(longest, _bridged((c < "\x7f" and _printable(c), 2) for c in text))
     return longest
 
 
