@@ -117,7 +117,7 @@ def test_a_line_that_did_not_pass_says_what_settles_it_after_next(work, capsys):
     rows = good_rows(work)
     del rows["chat"]
 
-    code, out = run(work, capsys, rows)
+    out = run(work, capsys, rows)[1]
 
     assert out.startswith("FAIL; 1 FAIL, ")
     assert "ITEM_UNDISPOSED n:notes:chat: " in out and " next: give the item one row" in out
@@ -352,7 +352,8 @@ def test_a_range_digest_moves_when_an_item_in_it_changes(work, capsys):
         document = json.loads((work / ".outcomebound/sources/n.json").read_text("utf-8"))
         digest = range_revision([i["revision"] for i in document["items"]])[:12]
         return {
-            "r": f"| n:notes:preamble..n:notes:chat #{digest} | not requirement-bearing | | all out |"
+            "r": f"| n:notes:preamble..n:notes:chat #{digest} | not requirement-bearing "
+            "| | all out |"
         }
 
     rows = range_row()

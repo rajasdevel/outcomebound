@@ -184,13 +184,15 @@ def _import_report(document: dict, path: Path, ignored: bool) -> None:
         )
 
 
+def _load(path: str) -> dict:
+    try:
+        return sources_manifest.load(Path(path))
+    except ValueError as error:
+        raise SourceRefusal("MANIFEST_INVALID", f"{display(path)}: {error}") from error
+
+
 def _skeleton(paths: Sequence[str], ranges: Sequence[str]) -> int:
-    documents = []
-    for path in paths:
-        try:
-            documents.append(sources_manifest.load(Path(path)))
-        except ValueError as error:
-            raise SourceRefusal("MANIFEST_INVALID", f"{display(path)}: {error}") from error
+    documents = [_load(path) for path in paths]
     shown = sources_manifest.REVISION_SHOWN
     spans: dict[str, str] = {}  # first id -> row cell
     covered: set[str] = set()
