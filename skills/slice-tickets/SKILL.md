@@ -38,9 +38,9 @@ the publishing commands.
   `CLAIMS_UNREADABLE` while the validation plan the declaration's `claims` names is missing.
 - A file copied from the shipped template fails `check` as it stands: it needs `# <title>` as
   its first line, `human-only` needs `yes`, `requested` or `no`, and `done-when` needs at least
-  one item. Two warnings a draft means: `CLAIM_PLANNED` on a
-  claim the ticket's own work adds, and `DISCOVERED_FROM_ABSENT` on a published ticket a draft
-  names, since a draft run reads no store.
+  one item. Warnings a draft means: `CLAIM_PLANNED` on a claim the ticket's own work adds,
+  `DISCOVERED_FROM_ABSENT` on a published ticket a draft names, since a draft run reads no store,
+  and the two an epic carries, as the epic sentence below says.
 - Where tickets have closed, read the follow-ups their handovers named. Carry one only where a
   user sees its result, inside a ticket or as a commit; drop the rest, listing their titles on
   one line of the breakdown.
