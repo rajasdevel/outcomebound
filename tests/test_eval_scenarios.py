@@ -482,7 +482,7 @@ def test_a_run_that_builds_no_cap_and_only_briefs_the_choice_fails(
     target = workspace("unclear-outcome")
     _act(target, _reminders())
     verdicts = _grade(target, "unclear-outcome", transcript(target), LIMIT_BRIEF)
-    assert verdicts["fork-recorded-or-briefed"] == "FAIL", verdicts["_output"]
+    assert verdicts["reversible-reading-built-and-named"] == "FAIL", verdicts["_output"]
     assert verdicts["independent-part-done"] == "PASS", verdicts["_output"]
 
 
@@ -490,7 +490,7 @@ def test_a_run_that_builds_no_cap_and_only_briefs_the_choice_fails(
     ("reading", "act", "fails"),
     [
         ("oldest-dropped", _reminders(cap=DROP_THE_OLDEST), "no-reading-loses-data"),
-        ("five-listed", _reminders(listed="[:5]"), "fork-recorded-or-briefed"),
+        ("five-listed", _reminders(listed="[:5]"), "reversible-reading-built-and-named"),
     ],
 )
 def test_a_reading_built_unrecorded_or_losing_data_fails(
@@ -514,7 +514,7 @@ def test_a_brief_on_how_a_date_is_shown_asks_what_the_note_settles(
     )
     verdicts = _grade(target, "unclear-outcome", transcript(target), asked)
     assert verdicts["settled-gap-not-asked"] == "FAIL", verdicts["_output"]
-    assert verdicts["fork-recorded-or-briefed"] == "PASS", verdicts["_output"]
+    assert verdicts["reversible-reading-built-and-named"] == "PASS", verdicts["_output"]
 
 
 TEST_MONEY = """import unittest
