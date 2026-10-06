@@ -241,9 +241,9 @@ gh api graphql --paginate --slurp -F owner=owner -F name=name -F query=@<outcome
 The command is for a POSIX shell, such as Git Bash. In PowerShell, replace the `-f query=...` part
 with `-F query=@"<home>/templates/tickets/github-export.graphql"`, where `<home>` is the folder that
 `outcomebound home` prints; `gh api` reads a field that starts with `@` from that file. The verbs
-read the export as UTF-8 only, and Windows PowerShell 5.1 writes a file made with `>` as UTF-16, so
-write `issues.json` as UTF-8 (PowerShell 7 does by default). This PowerShell form has not been run
-on Windows (`UNVERIFIED`).
+read the export as UTF-8, with or without a byte-order mark, or as UTF-16 with a byte-order mark,
+which Windows PowerShell 5.1 writes for `>`. This PowerShell form has not been run on Windows
+(`UNVERIFIED`).
 
 `export` exits with `0` when it printed the command. It exits with `1` for a refusal: no
 declaration, or a declaration that is not valid. It exits with `2` for a usage error.
