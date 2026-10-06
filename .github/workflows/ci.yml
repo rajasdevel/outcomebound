@@ -167,6 +167,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # Temporary: shows how make and Git's sh word a missing tool on this runner.
+      - name: Probe missing-tool wording
+        shell: bash
+        continue-on-error: true
+        run: |
+          printf 'all:\n\tnosuchtool-zz --version\n' > "$RUNNER_TEMP/probe.mk"
+          echo "--- make from bash"; make -f "$RUNNER_TEMP/probe.mk" 2>&1; echo "exit=$?"
+          echo "--- which make"; command -v make; make --version | head -1
+          echo "--- sh"; sh -c 'nosuchtool-zz --version' 2>&1; echo "exit=$?"
+          echo "--- python -m"; python -m nosuchmodule_zz 2>&1; echo "exit=$?"
+      - name: Probe missing-tool wording (PowerShell)
+        continue-on-error: true
+        run: |
+          make -f "$env:RUNNER_TEMP\probe.mk" 2>&1; "exit=$LASTEXITCODE"
+
       - name: Install the development tools
         run: python -m pip install -r requirements-dev.txt
 
