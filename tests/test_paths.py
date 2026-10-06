@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import discovery, paths
+from tests.portable import needs_symlinks, write
 
 CONTROL_ROOTS = ("a\x01b", "a\x7fb", "pkg\tsrc")
 
@@ -129,11 +130,11 @@ def test_bounded_relative_gives_the_grammar_verdict_on_every_corpus_value():
 
 
 def test_read_bounded_separates_a_hostile_path_from_an_unreadable_file(tmp_path):
-    (tmp_path / "doc.md").write_text("body\n", encoding="utf-8")
+    write(tmp_path / "doc.md", "body\n")
     assert paths.read_bounded(tmp_path, "doc.md") == b"body\n"
 
     (tmp_path / "nested").mkdir()
-    (tmp_path / "nested/deep.md").write_text("deep\n", encoding="utf-8")
+    write(tmp_path / "nested/deep.md", "deep\n")
     assert paths.read_bounded(tmp_path, "nested/deep.md") == b"deep\n"
 
     with pytest.raises(paths.PathError) as hostile:
@@ -148,11 +149,14 @@ def test_read_bounded_separates_a_hostile_path_from_an_unreadable_file(tmp_path)
         paths.read_bounded(tmp_path, "nested")
     assert "not a readable file" in str(directory.value)
 
+
+@needs_symlinks
+def test_read_bounded_refuses_a_symlink_on_any_component(tmp_path):
     # A symlinked ancestor relocates everything under it, so the check is on
     # every component and not on the resolved result.
     outside = tmp_path.parent / "outside"
     outside.mkdir(exist_ok=True)
-    (outside / "secret.md").write_text("secret\n", encoding="utf-8")
+    write(outside / "secret.md", "secret\n")
     (tmp_path / "linked").symlink_to(outside, target_is_directory=True)
     with pytest.raises(paths.PathError) as linked:
         paths.read_bounded(tmp_path, "linked/secret.md")

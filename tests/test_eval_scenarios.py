@@ -23,7 +23,13 @@ from types import ModuleType
 
 import pytest
 
+from tests.portable import needs_posix_bash
+
 ROOT = Path(__file__).resolve().parent.parent
+
+# Maintainer tooling: each fixture is built by `bash setup.sh`. Skipped with the reason, shown by
+# -rs, where there is no bash (Alpine) or the fixtures cannot run (Windows).
+pytestmark = needs_posix_bash
 FIXTURES = ROOT / "evals" / "fixtures"
 NAMES = (
     "decision",

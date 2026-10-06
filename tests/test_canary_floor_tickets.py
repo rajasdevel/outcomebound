@@ -9,7 +9,16 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
+from tests.portable import WINDOWS
 from tests.test_canary import assert_no_path, canary, git, instructions, load_canary, project, stub
+
+# The canary is maintainer tooling: it runs the installed release's sh launcher, and its tests
+# stand in for interpreters and floor tools with sh scripts, which Windows cannot start.
+pytestmark = pytest.mark.skipif(
+    WINDOWS, reason="the canary and its sh stand-ins are POSIX maintainer tooling"
+)
 
 # A floor tool that keeps its cache as ruff does: in the folder its variable names, else in a
 # folder of the tree that ignores itself, which `git status` alone does not show.
