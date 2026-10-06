@@ -38,9 +38,9 @@ the publishing commands.
   `CLAIMS_UNREADABLE` while the validation plan the declaration's `claims` names is missing.
 - A file copied from the shipped template fails `check` as it stands: it needs `# <title>` as
   its first line, `human-only` needs `yes`, `requested` or `no`, and `done-when` needs at least
-  one item. Two warnings a draft means: `CLAIM_PLANNED` on a
-  claim the ticket's own work adds, and `DISCOVERED_FROM_ABSENT` on a published ticket a draft
-  names, since a draft run reads no store.
+  one item. Warnings a draft means: `CLAIM_PLANNED` on a claim the ticket's own work adds,
+  `DISCOVERED_FROM_ABSENT` on a published ticket a draft names, since a draft run reads no store,
+  and the two an epic carries, as the epic sentence below says.
 - Where tickets have closed, read the follow-ups their handovers named. Carry one only where a
   user sees its result, inside a ticket or as a commit; drop the rest, listing their titles on
   one line of the breakdown.
@@ -172,7 +172,13 @@ parent: #41
 A relation is written on the ticket that depends, pointing at what stands before it, and never
 on the other side: the tracker shows the reverse. An epic is a parent with empty `bounds`,
 `reads` naming the sections its children answer to, and a `done-when` over what they make true
-together.
+together. Where its children build the whole of one design, its `reads` names the design (its
+path, or its sections) and its `done-when` the design's `## Validation` checks, those the claims
+plan holds and those a child's work adds, so the epic closing with them green says the design is
+built; a check no command settles is none of them. On an epic, `CLAIM_PLANNED` and
+`CLAIM_READS_OUTSIDE_BOUNDS` are warnings the draft means, since it writes nothing. A child's
+`reads` names the sections it answers to, which another child may share. The epic's claims are
+reported in its closing comment and hold no child.
 
 ## Lint, then show the user
 
