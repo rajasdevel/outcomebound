@@ -124,6 +124,22 @@ def test_a_missing_frontmatter_field_is_rejected():
         parse_fragment(GOOD.replace("applies: sample projects\n", ""), "x.md")
 
 
+def test_a_fragment_saved_with_crlf_or_a_byte_order_mark_parses_as_one_saved_with_lf():
+    """A `local.md` edited on Windows, or checked out with `core.autocrlf`, holds CRLF, and a
+    Windows editor may add a mark. Its fields, body and digest are those of the LF text, so the
+    pointers block that inlines it is the same one."""
+
+    plain = parse_fragment(GOOD, "x.md")
+    for text in (
+        GOOD.replace("\n", "\r\n"),
+        "\ufeff" + GOOD,
+        "\ufeff" + GOOD.replace("\n", "\r\n"),
+    ):
+        found = parse_fragment(text, "x.md")
+        assert found == plain
+        assert "\r" not in found.body
+
+
 def test_an_unknown_family_is_rejected():
     with pytest.raises(FragmentError, match="family"):
         parse_fragment(GOOD.replace("family: stack", "family: doctrine"), "x.md")

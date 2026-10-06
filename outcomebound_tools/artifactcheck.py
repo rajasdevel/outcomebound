@@ -12,6 +12,7 @@ import os
 import re
 import sys
 
+from outcomebound_tools import textio
 from outcomebound_tools.identity import IdentityError, parse_managed_block
 
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
@@ -137,7 +138,7 @@ def _main(argv=None) -> int:
     problems: list[str] = []
     if args.managed_block:
         try:
-            check_block(sys.stdin.read(), args.id)
+            check_block(textio.stdin_text(), args.id)
         except ArtifactCheckError as error:
             problems.append(str(error))
     for path in args.spec:

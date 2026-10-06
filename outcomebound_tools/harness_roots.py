@@ -36,7 +36,8 @@ def _tracked(target: Path, relative: str) -> bool:
         listed = subprocess.run(
             ["git", *GIT_READ_CONFIGURATION, "-C", str(target), "ls-files", "--", relative],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             env=git_environment(),
         )

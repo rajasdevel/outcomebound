@@ -344,8 +344,22 @@ def staged_change(project: Path) -> None:
     (project / "README.md").write_text("# Project\n\nNot staged.\n", encoding="utf-8")
 
 
+def crlf_checkout(project: Path) -> None:
+    """The project as a Windows checkout with `core.autocrlf=true` holds it: every file the
+    install wrote, and the project's own local fragment, with CRLF line endings, committed.
+    The previous release recorded the digests of the LF text it wrote."""
+
+    own, _ = own_paths(project)
+    for relative in sorted({*own, ".outcomebound/fragments/local.md"}):
+        path = project / relative
+        data = path.read_bytes().replace(b"\r\n", b"\n")
+        path.write_bytes(data.replace(b"\n", b"\r\n"))
+    commit(project, "crlf checkout")
+
+
 CASES = {
     "plain": Case(plain),
+    "crlf-checkout": Case(crlf_checkout),
     "plan-no-cwd": Case(claims(None), CWD_WARNINGS),
     "plan-dot": Case(claims("."), CWD_WARNINGS),
     "plan-dotdot": Case(claims("..")),

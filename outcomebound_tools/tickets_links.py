@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools import paths
+from outcomebound_tools import paths, textio
 from outcomebound_tools.tickets_model import fenced_spans
 from outcomebound_tools.tickets_report import EngineError
 
@@ -81,7 +81,7 @@ def _read(target: Path | str, relative: str) -> str | None:
 
     try:
         resolved = paths.resolve_bounded(target, relative)
-        return resolved.read_text(encoding="utf-8").replace("\r\n", "\n")
+        return textio.decode(resolved.read_bytes()).replace("\r\n", "\n")
     except (FileNotFoundError, NotADirectoryError):
         return None
     except (OSError, UnicodeDecodeError, paths.PathError) as error:

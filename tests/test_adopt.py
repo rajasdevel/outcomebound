@@ -690,6 +690,7 @@ def test_a_claude_md_in_a_folder_above_brings_the_import_block_back(
     import block is written; the person's own ~/.claude/CLAUDE.md is user memory and does not."""
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / "CLAUDE.md").write_text("# Mine\n", encoding="utf-8")
     plain = repo(tmp_path / "plain")
@@ -2054,7 +2055,8 @@ def test_the_writer_stages_exclusively_keeps_modes_and_prunes_what_it_empties(
     fileplan.write(tmp_path, {"a/b/c.sh": b"one\n"}, {"a/b/c.sh": None})
     (tmp_path / "a/b/c.sh").chmod(0o755)
     fileplan.write(tmp_path, {"a/b/c.sh": b"two\n"}, {"a/b/c.sh": b"one\n"})
-    assert (tmp_path / "a/b/c.sh").stat().st_mode & 0o777 == 0o755
+    if os.name != "nt":  # Windows keeps the read-only bit of a mode only, so 0o755 is 0o666 there
+        assert (tmp_path / "a/b/c.sh").stat().st_mode & 0o777 == 0o755
     assert not list(tmp_path.glob("a/b/*" + fileplan.STAGE_SUFFIX))
 
     fileplan.write(tmp_path, {"a/b/c.sh": None}, {"a/b/c.sh": b"two\n"})

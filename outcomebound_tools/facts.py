@@ -23,7 +23,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools import identity, paths
+from outcomebound_tools import identity, paths, textio
 from outcomebound_tools.fragments import EDGE_SEPARATOR, Fragment
 
 FACTS = "project-facts"
@@ -364,7 +364,7 @@ def read_ci(target: Path) -> list[CiFile]:
             result.append(CiFile(path, data, unread=(f"larger than {MAX_CI_BYTES} bytes",)))
             continue
         try:
-            found = entries(data.decode("utf-8"))
+            found = entries(textio.decode(data))
         except UnicodeDecodeError:
             result.append(CiFile(path, data, unread=("not UTF-8 text",)))
             continue
@@ -430,7 +430,9 @@ def render(
     else:
         unverified.append("Done: no command is recorded; adopt records one with --done")
     ci = read_ci(target)
-    inputs.update((item.path, sha256(item.data)) for item in ci if item.data is not None)
+    inputs.update(
+        (item.path, sha256(textio.fold(item.data))) for item in ci if item.data is not None
+    )
     line, left_out = _ci_fact(ci)
     lines.extend([line] if line else [])
     unverified.extend(left_out)
@@ -440,7 +442,7 @@ def render(
     except paths.PathError:
         floor = None
     if floor is not None:
-        inputs[FLOOR] = sha256(floor)
+        inputs[FLOOR] = sha256(textio.fold(floor))
         edges.append(FLOOR_EDGE)
     if edges:
         # No edge holds the separator (`fragments._edges`), so each one reads back whole.

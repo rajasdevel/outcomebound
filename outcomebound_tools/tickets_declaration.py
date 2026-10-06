@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools import home, identity, paths, schemacheck
+from outcomebound_tools import home, identity, paths, schemacheck, textio
 from outcomebound_tools.tickets_report import EngineError, Refusal
 
 __all__ = [
@@ -159,7 +159,7 @@ def load_declaration(target: Path | str) -> Declaration:
 
     path = Path(target) / DECLARATION_PATH
     try:
-        text = path.read_text(encoding="utf-8")
+        text = textio.read_text(path)
     except FileNotFoundError as error:
         raise Refusal(
             "DECLARATION_MISSING",

@@ -35,12 +35,12 @@ from __future__ import annotations
 import argparse
 import os.path
 import re
-import shlex
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
 
+from outcomebound_tools import paths
 from outcomebound_tools.tickets_check import check_loaded
 from outcomebound_tools.tickets_claims import ClaimsPlan, load_claims
 from outcomebound_tools.tickets_declaration import Declaration
@@ -494,7 +494,7 @@ def _check_body(item: DoneWhen, compiled: _Compiled) -> str:
     if not definition.command:
         return _UNRUNNABLE
     return _COMMAND_LINE.format(
-        command=shlex.join(definition.command),
+        command=" ".join(map(paths.shell_word, definition.command)),
         cwd=compiled.cwd,
         timeout=_timeout(definition.timeout_seconds),
     )

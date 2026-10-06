@@ -21,7 +21,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 
-from outcomebound_tools import declared_tests, home, paths, programs, schemacheck
+from outcomebound_tools import declared_tests, home, paths, programs, schemacheck, textio
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ROOT = home.ROOT
@@ -366,7 +366,7 @@ def _read_package(path: Path, relative: str, lock_evidence: list[tuple[str, str]
                 "evidence": f"package.json exceeds the {MAX_PACKAGE_BYTES}-byte read limit",
                 "scripts": [],
             }
-        document = json.loads(path.read_text(encoding="utf-8"))
+        document = json.loads(textio.read_text(path))
     except json.JSONDecodeError:
         return {
             "path": relative,

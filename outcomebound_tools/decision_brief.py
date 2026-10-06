@@ -44,7 +44,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, TextIO
 
-from outcomebound_tools import home
+from outcomebound_tools import home, textio
 
 __all__ = [
     "MARKS",
@@ -764,7 +764,7 @@ def _read(source: str, symbols: str) -> tuple[list[tuple[str, Brief]], tuple[tup
 
     try:
         raw = sys.stdin.buffer.read() if source == "-" else Path(source).read_bytes()
-        document = json.loads(raw.decode("utf-8"))
+        document = json.loads(textio.decode(raw, utf16=True))
     except OSError as error:
         raise _Unreadable(error.strerror or str(error)) from error
     except UnicodeDecodeError as error:

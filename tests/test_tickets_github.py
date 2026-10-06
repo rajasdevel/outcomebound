@@ -717,13 +717,46 @@ def test_input_age_from_a_file_and_from_standard_input(
     )
     assert from_file.input.ids == (numbers[0], numbers[-1]), "the lowest and highest it holds"
 
-    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(path.read_text(encoding="utf-8")))
+    stdin = __import__("io").TextIOWrapper(__import__("io").BytesIO(path.read_bytes()))
+    monkeypatch.setattr("sys.stdin", stdin)
     piped = read("-")
     assert piped.input is not None
     assert piped.input.path == "-"
     assert piped.input.modified is None
     assert piped.input.age_seconds is None
     assert [item.id for item in piped.tickets] == [item.id for item in from_file.tickets]
+
+
+TITLE = "Ёлка — naïve ticket"
+
+
+def non_ascii(loaded: list[Any]) -> None:
+    """A title with a byte (0x81, in `Ё`) that the Windows ANSI code page leaves undefined."""
+
+    node(loaded, 1)["title"] = TITLE
+
+
+def test_an_export_is_read_in_whatever_encoding_a_windows_shell_saved_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """UTF-8 with or without a byte-order mark, and UTF-16 with one, as PowerShell 5.1's `>`
+    writes it, read from a file or from standard input, whatever the console's code page."""
+
+    loaded = pages()
+    non_ascii(loaded)
+    text = json.dumps(loaded, ensure_ascii=False)
+    for name, data in (
+        ("utf-8", text.encode("utf-8")),
+        ("utf-8-bom", b"\xef\xbb\xbf" + text.encode("utf-8")),
+        ("utf-16", text.encode("utf-16")),
+    ):
+        path = tmp_path / f"{name}.json"
+        path.write_bytes(data)
+        assert ticket(read(path), "#1").title == TITLE, name
+
+        stdin = __import__("io").TextIOWrapper(__import__("io").BytesIO(data), encoding="cp1252")
+        monkeypatch.setattr("sys.stdin", stdin)
+        assert ticket(read("-"), "#1").title == TITLE, f"{name} on standard input"
 
 
 # --- refusals -----------------------------------------------------------------------
