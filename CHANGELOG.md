@@ -12,13 +12,20 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-10-05
+## [1.3.0] - 2026-10-07
 
-A minor release. Tickets that land together now pass the project's merge gate once, at their
-landing, and the goal envelope names the landing grain (#71, #74). The finish check no longer holds
-a turn when a Done command cannot find a tool, and `adopt --finish-check` now measures Done as a
-hook runs it, with no activated virtual environment (#72, #74). #70 and #73 change only this
-repository's tests and release process; they change nothing that an install receives.
+A minor release. OutcomeBound now works on Windows, macOS, Linux and inside containers (#78). A
+person can rule a review hit of `instructions check` safe, and only a base64-shaped run that a model
+can read counts as concealed content (#77). Tickets that land together pass the project's merge
+gate once, at their landing, and the goal envelope names the landing grain (#71, #74). The finish
+check no longer holds a turn when a Done command cannot find a tool, and `adopt --finish-check` now
+measures Done as a hook runs it, with no activated virtual environment (#72, #74). The skills, the
+fragments and the contract close the known issues that a review of agent sessions and an audit of
+the skills found (#76, #79, #80, #86).
+
+#70, #73, #84, #85 and #88 change only this repository's tests, designs, evaluations and release
+process; they change nothing that an install receives. #75 was the first release commit of 1.3.0.
+No tag was made from it, and this section replaces the section that it wrote.
 
 Do these steps first:
 
@@ -31,8 +38,9 @@ Do these steps first:
    `v1.3.0` in the same change as step 2. With the old pin and the new install, the check fails.
    With the new pin and the old install, the check also fails.
 4. If you edited a copy of a shipped fragment that this release changes
-   (`.outcomebound/fragments/tickets.md` or `python.md`), adopt refuses it as before. Move the edit
-   to `.outcomebound/fragments/local.md` or to your own instructions, and run adopt again.
+   (`.outcomebound/fragments/` `commands.md`, `tickets.md`, `workspace.md`, `multi-agent.md` or
+   `python.md`), adopt refuses it as before. Move the edit to `.outcomebound/fragments/local.md` or
+   to your own instructions, and run adopt again.
 5. Make sure that each Done command names the project's interpreter, for example
    `.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH. A
    hook runs Done with no activated virtual environment, so a bare `pytest` that only an activated
@@ -49,6 +57,42 @@ Do these steps first:
 8. In Codex, trust the finish-check hook again in `/hooks` only if the install report gives an
    `action` line for it. Then run `outcomebound adopt . --check` with the new engine, and run the
    project's Done checks.
+9. If you set `PYTHONPATH` where `outcomebound` runs, make sure that it holds absolute folders only.
+   A relative entry, such as `.`, lets a file named `_outcomebound_launch.py` in the current folder
+   replace the first step of the command (#78).
+10. On Windows, install with the same command. The package now gives `outcomebound.exe`. A Done
+    command runs through Git for Windows' `sh.exe`; where no `sh` exists, the finish check reads
+    `UNVERIFIED` and holds no turn (#78).
+11. If `instructions check` reports a review hit that a person judges safe, that person can rule it
+    with `outcomebound instructions rule <target> <id>` at a terminal (#77). The ruling goes to
+    `~/.outcomebound/rulings.json`, outside the project. An agent never runs this verb.
+
+### Added
+
+- `outcomebound instructions rule <target> <id>` (#77): a person, at a terminal, rules a review hit
+  of `instructions check` safe. The ruling goes to the person's own file,
+  `~/.outcomebound/rulings.json`, outside every target, so a change under check cannot write it.
+  The id pins the hit's check, path and fact, the file's bytes, and the repository (the clone's
+  common Git directory, which its worktrees share; without Git, the target). A ruled hit is still
+  reported on every run, with the day it was ruled, and it does not change the result. Any change
+  to its file raises the hit again. A gate finding, a hit that changes nothing already, and a change
+  since `--base` take no ruling. If the home folder lies inside the target, no ruling is read. The
+  verb refuses without a terminal; this stops a script, not an agent that holds a terminal, so the
+  contract keeps a ruling a person's act. The text report prints each review hit's id and how to
+  rule it. The report schema adds two optional fields to each finding, `id` and `ruled`.
+- A console entry point (#78): the package installs `outcomebound` as an entry point, so Windows
+  gets `outcomebound.exe`. It starts the engine again as `python -I -X utf8 -m outcomebound_tools`,
+  so the caller's folder cannot shadow the engine and the output is UTF-8. The checkout keeps its
+  POSIX `sh` launcher for contributors.
+- The `decision-brief` skill: a brief says what happens if no answer comes, and the safe state that
+  the held work stays in while it waits (#79). It is a `facts` pair that the renderer already draws,
+  not a new schema field. A brief still never ends a turn, and a held item holds only itself.
+- The `slice-tickets` skill: where the children of an epic build the whole of one design, the epic's
+  `reads` names the design or its sections, and its `done-when` names the design's `## Validation`
+  checks that the claims plan holds or that a child's work adds (#76). On an epic,
+  `CLAIM_PLANNED` and `CLAIM_READS_OUTSIDE_BOUNDS` are warnings that the draft means, because an
+  epic writes nothing. A child's `reads` names the sections that it answers to, and the epic's claims
+  are reported in its closing comment.
 
 ### Changed
 
@@ -67,6 +111,53 @@ Do these steps first:
 - The `python` fragment (version 7): a Done command names the project's interpreter, such as
   `.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH,
   because a hook runs it with no activated virtual environment (#72, #74).
+- The `workspace` fragment (version 6): a shared machine has a budget. Keep free disk space, bound
+  the heavy lanes that run at once, and clean up only what the task made. Files of an unknown owner
+  stay, and the handoff names them (#79).
+- The `multi-agent` fragment (version 7): while it waits on a delegate, the agent ends its turn and
+  does not poll; each worker has one role and one ticket at a time (#79). A dispatch names the model
+  and effort that it chose, because a harness default can be the session's model, and the brief
+  holds the bounds itself, because a delegate may load no project instructions (#80).
+- The `commands` fragment (version 3): its commands are for a POSIX shell, a probe that a sandbox
+  denies reads `UNVERIFIED`, and a job that outlives the task needs a grant (#79).
+- The `using-outcomebound` skill: a docs-only or mechanical leaf needs no independent review and no
+  full suite, unless the project requires them (#79). It points to the `decision-brief` skill for
+  what to ask the user, and its description says what it does after its trigger (#80).
+- The `hand-off-tickets` skill: an edge that applies only under a condition names the default that
+  applies when nobody answers (#79). "Goes back once" is replaced by a cause: where a fix round
+  repeats the same miss or adds new defects, the tier or the package is wrong (#80). It points to the
+  `tickets` fragment for an edit outside `bounds`. Its effect is recorded as `UNVERIFIED`: the
+  hand-off comparison hands implementers prepared packages and does not load this skill, so it runs
+  again only when what a tier's package gives its implementer changes (#84).
+- The `gather-requirements` skill: where requirements come from a source, keep each requirement and
+  constraint that the source holds, and name any material omission, changed meaning or unresolved
+  conflict. Naming a drop does not authorize it (#80).
+- The contract ("Validate and report") and the `tests-worth-keeping` skill: a completion-bar check
+  or a material claim reported `UNVERIFIED` says what evidence is missing and what would settle it
+  (#80). The kernel does not change.
+- Shipped text that gives a POSIX shell command says so once, and the tickets export also has a form
+  that PowerShell reads (#79). The tickets docs and `skills/slice-tickets/references/github.md` now
+  show the export command as the engine prints it, `-F query=@<path>`, one line that a POSIX shell,
+  PowerShell and Git Bash read (#86). That PowerShell runs it on Windows is `UNVERIFIED`.
+- `instructions check` counts a base64-shaped run as concealed content only where a model could
+  read it (#77): a piece between pins or `=`, decoded at its best alignment, holds a stretch of 24
+  bytes of text; or the pieces' stretches of 8 bytes or more come to 24 together; or a piece starts
+  a compressed stream (gzip, zlib, zip, bzip2, xz or zstd). Text is a printable character read as
+  UTF-8, or printable ASCII read as UTF-16. Runs of hex characters keep the old length rule. The
+  design names what the check does not claim: text broken by a character every 7 bytes or fewer,
+  UTF-32, and non-ASCII text in UTF-16. Before, every run of 60 or more base64 characters was
+  flagged, so notes written with their spaces removed and embedded images read as payloads.
+- The engine on every platform (#78): it finds a program on PATH in the same way everywhere (on
+  Windows it reads PATHEXT, and it never takes the current folder or the WSL `bash` stub); where
+  only `python` or `py` exists, the floor uses the running interpreter. The finish check runs a Done
+  command through a POSIX `sh`, and its time limit stops the whole process tree. Every verb writes
+  UTF-8 with LF line endings. Export files and standard input are read as UTF-8, with or without a
+  byte-order mark, or as UTF-16 with a byte-order mark. Records, manifests and reports hold
+  POSIX-form paths. On Windows, `research clone` makes `~/.outcomebound/research` as a pointer file,
+  so it needs no administrator rights. On Windows, the writer refuses a name that Windows cannot
+  hold (a device name such as `aux.txt`, a character that its file names lack, a trailing dot or
+  space); other platforms write it. In a container where Git refuses a checkout that another user
+  owns, `instructions check` says so and names the fix. The engine never passes `safe.directory`.
 
 ### Fixed
 
@@ -95,6 +186,20 @@ Do these steps first:
   `UNVERIFIED`, and adopt keeps no known failure for it. The install report names the entries that
   it left out. A known-failure record now holds the field `as_hook`. For a record without it, adopt
   gives a note, and step 6 above says what to do. An engine of 1.2.0 or earlier ignores the field.
+
+- Two skills' frontmatter was invalid YAML (#80): the descriptions of `slice-tickets` and
+  `hand-off-tickets` held an unquoted `: `, so a YAML parser refused them. The descriptions are
+  reworded. What each harness did with the old frontmatter is `UNVERIFIED`.
+- adopt read a checkout with Windows line endings (`core.autocrlf=true`) as changed (#78). Now it
+  reads `current` and upgrades without `--force`. Digests are computed over text with folded line
+  endings, the host file's line endings are kept, and a file with mixed endings keeps every byte
+  outside the blocks. Records that 1.2.0 wrote read as before.
+- The installed `outcomebound` command could not start on Windows (#78). A failure of the launcher
+  now exits 1 or 127, never 2, because a harness's stop hook reads exit 2 as "hold the turn".
+- The finish check now recognises GNU make's Windows wording for a missing tool,
+  `process_begin: CreateProcess(NULL, <tool> ...) failed.` followed by `make (e=2):` (#78). A
+  traceback before a missing last tool now fails, as the finish-check design already said.
+- `tickets brief` with its arguments swapped now names the correct order (#78).
 
 ## [1.2.0] - 2026-10-05
 
