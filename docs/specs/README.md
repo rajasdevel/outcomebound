@@ -20,6 +20,8 @@ the same change.
 - [finish-check](finish-check/design.md): at the stop hook of `claude-code` and `codex`, the
   recorded Done commands run, and a failure goes back to the agent. The verb is
   `outcomebound finish-check`.
+- [sources](sources/design.md): requirement sources, `outcomebound sources`. Import a markdown or
+  text source into items, and check the ledger that disposes of each item.
 - [research](research/design.md): the research repository. How the engine finds, prints and
   updates its clone, and how it takes findings back.
 

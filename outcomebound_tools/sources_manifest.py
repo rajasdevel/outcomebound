@@ -157,13 +157,13 @@ def suspect_reasons(text: str) -> list[str]:
     hidden: dict[str, str] = {}
     previous = ""
     for char in text:
-        why = instruction_audit._hidden_reason(char, previous)
+        why = instruction_audit.hidden_reason(char, previous)
         if why is not None:
             hidden.setdefault(f"U+{ord(char):04X}", why)
         previous = char
     reasons.extend(f"{why} ({point})" for point, why in sorted(hidden.items()))
     if any(
-        p.search(line) for line in text.split("\n") for p in instruction_audit._OVERRIDE_PHRASES
+        p.search(line) for line in text.split("\n") for p in instruction_audit.OVERRIDE_PHRASES
     ):
         reasons.append("an override phrase")
     return reasons
@@ -173,7 +173,7 @@ def display(text: str, limit: int | None = None) -> str:
     """`text` with every character outside printable ASCII escaped, as the instruction audit
     prints quoted text, cut at `limit` characters."""
 
-    shown = instruction_audit._plain(text)
+    shown = instruction_audit.plain(text)
     return shown if limit is None or len(shown) <= limit else shown[: limit - 3] + "..."
 
 

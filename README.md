@@ -323,6 +323,7 @@ and none of them is affiliated with OutcomeBound or endorses it:
 [obra/superpowers](https://github.com/obra/superpowers),
 [mattpocock/skills](https://github.com/mattpocock/skills),
 [anthropics/skills](https://github.com/anthropics/skills),
+[agentsmd/agents.md](https://github.com/agentsmd/agents.md),
 [agentskills/agentskills](https://github.com/agentskills/agentskills),
 [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill),
 [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
