@@ -282,6 +282,13 @@ a loosening visible; your branch protection is what holds it to a person's decis
   phrases and risky harness settings in the files your agents load. It writes nothing. A hit you
   judge safe, you record with `outcomebound instructions rule . <id>`, in your own file outside the
   project; it then stops changing the result until that file changes.
+- **Sources** (`outcomebound sources import`, `outcomebound sources check`): where requirements come
+  from a document, an issue or a transcript saved as markdown or text, `import` splits it into items
+  that each have an id and a revision digest, and `check` fails where the ledger in your spec leaves
+  an item without a disposition, cites an item that is not there, quotes words the item lacks, or
+  records an item that has changed since. It says what it does not establish: a requirement that
+  keeps one item's words may still lose its other constraints. The manifest holds the source text,
+  so Git ignores it unless you opt in.
 - **Text for people** (`adopt --human-style ste`): agents write reports and commit messages for
   people in the style of ASD-STE100 Simplified Technical English.
 - **Workspace** (the `workspace` fragment): where several agents share one machine's checkout, four
