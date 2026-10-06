@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "44a6d5a81cc701aecaba484f8bac16ae226384276d9329667ed87f0aa92b5925",
-      "sha256": "f06137aeea6f00e01fe0b05907704fdc76022eaa96381f5438d910fccee5b211"
+      "frame": "0b2e018e67eeb248fa9ba3034241370202a74eeed79b39d5748c910a9cd7632c",
+      "sha256": "a61b38760ee7b9eab88712ecdbbe96bc9071e7c5cacaf44252748f5bf9c5971a"
     },
     {
       "kind": "fragment",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "36e0e1e2afcd2f8576ed705a5dc9f765dfbf96d77c31c30f0b90a0366df264cc"
+      "sha256": "fcbc34c4eed2132c5507d29cb7927620817888cfb2075e3b7cf21eaad871575d"
     },
     {
       "kind": "skill",
@@ -98,7 +98,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "d131cb92c23afeaf2b71bf112a600e92b7ab3e2f33c90434b9feed2d32093944"
+      "sha256": "e6cf0bab4f63a9f2f2c78045e36c5e414e0f9222d6067bc9b26208586d4d9778"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/explorable/SKILL.md",
+      "id": "explorable",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "768043e1a39274a9eb430fd091014c42e7609af2a2afdfc570fee2494f42ec4d"
     },
     {
       "kind": "skill",
@@ -107,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "3168a48d866439aea0df89203f4c754eaa70fcbe0ca35a9576bb9f4b10bde651"
+      "sha256": "4a2581532006b419ecd7167e6ebe9438149e48b1df81d7af10857f7545cd5044"
     },
     {
       "kind": "skill",

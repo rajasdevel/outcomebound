@@ -259,6 +259,7 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
         "explain-spec",
         "slice-tickets",
         "hand-off-tickets",
+        "explorable",
     }
     assert current.files == _folders(skills, adopt.SKILLS)
     assert next(iter(current.files)) == f"{skills}/using-outcomebound/SKILL.md"
@@ -272,7 +273,7 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
 
 def test_the_current_arm_carries_every_installs_skills_and_the_fixtures_fragments_only() -> None:
     """A fixture's `fragments` file selects fragments as adopt's `--fragments` does: the
-    current arm carries every install's seven skills and each selected fragment's file, and
+    current arm carries every install's eight skills and each selected fragment's file, and
     the earlier and kernel-off arms carry nothing whatever is selected."""
 
     from outcomebound_tools import adopt, fragments

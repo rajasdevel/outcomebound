@@ -85,6 +85,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
+- when a decision turns on values a person may judge differently or on how options work, a person must learn a mechanism by trying it, or many questions are easier to answer on a page: read .claude/skills/explorable/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual
@@ -125,7 +126,7 @@ OutcomeBound.md       the contract
 outcomebound_tools/   the engine
 scripts/              the `outcomebound` launcher, the package's build backend and this repository's scripts
 pyproject.toml        names the build backend; the package's metadata is in the backend
-skills/               the seven working skills, and the adopt skill, which stays in this checkout
+skills/               the eight working skills, and the adopt skill, which stays in this checkout
 fragments/            stack and setup guidance, copied under .outcomebound/fragments/ and pointed at from AGENTS.md
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       outcomebound.mk, Make targets a project may include for the floor and a validation plan
