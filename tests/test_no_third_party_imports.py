@@ -4,6 +4,7 @@ A copy of the script's logic here would copy its defects too, and pass with them
 """
 
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -72,4 +73,5 @@ def test_check_no_deps_checks_the_root_it_is_given_and_the_current_directory_by_
         [sys.executable, gate], cwd=tmp_path, capture_output=True, text=True, check=False
     )
     assert here.returncode == 1, here.stdout + here.stderr
-    assert "FAIL: ./scripts/helper.py imports non-stdlib 'yaml'" in here.stdout, here.stdout
+    relative = os.path.join(".", "scripts", "helper.py")
+    assert f"FAIL: {relative} imports non-stdlib 'yaml'" in here.stdout, here.stdout

@@ -7,42 +7,24 @@ confusing domain error instead of printing usage, so each has the same shape: ch
 """  # noqa: E501 - the summary line is one line, as written
 
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from tests.portable import needs_bash, run_bash
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = sorted((ROOT / "scripts").glob("*.sh"))
 PY_SCRIPTS = sorted(path for path in (ROOT / "scripts").glob("*.py") if os.access(path, os.X_OK))
 
 
-def _bash() -> str | None:
-    """The bash the `.sh` scripts need, or None where there is none to run them with. On
-    Windows `bash` on PATH can be the WSL stub, so Git for Windows' own is taken (UNVERIFIED
-    until the Windows CI job runs it); Alpine has none until it is installed."""
-
-    if os.name != "nt":
-        return shutil.which("bash")
-    git = shutil.which("git")
-    candidate = Path(git).resolve().parent.parent / "bin" / "bash.exe" if git else None
-    return str(candidate) if candidate is not None and candidate.is_file() else None
-
-
 def _run(script: Path, flag: str) -> subprocess.CompletedProcess[str]:
-    bash = _bash()
-    if bash is None:
-        pytest.skip("no bash here to run a .sh script with (the Alpine image has none)")
-    return subprocess.run(
-        [bash, str(script), flag],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-    )
+    return run_bash(script, flag, capture_output=True, text=True, encoding="utf-8")
 
 
+@needs_bash
 @pytest.mark.parametrize("script", SCRIPTS, ids=[p.name for p in SCRIPTS])
 @pytest.mark.parametrize("flag", ["-h", "--help"])
 def test_help_exits_zero_with_usage_and_no_traceback(script, flag):

@@ -59,7 +59,7 @@ def limits(text: str) -> list[tuple[int, str]]:
 def test_shipped_model_text_sets_no_limit_without_its_evidence() -> None:
     seen, unexplained = set(), []
     for path in shipped():
-        name = str(path.relative_to(ROOT))
+        name = path.relative_to(ROOT).as_posix()
         for number, matched in limits(path.read_text(encoding="utf-8")):
             if (name, matched) in ALLOWED:
                 seen.add((name, matched))
