@@ -101,13 +101,15 @@ _BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
 # pieces by pins is no more than the same pieces between spaces, which already pass.
 _PIN_SLACK = 4
 _HEX_STRETCH = re.compile(r"[0-9a-fA-F]{40,}")
-# A run that is not all hex is a payload only where a model could read it: its pieces between
-# pins, each decoded at its best alignment, give at least `_TEXT_SHARE` printable characters over
-# at least `_TEXT_BYTES` bytes, or one of them starts a compressed stream. Words run together
-# (a note written with its spaces taken out) decode to neither: in the field case that raised
-# this, no run came above a share of 0.58.
-_TEXT_SHARE = 0.85
-_TEXT_BYTES = 18
+# A run that is not all hex is a payload only where a model could read it: a piece between pins
+# or `=`, decoded at its best alignment, holds an unbroken stretch of text of `_TEXT_BYTES` bytes,
+# its pieces' stretches of `_TEXT_PART` bytes or more come to `_TEXT_BYTES` together, or a piece
+# starts a compressed stream. Text is a printable character read as UTF-8, or printable ASCII read
+# as UTF-16. Words run together (a note written with its spaces taken out) decode to short
+# stretches only, as random bytes do: a stretch of 24 printable bytes is about one in a billion
+# positions of random bytes.
+_TEXT_BYTES = 24
+_TEXT_PART = 8
 _COMPRESSED = (
     b"\x1f\x8b",  # gzip
     b"\x78\x01",  # zlib
@@ -724,49 +726,52 @@ def _split_at_pins(run: str) -> list[str]:
     return pieces
 
 
-def _share(raw: bytes) -> float:
-    """How much of `raw` reads as text: as UTF-8, any printable character; as UTF-16, printable
-    ASCII only, since random bytes read as UTF-16 give printable characters of other scripts."""
+def _printable(c: str) -> bool:
+    return c != "\ufffd" and (c.isprintable() or c in "\t\n\r")
 
-    def printable(c: str) -> bool:
-        return c != "\ufffd" and (c.isprintable() or c in "\t\n\r")
 
-    shares = []
-    text = raw.decode("utf-8", "replace")
-    if text:
-        shares.append(sum(map(printable, text)) / len(text))
+def _stretch(raw: bytes) -> int:
+    """The longest unbroken stretch of text in `raw`, in bytes: printable characters read as
+    UTF-8, or printable ASCII read as UTF-16, since random bytes read as UTF-16 give printable
+    characters of other scripts."""
+
+    longest = 0
+    run = 0
+    for c in raw.decode("utf-8", "replace"):
+        run = run + len(c.encode("utf-8")) if _printable(c) else 0
+        longest = max(longest, run)
     for codec in ("utf-16-le", "utf-16-be"):
-        text = raw[: len(raw) // 2 * 2].decode(codec, "replace")
-        if text:
-            shares.append(sum(1 for c in text if c < "\x7f" and printable(c)) / len(text))
-    return max(shares, default=0.0)
+        for start in (0, 1):
+            run = 0
+            body = raw[start:]
+            for c in body[: len(body) // 2 * 2].decode(codec, "replace"):
+                run = run + 2 if c < "\x7f" and _printable(c) else 0
+                longest = max(longest, run)
+    return longest
 
 
-def _decoded(piece: str) -> tuple[float, int, bool]:
-    """The best share of text over the alignments of `piece`, the bytes it decodes to there,
-    and whether a compressed stream starts at any of them."""
+def _decoded(piece: str) -> tuple[int, bool]:
+    """The longest stretch of text in `piece`'s decode over its alignments, and whether a
+    compressed stream starts at any of them."""
 
-    best, size, compressed = 0.0, 0, False
-    for part in piece.split("="):
-        for start in range(4):
-            usable = part[start:]
-            usable = usable[: len(usable) // 4 * 4]
-            if not usable:
-                continue
-            raw = base64.b64decode(usable, validate=True)
-            compressed = compressed or raw.startswith(_COMPRESSED)
-            share = _share(raw)
-            if share > best:
-                best, size = share, len(raw)
-    return best, size, compressed
+    longest, compressed = 0, False
+    for start in range(4):
+        usable = piece[start:]
+        usable = usable[: len(usable) // 4 * 4]
+        if not usable:
+            continue
+        raw = base64.b64decode(usable, validate=True)
+        compressed = compressed or raw.startswith(_COMPRESSED)
+        longest = max(longest, _stretch(raw))
+    return longest, compressed
 
 
 def _payload(run: str) -> bool:
-    """Whether a base64-shaped run is a payload: see `_TEXT_SHARE`. Each piece is judged alone,
-    so pins an author adds cannot dilute a readable piece, and the pieces are judged together,
-    so a payload cut into short pieces is still read."""
+    """Whether a base64-shaped run is a payload: see `_TEXT_BYTES`. Pins and `=` cut it into
+    pieces; a stretch of text is judged by itself, so neither pins, `=` nor random bytes an author
+    adds around it can dilute it, and short stretches are judged together."""
 
-    pieces = [piece for piece in _split_at_pins(run) if piece]
+    pieces = [part for piece in _split_at_pins(run) for part in piece.split("=") if part]
     if len("".join(pieces)) < _RUN_LENGTH:
         return False
     if re.fullmatch(r"[0-9a-fA-F]+", "".join(pieces)) or any(
@@ -774,13 +779,13 @@ def _payload(run: str) -> bool:
         for stretch in _HEX_STRETCH.finditer(run)
     ):
         return True
-    readable = total = 0.0
+    together = 0
     for piece in pieces:
-        share, size, compressed = _decoded(piece)
-        if compressed or (size >= _TEXT_BYTES and share >= _TEXT_SHARE):
+        longest, compressed = _decoded(piece)
+        if compressed or longest >= _TEXT_BYTES:
             return True
-        readable, total = readable + share * size, total + size
-    return total >= _TEXT_BYTES and readable >= _TEXT_SHARE * total
+        together += longest if longest >= _TEXT_PART else 0
+    return together >= _TEXT_BYTES
 
 
 def _concealed_content(path: str, text: str) -> list[Finding]:
