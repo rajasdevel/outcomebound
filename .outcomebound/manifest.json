@@ -30,7 +30,7 @@
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
         ".outcomebound/fragments/commands.md": "c0273bb53e64307ce74ccbf2b15e43cf38c0a6ff3d8d6e1a34b3d6b5a126436e",
         ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",
-        ".outcomebound/fragments/multi-agent.md": "a405914c756844ceef3cad0113d418b0b4423fc3d81336955385e3dea7120326",
+        ".outcomebound/fragments/multi-agent.md": "f7a2e2db8dad1b4b156777b5c38114036ec359f0da297f9a2bae5168ca150cd5",
         ".outcomebound/fragments/research.md": "6c9009492b287148950cb4252ac4f04858dc4c852cd43556029e964494d45d4e",
         ".outcomebound/fragments/workspace.md": "4f789877bf943eafc97398f0ca1c0d7ceb84165f7e35a40d482b567fe6a21b7f"
       },
@@ -50,7 +50,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "a405914c756844ceef3cad0113d418b0b4423fc3d81336955385e3dea7120326"
+      "sha256": "f7a2e2db8dad1b4b156777b5c38114036ec359f0da297f9a2bae5168ca150cd5"
     },
     {
       "kind": "fragment",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "71ebc607996559152fd1e459d19d7cef1ab3c770c1fa8f7107dbe7292105a62a"
+      "sha256": "36e0e1e2afcd2f8576ed705a5dc9f765dfbf96d77c31c30f0b90a0366df264cc"
     },
     {
       "kind": "skill",
@@ -98,7 +98,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "13f766fda64da47b37b41613df57f842e9f7eb01aefb41db6e65aa6b30b7f1d0"
+      "sha256": "eec9264defd2f3cd40c80f530d14b4be50e1737ac4d8fabbe389ff441cc03e52"
     },
     {
       "kind": "skill",
@@ -107,7 +107,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "f8c192ae2cfd895f702e7f528d993db9bae2a4893c56367bd8b427d8c37e0359"
+      "sha256": "d77791fd6e157160d456801ff23c081b6033baf6e4bb772a17e679fc0de8658d"
     },
     {
       "kind": "skill",
@@ -116,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "21cf3c507a1aea61887128c799e347ad012579a1d321fafb3e7d096f7b230acb"
+      "sha256": "f6f89d9d6008e22da6502586cbd60296b8005191451d2841aac895da1411ca46"
     }
   ]
 }
