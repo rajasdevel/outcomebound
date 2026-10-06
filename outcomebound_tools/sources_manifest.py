@@ -28,7 +28,6 @@ from outcomebound_tools import hashing, home, instruction_audit, schemacheck, te
 VERSION = 1
 KIND_BY_SUFFIX = {".md": "markdown", ".markdown": "markdown", ".txt": "text", ".text": "text"}
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
-ITEM_ID = re.compile(r"[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*")
 REVISION_SHOWN = 12
 _HEADING = re.compile(r"(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*")
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
@@ -65,7 +64,7 @@ def slug(text: str, fallback: str = "section") -> str:
     return re.sub(r"[^a-z0-9]+", "-", folded.lower()).strip("-") or fallback
 
 
-def _unique(base: str, seen: dict[str, int]) -> str:
+def unique(base: str, seen: dict[str, int]) -> str:
     seen[base] = seen.get(base, 0) + 1
     return base if seen[base] == 1 else f"{base}-{seen[base]}"
 
@@ -112,7 +111,7 @@ def _markdown_items(lines: Sequence[str], name: str, file_slug: str) -> list[Ite
             continue
         section = "preamble" if title is None else slug(title)
         item = Item(
-            f"{name}:{file_slug}:{_unique(section, seen)}",
+            f"{name}:{file_slug}:{unique(section, seen)}",
             title,
             first,
             first + len(body) - 1,
@@ -250,7 +249,7 @@ def build(
     slugs: dict[str, int] = {}
     for recorded, path in named:
         file_kind, text, data = read_source(path, kind)
-        file_slug = _unique(slug(path.stem, "file"), slugs)
+        file_slug = unique(slug(path.stem, "file"), slugs)
         found = split_items(text, file_kind, name, file_slug)
         if not found:
             raise SourceRefusal("SOURCE_EMPTY", f"{display(recorded)} holds no text to read")

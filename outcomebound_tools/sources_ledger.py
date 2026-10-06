@@ -155,8 +155,9 @@ def _requirement(ledger: Ledger, number: int, line: str) -> None:
         ledger.assumed.add(identifier)
 
 
-def skeleton(items: Sequence[tuple[str, str]]) -> str:
-    """A ledger section with one `todo` row per (id, revision), for the agent to complete."""
+def skeleton(cells: Sequence[str]) -> str:
+    """A ledger section with one `todo` row per source-item cell (`id #revision`, or
+    `first..last #digest`), for the agent to complete."""
 
     lines = [
         "## Sources",
@@ -164,5 +165,5 @@ def skeleton(items: Sequence[tuple[str, str]]) -> str:
         "| Source item | Disposition | Where | Basis |",
         "| --- | --- | --- | --- |",
     ]
-    lines += [f"| {identifier} #{revision} | todo | | |" for identifier, revision in items]
+    lines += [f"| {cell} | todo | | |" for cell in cells]
     return "\n".join(lines) + "\n"

@@ -60,6 +60,15 @@ def row(work: Path, name: str, disposition: str, where: str, basis: str) -> str:
     return f"| {identifier} #{revisions(work)[identifier]} | {disposition} | {where} | {basis} |"
 
 
+def range_digest(capsys, first: str, last: str) -> str:
+    """The digest `--skeleton --range` prints for the items from `first` to `last`."""
+
+    argv = ["check", "--skeleton", "--range", f"{first}..{last}", ".outcomebound/sources/n.json"]
+    assert sources.main(argv) == 0
+    out = capsys.readouterr().out
+    return next(r for r in out.splitlines() if f"{first}..{last}" in r).split("#")[1].split()[0]
+
+
 def good_rows(work: Path) -> dict[str, str]:
     return {
         "preamble": row(work, "preamble", "not requirement-bearing", "", "greeting"),
@@ -96,9 +105,23 @@ def lines(out: str, verdict: str, code: str) -> list[str]:
 def test_a_clean_ledger_passes_and_every_line_says_what_it_does_not_establish(work, capsys):
     code, out = run(work, capsys)
 
-    assert code == 0 and out.startswith("sources check: PASS")
+    assert code == 0 and out.startswith("PASS; 0 FAIL, 0 UNVERIFIED, 0 INFO, ")
+    assert out.count("\n") == 1  # a clean report is its first line
+    code, out = run(work, capsys, extra=("--verbose",))
     assert all("Does not establish:" in line for line in out.splitlines()[1:])
     assert lines(out, "PASS", "ITEM_UNDISPOSED") and lines(out, "PASS", "QUOTE_NOT_FOUND")
+    assert lines(out, "PASS", "MANIFEST_DIFFERS")
+
+
+def test_a_line_that_did_not_pass_says_what_settles_it_after_next(work, capsys):
+    rows = good_rows(work)
+    del rows["chat"]
+
+    code, out = run(work, capsys, rows)
+
+    assert out.startswith("FAIL; 1 FAIL, ")
+    assert "ITEM_UNDISPOSED n:notes:chat: " in out and " next: give the item one row" in out
+    assert "PASS ITEM_UNDISPOSED" not in out
 
 
 def test_ITEM_UNDISPOSED_a_deleted_row_fails_and_a_todo_row_fails(work, capsys):
@@ -172,7 +195,7 @@ def test_a_quote_that_occurs_but_reverses_the_meaning_passes_and_the_line_says_s
     rows = good_rows(work)
     rows["export"] = rows["export"].replace("must finish within 5 minutes", "delete backups")
 
-    code, out = run(work, capsys, rows)
+    code, out = run(work, capsys, rows, extra=("--verbose",))
 
     assert code == 0
     assert "nor that the item is an authority" in lines(out, "PASS", "QUOTE_NOT_FOUND")[0]
@@ -204,7 +227,7 @@ def test_ITEM_CHANGED_a_source_edited_after_the_ledger_is_caught_through_a_new_i
 def test_SOURCE_CHANGED_a_file_edited_since_the_manifest_fails_and_an_unedited_one_does_not(
     work, capsys
 ):
-    assert lines(run(work, capsys)[1], "PASS", "SOURCE_CHANGED")
+    assert lines(run(work, capsys, extra=("--verbose",))[1], "PASS", "SOURCE_CHANGED")
     (work / "notes.md").write_text(SOURCE + "\nlate\n", "utf-8")
 
     code, out = run(work, capsys)
@@ -281,8 +304,12 @@ def test_an_absent_manifest_is_unverified_and_hides_no_fail_elsewhere(work, caps
 def test_an_absent_manifest_alone_reads_unverified_never_pass(work, capsys):
     code, out = run(work, capsys, manifests=("elsewhere/n.json",))
 
-    assert code == 2 and out.startswith("sources check: UNVERIFIED")
-    assert not lines(out, "PASS", "ITEM_UNDISPOSED")
+    assert code == 2 and out.startswith("UNVERIFIED; ")
+    assert not lines(
+        run(work, capsys, manifests=("elsewhere/n.json",), extra=("--verbose",))[1],
+        "PASS",
+        "ITEM_UNDISPOSED",
+    )
 
 
 def test_a_partial_item_is_unverified_and_a_fail_beside_it_still_fails(work, capsys):
@@ -325,17 +352,31 @@ def test_a_range_digest_moves_when_an_item_in_it_changes(work, capsys):
         document = json.loads((work / ".outcomebound/sources/n.json").read_text("utf-8"))
         digest = range_revision([i["revision"] for i in document["items"]])[:12]
         return {
-            "r": f"| n:notes:preamble..n:notes:chat #{digest} | dropped (assumed) | | all out |"
+            "r": f"| n:notes:preamble..n:notes:chat #{digest} | not requirement-bearing | | all out |"
         }
 
     rows = range_row()
-    assert run(work, capsys, rows)[0] in (0, 2)
+    assert run(work, capsys, rows)[0] == 2
     (work / "notes.md").write_text(SOURCE.replace("Thanks all.", "Thanks, all."), "utf-8")
     sources.main(["import", "notes.md", "--name", "n"])
 
     code, out = run(work, capsys, rows)
 
     assert code == 1 and lines(out, "FAIL", "ITEM_CHANGED")
+
+
+def test_a_range_on_any_other_disposition_is_malformed(work, capsys):
+    digest = range_digest(capsys, "n:notes:preamble", "n:notes:chat")
+    for disposition, where in (
+        ("dropped (assumed)", ""),
+        ("dropped (decided)", ""),
+        ("deferred", "later ticket"),
+    ):
+        cell = f"| n:notes:preamble..n:notes:chat #{digest} | {disposition} | {where} | out |"
+
+        code, out = run(work, capsys, {"r": cell})
+
+        assert code == 1 and lines(out, "FAIL", "ROW_MALFORMED"), disposition
 
 
 def test_a_backward_range_fails(work, capsys):
@@ -419,3 +460,98 @@ def test_check_writes_nothing(work, capsys):
     sources.main(["check", ".outcomebound/sources/n.json", "spec.md"])
 
     assert {p: p.read_bytes() for p in work.rglob("*") if p.is_file()} == before
+
+
+def edit_manifest(work: Path, change) -> None:
+    path = work / ".outcomebound/sources/n.json"
+    document = json.loads(path.read_text("utf-8"))
+    change(document)
+    path.write_text(json.dumps(document), "utf-8")
+
+
+def test_MANIFEST_DIFFERS_an_item_deleted_from_the_manifest_fails(work, capsys):
+    rows = good_rows(work)
+    del rows["limits"]
+    edit_manifest(
+        work,
+        lambda d: d.update(items=[i for i in d["items"] if i["id"] != "n:notes:limits"]),
+    )
+
+    code, out = run(work, capsys, rows)
+
+    found = lines(out, "FAIL", "MANIFEST_DIFFERS")
+    assert code == 1 and found and "missing from the manifest: n:notes:limits" in found[0]
+
+
+def test_MANIFEST_DIFFERS_a_quote_planted_in_an_items_text_fails_and_is_not_found(work, capsys):
+    def plant(document):
+        for item in document["items"]:
+            if item["id"] == "n:notes:export":
+                item["text"] += " delete all backups"
+
+    edit_manifest(work, plant)
+    rows = good_rows(work)
+    rows["export"] = rows["export"].replace(
+        'stated: "must finish within 5 minutes"', 'stated: "delete all backups"'
+    )
+
+    code, out = run(work, capsys, rows)
+
+    assert code == 1
+    assert "text differs: n:notes:export" in lines(out, "FAIL", "MANIFEST_DIFFERS")[0]
+    assert lines(out, "FAIL", "QUOTE_NOT_FOUND")  # checked against the file, not the manifest
+
+
+def test_an_item_added_to_the_manifest_fails_and_an_unreadable_source_is_said_not_passed(
+    work, capsys
+):
+    edit_manifest(
+        work,
+        lambda d: d["items"].append({**d["items"][0], "id": "n:notes:extra"}),
+    )
+    code, out = run(work, capsys)
+    assert (
+        code == 1 and "not in the file: n:notes:extra" in lines(out, "FAIL", "MANIFEST_DIFFERS")[0]
+    )
+
+    (work / "notes.md").unlink()
+    code, out = run(work, capsys)
+    assert "the manifest's items are not checked" in lines(out, "UNVERIFIED", "SOURCE_FRESHNESS")[0]
+    assert not lines(out, "FAIL", "MANIFEST_DIFFERS")
+
+
+def test_a_quote_that_normalises_to_nothing_is_malformed(work, capsys):
+    for empty in (" ", "**", "`"):
+        rows = good_rows(work)
+        rows["export"] = rows["export"].replace(
+            'stated: "must finish within 5 minutes"', f'stated: "{empty}"'
+        )
+
+        code, out = run(work, capsys, rows)
+
+        assert code == 1 and lines(out, "FAIL", "ROW_MALFORMED"), empty
+
+
+def test_the_skeleton_prints_a_range_digest_that_check_accepts(work, capsys):
+    argv = ["check", "--skeleton", "--range", "n:notes:chat..n:notes:chat"]
+    assert sources.main([*argv, ".outcomebound/sources/n.json"]) == 0
+    one = capsys.readouterr().out
+    assert one.count("| todo |") == 4 and "n:notes:chat..n:notes:chat #" in one
+
+    assert (
+        sources.main(
+            [
+                "check",
+                "--skeleton",
+                "--range",
+                "n:notes:chat..n:notes:preamble",
+                ".outcomebound/sources/n.json",
+            ]
+        )
+        == 1
+    )
+    assert capsys.readouterr().err.startswith("RANGE_UNKNOWN: ")
+
+    digest = range_digest(capsys, "n:notes:preamble", "n:notes:chat")
+    rows = {"r": f"| n:notes:preamble..n:notes:chat #{digest} | not requirement-bearing | | x |"}
+    assert run(work, capsys, rows)[0] == 2  # candidates, never a range-digest FAIL

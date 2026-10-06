@@ -85,7 +85,7 @@ def _parser() -> argparse.ArgumentParser:
             "Check the `## Sources` ledger of a file against the manifests named before it, "
             "which are the declared input set. FAIL codes: ITEM_UNDISPOSED, ITEM_UNKNOWN, "
             "ITEM_DUPLICATE, TARGET_MISSING, QUOTE_NOT_FOUND (quote occurrence only), "
-            "ITEM_CHANGED, SOURCE_CHANGED, ROW_MALFORMED, REQUIREMENT_DUPLICATE, "
+            "ITEM_CHANGED, SOURCE_CHANGED, MANIFEST_DIFFERS, ROW_MALFORMED, REQUIREMENT_DUPLICATE, "
             "LEDGER_MISSING, MANIFEST_INVALID. UNVERIFIED: an absent or partial manifest, a "
             "source file not found, a not-requirement-bearing range with lexical candidates. "
             "An UNVERIFIED line hides no FAIL. Each report line says what it does not "
@@ -93,7 +93,8 @@ def _parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "With --skeleton, name only manifests: a ledger section with one `todo` row per "
-            "item is printed, ids and revisions filled. " + _EXITS
+            "item is printed, ids and revisions filled; each --range FIRST..LAST replaces the "
+            "rows of its items with one row and the range's digest. " + _EXITS
         ),
     )
     checked.add_argument("paths", nargs="+", metavar="PATH", help="MANIFEST... LEDGER-FILE")
@@ -111,6 +112,15 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print a ledger skeleton for the manifests named; check nothing",
     )
+    checked.add_argument(
+        "--range",
+        action="append",
+        default=[],
+        metavar="FIRST..LAST",
+        dest="ranges",
+        help="with --skeleton: one row, digest filled, for the items from FIRST to LAST",
+    )
+    checked.add_argument("--verbose", action="store_true", help="also print the checks that passed")
     return parser
 
 
@@ -174,18 +184,39 @@ def _import_report(document: dict, path: Path, ignored: bool) -> None:
         )
 
 
-def _skeleton(paths: Sequence[str]) -> int:
-    pairs: list[tuple[str, str]] = []
+def _skeleton(paths: Sequence[str], ranges: Sequence[str]) -> int:
+    documents = []
     for path in paths:
         try:
-            document = sources_manifest.load(Path(path))
+            documents.append(sources_manifest.load(Path(path)))
         except ValueError as error:
             raise SourceRefusal("MANIFEST_INVALID", f"{display(path)}: {error}") from error
-        pairs += [
-            (item["id"], item["revision"][: sources_manifest.REVISION_SHOWN])
-            for item in document["items"]
-        ]
-    sys.stdout.write(sources_ledger.skeleton(pairs))
+    shown = sources_manifest.REVISION_SHOWN
+    spans: dict[str, str] = {}  # first id -> row cell
+    covered: set[str] = set()
+    for text in ranges:
+        first, _, last = text.partition("..")
+        for document in documents:
+            ids = [item["id"] for item in document["items"]]
+            if first in ids and last in ids and ids.index(first) <= ids.index(last):
+                span = document["items"][ids.index(first) : ids.index(last) + 1]
+                digest = sources_check.range_revision([item["revision"] for item in span])
+                spans[first] = f"{first}..{last} #{digest[:shown]}"
+                covered.update(item["id"] for item in span)
+                break
+        else:
+            raise SourceRefusal(
+                "RANGE_UNKNOWN",
+                f"{display(text)} is not two ids of one manifest, first before last",
+            )
+    rows: list[str] = []
+    for document in documents:
+        for item in document["items"]:
+            if item["id"] in spans:
+                rows.append(spans[item["id"]])
+            elif item["id"] not in covered:
+                rows.append(f"{item['id']} #{item['revision'][:shown]}")
+    sys.stdout.write(sources_ledger.skeleton(rows))
     return 0
 
 
@@ -197,8 +228,10 @@ def _check(options: argparse.Namespace) -> int:
         )
     except (OSError, UnicodeDecodeError) as error:
         raise SourceRefusal("LEDGER_UNREADABLE", f"{display(ledger)}: {error}") from error
-    render = sources_check.render_json if options.json else sources_check.render_text
-    sys.stdout.write(render(findings))
+    if options.json:
+        sys.stdout.write(sources_check.render_json(findings))
+    else:
+        sys.stdout.write(sources_check.render_text(findings, verbose=options.verbose))
     return sources_check.exit_code(sources_check.verdict(findings))
 
 
@@ -210,7 +243,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             _, partial = _write_manifest(options)
             return 2 if partial else 0
         if options.skeleton:
-            return _skeleton(options.paths)
+            return _skeleton(options.paths, options.ranges)
         if len(options.paths) < 2:
             parser.error(
                 "check takes MANIFEST... LEDGER-FILE: at least one manifest, then the ledger"

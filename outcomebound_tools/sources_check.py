@@ -46,7 +46,10 @@ LIMITS = {
     ),
     "ITEM_CHANGED": "that an item with the same revision still means what it meant",
     "SOURCE_CHANGED": "anything about a source with no file to read, or items the file adds later",
-    "SOURCE_FRESHNESS": "that the manifest matches the source as it stands now",
+    "MANIFEST_DIFFERS": (
+        "anything about a source with no file to read; the manifest's items are then unverified"
+    ),
+    "SOURCE_FRESHNESS": "that the manifest's items are the ones its source file splits into",
     "MANIFEST_ABSENT": "anything about the items of that manifest",
     "SOURCE_PARTIAL": "what the partial item left out",
     "RANGE_CANDIDATES": (
@@ -60,6 +63,25 @@ LIMITS = {
     "DROP_ASSUMED": "that the drop is right; the person may reverse it",
     "REQUIREMENT_UNSOURCED": "that the requirement is wrong; it may rest on the person's word",
     "SOURCE_CONVERTED": "how faithful the conversion to text was",
+}
+# What settles a line that did not pass, after `next:`. A line with no entry has no next step.
+NEXT = {
+    "MANIFEST_INVALID": "import the source again, or name the right manifest",
+    "LEDGER_MISSING": "add a `## Sources` section; `--skeleton` prints one",
+    "ROW_MALFORMED": "write the row in the shape the design gives",
+    "ITEM_UNDISPOSED": "give the item one row with a disposition",
+    "ITEM_UNKNOWN": "use an id the manifest holds; `--skeleton` lists them",
+    "ITEM_DUPLICATE": "keep one row for the item",
+    "TARGET_MISSING": "define the requirement in `## Requirements`, or name the right id",
+    "REQUIREMENT_DUPLICATE": "define the id once",
+    "QUOTE_NOT_FOUND": "quote words that are in the item",
+    "ITEM_CHANGED": "read the item again and give it its disposition again",
+    "SOURCE_CHANGED": "import the file again, then check again",
+    "MANIFEST_DIFFERS": "import the source again; do not edit a manifest by hand",
+    "MANIFEST_ABSENT": "name the manifest, or import the source",
+    "SOURCE_FRESHNESS": "run the check where the source file is, or pass --root",
+    "SOURCE_PARTIAL": "read the source itself for what the partial item left out",
+    "RANGE_CANDIDATES": "give each candidate its own row, or read them and say so",
 }
 ORDER = tuple(LIMITS)
 _PLAIN = str.maketrans(
@@ -81,6 +103,10 @@ class Finding:
     @property
     def limit(self) -> str:
         return LIMITS[self.code]
+
+    @property
+    def next(self) -> str | None:
+        return NEXT.get(self.code) if self.verdict in (FAIL, UNVERIFIED) else None
 
 
 def normalise(text: str) -> str:
@@ -113,6 +139,7 @@ class _Run:
         self.items: ItemMap = {}
         self.covered: dict[str, list[Row]] = {}
         self.unchecked = 0
+        self.resplit = 0
         self.ledger = ledger_module.parse(textio.read_text(ledger_path))
 
     def add(self, code: str, verdict: str, subject: str, text: str) -> None:
@@ -192,12 +219,14 @@ class _Run:
                 "ITEM_CHANGED",
                 FAIL,
                 self.where(row),
-                f"the ledger records #{row.revision}; the manifest holds #{now} now. "
-                "Read the item again and give it its disposition again",
+                f"the ledger records #{row.revision}; the manifest holds #{now} now",
             )
 
     def disposition(self, row: Row, members: list[dict[str, Any]]) -> None:
         kind = row.disposition
+        if row.last is not None and kind not in ("carried", "not requirement-bearing"):
+            text = f"only a not requirement-bearing row may name a range, not a {kind} row"
+            self.add("ROW_MALFORMED", FAIL, self.where(row), text)
         if kind == "carried":
             self.carried(row, members)
         elif kind in ("dropped (assumed)", "dropped (decided)", "not requirement-bearing"):
@@ -230,7 +259,9 @@ class _Run:
                 "ROW_MALFORMED", FAIL, where, 'a stated Basis holds a quote in "double quotes"'
             )
         for quote in quotes:
-            if row.last is None and normalise(quote) not in normalise(members[0]["text"]):
+            if not normalise(quote):
+                self.add("ROW_MALFORMED", FAIL, where, "a stated quote holds words")
+            elif row.last is None and normalise(quote) not in normalise(members[0]["text"]):
                 self.add("QUOTE_NOT_FOUND", FAIL, where, f'"{quote}" is not in {members[0]["id"]}')
 
     def coverage(self) -> None:
@@ -283,19 +314,67 @@ class _Run:
             self.add(code, verdict, subject, text)
 
     def freshness(self) -> None:
+        """Read each source file once. Where its digest matches the manifest's, split it as
+        `import` does and compare the items with the manifest's; the file's text then stands for
+        the manifest's wherever a quote is checked. Run before the rows."""
+
         for document in self.manifests.values():
-            for source in document["sources"]:
+            slugs: dict[str, int] = {}
+            for index, source in enumerate(document["sources"]):
+                file_slug = manifest_module.unique(
+                    manifest_module.slug(Path(source["file"]).stem, "file"), slugs
+                )
                 try:
                     data = (self.root / source["file"]).read_bytes()
                 except OSError:
                     where = display(self.root.as_posix())
                     self.add(
-                        "SOURCE_FRESHNESS", UNVERIFIED, source["file"], f"not found under {where}"
+                        "SOURCE_FRESHNESS",
+                        UNVERIFIED,
+                        source["file"],
+                        f"not found under {where}; the manifest's items are not checked "
+                        "against the source",
                     )
                     continue
                 if hashlib.sha256(textio.fold(data)).hexdigest() != source["raw_sha256"]:
-                    text = "the file differs from the one imported; import it and check again"
+                    text = "the file differs from the one imported"
                     self.add("SOURCE_CHANGED", FAIL, source["file"], text)
+                    continue
+                self.compare(document, index, source, file_slug)
+
+    def compare(
+        self, document: dict[str, Any], index: int, source: dict[str, Any], file_slug: str
+    ) -> None:
+        try:
+            _, text, _ = manifest_module.read_source(self.root / source["file"], source["format"])
+        except ValueError as error:
+            self.add("MANIFEST_DIFFERS", FAIL, source["file"], f"cannot be read as text ({error})")
+            return
+        expected = manifest_module.split_items(text, source["format"], document["name"], file_slug)
+        held = {item["id"]: item for item in document["items"] if item["source"] == index}
+        self.resplit += 1
+        missing = [item.id for item in expected if item.id not in held]
+        known = {item.id for item in expected}
+        added = [identifier for identifier in held if identifier not in known]
+        changed = []
+        for item in expected:
+            found = held.get(item.id)
+            if found is not None and (
+                found["revision"] != item.revision or found["text"] != item.text
+            ):
+                changed.append(item.id)
+                found["text"] = item.text  # quotes are checked against the file's own text
+        if missing or added or changed:
+            parts = [
+                f"{label}: {', '.join(ids)}"
+                for label, ids in (
+                    ("missing from the manifest", missing),
+                    ("not in the file", added),
+                    ("text differs", changed),
+                )
+                if ids
+            ]
+            self.add("MANIFEST_DIFFERS", FAIL, source["file"], "; ".join(parts))
 
     def candidates(self) -> None:
         for row in self.ledger.rows:
@@ -337,9 +416,12 @@ class _Run:
             "QUOTE_NOT_FOUND": "every stated quote occurs in its item",
             "ITEM_CHANGED": "every recorded revision matches",
             "SOURCE_CHANGED": "every source file read matches its manifest",
+            "MANIFEST_DIFFERS": f"{self.resplit} source file(s) split into the manifest's items",
         }
         if not self.manifests:
             return
+        if not self.resplit:
+            del held["MANIFEST_DIFFERS"]
         self.findings.extend(
             Finding(code, PASS, "all", text) for code, text in held.items() if code not in failed
         )
@@ -351,10 +433,10 @@ def check(manifest_paths: Sequence[Path], ledger_path: Path, root: Path) -> list
 
     run = _Run(ledger_path, root)
     run.load(manifest_paths)
+    run.freshness()
     run.rows()
     run.coverage()
     run.notes()
-    run.freshness()
     run.candidates()
     run.passes()
     rank = {code: index for index, code in enumerate(ORDER)}
@@ -372,13 +454,23 @@ def exit_code(result: str) -> int:
     return {PASS: 0, FAIL: 1, UNVERIFIED: 2}[result]
 
 
-def render_text(findings: Sequence[Finding]) -> str:
-    lines = [f"sources check: {verdict(findings)}"]
-    lines.extend(
-        f"{found.verdict} {found.code} {found.subject}: {found.text}. "
-        f"Does not establish: {found.limit}."
-        for found in findings
-    )
+def render_text(findings: Sequence[Finding], *, verbose: bool = False) -> str:
+    """The verdict and its counts first, then each line that did not pass; the passing lines
+    only under `verbose`, as `instructions check` prints."""
+
+    counts = {
+        kind: sum(f.verdict == kind for f in findings) for kind in (FAIL, UNVERIFIED, INFO, PASS)
+    }
+    tally = ", ".join(f"{counts[kind]} {kind}" for kind in counts)
+    lines = [f"{verdict(findings)}; {tally}"]
+    for found in findings:
+        if found.verdict == PASS and not verbose:
+            continue
+        line = f"{found.verdict} {found.code} {found.subject}: {found.text}. "
+        line += f"Does not establish: {found.limit}."
+        if found.next:
+            line += f" next: {found.next}."
+        lines.append(line)
     return "\n".join(lines) + "\n"
 
 
@@ -397,6 +489,7 @@ def render_json(findings: Sequence[Finding]) -> str:
                 "subject": f.subject,
                 "text": f.text,
                 "does_not_establish": f.limit,
+                **({"next": f.next} if f.next else {}),
             }
             for f in findings
         ],

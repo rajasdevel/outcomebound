@@ -1,12 +1,12 @@
 ---
 name: sources
-status: draft
+status: ratified
 ---
 
 # Sources — design
 
-This draft lands with the change that adds `outcomebound sources`. It needs the release canary
-(`make canary`) before it lands, because it adds a verb to the engine.
+This design lands with the change that adds `outcomebound sources`. The release canary
+(`make canary`) must pass before that change lands, because it adds a verb to the engine.
 
 ## Outcome
 
@@ -26,9 +26,12 @@ holds five constraints, linked to one requirement, passes; the report says so on
 
 The data each verdict reads, and who can write it. `check` reads the manifests it is given, the
 ledger file, and the source files the manifests name (to compare digests). The agent that fills
-the ledger can write the ledger and can run `import` again, so it can also write a manifest that
-matches an edited source. The check therefore reports `SOURCE_CHANGED` against the source file as
-it stands, not against the manifest alone, and reads `UNVERIFIED` where the file is not there. A
+the ledger can write the ledger, can run `import` again, and can edit a manifest in a folder Git
+ignores. The check therefore trusts no manifest on its digest alone: where the source file is
+there and its digest matches, it splits the file as `import` does and compares the items with the
+manifest's (`MANIFEST_DIFFERS`), and it checks quotes against the file's text. It reports
+`SOURCE_CHANGED` against the source file as it stands, and reads `UNVERIFIED` where the file is not
+there, since the manifest is then the only evidence of the items. A
 person who needs more than that keeps the source outside the agent's reach and runs the check
 there. `import` writes one manifest and, in the default folder, one ignore file. Nothing runs,
 and no connection is opened.
@@ -48,13 +51,13 @@ and no connection is opened.
 | A suspect item is one whose text holds a hidden character or an override phrase, by the instruction audit's own classes. The flag is advisory and prints beside the item's disposition, and nothing in `check` fails on it. The manifest keeps the raw text. Every line the verbs print escapes characters outside printable ASCII, and prints no source text but a quote the ledger gave | stripping characters from the text, which changes what the source says; a FAIL on a carried suspect item, which a legitimate requirement with imperative words would meet, and which reads a clean item as safe | agent | assumed |
 | A markdown reference note that cites an image (the file, its digest or revision, the region or state, an interpretation, the comparison sought) is an ordinary item. There is no image reader. Pixels are inferred by whoever reads them, and the note says so | an image importer before a real export shows what it must read | agent | assumed |
 | The ledger is the `## Sources` table of the file where the requirements live: Source item, Disposition, Where, Basis. Requirements are the lines of that file's `## Requirements` section that start with `R<n>`; an id is never renumbered or reused, and belongs to the file that defines it. Both sections are optional in the spec template | a separate ledger file, which no one opens beside the requirements; a new column in the decisions table, which the rules for a design fix at four | agent | assumed |
-| Dispositions are `carried` (to one or more requirement ids; basis `stated` with a quote, or `inferred`), `dropped (assumed)` or `dropped (decided)` (with a reason), `not requirement-bearing` (with a reason; the row may be a range), and `deferred` (names a ticket or a later design). `todo` is the skeleton's mark and reads as undisposed. The mapping is many to many: one item may carry to several requirements in one row, and several items to one requirement in several rows | one requirement per item, which loses the constraints beyond the first | agent | assumed |
-| A range is `<first id>..<last id>` within one manifest, in manifest order, with the digest of its items' revisions in place of one revision. An item added to the range or changed in it moves the digest, so a new item never takes a range's old disposition without a new row. A range of `not requirement-bearing` that holds items matching a short list of English modal and decision words reads `UNVERIFIED` and names them, as lexical candidates only | an engine rule that every candidate has its own row, which fails a long transcript; counting the candidates as information, under which a disposed ledger reads as coverage | agent | assumed |
+| Dispositions are `carried` (to one or more requirement ids; basis `stated` with a quote, or `inferred`), `dropped (assumed)` or `dropped (decided)` (with a reason), `not requirement-bearing` (with a reason; the only disposition whose row may be a range), and `deferred` (names a ticket or a later design). `todo` is the skeleton's mark and reads as undisposed. The mapping is many to many: one item may carry to several requirements in one row, and several items to one requirement in several rows | one requirement per item, which loses the constraints beyond the first | agent | assumed |
+| A range, which only a `not requirement-bearing` row may name (any other disposition with a range is `ROW_MALFORMED`, so no one row drops a whole source), is `<first id>..<last id>` within one manifest, in manifest order, with the digest of its items' revisions in place of one revision. An item added to the range or changed in it moves the digest, so a new item never takes a range's old disposition without a new row. A range of `not requirement-bearing` that holds items matching a short list of English modal and decision words reads `UNVERIFIED` and names them, as lexical candidates only | an engine rule that every candidate has its own row, which fails a long transcript; counting the candidates as information, under which a disposed ledger reads as coverage | agent | assumed |
 | The declared input set is the manifests named on the command line. A row whose id names a manifest that is not given is `ITEM_UNKNOWN`, unless that manifest is the absent one | reading every manifest in a folder, which makes an old import part of every check | agent | assumed |
-| `QUOTE_NOT_FOUND` is a quote occurrence check: the quote, with case, whitespace, curly quotes, `*` and backticks folded, occurs in the item's text. The report line says it establishes nothing about meaning or authority | calling it fidelity, which it is not: "delete backups" occurs in "must not delete backups" | agent | assumed |
-| `check` compares each manifest's raw digest with the file it names, found under `--root` (default the current folder). A different digest is `SOURCE_CHANGED`, a file not found is `SOURCE_FRESHNESS` and `UNVERIFIED`. A manifest compared with itself cannot find a source that moved on | trusting the manifest alone; failing where the file is absent, as it is in a CI that holds no source | agent | assumed |
+| `QUOTE_NOT_FOUND` is a quote occurrence check: the quote, with case, whitespace, curly quotes, `*` and backticks folded, occurs in the item's text. A quote that folds to nothing is `ROW_MALFORMED`, since it occurs in every item. The report line says it establishes nothing about meaning or authority | calling it fidelity, which it is not: "delete backups" occurs in "must not delete backups" | agent | assumed |
+| `check` compares each manifest's raw digest with the file it names, found under `--root` (default the current folder). A different digest is `SOURCE_CHANGED`, a file not found is `SOURCE_FRESHNESS` and `UNVERIFIED`. Where the digest matches, the file is split as `import` splits it and its items, with their revisions and text, must be the manifest's: any item missing, added or different is `MANIFEST_DIFFERS`, and a quote is checked against the file's text. A manifest compared with itself finds neither a source that moved on nor an edited manifest | trusting the manifest alone, or its items where the raw digest matches, which a hand-edited manifest passes; failing where the file is absent, as it is in a CI that holds no source | agent | assumed |
 | A manifest that is absent reads `UNVERIFIED`, and so does a partial item; neither hides a FAIL found elsewhere, and rows for the absent manifest's name are reported unchecked, never unknown | exit 2 before any other check runs | agent | assumed |
-| `check --skeleton <manifest>...` prints a ledger section with one `todo` row per item, ids and revisions filled, so an agent never types an id or a digest | an agent that writes ids by hand | agent | assumed |
+| `check --skeleton <manifest>...` prints a ledger section with one `todo` row per item, ids and revisions filled; each `--range FIRST..LAST` replaces the rows of its items with one row that holds the range's digest, so an agent never types an id or a digest | an agent that writes ids by hand | agent | assumed |
 | Exits as `outcomebound tickets` exits: 0 PASS; 1 FAIL or a refusal; 2 UNVERIFIED or a usage error. `import` exits 2 where the manifest is partial; its refusals are `SOURCE_UNREADABLE`, `SOURCE_KIND_UNKNOWN`, `SOURCE_ENCODING`, `SOURCE_NAME_INVALID`, `SOURCE_EMPTY`, `SOURCE_DUPLICATE` and `SOURCE_UNWRITABLE`; `check`'s is `LEDGER_UNREADABLE` | a new code for UNVERIFIED | agent | assumed |
 | An engine limit on items, file size or section length is not imposed | a cap chosen without evidence | agent | assumed |
 | `check` reports a requirement carried from no item and not marked `[assumed]`, an item dropped on an assumption, a suspect item and a converted source, each as information that does not change the verdict | failing on them, which would hold work for a requirement the person gave by word | agent | assumed |
@@ -62,7 +65,9 @@ and no connection is opened.
 ## Checks
 
 Each line of a report names its code, says what it found, and says what it does not establish
-(`LIMITS` in `outcomebound_tools/sources_check.py`).
+(`LIMITS` in `outcomebound_tools/sources_check.py`). As `instructions check` prints, the first
+line is the verdict and its counts, each line that did not pass follows with a `next:` step, and
+the passing lines print only under `--verbose` or `--json`.
 
 | Code | Verdict | Finds |
 | --- | --- | --- |
@@ -73,7 +78,8 @@ Each line of a report names its code, says what it found, and says what it does 
 | `QUOTE_NOT_FOUND` | FAIL | a stated quote that does not occur in its item |
 | `ITEM_CHANGED` | FAIL | a row's revision is not the manifest's current one |
 | `SOURCE_CHANGED` | FAIL | a source file differs from the one its manifest was made from |
-| `ROW_MALFORMED` | FAIL | a row with the wrong cells, an unknown disposition, a missing Where or Basis, or a bad range |
+| `MANIFEST_DIFFERS` | FAIL | a source file that matches its manifest's digest splits into items other than the manifest's: one missing, one added, or one with other text |
+| `ROW_MALFORMED` | FAIL | a row with the wrong cells, an unknown disposition, a missing Where or Basis, or a range on a disposition but `not requirement-bearing`, or a bad range |
 | `REQUIREMENT_DUPLICATE` | FAIL | a requirement id defined twice |
 | `LEDGER_MISSING` | FAIL | no `## Sources` section |
 | `MANIFEST_INVALID` | FAIL | a manifest that does not read as one, or two with one name |
@@ -88,7 +94,7 @@ speaker truth, the source's currency and authority.
 
 `tests/test_sources_import.py` and `tests/test_sources_check.py`: import is deterministic and
 valid against its schema; each FAIL code has a ledger that triggers it and the clean ledger beside
-it; an absent manifest hides no FAIL; a partial item and a file not found read UNVERIFIED; a range
+it; an absent manifest hides no FAIL; a partial item and a file not found read UNVERIFIED; an item deleted from a manifest, or a quote planted in its text, fails; a range
 digest moves when an item in it changes; every report line carries its limit; output escapes. The
 ledger format and the check have not met a real project's source: the release canary is the
 first such run, and what it finds becomes a case in the suite.

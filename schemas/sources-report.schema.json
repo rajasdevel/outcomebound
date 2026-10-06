@@ -31,7 +31,8 @@
           "verdict": {"enum": ["PASS", "FAIL", "UNVERIFIED", "INFO"]},
           "subject": {"type": "string"},
           "text": {"type": "string"},
-          "does_not_establish": {"type": "string"}
+          "does_not_establish": {"type": "string"},
+          "next": {"type": "string"}
         }
       }
     }
