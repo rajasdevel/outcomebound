@@ -239,8 +239,9 @@ class Arm(NamedTuple):
 def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     """The arm as it runs, for an install that selects the fragments `selected`. `current`
     mirrors a codex install of this checkout: the whole folder of each skill that install
-    carries, which is every install's seven, at the skill path the harness table gives codex, and this checkout's launcher. The earlier arm
-    is its kernel alone and the kernel-off arm has nothing, whatever is selected."""
+    carries, which is every install's seven, at the skill path the harness table gives codex, and
+    this checkout's launcher. The earlier arm is its kernel alone and the kernel-off arm has
+    nothing, whatever is selected."""
 
     text = kernel(name)
     if name in (EARLIER, NONE):

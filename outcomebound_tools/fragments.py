@@ -27,7 +27,6 @@ import hashlib
 import json
 import re
 import sys
-from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
