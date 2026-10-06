@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket to the agent or model that will build it: finding the implementer's tier, and writing the package that tier needs, from the ticket alone for a capable model to failing tests and stubs, one step at a time, for a small one. Not for slicing work into tickets.
+description: Use when delegating an accepted ticket to a subagent or another model to build. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing work into tickets.
 ---
 
 # Hand a ticket to its implementer
@@ -25,11 +25,11 @@ done at every tier.
 
 **Bounds.** Writing a package, with its tests and stubs, inside the ticket's `bounds` and on the
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
-`done-when` stay the person's: a package adds to them and never changes them. An edit outside `bounds`
-that only carries the ticket's own change, such as an import or an inventory entry for its own
-files, is inside the ticket's authority, as the tickets fragment says, and is no change to them. Where a line of the ticket holds only on a condition the implementer may
-be unable to settle, the package names the side to take when it cannot be settled, the smaller
-change inside `bounds`, and the implementer's handover says which side it took. Where the ticket
+`done-when` stay the person's: a package adds to them and never changes them. What the tickets
+fragment says of an edit outside `bounds` holds for the package. Where a line of the ticket holds
+only on a condition the implementer may be unable to settle, the package names the side to take
+when it cannot be settled, the smaller change inside `bounds`, and the implementer's handover says
+which side it took. Where the ticket
 cannot be built as written, file the follow-up that makes it buildable where a goal envelope the
 person wrote accepts follow-ups, since that line is their acceptance of it; otherwise put the
 change to the person as a decision brief in a comment on the ticket. Either way, go on with the
@@ -105,9 +105,9 @@ removes none of them. Say so in the package, naming the test files.
 Where a step's package would be its code, write the code yourself and go on to the next step.
 
 Review each step against its tests, its files and the ticket's `bounds`, and the last step against
-the ticket's `done-when` as well. A step that fails review goes back once with the finding; one
-that fails again you write yourself or hand to a higher tier, since a second miss says the tier is
-wrong and further fix rounds tend to add defects; the handover says which.
+the ticket's `done-when` as well. A step that fails review goes back with the finding. Where a fix
+round repeats the same miss or adds new defects, the tier or the package is wrong: write the step
+yourself or hand it to a higher tier, and the handover says which.
 
 ## Hand over
 

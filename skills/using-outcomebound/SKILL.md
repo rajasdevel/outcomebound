@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when deciding how much design, testing, review, or process a task needs, or when unsure whether a change is routine or crosses a component or API boundary.
+description: Use when deciding how much design, testing, review, or process a task needs, or when unsure whether a change is routine or crosses a component or API boundary. Sizes the work to the outcome and picks the mechanisms it needs.
 ---
 
 # Using OutcomeBound
@@ -35,10 +35,8 @@ or a decision, in the most checkable form that fixes it: a check or a refusal be
 
 ## Put a decision to the user
 
-Ask the user only what is theirs: an act your authority does not grant, or a fork in the outcome
-that nothing readable settles and no later commit could undo. Everything else you decide and note in one line where the work is
-recorded. The `decision-brief` skill says what is theirs, the due diligence before you ask, and
-the shape each decision goes as.
+The `decision-brief` skill says what is the user's to decide, the due diligence before asking and
+the shape each decision goes as; everything else you decide.
 
 ## Read the full contract
 
