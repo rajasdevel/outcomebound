@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Security-Policy" content="{policy}">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="generator" content="outcomebound explorable {version}">
+<meta name="explorable-kind" content="{kind}">
+<title>{title}</title>
+<style>{stylesheet}</style>
+<script type="application/json" id="explorable-config">{config}</script>
+<script>{runtime}</script>
+</head>
+<body class="xp" data-kind="{kind}">
+<header class="xp-header"><p class="xp-kind">{kind_label}</p><h1>{title}</h1><p class="xp-built">Built {built}</p></header>
+<div class="xp-banner" id="explorable-network" role="status" hidden></div>
+<main class="xp-main">
+{briefs}
+{content}
+<section class="xp-reply" id="explorable-reply" aria-labelledby="explorable-reply-title"><h2 id="explorable-reply-title">Your reply</h2></section>
+</main>
+</body>
+</html>
