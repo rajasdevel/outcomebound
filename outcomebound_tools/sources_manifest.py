@@ -162,9 +162,7 @@ def suspect_reasons(text: str) -> list[str]:
             hidden.setdefault(f"U+{ord(char):04X}", why)
         previous = char
     reasons.extend(f"{why} ({point})" for point, why in sorted(hidden.items()))
-    if any(
-        p.search(line) for line in text.split("\n") for p in instruction_audit.OVERRIDE_PHRASES
-    ):
+    if any(p.search(line) for line in text.split("\n") for p in instruction_audit.OVERRIDE_PHRASES):
         reasons.append("an override phrase")
     return reasons
 
