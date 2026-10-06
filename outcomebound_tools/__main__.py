@@ -1,8 +1,14 @@
 """`outcomebound <verb> ...`: the one table from each verb to the module that runs it.
 
-The launcher, `scripts/outcomebound`, runs this module isolated (`python -I`), from a checkout
-or from an installed package. `home` prints where the engine's own files are; every other verb
-runs its module as `__main__`, with the module's name as `argv[0]`.
+The launcher runs this module isolated (`python -I -X utf8`): `scripts/outcomebound` in a
+checkout, the package's console entry point (`launcher.py`) once installed. `home` prints where
+the engine's own files are; every other verb runs its module as `__main__`, with the module's
+name as `argv[0]`.
+
+Every verb's text leaves as UTF-8 with LF line endings, whatever the platform's console code
+page and newline are, so a script, a path or a JSON document the engine prints reads the same
+through a pipe or a redirect everywhere. A word this table cannot run, or no word, exits 1,
+never 2: a harness's stop hook reads exit 2 as holding the turn.
 """
 
 from __future__ import annotations
@@ -27,7 +33,17 @@ VERBS = {
 USAGE = "usage: outcomebound <verb> [argument ...]\nverbs: home " + " ".join(VERBS)
 
 
+def _utf8_lf_streams() -> None:
+    """Make stdout and stderr UTF-8 with LF line ends. Each keeps its own error handler."""
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors=stream.errors, newline="\n")
+
+
 def main(argv: list[str] | None = None) -> int:
+    _utf8_lf_streams()
     arguments = sys.argv[1:] if argv is None else argv
     verb = arguments[0] if arguments else ""
     if verb == "home":
@@ -41,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if verb not in VERBS:
         print(USAGE, file=sys.stderr)
-        return 2
+        return 1
     module = VERBS[verb]
     sys.argv = [module, *arguments[1:]]
     runpy.run_module(f"outcomebound_tools.{module}", run_name="__main__", alter_sys=True)

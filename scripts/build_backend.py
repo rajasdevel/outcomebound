@@ -4,11 +4,14 @@
 `pyproject.toml` names this module as its build backend, so `uv tool install`, `pipx install`
 and `pip install` build from a checkout or a source archive with no build dependency. The wheel
 holds the engine package, `outcomebound_tools/`, with the engine's own files under
-`outcomebound_tools/_home/`, where `outcomebound_tools.home` finds them, and installs the
-launcher, `scripts/outcomebound`, as its one command. A checkout contributes the files Git
-tracks; a source archive, every file it holds but dotfiles and bytecode. Builds are
-reproducible: entries are sorted and dated from SOURCE_DATE_EPOCH, or 1980-01-01, so a wheel
-built from the source archive is the wheel built from the checkout.
+`outcomebound_tools/_home/`, where `outcomebound_tools.home` finds them, and a console entry
+point, `outcomebound`, for its one command: pip and uv make it a script on POSIX and an `.exe` on
+Windows. The entry point's module is `outcomebound_tools/launcher.py`, shipped at the top level
+as `_outcomebound_launch.py`. A checkout contributes the files Git tracks; a source archive,
+every file it holds but dotfiles and bytecode. Builds are reproducible: entries are sorted and
+dated from SOURCE_DATE_EPOCH, or 1980-01-01, and a file is executable when it starts with a
+`#!` line, never by what the build machine's file system says, so a wheel built from the source
+archive is the wheel built from the checkout, on any platform.
 
 Run directly, it builds into dist/: `python3 scripts/build_backend.py [--sdist] [--out DIR]`.
 """
@@ -37,7 +40,11 @@ SUMMARY = (
 URL = "https://github.com/rajasdevel/outcomebound"
 REQUIRES_PYTHON = ">=3.10"
 PACKAGE = "outcomebound_tools"
-LAUNCHER = "scripts/outcomebound"
+# The console entry point's module: its source in the package, and the top-level name it ships
+# under, so a folder on PYTHONPATH with an `outcomebound_tools` of its own cannot take the hop.
+LAUNCH_SOURCE = f"{PACKAGE}/launcher.py"
+LAUNCH_MODULE = "_outcomebound_launch"
+ENTRY_POINTS = f"[console_scripts]\n{NAME} = {LAUNCH_MODULE}:main\n"
 # The engine's own files, shipped under the package's _home/ with the checkout's layout.
 HOME = (
     "OutcomeBound.md",
@@ -52,9 +59,15 @@ HOME = (
     "templates",
 )
 # What a source archive adds to build the wheel again.
-SDIST = ("pyproject.toml", "README.md", "scripts/build_backend.py", LAUNCHER)
+SDIST = ("pyproject.toml", "README.md", "scripts/build_backend.py")
 # A build without these would install a command with no engine behind it.
-REQUIRED = (f"{PACKAGE}/__main__.py", f"{PACKAGE}/home.py", "OutcomeBound.md", "VERSION", LAUNCHER)
+REQUIRED = (
+    f"{PACKAGE}/__main__.py",
+    f"{PACKAGE}/home.py",
+    LAUNCH_SOURCE,
+    "OutcomeBound.md",
+    "VERSION",
+)
 ROOT = Path(__file__).resolve().parent.parent
 FLOOR_EPOCH = 315532800  # 1980-01-01, the earliest date a zip entry holds
 PRERELEASE = {"alpha": "a", "a": "a", "beta": "b", "b": "b", "rc": "rc"}
@@ -126,6 +139,15 @@ def _shipped(root: Path) -> list[str]:
     return sorted(set(names))
 
 
+def _executable(data: bytes) -> bool:
+    """Whether a file ships executable: it starts with a `#!` line. Git's mode and the file
+    system's differ by platform (every file is executable to `os.access` on Windows, and an
+    unpacked archive loses the mode there), and every file a checkout tracks as executable that
+    ships here is a script with a `#!` line."""
+
+    return data.startswith(b"#!")
+
+
 def _under(names: list[str], prefixes: tuple[str, ...]) -> list[str]:
     return [n for n in names if any(n == p or n.startswith(p + "/") for p in prefixes)]
 
@@ -160,15 +182,17 @@ def _entries(root: Path) -> list[tuple[str, bytes, bool]]:
     entries = [
         (name, (root / name).read_bytes(), False)
         for name in _under(names, (PACKAGE,))
-        if name.endswith(".py") and not name.startswith(f"{PACKAGE}/_home/")
+        if name.endswith(".py")
+        and not name.startswith(f"{PACKAGE}/_home/")
+        and name != LAUNCH_SOURCE
     ]
-    entries += [
-        (f"{PACKAGE}/_home/{name}", (root / name).read_bytes(), os.access(root / name, os.X_OK))
-        for name in _under(names, HOME)
-    ]
-    entries.append((f"{dist}.data/scripts/outcomebound", (root / LAUNCHER).read_bytes(), True))
+    entries.append((f"{LAUNCH_MODULE}.py", (root / LAUNCH_SOURCE).read_bytes(), False))
+    for name in _under(names, HOME):
+        data = (root / name).read_bytes()
+        entries.append((f"{PACKAGE}/_home/{name}", data, _executable(data)))
     info = f"{dist}.dist-info"
     entries += [
+        (f"{info}/entry_points.txt", ENTRY_POINTS.encode("utf-8"), False),
         (f"{info}/METADATA", _metadata(root).encode("utf-8"), False),
         (f"{info}/WHEEL", WHEEL.encode("utf-8"), False),
         (f"{info}/LICENSE", (root / "LICENSE").read_bytes(), False),
@@ -238,10 +262,9 @@ def build_sdist(sdist_directory: str, config_settings: dict[str, object] | None 
     names = _under(_shipped(ROOT), (PACKAGE, *HOME, *SDIST))
     names = [n for n in names if not n.startswith(f"{PACKAGE}/_home/")]
     members = [(f"{dist}/PKG-INFO", _metadata(ROOT).encode("utf-8"), False)]
-    members += [
-        (f"{dist}/{name}", (ROOT / name).read_bytes(), os.access(ROOT / name, os.X_OK))
-        for name in names
-    ]
+    for name in names:
+        data = (ROOT / name).read_bytes()
+        members.append((f"{dist}/{name}", data, _executable(data)))
     filename = f"{dist}.tar.gz"
     with (
         open(Path(sdist_directory) / filename, "wb") as raw,

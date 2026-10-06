@@ -235,15 +235,15 @@ that runs it. `export` does not take `--input`. Example, for a declaration whose
 ```text
 $ outcomebound tickets export
 # the pinned query: <outcomebound home>/templates/tickets/github-export.graphql
-gh api graphql --paginate --slurp -F owner=owner -F name=name -f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" > issues.json
+gh api graphql --paginate --slurp -F owner=owner -F name=name -F query=@<outcomebound home>/templates/tickets/github-export.graphql > issues.json
 ```
 
 The command is for a POSIX shell, such as Git Bash. In PowerShell, replace the `-f query=...` part
 with `-F query=@"<home>/templates/tickets/github-export.graphql"`, where `<home>` is the folder that
 `outcomebound home` prints; `gh api` reads a field that starts with `@` from that file. The verbs
-read the export as UTF-8 only, and Windows PowerShell 5.1 writes a file made with `>` as UTF-16, so
-write `issues.json` as UTF-8 (PowerShell 7 does by default). This PowerShell form has not been run
-on Windows (`UNVERIFIED`).
+read the export as UTF-8, with or without a byte-order mark, or as UTF-16 with a byte-order mark,
+which Windows PowerShell 5.1 writes for `>`. This PowerShell form has not been run on Windows
+(`UNVERIFIED`).
 
 `export` exits with `0` when it printed the command. It exits with `1` for a refusal: no
 declaration, or a declaration that is not valid. It exits with `2` for a usage error.
@@ -259,8 +259,10 @@ outcomebound tickets check --input issues.json
 ```
 
 `outcomebound tickets export` prints this command with the owner and the name of the declared
-repository. When you run `check` or `brief` without `--input`, the refusal `INPUT_REQUIRED` prints
-the same command. The `input:` line of the `check` report gives the path of the export, the time
+repository. It gives `gh` the query as a file (`-F query=@<path>`), so the same line runs in a
+POSIX shell, PowerShell and Git Bash. `check` and `brief` read an export saved as UTF-16 with a
+byte-order mark, which Windows PowerShell 5.1 documents for `>`, and one saved as UTF-8 with one. When you run `check` or `brief` without `--input`, the refusal
+`INPUT_REQUIRED` prints the same command. The `input:` line of the `check` report gives the path of the export, the time
 that it was written, its age, and the lowest and the highest issue number that it holds, for
 example `input: issues.json; modified 2026-09-20T09:00:00Z; age 120s; holds #1 to #42`. The query is shipped unedited,
 so you can pipe it straight in. The engine refuses a file that is

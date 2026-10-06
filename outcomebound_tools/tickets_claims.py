@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
-from outcomebound_tools import paths
+from outcomebound_tools import paths, textio
 from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_report import Refusal
 
@@ -175,7 +175,7 @@ def _tree_document(root: Path, path: str) -> object:
     except paths.PathError as error:
         raise _Unreadable(str(error)) from error
     try:
-        return json.loads(raw.decode("utf-8"))
+        return json.loads(textio.decode(raw))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise _Unreadable(f"it is not UTF-8 JSON: {error}") from error
 

@@ -25,6 +25,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from outcomebound_tools import textio
 from outcomebound_tools.tickets_check import check_loaded
 from outcomebound_tools.tickets_declaration import DECLARATION_PATH, Declaration
 from outcomebound_tools.tickets_draft import read_draft
@@ -88,7 +89,7 @@ def _read(paths: Sequence[str], declaration: Declaration) -> list[_Draft]:
         ticket, _ = read_draft(path, declaration)
         if ticket is None:
             raise Refusal(_REFUSED, f"no draft could be read at {path}")
-        text = Path(path).read_text(encoding="utf-8")
+        text = textio.read_text(path)
         if "\0" in text:
             raise Refusal(
                 _REFUSED,

@@ -13,8 +13,8 @@ gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
 That line is for a POSIX shell, such as Git Bash. In PowerShell, pass the file itself: `-F
 query=@"<home>/templates/tickets/github-export.graphql"`, with `<home>` the folder
 `outcomebound home` prints, since `gh api` reads a field that starts with `@` from that file. The
-verbs read the export as UTF-8 only, and Windows PowerShell 5.1 writes a file made with `>` as
-UTF-16, so write `issues.json` as UTF-8. This PowerShell form has not been run on Windows
+verbs read the export as UTF-8, with or without a byte-order mark, or as UTF-16 with a byte-order
+mark, which Windows PowerShell 5.1 writes for `>`. This PowerShell form has not been run on Windows
 (`UNVERIFIED`).
 
 The verbs refuse a file that is not this query's `--paginate --slurp` output for the declared

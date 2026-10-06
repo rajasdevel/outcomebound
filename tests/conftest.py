@@ -5,9 +5,12 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+from tests.portable import home_environment
 
 # Git's automatic maintenance runs detached after a commit, so it can still be writing
 # `.git/objects/maintenance.lock` into a fixture repository while a test snapshots or
@@ -55,3 +58,34 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     root = session.config.stash.get(OWN_BASE, None)
     if root is not None and exitstatus == 0:
         shutil.rmtree(root, ignore_errors=True)
+
+
+# A test that reads or writes a home must reach its own: the person's engine and codex folders
+# in their home are theirs. `Path.home()` reads `HOME` on POSIX and `USERPROFILE` on Windows,
+# and Git reads `HOME`, so every variable that names a home is set. The session's home covers
+# fixtures wider than one test; each test then gets a fresh one.
+FOREIGN_HOMES = ("CODEX_HOME", "CLAUDE_CONFIG_DIR")
+
+
+def _isolate(monkeypatch: pytest.MonkeyPatch, home: Path) -> None:
+    for name, value in home_environment(home).items():
+        monkeypatch.setenv(name, value)
+    for name in FOREIGN_HOMES:
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def session_home(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
+    home = tmp_path_factory.mktemp("session-home")
+    with pytest.MonkeyPatch.context() as patch:
+        _isolate(patch, home)
+        yield home
+
+
+@pytest.fixture(autouse=True)
+def isolated_home(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch, session_home: Path
+) -> Path:
+    home = tmp_path_factory.mktemp("home")
+    _isolate(monkeypatch, home)
+    return home

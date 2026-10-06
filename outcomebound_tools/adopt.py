@@ -41,7 +41,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
 import signal
 import subprocess
 import sys
@@ -61,6 +60,8 @@ from outcomebound_tools import (
     identity,
     instruction_audit,
     paths,
+    programs,
+    textio,
     walk,
 )
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
@@ -222,10 +223,10 @@ def _local_fragment(source: Path, target: Path) -> fragments.Fragment:
     if data is None:
         raise AdoptError(
             f"the {LOCAL} fragment is the target's own file and is missing: {LOCAL_FRAGMENT}; "
-            f"copy {source / 'templates/fragment-local.md'} there and edit it"
+            f"copy {(source / 'templates/fragment-local.md').as_posix()} there and edit it"
         )
     try:
-        fragment = fragments.parse_fragment(data.decode("utf-8"), LOCAL_FRAGMENT)
+        fragment = fragments.parse_fragment(textio.decode(data), LOCAL_FRAGMENT)
     except UnicodeDecodeError as error:
         raise AdoptError(f"{LOCAL_FRAGMENT} is not UTF-8 text") from error
     except fragments.FragmentError as error:
@@ -293,7 +294,7 @@ def _fragment_bytes(fragment: fragments.Fragment) -> bytes:
     if fragment.path is None:
         raise AdoptError(f"the {fragment.id} fragment has no file to install")
     try:
-        return fragment.path.read_bytes()
+        return textio.fold(fragment.path.read_bytes())
     except OSError as error:
         raise AdoptError(f"cannot read the {fragment.id} fragment: {error}") from error
 
@@ -312,7 +313,7 @@ def workspace_ignore(source: Path) -> bytes:
 
 def skill_file(source: Path, name: str, relative: str = "SKILL.md") -> bytes:
     try:
-        return (source / "skills" / name / relative).read_bytes()
+        return textio.fold((source / "skills" / name / relative).read_bytes())
     except OSError as error:
         raise AdoptError(f"cannot read skills/{name}/{relative} in the engine: {error}") from error
 
@@ -477,7 +478,7 @@ def cut(text: str, block_id: str) -> str:
 
 def _host_text(path: str, data: bytes | None) -> str:
     try:
-        text = "" if data is None else data.decode("utf-8")
+        text = "" if data is None else textio.universal(textio.decode(data))
         identity.find_managed_blocks(text)
     except UnicodeDecodeError as error:
         raise AdoptError(f"{path} is not UTF-8 text") from error
@@ -530,7 +531,7 @@ class Settings:
         if before is None:
             return cls(path, None, {})
         try:
-            text = before.decode("utf-8")
+            text = textio.decode(before)
             data = json.loads(text)
         except UnicodeDecodeError as error:
             raise AdoptError(f"{path} is not UTF-8 text") from error
@@ -627,7 +628,8 @@ class Settings:
         unit = indent.group(1) if indent else "  "
         text = json.dumps(self.data, indent=unit, ensure_ascii=self.ascii)
         text += "\n" if self.before is None or self.text.endswith("\n") else ""
-        return text.replace("\n", "\r\n" if "\r\n" in self.text else "\n").encode("utf-8")
+        data = text.replace("\n", "\r\n" if "\r\n" in self.text else "\n").encode("utf-8")
+        return textio.UTF8_BOM + data if (self.before or b"").startswith(textio.UTF8_BOM) else data
 
 
 # --- The manifest ---------------------------------------------------------------
@@ -721,7 +723,8 @@ class Manifest:
         }
         if document == self.document:
             return self.raw
-        return (json.dumps(document, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        text = json.dumps(document, indent=2, ensure_ascii=False) + "\n"
+        return textio.with_style(text.encode("utf-8"), self.raw)
 
 
 def load_manifest(target: Path) -> Manifest:
@@ -737,7 +740,7 @@ def load_manifest(target: Path) -> Manifest:
     if raw is None:
         return Manifest()
     try:
-        document = json.loads(raw.decode("utf-8"))
+        document = json.loads(textio.decode(raw))
     except ValueError as error:
         raise AdoptError(f"cannot read {MANIFEST}: {error}") from error
     if not isinstance(document, dict):
@@ -909,17 +912,31 @@ class HookWant(Want):
 
 @dataclass
 class Host:
-    """A file adopt keeps blocks in: its bytes as read, and its text as planned."""
+    """A file adopt keeps blocks in: its bytes as read, its text as planned, and the text as read.
+
+    The text is LF and has no byte-order mark, whatever the file has. The planned bytes give it
+    back with each line the blocks did not touch as it was, in its own ending and mark, the lines
+    the blocks wrote in the ending most of its lines use, and a host whose text no block changed
+    keeps its bytes as they are, so adopt never rewrites a file's line endings for its own sake.
+    """
 
     before: bytes | None
     text: str
+    read: str = ""
+
+    def __post_init__(self) -> None:
+        self.read = self.text
 
     def after(self) -> bytes | None:
         """The planned bytes; a host left empty by a removal is deleted."""
 
-        if self.text or self.before == b"":
-            return self.text.encode("utf-8")
-        return None
+        if self.before is not None and self.text == self.read:
+            return self.before
+        if not (self.text or self.before == b""):
+            return None
+        data = textio.splice(self.before, self.text) if self.before else self.text.encode("utf-8")
+        marked = (self.before or b"").startswith(textio.UTF8_BOM)
+        return textio.UTF8_BOM + data if marked else data
 
 
 class Run:
@@ -944,7 +961,7 @@ class Run:
         path = self.target
         for part in relative.split("/"):
             path = path / part
-            if path.is_symlink():
+            if paths.redirects(path):
                 return True
         return path.exists()
 
@@ -979,14 +996,19 @@ class Run:
             self._keep_hook(want, record)
         elif want.kind in FILE_KINDS:
             before = self._before(want.path)
-            if want.path == LOCAL_IGNORE and record is None and before not in (None, want.data):
+            if (
+                want.path == LOCAL_IGNORE
+                and record is None
+                and before is not None
+                and textio.fold(before) != want.data
+            ):
                 raise AdoptError(
                     f"adopt now writes {LOCAL_IGNORE} whole, and this one is the project's own, "
                     "which --force would not keep either: move its lines to the root .gitignore, "
                     "delete the file, then run adopt again"
                 )
             self._judge(want.path, before, want.data, record)
-            self.files[want.path] = (before, want.data)
+            self.files[want.path] = (before, textio.with_style(want.data, before))
         else:
             host = self.host(want.path)
             current = block_text(host.text, want.id)
@@ -1019,7 +1041,7 @@ class Run:
         """Remove what `record` says adopt wrote; a path that is now a symlink is left alone."""
 
         path, name = record["path"], record["id"]
-        if (self.target / path).is_symlink():
+        if paths.redirects(self.target / path):
             return
         if record["kind"] == HOOK:
             self._drop_hook(record)
@@ -1060,6 +1082,9 @@ class Run:
     ) -> None:
         """Note `name` as edited when its bytes are neither wanted nor what adopt recorded.
 
+        Bytes compare and digest in LF form, as the record does, so a checkout that Git gave
+        CRLF reads as it does with LF.
+
         Bytes that differ from the record but are what this run writes, such as a block a
         person regenerated by hand from the source it renders, are no edit: they are recorded
         as they are, and the report says so, so that no `--force` is needed to keep them. So
@@ -1068,6 +1093,7 @@ class Run:
 
         if current is None:
             return
+        current = textio.fold(current)
         unrecorded = record is not None and sha256(current) != record["sha256"]
         if current == wanted:
             if unrecorded:
@@ -1314,7 +1340,7 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
                 "skip",
                 "finish-check: Done was not measured, so no record of known failures applies "
                 "to this Done list and checkout, and every failure holds a turn; `outcomebound "
-                f"adopt {shlex.quote(str(run.target))} --finish-check` measures it once",
+                f"adopt {paths.shell_path(run.target)} --finish-check` measures it once",
             )
         )
         return
@@ -1352,7 +1378,7 @@ def slow_done(target: Path, seconds: float, timeout: int) -> Notes:
             "UNVERIFIED",
             f"finish-check: Done took {seconds:.0f} s, longer than the {limit} s the hook's "
             f"{timeout} s timeout gives it, so a turn end would stop it; re-run `outcomebound "
-            f"adopt {shlex.quote(str(target))} --finish-timeout <seconds>` with more than {least}, "
+            f"adopt {paths.shell_path(target)} --finish-timeout <seconds>` with more than {least}, "
             f"for example {2 * least}",
         )
     ]
@@ -1584,7 +1610,7 @@ def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
         return []
     common = (discovery.git_read(target, "rev-parse", "--git-common-dir") or b"").strip()
     git_dir = (target / os.fsdecode(common)).resolve() if common else target / ".git"
-    roots = ", ".join(_printable(f'"{path}"') for path in (target / ".agents", git_dir))
+    roots = ", ".join(_printable(f'"{path.as_posix()}"') for path in (target / ".agents", git_dir))
     return [
         (
             "UNVERIFIED",
@@ -1770,8 +1796,10 @@ def _observed(target: Path, record: Record) -> bytes | None:
             return None
         settings = Settings.parse(record["path"], data)
         return settings.at(settings.find(record["sha256"]))
-    if record["kind"] in FILE_KINDS or data is None:
-        return data
+    if data is None:
+        return None
+    if record["kind"] in FILE_KINDS:
+        return textio.fold(data)
     return block_text(_host_text(record["path"], data), record["id"])
 
 
@@ -1908,7 +1936,7 @@ def next_step(target: Path, found: Sequence[str]) -> str | None:
     where each already is. An edited record is refused without `--force`, which would replace
     the edit, so the edit is moved out first."""
 
-    command = f"outcomebound adopt {shlex.quote(str(target))}"
+    command = f"outcomebound adopt {paths.shell_path(target)}"
     if "edited" in found:
         return (
             "next: move each edit out of OutcomeBound's blocks and files, then "
@@ -1923,7 +1951,7 @@ def check(target: Path, source: Path) -> int:
     manifest = load_manifest(target)
     if manifest.raw is None:
         print(f"missing  {MANIFEST}")
-        command = f"outcomebound adopt {shlex.quote(str(target))} --detect"
+        command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return 1
     found: list[str] = []
@@ -1943,8 +1971,9 @@ def check(target: Path, source: Path) -> int:
 
 
 def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
-    """What one read-only git command printed in `target`; None where it failed. Git comes from
-    PATH's absolute entries only, so the target cannot supply its own."""
+    """What one read-only git command printed in `target`; None where it failed or Git cannot run.
+    Git comes from PATH's absolute entries only (`programs.require`), so the target cannot supply
+    its own, on Windows too."""
 
     inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
@@ -1952,7 +1981,7 @@ def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | N
     )
     try:
         completed = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            [programs.require("git", inherited), *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             env=git_environment(inherited),
             input=stdin if stdin is not None else b"",
@@ -1995,7 +2024,7 @@ def _proposal(target: Path) -> tuple[list[str], str | None]:
     done = []
     if floor is not None:
         base = default_base(target)
-        done.append(FLOOR_RUNNER + (f" --base {shlex.quote(base)}" if base else ""))
+        done.append(FLOOR_RUNNER + (f" --base {paths.shell_word(base)}" if base else ""))
     ci = [command for item in facts.read_ci(target) for command in item.tests]
     if ci:
         return [*done, ci[0]], None
@@ -2030,20 +2059,25 @@ def detect(target: Path, source: Path) -> int:
         raise AdoptError(str(error)) from error
     found = [harness for sign, harness in HARNESS_SIGNS if os.path.lexists(target / sign)]
     harnesses = ",".join(dict.fromkeys(found)) if found else GENERIC
-    words = ["outcomebound", "adopt", str(target), "--harness"]
+    words = ["outcomebound", "adopt", Path(target).as_posix(), "--harness"]
     words.append(harnesses)
     if ids:
         words += ["--fragments", ",".join(ids)]
     done, suggested_by = _proposal(target)
     for command in done:
         words += ["--done", command]
-    line = " ".join(map(shlex.quote, words))
+    line = " ".join(map(paths.shell_word, words))
     if suggested_by is not None:
         line += (
             f"  # {done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on "
             "the host, so where the project runs its tests only in a container, give that "
             "command to --done in its place"
         )
+        if done[-1].split()[0] in ("python", "python3"):
+            line += (
+                "  # the python it names is the interpreter of the machine that ran --detect: "
+                "commit the form your hooks run"
+            )
     if FLOOR_RUNNER in done:
         line += (
             "  # no default branch resolves: the floor runs without --base, so its loosening "
@@ -2301,7 +2335,7 @@ def _measure(target: Path, done: list[str], timeout: int) -> int:
         print(
             f"{'UNVERIFIED':<8} finish-check: the measurement was stopped, and no known failures "
             "are kept, so every failure holds a turn; `outcomebound adopt "
-            f"{shlex.quote(str(target))} --finish-check` measures Done again",
+            f"{paths.shell_path(target)} --finish-check` measures Done again",
             flush=True,
         )
         return 128 + int(number)

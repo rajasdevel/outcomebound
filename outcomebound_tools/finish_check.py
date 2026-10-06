@@ -28,8 +28,6 @@ import hashlib
 import json
 import os
 import re
-import shlex
-import shutil
 import signal
 import subprocess
 import sys
@@ -41,7 +39,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Any, NoReturn
 
-from outcomebound_tools import adapters
+from outcomebound_tools import adapters, paths, programs
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 ID = "finish-check"
@@ -174,6 +172,21 @@ def read_input(stream: IO[bytes] | None) -> dict[str, Any] | None:
     return document if isinstance(document, dict) else None
 
 
+# A folder the way Git Bash and Cygwin write it, `/c/work/app` or `/cygdrive/c/work/app`.
+_MSYS_DRIVE = re.compile(r"^/(?:cygdrive/)?([A-Za-z])(?:/(.*))?$")
+
+
+def native_path(given: str, windows: bool | None = None) -> str:
+    """`given` as the folder this platform reads: on Windows, a drive written the way Git Bash
+    writes it (`/c/work/app`) is `C:/work/app`, which Python would otherwise read as a folder
+    `c` on the current drive; elsewhere, and for any other form, `given` as it is."""
+
+    found = _MSYS_DRIVE.match(given)
+    if found is None or not (os.name == "nt" if windows is None else windows):
+        return given
+    return f"{found.group(1).upper()}:/{found.group(2) or ''}"
+
+
 def find_target(payload: Mapping[str, Any] | None, cwd: Path) -> tuple[Path, bool]:
     """(the target, whether it holds the manifest): the nearest directory holding the manifest
     upward from the input's `cwd`, where the agent works, else from the process's `cwd`; not
@@ -181,7 +194,7 @@ def find_target(payload: Mapping[str, Any] | None, cwd: Path) -> tuple[Path, boo
     session started when the agent moves into a worktree."""
 
     given = payload.get("cwd") if payload is not None else None
-    start = cwd / given if isinstance(given, str) and given else cwd
+    start = cwd / native_path(given) if isinstance(given, str) and given else cwd
     for directory in (start, *start.parents):
         if (directory / MANIFEST).is_file():
             return directory, True
@@ -216,7 +229,7 @@ def _git(target: Path, *arguments: str, deadline: float | None = None) -> bytes 
         return None
     try:
         done = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, "-C", str(target), *arguments],
+            [programs.require("git"), *GIT_READ_CONFIGURATION, "-C", str(target), *arguments],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,
@@ -602,18 +615,65 @@ NOT_RUN = (126, 127)
 # A tool the command names that this PATH does not hold, as the last line of output says it when a
 # runner between the hook and the tool turns the shell's 127 into its own exit code: make's
 # `make: pytest: No such file or directory`, a script's `run.sh: line 3: pytest: command not
-# found` or `run.sh: 3: pytest: not found`, a shell's `sh: pytest: command not found`, and a
-# Python launcher's `python3: No module named pytest`. A test's own message (`FileNotFoundError:
-# [Errno 2] No such file or directory: 'x'`, `ModuleNotFoundError: No module named 'x'`) has no
-# such form. make's own `make: *** [test] Error 1` lines after it are passed over.
+# found` or `run.sh: 3: pytest: not found`, a shell's `sh: pytest: command not found` or, for
+# busybox, `sh: pytest: not found`, and a Python launcher's `python3: No module named pytest`.
+# A test's own message (`FileNotFoundError: [Errno 2] No such file or directory: 'x'`,
+# `ModuleNotFoundError: No module named 'x'`) has no such form. make's own
+# `make: *** [test] Error 1` lines after it are passed over.
 _MISSING = re.compile(
     r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
+    r"|process_begin: CreateProcess\(NULL, (?P<winmade>[^\s,]+),?(?: .*)?\) failed\."
     r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
-    r"|(?:\S*/)?(?:ba|da|z)?sh: (?P<shelled>[^\s:]+): command not found"
-    r"|(?P<launcher>(?:\S*/)?python[\d.]*): No module named (?P<module>[\w.]+))$"
+    r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>[^\s:]+): (?:command )?not found"
+    r"|(?P<launcher>(?:\S*[/\\])?python[\d.]*(?:\.exe)?): No module named (?P<module>[\w.]+))$"
 )
+# GNU make on Windows says it in two lines: `process_begin: CreateProcess(NULL, <tool> ...)
+# failed.` and `make (e=2): <sentence>`. `e=2` is ERROR_FILE_NOT_FOUND in every language; the
+# sentence is localized, so only `e=2` is read (observed on a hosted Windows runner, 2026-10-06).
+_MAKE_E2 = re.compile(r"^make(?:\[\d+\])? \(e=2\):")
 # make's own lines after the tool's: its error line, and a nested make's directory lines.
 _MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: (?:\*\*\* |(?:Leaving|Entering) directory )")
+
+
+def _not_found(output: bytes) -> tuple[re.Match[str] | None, list[str]]:
+    """The runner's not-found line the output ends in, make's own lines after it aside, and the
+    lines before it; None where the output does not end in one."""
+
+    lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
+    while lines and _MAKE_ERROR.match(lines[-1]):
+        lines.pop()
+    if len(lines) >= 2 and _MAKE_E2.match(lines[-1]):
+        found = _MISSING.match(lines[-2])
+        if found is not None and found["winmade"]:
+            return found, lines[:-2]
+        return None, lines[:-1]
+    found = _MISSING.match(lines[-1]) if lines else None
+    if found is not None and found["winmade"]:
+        return None, lines[:-1]
+    return found, lines[:-1]
+
+
+def _tool_named(found: re.Match[str]) -> str:
+    return (
+        found["made"]
+        or found["winmade"]
+        or found["scripted"]
+        or found["shelled"]
+        or found["launcher"]
+        or ""
+    )
+
+
+def _quiet_before(found: re.Match[str], before: Sequence[str]) -> bool:
+    """Whether the lines before a not-found line are only make's directory lines and the echo of a
+    command that starts with the missing tool."""
+
+    tool = _tool_named(found)
+    for line in before:
+        echoed = line.split(" ", 1)[0] in (tool, Path(tool).name)
+        if not (echoed or _MAKE_ERROR.match(line)):
+            return False
+    return True
 
 
 def _missing_line(output: bytes) -> re.Match[str] | None:
@@ -622,18 +682,16 @@ def _missing_line(output: bytes) -> re.Match[str] | None:
     command that starts with the missing tool. Output before it means something else ran, and a
     missing last tool does not show that it passed."""
 
-    lines = [line.strip() for line in clean(output).splitlines() if line.strip()]
-    while lines and _MAKE_ERROR.match(lines[-1]):
-        lines.pop()
-    found = _MISSING.match(lines[-1]) if lines else None
-    if found is None:
-        return None
-    tool = found["made"] or found["scripted"] or found["shelled"] or found["launcher"] or ""
-    for before in lines[:-1]:
-        echoed = before.split(" ", 1)[0] in (tool, Path(tool).name)
-        if not (echoed or _MAKE_ERROR.match(before)):
-            return None
-    return found
+    found, before = _not_found(output)
+    return found if found is not None and _quiet_before(found, before) else None
+
+
+def ran_before_missing(output: bytes) -> bool:
+    """Whether the output ends in a not-found line that other output precedes: something else
+    ran, so a missing last tool, even at exit 126 or 127, is not the command's only word."""
+
+    found, before = _not_found(output)
+    return found is not None and not _quiet_before(found, before)
 
 
 def missing_tool(output: bytes) -> str | None:
@@ -645,7 +703,7 @@ def missing_tool(output: bytes) -> str | None:
         return None
     if found["module"]:
         return f"python -m {found['module']}"
-    return found["made"] or found["scripted"] or found["shelled"]
+    return _tool_named(found)
 
 
 # Exit code of the probe that finds a module missing; any other non-zero exit says nothing.
@@ -656,7 +714,7 @@ def confirmed_absent(
     target: Path, output: bytes, environment: Mapping[str, str] | None = None
 ) -> bool:
     """Whether the tool the last line names is in fact absent where the command ran, and not only
-    said to be: a name `shutil.which` does not find on that PATH, or a module the named Python
+    said to be: a name `programs.find` does not find on that PATH, or a module the named Python
     launcher cannot find. A command can print the line itself; then the tool is there, and the
     failure stands."""
 
@@ -664,13 +722,22 @@ def confirmed_absent(
     if found is None:
         return False
     # Done runs from the target's root, so an empty or relative entry names a folder of it.
-    entries = (environment if environment is not None else os.environ).get("PATH", "")
+    source = environment if environment is not None else os.environ
+    entries = source.get("PATH", "")
     path = os.pathsep.join(str((target / entry).resolve()) for entry in entries.split(os.pathsep))
+    # What the shell could find: on Windows a script with no extension, which Git's shell runs.
+    where = {"PATH": path}
+    # What a Windows lookup reads besides PATH: the extensions to try, and the system folder.
+    carried = ("PATHEXT", "SYSTEMROOT")
+    where |= {key: value for key, value in source.items() if key.upper() in carried}
     if not found["module"]:
-        tool = found["made"] or found["scripted"] or found["shelled"]
-        return shutil.which(tool, path=path) is None
+        tool = _tool_named(found)
+        if _folder_in(tool):
+            # A name with a folder is looked up as it stands, from the target's root.
+            return not (target / tool).is_file()
+        return programs.find(tool, where, extensionless=True) is None
     launcher = found["launcher"]
-    program = launcher if "/" in launcher else shutil.which(launcher, path=path)
+    program = launcher if _folder_in(launcher) else programs.find(launcher, where)
     if program is None or not Path(program).exists():
         # A launcher that is not there would have failed before it could print the line, so
         # the line is the command's own text, not a launcher's word.
@@ -713,6 +780,12 @@ def other_failure(output: bytes) -> bool:
     return bool(tests) or bool(_OTHER_FAILURE.search(text)) or len(levels) != len(set(levels))
 
 
+def _folder_in(name: str) -> bool:
+    """Whether a program's name holds a folder: `/` anywhere, and `\\` on Windows."""
+
+    return "/" in name or (os.name == "nt" and "\\" in name)
+
+
 def project_owned(target: Path, tool: str) -> bool:
     """Whether a tool `missing_tool` names is the project's own, so that its absence is the
     work's and not the hook's environment's: a path inside the target, relative or absolute, which
@@ -722,9 +795,11 @@ def project_owned(target: Path, tool: str) -> bool:
     package's folder included."""
 
     root = target.resolve()
-    if "/" in tool and not tool.startswith("python -m "):
+    if _folder_in(tool) and not tool.startswith("python -m "):
         path = Path(tool)
-        if not path.is_absolute():
+        # On Windows `/opt/x` has a root and no drive: it is not relative, and it names a place
+        # of the current drive, not a place inside the target.
+        if not (path.is_absolute() or path.root):
             return True
         resolved = path.resolve(strict=False)
         return resolved == root or root in resolved.parents
@@ -828,12 +903,10 @@ def shorten(text: str, limit: int = COMMAND_SHOWN) -> str:
 
 
 def _stop(process: subprocess.Popen[bytes]) -> None:
-    """Kill the command's whole process group, so nothing it started outlives the limit."""
+    """Kill the command's whole process group, on Windows its process tree, so nothing it
+    started outlives the limit."""
 
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except (ProcessLookupError, PermissionError):
-        process.kill()
+    programs.stop_tree(process)
     process.wait()
 
 
@@ -876,30 +949,48 @@ def _release(previous: Handlers, held: Sequence[int]) -> None:
         if callable(handler):
             handler(number, None)
         elif handler == signal.SIG_DFL:
-            os.kill(os.getpid(), number)
+            _die(number)
+
+
+def _die(number: int, windows: bool | None = None) -> NoReturn:
+    """End this process as its signal's default action would. Windows has no such action to
+    send: `os.kill` there ends the process at once with the signal's number as its exit code,
+    never running a `finally`, so a Ctrl-C is the exception Python raises for it and any other
+    signal exits with the shell's 128 plus its number."""
+
+    if not (os.name == "nt" if windows is None else windows):
+        os.kill(os.getpid(), number)
+    if number == signal.SIGINT:
+        raise KeyboardInterrupt
+    raise SystemExit(128 + number)
 
 
 def run_one(
     target: Path, line: str, seconds: float | None, environment: Mapping[str, str] | None = None
 ) -> Result:
     """Run one Done command from the target's root in its own process group, for at most
-    `seconds`, None for as long as it takes; its output, both streams, kept for the report. A
-    stopping signal that arrives while the command starts is acted on once it has started, so
-    its group is stopped too."""
+    `seconds`, None for as long as it takes; its output, both streams, kept for the report. The
+    line runs under a POSIX shell: `/bin/sh`, on Windows the `sh.exe` of Git for Windows; where
+    there is none the command reads `UNVERIFIED`, unheld. A stopping signal that arrives while
+    the command starts is acted on once it has started, so its group is stopped too."""
 
     started = time.monotonic()
+    shell = programs.posix_shell()
+    if shell is None:
+        why = "could not start: no POSIX shell; install Git for Windows, or put its sh.exe on PATH"
+        return Result(line, UNVERIFIED, 0.0, why, cause=ENVIRONMENT)
     with tempfile.TemporaryFile() as sink:
         held: list[int] = []
         previous = _hold(held)
         try:
             process = subprocess.Popen(
-                ["/bin/sh", "-c", line],
+                [shell, "-c", line],
                 cwd=target,
                 stdin=subprocess.DEVNULL,
                 stdout=sink,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
-                env=environment,
+                env=programs.shell_environment(shell, environment),
+                **programs.new_group(),
             )
         except OSError as error:
             _release(previous, held)
@@ -918,15 +1009,15 @@ def run_one(
             return Result(line, UNVERIFIED, elapsed, why, _tail(sink), TIME)
         except BaseException:
             # Stopped from outside, by a KeyboardInterrupt or a signal handler's exception: the
-            # command's group goes too, since it runs in its own session and the terminal's
-            # signal never reaches it.
+            # command's group goes too, since it runs in its own session (on Windows, its own
+            # process group) and the terminal's signal never reaches it.
             _stop(process)
             raise
         elapsed = time.monotonic() - started
         if code == 0:
             return Result(line, PASS, elapsed, code=code)
         tail = _tail(sink)
-        if code in NOT_RUN and not other_failure(tail):
+        if code in NOT_RUN and not other_failure(tail) and not ran_before_missing(tail):
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
         missing = missing_tool(tail)
@@ -1170,7 +1261,7 @@ def _unverified_head(last: Result, target: Path, timeout: int) -> str:
             f"finish-check UNVERIFIED: `{shown}` could not run in the hook's environment, which "
             "has the harness process's PATH and no activated virtual environment; nothing was held."
         )
-    quoted = shlex.quote(str(target))
+    quoted = paths.shell_path(target)
     return (
         f"finish-check UNVERIFIED: `{shown}` did not finish within {timeout - MARGIN_SECONDS} s, "
         f"{MARGIN_SECONDS} s before the hook's {timeout} s timeout; nothing was held. To give the "
@@ -1206,7 +1297,7 @@ def verdict_for(
             f"adopt measured Done {on} this checkout descends from: the same exit code, and no "
             "failure id its output names is new; so nothing was held." + limit + " A "
             "known command that passes leaves the record, and a later failure of it holds. "
-            f"`outcomebound adopt {shlex.quote(str(target))} --finish-check` measures Done again."
+            f"`outcomebound adopt {paths.shell_path(target)} --finish-check` measures Done again."
             + again
         )
         return told(report(head, results))
@@ -1276,7 +1367,7 @@ def check(
         return told(
             f"finish-check UNVERIFIED: the Done commands in {target / MANIFEST} are not the ones "
             "this hook was written for; nothing ran. "
-            f"Re-run `outcomebound adopt {shlex.quote(str(target))}`."
+            f"Re-run `outcomebound adopt {paths.shell_path(target)}`."
         )
     deadline = started + timeout - MARGIN_SECONDS
     before = tree_digest(target, digest, deadline)

@@ -53,7 +53,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import adapters, facts, finish_check, identity, walk
+from outcomebound_tools import adapters, facts, finish_check, identity, programs, walk
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
@@ -498,7 +498,15 @@ def _listed(root: Path) -> tuple[list[str] | None, str]:
 
     walked = "every file under the target was walked"
     try:
-        inside, answer, _ = _git_status(root, "rev-parse", "--is-inside-work-tree")
+        inside, answer, refusal = _git_status(root, "rev-parse", "--is-inside-work-tree")
+        if inside != 0 and b"dubious ownership" in refusal:
+            # Git's own refusal: the target belongs to another user. The engine never trusts a
+            # target for Git (that is the person's act), so it says what to run and walks.
+            return None, (
+                "Git refuses the target, owned by another user (dubious ownership), so "
+                f"{walked}; to list it by Git, trust it with `git config --global --add "
+                "safe.directory <the target>`"
+            )
         if inside != 0 or answer.strip() != b"true":
             return None, f"not a Git work tree, so {walked}"
         ignored, _, _ = _git_status(root, "check-ignore", "-q", ".")
@@ -1110,8 +1118,8 @@ def _harness_config(
 
 def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     """One read-only git command's exit status and both streams; a git that cannot run raises
-    `AuditError`. Git comes from PATH's absolute entries only, so the target cannot supply its
-    own."""
+    `AuditError`. Git comes from PATH's absolute entries only (`programs.require`), so the target
+    cannot supply its own, on Windows too."""
 
     inherited = {key: value for key, value in os.environ.items() if key not in _GIT_UNSET}
     inherited["PATH"] = os.pathsep.join(
@@ -1120,7 +1128,7 @@ def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     inherited["GIT_OPTIONAL_LOCKS"] = "0"
     try:
         completed = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            [programs.require("git", inherited), *GIT_READ_CONFIGURATION, *arguments],
             cwd=root,
             env=git_environment(inherited),
             stdin=subprocess.DEVNULL,

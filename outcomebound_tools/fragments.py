@@ -31,7 +31,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
-from outcomebound_tools import adapters, home
+from outcomebound_tools import adapters, home, textio
 from outcomebound_tools.mechanisms import MECHANISMS, unknown
 
 FAMILIES = ("stack", "setup")
@@ -224,6 +224,8 @@ def _slot_bodies(body: str, source: str) -> dict[str, str]:
 
 
 def parse_fragment(text: str, source: str = "<fragment>") -> Fragment:
+    # A fragment edited on Windows can carry CRLF and a byte-order mark; it parses as without.
+    text = textio.universal(text.removeprefix("\ufeff"))
     fields, body = _frontmatter(text, source)
     if not ID_RE.match(fields["id"]):
         raise FragmentError(f"{source}: id must be lowercase-hyphen, got {fields['id']!r}")

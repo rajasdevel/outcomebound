@@ -18,6 +18,7 @@ from outcomebound_tools.identity import (
     parse_managed_block,
 )
 from outcomebound_tools.validation import PlanError, load_plan
+from tests.portable import engine
 
 GARBAGE = (
     "",
@@ -250,7 +251,6 @@ def test_a_truncated_sentinel_inside_a_fence_is_still_only_documentation():
 
 
 ROOT = Path(__file__).resolve().parent.parent
-LAUNCHER = ROOT / "scripts/outcomebound"
 
 
 @pytest.mark.parametrize(
@@ -275,9 +275,7 @@ def test_adopt_refuses_a_host_with_a_truncated_sentinel_instead_of_appending(tmp
     (tmp_path / "AGENTS.md").write_text(host, encoding="utf-8")
     before = _tree(tmp_path)
 
-    result = subprocess.run(
-        [str(LAUNCHER), "adopt", str(tmp_path)], capture_output=True, text=True, cwd=ROOT
-    )
+    result = subprocess.run(engine("adopt", tmp_path), capture_output=True, text=True, cwd=ROOT)
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert "malformed managed block sentinel" in result.stderr

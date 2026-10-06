@@ -20,8 +20,12 @@ we can agree on the aim before you write the code.
 ## Your first pull request
 
 1. **Fork and clone.** Fork the repository on GitHub, and clone your fork. You need Python 3.10
-   or later, Git and a POSIX `sh`. Put the clone's `scripts/outcomebound` on your `PATH`. It
-   runs the engine of that checkout, so the code that you edit is the code that runs.
+   or later, Git and a POSIX `sh`, and `make` for the checks. Put the clone's
+   `scripts/outcomebound` on your `PATH`. It runs the engine of that checkout, so the code that
+   you edit is the code that runs. It picks the first `python3` or `python` on an absolute
+   `PATH` entry that is Python 3.10 or later. On Windows, work in Git Bash (it brings `sh`);
+   `make` is not part of Git for Windows, so install it, or run the commands of the `Makefile`
+   by hand. That route is UNVERIFIED on Windows: CI runs the test suite there, not the launcher.
 2. **Branch.** Make one branch from `main` for each change.
 3. **Change.** If the change alters behavior, add or change a test
    ([Writing a test](#writing-a-test)). Do not edit `CHANGELOG.md`: the release writes its

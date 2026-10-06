@@ -1,15 +1,16 @@
 """The one safe file writer every engine route writes a target through.
 
-`write` holds three properties: no symlink anywhere on a destination's path, every
-write staged with O_EXCL, fsynced and renamed over its destination, and a refusal
-whenever a destination's bytes are not the bytes its caller read. Nothing here
-recovers an interrupted run; the target's Git history is the undo.
+`write` holds three properties: no symlink anywhere on a destination's path (on Windows, no
+junction either, and no name Windows cannot hold), every write staged with O_EXCL, fsynced and
+renamed over its destination, and a refusal whenever a destination's bytes are not the bytes its
+caller read. Nothing here recovers an interrupted run; the target's Git history is the undo.
 """
 
 from __future__ import annotations
 
 import os
 import stat
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -17,6 +18,9 @@ from outcomebound_tools import paths
 
 STAGE_SUFFIX = ".outcomebound-stage"
 NEW_FILE_MODE = 0o644
+# On Windows a rename onto a file that another process has open fails until it lets go.
+REPLACE_TRIES = 5
+REPLACE_WAIT = 0.1
 
 
 class WriteError(ValueError):
@@ -27,9 +31,13 @@ def destination(root: Path, relative: str) -> Path:
     """``root``/``relative``, refused when the path is unbounded or crosses a symlink."""
 
     try:
-        return paths.resolve_bounded(root, relative)
+        resolved = paths.resolve_bounded(root, relative)
     except paths.PathError as error:
         raise WriteError(str(error)) from error
+    unwritable = paths.windows_refusal(relative)
+    if unwritable is not None:
+        raise WriteError(f"{relative}: {unwritable}")
+    return resolved
 
 
 def current(root: Path, relative: str) -> bytes | None:
@@ -90,9 +98,29 @@ def _replace(path: Path, content: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(stage, mode)
-        os.replace(stage, path)
+        _move(stage, path)
     finally:
         stage.unlink(missing_ok=True)
+
+
+def _move(stage: Path, path: Path) -> None:
+    """Rename the staged file over its destination. On Windows a scanner or an editor that has the
+    destination open, or just closed the stage, makes the rename fail for a moment, so it is tried
+    a few times before the refusal; a read-only destination fails every time."""
+
+    for _ in range(REPLACE_TRIES - 1 if paths.on_windows() else 0):
+        if _replaced(stage, path):
+            return
+        time.sleep(REPLACE_WAIT)
+    os.replace(stage, path)
+
+
+def _replaced(stage: Path, path: Path) -> bool:
+    try:
+        os.replace(stage, path)
+    except PermissionError:
+        return False
+    return True
 
 
 def _prune(root: Path, directory: Path) -> None:

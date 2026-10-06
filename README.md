@@ -81,10 +81,15 @@ loosening visible, and your branch protection is what prevents one.
 
 ## Try it
 
-You need Python 3.10 or later, a POSIX `sh`, and a Git work tree: Git is the undo. Native
-Windows is not tested. The tool installs for Claude Code, Codex, Cursor, Gemini CLI and Amp.
-Another harness can use `--harness generic`, and then you check that it loads the files. pi is
-not verified yet, so `adopt` refuses it ([references/portability.md](references/portability.md)).
+You need Python 3.10 or later, and a Git work tree: Git is the undo. OutcomeBound runs on
+Windows (PowerShell, cmd or Git Bash), macOS and Linux, and in containers, such as Debian and
+Alpine images. CI runs the test suite on a hosted Windows runner and in a Debian and an Alpine
+container. On Windows, install [Git for Windows](https://gitforwindows.org): `adopt` needs Git,
+and the finish check runs your Done commands with the `sh` of Git for Windows. On macOS and
+Linux the finish check uses the system `sh`. The tool installs for Claude Code, Codex, Cursor,
+Gemini CLI and Amp. Another harness can use `--harness generic`, and then you check that it
+loads the files. pi is not verified yet, so `adopt` refuses it
+([references/portability.md](references/portability.md)).
 
 ```sh
 uv tool install git+https://github.com/rajasdevel/outcomebound@v1.3.0
@@ -92,8 +97,13 @@ cd your-repo
 outcomebound adopt . --detect
 ```
 
-`pipx install` and `pip install` into a virtual environment work too. `pip install --user` does
-not, because `outcomebound` runs Python isolated (`-I`), which ignores the user site.
+`pipx install` and `pip install` into a virtual environment work too. The install commands are the
+same in PowerShell, cmd and a POSIX shell. The commands that OutcomeBound prints for you to paste
+are for POSIX shells and PowerShell, not cmd. They give an `outcomebound` program: an `.exe` on
+Windows. `pip install --user` does not work, because `outcomebound` runs Python isolated (`-I`),
+which ignores the user site. Where `PYTHONPATH` is set in the environment that runs
+OutcomeBound, it must hold absolute folders only: a relative entry such as `.` or `src` lets a
+file of the repository replace the command's first step.
 
 `--detect` writes nothing. It prints the install command that your files suggest, for example
 `outcomebound adopt <your-repo> --harness claude-code --fragments python,commands --done 'python3 -m pytest'`

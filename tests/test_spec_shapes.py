@@ -5,7 +5,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests.portable import needs_bash, run_bash
+
 ROOT = Path(__file__).resolve().parent.parent
+NEW_SPEC = ROOT / "scripts" / "new-spec.sh"
 
 
 def _check(path):
@@ -39,7 +42,11 @@ def test_generic_type_is_not_mistaken_for_template_residue(tmp_path):
 
 def test_known_placeholder_or_heading_only_scaffold_fails(tmp_path):
     design = tmp_path / "design.md"
-    design.write_text("# <slug> — design\n\n## Outcome\n\n<!-- observable result -->\n")
+    design.write_text(
+        "# <slug> — design\n\n## Outcome\n\n<!-- observable result -->\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     result = _check(design)
     assert result.returncode == 1
     assert "placeholder" in result.stderr and "no authored content" in result.stderr
@@ -62,14 +69,16 @@ def test_missing_target_returns_a_clean_failure(tmp_path):
     assert "Traceback" not in result.stderr
 
 
+@needs_bash
 def test_new_spec_defaults_to_design_only_and_scaffold_is_incomplete(tmp_path):
     (tmp_path / "docs/specs").mkdir(parents=True)
-    result = subprocess.run(
-        ["bash", str(ROOT / "scripts/new-spec.sh"), "shape-probe"],
+    result = run_bash(
+        NEW_SPEC,
+        "shape-probe",
         capture_output=True,
         text=True,
         cwd=tmp_path,
-        env={**os.environ, "OUTCOMEBOUND_HOME": str(ROOT)},
+        env={**os.environ, "OUTCOMEBOUND_HOME": ROOT.as_posix()},
     )
     assert result.returncode == 0, result.stderr
     design = tmp_path / "docs/specs/shape-probe/design.md"
@@ -78,10 +87,13 @@ def test_new_spec_defaults_to_design_only_and_scaffold_is_incomplete(tmp_path):
     assert _check(design).returncode == 1
 
 
+@needs_bash
 def test_new_spec_adds_plan_only_when_selected(tmp_path):
     (tmp_path / "docs/specs").mkdir(parents=True)
-    result = subprocess.run(
-        ["bash", str(ROOT / "scripts/new-spec.sh"), "planned", "--with-plan"],
+    result = run_bash(
+        NEW_SPEC,
+        "planned",
+        "--with-plan",
         capture_output=True,
         text=True,
         cwd=tmp_path,
@@ -107,7 +119,7 @@ def test_nested_spec_directories_are_checked(tmp_path):
     (nested / "design.md").write_text("# <slug> — design\n", encoding="utf-8")
     result = _check_dir(tmp_path)
     assert result.returncode == 1
-    assert "nested-spec/design.md" in result.stderr
+    assert os.path.join("nested-spec", "design.md") in result.stderr
 
 
 def test_spec_directory_without_design_or_plan_is_reported(tmp_path):
@@ -171,17 +183,15 @@ def test_node_modules_and_hidden_dirs_are_excluded_from_the_walk(tmp_path):
     assert "visible-empty" in visible_result.stderr
 
 
+@needs_bash
 def test_new_spec_accepts_a_dotted_slug_and_an_explicit_target(tmp_path):
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
-    result = subprocess.run(
-        [
-            "bash",
-            str(ROOT / "scripts/new-spec.sh"),
-            "payments-api-v2.1",
-            "--with-plan",
-            str(elsewhere),
-        ],
+    result = run_bash(
+        NEW_SPEC,
+        "payments-api-v2.1",
+        "--with-plan",
+        elsewhere,
         capture_output=True,
         text=True,
         cwd=tmp_path,
@@ -192,9 +202,12 @@ def test_new_spec_accepts_a_dotted_slug_and_an_explicit_target(tmp_path):
     assert not (tmp_path / "docs").exists()
 
 
+@needs_bash
 def test_new_spec_still_rejects_an_unknown_option(tmp_path):
-    result = subprocess.run(
-        ["bash", str(ROOT / "scripts/new-spec.sh"), "probe", "--with-notes"],
+    result = run_bash(
+        NEW_SPEC,
+        "probe",
+        "--with-notes",
         capture_output=True,
         text=True,
         cwd=tmp_path,
@@ -204,9 +217,13 @@ def test_new_spec_still_rejects_an_unknown_option(tmp_path):
     assert not (tmp_path / "docs").exists()
 
 
+@needs_bash
 def test_new_spec_rejects_more_than_one_target(tmp_path):
-    result = subprocess.run(
-        ["bash", str(ROOT / "scripts/new-spec.sh"), "probe", str(tmp_path), str(tmp_path / "b")],
+    result = run_bash(
+        NEW_SPEC,
+        "probe",
+        tmp_path,
+        tmp_path / "b",
         capture_output=True,
         text=True,
         cwd=tmp_path,

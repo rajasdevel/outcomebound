@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import errno
 import hashlib
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import unicodedata
@@ -28,7 +28,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
-from outcomebound_tools import fileplan, paths
+from outcomebound_tools import fileplan, paths, programs
 from outcomebound_tools.gitenv import git_environment
 
 REPOSITORY = "https://github.com/rajasdevel/outcomebound-research"
@@ -83,6 +83,12 @@ GIT_CONFIGURATION = (
     "protocol.https.allow=always",
 )
 UNREADABLE = (OSError, RuntimeError, ValueError)
+# Git runs without the user's and the system's configuration, so a failure that those settings
+# would have cured (a proxy, a certificate store) can be ours; the person has this way round it.
+OWN_GIT = (
+    "git ran without your Git configuration; to use it, clone the repository yourself and set "
+    f"{ENVIRONMENT} to the folder"
+)
 
 
 class Refusal(Exception):
@@ -125,6 +131,17 @@ def clone_root(path: str = INDEX) -> Path:
         ) from error
 
 
+def _pointer(link: Path) -> Path | None:
+    """The folder a pointer file names, where `link` is one: a small regular file whose first
+    line is an absolute path. `clone` writes one on Windows, where a link needs rights that a
+    normal account lacks."""
+
+    if link.is_symlink() or not link.is_file():
+        return None
+    first = (_small_text(link) or "").strip().splitlines()[:1]
+    return Path(first[0]) if first and os.path.isabs(first[0]) else None
+
+
 def _clone_root(path: str) -> Path:
     override = _overridden()
     if override:
@@ -139,7 +156,7 @@ def _clone_root(path: str) -> Path:
         raise _not_configured(
             f"no clone configured: {ENVIRONMENT} is unset and {LINK_TEXT} does not exist", path
         )
-    root = link.resolve()
+    root = _pointer(link) or link.resolve()
     if not root.is_dir():
         raise _not_configured(f"no clone configured: {LINK_TEXT} points at nothing", path)
     if not (root / INDEX).is_file():
@@ -272,7 +289,8 @@ def show(path: str) -> int:
         data = paths.read_bounded(root, path)
     except paths.PathError as error:
         raise Refusal(f"{path}: {_why_not(root, path, str(error))}") from error
-    text = data.decode("utf-8", "replace")
+    # LF whatever the clone's checkout has, so that one file has one digest on every machine.
+    text = data.decode("utf-8", "replace").replace("\r\n", "\n")
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
     commit, day = _commit_and_day(root)
     # The bytes are the working tree's, which Git was not asked to compare with the commit.
@@ -320,12 +338,14 @@ def child_environment(inherited: Mapping[str, str] | None = None) -> dict[str, s
 def _run_git(arguments: list[str]) -> str | None:
     """Run Git as an argument list, never through a shell; None on success, else why not."""
 
+    environment = child_environment()
     try:
         done = subprocess.run(
-            ["git", *arguments],
-            env=git_environment(child_environment()),
+            [programs.require("git", environment), *arguments],
+            env=git_environment(environment),
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             check=False,
             timeout=GIT_SECONDS,
         )
@@ -336,7 +356,7 @@ def _run_git(arguments: list[str]) -> str | None:
     if done.returncode == 0:
         return None
     output = f"{done.stdout or ''}{done.stderr or ''}".strip()
-    return f"git exited {done.returncode}\n{output[-TAIL:]}".strip()
+    return f"git exited {done.returncode}\n{output[-TAIL:]}\n{OWN_GIT}".strip()
 
 
 def _inside_work_tree(directory: Path) -> bool:
@@ -354,8 +374,11 @@ def _check_destination(destination: Path) -> None:
             "the clone's AGENTS.md; name a folder outside any project"
         )
     link = _link()
-    if os.path.lexists(link) and not link.is_symlink():
-        raise Refusal(f"clone: {LINK_TEXT} exists and is not a symlink; move it aside first")
+    if os.path.lexists(link) and not link.is_symlink() and _pointer(link) is None:
+        raise Refusal(
+            f"clone: {LINK_TEXT} exists and is neither a symlink nor a pointer file; "
+            "move it aside first"
+        )
 
 
 def _point_link(destination: Path) -> None:
@@ -364,19 +387,33 @@ def _point_link(destination: Path) -> None:
     staged = link.with_name(f"research.{os.getpid()}.outcomebound-stage")
     staged.unlink(missing_ok=True)
     try:
-        staged.symlink_to(destination)
+        if paths.on_windows():
+            # A symbolic link needs Administrator rights or Developer Mode there, and a junction
+            # has no call in the standard library's public interface: a pointer file needs
+            # neither, and `clone_root` reads it as it reads the link.
+            staged.write_text(f"{destination.as_posix()}\n", encoding="utf-8", newline="\n")
+            if link.is_symlink():
+                link.unlink()
+        else:
+            staged.symlink_to(destination)
         os.replace(staged, link)
     finally:
         staged.unlink(missing_ok=True)
 
 
+def _command(arguments: list[str]) -> str:
+    """The Git command line a preview shows, quoted for the shell it is read in."""
+
+    return " ".join(paths.shell_word(word) for word in ["git", *arguments])
+
+
 def clone(destination_text: str, accept: bool) -> int:
     destination = Path(os.path.abspath(os.path.expanduser(destination_text)))
     _check_destination(destination)
-    arguments = [*GIT_CONFIGURATION, "clone", CLONE_URL, str(destination)]
-    print(f"{'runs' if accept else 'would run'}: {shlex.join(['git', *arguments])}")
+    arguments = [*GIT_CONFIGURATION, "clone", CLONE_URL, destination.as_posix()]
+    print(f"{'runs' if accept else 'would run'}: {_command(arguments)}")
     if not accept:
-        print(f"would link: {LINK_TEXT} -> {destination}")
+        print(f"would link: {LINK_TEXT} -> {destination.as_posix()}")
         if _overridden():
             print(f"{ENVIRONMENT} is set and overrides the link: printing reads that folder")
         print("nothing cloned: pass --accept")
@@ -393,7 +430,7 @@ def clone(destination_text: str, accept: bool) -> int:
         _point_link(destination)
     except OSError as error:
         raise Refusal(f"clone: cloned, but the link was not made: {error}") from error
-    print(f"linked: {LINK_TEXT} -> {destination}")
+    print(f"linked: {LINK_TEXT} -> {destination.as_posix()}")
     return 0
 
 
@@ -401,8 +438,8 @@ def pull(accept: bool) -> int:
     root = clone_root()
     if _git_dir(root) is None:
         raise Refusal(f"pull: {root} has no .git, so it is not a Git clone")
-    arguments = [*GIT_CONFIGURATION, "-C", str(root), "pull", "--ff-only", CLONE_URL, "main"]
-    print(f"{'runs' if accept else 'would run'}: {shlex.join(['git', *arguments])}")
+    arguments = [*GIT_CONFIGURATION, "-C", root.as_posix(), "pull", "--ff-only", CLONE_URL, "main"]
+    print(f"{'runs' if accept else 'would run'}: {_command(arguments)}")
     if not accept:
         print("nothing pulled: pass --accept")
         return 0
@@ -554,7 +591,9 @@ def finding(options: argparse.Namespace) -> dict[str, str]:
 
 def finding_bytes(fields: dict[str, str]) -> bytes:
     document = {"version": FORMAT_VERSION, **fields}
-    data = (json.dumps(document, sort_keys=True, ensure_ascii=False, indent=2) + "\n").encode()
+    data = (json.dumps(document, sort_keys=True, ensure_ascii=False, indent=2) + "\n").encode(
+        "utf-8"
+    )
     if len(data) > FINDING_MAX:
         raise Refusal(f"ingest: the finding is larger than {FINDING_MAX // 1024} KiB")
     return data
@@ -603,7 +642,7 @@ def ingest(options: argparse.Namespace) -> int:
     except (fileplan.WriteError, OSError) as error:
         raise Refusal(f"ingest: {error}") from error
     print(f"issue: {issue_link(fields)}")
-    print(f"{'unchanged' if present is not None else 'wrote'}: {project / relative}")
+    print(f"{'unchanged' if present is not None else 'wrote'}: {(project / relative).as_posix()}")
     print(
         "open the issue link in a browser to send the finding: that, or a pull request, is how it "
         "reaches the research repository; the file is a local record, which "
@@ -683,6 +722,15 @@ def _verb_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _reader_closed(problem: OSError) -> bool:
+    """Whether `problem` is a write to a pipe whose reader has closed it: `BrokenPipeError`, which
+    is what POSIX raises. On Windows the C runtime reports the same event as `EINVAL`."""
+
+    return isinstance(problem, BrokenPipeError) or (
+        paths.on_windows() and problem.errno == errno.EINVAL
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     try:
@@ -700,7 +748,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Refusal as problem:
         print(f"research: {problem}", file=sys.stderr)
         return 1
-    except BrokenPipeError:
+    except OSError as problem:
+        if not _reader_closed(problem):
+            raise
         # The reader closed the pipe (`| head`): stop quietly, not with Python's flush complaint.
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         return 0

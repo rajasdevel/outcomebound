@@ -13,19 +13,18 @@ from pathlib import Path
 
 import pytest
 
+from tests.portable import needs_bash, run_bash
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = sorted((ROOT / "scripts").glob("*.sh"))
 PY_SCRIPTS = sorted(path for path in (ROOT / "scripts").glob("*.py") if os.access(path, os.X_OK))
 
 
 def _run(script: Path, flag: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["bash", str(script), flag],
-        capture_output=True,
-        text=True,
-    )
+    return run_bash(script, flag, capture_output=True, text=True, encoding="utf-8")
 
 
+@needs_bash
 @pytest.mark.parametrize("script", SCRIPTS, ids=[p.name for p in SCRIPTS])
 @pytest.mark.parametrize("flag", ["-h", "--help"])
 def test_help_exits_zero_with_usage_and_no_traceback(script, flag):
@@ -63,6 +62,7 @@ def test_every_executable_python_script_answers_help_with_usage(
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         check=False,
     )
     combined = result.stdout + result.stderr

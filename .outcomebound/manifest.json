@@ -24,7 +24,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "cdec19572d84c06086ac1c5f0d1f228b3c12d50aba92c507380bf2c1d21a8fa0",
+        ".github/workflows/ci.yml": "e8bbd13aecb2bdfcf6402daa8a4c74ad3a1e06902b593bbd761cfa241f2138d0",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
@@ -37,7 +37,7 @@
       "style": [
         "ste"
       ],
-      "sha256": "786489bf5106c77c7e3ec58e572038a24394207014c142170e276d2321118b9f"
+      "sha256": "5b8ea288010cfcb41d1f19d354a5b35049a25a74178e92995e340f666f69c834"
     },
     {
       "kind": "block",

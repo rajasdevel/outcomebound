@@ -18,12 +18,14 @@ is one named line and exit 1, a `PlanningError` one named line and exit 2.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 
+from outcomebound_tools import paths
 from outcomebound_tools.tickets_brief import brief
 from outcomebound_tools.tickets_check import check
 from outcomebound_tools.tickets_declaration import Declaration, load_declaration
@@ -289,6 +291,27 @@ _EXIT_BY_STOP: Mapping[type[Refusal | PlanningError], int] = MappingProxyType(
 )
 
 
+# A ticket as a person types it: a number, `#<n>`, or `<owner>/<name>#<n>`.
+_TICKET = re.compile(r"(?:[\w.-]+/[\w.-]+#|#)?\d+")
+
+
+def _order_hint(options: argparse.Namespace) -> str:
+    """What to add to a missing declaration when `brief` was given its ticket first: its target
+    is not a folder and reads as a ticket, so the two arguments are most likely swapped."""
+
+    target = options.target
+    if not hasattr(options, "ticket") or Path(target).is_dir() or not _TICKET.fullmatch(target):
+        return ""
+    command = "outcomebound tickets brief <target> <ticket>"
+    if Path(options.ticket).is_dir():
+        words = (paths.shell_word(options.ticket), paths.shell_word(target))
+        command = f"outcomebound tickets brief {' '.join(words)}"
+    return (
+        f"; {target} is not a folder but reads as a ticket, and `brief` takes the target first, "
+        f"then the ticket: `{command}`"
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run one verb and return the process's exit code (0, 1 or 2)."""
 
@@ -302,7 +325,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.verbs[options.verb].error(refused)
     try:
         target = Path(options.target)
-        declaration = load_declaration(target)
+        try:
+            declaration = load_declaration(target)
+        except Refusal as missing:
+            if missing.code != "DECLARATION_MISSING":
+                raise
+            raise Refusal(missing.code, missing.text + _order_hint(options)) from None
         outcome = VERBS[options.verb](target, declaration, options)
     except (Refusal, PlanningError) as stopped:
         sys.stderr.write(f"{stopped.code}: {stopped.text}\n")
