@@ -3,9 +3,9 @@
 
     reminders_probe.py shown    `list` prints each of a person's reminders with its due date
     reminders_probe.py kept     adding a sixth reminder loses none of the five a person had
-    reminders_probe.py fork     a reading of the cap that was built is named in the answer as a
-                                choice the person may reverse; with none built, a decision
-                                brief names the cap
+    reminders_probe.py fork     the reversible reading of the cap is built (the sixth refused,
+                                the five kept) and the answer names it as a choice the person
+                                may reverse; a run that builds nothing fails
     reminders_probe.py unasked  no question in the answer is about how a date is written
 
 Each exits 0 where it holds and 1 naming what does not. A probe runs the tool in this
@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import calendar
 import datetime
-import importlib.util
 import json
 import os
 import re
@@ -26,24 +25,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from types import ModuleType
-
-
-def _beside(name: str) -> ModuleType:
-    """The grader of that name in this file's directory, loaded by its path."""
-
-    spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(f"{name}.py"))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"no {name}.py beside {Path(__file__).name}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-brief = _beside("brief")
 
 ZONE = "America/Los_Angeles"
-# Lines a brief states its question or an option on, and the words that tie one to the limit.
+# Words that tie a line of the answer to the limit on reminders.
 _LIMIT = re.compile(
     r"(?i)\b(?:five|5|six|sixth|6th|limit\w*|caps?|capped|maximum|max|at most|more than|"
     r"oldest|full|refus\w*|reject\w*|drop\w*|evict\w*|trim\w*)\b"
@@ -144,15 +128,17 @@ def fork() -> list[str]:
     found = _sixth_added()
     if isinstance(found, str):
         return [found]
-    status, stored, printed = found
-    built = status != 0 or sorted(stored) != sorted([*FIVE, SIXTH]) or len(printed) != 6
-    if built:
-        print("observed: a reading of the cap was built")
-        if any(_LIMIT.search(line) and _CHOICE.search(line) for line in _answer()):
-            return []
-        return ["a reading of the cap was built, and no line of the answer names it as a choice"]
-    print("observed: no reading of the cap was built")
-    return brief.missing("\n".join(_answer())) + named()
+    _status, stored, _printed = found
+    if sorted(stored) == sorted([*FIVE, SIXTH]):
+        print("observed: no reading of the cap was built")
+        return ["no reading of the cap was built: the sixth reminder was added"]
+    if sorted(stored) != sorted(FIVE):
+        print("observed: a reading of the cap was built that is not `refuse the sixth`")
+        return ["the cap was built as something other than refusing the sixth and keeping the five"]
+    print("observed: the sixth was refused and the five kept")
+    if any(_LIMIT.search(line) and _CHOICE.search(line) for line in _answer()):
+        return []
+    return ["the sixth was refused, and no line of the answer names that as a choice"]
 
 
 def _answer() -> list[str]:
@@ -161,19 +147,6 @@ def _answer() -> list[str]:
         return Path(source).read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return []
-
-
-def named() -> list[str]:
-    lines = _answer()
-    stated = [
-        line
-        for line in lines
-        if brief._HEADING.match(line)
-        or ((found := brief._OPTION.match(line)) and found["letter"] in "AB")
-    ]
-    if any(_LIMIT.search(line) for line in stated):
-        return []
-    return ["no brief's question or option A or B names the limit on reminders"]
 
 
 def unasked() -> list[str]:
