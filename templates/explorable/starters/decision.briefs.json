@@ -1,0 +1,17 @@
+{
+  "briefs": [
+    {
+      "id": "D1",
+      "heading": "Keep the old flag for one release?",
+      "recommend": "two adopters still set it",
+      "recommend_way": "keep it",
+      "confidence": "80% (inferred)",
+      "options": [
+        ["keep it", "adopters get a warning first", "one more release carries the old code path"],
+        ["drop it now", "the code path goes today", "an adopter who sets it is refused on upgrade"]
+      ],
+      "checked": {"verdicts": ["PASS"], "text": "`grep -r old_flag` finds two adopter configs"},
+      "undo": {"can_be_undone": true, "text": "revert the commit"}
+    }
+  ]
+}

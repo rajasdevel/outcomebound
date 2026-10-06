@@ -377,6 +377,20 @@
     "-q",
     "tests/test_spec_shapes.py"
    ]
+  },
+  {
+   "name": "explorable",
+   "risk": "an explorable page is built or passed with a shell, a load or a part the engine should refuse, or a browser run leaves a process behind or reads a result wrong",
+   "kind": "test",
+   "required": true,
+   "command": [
+    "python3",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_explorable.py",
+    "tests/test_decision_brief_html.py"
+   ]
   }
  ]
 }
