@@ -162,6 +162,21 @@ def _trees() -> dict[str, ast.Module]:
     }
 
 
+def _names_git(first: ast.expr) -> bool:
+    """Whether an argv's first word is `"git"`, or `programs.require("git")`, which finds it on
+    PATH's absolute entries."""
+
+    if isinstance(first, ast.Constant):
+        return first.value == "git"
+    return (
+        isinstance(first, ast.Call)
+        and isinstance(first.func, ast.Attribute)
+        and isinstance(first.func.value, ast.Name)
+        and (first.func.value.id, first.func.attr) == ("programs", "require")
+        and [arg.value for arg in first.args if isinstance(arg, ast.Constant)] == ["git"]
+    )
+
+
 def _imported(tree: ast.Module) -> set[str]:
     """Every module this file imports: the top-level name, and the engine's own."""
 
@@ -238,7 +253,7 @@ def test_the_ticket_engine_runs_only_git() -> None:
         argv = node.args[0]
         assert isinstance(argv, ast.List) and argv.elts, "a git call with no argv list"
         first = argv.elts[0]
-        assert isinstance(first, ast.Constant) and first.value == "git", ast.dump(first)
+        assert _names_git(first), ast.dump(first)
 
 
 def test_the_ticket_engine_opens_no_network() -> None:

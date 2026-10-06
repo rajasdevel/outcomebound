@@ -24,7 +24,10 @@ from typing import Any
 
 import pytest
 
-from outcomebound_tools import adopt, facts, fileplan, finish_check, fragments, identity
+from outcomebound_tools import adopt, facts, fileplan, finish_check, fragments, identity, paths
+from outcomebound_tools.declared_tests import PYTEST
+from tests.portable import WINDOWS, engine, needs_symlinks, write
+from tests.processes import running
 
 ROOT = Path(__file__).resolve().parent.parent
 GIT = shutil.which("git") or "git"
@@ -56,7 +59,7 @@ def repo(path: Path, files: dict[str, str] | None = None) -> Path:
     subprocess.run([GIT, "init", "-q", str(path)], check=True)
     for name, text in (files or {}).items():
         (path / name).parent.mkdir(parents=True, exist_ok=True)
-        (path / name).write_text(text, encoding="utf-8")
+        write(path / name, text)
     return path
 
 
@@ -122,8 +125,8 @@ def engine_copy(tmp_path: Path) -> Path:
 def change_kernel(source: Path, version: str) -> None:
     template = source / adopt.KERNEL_TEMPLATE
     text = template.read_text(encoding="utf-8")
-    template.write_text(text.replace("not least work.", "not least work, now."), encoding="utf-8")
-    (source / "VERSION").write_text(version + "\n", encoding="utf-8")
+    write(template, text.replace("not least work.", "not least work, now."))
+    write(source / "VERSION", version + "\n")
 
 
 def sha(data: bytes) -> str:
@@ -302,7 +305,7 @@ def test_an_edited_owned_block_is_refused_and_force_replaces_it(
     assert run(capsys, str(target), "--harness", "codex")[0] == 0
     agents = target / "AGENTS.md"
     edited = agents.read_text(encoding="utf-8").replace("Smallest complete", "Largest complete")
-    agents.write_text(edited, encoding="utf-8")
+    write(agents, edited)
 
     code, _, err = run(capsys, str(target))
 
@@ -334,11 +337,11 @@ def edit_local(target: Path, fragment: str, block: str) -> str:
     installed pointers block to `block`; returns AGENTS.md as edited."""
 
     local = target / adopt.LOCAL_FRAGMENT
-    local.write_text(local.read_text(encoding="utf-8").replace(DISTINGUISH, fragment), "utf-8")
+    write(local, local.read_text(encoding="utf-8").replace(DISTINGUISH, fragment))
     agents = target / "AGENTS.md"
     text = agents.read_text(encoding="utf-8")
     assert text.count(DISTINGUISH) == 1
-    agents.write_text(text.replace(DISTINGUISH, block), encoding="utf-8")
+    write(agents, text.replace(DISTINGUISH, block))
     return agents.read_text(encoding="utf-8")
 
 
@@ -362,7 +365,7 @@ def test_a_block_edited_to_what_this_install_writes_needs_no_force(
     assert code == 1 and states(out)[pointers] == "stale"
     assert f"stale    {pointers}: {adopt.UNRECORDED}" in out.splitlines()
     assert next_lines(out) == [
-        f"next: outcomebound adopt {shlex.quote(str(target))} makes every record current"
+        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
     ]
 
     code, out, err = run(capsys, str(target))
@@ -407,7 +410,7 @@ def without_frame(target: Path) -> None:
     document = manifest(target)
     for record in document["artifacts"]:
         record.pop("frame", None)
-    (target / adopt.MANIFEST).write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    write(target / adopt.MANIFEST, json.dumps(document, indent=2) + "\n")
 
 
 def render_anew(source: Path) -> None:
@@ -417,7 +420,7 @@ def render_anew(source: Path) -> None:
     path = source / "fragments/setup/commands.md"
     text = path.read_text(encoding="utf-8")
     assert text.count(COMMANDS_CONDITION) == 1
-    path.write_text(text.replace(COMMANDS_CONDITION, f"{COMMANDS_CONDITION} later"), "utf-8")
+    write(path, text.replace(COMMANDS_CONDITION, f"{COMMANDS_CONDITION} later"))
 
 
 def rendered_lines(out: str) -> list[str]:
@@ -503,7 +506,7 @@ def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_rele
     assert states(out)[pointers] == "stale", out
     assert f"stale    {pointers}: {adopt.FROM_SOURCE}" in out.splitlines()
     assert next_lines(out) == [
-        f"next: outcomebound adopt {shlex.quote(str(target))} makes every record current"
+        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
     ]
 
     code, out, err = run(capsys, str(target), source=source)
@@ -532,7 +535,7 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
     if shape == "frame-edited":
         agents = target / "AGENTS.md"
         edited = edited.replace("- when writing, changing or judging a test", "- when testing")
-        agents.write_text(edited, encoding="utf-8")
+        write(agents, edited)
     else:
         without_frame(target)
     render_anew(source)
@@ -562,11 +565,11 @@ def test_the_local_fragments_history_is_read_where_the_install_is_a_subfolder(
     local = target / adopt.LOCAL_FRAGMENT
     local.parent.mkdir(parents=True)
     first = local_fragment()
-    local.write_text(first, encoding="utf-8")
+    write(local, first)
     commit_all(work_tree)
     second = first.replace(DISTINGUISH, "**Distinguish** — committed ≠ pushed here.")
     assert second != first
-    local.write_text(second, encoding="utf-8")
+    write(local, second)
     commit_all(work_tree)
     monkeypatch.chdir(tmp_path)
 
@@ -584,9 +587,9 @@ def test_a_file_edited_to_what_this_install_writes_needs_no_force(
     target = repo(tmp_path / "t")
     assert run(capsys, str(target), source=source)[0] == 0
     shipped = source / "skills/decision-brief/SKILL.md"
-    shipped.write_text(shipped.read_text(encoding="utf-8") + "\nOne more line.\n", "utf-8")
+    write(shipped, shipped.read_text(encoding="utf-8") + "\nOne more line.\n")
     skill = ".outcomebound/skills/decision-brief/SKILL.md"
-    (target / skill).write_text("mine\n", encoding="utf-8")
+    write(target / skill, "mine\n")
 
     code, _, err = run(capsys, str(target), source=source)
 
@@ -639,7 +642,7 @@ def test_an_install_reports_the_words_it_always_loads_and_refuses_no_size(
     local = (ROOT / "templates/fragment-local.md").read_text(encoding="utf-8")
     padded = local.replace("**Context** —", "**Context** —" + " word" * 20_000)
     (target / adopt.LOCAL_FRAGMENT).parent.mkdir(parents=True)
-    (target / adopt.LOCAL_FRAGMENT).write_text(padded, encoding="utf-8")
+    write(target / adopt.LOCAL_FRAGMENT, padded)
     arguments = (str(target), "--harness", "claude-code", "--fragments", "local")
 
     code, out, err = run(capsys, *arguments)
@@ -692,18 +695,19 @@ def test_a_claude_md_in_a_folder_above_brings_the_import_block_back(
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     (tmp_path / ".claude").mkdir()
-    (tmp_path / ".claude" / "CLAUDE.md").write_text("# Mine\n", encoding="utf-8")
+    write(tmp_path / ".claude" / "CLAUDE.md", "# Mine\n")
     plain = repo(tmp_path / "plain")
     assert run(capsys, str(plain), "--harness", "claude-code")[0] == 0
     assert not (plain / "CLAUDE.md").exists()
 
     (tmp_path / "work").mkdir()
-    (tmp_path / "work" / "CLAUDE.md").write_text("# Team\n", encoding="utf-8")
+    write(tmp_path / "work" / "CLAUDE.md", "# Team\n")
     below = repo(tmp_path / "work" / "t")
     assert run(capsys, str(below), "--harness", "claude-code")[0] == 0
     assert "@AGENTS.md" in (below / "CLAUDE.md").read_text(encoding="utf-8")
 
 
+@needs_symlinks
 @pytest.mark.parametrize("seeded", ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md", "link"])
 def test_each_file_that_hides_agents_md_brings_the_import_block_back(
     tmp_path: Path, capsys: Capture, seeded: str
@@ -717,7 +721,7 @@ def test_each_file_that_hides_agents_md_brings_the_import_block_back(
         (target / "CLAUDE.local.md").symlink_to("missing.md")
     else:
         (target / seeded).parent.mkdir(parents=True, exist_ok=True)
-        (target / seeded).write_text("# Mine\n", encoding="utf-8")
+        write(target / seeded, "# Mine\n")
     before = {path: data for path, data in snapshot(target).items() if path != "CLAUDE.md"}
 
     code, _, err = run(capsys, str(target), "--harness", "claude-code")
@@ -738,7 +742,7 @@ def test_an_import_block_an_older_engine_wrote_is_kept_until_its_file_is_gone(
     table_path = source / "adapters/harnesses.json"
     table = json.loads(table_path.read_text(encoding="utf-8"))
     table["claude-code"]["reads_agents_md"] = None  # an engine without the rule
-    table_path.write_text(json.dumps(table), encoding="utf-8")
+    write(table_path, json.dumps(table))
     target = repo(tmp_path / "t")
     assert run(capsys, str(target), "--harness", "claude-code", source=source)[0] == 0
     before = snapshot(target)
@@ -769,7 +773,7 @@ def test_the_rule_is_the_tables_and_a_host_shared_without_it_keeps_its_import(
     table["gemini"]["reads_agents_md"] = {"unless": ["GEMINI.md"], "since": "9.9"}
     table["probe"] = {**table["gemini"], "skill_install_path": ".probe/skills/"}
     table["probe"]["reads_agents_md"] = None
-    table_path.write_text(json.dumps(table), encoding="utf-8")
+    write(table_path, json.dumps(table))
     alone, shared = repo(tmp_path / "alone"), repo(tmp_path / "shared")
 
     assert run(capsys, str(alone), "--harness", "gemini", source=source)[0] == 0
@@ -779,6 +783,7 @@ def test_the_rule_is_the_tables_and_a_host_shared_without_it_keeps_its_import(
     assert list(blocks(shared, "GEMINI.md")) == ["pointer-gemini-md"]
 
 
+@needs_symlinks
 def test_a_claude_md_link_or_import_line_already_loads_agents_md(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -794,6 +799,7 @@ def test_a_claude_md_link_or_import_line_already_loads_agents_md(
     assert (imported / "CLAUDE.md").read_text(encoding="utf-8") == "# Notes\n\n@AGENTS.md\n"
 
 
+@needs_symlinks
 def test_an_import_block_whose_file_became_a_link_is_dropped_not_followed(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -862,7 +868,7 @@ def test_a_harness_that_cannot_load_agents_md_is_refused_before_any_write(
         {"verified": False, "pointer_mechanism": "AGENTS.md"} if row is None else dict(row)
     )
     table["probe"]["skill_install_path"] = ".probe/skills/"
-    table_path.write_text(json.dumps(table), encoding="utf-8")
+    write(table_path, json.dumps(table))
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     before = snapshot(target)
 
@@ -873,6 +879,7 @@ def test_a_harness_that_cannot_load_agents_md_is_refused_before_any_write(
     assert snapshot(target) == before
 
 
+@needs_symlinks
 def test_a_claude_md_link_elsewhere_is_refused_before_any_write(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -921,7 +928,7 @@ def test_a_fragment_record_never_owns_the_projects_local_fragment(
     document = manifest(target)
     record = {"kind": "fragment", "path": adopt.LOCAL_FRAGMENT, "id": adopt.LOCAL}
     document["artifacts"].append({**record, "sha256": sha(local.encode())})
-    (target / adopt.MANIFEST).write_text(json.dumps(document), encoding="utf-8")
+    write(target / adopt.MANIFEST, json.dumps(document))
 
     assert run(capsys, str(target), "--remove", "--force")[0] == 0
 
@@ -937,7 +944,7 @@ def test_a_manifest_path_that_reaches_git_is_refused(tmp_path: Path, capsys: Cap
     record["sha256"] = sha(b"#!/bin/sh\n")
     document = {"format_version": 2, "engine_version": VERSION, "artifacts": [record]}
     (target / ".outcomebound").mkdir()
-    (target / adopt.MANIFEST).write_text(json.dumps(document), encoding="utf-8")
+    write(target / adopt.MANIFEST, json.dumps(document))
 
     for arguments in (("--remove", "--force"), ("--check",), ("--harness", "codex")):
         assert run(capsys, str(target), *arguments)[0] == 1, arguments
@@ -959,11 +966,11 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
     assert code == 0 and set(states(out).values()) == {"current"}
     assert next_lines(out) == []
 
-    (target / CLAUDE_SKILL).write_text("mine\n", encoding="utf-8")
-    (target / "CLAUDE.md").write_text("# no import any more\n", encoding="utf-8")
+    write(target / CLAUDE_SKILL, "mine\n")
+    write(target / "CLAUDE.md", "# no import any more\n")
     change_kernel(source, "9.9.9")
     brief = source / "skills/decision-brief/SKILL.md"
-    brief.write_text(brief.read_text(encoding="utf-8") + "\nOne more line.\n", encoding="utf-8")
+    write(brief, brief.read_text(encoding="utf-8") + "\nOne more line.\n")
 
     code, out, _ = run(capsys, str(target), "--check", source=source)
 
@@ -982,7 +989,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
     }
     assert out.splitlines()[-1] == (
         "next: move each edit out of OutcomeBound's blocks and files, then "
-        f"outcomebound adopt {shlex.quote(str(target))} --force makes every record current"
+        f"outcomebound adopt {paths.shell_path(target)} --force makes every record current"
     )
 
 
@@ -998,7 +1005,7 @@ def test_check_ends_with_the_command_that_makes_each_record_current(
     code, out, _ = run(capsys, str(target), "--check", source=source)
 
     assert code == 2 and next_lines(out) == [
-        f"next: outcomebound adopt {shlex.quote(str(target))} makes every record current"
+        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
     ]
     assert out.splitlines()[-1] == next_lines(out)[0]
     words = shlex.split(next_lines(out)[0].removeprefix("next: ").split(" makes ")[0])
@@ -1018,7 +1025,7 @@ def test_check_without_a_manifest_names_the_command_that_proposes_an_install(
     assert code == 1
     assert out.splitlines() == [
         f"missing  {adopt.MANIFEST}",
-        f"next: outcomebound adopt {shlex.quote(str(target))} --detect prints the command "
+        f"next: outcomebound adopt {paths.shell_path(target)} --detect prints the command "
         "that installs OutcomeBound here",
     ]
 
@@ -1050,7 +1057,7 @@ def test_remove_leaves_every_byte_that_was_there_before(tmp_path: Path, capsys: 
 def test_remove_refuses_an_edited_file_unless_forced(tmp_path: Path, capsys: Capture) -> None:
     target = repo(tmp_path / "t")
     assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
-    (target / CLAUDE_SKILL).write_text("mine\n", encoding="utf-8")
+    write(target / CLAUDE_SKILL, "mine\n")
     before = snapshot(target)
 
     code, _, err = run(capsys, str(target), "--remove")
@@ -1073,7 +1080,7 @@ def test_detect_prints_one_command_that_installs(tmp_path: Path, capsys: Capture
     assert code == 0 and len(out.splitlines()) == 1
     assert snapshot(target) == before
     words = shlex.split(out)
-    assert words[:3] == ["outcomebound", "adopt", str(target.resolve())]
+    assert words[:3] == ["outcomebound", "adopt", target.resolve().as_posix()]
     assert words[words.index("--harness") + 1] == "claude-code"
     assert words[words.index("--fragments") + 1] == "python,commands"
     assert run(capsys, *words[2:])[0] == 0
@@ -1124,7 +1131,7 @@ def test_detect_proposes_the_workspace_where_a_workspace_folder_exists(
     """Git ignores these folders, so detection reads the disk, and the proposal installs."""
 
     target = repo(tmp_path / "t", {f".agents/{folder}/note.md": "# note\n"})
-    (target / ".gitignore").write_text(f".agents/{folder}/\n", encoding="utf-8")
+    write(target / ".gitignore", f".agents/{folder}/\n")
 
     code, out, _ = run(capsys, str(target), "--detect")
 
@@ -1283,7 +1290,7 @@ def test_check_names_the_fact_that_moved_and_an_install_brings_it_current(
     target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW})
     assert run(capsys, str(target), "--harness", "codex", "--done", "make test")[0] == 0
     workflow = target / ".github/workflows/ci.yml"
-    workflow.write_text(WORKFLOW.replace("make test", "make test-all"), encoding="utf-8")
+    write(workflow, WORKFLOW.replace("make test", "make test-all"))
 
     code, out, _ = run(capsys, str(target), "--check")
 
@@ -1299,7 +1306,7 @@ def test_check_names_the_fact_that_moved_and_an_install_brings_it_current(
     assert code == 0 and set(states(out).values()) == {"current"}
 
     agents = target / "AGENTS.md"
-    agents.write_text(agents.read_text(encoding="utf-8").replace("make test-all", "make x"))
+    write(agents, agents.read_text(encoding="utf-8").replace("make test-all", "make x"))
     code, out, _ = run(capsys, str(target), "--check")
     assert states(out)[f"AGENTS.md ({adopt.FACTS})"] == "edited"
     assert run(capsys, str(target))[0] == 1
@@ -1363,13 +1370,10 @@ def test_a_skill_the_engine_retired_reads_stale_and_an_upgrade_removes_it(
     older = engine_copy(tmp_path)
     for relative in ("SKILL.md", "references/github.md"):
         (older / "skills/old-skill" / relative).parent.mkdir(parents=True, exist_ok=True)
-        (older / "skills/old-skill" / relative).write_text(f"{relative}\n", encoding="utf-8")
+        write(older / "skills/old-skill" / relative, f"{relative}\n")
     fragment = older / "fragments/setup/tickets.md"
     text = fragment.read_text(encoding="utf-8")
-    fragment.write_text(
-        text.replace('"hand-off-tickets"]', '"hand-off-tickets", "old-skill"]'),
-        encoding="utf-8",
-    )
+    write(fragment, text.replace('"hand-off-tickets"]', '"hand-off-tickets", "old-skill"]'))
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     arguments = ("--harness", "claude-code", "--fragments", "tickets")
     assert run(capsys, str(target), *arguments, source=older)[0] == 0
@@ -1395,12 +1399,12 @@ def test_a_skill_record_naming_a_file_the_skill_does_not_ship_reads_stale(
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     assert run(capsys, str(target), "--harness", "claude-code", "--fragments", "tickets")[0] == 0
     extra = ".claude/skills/slice-tickets/references/extra.md"
-    (target / extra).write_text("ours\n", encoding="utf-8")
+    write(target / extra, "ours\n")
     document = manifest(target)
     for record in document["artifacts"]:
         if record["path"] == ".claude/skills/slice-tickets/references/github.md":
             record.update(path=extra, sha256=sha(b"ours\n"))
-    (target / adopt.MANIFEST).write_text(json.dumps(document), encoding="utf-8")
+    write(target / adopt.MANIFEST, json.dumps(document))
 
     code, out, _ = run(capsys, str(target), "--check")
 
@@ -1420,7 +1424,7 @@ def test_the_workspace_fragment_keeps_its_four_folders_out_of_git(
     for folder in ("worktrees/a", "work/a", "handoffs", "shared-memory"):
         note = target / ".agents" / folder / "x.md"
         note.parent.mkdir(parents=True, exist_ok=True)
-        note.write_text("x\n", encoding="utf-8")
+        write(note, "x\n")
         listed = subprocess.run(
             [GIT, "status", "--porcelain", "--untracked-files=all", "--", str(note)],
             cwd=target,
@@ -1474,8 +1478,8 @@ def test_detect_proposes_the_floors_runner_then_the_projects_test_command(
         words = shlex.split(out, comments=True)
         return [words[i + 1] for i, word in enumerate(words) if word == "--done"]
 
-    assert proposed(with_floor) == [adopt.FLOOR_RUNNER, "python3 -m pytest"]
-    assert proposed(without) == ["python3 -m pytest"]
+    assert proposed(with_floor) == [adopt.FLOOR_RUNNER, PYTEST]
+    assert proposed(without) == [PYTEST]
     assert proposed(bare) == []
 
 
@@ -1596,13 +1600,13 @@ def hook_records(target: Path) -> list[dict[str, Any]]:
 
 
 def fire(target: Path, command: str) -> dict[str, Any]:
-    """Run an entry's command as its harness would, the launcher standing in for the name on
+    """Run an entry's command as its harness would, `engine()` standing in for the name on
     PATH, with the stop input both rows send when the guard is unset."""
 
     words = shlex.split(command)
     assert words[0] == "outcomebound"
     done = subprocess.run(
-        [str(LAUNCHER), *words[1:]],
+        engine(*words[1:]),
         input=json.dumps({"stop_hook_active": False}).encode(),
         cwd=target,
         env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
@@ -1651,7 +1655,7 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
         }
     ]
     assert fire(target, ours["hooks"][0]["command"]) == {}
-    (target / "changed.txt").write_text("a change\n", encoding="utf-8")
+    write(target / "changed.txt", "a change\n")
     assert fire(target, ours["hooks"][0]["command"])["systemMessage"].startswith(
         "finish-check PASS: true, "
     )
@@ -1675,7 +1679,7 @@ def test_check_reads_the_entry_as_edited_stale_or_missing_and_an_edit_needs_forc
     settings, name = target / ".claude/settings.json", ".claude/settings.json (finish-check)"
     document = json.loads(settings.read_text(encoding="utf-8"))
     document["hooks"]["Stop"][0]["hooks"][0]["timeout"] = 30
-    settings.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+    write(settings, json.dumps(document, indent=2) + "\n")
 
     assert states(run(capsys, str(target), "--check")[1])[name] == "edited"
     edited = snapshot(target)
@@ -1687,7 +1691,7 @@ def test_check_reads_the_entry_as_edited_stale_or_missing_and_an_edit_needs_forc
     for record in recorded["artifacts"]:
         if record["id"] == adopt.FACTS:
             record["done"] = ["false"]
-    (target / adopt.MANIFEST).write_text(json.dumps(recorded), encoding="utf-8")
+    write(target / adopt.MANIFEST, json.dumps(recorded))
     assert states(run(capsys, str(target), "--check")[1])[name] == "stale"
     settings.unlink()
     assert states(run(capsys, str(target), "--check")[1])[name] == "missing"
@@ -1765,7 +1769,7 @@ def test_finish_timeout_is_written_kept_and_changed_in_the_one_entry(
         "timeout": 1200,
     }
     assert [record["timeout"] for record in hook_records(target)] == [1200]
-    (target / "changed.txt").write_text("a change\n", encoding="utf-8")
+    write(target / "changed.txt", "a change\n")
     assert fire(target, stop()[0]["hooks"][0]["command"])["systemMessage"].startswith(
         "finish-check PASS: true, "
     )
@@ -1866,7 +1870,7 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     count = tmp_path / "count"
-    failing = f"echo run >> {count}; exit 3"
+    failing = f"echo run >> {paths.shell_path(count)}; exit 3"
     target = repo(tmp_path / "t")
     commit_all(target)
     arguments = ("--harness", "claude-code", "--done", failing, "--done", "true", "--finish-check")
@@ -1912,10 +1916,16 @@ def test_a_new_measurement_names_the_failures_new_since_the_record_it_replaces(
     known without the install report naming it apart from the failures known before."""
 
     lines = tmp_path / "lines"
-    lines.write_text("FAILED tests/test_a.py::test_old - assert 0\n", encoding="utf-8")
+    write(lines, "FAILED tests/test_a.py::test_old - assert 0\n")
     target = repo(tmp_path / "t")
     commit_all(target)
-    arguments = ("--harness", "codex", "--done", f"cat {lines}; exit 1", "--finish-check")
+    arguments = (
+        "--harness",
+        "codex",
+        "--done",
+        f"cat {paths.shell_path(lines)}; exit 1",
+        "--finish-check",
+    )
     assert "new since the record" not in run(capsys, str(target), *arguments)[1]
 
     with lines.open("a", encoding="utf-8") as handle:
@@ -1951,6 +1961,12 @@ def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(
     assert "UNVERIFIED finish-check: Done took" in run(capsys, str(target))[1]
 
 
+@pytest.mark.skipif(
+    WINDOWS,
+    reason="the stop is SIGINT to a process started with SIGINT at its default, and Done is a "
+    "POSIX line that echoes $$ and execs sleep: a console control event is another mechanism, "
+    "which no run here shows",
+)
 def test_a_stopped_measurement_stops_done_keeps_nothing_and_exits_130(tmp_path: Path) -> None:
     """Breaks if Ctrl-C during the install's Done run leaves the command running, which runs in
     its own session where the terminal's signal does not reach it, ends in a traceback, or
@@ -1961,7 +1977,7 @@ def test_a_stopped_measurement_stops_done_keeps_nothing_and_exits_130(tmp_path: 
 
     target = repo(tmp_path / "t")
     pid = tmp_path / "pid"
-    done = f"echo $$ > {pid}; exec sleep 300"
+    done = f"echo $$ > {paths.shell_path(pid)}; exec sleep 300"
     process = subprocess.Popen(
         [
             sys.executable,
@@ -1991,8 +2007,7 @@ def test_a_stopped_measurement_stops_done_keeps_nothing_and_exits_130(tmp_path: 
     assert process.returncode == 130, err
     assert "Traceback" not in err
     assert "UNVERIFIED finish-check: the measurement was stopped" in out
-    with pytest.raises(ProcessLookupError):
-        os.kill(int(pid.read_text(encoding="utf-8")), 0)
+    assert not running(int(pid.read_text(encoding="utf-8")))
     assert finish_check.known_record(target, finish_check.done_digest([done])) is None
 
 
@@ -2030,6 +2045,7 @@ def test_the_writer_refuses_bytes_other_than_those_its_caller_read(tmp_path: Pat
     assert (tmp_path / "b.md").read_bytes() == b"new\n"
 
 
+@needs_symlinks
 def test_the_writer_refuses_a_symlink_anywhere_on_the_path(tmp_path: Path) -> None:
     root, outside = tmp_path / "root", tmp_path / "outside"
     root.mkdir()
@@ -2127,7 +2143,7 @@ def test_detect_says_a_test_command_it_did_not_read_from_ci_runs_on_the_host(
     )
 
     _, out, _ = run(capsys, str(guessed), "--detect")
-    assert "# python3 -m pytest is what pytest.ini suggests" in out and "on the host" in out
+    assert f"# {PYTEST} is what pytest.ini suggests" in out and "on the host" in out
     _, out, _ = run(capsys, str(from_ci), "--detect")
     assert "on the host" not in out
 
@@ -2177,7 +2193,7 @@ def test_an_install_warns_where_a_tracked_agents_md_holds_uncommitted_changes(
     _, out, _ = run(capsys, str(target), "--dry-run")
     assert warnings(out) == []
 
-    (target / "AGENTS.md").write_text("# P\n\nA change not committed.\n", encoding="utf-8")
+    write(target / "AGENTS.md", "# P\n\nA change not committed.\n")
     _, out, _ = run(capsys, str(target))
     [warned] = warnings(out)
     assert "AGENTS.md holds changes that are not committed" in warned
@@ -2238,7 +2254,8 @@ def test_a_codex_install_names_the_sandbox_route_for_unattended_sessions(
     [line] = [line for line in out.splitlines() if "writable_roots" in line]
     assert line.startswith("UNVERIFIED codex:")
     resolved = target.resolve()
-    assert f'"{resolved / ".agents"}"' in line and f'"{resolved / ".git"}"' in line
+    assert f'"{(resolved / ".agents").as_posix()}"' in line
+    assert f'"{(resolved / ".git").as_posix()}"' in line
     _, out, _ = run(capsys, str(target), "--harness", "claude-code")
     assert "writable_roots" not in out
 

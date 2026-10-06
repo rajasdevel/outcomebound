@@ -8,7 +8,6 @@ Only the catalog acceptance tests read the `fragments/` tree itself.
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
@@ -27,6 +26,7 @@ from outcomebound_tools.fragments import (
 )
 from outcomebound_tools.identity import parse_managed_blocks
 from outcomebound_tools.mechanisms import MECHANISMS
+from tests.portable import engine, needs_symlinks, write
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -87,7 +87,7 @@ def source(tmp_path_factory):
     for relative, text in FIXTURE_FRAGMENTS.items():
         path = root / "fragments" / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        write(path, text)
     copied = ("templates/managed-block.agents.md.tmpl", *(f"skills/{s}/SKILL.md" for s in SKILLS))
     for relative in copied:
         destination = root / relative
@@ -230,14 +230,14 @@ def test_a_catalog_loads_from_a_source_root(source):
 def test_a_fragment_in_the_wrong_family_directory_is_rejected(source, tmp_path):
     root = tmp_path / "broken"
     shutil.copytree(source / "fragments", root / "fragments")
-    (root / "fragments/setup/misfiled.md").write_text(_fragment("misfiled"), encoding="utf-8")
+    write(root / "fragments/setup/misfiled.md", _fragment("misfiled"))
     with pytest.raises(FragmentError, match="does not match its directory"):
         load_all(root)
 
 
 def test_a_local_fragment_overrides_a_shipped_id(source, tmp_path):
     local = tmp_path / "local.md"
-    local.write_text(_fragment("python", detect_patterns=["local.toml"]), encoding="utf-8")
+    write(local, _fragment("python", detect_patterns=["local.toml"]))
     catalog = load_all(source, local=local)
     assert catalog["python"].detect == ("local.toml",)
 
@@ -289,9 +289,9 @@ def test_a_shipped_fragment_naming_a_skill_the_engine_lacks_is_refused(tmp_path)
     for directory in ("fragments", "skills"):
         shutil.copytree(ROOT / directory, tmp_path / "engine" / directory)
     tickets = tmp_path / "engine/fragments/setup/tickets.md"
-    tickets.write_text(
+    write(
+        tickets,
         tickets.read_text(encoding="utf-8").replace('"slice-tickets"', '"no-such-skill"'),
-        encoding="utf-8",
     )
     with pytest.raises(FragmentError, match="no-such-skill"):
         load_all(tmp_path / "engine")
@@ -317,9 +317,9 @@ def test_fragment_order_is_the_order_given(source):
 
 
 def test_detect_proposes_and_never_writes(tmp_path, source):
-    (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    write(tmp_path / "pyproject.toml", "[project]\n")
     (tmp_path / "node_modules").mkdir()
-    (tmp_path / "node_modules" / "package.json").write_text("{}", encoding="utf-8")
+    write(tmp_path / "node_modules" / "package.json", "{}")
     before = sorted(p.name for p in tmp_path.iterdir())
     proposed = detect(tmp_path, load_all(source))
     assert "python" in proposed
@@ -339,7 +339,7 @@ def test_the_pattern_dot_matches_every_target_without_a_file_to_find(tmp_path, m
 def test_detect_skips_hidden_directories_a_pattern_does_not_name(tmp_path, source):
     workflows = tmp_path / ".github" / "workflows"
     workflows.mkdir(parents=True)
-    (workflows / "ci.yml").write_text("on: push\n", encoding="utf-8")
+    write(workflows / "ci.yml", "on: push\n")
     proposed = detect(tmp_path, load_all(source))
     assert "ci-release" in proposed, "a pattern that names .github may match inside it"
     assert "yaml-anywhere" not in proposed, "a bare glob must not descend into hidden dirs"
@@ -362,17 +362,18 @@ def test_ci_release_is_proposed_only_where_the_repository_shows_it_releases(
 
     for name in files:
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text("x\n", encoding="utf-8")
+        write(tmp_path / name, "x\n")
     assert ("ci-release" in detect(tmp_path, load_all(ROOT))) is proposed
 
 
+@needs_symlinks
 @pytest.mark.parametrize("link", ["directory", "file"], ids=["dir-symlink", "file-symlink"])
 def test_detect_ignores_evidence_that_resolves_outside_the_target(tmp_path, source, link):
     """Detection reports what is in the target; a link out of it is another tree."""
 
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    write(outside / "pyproject.toml", "[project]\n")
     target = tmp_path / "target"
     target.mkdir()
     if link == "directory":
@@ -426,17 +427,17 @@ def test_byte_cap_refuses_a_row_it_cannot_read_as_a_fragment_error(
 
 
 def _cli(*args, cwd=ROOT):
+    """The verb as a person runs it: `engine()` starts it through `outcomebound`, which makes
+    standard output UTF-8 where the console's code page could not hold the text."""
+
     return subprocess.run(
-        [sys.executable, "-m", "outcomebound_tools.fragments", *args],
-        capture_output=True,
-        text=True,
-        cwd=cwd,
+        engine("fragments", *args), capture_output=True, text=True, encoding="utf-8", cwd=cwd
     )
 
 
 def _oversized_local(tmp_path):
     local = tmp_path / "local.md"
-    local.write_text(_fragment("local", family="setup", padding=" " + "detail. " * 5000))
+    write(local, _fragment("local", family="setup", padding=" " + "detail. " * 5000))
     return local
 
 
@@ -459,7 +460,9 @@ def test_compose_cli_warns_when_a_harness_byte_cap_is_exceeded(source, tmp_path)
     local = str(_oversized_local(tmp_path))
     result = _cli(*arguments, "--harness", "codex", "--local", local, "--fragments", "local")
     assert result.returncode == 0, result.stderr
-    cap = json.loads((ROOT / "adapters/harnesses.json").read_text())["codex"]["doc_byte_cap"]
+    cap = json.loads((ROOT / "adapters/harnesses.json").read_text(encoding="utf-8"))["codex"][
+        "doc_byte_cap"
+    ]
     composed = len(result.stdout.encode("utf-8"))
     assert composed > cap
     assert "doc_byte_cap" in result.stderr
@@ -508,7 +511,7 @@ def test_selecting_nothing_fails_closed(source):
 
 
 def test_detect_cli_proposes_without_writing(tmp_path, source):
-    (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    write(tmp_path / "pyproject.toml", "[project]\n")
     result = _cli("detect", "--target", str(tmp_path), "--source", str(source))
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == ["python"]
@@ -525,7 +528,7 @@ def test_cli_help_works():
 def test_a_malformed_fragment_in_the_source_root_is_a_typed_cli_failure(tmp_path):
     root = tmp_path / "broken"
     (root / "fragments/stack").mkdir(parents=True)
-    (root / "fragments/stack/bad.md").write_text("no frontmatter here\n", encoding="utf-8")
+    write(root / "fragments/stack/bad.md", "no frontmatter here\n")
     result = _cli("compose", "--source", str(root), "--fragments", "bad")
     assert result.returncode == 2
     assert "Traceback" not in result.stderr

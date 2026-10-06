@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import fileplan
+from tests.portable import WINDOWS
 
 
 def test_a_name_windows_cannot_hold_is_refused_before_anything_is_written(
@@ -31,7 +32,15 @@ def test_a_name_windows_cannot_hold_is_refused_before_anything_is_written(
         fileplan.current(tmp_path, "notes.")
 
 
-def test_another_platform_writes_a_name_only_windows_refuses(tmp_path: Path) -> None:
+@pytest.mark.skipif(
+    WINDOWS,
+    reason="the name is one a Windows file system cannot hold, so a real write of it here "
+    "opens a device; what the writer decides for Windows is the test above",
+)
+def test_another_platform_writes_a_name_only_windows_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("sys.platform", "linux")
     fileplan.write(tmp_path, {"docs/aux.md": b"y"}, {"docs/aux.md": None})
 
     assert (tmp_path / "docs/aux.md").read_bytes() == b"y"
@@ -93,6 +102,7 @@ def test_a_refused_rename_is_not_tried_again_on_another_platform(
         tries.append(1)
         raise PermissionError(13, "read-only")
 
+    monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setattr(os, "replace", replace)
 
     with pytest.raises(PermissionError):

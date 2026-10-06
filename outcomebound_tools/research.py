@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import errno
 import hashlib
 import json
 import os
@@ -27,7 +28,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
-from outcomebound_tools import fileplan, paths
+from outcomebound_tools import fileplan, paths, programs
 from outcomebound_tools.gitenv import git_environment
 
 REPOSITORY = "https://github.com/rajasdevel/outcomebound-research"
@@ -337,10 +338,11 @@ def child_environment(inherited: Mapping[str, str] | None = None) -> dict[str, s
 def _run_git(arguments: list[str]) -> str | None:
     """Run Git as an argument list, never through a shell; None on success, else why not."""
 
+    environment = child_environment()
     try:
         done = subprocess.run(
-            ["git", *arguments],
-            env=git_environment(child_environment()),
+            [programs.require("git", environment), *arguments],
+            env=git_environment(environment),
             capture_output=True,
             encoding="utf-8",
             errors="replace",
@@ -720,6 +722,15 @@ def _verb_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _reader_closed(problem: OSError) -> bool:
+    """Whether `problem` is a write to a pipe whose reader has closed it: `BrokenPipeError`, which
+    is what POSIX raises. On Windows the C runtime reports the same event as `EINVAL`."""
+
+    return isinstance(problem, BrokenPipeError) or (
+        paths.on_windows() and problem.errno == errno.EINVAL
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     try:
@@ -737,7 +748,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except Refusal as problem:
         print(f"research: {problem}", file=sys.stderr)
         return 1
-    except BrokenPipeError:
+    except OSError as problem:
+        if not _reader_closed(problem):
+            raise
         # The reader closed the pipe (`| head`): stop quietly, not with Python's flush complaint.
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         return 0

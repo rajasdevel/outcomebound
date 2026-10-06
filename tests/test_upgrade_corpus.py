@@ -46,11 +46,18 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import adopt
+from tests.portable import write
 
 ROOT = Path(__file__).resolve().parent.parent
 GIT = shutil.which("git") or "git"
 CANDIDATE = Path(os.environ.get("OB_UPGRADE_CANDIDATE") or ROOT).resolve()
 OLDEST = "v1.0.0"
+# Git converts line endings under `core.autocrlf=true`, which a Windows install of Git sets for
+# every account: `git archive` then writes an earlier release's files with CRLF, which that
+# release's engine cannot read (its tag holds no `.gitattributes`), and `git add` turns the
+# bytes a case commits back to LF. This harness commits and archives exactly the bytes it names,
+# so that a case that wants CRLF (`crlf_checkout`) writes it and an earlier release gets LF.
+EXACT = ("-c", "core.autocrlf=false")
 IDENTITY = ("-c", "user.name=t", "-c", "user.email=t@example.com")
 # The scripts/outcomebound launcher's own run of a checkout, under this test's Python, so that
 # every engine runs on the Python the suite runs on.
@@ -107,7 +114,12 @@ needs_permissions = pytest.mark.skipif(
 
 def git(cwd: Path, *argv: str, check: bool = True) -> str:
     done = subprocess.run(
-        [GIT, "-C", str(cwd), *argv], check=check, capture_output=True, text=True, errors="replace"
+        [GIT, *EXACT, "-C", str(cwd), *argv],
+        check=check,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     return done.stdout
 
@@ -124,6 +136,7 @@ def engine(tree: Path, *argv: str) -> subprocess.CompletedProcess[str]:
         [sys.executable, "-I", "-c", LAUNCH, str(tree), *argv],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         errors="replace",
         check=False,
     )
@@ -251,8 +264,8 @@ def claims(cwd: str | None, planned: bool = False) -> Callable[[Path], None]:
         plan: dict[str, object] = {"version": 1, "claims": [claim]}
         if cwd is not None:
             plan["cwd"] = cwd
-        (project / ".outcomebound/ticket-claims.json").write_text(json.dumps(plan) + "\n")
-        (project / ".outcomebound/tickets.json").write_text(json.dumps(TICKETS) + "\n")
+        write(project / ".outcomebound/ticket-claims.json", json.dumps(plan) + "\n")
+        write(project / ".outcomebound/tickets.json", json.dumps(TICKETS) + "\n")
         commit(project, "plan")
 
     return shape
@@ -269,7 +282,7 @@ def local_edited_alike(project: Path) -> None:
 
     for name in (".outcomebound/fragments/local.md", "AGENTS.md"):
         path = project / name
-        path.write_text(edit_alike(path.read_text(encoding="utf-8")), encoding="utf-8")
+        write(path, edit_alike(path.read_text(encoding="utf-8")))
     commit(project, "local fragment")
 
 
@@ -278,7 +291,7 @@ def local_edited_in_block_only(project: Path) -> None:
     record nor what the candidate writes."""
 
     path = project / "AGENTS.md"
-    path.write_text(edit_alike(path.read_text(encoding="utf-8")), encoding="utf-8")
+    write(path, edit_alike(path.read_text(encoding="utf-8")))
     commit(project, "block edit")
 
 
@@ -291,7 +304,7 @@ def local_and_pointer_line_edited(project: Path) -> None:
     path = project / "AGENTS.md"
     text = path.read_text(encoding="utf-8")
     assert text.count(TEST_LINE) == 1
-    path.write_text(text.replace(TEST_LINE, "- when writing or judging a test"), encoding="utf-8")
+    write(path, text.replace(TEST_LINE, "- when writing or judging a test"))
     commit(project, "pointer line")
 
 
@@ -302,7 +315,7 @@ def tickets_condition_reworded(tree: Path) -> None:
     path = tree / "fragments/setup/tickets.md"
     text = path.read_text(encoding="utf-8")
     assert text.count(TICKETS_CONDITION) == 1
-    path.write_text(text.replace(TICKETS_CONDITION, f"{TICKETS_CONDITION} file"), encoding="utf-8")
+    write(path, text.replace(TICKETS_CONDITION, f"{TICKETS_CONDITION} file"))
 
 
 def unreadable_folder(project: Path) -> None:
@@ -319,8 +332,8 @@ def ignored_copies(project: Path) -> None:
     for name in ("copy-a", "copy-b"):
         copy = project / ".agents/work" / name
         copy.mkdir(parents=True)
-        (copy / "AGENTS.md").write_text(text + "x" * CAP, encoding="utf-8")
-        (copy / "app.py").write_text("", encoding="utf-8")
+        write(copy / "AGENTS.md", text + "x" * CAP)
+        write(copy / "app.py", "")
     assert git(project, "check-ignore", ".agents/work/copy-a/AGENTS.md").strip()
 
 
@@ -330,18 +343,18 @@ def nested_repository(project: Path) -> None:
     nested = project / "vendor/lib"
     nested.mkdir(parents=True)
     git(nested, "init", "-q")
-    (nested / "AGENTS.md").write_text("n" * CAP, encoding="utf-8")
+    write(nested / "AGENTS.md", "n" * CAP)
     commit(nested, "nested")
 
 
 def staged_change(project: Path) -> None:
     """A change and a new file staged, and a change not staged, all to the project's files."""
 
-    (project / "app.py").write_text("print('staged')\n", encoding="utf-8")
+    write(project / "app.py", "print('staged')\n")
     (project / "src").mkdir()
-    (project / "src/new.py").write_text("NEW = 1\n", encoding="utf-8")
+    write(project / "src/new.py", "NEW = 1\n")
     git(project, "add", "app.py", "src/new.py")
-    (project / "README.md").write_text("# Project\n\nNot staged.\n", encoding="utf-8")
+    write(project / "README.md", "# Project\n\nNot staged.\n")
 
 
 def crlf_checkout(project: Path) -> None:
@@ -393,7 +406,8 @@ MARKS = {"unreadable-folder": needs_permissions}
 
 @pytest.fixture(scope="session")
 def tag_engine(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path]:
-    """The engine of a release tag, from `git archive`, built once per test process."""
+    """The engine of a release tag, from `git archive` with LF line endings (`EXACT`), built once
+    per test process."""
 
     engines: dict[str, Path] = {}
 
@@ -401,7 +415,7 @@ def tag_engine(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path
         if tag not in engines:
             tree = tmp_path_factory.mktemp(f"engine-{tag}")
             archive = subprocess.run(
-                [GIT, "-C", str(ROOT), "archive", "--format=zip", tag],
+                [GIT, *EXACT, "-C", str(ROOT), "archive", "--format=zip", tag],
                 check=True,
                 capture_output=True,
             ).stdout
@@ -431,9 +445,9 @@ def installed(
             git(work_tree, "init", "-q")
             project = work_tree / folder
             project.mkdir(exist_ok=True)
-            (project / "AGENTS.md").write_text("# Project\n\nThe project's own words.\n")
-            (project / "README.md").write_text("# Project\n")
-            (project / "app.py").write_text("print('app')\n")
+            write(project / "AGENTS.md", "# Project\n\nThe project's own words.\n")
+            write(project / "README.md", "# Project\n")
+            write(project / "app.py", "print('app')\n")
             local = project / ".outcomebound/fragments/local.md"
             local.parent.mkdir(parents=True)
             shutil.copyfile(tree / "templates/fragment-local.md", local)

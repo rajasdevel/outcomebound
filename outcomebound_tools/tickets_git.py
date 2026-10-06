@@ -18,6 +18,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from outcomebound_tools import programs
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 from outcomebound_tools.tickets_report import EngineError
 
@@ -62,10 +63,10 @@ def git(target: Path | str, *arguments: str) -> GitResult:
 
     try:
         # A fixed argv list with shell=False, built from this engine's own
-        # constants and the caller's refs and paths; `git` is resolved from
-        # PATH, as every adapter in this engine resolves it.
+        # constants and the caller's refs and paths; `git` is found on PATH's absolute
+        # entries only (`programs.require`), so the checkout cannot supply its own.
         completed = subprocess.run(
-            ["git", *GIT_READ_CONFIGURATION, *arguments],
+            [programs.require("git"), *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             capture_output=True,
             check=False,
