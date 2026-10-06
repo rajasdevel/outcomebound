@@ -26,6 +26,7 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -189,19 +190,49 @@ def run_page(browser: str, page: Path, timeout: float) -> BrowserRun:
     return BrowserRun(None, "the browser exited without printing the document")
 
 
-def parse_result(document: str) -> tuple[dict[str, Any] | None, str]:
-    """The check result in a printed document, or None and why it is not there."""
+class _ResultFinder(HTMLParser):
+    """Each element whose id is the result's, and the text of the first one if it is a script."""
 
-    lowered = document.lower()
-    marker = lowered.find(f'id="{RESULT_ID}"')
-    if marker < 0:
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.count = 0
+        self.script = False
+        self.text: list[str] = []
+        self._collecting = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if dict(attrs).get("id") != RESULT_ID:
+            return
+        self.count += 1
+        if self.count == 1 and tag == "script":
+            self.script = True
+            self._collecting = True
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self._collecting = False
+
+    def handle_data(self, data: str) -> None:
+        if self._collecting:
+            self.text.append(data)
+
+
+def parse_result(document: str) -> tuple[dict[str, Any] | None, str]:
+    """The check result in a printed document, or None and why it is not there. The document
+    must hold exactly one element with the result's id, so that a second one in the page's
+    content cannot stand in for the runtime's."""
+
+    finder = _ResultFinder()
+    finder.feed(document)
+    finder.close()
+    if finder.count == 0:
         return None, "the page wrote no check result"
-    start = document.find(">", marker)
-    end = lowered.find("</script>", start)
-    if start < 0 or end < 0:
-        return None, "the check result element is not closed"
+    if finder.count > 1:
+        return None, f"the document holds {finder.count} elements with the id {RESULT_ID}, not one"
+    if not finder.script:
+        return None, "the check result element is not a script element"
     try:
-        result = json.loads(document[start + 1 : end])
+        result = json.loads("".join(finder.text))
     except json.JSONDecodeError:
         return None, "the check result is not JSON"
     if not isinstance(result, dict) or result.get("done") is not True:

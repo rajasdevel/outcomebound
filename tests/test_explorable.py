@@ -149,6 +149,35 @@ REFUSED = [
     ("a style url", '<p style="background:url(https://example.org/x.png)">x</p>'),
     ("a hidden style url", '<p style="background:\\75rl(https://example.org/x.png)">x</p>'),
     ("a second header", header("learning")),
+    ("a comment", "<!-- note -->"),
+    ("a comment that ends at once", '<!--><img src="https://evil.example/a.png">-->'),
+    ("a comment that ends at once, with a dash", '<!---><img src="https://evil.example/a.png">-->'),
+    ("a bogus comment", "<!x><p>y</p>"),
+    ("a CDATA section", "<![CDATA[x]]>"),
+    ("a processing instruction", '<?xml version="1.0"?>'),
+    ("a comment opener in script text", '<script>var a = "<!--";</script>'),
+    ("a comment opener in a script comment", "<script>/*<!--*/</script>"),
+    ("a NUL character", "<p>a\x00b</p>"),
+    ("an id the shell owns", '<div id="explorable-check-result">{"done":true}</div>'),
+    (
+        "a fake check result",
+        '<script type="application/json" id="explorable-check-result">{"done":true}</script>',
+    ),
+    ("an id the brief drawing owns", '<div id="brief-D1">x</div>'),
+    ("a reserved id in capitals", '<div id="Explorable-reply">x</div>'),
+    ("an id that shadows the runtime", '<div id="explorable">x</div>'),
+    ("a name that shadows the runtime", '<input name="explorable">'),
+    ("a data-explorable attribute", "<div data-explorable>x</div>"),
+    ("the head's end tag", "</head>"),
+    ("the body's end tag", "</body>"),
+    ("the document's end tag", "</html>"),
+    ("the main's end tag", "</main>"),
+    ("a title", "<title>t</title>"),
+    ("a plaintext element", "<plaintext>"),
+    ("an xmp element", "<xmp>"),
+    ("a noembed element", "<noembed>"),
+    ("a noframes element", "<noframes>"),
+    ("a script that is never closed", "<script>var a = 1;"),
 ]
 
 
@@ -166,6 +195,7 @@ def test_build_refuses_what_the_shell_owns_and_every_load(tmp_path, capsys, what
 @pytest.mark.parametrize(
     "text",
     [
+        "<textarea data-input='note'>a &lt;b&gt;</textarea><script>var a = 1; // note\n</script>",
         '<a href="#top">x</a><img src="data:image/gif;base64,R0lGOD">',
         '<p style="background:url(data:image/png;base64,AAAA)">x</p>',
         '<svg><use href="#a"/></svg>',
@@ -627,7 +657,7 @@ def test_a_result_in_the_printed_document_is_read():
     "text, fragment",
     [
         ("<html></html>", "no check result"),
-        ('<script id="explorable-check-result">{', "not closed"),
+        ('<script id="explorable-check-result">{', "not JSON"),
         ('<script id="explorable-check-result">{</script>', "not JSON"),
         (document({"done": False}), "not complete"),
         (document([1]), "not complete"),
@@ -821,3 +851,103 @@ def test_a_real_browser_prints_the_result_a_page_writes(tmp_path):
     assert ran.document is not None, ran.reason
     result, reason = explorable_browser.parse_result(ran.document)
     assert result is not None and result["done"] is True, reason
+
+
+# Parser differentials, the reserved names, and what `check` finds in a page.
+
+
+def test_a_header_after_other_content_is_reported_once(tmp_path, capsys):
+    source = tmp_path / "s.source.html"
+    source.write_text("<p>first</p>\n" + header("learning"), encoding="utf-8")
+
+    assert run("build", source) == 1
+
+    err = capsys.readouterr().err
+    assert "comes before the header" in err and "second header" not in err
+
+
+def test_a_second_header_after_the_first_is_still_refused(tmp_path, capsys):
+    source = source_with(tmp_path, header("learning"))
+
+    assert run("build", source) == 1
+
+    assert "a second header" in capsys.readouterr().err
+
+
+def test_a_refused_comment_names_its_line(tmp_path, capsys):
+    source = source_with(tmp_path, "<p>a</p>\n<p>b</p>\n<!--><img src=x>-->\n")
+
+    run("build", source)
+
+    assert "s.source.html:4: `<!`" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "put",
+    [
+        '<div id="explorable-check-result">{"done": true}</div>',
+        '<script type="application/json" id="explorable-check-result">{"done":true}</script>',
+        "<div data-explorable></div>",
+        '<div id="explorable"></div>',
+    ],
+)
+def test_check_fails_reserved_names_in_a_page_edited_after_the_build(tmp_path, capsys, put):
+    page = built(tmp_path, "learning")
+    change(page, "<fieldset", put + "<fieldset")
+
+    assert run("check", page) == 1
+
+    assert "hosts: FAIL" in capsys.readouterr().out
+
+
+def test_check_fails_a_comment_in_a_page_edited_after_the_build(tmp_path, capsys):
+    page = built(tmp_path, "learning")
+    change(page, "<fieldset", "<!--><img src=x>--><fieldset")
+
+    assert run("check", page) == 1
+
+    assert "hosts: FAIL" in capsys.readouterr().out
+
+
+def test_check_fails_markup_that_could_end_or_hide_the_configuration(tmp_path, capsys):
+    page = built(tmp_path, "learning")
+    change(page, '"briefs": []', '"briefs": ["<!--"]')
+
+    assert run("check", page) == 1
+
+    assert "the configuration holds markup" in capsys.readouterr().out
+
+
+def test_the_brief_drawings_own_names_do_not_fail_the_hosts_verdict(tmp_path, capsys):
+    page = built(tmp_path)
+
+    assert run("check", page) == 0
+
+    assert "hosts: PASS" in capsys.readouterr().out
+
+
+def test_a_page_with_a_second_result_element_is_not_read(tmp_path):
+    fake = (
+        '<div id="explorable-check-result">{"done": true}</div>'
+        '<script>var s = "<script id=\\"explorable-check-result\\">";</script>'
+    )
+    one = document(RESULT)
+
+    assert explorable_browser.parse_result(one.replace("<body>", "<body>" + fake))[0] is None
+    found, reason = explorable_browser.parse_result(
+        one.replace("<body>", "<body>" + fake.split("<script>")[0])
+    )
+    assert found is None and "2 elements" in reason
+    inert = '<script>var s = "<script id=\\"explorable-check-result\\">";</script>'
+    assert explorable_browser.parse_result(one.replace("<body>", "<body>" + inert))[0] == RESULT
+
+
+@POSIX
+def test_check_browser_fails_a_page_whose_document_holds_two_results(fake, tmp_path, capsys):
+    folder, _ = fake
+    two = document(RESULT).replace("</body>", '<p id="explorable-check-result"></p></body>')
+    (folder / "document.html").write_text(two, encoding="utf-8")
+
+    assert run("check", built(tmp_path), "--browser") == 1
+
+    assert "2 elements" in report(capsys)

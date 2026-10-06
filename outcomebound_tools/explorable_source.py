@@ -77,6 +77,13 @@ LOADING_ATTRIBUTES = (
 _CITATION = re.compile(r"https://[^\s/?#]", re.IGNORECASE)
 _CSS_URL = re.compile(r"url\(\s*(['\"]?)(.*?)\1\s*\)", re.IGNORECASE | re.DOTALL)
 _HEADER_END = re.compile(r"</script[^>]*>", re.IGNORECASE)
+# What a browser reads differently from this module's parser, or that can swallow the shell's
+# own markup after the content: no comment, declaration, CDATA section or processing instruction
+# anywhere after the header (script text included), and these elements and end tags.
+_MARKUP_OPENERS = re.compile(r"<[!?]")
+REFUSED_START = frozenset({"title", "plaintext", "xmp", "noembed", "noframes"})
+REFUSED_END = frozenset({*FORBIDDEN_ELEMENTS, "title", "main"})
+RESERVED_PREFIXES = ("explorable-", "brief-")
 _CITATION_REL = ("noopener", "noreferrer")
 _CITATION_POLICY = "no-referrer"
 
@@ -130,20 +137,30 @@ def _normal(value: str) -> str:
 
 
 class _Scanner(HTMLParser):
-    def __init__(self, text: str, *, source: bool, first_line: int) -> None:
+    def __init__(self, text: str, *, source: bool, first_line: int, reserved: bool) -> None:
         super().__init__(convert_charrefs=True)
         self.text = text
         self.source = source
+        self.reserved = reserved
         self.first_line = first_line
         self.result = Scan()
         self.starts = [0]
         for found in re.finditer("\n", text):
             self.starts.append(found.end())
         self.begun = False
+        self.unclosed_line = 1
+        self._header_seen = False
         self._header: list[str] | None = None
         self._script: tuple[int, list[str]] | None = None
 
     # Positions.
+
+    def unclosed(self) -> bool:
+        """Whether a script element was opened and never closed."""
+
+        if self._script is not None:
+            self.unclosed_line = self._script[0]
+        return self._script is not None
 
     def line(self) -> int:
         return self.getpos()[0] + self.first_line - 1
@@ -194,6 +211,8 @@ class _Scanner(HTMLParser):
         self._start(tag, attrs, closed=False)
 
     def handle_endtag(self, tag: str) -> None:
+        if tag in REFUSED_END:
+            self.refuse(f"</{tag}> end tag: the shell owns it, and a source holds none")
         if tag != "script":
             return
         if self._header is not None:
@@ -217,13 +236,15 @@ class _Scanner(HTMLParser):
             self.refuse(
                 f"<{tag}> comes before the header; the header is the first thing in a source"
             )
-        elif header:
+        elif header and self._header_seen:
             self.refuse("a second header: a source has one header, `data-explorable`, first")
         self.result.attributes.update(name for name in names if name.startswith("data-"))
-        if tag in FORBIDDEN_ELEMENTS:
+        if tag in FORBIDDEN_ELEMENTS or tag in REFUSED_START:
             self.refuse(f"<{tag}> element: the shell owns it, and a source holds none")
         for name, value in attrs:
             self._attribute(tag, name, value or "")
+            if self.reserved:
+                self._reserved(tag, name, value or "")
         if tag == "a":
             self._citation(attrs, closed)
         if tag == "script" and not closed and not _is_data(attrs):
@@ -233,11 +254,23 @@ class _Scanner(HTMLParser):
         kind = dict(attrs).get("type") or ""
         if kind.strip().lower() != "application/json":
             self.refuse('the header is `<script type="application/json" data-explorable>`')
+        self._header_seen = True
         self.result.header_line = self.line()
         if not closed:
             self._header = []
 
     # Attributes.
+
+    def _reserved(self, tag: str, name: str, value: str) -> None:
+        """The names the shell, the brief drawing and the runtime own."""
+
+        lowered = value.strip().lower()
+        if name == "id" and lowered.startswith(RESERVED_PREFIXES):
+            self.refuse(f"id={value!r} is a name the shell and the brief drawing own")
+        elif name in ("id", "name") and lowered == "explorable":
+            self.refuse(f"{name}={value!r} would shadow the runtime's `explorable` object")
+        elif name == HEADER_ATTRIBUTE and tag != "script":
+            self.refuse("data-explorable belongs to the header alone")
 
     def _attribute(self, tag: str, name: str, value: str) -> None:
         if name in LOADING_ATTRIBUTES:
@@ -312,15 +345,37 @@ def _is_data(attrs: list[tuple[str, str | None]]) -> bool:
     return bool(kind) and kind not in ("text/javascript", "module", "application/javascript")
 
 
-def scan(text: str, *, source: bool, first_line: int = 1) -> Scan:
+def scan(text: str, *, source: bool, first_line: int = 1, reserved: bool | None = None) -> Scan:
     """One pass over `text`. With `source`, the header must come first and is read, and each
     citation is queued for rewriting; otherwise `text` is a built page's content, and a citation
-    must already carry what `build` gives it. `first_line` is the number of `text`'s first line."""
+    must already carry what `build` gives it. `first_line` is the number of `text`'s first line.
+    `reserved` (by default, `source`) also refuses the names the shell owns."""
 
-    scanner = _Scanner(text, source=source, first_line=first_line)
+    scanner = _Scanner(
+        text,
+        source=source,
+        first_line=first_line,
+        reserved=source if reserved is None else reserved,
+    )
     scanner.feed(text)
     scanner.close()
-    return scanner.result
+    result = scanner.result
+    if scanner.unclosed():
+        result.findings.append(Finding(scanner.unclosed_line, "a script element is never closed"))
+    start = (result.header_end or 0) if source else 0
+    for found in _MARKUP_OPENERS.finditer(text, start):
+        line = first_line + text.count("\n", 0, found.start())
+        result.findings.append(
+            Finding(
+                line,
+                f"`{found.group()}` opens a comment, declaration, CDATA section or processing "
+                "instruction; a page needs none, and script code uses // or /* */",
+            )
+        )
+    for found in re.finditer("\x00", text):
+        line = first_line + text.count("\n", 0, found.start())
+        result.findings.append(Finding(line, "a NUL character"))
+    return result
 
 
 def _header(raw: str, line: int) -> tuple[dict[str, Any], list[Finding]]:
