@@ -140,8 +140,12 @@ jobs:
       # an invisible skip reads as a pass. A displayed skip stays UNVERIFIED.
       # -n auto spreads the suite across the runner's CPUs; --basetemp gives each
       # job its own temporary tree, so jobs sharing a host never collide in it.
+      # The base folder reaches the command through the environment, so that the command is
+      # plain text, which the project facts read.
       - name: Run test suite
-        run: python -m pytest -o addopts="" -q -rs -n auto --basetemp="$RUNNER_TEMP/pytest-${{ matrix.python-version }}"
+        env:
+          PYTEST_BASETEMP: ${{ runner.temp }}/pytest-${{ matrix.python-version }}
+        run: python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"
 
   # The engine on Windows, on a hosted Windows runner: the suite at the oldest and the newest
   # Python this project supports. Nobody on the project runs Windows, so this job is the evidence.
@@ -166,8 +170,11 @@ jobs:
       - name: Install the development tools
         run: python -m pip install -r requirements-dev.txt
 
+      # PowerShell is this runner's default shell, so the variable reads `$env:` there.
       - name: Run test suite
-        run: python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --basetemp="${{ runner.temp }}\pytest-${{ matrix.python-version }}"
+        env:
+          PYTEST_BASETEMP: ${{ runner.temp }}\pytest-${{ matrix.python-version }}
+        run: python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --basetemp="$env:PYTEST_BASETEMP"
 
   # The engine inside containers: a Debian slim image, where the job runs as root, and an Alpine
   # image, with busybox sh and musl. Neither image has Git until the job installs it.
@@ -192,9 +199,16 @@ jobs:
       - name: Install the development tools
         run: python -m pip install -q -r requirements-dev.txt
 
+      # The checkout belongs to another user than the container's root, and Git refuses such a
+      # repository as dubious ownership. The suite runs under a home of its own, which hides a
+      # `--global` setting, so the exception is made for the whole machine, in /etc/gitconfig.
+      # This is the job's own trust in its own checkout; the engine never makes it (see the
+      # `instructions` and `distribution` designs).
+      - name: Trust the checkout
+        run: git config --system --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Run test suite
         run: |
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider
 
   # A release tag that passed every leg of `test` is published, and nothing else is: the job

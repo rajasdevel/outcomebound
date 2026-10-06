@@ -22,6 +22,8 @@ import pytest
 
 from outcomebound_tools import decision_brief, surfaces
 from outcomebound_tools.decision_brief import Brief
+from outcomebound_tools.textio import universal
+from tests.portable import engine
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "schemas" / "decision-briefs.schema.json"
@@ -164,16 +166,30 @@ def _main(capsys: pytest.CaptureFixture[str], *argv: str) -> tuple[int, str, str
     return code, captured.out, captured.err
 
 
-def _run(
-    argv: list[str], env: dict[str, str], stdin: str = "", cwd: Path = ROOT
-) -> subprocess.CompletedProcess[bytes]:
-    """The command as an agent runs it, in an environment holding only what is given,
-    from `cwd`."""
+# What a child needs to start at all: `SYSTEMROOT` is how Python on Windows gets random numbers
+# for its hash seed, and without it Python 3.10 there ends in "Fatal Python error".
+CARRIED = ("PATH", "LD_LIBRARY_PATH", "SYSTEMROOT", "SYSTEMDRIVE", "TEMP", "TMP")
 
-    carried = {name: os.environ[name] for name in ("PATH", "LD_LIBRARY_PATH") if name in os.environ}
+
+def _run(
+    argv: list[str],
+    env: dict[str, str],
+    stdin: str = "",
+    cwd: Path = ROOT,
+    *,
+    module: bool = False,
+) -> subprocess.CompletedProcess[bytes]:
+    """The command as an agent runs it, through `outcomebound brief` (UTF-8 with LF on every
+    platform), in an environment holding only what is given, from `cwd`. `module` runs the
+    module itself instead, so that the stream's own encoding is the one `env` names."""
+
+    carried = {name: os.environ[name] for name in CARRIED if name in os.environ}
+    command = (
+        [sys.executable, "-m", "outcomebound_tools.decision_brief"] if module else engine("brief")
+    )
     return subprocess.run(
-        [sys.executable, "-m", "outcomebound_tools.decision_brief", *argv],
-        env={**carried, "PYTHONPATH": str(ROOT), **env},
+        [*command, *argv],
+        env={**carried, **({"PYTHONPATH": str(ROOT)} if module else {}), **env},
         cwd=cwd,
         input=stdin.encode("utf-8"),
         capture_output=True,
@@ -219,13 +235,14 @@ def test_the_symbols_follow_what_standard_output_can_carry(tmp_path: Path) -> No
 
     path = str(_write(tmp_path, DOCUMENT))
     wide = _run([path, "--form", "ascii"], {"PYTHONIOENCODING": "utf-8"})
-    narrow = _run([path, "--form", "mermaid"], {"PYTHONIOENCODING": "cp1252"})
+    narrow = _run([path, "--form", "mermaid"], {"PYTHONIOENCODING": "cp1252"}, module=True)
     forced = _run([path, "--form", "ascii", "--symbols", "ascii"], {"PYTHONIOENCODING": "utf-8"})
 
     assert wide.returncode == 0, wide.stderr
     assert wide.stdout.decode("utf-8") == EMOJI_ASCII
     assert narrow.returncode == 0, narrow.stderr
-    assert narrow.stdout.decode("cp1252") == ASCII_MERMAID
+    # The module run by itself writes its stream's own line ending, CRLF on Windows.
+    assert universal(narrow.stdout.decode("cp1252")) == ASCII_MERMAID
     assert forced.stdout.decode("utf-8") == ASCII_ASCII
 
 

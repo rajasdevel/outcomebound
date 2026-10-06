@@ -21,7 +21,9 @@ follows on its own line. Exit 0: no problem; 1: a problem; 2: Git cannot list th
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -164,12 +166,66 @@ def documented(root: Path, tracked: list[str]) -> list[str]:
     return problems
 
 
+# Folders whose `bash` is the Windows Subsystem for Linux launcher, which prints "no installed
+# distributions" where none is installed.
+LAUNCHER_FOLDERS = ("\\windows\\", "\\windowsapps\\")
+
+
+def _windows_shell(name: str) -> str | None:
+    """A POSIX shell on Windows: `name` on PATH unless it is the WSL launcher, else the one that
+    sits in the installation of the `git` on PATH (Git for Windows)."""
+
+    found = shutil.which(name)
+    if found and not any(folder in found.lower() for folder in LAUNCHER_FOLDERS):
+        return found
+    git = shutil.which("git")
+    if git:
+        for parent in list(Path(git).parents)[:3]:
+            for relative in ("bin", Path("usr") / "bin"):
+                candidate = parent / relative / f"{name}.exe"
+                if candidate.is_file():
+                    return str(candidate)
+    return None
+
+
+def interpreter(first_line: str, windows: bool) -> list[str] | None:
+    """The words that start a script whose first line is `first_line`, as the script's `#!` line
+    names its interpreter; None where it names none this platform can find. POSIX runs the file
+    itself, which is what its mode bit promises. Windows has no `#!`, so Python runs under this
+    Python and a shell script under Git for Windows' shell."""
+
+    if not windows:
+        return []
+    words = first_line.removeprefix("#!").split()
+    if words and Path(words[0]).name == "env":
+        words = [word for word in words[1:] if not word.startswith("-")]
+    name = Path(words[0]).name if words else ""
+    if name.startswith("python"):
+        return [sys.executable]
+    if name in ("sh", "bash", "dash"):
+        shell = _windows_shell(name) or _windows_shell("bash")
+        return None if shell is None else [shell]
+    return None
+
+
+def _first_line(path: Path) -> str:
+    try:
+        with path.open("rb") as handle:
+            return handle.readline().decode("utf-8", "replace").strip()
+    except OSError:
+        return ""
+
+
 def _help(root: Path, path: str, empty: str) -> str | None:
     """Why `path --help`, run from the directory `empty`, did not exit 0, or None."""
 
+    start = interpreter(_first_line(root / path), os.name == "nt")
+    if start is None:
+        return f"{path} --help could not run: no interpreter for its first line"
+    target = (root / path).as_posix() if start else str(root / path)
     try:
         done = subprocess.run(
-            [str(root / path), "--help"],
+            [*start, target, "--help"],
             cwd=empty,
             stdin=subprocess.DEVNULL,
             capture_output=True,

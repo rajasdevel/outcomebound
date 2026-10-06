@@ -55,6 +55,7 @@ def test_export_prints_the_pinned_query_path_and_the_command_and_runs_nothing(
     assert captured.err == ""
     query, command = captured.out.splitlines()
     pinned = (home.ROOT / "templates/tickets/github-export.graphql").resolve()
+    # The path is printed in forward slashes on every platform, which every shell takes.
     assert query.startswith("# ") and query.endswith(pinned.as_posix())
     assert pinned.is_file()
     assert command.startswith("gh api graphql --paginate --slurp -F owner=owner -F name=name ")

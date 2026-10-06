@@ -465,7 +465,15 @@ def _listed(root: Path) -> tuple[list[str] | None, str]:
 
     walked = "every file under the target was walked"
     try:
-        inside, answer, _ = _git_status(root, "rev-parse", "--is-inside-work-tree")
+        inside, answer, refusal = _git_status(root, "rev-parse", "--is-inside-work-tree")
+        if inside != 0 and b"dubious ownership" in refusal:
+            # Git's own refusal: the target belongs to another user. The engine never trusts a
+            # target for Git (that is the person's act), so it says what to run and walks.
+            return None, (
+                "Git refuses the target, owned by another user (dubious ownership), so "
+                f"{walked}; to list it by Git, trust it with `git config --global --add "
+                "safe.directory <the target>`"
+            )
         if inside != 0 or answer.strip() != b"true":
             return None, f"not a Git work tree, so {walked}"
         ignored, _, _ = _git_status(root, "check-ignore", "-q", ".")
