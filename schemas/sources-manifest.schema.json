@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:sources-manifest:1",
+  "title": "OutcomeBound source manifest v1",
+  "description": "What `outcomebound sources import` writes: the items of one or more markdown or plain-text files. An item's id is where it stands (name:file:section); its revision is the sha256 of its text, so a changed item keeps its id and shows a new revision. The manifest holds the source text. It has no timestamp: one input gives one file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "name", "partial", "sources", "items"],
+  "properties": {
+    "version": {"const": 1},
+    "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "partial": {"type": "boolean", "description": "True where any item is partial."},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "format", "raw_sha256", "bytes", "converted"],
+        "properties": {
+          "file": {"type": "string", "minLength": 1, "description": "The path as given, relative to the folder the import ran in, else the file's name."},
+          "format": {"enum": ["markdown", "text"]},
+          "raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 of the file's bytes with CRLF as LF."},
+          "bytes": {"type": "integer", "description": "The size of the file with CRLF as LF."},
+          "converted": {"type": "boolean", "description": "The text was converted from another format; the conversion's fidelity is unverified."}
+        }
+      }
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "heading", "line_start", "line_end", "revision", "text", "partial", "suspect"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*:[a-z0-9][a-z0-9-]*$"},
+          "source": {"type": "integer", "description": "Index into sources."},
+          "heading": {"type": ["string", "null"]},
+          "line_start": {"type": "integer"},
+          "line_end": {"type": "integer"},
+          "revision": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "text": {"type": "string", "description": "The item's text, raw."},
+          "partial": {"type": "array", "items": {"type": "string"}, "description": "Why the item may not hold all its source's text; empty where nothing was observed."},
+          "suspect": {"type": "array", "items": {"type": "string"}, "description": "Advisory flags from the instruction audit's lexical classes; empty is not safe."}
+        }
+      }
+    }
+  }
+}

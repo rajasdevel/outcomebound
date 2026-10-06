@@ -16,6 +16,12 @@ status: draft
 
 <!-- Observable result and completion bar. -->
 
+## Requirements
+
+<!-- Optional. Only where requirements come from a source: one line each, starting with an id
+`R1`, `R2` and so on. Ids are never renumbered or reused. Add `[assumed]` to a line that no source
+states. Delete this section otherwise. -->
+
 ## Decisions
 
 | Decision | Rejected alternative | Owner | Status |
@@ -25,3 +31,15 @@ status: draft
 ## Validation
 
 <the checks that settle the material risks, named once>
+
+## Sources
+
+<!-- Optional. Only where requirements come from a source: `outcomebound sources import` reads
+the source, `outcomebound sources check --skeleton <manifest>` prints these rows, and
+`outcomebound sources check <manifest>... <this file>` checks them. Delete this section
+otherwise. A quote is the shortest phrase that anchors the requirement: this file may be public
+where the source is not. -->
+
+| Source item | Disposition | Where | Basis |
+| --- | --- | --- | --- |
+| <id> #<revision> | carried | R1 | stated: "<quote>" |
