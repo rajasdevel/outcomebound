@@ -169,6 +169,7 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("ignore", adopt.LOCAL_IGNORE, adopt.LOCAL_RECORDS),
         ("pointer", "CLAUDE.md", "pointer-claude-md"),
         ("skill", CLAUDE_BRIEF, "decision-brief"),
+        ("skill", ".claude/skills/explain-spec/SKILL.md", "explain-spec"),
         ("skill", ".claude/skills/gather-requirements/SKILL.md", "gather-requirements"),
         ("skill", ".claude/skills/tests-worth-keeping/SKILL.md", "tests-worth-keeping"),
         ("skill", CLAUDE_SKILL, "using-outcomebound"),
@@ -984,6 +985,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         "CLAUDE.md (pointer-claude-md)": "missing",
         CLAUDE_BRIEF: "stale",
         CLAUDE_SKILL: "edited",
+        ".claude/skills/explain-spec/SKILL.md": "current",
         ".claude/skills/gather-requirements/SKILL.md": "current",
         ".claude/skills/tests-worth-keeping/SKILL.md": "current",
     }

@@ -50,7 +50,13 @@ EXCLUDED_DIRS = frozenset({".git", "node_modules", ".venv", "venv", "__pycache__
 # The skills every install carries, the core skill first; a selected fragment's `skills:` adds
 # its own (`carried`). adopt installs each for every harness, and `inline` emits each after the
 # kernel.
-SKILLS = ("using-outcomebound", "decision-brief", "gather-requirements", "tests-worth-keeping")
+SKILLS = (
+    "using-outcomebound",
+    "decision-brief",
+    "gather-requirements",
+    "tests-worth-keeping",
+    "explain-spec",
+)
 ENGINE_ROOT = home.ROOT
 PREAMBLE = (
     "Project guidance for this repository. Each block instantiates the operating contract "

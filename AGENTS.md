@@ -82,6 +82,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md
 - when writing, changing or judging a test: read .claude/skills/tests-worth-keeping/SKILL.md
+- when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "e4397c4e06273a577d69bdd30388f10744d29a7f820cbc03821150435a8a3855",
-      "sha256": "0329cd1d5b4588971504762559fb64ef5669dd64091b01e0ff0807a5bd238cbb"
+      "frame": "bbfbe0717001716b483439f0691a84acce544cfcf460a3966457d5b1e647e9b2",
+      "sha256": "f28723e22841911c627f1546784bfa0c4e685338e47ece5a3a90ccdad463f35a"
     },
     {
       "kind": "fragment",
@@ -93,12 +93,21 @@
     },
     {
       "kind": "skill",
+      "path": ".claude/skills/explain-spec/SKILL.md",
+      "id": "explain-spec",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "20e47fdb0b51d2d995366739bbf6308bb3403204251bb6c8ef5c31389954b7e2"
+    },
+    {
+      "kind": "skill",
       "path": ".claude/skills/gather-requirements/SKILL.md",
       "id": "gather-requirements",
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "2c276f95be287ece49d981c08cd99d6166d74a3b42f2cf1eb42b8c15f5a07136"
+      "sha256": "6958b39c9fd453514c9074553cff63cdcf3234dcbb4b1354ce4ce1f77fbc4ec5"
     },
     {
       "kind": "skill",

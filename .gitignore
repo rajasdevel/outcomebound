@@ -42,6 +42,7 @@ env/
 !.claude/skills/decision-brief/
 !.claude/skills/gather-requirements/
 !.claude/skills/tests-worth-keeping/
+!.claude/skills/explain-spec/
 CLAUDE.local.md
 
 # Local tool state, not part of the project

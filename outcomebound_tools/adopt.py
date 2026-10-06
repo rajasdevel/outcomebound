@@ -92,6 +92,9 @@ CONDITIONS = {
         "or requirements arrive from an existing source"
     ),
     "tests-worth-keeping": "when writing, changing or judging a test",
+    "explain-spec": (
+        "when a person must act on a spec they did not write, or says they do not follow it"
+    ),
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": "when handing an accepted ticket to the agent or model that will build it",
 }

@@ -256,6 +256,7 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
         "decision-brief",
         "gather-requirements",
         "tests-worth-keeping",
+        "explain-spec",
     }
     assert current.files == _folders(skills, adopt.SKILLS)
     assert next(iter(current.files)) == f"{skills}/using-outcomebound/SKILL.md"
