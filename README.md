@@ -327,6 +327,6 @@ and none of them is affiliated with OutcomeBound or endorses it:
 [agentskills/agentskills](https://github.com/agentskills/agentskills),
 [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill),
 [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
-[UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai). Each idea, with its
-exact source, is in the research library's [credited
-ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
+[UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai). The research
+library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
+page is where sources are recorded.

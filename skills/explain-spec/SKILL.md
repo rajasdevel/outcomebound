@@ -16,9 +16,9 @@ Read the spec and the code it points to, and teach only what they say; mark anyt
 `UNVERIFIED`. Start from what the person says they already know and skip it. Give the outcome
 and who it is for, then each decision in dependency order with the alternative the spec rejected
 and the reason, then the edges: what happens when the input is empty, the call is repeated, a
-step fails, or the change is undone. Where order or flow is the point, add a diagram. Write for
-the person in the style the project sets for text people read; when a message does not land,
-say it again, shorter, in the project's own terms.
+step fails, or the change is undone. Where order or flow is the point, add a diagram, in the form
+the surface shows. Write for the person in the style the project sets for text people read; when
+a message does not land, say it again, shorter, in the project's own terms.
 
 ## Ask
 
@@ -31,10 +31,9 @@ multiple-choice question equal in length so the format gives no clue.
 ## What a wrong answer means
 
 When the spec does not answer the question, the gap is real: fix the spec in place, or record the
-row as open, in the same change. When the spec answers it and the person did not follow, the
-misunderstanding is theirs to resolve and not a defect in the spec: explain that row again and ask
-again. Record the result of each row in a short note beside the spec: understood, unclear, or
-skipped by the person.
+row as open, in the same change. When the spec answers it and the person did not follow, explain
+that row again and ask again; where the row's words caused the misreading, fix the words in the
+same change.
 
 ## With no person present
 
