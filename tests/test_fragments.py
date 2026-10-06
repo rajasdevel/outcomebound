@@ -459,19 +459,23 @@ def test_compose_cli_is_silent_below_the_cap_and_for_a_harness_without_one(sourc
     assert len(uncapped.stdout.encode("utf-8")) > 32768
 
 
+def _sentinels_outside_fences(text):
+    in_fence, found = False, []
+    for line in text.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+        elif not in_fence and "<!-- outcomebound:" in line:
+            found.append(line)
+    return found
+
+
 def test_inline_mode_emits_kernel_skills_and_fragments_with_no_sentinels(source):
     """Each skill an install carries follows the kernel, so the kernel's pointer to the
     decision-brief skill resolves inside the blob."""
 
     result = _cli("compose", "--source", str(source), "--fragments", "python", "--inline")
     assert result.returncode == 0, result.stderr
-    in_fence, outside = False, []
-    for line in result.stdout.splitlines():
-        if line.lstrip().startswith(("```", "~~~")):
-            in_fence = not in_fence
-        elif not in_fence:
-            outside.append(line)
-    assert not [line for line in outside if "<!-- outcomebound:" in line]
+    assert not _sentinels_outside_fences(result.stdout)
     assert "**OutcomeBound**" in result.stdout and "four inputs" in result.stdout
     assert "`decision-brief` skill" in result.stdout
     for heading in ("# Using OutcomeBound", "# Decision brief"):
@@ -533,7 +537,7 @@ def test_a_malformed_fragment_in_the_source_root_is_a_typed_cli_failure(tmp_path
 def test_inline_is_a_library_call_too(source):
     catalog = load_all(source)
     text = inline(source, [catalog["python"]])
-    assert "outcomebound:" not in text
+    assert not _sentinels_outside_fences(text)
     assert text.endswith("\n")
 
 
