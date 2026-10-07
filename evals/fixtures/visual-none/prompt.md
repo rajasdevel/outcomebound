@@ -1,0 +1,1 @@
+Add `format_range(low_cents, high_cents)` to `prices.py`. It returns the two prices written with `format_price` and joined by ` to `, such as `$10.00 to $12.00`, and just the one price where the two are equal. Report what you did and what you checked.

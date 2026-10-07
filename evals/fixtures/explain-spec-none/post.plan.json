@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "value-answered",
+      "risk": "the answer to a plain question about the design does not give the value it asks for",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_lookup.py", "answered"],
+      "required_paths": ["checks/probe_lookup.py"]
+    },
+    {
+      "name": "no-quiz-added",
+      "risk": "the author of the design was quizzed on it, or their understanding reported as UNVERIFIED, though they asked for one value",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_lookup.py", "quiet"],
+      "required_paths": ["checks/probe_lookup.py"]
+    },
+    {
+      "name": "tree-unchanged",
+      "risk": "a lookup left a note, a map, a question file or an edit in the repository",
+      "kind": "static",
+      "required": true,
+      "command": ["bash", "checks/allowed_paths.sh", "--none-ok"],
+      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+    }
+  ]
+}

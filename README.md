@@ -112,8 +112,9 @@ the diff, and commit. Your agent's next session reads the contract. The install 
 
 ```text
 AGENTS.md             the contract; Done, CI test and irreversible edges from your files
-.claude/skills/       seven skills: sizing, decision briefs, requirements, tests, explaining a spec,
-                      slicing tickets, handing one off (per harness)
+.claude/skills/       nine skills: sizing, decision briefs, requirements, tests, diagnosing a failure,
+                      review findings, explaining a spec, slicing tickets, handing one off (per
+                      harness)
 .outcomebound/        the fragments you select, and a manifest of what adopt wrote
 CLAUDE.md, GEMINI.md  an @AGENTS.md import, only where the harness needs one
 ```
@@ -298,6 +299,7 @@ a loosening visible; your branch protection is what holds it to a person's decis
   phrases and risky harness settings in the files your agents load. It writes nothing. A hit you
   judge safe, you record with `outcomebound instructions rule . <id>`, in your own file outside the
   project; it then stops changing the result until that file changes.
+- **Review check** (`outcomebound review check <file>`): fails where a finding in a review file has no disposition (`fixed`, `rejected` or `deferred`), or no `Reviewed:` ref.
 - **Sources** (`outcomebound sources import`, `outcomebound sources check`): where requirements come
   from a document, an issue or a transcript saved as markdown or text, `import` splits it into items
   that each have an id and a revision digest, and `check` fails where the ledger in your spec leaves
@@ -344,6 +346,7 @@ and none of them is affiliated with OutcomeBound or endorses it:
 [cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill),
 [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
 [UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai),
-[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills). The research
+[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills),
+[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail). The research
 library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
 page is where sources are recorded.

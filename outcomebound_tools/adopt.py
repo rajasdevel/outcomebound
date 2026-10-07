@@ -91,6 +91,8 @@ CONDITIONS = {
         "or requirements arrive from an existing source"
     ),
     "tests-worth-keeping": "when writing, changing or judging a test",
+    "diagnose": "when a failure's cause is unknown, or a fix did not hold",
+    "review-findings": "when acting on review findings, or writing a review the project requires",
     "explain-spec": (
         "when a person must act on a spec they did not write, or says they do not follow it"
     ),
@@ -2142,7 +2144,7 @@ edges: those the selected fragments declare, and a floor loosening where a floor
 Text for people: with --human-style ste, text an agent writes for a person in the style of
 ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers: the local
 fragment inline, then one line per fragment in --fragments, copied under
-.outcomebound/fragments/, and per skill: the seven working skills. The workspace fragment also gets
+.outcomebound/fragments/, and per skill: the nine working skills. The workspace fragment also gets
 .agents/.gitignore, which keeps its four folders out of Git, and every install gets
 .outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
 validation logs) out of Git. A fact it cannot observe is left out, and the install report names

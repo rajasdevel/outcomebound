@@ -634,3 +634,29 @@ def test_tests_import_only_public_names() -> None:
             reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
     assert reached >= 14, "the survey found fewer imported names than this file uses"
+
+
+def test_satisfies_names_requirement_ids_and_moves_the_identity_only_where_written() -> None:
+    """`satisfies` reads one or more `R<n>` ids in written order and refuses any other
+    entry; a block without it keeps the identity it had before the key existed."""
+
+    assert _fields({"satisfies": "R1, R12"}).satisfies == ("R1", "R12")
+    assert _fields().satisfies == ()
+    for offending in ("", "D1", "R", "R1.2", "r1"):
+        fields, messages = parse_block(_block({"satisfies": offending}))
+        assert [item.code for item in messages] == ["VALUE_INVALID"], offending
+        assert "satisfies" in messages[0].text and fields.satisfies == (), offending
+    assert _codes(_block({"satisfies": ["R1"]})) == ["VALUE_INVALID"]
+    assert _identity(keys={"satisfies": "R1"}) != _identity()
+    assert _identity(keys={"satisfies": "R1"}) != _identity(keys={"satisfies": "R2"})
+    legacy = {
+        "title": TITLE,
+        "brief": BRIEF.strip(),
+        "human-only": "no",
+        "discovered-from": "",
+        "reads": [BLOCK["reads"]],
+        "bounds": [BLOCK["bounds"]],
+        "done-when": ["tickets-model"],
+    }
+    payload = json.dumps(legacy, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    assert _identity() == hashlib.sha256(payload.encode("utf-8")).hexdigest()

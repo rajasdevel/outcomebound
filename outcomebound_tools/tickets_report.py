@@ -120,6 +120,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "BOUNDS_INVALID",
         "DEPENDENCY_CYCLE",
         "CLAIM_CWD_OUTSIDE",
+        "REQUIREMENT_UNKNOWN",
     ),
     Level.UNVERIFIED: (
         "EXPORT_TRUNCATED",
@@ -135,6 +136,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "BOUNDS_WHOLE_REPOSITORY",
         "DISCOVERED_FROM_ABSENT",
         "REPEATED_GUIDANCE",
+        "REQUIREMENT_UNCOVERED",
     ),
     Level.INFO: ("HOLD_SURFACES_DIFFER", "WAITS_ON_BRIEF", "RELATION_UNCHECKED"),
 }

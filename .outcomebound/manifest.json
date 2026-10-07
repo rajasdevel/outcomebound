@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "44a6d5a81cc701aecaba484f8bac16ae226384276d9329667ed87f0aa92b5925",
-      "sha256": "f06137aeea6f00e01fe0b05907704fdc76022eaa96381f5438d910fccee5b211"
+      "frame": "2f39c24fd470876f60d205660010f9d77bb96dcb0150def41fd5d76f8ddf1023",
+      "sha256": "2a2b03cbe950246b4ae550f0e0cd77a48993e526a87e69e60867613a0189eca9"
     },
     {
       "kind": "fragment",
@@ -93,6 +93,15 @@
     },
     {
       "kind": "skill",
+      "path": ".claude/skills/diagnose/SKILL.md",
+      "id": "diagnose",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "dcebda188c69743e3bae2be2707e41a80ee24c729285285665407d7e81d7e5d3"
+    },
+    {
+      "kind": "skill",
       "path": ".claude/skills/explain-spec/SKILL.md",
       "id": "explain-spec",
       "harnesses": [
@@ -107,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "3168a48d866439aea0df89203f4c754eaa70fcbe0ca35a9576bb9f4b10bde651"
+      "sha256": "ace6bd26a29129b0fd2b13da9670335e5efbf95c82b4fc98d16ca6274829547f"
     },
     {
       "kind": "skill",
@@ -120,12 +129,21 @@
     },
     {
       "kind": "skill",
+      "path": ".claude/skills/review-findings/SKILL.md",
+      "id": "review-findings",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "0343b6fcff66c1cbc907a051edb06f5de518ba4a1d3d1adaebed27ed2ffd52dd"
+    },
+    {
+      "kind": "skill",
       "path": ".claude/skills/slice-tickets/SKILL.md",
       "id": "slice-tickets",
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "6a3576901955453c3c540e9bb02837451100fd8f2f8ef9ad9ef44a04f645e0b5"
+      "sha256": "cc1c3e613f85fb60c85610bcd8888b86f966367381b41472f14f41d7ea60ca6c"
     },
     {
       "kind": "skill",
@@ -143,7 +161,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "d77791fd6e157160d456801ff23c081b6033baf6e4bb772a17e679fc0de8658d"
+      "sha256": "a599a866c2dd070dbf3eba2c70f0ab7bed66efaffba9c28dd18e8b28c667bf1b"
     },
     {
       "kind": "skill",

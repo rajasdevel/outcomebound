@@ -38,6 +38,7 @@ block, `id=ticket v=1`. The block holds these keys:
 | `human-only` | Whether a person must do the ticket: `yes` (a person must), `requested` (an agent asks for a person) or `no`. |
 | `done-when` | The checks that say the ticket is done. Each item names one claim. |
 | `discovered-from` | Optional. The ticket or issue during which this one was found. |
+| `satisfies` | Optional. The requirement ids that the ticket's work meets, as `R<n>` ids on one line separated by commas, for example `satisfies: R1, R3`. The ids are those of the `## Requirements` section of a design that the ticket's `reads` names. |
 | `waits-on` | Optional. The decision briefs that the ticket waits on, as ids on one line separated by commas, for example `waits-on: D1, D2`. Other tickets do not wait. |
 
 `templates/tickets/issue-template.md` is the skeleton to copy into an issue body. It has three
@@ -125,6 +126,16 @@ not resolve them. `--draft` lints local draft files together, relations included
 store. On a draft run, a `blocked-by` or `parent` entry that names a published ticket, such as
 `#12`, is not checked, because no store is read. `check` says so in an INFO message,
 `RELATION_UNCHECKED`. `--json` prints one JSON object instead of text.
+
+A ticket that names `satisfies` ids is checked against the designs that its `reads` name. An id that
+none of them holds is an ERROR, `REQUIREMENT_UNKNOWN`. An epic is a ticket with a child in the run that is open or closed; a dropped child covers nothing.
+When an epic's `reads` names a design that holds requirements, and a ticket in the run carries
+`satisfies`, an active requirement that no child names is a WARNING on the epic,
+`REQUIREMENT_UNCOVERED`. A requirement line that carries `[excluded]` or `[deferred]` in the design is
+not active. An id in the epic's own `satisfies` says that an existing ticket covers it; the epic's body
+names that ticket. A run with no `satisfies` has no coverage check. `check` does not tell a ticket that
+lists every id from a ticket that meets every one: it establishes that each id exists and that a
+child names it, not that the work meets it.
 
 On a draft run of two or more drafts, `check` gives a WARNING about the run,
 `REPEATED_GUIDANCE`, with no ticket id, for each paragraph that is in the body of every draft. The

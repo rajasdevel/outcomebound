@@ -83,6 +83,30 @@
               }
             }
           },
+          "produces": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "paths"
+            ],
+            "description": "Optional output the command must leave. Where the command exits 0, each path must be absent before the run and present after it, or present both times with a changed modification time, size or content (a directory: any file in it); otherwise the claim reads when_missing (UNVERIFIED by default, or FAIL) and the report names the path. A nonzero exit stays FAIL. With executes_tests on the same claim, the stricter verdict wins. The runner never opens an output to judge it: a produced file proves only that the command wrote it, not that its content is right. Nothing is deleted or moved.",
+            "properties": {
+              "paths": {
+                "type": "array",
+                "minItems": 1,
+                "description": "Paths relative to the plan's working directory: no absolute path, no '..', and none that resolves outside it.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "when_missing": {
+                "enum": [
+                  "UNVERIFIED",
+                  "FAIL"
+                ]
+              }
+            }
+          },
           "timeout_seconds": {
             "type": "number",
             "description": "Seconds after which this claim's command, with everything it started, is stopped and reads UNVERIFIED; it takes the place of the plan's timeout_seconds. Optional: with neither set there is no timeout."

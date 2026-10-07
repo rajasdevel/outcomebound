@@ -20,7 +20,8 @@ status: draft
 
 <!-- Optional. Only where requirements come from a source: one line each, starting with an id
 `R1`, `R2` and so on. Ids are never renumbered or reused. Add `[assumed]` to a line that no source
-states. Delete this section otherwise. -->
+states, and `[deferred]` or `[excluded]` to one that this work leaves out, so `tickets check` does
+not ask a ticket to satisfy it. Delete this section otherwise. -->
 
 ## Decisions
 

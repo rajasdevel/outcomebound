@@ -581,3 +581,10 @@ def test_MANIFEST_DIFFERS_a_flag_cleared_by_hand_fails(work, capsys):
 
     found = lines(out, "FAIL", "MANIFEST_DIFFERS")
     assert code == 1 and found and "text or flags differ" in found[0]
+
+
+def test_a_fence_shaped_line_with_an_info_string_does_not_close_a_ledger_fence():
+    from outcomebound_tools import sources_ledger
+
+    text = "```\ncode\n```python\n```\n\n## Sources\n\n| a #" + "0" * 8 + " | todo | | |\n"
+    assert sources_ledger.parse(text).present is True

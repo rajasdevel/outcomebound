@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "design-read",
+      "risk": "the explanation was given without the design having been read by any command the run executed",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_notify.py", "read"],
+      "required_paths": ["checks/probe_notify.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "each-decision-explained-with-what-it-rejected",
+      "risk": "the answer leaves out a decision of the design, a value it sets or the alternative it rejected",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_notify.py", "explained"],
+      "required_paths": ["checks/probe_notify.py"]
+    },
+    {
+      "name": "questions-drawn-from-the-design",
+      "risk": "no question of the answer or of a note it wrote comes from a rejected alternative, the assumed row or an edge of the design",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_notify.py", "questions"],
+      "required_paths": ["checks/probe_notify.py"]
+    },
+    {
+      "name": "understanding-reported-unverified",
+      "risk": "a run with nobody to answer reports that the person understands the design, or never reports their understanding as UNVERIFIED",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_notify.py", "understanding"],
+      "required_paths": ["checks/probe_notify.py"]
+    },
+    {
+      "name": "design-rows-kept",
+      "risk": "a decision or assumed row of the design was removed or reworded to fit an explanation",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_notify.py", "rows"],
+      "required_paths": ["checks/probe_notify.py"]
+    },
+    {
+      "name": "only-the-design-and-notes-changed",
+      "risk": "an explanation task changed the code, its tests or the project note, or left a commit",
+      "kind": "static",
+      "required": true,
+      "command": ["bash", "checks/allowed_paths.sh", "--none-ok", "docs/specs/notify/design.md", ".agents/work/*"],
+      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+    }
+  ]
+}

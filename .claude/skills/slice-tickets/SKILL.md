@@ -165,6 +165,11 @@ parent: #41
 - `blocked-by`, `parent` and `discovered-from` name a sibling draft by its file name without the
   extension, or a published ticket by `#N`. The first two leave the block at publishing and
   become the tracker's relations; `discovered-from` stays, rewritten to the issue number.
+- `satisfies` names the `R<n>` ids of the design's `## Requirements` that the ticket's work meets, and
+  is written only where requirements came from a source; `check` reports an id the ticket's `reads`
+  design does not hold, and, on an epic over the design, a requirement no child names, unless the
+  design marks it `[deferred]` or `[excluded]`, or the epic's own `satisfies` names it as covered
+  elsewhere; a set with no `satisfies` gets no coverage check.
 - `waits-on` names, by its id, the decision brief whose answer the ticket's work waits on. It
   stays in the block, and `check` and `brief` show it, so a run can tell which tickets can start:
   a ticket without `waits-on` waits on no brief, whatever briefs are open.

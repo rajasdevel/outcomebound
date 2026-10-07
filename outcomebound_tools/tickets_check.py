@@ -4,7 +4,8 @@ What this module decides: which tickets are judged — the open ones, and every
 draft — the order in which one ticket is judged and where that pass stops, when
 a body is too thin to be a brief, what a `reads` entry that will not resolve
 reads, what a claim the plan does not define reads, what a claim that declares
-it needs a path outside the ticket's `bounds` reads, and what is said about a
+it needs a path outside the ticket's `bounds` reads, what a requirement id a ticket
+satisfies reads (`tickets_requirements`), and what is said about a
 knot of the waiting graph, about a `discovered-from` the input does not hold,
 and about a ticket whose work waits on a person's decision brief.
 A closed or dropped ticket's links are history and are not resolved: it is read,
@@ -55,6 +56,7 @@ from outcomebound_tools.tickets_report import (
     TicketResult,
     message,
 )
+from outcomebound_tools.tickets_requirements import Requirements
 from outcomebound_tools.tickets_store import read_store
 
 __all__ = ["check", "check_loaded"]
@@ -438,6 +440,7 @@ class _Run:
     given: _Input
     sections: _Sections
     plan: ClaimsPlan
+    requirements: Requirements
     knots: Mapping[str, tuple[str, ...]]
 
 
@@ -458,6 +461,8 @@ def _judge(ticket: Ticket, run: _Run) -> TicketResult:
         *reported,
         *_brief_messages(ticket),
         *_reads_messages(ticket, run.sections),
+        *run.requirements.unknown(ticket),
+        *run.requirements.uncovered(ticket),
         *_claim_messages(ticket, run.plan),
         *_reach_messages(ticket, run.plan),
         *_relation_messages(ticket, run.given, run.knots),
@@ -522,7 +527,13 @@ def check_loaded(
     )
     claims = load_claims(root, declaration) if plan is None else plan
     judged = tuple(ticket for ticket in given.tickets if ticket.state == _OPEN)
-    run = _Run(given=given, sections=_Sections(root), plan=claims, knots=_knots(judged))
+    run = _Run(
+        given=given,
+        sections=_Sections(root),
+        plan=claims,
+        requirements=Requirements(root, given.tickets),
+        knots=_knots(judged),
+    )
     return Report(
         verb=_VERB,
         store=declaration.store,

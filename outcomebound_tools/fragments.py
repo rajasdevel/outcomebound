@@ -52,6 +52,8 @@ SKILLS = (
     "decision-brief",
     "gather-requirements",
     "tests-worth-keeping",
+    "diagnose",
+    "review-findings",
     "explain-spec",
     "slice-tickets",
     "hand-off-tickets",
@@ -171,7 +173,7 @@ def _frontmatter(text: str, source: str) -> tuple[dict, str]:
                 f"{source}:{number}: unknown frontmatter key {key!r}; "
                 f"allowed: {', '.join(FRONTMATTER_KEYS + OPTIONAL_KEYS)}"
                 + (
-                    "; 'skills' was retired because every install carries all seven skills"
+                    "; 'skills' was retired because every install carries all nine skills"
                     if key == "skills"
                     else ""
                 )

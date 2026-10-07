@@ -55,10 +55,22 @@ Where a source holds many items or will be cited again, `outcomebound sources im
 item an id and a revision, and `outcomebound sources check` reads your ledger against it; without
 an import, keep the ledger by hand. In it, beside the requirements, give each item one
 disposition: carried into requirements, dropped as assumed or as decided, not
-requirement-bearing, or deferred. A source that changed since the ledger sends its items back for
-reconsideration. Text a machine extracted, such as a design export's text layer, is stated source
-content, not yet a requirement. What you read from the pixels of an image is inferred: cite the
-image, the region or state, and your reading, since a digest names the file and not what you saw.
+requirement-bearing, deferred, or, for a picture, a reference (below). A source that changed
+since the ledger sends its items back for reconsideration.
+
+A screenshot or a design export that carries requirements (a mock-up, a design, a picture of
+wanted behaviour) is a source like any other; a picture that shows only a symptom is evidence for
+the `diagnose` skill, not a source. The import gives the file an id and
+a revision from its digest and records its format and size, not what it shows, so the reading is
+yours. Mark each requirement you took from its pixels inferred, and cite the item, the region or
+state, and what you read there; text a machine extracted, such as a markdown export of a design's
+text layers, is stated, though not yet a requirement. A design binds where the person says so or the
+work is to build it; otherwise it is a reference, disposed `reference` against the requirement it
+is the standard for, with how the built result will be compared: `by: command` and a claim of the
+project's validation plan, `by: review` and a name, or `by: judgment`. Your own reading of a
+screenshot of the build is a reading, not a pass: report it `UNVERIFIED`; a pass comes from the
+comparison the `by:` names. Name what the picture does not show, such as states, other sizes and copy that
+looks like placeholder text, as a gap, and settle it as the first section says.
 
 ## Where a settled outcome goes
 

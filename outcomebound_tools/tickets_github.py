@@ -682,6 +682,7 @@ def _ticket(
             blocked_by=issue.blocked_by,
             parent=issue.parent,
             discovered_from=fields.discovered_from,
+            satisfies=fields.satisfies,
             waits_on=fields.waits_on,
             content=content_identity(title, brief, fields),
         ),

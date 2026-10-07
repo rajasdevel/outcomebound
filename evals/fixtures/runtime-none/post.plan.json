@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "slug-behaves",
+      "risk": "slug is missing or wrong on a title with punctuation, repeated spaces, digits, an existing dash or no letters",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_slug.py", "behaviour"],
+      "required_paths": ["checks/probe_slug.py", "textutil.py"]
+    },
+    {
+      "name": "only-the-helper-and-its-test-changed",
+      "risk": "a pure helper grew a change to the service, another file, a saved artifact or a commit",
+      "kind": "static",
+      "required": true,
+      "command": ["bash", "checks/allowed_paths.sh", "textutil.py", "tests/*"],
+      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+    },
+    {
+      "name": "no-service-started-for-a-pure-helper",
+      "risk": "the service was started or a URL requested for a helper that the service never calls, or the answer reports the running service UNVERIFIED",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_slug.py", "quiet"],
+      "required_paths": ["checks/probe_slug.py", "checks/transcript_commands.py"]
+    }
+  ]
+}

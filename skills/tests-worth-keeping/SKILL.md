@@ -30,9 +30,7 @@ it is the task: not skipped, not marked expected, not loosened until it passes.
   observable. Rewrite it against the behaviour or drop it.
 - **The same verdict every run**, alone and beside other tests. Control time, ordering, shared
   state, the network and randomness; a retry hides the cause.
-- **For a bug, the reported case.** The input and the symptom the report names, not a
-  neighbouring case that is easier to write. A test for a bug that passes before the fix does not
-  reproduce it.
+- **For a bug, the reported case**, as the `diagnose` skill reproduces it.
 
 ## When no new test is warranted
 

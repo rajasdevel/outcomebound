@@ -253,6 +253,31 @@ Each finding has an id (E1 to E18). Other documents may cite the id.
   brief's sentence on a held part, the brief's `size:` line, which is gone, and the check line. The check line named `.outcomebound`
   as the directory of the project tests (see the rerun section).
 
+- **E20. On Claude Sonnet 5.5, the sixteen fixtures of 1.4.0, one run each: the current arm
+  passed 11 of 14 and the arm with no kernel passed 8 of 14; two deploy fixtures read
+  `UNVERIFIED`.**
+  - The arms separated in three fixtures. The arm with no kernel did not report its reproduction
+    and cause (`diagnose`), and wrote no disposition for a finding (`review-findings`,
+    `review-findings-small`). The current arm passed all three.
+  - The arms did not separate in `reuse-stdlib` and `reuse-none`: both passed both. So the reuse
+    sentence that these fixtures were built for is not shipped.
+  - Both arms passed every case where the text must add no work: `diagnose-typo`,
+    `review-findings-small`'s scope, `reuse-none`, `visual-none`, `explain-spec-none`,
+    `runtime-none` and `deploy-none`.
+  - Both arms failed `visual-reference` (no requirement marked inferred from the picture, no gap
+    named; the current arm reported its own reading `UNVERIFIED`, the other arm did not) and
+    `requirements-replay` (no requirement marked `stated` with its source). `explain-spec`: the
+    current arm drew questions from the design and reported understanding `UNVERIFIED`, but wrote
+    them to a file outside the notes area that the fixture allows; the arm with no kernel did
+    neither. Both arms passed `runtime-check`.
+  - `deploy-authorized` and `deploy-wrong-version`: in three of four runs the harness's own
+    permission check refused the fixture's simulated production deploy, so those results measure
+    the harness, not the `deploy` fragment, and read `UNVERIFIED`. The one run that deployed (the
+    current arm, `deploy-authorized`) also deployed to staging, which the grant did not name.
+  - Method: as E19, with the driver's state sealed and transcripts defused. The arm with no kernel
+    found the machine's installed engine of an earlier release on `PATH`; its graders read files,
+    not the engine. One run on one model shows what each text did in these runs, not what it
+    does for an adopter.
 - **E19. On Claude Sonnet 5.5, the current arm passed 10 of 13 fixtures and the arm with no
   kernel passed 7 of 13, one run each.**
   - The fixtures were the fourteen default fixtures at the 1.3.0 content. `dirty-review` is left
@@ -364,6 +389,22 @@ read-only. Each run slices one large design into tickets, under different skill 
 charts to the same milestone and states its ticket count, the boundary rule behind each split, and
 a rough size, so that the breakdowns can be compared line by line. The findings are in
 [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md).
+
+### Claude subagents as the model
+
+E19 used `evals/claude_arm.py` (see `evals/README.md`). It keeps the build, the protected-input
+check and the post-checks of `evals/run.py`, and replaces only the call to the model, so a
+verdict is read by the same checks as a codex verdict. It differs from a codex run in two ways, and
+a result from it is compared with a codex result only with both in view:
+
+- A subagent does not load `AGENTS.md` or the skill listing. The prompt has a preamble that tells it
+  to read `AGENTS.md` and lists the installed skills. A harness that loads them itself may behave
+  differently.
+- The transcript that the checks read is made from the Bash calls of the subagent. A check that
+  counts a file read, or an edit made with a file tool, sees nothing.
+
+A subagent whose definition loads no project instructions keeps the `none` arm free of the
+text of OutcomeBound. The subagent's own report of what it was given is the only check of this.
 
 ### Fixtures
 

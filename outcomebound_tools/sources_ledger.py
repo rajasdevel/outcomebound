@@ -21,12 +21,14 @@ DISPOSITIONS = (
     "dropped (decided)",
     "not requirement-bearing",
     "deferred",
+    "reference",
     "todo",
 )
 _HEADING_SOURCES = re.compile(r"##[ \t]+Sources[ \t]*")
 _HEADING_REQUIREMENTS = re.compile(r"##[ \t]+Requirements[ \t]*")
 _H2 = re.compile(r"##[ \t]+\S")
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
+_CLOSING = re.compile(r"[ ]{0,3}(`{3,}|~{3,})[ \t]*")
 _REQUIREMENT = re.compile(r"[ \t]*(?:[-*+][ \t]+|\|[ \t]*)?(?:\*\*|__)?(R\d+)\b")
 _REQUIREMENT_ID = re.compile(r"R\d+")
 _ASSUMED = re.compile(r"\[assumed\]", re.IGNORECASE)
@@ -34,6 +36,7 @@ _SOURCE_CELL = re.compile(
     r"`?(?P<first>[a-z0-9][a-z0-9:-]*?)(?:\.\.(?P<last>[a-z0-9][a-z0-9:-]*))?`?"
     r"[ \t]+#(?P<revision>[0-9a-f]{8,64})"
 )
+_BY = re.compile(r"by:[ \t]*(command|review|judgment)\b[ \t]*(.*)", re.IGNORECASE | re.DOTALL)
 _QUOTE = re.compile(r'"([^"]+)"|“([^”]+)”')
 
 
@@ -49,6 +52,8 @@ class Row:
     where_text: str = ""
     basis: str = ""
     problem: str | None = None
+    by: str = ""  # a reference row's `command`, `review` or `judgment`
+    by_name: str = ""  # the claim of `command`, the reviewer of `review`
 
     def quotes(self) -> list[str]:
         return [a or b for a, b in _QUOTE.findall(self.basis)]
@@ -98,7 +103,23 @@ def _row(line_number: int, line: str) -> Row | None:
     row.revision = matched["revision"]
     if row.disposition not in DISPOSITIONS:
         row.problem = f"its Disposition is none of {', '.join(DISPOSITIONS[:-1])}"
+    elif row.disposition == "reference":
+        _reference_basis(row)
     return row
+
+
+def _reference_basis(row: Row) -> None:
+    """Read a reference row's Basis: `by: command <claim>`, `by: review <who>` or `by: judgment`."""
+
+    found = _BY.fullmatch(row.basis.replace("`", "").strip())
+    if found is None:
+        row.problem = (
+            "a reference row's Basis is `by: command <claim>`, `by: review <who>` or `by: judgment`"
+        )
+        return
+    row.by, row.by_name = found.group(1).lower(), found.group(2).strip()
+    if row.by != "judgment" and not row.by_name:
+        row.problem = f"`by: {row.by}` names the {'claim' if row.by == 'command' else 'reviewer'}"
 
 
 def _unfenced(text: str) -> Iterator[tuple[int, str]]:
@@ -106,14 +127,16 @@ def _unfenced(text: str) -> Iterator[tuple[int, str]]:
 
     fence: str | None = None
     for number, line in enumerate(text.split("\n"), 1):
-        opening = _FENCE.match(line)
         if fence is None:
+            opening = _FENCE.match(line)
             if opening:
                 fence = opening.group(1)
             else:
                 yield number, line
-        elif opening and opening.group(1)[0] == fence[0] and len(opening.group(1)) >= len(fence):
-            fence = None
+        else:
+            closing = _CLOSING.fullmatch(line)
+            if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
+                fence = None
 
 
 def _section_of(line: str) -> str | None:

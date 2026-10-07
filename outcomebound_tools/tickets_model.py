@@ -220,6 +220,26 @@ def _read_reads(value: str, items: tuple[str, ...]) -> tuple[Reads, ...]:
     return tuple(_reads_entry(entry) for entry in _entries(value))
 
 
+# A requirement id, as `sources_ledger` spells it: `R`, then digits.
+_REQUIREMENT = re.compile(r"R\d+")
+
+
+def _read_requirement_ids(value: str, items: tuple[str, ...]) -> tuple[str, ...]:
+    """`satisfies`: the requirement ids of the design the ticket reads that its work meets.
+
+    At least one, each `R<n>`; the order is the order written. Which design holds an
+    id is `tickets_requirements`'.
+    """
+
+    entries = _read_entries(value, items)
+    if not entries:
+        raise ModelError("names at least one requirement id, such as `R1`")
+    for entry in entries:
+        if _REQUIREMENT.fullmatch(entry) is None:
+            raise ModelError(f"entry {entry!r} is not a requirement id such as `R1`")
+    return entries
+
+
 _CLAIM_NAME = re.compile(r"[a-z][a-z0-9-]*")
 
 
@@ -306,6 +326,7 @@ _KEYS: tuple[_Key, ...] = (
     _Key("human-only", "human_only", "decision", _closed_set(HOLDS), True),
     _Key("done-when", "done_when", "decision", _read_done_when, True, _written_items),
     _Key("discovered-from", "discovered_from", "decision", _read_id),
+    _Key("satisfies", "satisfies", "decision", _read_requirement_ids, written=_written_value),
     _Key("waits-on", "waits_on", "wait", _read_brief_ids),
     _Key("status", "status", "lifecycle", _closed_set(STATES)),
     _Key("assignee", "assignee", "lifecycle", _read_text),
@@ -354,6 +375,7 @@ class BlockFields:
     human_only: str = ""
     done_when: tuple[DoneWhen, ...] = ()
     discovered_from: str = ""
+    satisfies: tuple[str, ...] = ()
     waits_on: tuple[str, ...] = ()
     status: str = ""
     assignee: str = ""
@@ -621,6 +643,11 @@ _IDENTITY_HOLD: Mapping[str, str] = MappingProxyType(
 )
 
 
+# A list key a ticket need not carry and that joins the document only where written, so
+# a ticket without it keeps the identity it had before the key existed.
+_OMIT_EMPTY: tuple[str, ...] = ("satisfies",)
+
+
 def _normalised_brief(brief: str) -> str:
     """Line endings to line feeds, no trailing whitespace, no blank edges."""
     lines = [line.rstrip() for line in brief.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
@@ -658,7 +685,13 @@ def content_identity(title: str, brief: str, fields: BlockFields) -> str:
         "human-only": _identity_hold(fields),
         "discovered-from": fields.discovered_from,
     }
-    document.update({name: list(fields.written.get(name, ())) for name in LIST_KEYS})
+    document.update(
+        {
+            name: list(fields.written.get(name, ()))
+            for name in LIST_KEYS
+            if name not in _OMIT_EMPTY or fields.written.get(name)
+        }
+    )
     payload = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -753,6 +786,7 @@ class Ticket:
     blocked_by: tuple[str, ...] = ()
     parent: str = ""
     discovered_from: str = ""
+    satisfies: tuple[str, ...] = ()
     waits_on: tuple[str, ...] = ()
     content: str = ""
 

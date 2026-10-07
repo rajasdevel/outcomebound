@@ -216,3 +216,11 @@ def test_two_files_with_one_stem_get_distinct_ids(work, capsys):
 
     assert [i["id"] for i in manifest(work, "n")["items"]] == ["n:x:h", "n:x-2:h"]
     assert [s["file"] for s in manifest(work, "n")["sources"]] == ["a/x.md", "b/x.md"]
+
+
+def test_a_fence_shaped_line_with_an_info_string_does_not_close_a_fence(work, capsys):
+    (work / "notes.md").write_text("# A\n```\ncode\n```python\n```\n# B\nx\n", "utf-8")
+
+    run(capsys, "notes.md", "--name", "notes")
+
+    assert [i["id"] for i in manifest(work)["items"]] == ["notes:notes:a", "notes:notes:b"]

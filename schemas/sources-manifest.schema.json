@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:outcomebound:schema:sources-manifest:1",
   "title": "OutcomeBound source manifest v1",
-  "description": "What `outcomebound sources import` writes: the items of one or more markdown or plain-text files. An item's id is where it stands (name:file:section); its revision is the sha256 of its text, so a changed item keeps its id and shows a new revision. The manifest holds the source text. It has no timestamp: one input gives one file.",
+  "description": "What `outcomebound sources import` writes: the items of one or more markdown, plain-text or image files. An item's id is where it stands (name:file:section); its revision is the sha256 of its text, so a changed item keeps its id and shows a new revision. The manifest holds the source text. It has no timestamp: one input gives one file.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "name", "partial", "sources", "items"],
@@ -19,8 +19,8 @@
         "required": ["file", "format", "raw_sha256", "bytes", "converted"],
         "properties": {
           "file": {"type": "string", "minLength": 1, "description": "The path as given, relative to the folder the import ran in, else the file's name."},
-          "format": {"enum": ["markdown", "text"]},
-          "raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 of the file's bytes with CRLF as LF."},
+          "format": {"enum": ["markdown", "text", "image"], "description": "image: one item per file, its id and revision from the digest of the file's bytes; its text is the header's format and pixel size, never the pixels."},
+          "raw_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "sha256 of the file's bytes with CRLF as LF; for a binary image, of the bytes as they are."},
           "bytes": {"type": "integer", "description": "The size of the file with CRLF as LF."},
           "converted": {"type": "boolean", "description": "The text was converted from another format; the conversion's fidelity is unverified."}
         }
@@ -41,7 +41,7 @@
           "line_end": {"type": "integer"},
           "revision": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
           "text": {"type": "string", "description": "The item's text, raw."},
-          "partial": {"type": "array", "items": {"type": "string"}, "description": "Why the item may not hold all its source's text; empty where nothing was observed."},
+          "partial": {"type": "array", "items": {"type": "string"}, "description": "Why the item may not hold all its source's text, or, for an image, that its header states no pixel size (size-unverified); empty where nothing was observed."},
           "suspect": {"type": "array", "items": {"type": "string"}, "description": "Advisory flags from the instruction audit's lexical classes; empty is not safe."}
         }
       }

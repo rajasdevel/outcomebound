@@ -475,3 +475,169 @@ def test_output_that_matches_but_a_nonzero_exit_stays_fail(tmp_path):
     r = _run(tmp_path, [claim])
     assert r.returncode == 1
     assert "FAIL" in r.stdout and "no test executed" not in r.stdout
+
+
+def _writes(path: str, text: str = "out") -> str:
+    return f"from pathlib import Path; Path({path!r}).write_text({text!r})"
+
+
+def _produces(*paths: str, **fields: Any) -> dict[str, Any]:
+    return {"paths": list(paths), **fields}
+
+
+def test_exit_zero_with_the_declared_output_passes_and_says_what_that_proves(tmp_path):
+    claim = _claim([sys.executable, "-c", _writes("out.txt")], produces=_produces("out.txt"))
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 0, r.stdout
+    assert "out.txt" in r.stdout and "not that its content is right" in r.stdout
+
+
+def test_exit_zero_without_the_declared_output_reads_unverified_and_names_the_path(tmp_path):
+    r = _run(tmp_path, [_claim(produces=_produces("out.txt"))])
+    assert r.returncode == 2, r.stdout
+    assert "UNVERIFIED" in r.stdout and "out.txt" in r.stdout
+
+
+def test_when_missing_fail_makes_a_missing_output_a_fail(tmp_path):
+    claim = _claim(produces=_produces("out.txt", when_missing="FAIL"))
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 1, r.stdout
+    assert "FAIL" in r.stdout and "out.txt" in r.stdout
+
+
+@pytest.mark.parametrize("when_missing", ["UNVERIFIED", "FAIL"])
+def test_a_nonzero_exit_stays_fail_with_or_without_the_output(tmp_path, when_missing):
+    code = _writes("out.txt") + "; raise SystemExit(3)"
+    with_output = _claim(
+        [sys.executable, "-c", code], produces=_produces("out.txt", when_missing=when_missing)
+    )
+    assert _run(tmp_path, [with_output]).returncode == 1
+    (tmp_path / "out.txt").unlink()
+    without = _claim(
+        [sys.executable, "-c", "raise SystemExit(3)"],
+        produces=_produces("out.txt", when_missing=when_missing),
+    )
+    r = _run(tmp_path, [without])
+    assert r.returncode == 1 and "FAIL" in r.stdout and "declared check exit 3" in r.stdout
+
+
+def test_an_untouched_existing_file_is_not_produced(tmp_path):
+    (tmp_path / "out.txt").write_text("old")
+    r = _run(tmp_path, [_claim(produces=_produces("out.txt"))])
+    assert r.returncode == 2 and "out.txt" in r.stdout
+    assert (tmp_path / "out.txt").read_text() == "old"
+
+
+def test_a_changed_existing_file_counts_as_produced(tmp_path):
+    (tmp_path / "out.txt").write_text("old")
+    claim = _claim([sys.executable, "-c", _writes("out.txt", "new")], produces=_produces("out.txt"))
+    assert _run(tmp_path, [claim]).returncode == 0
+    assert (tmp_path / "out.txt").read_text() == "new"
+
+
+def test_every_declared_path_must_be_produced(tmp_path):
+    claim = _claim([sys.executable, "-c", _writes("a.txt")], produces=_produces("a.txt", "b.txt"))
+    r = _run(tmp_path, [claim])
+    assert r.returncode == 2
+    assert "b.txt" in r.stdout and "missing" in r.stdout.lower()
+
+
+def test_a_produced_directory_counts_when_a_file_in_it_is_new(tmp_path):
+    code = "from pathlib import Path; Path('d').mkdir(exist_ok=True); Path('d/f').write_text('x')"
+    claim = _claim([sys.executable, "-c", code], produces=_produces("d"))
+    assert _run(tmp_path, [claim]).returncode == 0
+
+
+def test_the_stricter_verdict_wins_with_executes_tests(tmp_path):
+    ran = {"ran_output": r"\d+ passed"}
+    out = _writes("out.txt") + "; print('3 passed')"
+    # both satisfied: PASS
+    ok = _claim([sys.executable, "-c", out], executes_tests=ran, produces=_produces("out.txt"))
+    assert _run(tmp_path, [ok]).returncode == 0
+    (tmp_path / "out.txt").unlink()
+    # tests ran, output missing, when_missing FAIL: FAIL beats nothing
+    missing = _claim(
+        [sys.executable, "-c", "print('3 passed')"],
+        executes_tests=ran,
+        produces=_produces("out.txt", when_missing="FAIL"),
+    )
+    assert _run(tmp_path, [missing]).returncode == 1
+    # no test ran (when_none FAIL), output present, when_missing UNVERIFIED: FAIL
+    none_ran = _claim(
+        [sys.executable, "-c", _writes("out.txt")],
+        executes_tests={**ran, "when_none": "FAIL"},
+        produces=_produces("out.txt", when_missing="UNVERIFIED"),
+    )
+    assert _run(tmp_path, [none_ran]).returncode == 1
+    # no test ran (UNVERIFIED), output missing (UNVERIFIED): UNVERIFIED, both facts kept
+    both = _claim(
+        [sys.executable, "-c", "print('0 items')"],
+        executes_tests=ran,
+        produces=_produces("gone.txt"),
+    )
+    r = _run(tmp_path, [both])
+    assert r.returncode == 2
+    assert "no test executed" in r.stdout and "gone.txt" in r.stdout
+
+
+def test_a_waiver_stays_beside_a_missing_output(tmp_path):
+    path = _plan(tmp_path, [_claim(produces=_produces("out.txt"))])
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = validation._main([str(path), "--waive", "focused-regression=go on"])
+    assert code == 2
+    assert "the observed UNVERIFIED stands" in out.getvalue()
+
+
+@pytest.mark.parametrize(
+    "produces",
+    [
+        {"paths": ["/etc/passwd"]},
+        {"paths": ["../out.txt"]},
+        {"paths": ["a/../../out.txt"]},
+        {"paths": [""]},
+        {"paths": []},
+        {},
+        {"paths": ["out.txt"], "when_missing": "PASS"},
+        {"paths": ["out.txt"], "extra": 1},
+        [],
+        "out.txt",
+    ],
+)
+def test_a_malformed_or_escaping_produces_is_an_invalid_plan(tmp_path, run, produces):
+    r = run(_plan(tmp_path, [_claim(produces=produces)]))
+    assert r.returncode == 2
+    assert "invalid plan" in r.stderr.lower()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_a_produces_path_that_resolves_outside_the_project_is_refused_unrun(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "link").symlink_to(outside, target_is_directory=True)
+    claim = _claim([sys.executable, "-c", _writes("link/x.txt")], produces=_produces("link/x.txt"))
+    r = _run(project, [claim])
+    assert r.returncode == 2 and "outside" in r.stdout
+    assert not (outside / "x.txt").exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privileges on Windows")
+def test_a_file_link_inside_a_directory_output_that_leads_out_is_refused_unrun(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_text("a", "utf-8")
+    project = tmp_path / "project"
+    (project / "d").mkdir(parents=True)
+    (project / "d" / "link.txt").symlink_to(outside / "secret.txt")
+    command = "open('../outside/secret.txt', 'a').write('x')"
+    r = _run(project, [_claim([sys.executable, "-c", command], produces=_produces("d"))])
+    assert r.returncode == 2 and "outside" in r.stdout
+    assert (outside / "secret.txt").read_text("utf-8") == "a"
+
+
+@pytest.mark.parametrize("raw", [".", "./out", "out/.", ".git", "a/.git/x", ".GIT", "out/.git."])
+def test_a_produces_path_naming_the_project_root_or_git_is_an_invalid_plan(tmp_path, raw):
+    r = _run(tmp_path, [_claim(produces=_produces(raw))])
+    assert r.returncode == 2 and "produces" in (r.stdout + r.stderr)

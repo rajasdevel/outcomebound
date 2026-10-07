@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "export-behaves-as-the-corrected-issue-asks",
+      "risk": "the export misses a requirement of the issue: an ISO date, the column order, the cancelled orders left out, or the amounts, which the later comment keeps in cents",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_export.py", "behaviour"],
+      "required_paths": ["checks/probe_export.py", "export.py"]
+    },
+    {
+      "name": "only-the-export-and-notes-changed",
+      "risk": "leaving out cancelled orders was done by deleting them from the data, or another file, a commit or a source edit came with the change",
+      "kind": "static",
+      "required": true,
+      "command": ["bash", "checks/allowed_paths.sh", "export.py", "test_export.py", ".agents/work/*"],
+      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+    },
+    {
+      "name": "every-requirement-of-the-issue-kept",
+      "risk": "the report drops a requirement or a constraint that the issue holds",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_export.py", "kept"],
+      "required_paths": ["checks/probe_export.py"]
+    },
+    {
+      "name": "later-correction-reported",
+      "risk": "the report does not say that the later comment changed the amounts",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_export.py", "corrected"],
+      "required_paths": ["checks/probe_export.py"]
+    },
+    {
+      "name": "requirement-tied-to-its-source",
+      "risk": "no requirement is marked stated beside the source it came from",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_export.py", "provenance"],
+      "required_paths": ["checks/probe_export.py"]
+    }
+  ]
+}

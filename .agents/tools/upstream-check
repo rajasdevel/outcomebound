@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+"""List commits in the credited repositories that touch skill paths, as review candidates.
+
+usage: .agents/tools/upstream-check --since YYYY-MM-DD [owner/repo ...]
+
+With no repository, it reads the GitHub links of the README's Acknowledgements. For each
+repository it reads the file tree and the commit list through `gh api` (read-only GET calls),
+and prints one line per commit that touches a directory holding a SKILL.md, or `skills/`:
+`owner/repo  date  short-sha  first line of the message  url`. A commit is a candidate to read,
+never a change to copy. It never clones a repository and never runs anything from one.
+Python standard library only; `gh` must be installed and logged in.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+import unicodedata
+from collections.abc import Callable
+from pathlib import Path
+from urllib.parse import quote
+
+README = Path(__file__).resolve().parent.parent.parent / "README.md"
+OWN_OWNER = "rajasdevel"
+LINK = re.compile(r"https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?=[)\s/#]|$)")
+SINCE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+SLUG = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+PER_PAGE = 100
+MAX_PAGES = 30  # a path with more commits than this since the date gets a note, never a silent cut
+
+Gh = Callable[[str], object]
+
+
+def readme_repos(text: str) -> list[str]:
+    """The repositories that the Acknowledgements section links, in order, once each."""
+    match = re.search(r"^## Acknowledgements\s*$(.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+    found: list[str] = []
+    for owner, repo in LINK.findall(match.group(1) if match else ""):
+        slug = f"{owner}/{repo}"
+        if owner.lower() != OWN_OWNER and slug not in found:
+            found.append(slug)
+    return found
+
+
+def skill_dirs(tree: dict) -> list[str]:
+    """The directories of a repository tree that hold a SKILL.md, plus `skills` if it exists."""
+    paths = [item.get("path", "") for item in tree.get("tree", []) if isinstance(item, dict)]
+    dirs = {path.rsplit("/", 1)[0] for path in paths if path.endswith("/SKILL.md")}
+    if any(path == "skills" or path.startswith("skills/") for path in paths):
+        dirs.add("skills")
+    return sorted(dirs)
+
+
+def plain(text: str) -> str:
+    """The text with each control or format character written as `\\xNN` or `\\uNNNN`, so
+    that remote text cannot move the cursor or recolour the terminal."""
+
+    def escaped(char: str) -> str:
+        if unicodedata.category(char) not in ("Cc", "Cf", "Zl", "Zp"):
+            return char
+        return f"\\x{ord(char):02x}" if ord(char) < 256 else f"\\u{ord(char):04x}"
+
+    return "".join(escaped(char) for char in text)
+
+
+def commit_line(repo: str, commit: dict) -> str:
+    """One line for a commit of the `commits` list: repository, date, short id, subject, url."""
+    info = commit.get("commit", {})
+    date = str(info.get("committer", {}).get("date", ""))[:10]
+    subject = str(info.get("message", "")).split("\n", 1)[0]
+    sha, url = str(commit.get("sha", ""))[:7], commit.get("html_url", "")
+    return plain(f"{repo}  {date}  {sha}  {subject}  {url}")
+
+
+def candidates(repo: str, since: str, gh: Gh) -> tuple[list[str], list[str]]:
+    """The lines for a repository's skill-path commits since a date, and any notes."""
+    notes: list[str] = []
+    tree = gh(f"repos/{repo}/git/trees/HEAD?recursive=1")
+    if not isinstance(tree, dict):
+        return [], [f"{repo}: no file tree"]
+    if tree.get("truncated"):
+        notes.append(f"{repo}: file tree truncated; some skill paths may be missing")
+    seen: dict[str, dict] = {}
+    for directory in skill_dirs(tree):
+        query = f"since={since}T00:00:00Z&path={quote(directory, safe='/')}&per_page={PER_PAGE}"
+        for page in range(1, MAX_PAGES + 1):
+            commits = gh(f"repos/{repo}/commits?{query}&page={page}")
+            commits = commits if isinstance(commits, list) else []
+            for commit in commits:
+                seen.setdefault(str(commit.get("sha", "")), commit)
+            if len(commits) < PER_PAGE:
+                break
+        else:
+            notes.append(f"{repo}: {directory}: page limit reached; older commits are missing")
+    ordered = sorted(
+        seen.values(), key=lambda c: c.get("commit", {}).get("committer", {}).get("date", "")
+    )
+    return [commit_line(repo, commit) for commit in ordered], notes
+
+
+def gh_api(endpoint: str) -> object:
+    """A read-only GET through the `gh` command; the answer is parsed JSON."""
+    done = subprocess.run(
+        ["gh", "api", "--method", "GET", endpoint], capture_output=True, text=True, check=False
+    )
+    if done.returncode != 0:
+        raise RuntimeError(f"gh api {endpoint.split('?')[0]}: {done.stderr.strip()[-300:]}")
+    return json.loads(done.stdout)
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        description="List skill-path commits in credited repositories."
+    )
+    parser.add_argument("--since", required=True, help="YYYY-MM-DD: the review date")
+    parser.add_argument("repos", nargs="*", help="owner/repo; default: the README's credits")
+    args = parser.parse_args(argv)
+    if not SINCE.match(args.since):
+        parser.error("--since takes a date as YYYY-MM-DD")
+    repos = args.repos or readme_repos(README.read_text(encoding="utf-8"))
+    if not repos:
+        parser.error("no repository named and none found in the README")
+    if not all(SLUG.fullmatch(repo) for repo in repos):
+        parser.error("a repository is named owner/repo")
+    status = 0
+    for repo in repos:
+        try:
+            lines, notes = candidates(repo, args.since, gh_api)
+        except (RuntimeError, ValueError, OSError) as error:
+            print(f"{repo}: UNVERIFIED ({error})", file=sys.stderr)
+            status = 1
+            continue
+        for note in notes:
+            print(plain(note), file=sys.stderr)
+        for line in lines:
+            print(line)
+    return status
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

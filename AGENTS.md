@@ -82,6 +82,8 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md
 - when writing, changing or judging a test: read .claude/skills/tests-worth-keeping/SKILL.md
+- when a failure's cause is unknown, or a fix did not hold: read .claude/skills/diagnose/SKILL.md
+- when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
@@ -112,7 +114,7 @@ standard library only.
 | `make scrub` | the public-text check plus the local list of private names `OB_SCRUB_LIST` names, over the tracked files and the commits since `OB_BASE`; `UNVERIFIED` without the list |
 | `make canary` | this checkout's engine beside the installed release, read-only, on each project of the local list `OB_CANARY_LIST` names, under Python 3.10 and the installed release's Python: `adopt --dry-run`, `adopt --check` and `instructions check`, `floor check --base HEAD` where a floor is installed, `tickets check --draft` on each draft set the project's claims plan names, and `tickets check` on an `issues.json` export in the project root (else `UNVERIFIED`; it calls no tracker); fails on a candidate crash, refusal or invalid report, or on any change to a project's tree, ignored entries included; reports by project number and records the verdict for HEAD's tree; `UNVERIFIED` without the list; run before a pull request that changes adopt, tickets, floor, instructions or discovery lands (one run on a commit that holds every change of several such pull requests covers all of them, before the first of them lands), and on the committed release commit (docs/VERSIONING.md gives the release sequence) |
 | `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: a PASS record of `make canary` for this tree, `VERSION`, changelog, README and CI templates agree (and, once named, the tag, and a passing CI run on main for its commit), the install is current, and gate, floor and suite pass |
-| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `sources`, `home` |
+| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `sources`, `review`, `home` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |
 | `bash scripts/new-spec.sh <slug> [--with-plan]` | scaffold a design under `docs/specs/<slug>/` from `templates/spec/design.md`, and with `--with-plan` a plan from `templates/spec/plan.md` |
 | `python3 scripts/build_backend.py [--sdist]` | build the package adopters install, into `dist/` |
@@ -125,7 +127,7 @@ OutcomeBound.md       the contract
 outcomebound_tools/   the engine
 scripts/              the `outcomebound` launcher, the package's build backend and this repository's scripts
 pyproject.toml        names the build backend; the package's metadata is in the backend
-skills/               the seven working skills, and the adopt skill, which stays in this checkout
+skills/               the nine working skills, and the adopt skill, which stays in this checkout
 fragments/            stack and setup guidance, copied under .outcomebound/fragments/ and pointed at from AGENTS.md
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       outcomebound.mk, Make targets a project may include for the floor and a validation plan
