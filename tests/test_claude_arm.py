@@ -11,6 +11,11 @@ import json
 from pathlib import Path
 from types import ModuleType
 
+from tests.portable import needs_posix_bash
+
+# Maintainer tooling beside evals/run.py: skipped, with the reason, where its tests are.
+pytestmark = needs_posix_bash
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
