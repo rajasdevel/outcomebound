@@ -25,6 +25,7 @@ from outcomebound_tools import (
     explorable_check,
     explorable_shell,
 )
+from tests.processes import running
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates" / "explorable"
@@ -731,9 +732,7 @@ def fake(tmp_path, monkeypatch):
 
 def gone(pid: int) -> bool:
     for _ in range(50):
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
+        if not running(pid):
             return True
         time.sleep(0.1)
     return False
