@@ -313,7 +313,7 @@ arm.
 
 | Arm | What it carries | Against the install it measures |
 | --- | --- | --- |
-| `current` | What `outcomebound adopt --harness codex` installs. This is the kernel block as adopt renders it, and each skill that the install carries: the four default skills, and `slice-tickets` and `hand-off-tickets` for a fixture that selects the `tickets` fragment. The skills are at the skill path of codex. The launcher is first on the PATH of the model. The `AGENTS.md` of the fixture has the project facts and pointers that adopt writes | — |
+| `current` | What `outcomebound adopt --harness codex` installs. This is the kernel block as adopt renders it, and each skill that the install carries: the seven working skills. The skills are at the skill path of codex. The launcher is first on the PATH of the model. The `AGENTS.md` of the fixture has the project facts and pointers that adopt writes | — |
 | `none` | The task alone. No kernel, no skill, no launcher. The note of the fixture has no sentence that points at the core skill | What the text of OutcomeBound adds at all |
 | `unsized` | `current` without the sizing paragraph of the kernel, the one that opens "Satisfy all four completely" | Whether that paragraph changes anything. Every install loads it. This is the one-group ablation of S11 in the prompt standard |
 | `earlier` | An earlier wording of the kernel (`evals/arms/earlier-kernel.md`), with the core skill of the checkout where the run starts | A change in the wording of the kernel |

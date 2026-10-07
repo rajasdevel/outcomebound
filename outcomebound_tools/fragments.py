@@ -27,7 +27,6 @@ import hashlib
 import json
 import re
 import sys
-from collections.abc import Iterable
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
@@ -37,9 +36,8 @@ from outcomebound_tools.mechanisms import MECHANISMS, unknown
 FAMILIES = ("stack", "setup")
 SLOTS = ("Context", "Bounds", "Mechanisms", "Completion bar", "Distinguish")
 FRONTMATTER_KEYS = ("id", "family", "applies", "detect", "version")
-# A fragment may leave these out: its pointer's condition, the irreversible acts it names, and
-# the engine skills an install carries when it is selected.
-OPTIONAL_KEYS = ("condition", "edges", "skills")
+# A fragment may leave these out: its pointer's condition and the irreversible acts it names.
+OPTIONAL_KEYS = ("condition", "edges")
 ID_RE = re.compile(r"\A[a-z0-9][a-z0-9-]*\Z")
 SLOT_RE = re.compile(r"^\*\*(?P<slot>[^*]+)\*\* — ", re.MULTILINE)
 BACKTICKED = re.compile(r"`([^`]+)`")
@@ -47,10 +45,17 @@ BACKTICKED = re.compile(r"`([^`]+)`")
 # is positive in any repository is proposed for each.
 ALWAYS = "."
 EXCLUDED_DIRS = frozenset({".git", "node_modules", ".venv", "venv", "__pycache__", ".outcomebound"})
-# The skills every install carries, the core skill first; a selected fragment's `skills:` adds
-# its own (`carried`). adopt installs each for every harness, and `inline` emits each after the
-# kernel.
-SKILLS = ("using-outcomebound", "decision-brief", "gather-requirements", "tests-worth-keeping")
+# The skills every install carries, the core skill first; no fragment adds or removes one.
+# adopt installs each for every harness, and `inline` emits each after the kernel.
+SKILLS = (
+    "using-outcomebound",
+    "decision-brief",
+    "gather-requirements",
+    "tests-worth-keeping",
+    "explain-spec",
+    "slice-tickets",
+    "hand-off-tickets",
+)
 ENGINE_ROOT = home.ROOT
 PREAMBLE = (
     "Project guidance for this repository. Each block instantiates the operating contract "
@@ -73,7 +78,6 @@ class Fragment:
     mechanisms: tuple[str, ...]
     condition: str = ""
     edges: tuple[str, ...] = ()
-    skills: tuple[str, ...] = ()
     digest: str = ""
     path: Path | None = None
 
@@ -113,24 +117,6 @@ def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
     return tuple(item.strip() for item in parsed)
 
 
-def _skill_names(value: str, source: str, number: int) -> tuple[str, ...]:
-    """The `skills:` list: a JSON list of distinct skill names, each a lowercase-hyphen id."""
-
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as error:
-        raise FragmentError(f"{source}:{number}: skills must be a JSON list: {error}") from error
-    if not isinstance(parsed, list) or not all(
-        isinstance(item, str) and ID_RE.match(item) for item in parsed
-    ):
-        raise FragmentError(
-            f"{source}:{number}: skills must be a JSON list of lowercase-hyphen skill names"
-        )
-    if len(set(parsed)) != len(parsed):
-        raise FragmentError(f"{source}:{number}: skills names a skill twice")
-    return tuple(parsed)
-
-
 def _detect_patterns(value, source: str, number: int) -> tuple[str, ...]:
     """Parse and constrain the detect list.
 
@@ -162,7 +148,7 @@ def _detect_patterns(value, source: str, number: int) -> tuple[str, ...]:
 
 
 # The keys whose value is a JSON list, each with its parser.
-LISTS = {"detect": _detect_patterns, "edges": _edges, "skills": _skill_names}
+LISTS = {"detect": _detect_patterns, "edges": _edges}
 
 
 def _frontmatter(text: str, source: str) -> tuple[dict, str]:
@@ -184,6 +170,11 @@ def _frontmatter(text: str, source: str) -> tuple[dict, str]:
             raise FragmentError(
                 f"{source}:{number}: unknown frontmatter key {key!r}; "
                 f"allowed: {', '.join(FRONTMATTER_KEYS + OPTIONAL_KEYS)}"
+                + (
+                    "; 'skills' was retired because every install carries all seven skills"
+                    if key == "skills"
+                    else ""
+                )
             )
         if key in fields:
             raise FragmentError(f"{source}:{number}: duplicate frontmatter key {key!r}")
@@ -250,7 +241,6 @@ def parse_fragment(text: str, source: str = "<fragment>") -> Fragment:
         mechanisms=named,
         condition=fields.get("condition", ""),
         edges=fields.get("edges", ()),
-        skills=fields.get("skills", ()),
         digest=hashlib.sha256(text.encode("utf-8")).hexdigest(),
     )
 
@@ -275,11 +265,6 @@ def load_all(source_root, local=None) -> dict[str, Fragment]:
                 )
             if fragment.id in catalog:
                 raise FragmentError(f"{path}: duplicate fragment id {fragment.id!r}")
-            missing = [name for name in fragment.skills if not (root / "skills" / name).is_dir()]
-            if missing:
-                raise FragmentError(
-                    f"{path}: skills names no skill in the engine: {', '.join(missing)}"
-                )
             catalog[fragment.id] = fragment
     if local:
         fragment = load_fragment(local)
@@ -322,9 +307,21 @@ def compose_body(selected) -> str:
 
 
 def _strip_sentinels(text: str) -> str:
-    return "\n".join(
-        line for line in text.splitlines() if not line.startswith("<!-- outcomebound:")
-    ).strip()
+    """Drop sentinel lines outside fenced code; a fenced example keeps its own."""
+
+    kept = []
+    fence = ""
+    for line in text.splitlines():
+        stripped = line.strip()
+        run = stripped[:1] * (len(stripped) - len(stripped.lstrip(stripped[:1])))
+        if not fence:
+            if run[:1] in ("`", "~") and len(run) >= 3:
+                fence = run
+        elif stripped == run and run[:1] == fence[0] and len(run) >= len(fence):
+            fence = ""
+        if fence or not line.startswith("<!-- outcomebound:"):
+            kept.append(line)
+    return "\n".join(kept).strip()
 
 
 def _strip_frontmatter(text: str) -> str:
@@ -333,15 +330,6 @@ def _strip_frontmatter(text: str) -> str:
         if end != -1:
             return text[end + 5 :].strip()
     return text.strip()
-
-
-def carried(selected: Iterable[Fragment]) -> tuple[str, ...]:
-    """The skills an install with these fragments carries: `SKILLS`, then each fragment's own."""
-
-    names = list(SKILLS)
-    for fragment in selected:
-        names.extend(name for name in fragment.skills if name not in names)
-    return tuple(names)
 
 
 def inline(source_root, selected) -> str:
@@ -357,8 +345,10 @@ def inline(source_root, selected) -> str:
         _read_text(root / "templates/managed-block.agents.md.tmpl", "the kernel template")
     )
     skills = [
-        _strip_frontmatter(_read_text(root / "skills" / name / "SKILL.md", f"the {name} skill"))
-        for name in carried(selected)
+        _strip_sentinels(
+            _strip_frontmatter(_read_text(root / "skills" / name / "SKILL.md", f"the {name} skill"))
+        )
+        for name in SKILLS
     ]
     return "\n\n".join([kernel, *skills, compose_body(selected)]) + "\n"
 

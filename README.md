@@ -112,7 +112,8 @@ the diff, and commit. Your agent's next session reads the contract. The install 
 
 ```text
 AGENTS.md             the contract; Done, CI test and irreversible edges from your files
-.claude/skills/       four skills: sizing, decision briefs, requirements, tests (per harness)
+.claude/skills/       seven skills: sizing, decision briefs, requirements, tests, explaining a spec,
+                      slicing tickets, handing one off (per harness)
 .outcomebound/        the fragments you select, and a manifest of what adopt wrote
 CLAUDE.md, GEMINI.md  an @AGENTS.md import, only where the harness needs one
 ```
@@ -214,7 +215,7 @@ default. If Done takes longer when `adopt` measures it, `adopt` tells you, and
 
 ### Hand off to a smaller model
 
-With the `tickets` fragment, a strong model slices large work into tickets that you accept. The
+Where a project declares a ticket store, a strong model slices large work into tickets that you accept. The
 `hand-off-tickets` skill then gives each implementer what its tier needs: the ticket's brief alone
 at the outcome tier, plus the approach, signatures, invariants, edge cases and milestones at the
 design tier. At the spec tier, the brief comes from `outcomebound tickets brief <id> --detail full`,
@@ -282,6 +283,13 @@ a loosening visible; your branch protection is what holds it to a person's decis
   phrases and risky harness settings in the files your agents load. It writes nothing. A hit you
   judge safe, you record with `outcomebound instructions rule . <id>`, in your own file outside the
   project; it then stops changing the result until that file changes.
+- **Sources** (`outcomebound sources import`, `outcomebound sources check`): where requirements come
+  from a document, an issue or a transcript saved as markdown or text, `import` splits it into items
+  that each have an id and a revision digest, and `check` fails where the ledger in your spec leaves
+  an item without a disposition, cites an item that is not there, quotes words the item lacks, or
+  records an item that has changed since. It says what it does not establish: a requirement that
+  keeps one item's words may still lose its other constraints. The manifest holds the source text,
+  so Git ignores it unless you opt in.
 - **Text for people** (`adopt --human-style ste`): agents write reports and commit messages for
   people in the style of ASD-STE100 Simplified Technical English.
 - **Workspace** (the `workspace` fragment): where several agents share one machine's checkout, four
@@ -311,11 +319,16 @@ OutcomeBound is not affiliated with them.
 
 ## Acknowledgements
 
-Many of OutcomeBound's ideas come from these projects and standards, named for credit. The text
-is our own, and none of them is affiliated with OutcomeBound or endorses it:
-[agents.md](https://agents.md/), [agentskills/agentskills](https://github.com/agentskills/agentskills),
-[obra/superpowers](https://github.com/obra/superpowers), [mattpocock/skills](https://github.com/mattpocock/skills),
+Ideas in OutcomeBound come from these GitHub repositories, named for credit. The text is our own,
+and none of them is affiliated with OutcomeBound or endorses it:
+[obra/superpowers](https://github.com/obra/superpowers),
+[mattpocock/skills](https://github.com/mattpocock/skills),
 [anthropics/skills](https://github.com/anthropics/skills),
+[agentsmd/agents.md](https://github.com/agentsmd/agents.md),
+[agentskills/agentskills](https://github.com/agentskills/agentskills),
+[cloudflare/security-audit-skill](https://github.com/cloudflare/security-audit-skill),
+[cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
 [UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai),
-[ASD-STE100](https://www.asd-ste100.org/). Each idea, with its exact source, is in the research
-library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md).
+[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills). The research
+library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
+page is where sources are recorded.

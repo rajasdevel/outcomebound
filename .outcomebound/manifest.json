@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "e4397c4e06273a577d69bdd30388f10744d29a7f820cbc03821150435a8a3855",
-      "sha256": "0329cd1d5b4588971504762559fb64ef5669dd64091b01e0ff0807a5bd238cbb"
+      "frame": "44a6d5a81cc701aecaba484f8bac16ae226384276d9329667ed87f0aa92b5925",
+      "sha256": "f06137aeea6f00e01fe0b05907704fdc76022eaa96381f5438d910fccee5b211"
     },
     {
       "kind": "fragment",
@@ -93,12 +93,48 @@
     },
     {
       "kind": "skill",
+      "path": ".claude/skills/explain-spec/SKILL.md",
+      "id": "explain-spec",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "d131cb92c23afeaf2b71bf112a600e92b7ab3e2f33c90434b9feed2d32093944"
+    },
+    {
+      "kind": "skill",
       "path": ".claude/skills/gather-requirements/SKILL.md",
       "id": "gather-requirements",
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "2c276f95be287ece49d981c08cd99d6166d74a3b42f2cf1eb42b8c15f5a07136"
+      "sha256": "3168a48d866439aea0df89203f4c754eaa70fcbe0ca35a9576bb9f4b10bde651"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/hand-off-tickets/SKILL.md",
+      "id": "hand-off-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "8631ea43b30e7d343620987bfe26f3ef205f7099bf05f69212b21cc37af78215"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/slice-tickets/SKILL.md",
+      "id": "slice-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "6a3576901955453c3c540e9bb02837451100fd8f2f8ef9ad9ef44a04f645e0b5"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/slice-tickets/references/github.md",
+      "id": "slice-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "6c5911671e3f65e6eecdf2f0153c3ac91f2be26f2b8e736a61fe0034cb3e6401"
     },
     {
       "kind": "skill",

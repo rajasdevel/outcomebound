@@ -16,7 +16,6 @@ from outcomebound_tools.fragments import (
     SKILLS,
     FragmentError,
     byte_cap,
-    carried,
     compose_body,
     detect,
     inline,
@@ -260,43 +259,23 @@ def test_edges_must_be_a_json_list_of_non_empty_strings(edges):
         parse_fragment(GOOD.replace("version: 1", f"edges: {edges}\nversion: 1"), "x.md")
 
 
-def test_a_fragment_names_the_skills_its_selection_adds_after_the_core_ones():
-    """`skills:` is optional; an install carries the core skills, then each selected fragment's
-    own once, in selection order; every skill a shipped fragment names ships in the engine."""
+def test_every_install_carries_the_seven_working_skills_and_no_fragment_adds_one():
+    """`SKILLS` is the whole set, each in the engine; a `skills:` key is refused as unknown."""
 
-    assert parse_fragment(GOOD, "x.md").skills == ()
-    named = parse_fragment(GOOD.replace("version: 1", 'skills: ["a-b", "c"]\nversion: 1'), "x.md")
-    assert named.skills == ("a-b", "c")
-    catalog = load_all(ROOT)
-    assert catalog["tickets"].skills == ("slice-tickets", "hand-off-tickets")
-    assert carried([catalog["tickets"], named, catalog["tickets"]]) == (
-        *SKILLS,
+    assert SKILLS == (
+        "using-outcomebound",
+        "decision-brief",
+        "gather-requirements",
+        "tests-worth-keeping",
+        "explain-spec",
         "slice-tickets",
         "hand-off-tickets",
-        "a-b",
-        "c",
     )
-    for fragment in catalog.values():
-        for name in fragment.skills:
-            assert (ROOT / "skills" / name / "SKILL.md").is_file(), (fragment.id, name)
-
-
-@pytest.mark.parametrize("skills", ["slice-tickets", '["Bad Name"]', "[1]", '["a", "a"]'])
-def test_skills_must_be_a_json_list_of_distinct_skill_names(skills):
+    for name in SKILLS:
+        assert (ROOT / "skills" / name / "SKILL.md").is_file(), name
+    assert not hasattr(load_all(ROOT)["tickets"], "skills")
     with pytest.raises(FragmentError, match="skills"):
-        parse_fragment(GOOD.replace("version: 1", f"skills: {skills}\nversion: 1"), "x.md")
-
-
-def test_a_shipped_fragment_naming_a_skill_the_engine_lacks_is_refused(tmp_path):
-    for directory in ("fragments", "skills"):
-        shutil.copytree(ROOT / directory, tmp_path / "engine" / directory)
-    tickets = tmp_path / "engine/fragments/setup/tickets.md"
-    write(
-        tickets,
-        tickets.read_text(encoding="utf-8").replace('"slice-tickets"', '"no-such-skill"'),
-    )
-    with pytest.raises(FragmentError, match="no-such-skill"):
-        load_all(tmp_path / "engine")
+        parse_fragment(GOOD.replace("version: 1", 'skills: ["a-b"]\nversion: 1'), "x.md")
 
 
 def test_the_same_selection_composes_the_same_bytes(source):
@@ -528,13 +507,44 @@ def test_compose_cli_is_silent_below_the_cap_and_for_a_harness_without_one(sourc
     assert len(uncapped.stdout.encode("utf-8")) > 32768
 
 
+def _sentinels_outside_fences(text):
+    """CommonMark fences: open on 3+ backticks or tildes, close on the same character at
+    least as long and with nothing after it; a shorter fence inside stays inside."""
+
+    fence, found = "", []
+    for line in text.splitlines():
+        stripped = line.strip()
+        run = stripped[:1] * (len(stripped) - len(stripped.lstrip(stripped[:1])))
+        if not fence:
+            if run[:1] in ("`", "~") and len(run) >= 3:
+                fence = run
+                continue
+        elif stripped == run and run[:1] == fence[0] and len(run) >= len(fence):
+            fence = ""
+            continue
+        if not fence and "<!-- outcomebound:" in line:
+            found.append(line)
+    return found
+
+
+def test_a_shorter_fence_inside_a_longer_one_stays_inside():
+    from outcomebound_tools.fragments import _strip_sentinels
+
+    sentinel = "<!-- outcomebound:begin demo -->"
+    text = "\n".join(["````", "```text", sentinel, "```", sentinel, "````", sentinel, "after"])
+    kept = _strip_sentinels(text).splitlines()
+    assert kept.count(sentinel) == 2
+    assert kept[-1] == "after" and sentinel not in kept[-2:]
+    assert _sentinels_outside_fences(text) == [sentinel]
+
+
 def test_inline_mode_emits_kernel_skills_and_fragments_with_no_sentinels(source):
     """Each skill an install carries follows the kernel, so the kernel's pointer to the
     decision-brief skill resolves inside the blob."""
 
     result = _cli("compose", "--source", str(source), "--fragments", "python", "--inline")
     assert result.returncode == 0, result.stderr
-    assert "outcomebound:begin" not in result.stdout
+    assert not _sentinels_outside_fences(result.stdout)
     assert "**OutcomeBound**" in result.stdout and "four inputs" in result.stdout
     assert "`decision-brief` skill" in result.stdout
     for heading in ("# Using OutcomeBound", "# Decision brief"):
@@ -542,6 +552,16 @@ def test_inline_mode_emits_kernel_skills_and_fragments_with_no_sentinels(source)
     for name in SKILLS:
         assert f"name: {name}" not in result.stdout, "skill frontmatter must be stripped"
     assert "**Distinguish**" in result.stdout
+
+
+def test_inline_mode_keeps_the_sentinels_of_the_slice_tickets_example(source):
+    """The filled ticket block is a format the tickets check reads, so an inline reader
+    needs its begin and end lines."""
+
+    result = _cli("compose", "--source", str(source), "--fragments", "python", "--inline")
+    assert result.returncode == 0, result.stderr
+    assert "<!-- outcomebound:begin id=ticket v=1 -->" in result.stdout
+    assert "<!-- outcomebound:end id=ticket -->" in result.stdout
 
 
 def test_unknown_fragment_id_fails_closed(source):
@@ -586,7 +606,7 @@ def test_a_malformed_fragment_in_the_source_root_is_a_typed_cli_failure(tmp_path
 def test_inline_is_a_library_call_too(source):
     catalog = load_all(source)
     text = inline(source, [catalog["python"]])
-    assert "outcomebound:" not in text
+    assert not _sentinels_outside_fences(text)
     assert text.endswith("\n")
 
 

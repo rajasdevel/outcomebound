@@ -29,6 +29,7 @@ VERBS = {
     "instructions": "instruction_audit",
     "finish-check": "finish_check",
     "research": "research",
+    "sources": "sources",
 }
 USAGE = "usage: outcomebound <verb> [argument ...]\nverbs: home " + " ".join(VERBS)
 

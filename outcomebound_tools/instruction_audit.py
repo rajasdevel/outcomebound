@@ -1868,5 +1868,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     return {PASS: 0, FAIL: 1}.get(report.result, 2)
 
 
+# The classes `sources import` flags in a requirement source, read under these names.
+OVERRIDE_PHRASES = _OVERRIDE_PHRASES
+hidden_reason = _hidden_reason
+plain = _plain
+
+
 if __name__ == "__main__":
     raise SystemExit(main())

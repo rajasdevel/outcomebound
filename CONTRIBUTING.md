@@ -184,7 +184,6 @@ The frontmatter of a fragment has these keys:
 - `condition` (optional): one line that says when the pointer to the fragment applies.
 - `edges` (optional): a JSON list of the irreversible acts that the text names. They feed the
   pointers and the project facts in `AGENTS.md`.
-- `skills` (optional): a JSON list of the shipped skills that selecting the fragment installs.
 
 The body has exactly five slots, in this order: **Context**, **Bounds**, **Mechanisms**,
 **Completion bar** and **Distinguish**. Each backticked name in the Mechanisms slot is a mechanism
