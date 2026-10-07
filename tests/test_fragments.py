@@ -259,7 +259,7 @@ def test_edges_must_be_a_json_list_of_non_empty_strings(edges):
         parse_fragment(GOOD.replace("version: 1", f"edges: {edges}\nversion: 1"), "x.md")
 
 
-def test_every_install_carries_the_seven_working_skills_and_no_fragment_adds_one():
+def test_every_install_carries_the_eight_working_skills_and_no_fragment_adds_one():
     """`SKILLS` is the whole set, each in the engine; a `skills:` key is refused as unknown."""
 
     assert SKILLS == (
@@ -270,6 +270,7 @@ def test_every_install_carries_the_seven_working_skills_and_no_fragment_adds_one
         "explain-spec",
         "slice-tickets",
         "hand-off-tickets",
+        "explorable",
     )
     for name in SKILLS:
         assert (ROOT / "skills" / name / "SKILL.md").is_file(), name

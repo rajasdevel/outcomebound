@@ -29,10 +29,12 @@ CHECKOUT_ONLY = {
     "tests-worth-keeping": (),
     "explain-spec": (),
     "hand-off-tickets": (),
+    "explorable": (),
 }
 
 # skill name -> further files shipped beside its entrypoint
 SHIPPED_BESIDE = {
+    "explorable": ("references/runtime.md",),
     "slice-tickets": ("references/github.md",),
 }
 

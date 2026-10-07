@@ -54,7 +54,9 @@ __all__ = [
     "Diagram",
     "checked_mark",
     "diagram",
+    "letter",
     "main",
+    "read_document",
     "render",
     "symbols_for",
 ]
@@ -157,6 +159,12 @@ def checked_mark(verdicts: Sequence[str]) -> str:
     """
 
     return "checked" if verdicts and all(item == "PASS" for item in verdicts) else "unchecked"
+
+
+def letter(index: int) -> str:
+    """The letter of the Option at `index`, from A."""
+
+    return string.ascii_uppercase[index]
 
 
 def _ways(brief: Brief) -> list[str]:
@@ -794,6 +802,22 @@ def _read(source: str, symbols: str) -> tuple[list[tuple[str, Brief]], tuple[tup
     briefs = [
         (entry["id"], _brief(entry, index, sep)) for index, entry in enumerate(document["briefs"])
     ]
+    return briefs, order
+
+
+def read_document(
+    source: str | os.PathLike[str], symbols: str = "emoji"
+) -> tuple[list[tuple[str, Brief]], tuple[tuple[str, str], ...]]:
+    """The briefs of the JSON document at `source`, each beside its id, and the order among
+    them, read and refused exactly as `outcomebound brief` reads and refuses them: a document it
+    cannot read or that breaks a rule, and a brief below the floor. A refusal is a `ValueError`
+    whose text names the cause. `source` is a file's path; standard input is not read."""
+
+    briefs, order = _read(os.fspath(source), symbols)
+    for number, (brief_id, brief) in enumerate(briefs, start=1):
+        refused = _refused(brief) or _below_floor(brief)
+        if refused:
+            raise ValueError(f"brief {number}, {brief_id}, is refused: {refused}")
     return briefs, order
 
 
