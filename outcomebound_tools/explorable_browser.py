@@ -16,6 +16,7 @@ failure of the page.
 from __future__ import annotations
 
 import contextlib
+import io
 import json
 import os
 import shutil
@@ -28,7 +29,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from outcomebound_tools import programs
 
@@ -133,10 +134,12 @@ def _collect(
 ) -> None:
     """Read the browser's output into `chunks` until the document ends or the pipe closes."""
 
-    stream = process.stdout
+    # `Popen` with `stdout=PIPE` and no text mode gives a buffered reader, whose `read1` returns
+    # what has arrived without waiting for a full buffer.
+    stream = cast("io.BufferedReader | None", process.stdout)
     tail = b""
     while stream is not None:
-        data = stream.read1(65536)  # type: ignore[attr-defined]
+        data = stream.read1(65536)
         if not data:
             break
         chunks.append(data)

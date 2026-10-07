@@ -7,12 +7,13 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from outcomebound_tools import decision_brief, decision_brief_html
 
-DOCUMENT = {
+DOCUMENT: dict[str, Any] = {
     "briefs": [
         {
             "id": "D1",

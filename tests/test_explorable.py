@@ -15,6 +15,7 @@ import stat
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -311,9 +312,9 @@ def test_the_pages_first_head_element_is_the_policy_unchanged(tmp_path):
 def test_every_library_reference_is_a_pin(tmp_path):
     page = built(tmp_path).read_text(encoding="utf-8")
     pins = json.loads((TEMPLATES / "libraries.json").read_text(encoding="utf-8"))
-    config = json.loads(
-        re.search(r'id="explorable-config">(.*?)</script>', page, re.DOTALL).group(1)
-    )
+    found = re.search(r'id="explorable-config">(.*?)</script>', page, re.DOTALL)
+    assert found is not None
+    config = json.loads(found.group(1))
 
     assert config["libraries"] == {
         name: {k: v for k, v in pin.items() if k not in ("package", "version")}
@@ -363,7 +364,9 @@ def test_brief_text_with_html_characters_is_escaped_in_the_page(tmp_path):
 
     assert "<script>alert(1)</script>" not in page
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
-    config = re.search(r'id="explorable-config">(.*?)</script>', page, re.DOTALL).group(1)
+    found = re.search(r'id="explorable-config">(.*?)</script>', page, re.DOTALL)
+    assert found is not None
+    config = found.group(1)
     assert "</script" not in config
 
 
@@ -631,7 +634,7 @@ def test_no_browser_is_a_reason_not_an_error():
 
 # The browser: result parsing.
 
-RESULT = {
+RESULT: dict[str, Any] = {
     "done": True,
     "errors": [],
     "expectations": [{"label": "a", "pass": True, "expected": {"o": "30"}, "shown": {"o": "30"}}],
