@@ -5,7 +5,7 @@ applies: repositories that version, tag, and publish releases
 condition: before a release, a tag push or a publish
 edges: ["pushing a tag", "publishing a package", "moving a shared registry tag", "editing a published release"]
 detect: ["VERSION", ".github/workflows/release*.yml", ".github/workflows/release*.yaml", ".github/workflows/publish*.yml", ".github/workflows/publish*.yaml"]
-version: 5
+version: 6
 ---
 **Context** — a workflow file is a claim; the run log and the published artifact are the
 evidence. Version, changelog entry, and tag must agree with what was actually built.
@@ -17,4 +17,4 @@ or compatibility window changes; `broad-suite` before integrating a release cand
 **Completion bar** — version, changelog entry, and tag name agree (static); the release workflow,
 where the project has one, is green on the exact commit (build); the published artifact stays
 unverified until it is resolved from the registry, a read you can make yourself.
-**Distinguish** — committed ≠ pushed ≠ CI green ≠ tagged ≠ released ≠ deployed.
+**Distinguish** — committed ≠ pushed ≠ CI green ≠ tagged ≠ released.
