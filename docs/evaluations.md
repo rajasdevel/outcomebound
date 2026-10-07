@@ -51,10 +51,11 @@ drove one named model in a disposable repository. The effort was medium unless a
 another effort. Deterministic post-checks graded the runs, except where a section says that a
 model judge scored them.
 
-- **Models.** Every candidate model under Results is an OpenAI model that ran through codex.
-  Claude models appear only under "Results not kept here": as the judge of one proposal-only
-  sample, and as candidates in the slicing arms. Behavior on other model families and other
-  harnesses is not measured.
+- **Models.** Every candidate model under Results is an OpenAI model that ran through codex,
+  except E19, a single run of Claude Sonnet 5.5 through Claude Code subagents. Claude models also
+  appear under "Results not kept here": as the judge of one proposal-only sample, and as
+  candidates in the slicing arms. Behavior on other model families and other harnesses is not
+  measured.
 - **Runs.** Most cells hold three runs. The hand-off comparison holds nine a cell, as three
   clusters of three. Three runs show only a large difference. Nine runs also show only a large
   effect.
@@ -251,6 +252,32 @@ Each finding has an id (E1 to E18). Other documents may cite the id.
   from changes for 1.1.0. Those changes are the kernel's sentence on holding one item, the
   brief's sentence on a held part, the brief's `size:` line, which is gone, and the check line. The check line named `.outcomebound`
   as the directory of the project tests (see the rerun section).
+
+- **E19. On Claude Sonnet 5.5, the current arm passed 10 of 13 fixtures and the arm with no
+  kernel passed 7 of 13, one run each.**
+  - The fixtures were the fourteen default fixtures at the 1.3.0 content. `dirty-review` is left
+    out of both counts: its current-arm build was wrong (the next bullet).
+  - The arm with no kernel failed where the current arm passed in five fixtures: `slice-a-spec`
+    (more drafts than the sizing rule allows), `slice-gate-findings` (a gate ticket that cannot
+    turn green), `small-fix` (the absent lint tool was not reported), `unclear-outcome` (the
+    reversible reading was not named as a choice) and `decision` (the compatibility document was
+    not read before the answer).
+  - The current arm failed where the arm with no kernel passed in one fixture: `decision`. The
+    brief had every part, but it was not drawn with `outcomebound brief`, and its id did not have
+    the form that the check reads. Both arms failed `ladder-2-last-units`: each ran the slow suite.
+  - The build of the current and unsized arms committed the uncommitted edits of `dirty-review`
+    into its seed, so those arms started from a clean tree and the worktree check failed whatever
+    the model did. The runner now commits only the notes that it writes. Which earlier
+    `dirty-review` results for those arms this changed is `UNVERIFIED`.
+  - Method: each run was a Claude Code subagent on Sonnet 5.5 whose definition loads no project
+    instructions (`omitClaudeMd`), in a fixture that `evals/run.py`'s own functions built and
+    graded. Only the call to the model was replaced. The prompt was the runner's prompt, with a
+    preamble that told the subagent to read `AGENTS.md` and listed the installed skills, because a
+    subagent does not load them itself. The transcript that the checks read was made from the
+    subagent's shell commands. The subagent's own report says that its instructions held no
+    OutcomeBound text; no other check of that ran.
+
+  1 run an arm, 28 runs, 2026-10-06. One run shows only a large difference.
 
 ## The question that evals answer
 

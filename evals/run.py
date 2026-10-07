@@ -292,8 +292,11 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     blocks = [rendered.facts, *([rendered.pointers] if rendered.pointers else [])]
     agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
     env = {**child_env(), **HERMETIC_GIT}
+    # Only the notes this function wrote join the seed: a fixture's uncommitted edits, such as
+    # the work in progress beside a read-only review, stay uncommitted, as setup left them.
+    notes = [note for note in ("AGENTS.md", "README.md") if (workdir / note).is_file()]
     for command in (
-        ["git", "add", "-A"],
+        ["git", "add", "--", *notes],
         ["git", "commit", "-q", "--amend", "--no-edit"],
         ["git", "tag", "-f", "seed"],
     ):

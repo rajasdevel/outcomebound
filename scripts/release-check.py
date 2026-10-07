@@ -126,7 +126,9 @@ def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
 def unnamed_pulls(root: Path, version: str, changelog: list[str]) -> list[str] | None:
     """The pull requests that landed since the previous release (`(#N)` in a first-parent
     subject) and that the section of `version` does not name; None where no previous release
-    tag is found. The release commit itself, the one that sets VERSION, is not counted."""
+    tag is found. The release commit itself is not counted: HEAD, where it sets VERSION or its
+    subject is `release: <version>`, with or without its pull request's number. The second form
+    knows a release cut again, whose VERSION an earlier cut already set."""
 
     previous = _git(
         root,
@@ -143,7 +145,10 @@ def unnamed_pulls(root: Path, version: str, changelog: list[str]) -> list[str] |
         return None
     log = _git(root, "log", "--first-parent", "--format=%H%x00%s", f"{previous}..HEAD") or ""
     head = _git(root, "rev-parse", "HEAD")
-    release = "VERSION" in (_git(root, "diff", "--name-only", "HEAD~1", "HEAD") or "").split()
+    subject = _git(root, "log", "-1", "--format=%s", "HEAD") or ""
+    release = "VERSION" in (
+        _git(root, "diff", "--name-only", "HEAD~1", "HEAD") or ""
+    ).split() or bool(re.fullmatch(rf"release: {re.escape(version)}( \(#\d+\))?", subject))
     heading = re.compile(rf"## \[{re.escape(version)}\] - ")
     start = next((i for i, line in enumerate(changelog) if heading.match(line)), None)
     if start is None:
