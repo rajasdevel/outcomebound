@@ -239,12 +239,11 @@ $ outcomebound tickets export
 gh api graphql --paginate --slurp -F owner=owner -F name=name -F query=@<outcomebound home>/templates/tickets/github-export.graphql > issues.json
 ```
 
-The command is for a POSIX shell, such as Git Bash. In PowerShell, replace the `-f query=...` part
-with `-F query=@"<home>/templates/tickets/github-export.graphql"`, where `<home>` is the folder that
-`outcomebound home` prints; `gh api` reads a field that starts with `@` from that file. The verbs
-read the export as UTF-8, with or without a byte-order mark, or as UTF-16 with a byte-order mark,
-which Windows PowerShell 5.1 writes for `>`. This PowerShell form has not been run on Windows
-(`UNVERIFIED`).
+The same line runs in a POSIX shell, PowerShell and Git Bash: it gives `gh` the query as a file
+(`-F query=@<path>`, the path in forward slashes), and `gh api` reads a field that starts with `@`
+from that file. The verbs read the export as UTF-8, with or without a byte-order mark, or as UTF-16
+with a byte-order mark, which Windows PowerShell 5.1 writes for `>`. This line has not been run in
+PowerShell on Windows (`UNVERIFIED`).
 
 `export` exits with `0` when it printed the command. It exits with `1` for a refusal: no
 declaration, or a declaration that is not valid. It exits with `2` for a usage error.
@@ -254,19 +253,17 @@ declaration, or a declaration that is not valid. It exits with `2` for a usage e
 Run the pinned query from your project, and give the engine the file:
 
 ```sh
-gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> \
-  -f query="$(cat "$(outcomebound home)/templates/tickets/github-export.graphql")" > issues.json
+gh api graphql --paginate --slurp -F owner=<owner> -F name=<project> -F query=@<outcomebound home>/templates/tickets/github-export.graphql > issues.json
 outcomebound tickets check --input issues.json
 ```
 
-`outcomebound tickets export` prints this command with the owner and the name of the declared
-repository. It gives `gh` the query as a file (`-F query=@<path>`), so the same line runs in a
-POSIX shell, PowerShell and Git Bash. `check` and `brief` read an export saved as UTF-16 with a
+`outcomebound tickets export` prints this command with the owner, the name of the declared
+repository and the query's path. The same line runs in a POSIX shell, PowerShell and Git Bash.
+`check` and `brief` read an export saved as UTF-16 with a
 byte-order mark, which Windows PowerShell 5.1 documents for `>`, and one saved as UTF-8 with one. When you run `check` or `brief` without `--input`, the refusal
 `INPUT_REQUIRED` prints the same command. The `input:` line of the `check` report gives the path of the export, the time
 that it was written, its age, and the lowest and the highest issue number that it holds, for
-example `input: issues.json; modified 2026-09-20T09:00:00Z; age 120s; holds #1 to #42`. The query is shipped unedited,
-so you can pipe it straight in. The engine refuses a file that is
+example `input: issues.json; modified 2026-09-20T09:00:00Z; age 120s; holds #1 to #42`. The query is shipped unedited. The engine refuses a file that is
 not the output of this query for the declared repository. Where a page or a connection reports
 more than it returned, the reader says UNVERIFIED. It does not guess. Make a new export after you
 change a ticket yourself.
