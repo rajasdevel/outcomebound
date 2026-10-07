@@ -154,14 +154,18 @@ Three limits hold for every result, and a report of a run says them:
   subagent's own session writes. A file that the subagent reads or edits with the Read, Edit or
   Write tools is not a command, so it is not in the transcript. A line of a command or of the
   answer that would read as the structure of a transcript (an `exec` line, a status line) is
-  indented, so a command's text or the answer cannot forge a command. That is all the indenting
-  covers. The session file itself rests on the subagent: it can append an event, or delete one.
+  indented, so a command's text or the answer cannot forge a command. Every kind of line break
+  (CR, CRLF, VT, FF, NEL, U+2028, U+2029) first becomes one newline, since the graders read the
+  file with universal newlines. That is all the indenting covers. The session file itself rests on the subagent: it can append an event, or delete one.
   `grade` refuses a Bash call with no result in a later user event; a call appended with its
   result passes.
 - The subagent has a shell and can reach any path. That the fixture's files outside the protected
   set stay untampered, and that it works only in its fixture, rest on its own behaviour. The graders
   and the engine are sealed (above), so a change to them is refused, but a change that is put back
-  before `grade` runs is not seen.
+  before `grade` runs is not seen. A symlink under `evals/` or
+  `outcomebound_tools/` is sealed by its target. Files under a `__pycache__` folder are not sealed.
+  Paths compare as the OS resolves them (symlinks, `..`, a trailing slash), for `--seal-out` and
+  for the `cd` prefix; a `--seal-out` inside the state folder by any spelling is refused.
 
 ## The kernel and skill fixtures
 

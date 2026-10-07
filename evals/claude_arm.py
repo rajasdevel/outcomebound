@@ -15,7 +15,8 @@ Limits (each is reported with the results):
 - The subagent has a shell, so it can reach any path. That the fixture's files outside the
   protected set stay untampered, and that it works only in its fixture, rest on the subagent's
   own behaviour. What grades the run is sealed, though: `prepare` records in the state the SHA-256
-  of each file under `evals/` and `outcomebound_tools/` and this checkout's HEAD and porcelain
+  of each file (a symlink, by its target) under `evals/` and `outcomebound_tools/`, except under
+  `__pycache__`, and this checkout's HEAD and porcelain
   status, and `grade` refuses where any differs, so an edit of a grader, a post plan or the engine
   between the two is refused. The state's SHA-256 is the seal: `prepare` prints it, and with
   `--seal-out PATH` writes it to a path outside the state folder; it writes it nowhere inside that
@@ -32,7 +33,9 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import os
 import re
+import shlex
 import sys
 import tempfile
 from pathlib import Path
@@ -65,10 +68,13 @@ def _fingerprint() -> dict:
     files = {}
     for top in ("evals", "outcomebound_tools"):
         for path in sorted((REPO / top).rglob("*")):
-            if path.is_file() and "__pycache__" not in path.parts:
-                files[path.relative_to(REPO).as_posix()] = hashlib.sha256(
-                    path.read_bytes()
-                ).hexdigest()
+            if "__pycache__" in path.parts:
+                continue
+            name = path.relative_to(REPO).as_posix()
+            if path.is_symlink():  # by its target, so a dangling or retargeted link shows
+                files[name] = "symlink:" + os.readlink(path)
+            elif path.is_file():
+                files[name] = hashlib.sha256(path.read_bytes()).hexdigest()
 
     def git(*arguments: str) -> str:
         done = subprocess.run(
@@ -189,6 +195,18 @@ _FORGEABLE = re.compile(
 _CLOSING = re.compile(r"^.* in /\S*$")
 
 
+_BREAKS = re.compile("\r\n|[\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
+
+
+def _one_line_break(text: str) -> str:
+    """The text with every line-break kind (CR, CRLF, VT, FF, FS, GS, RS, NEL, LS, PS) as `\\n`.
+
+    The graders read the saved transcript with universal newlines, so a CR is a line break there;
+    turning each kind into one `\\n` first means every reader sees the lines that are defused."""
+
+    return _BREAKS.sub("\n", text)
+
+
 def _neutral(text: str, closing: bool = False) -> str:
     """The text with each line that the graders would read as transcript structure defused.
 
@@ -198,7 +216,7 @@ def _neutral(text: str, closing: bool = False) -> str:
     a block."""
 
     out = []
-    for line in text.split("\n"):
+    for line in _one_line_break(text).split("\n"):
         if _FORGEABLE.match(line):
             line = "  " + line
         elif closing and _CLOSING.match(line):
@@ -207,12 +225,44 @@ def _neutral(text: str, closing: bool = False) -> str:
     return "\n".join(out)
 
 
+_CD = re.compile(r"^cd[ \t]+(?P<dir>\"[^\"]*\"|'[^']*'|\S+)[ \t]*&&[ \t]*")
+
+
+def _without_cd(command: str, workdir: str) -> str:
+    """The command without a leading `cd <dir> && ` where <dir> is the workdir, compared as the
+    OS resolves it (symlinks, a trailing slash, `.` and `..`), not as a string."""
+
+    found = _CD.match(command)
+    if found:
+        try:
+            named = shlex.split(found.group("dir"))
+            if len(named) == 1 and os.path.realpath(named[0]) == os.path.realpath(workdir):
+                return command[found.end() :]
+        except ValueError:
+            pass
+    return command
+
+
+def _inside(path: Path, folder: Path) -> bool:
+    """Whether `path` is `folder` or below it, as the OS resolves both: through symlinks and
+    `..`, and by file identity where the file system folds case."""
+
+    folder = folder.resolve()
+    for candidate in (path.resolve(), *path.resolve().parents):
+        if candidate == folder:
+            return True
+        try:
+            if candidate.exists() and folder.exists() and os.path.samefile(candidate, folder):
+                return True
+        except OSError:
+            pass
+    return False
+
+
 def _block(command: str, workdir: str) -> str:
     """One Bash call as a codex exec block, with forgeable lines defused."""
 
-    prefix = f"cd {workdir} && "
-    if command.startswith(prefix):
-        command = command[len(prefix) :]
+    command = _without_cd(command, workdir)
     body = _neutral(command.rstrip("\n"), closing=True).split("\n")
     body[-1] = f"{body[-1]} in {workdir}"
     return "exec\n" + "\n".join(body) + "\n succeeded in 0ms:\n"
@@ -222,7 +272,7 @@ def _events(subagent_jsonl: Path) -> list[dict]:
     """The JSON object events of a subagent transcript; others are skipped."""
 
     found = []
-    for line in subagent_jsonl.read_text(encoding="utf-8", errors="replace").splitlines():
+    for line in subagent_jsonl.read_text(encoding="utf-8", errors="replace").split("\n"):
         try:
             event = json.loads(line)
         except ValueError:
@@ -358,7 +408,7 @@ def main(argv: list[str]) -> None:
             raise SystemExit("--seal-out needs a file path")
         seal_out = Path(args[at + 1]).resolve()
         del args[at : at + 2]
-        if seal_out == STATE or STATE in seal_out.parents:
+        if _inside(seal_out, STATE):
             raise SystemExit(
                 "refused: --seal-out is inside the state folder, where the subagent works"
             )
