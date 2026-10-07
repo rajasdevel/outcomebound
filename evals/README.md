@@ -591,3 +591,14 @@ Automatic checks cover scope and readable evidence only. The adjacent `review.md
 source-based semantic review, accepts equivalent wording and rejects a narrowed decision or
 an unauthorized code repair. Understanding stays UNVERIFIED without a person's answer.
 The original `explain-spec` row oracle is unchanged; its exact-wording limit is not used here.
+
+
+## Review closure after an available check
+
+`review-close-after-check` runs only when named. It supplies a one-based pagination finding,
+its exact counterexample and three permitted files. Scope and readable-input checks are
+mechanical. The fixture's review.md requires source-based review of the last implementation
+edit, the completed fixed-revision counterexample and the first fixed disposition, in that order.
+A passing final test cannot justify an earlier unsupported claim. One completed unit test with
+the counterexample is enough; no duplicate probe is required. Preserve raw and semantic verdicts
+separately. This fixture does not add a model judge or claim general review reliability.

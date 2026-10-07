@@ -51,7 +51,14 @@ FRAGMENTS_FILE = "fragments"
 TASK_SCRIPT = "task.sh"
 # The hand-off fixtures measure a hand-off package on a named implementer, not the kernel, so
 # they run only when --fixtures names them.
-NAMED_ONLY = ("handoff-", "lifecycle-", "adopt-", "clause-", "explain-mismatch")
+NAMED_ONLY = (
+    "handoff-",
+    "lifecycle-",
+    "adopt-",
+    "clause-",
+    "explain-mismatch",
+    "review-close-after-check",
+)
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"

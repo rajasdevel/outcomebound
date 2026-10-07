@@ -14,8 +14,9 @@ skill is for what a review says about the code.
 
 Check each finding against the code at the revision you hold before you act on it: run the case
 it describes, or read the lines it names. Where the finding gives a counterexample you can
-run, run it on the fixed revision before calling the finding fixed; report an unavailable
-check `UNVERIFIED`. Then give it one disposition:
+run, leave its disposition open during the fix. After the last relevant change, complete that
+check and read its result before writing `fixed` or `PASS`; report an unavailable check
+`UNVERIFIED`. Then give it one disposition:
 
 - `fixed`, and where: the commit, file or test that holds the change.
 - `rejected`, and why: the evidence that the claim is wrong, such as the case you ran or the line

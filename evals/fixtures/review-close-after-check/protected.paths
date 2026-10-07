@@ -1,0 +1,12 @@
+README.md
+AGENTS.md
+checks/review_pager_inputs.py
+checks/scope_walk.py
+checks/transcript_commands.py
+checks/allowed_paths.sh
+.outcomebound/skills/using-outcomebound/SKILL.md
+.outcomebound/skills/using-outcomebound/references/lifecycle.md
+.agents/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/references/lifecycle.md
+.git/config
+.git/info/exclude
