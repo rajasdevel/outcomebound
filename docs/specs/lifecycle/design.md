@@ -89,8 +89,8 @@ evidence schema, runtime ledger or model-judge service.
 1. Repair the graders with deterministic valid and adverse examples in the existing scenario,
    adapter and runner tests. These checks run no model.
 2. Map every skill to its existing direct case and actual evidence. Reuse unchanged records only
-   where their instruction, fixture, tools and grader inputs support the current claim. Add the
-   missing direct handoff and adoption cases and the specific controls that expose a gap.
+   where their instruction, fixture, tools and grader inputs support the current claim. Use the
+   direct handoff and adoption cases and the specific controls that expose a gap.
 3. Run a small named pilot of affected cases. Inspect outcomes and traces before changing
    instructions. Use an independent case for a substantive repair and one reusable no-work
    control where it serves the claim. Compare the old and proposed text with equal tools; when
@@ -117,6 +117,11 @@ All known valid in-scope failures must be fixed and checked before release. Miss
 evidence cannot pass through documentation or a waiver. General skill superiority, every model
 and every platform are not claims this bounded qualification establishes. Post-release feedback
 adds stable confirmed failures to the same regression suite.
+
+[E21](../../evaluations.md#e21-direct-skill-and-lifecycle-qualification) records the scoped
+diagnostics and matched clause comparisons, with raw and semantic verdicts separate. Required
+native observations and browser interactions remain `UNVERIFIED`. These results do not establish
+parity with inspirations or general reliability.
 
 ## Research basis
 

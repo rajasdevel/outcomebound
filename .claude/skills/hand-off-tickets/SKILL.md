@@ -15,9 +15,10 @@ done at every tier.
 1. The hand-off names the implementer's tier and where it came from: the person, the project's
    committed instructions by path, the placement table at the commit its first line names, or the
    spec tier taken because neither the table nor those instructions place the model.
-2. The package carries what its tier's section below lists. Every existing path, symbol and command
-   it names is in the tree as it stands when the package is written, and every one the work adds
-   is marked as added.
+2. The package contains the compiled brief and what its tier's section below lists, in the
+   message or in an existing file that the message names. An instruction to attach the brief later
+   is not a delivered package. Every existing path, symbol and command it names is in the tree
+   as it stands when the package is written, and every one the work adds is marked as added.
 3. At the spec tier, every test a step's package carries ran before the hand-off and failed for
    the reason it names.
 4. At the spec tier, each step's result was reviewed by a model at the outcome tier, you where you

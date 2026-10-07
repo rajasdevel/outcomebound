@@ -98,10 +98,11 @@ recorded run, because a model call does not repeat exactly.
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
 | Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
 | Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
+| Direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
-(sixteen cases in each of two arms). The documented total is therefore 349 calls. The additional
+(sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. E21 adds 26, for 375 documented calls. The additional
 sixty used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
@@ -112,7 +113,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E20). Other documents may cite the id.
+Each finding has an id (E1 to E21). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -1367,3 +1368,28 @@ and post-check timeouts retain partial evidence. Timeout cleanup stops the task 
 and currently observed descendants, then bounds pipe draining. A process already reparented or
 outside the observed tree is not proof of complete cleanup. Native sandbox writes and native
 skill or hook loading require their own observation.
+
+## E21. Direct skill and lifecycle qualification
+
+The run metadata and agent reviews date 2026-10-08. E21 adds 26 model calls: 18 direct diagnostic calls and four matched pairs, with one call per side. Every new call used gpt-6.1-sol at medium through Codex CLI 0.160.1. The documented total becomes 375 calls: the earlier 349 plus these 26. This arithmetic does not recount all older evidence. Six saved diagnosis/slicing regrades and the saved spec-authoring regrade made no new model call.
+
+The diagnostics retain their separate source revisions: `452096b`, `c4cd0a9`, `34c50f3`, `45e5584`, `0b87a67` and `78d375d`. The four pairs ran at `120cdf2`, before the later review-order repair. The explanation repairs ran at `34c50f3` and `45e5584`; the renderer/handoff delivery changes at `0b87a67`; the review-order follow-ups at `78d375d`. A run named `current` refers to its recorded inputs, not every later source change. Saved E19/E20 results keep their original inputs; E19 has no original whole-engine fingerprint.
+
+Raw results below are the automatic checks. Semantic results are separate agent reviews of meaning, completed acts and bounds, not human observations. A completed read returned the subject guidance in each skill's direct evidence; the typo control correctly skipped the diagnosis skill. These explicit fixture reads do not establish native discovery.
+
+| Skill or lifecycle area | Direct case and raw result | Separate review and actual guidance read | Limit |
+| --- | --- | --- | --- |
+| `using-outcomebound` | `ladder-2-last-units`, `deploy-none`: PASS. Both deployment cases: serving-read FAIL. | Small scope PASS; completed deployment followed by actual status PASS. Skill read PASS in ladder/lifecycle. | Historical excessive-process FAIL stays. `deploy-wrong-version` rebuilt before deploy, so it did not test a mismatch that remained. Real deployment and health UNVERIFIED. |
+| `gather-requirements` | `requirements-replay`: provenance FAIL. `visual-reference`: PASS. Interview pair: both PASS. | Requirements provenance PASS despite a missing literal label; interview continuation PASS on both sides. Subject reads PASS. | Visual fidelity UNVERIFIED. No demonstrated pair gain or complete live interview. Valid older omissions stay FAIL. |
+| `tests-worth-keeping` | Intended-guard pair: both PASS. Historical regression case retained. | Both reach the intended guard with a valid caller, assert its refusal/state and fail on prior code. Subject reads PASS. | Existing calendar failure stays FAIL. No demonstrated pair gain or general test-quality claim. |
+| `diagnose` | Saved `diagnose` and `diagnose-typo` regrades: PASS. | Original completed skill read and pre-fix reproduction verified for diagnosis; narrow typo fix/skip preserved. | Failed typo command stays failed. Regrade is not new behavior, native loading or causal benefit. |
+| `review-findings` | Review pair: both raw PASS. Known-case repair and independent pagination follow-up: raw PASS. | Pair semantic FAIL: each called findings fixed before completing the post-fix counterexample. Both repair follow-ups PASS: the exact completed check precedes the first fixed status, with no later relevant edit. Subject reads PASS. | Original pair semantic FAIL stays. The known-case repair follows an inspected failure; one separate pagination case is not general reliability or causal gain. |
+| `explain-spec` | Original explanation: FAIL. Repaired original case and `explain-mismatch`: PASS. | Original semantic FAIL retained; repaired cases preserve decided requirements and separate code gaps. Revised subject reads PASS. | Seeded packing compliance stays FAIL. Human understanding and general benefit UNVERIFIED. |
+| `slice-tickets` | Four saved slicing regrades: PASS. | Original subject reads PASS; outcome cuts, repair dependencies, shared ownership and registry bounds retained. Saved drafts pass current lint. | No original E19 whole-engine fingerprint. New mapping, export, publication and incidental-edit branches were not exercised. |
+| `hand-off-tickets` | Spec authoring: original red/green FAIL; corrected saved mechanical regrade PASS. Outcome authoring: PASS. | Spec delivery FAIL: the supplied brief was omitted. Outcome delivery PASS with the complete brief and only necessary tier facts. Subject reads PASS. | Outcome-tier success does not repair the original spec response or qualify every tier. Prepared-package implementer comparisons measure package effects, not authoring-skill behavior. |
+| `decision-brief` | `decision`: PASS. Later lifecycle case: PASS. | Recommendation PASS but original display FAIL: selected renderer content was lost. Later complete-renderer delivery PASS. Subject reads PASS. | Original display failure stays. Different-case success is not causal benefit, general rendering reliability or human comprehension. |
+| `explorable` | Decision-page case and learning pair: raw PASS. | Subject reads PASS; inspected learning source supplies prediction feedback and reset. | Required browser interaction UNVERIFIED on both pair sides. Local handler checks and declared expectations do not establish real reveal/retry behavior or understanding. No demonstrated gain. |
+| `adopt-outcomebound` | `adopt-upgrade`: scope FAIL. `adopt-inspect`: PASS. | Upgrade semantic PASS under the disclosed task; fixed fragment selection was not disclosed. Inspection PASS with no writes. Subject reads PASS. | Future explicit empty-selection behavior has no new result. Seed install currency stays FAIL; preview grants no overwrite. Native loading UNVERIFIED. |
+| Lifecycle operation and retirement | `lifecycle-retirement`: PASS. | Finite inspection, lossless recovery/restore, complete rendered handoff and preservation of consumers/retention PASS. Skill/reference reads PASS. | Telemetry query FAIL; metrics, incident routing and consumer execution UNVERIFIED. Retirement incomplete; no deletion or production operation claimed. |
+
+The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair leaves its required browser observation unavailable. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. Native skill/hook acceptance, manual browser behavior and human understanding remain UNVERIFIED. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.

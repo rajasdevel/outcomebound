@@ -20,6 +20,10 @@ step fails, or the change is undone. Where order or flow is the point, add a dia
 the surface shows. Write for the person in the style the project sets for text people read; when
 a message does not land, say it again, shorter, in the project's own terms.
 
+When code falls short of a decided requirement, keep the requirement and record the gap
+separately. Clarifying words must preserve the decision and its bounds; change the decision only
+within the authority the project grants.
+
 ## Ask
 
 Draw the questions from the spec's rows, not from your own idea of what matters: for each

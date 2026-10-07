@@ -50,7 +50,7 @@ research](https://github.com/rajasdevel/outcomebound-research/blob/main/practice
 | `review-findings` names a review file format (a `Reviewed:` line, a `### <id> · <title>` heading for each finding, a `Disposition:` line of `fixed`, `rejected` or `deferred` with its where or why) and the verb `outcomebound review check`; `docs/specs/review/design.md` holds the format and the verb, and the skill names the same format | a skill that asks for a disposition and leaves the format to each project | agent | decided |
 | Each skill has one eval fixture whose post-checks read the behavior the skill exists for. Until runs of its fixture pass, what a skill does for an adopter is `UNVERIFIED` wherever it is claimed | shipping on reading alone | user | decided |
 | `diagnose`, `review-findings`, `explain-spec`, the `runtime` and `deploy` fragments, a reuse sentence for `using-outcomebound` and the visual-inputs paragraph of `gather-requirements` each have a fixture with a case where the text is to help and a case where it must add no work (`diagnose` and `diagnose-typo`, `review-findings` and `review-findings-small`, `reuse-stdlib` and `reuse-none`, `visual-reference` and `visual-none`; `explain-spec` and `explain-spec-none`; the `runtime` fragment, `runtime-check` and `runtime-none`; the `deploy` fragment, `deploy-authorized` and `deploy-wrong-version` with the no-work twin `deploy-none`), and `requirements-replay` has the source paragraph of `gather-requirements` replayed on one issue with a later correction; one run per arm on one model (`docs/evaluations.md` E20): `diagnose` and `review-findings` separated the arms; the reuse sentence did not (both arms passed both of its fixtures), so it is not shipped and waits for a fixture that separates them; the other results are recorded there, and with one run on one model what each does for an adopter stays `UNVERIFIED` | shipping on reading alone | agent | decided |
-| Two skills do not yet meet the one-fixture rule above, and what each does is `UNVERIFIED`: the hand-off comparison measures prepared packages on implementers and does not load `hand-off-tickets`; `adopt-outcomebound` has no fixture, since it is never installed in an adopting project, and the engine's tests check the `adopt` verbs it runs, not the skill | a fixture for each built before the release | agent | decided |
+| Direct cases now load `hand-off-tickets` (`handoff-author-spec` and `handoff-author-outcome`) and `adopt-outcomebound` (`adopt-upgrade` and `adopt-inspect`). [E21](../../evaluations.md#e21-direct-skill-and-lifecycle-qualification) records their scoped results and limits. Prepared-package comparisons and engine tests remain separate evidence; these runs do not establish general skill benefit | treating prepared-package comparisons or engine tests as direct skill evidence | agent | decided |
 | A project's required process binds; what its documents only suggest is sized like any mechanism, and the project facts, the contract and the core skill say so; the kernel stays within its 300 words. The ladder's rungs 2 and 3 measure it, in a project whose documents suggest a design note, a record, the full suite and a second reader for every change | leaving a project's suggestions to outrank the sizing the kernel asks for | agent | decided |
 | The kernel keeps its sizing paragraph. On the ladder, the install without it matched the full install within one run on every rung, on one model at three runs a cell, which cannot show its effect absent; and it states the rule the rest of the text applies | cutting it on three runs a cell | agent | decided |
 | A skill whose fixture shows no difference between the current and kernel-off arms, over repeated runs, is rewritten or cut | keeping a skill because it reads well | agent | decided |
@@ -70,10 +70,12 @@ holds every path a skill names; `outcomebound instructions check` reads the inst
 it reads any instruction file; the fixtures are listed in `evals/README.md`.
 
 
-## Planned lifecycle support
+## Lifecycle support and qualification
 
 The [lifecycle design](../lifecycle/design.md) defines the v1.5.0 outcome and transition
-requirements. This section is planned work; it does not report new behavior evidence.
+requirements. [E21](../../evaluations.md#e21-direct-skill-and-lifecycle-qualification) records
+the scoped qualification, including failures, bounded repairs and evidence limits. Qualification
+does not change the decision statuses below.
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
@@ -106,6 +108,5 @@ A successful summary command means the summary was produced; its claim verdicts 
 reading. Native observations remain separate because the runner does not observe native hooks.
 
 Execution and record details stay in `evals/README.md`; dated runs and method corrections stay
-in `docs/evaluations.md`. The latter must correct its stale range and totals without changing
-historical results. The explain-spec fixture declares its own notes area; the skill gains no
+in `docs/evaluations.md`. The explain-spec fixture declares its own notes area; the skill gains no
 universal notes-folder rule.

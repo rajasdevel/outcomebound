@@ -61,8 +61,9 @@ digest. Claim no check that did not run: a verdict you give is your report of a 
 With `outcomebound` on PATH, draw every brief: `outcomebound brief -` reads the JSON document
 `outcomebound brief --help` describes from standard input, so drawing writes no file, and prints
 it in the marks and diagram form the session's surface shows; `--help` names the surfaces that
-need `--form mermaid`. Show its output as markdown, never inside a code block. A brief the
-command refuses is fixed and drawn again, never hand-written. Without `outcomebound` on PATH,
+need `--form mermaid`. Paste the complete rendered brief into the user-facing text as markdown,
+never inside a code block. To revise it, change the input and draw it again; do not shorten or rewrite the rendered
+brief. A refused brief is fixed and drawn again, never hand-written. Without `outcomebound` on PATH,
 write the same shape by hand, options lettered.
 
 A drawn brief, fenced here only to show its lines; its bare `D1` is right only where the
