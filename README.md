@@ -112,9 +112,9 @@ the diff, and commit. Your agent's next session reads the contract. The install 
 
 ```text
 AGENTS.md             the contract; Done, CI test and irreversible edges from your files
-.claude/skills/       nine skills: sizing, decision briefs, requirements, tests, diagnosing a failure,
-                      review findings, explaining a spec, slicing tickets, handing one off (per
-                      harness)
+.claude/skills/       ten skills: sizing, decision briefs, requirements, tests, diagnosing a failure,
+                      review findings, explaining a spec, slicing tickets, handing one off,
+                      explorable pages (per harness)
 .outcomebound/        the fragments you select, and a manifest of what adopt wrote
 CLAUDE.md, GEMINI.md  an @AGENTS.md import, only where the harness needs one
 ```
@@ -347,6 +347,7 @@ and none of them is affiliated with OutcomeBound or endorses it:
 [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design),
 [UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai),
 [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills),
-[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail). The research
+[DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail),
+[worrydream/Tangle](https://github.com/worrydream/Tangle). The research
 library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
 page is where sources are recorded.

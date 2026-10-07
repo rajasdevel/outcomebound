@@ -98,6 +98,11 @@ CONDITIONS = {
     ),
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": "when handing an accepted ticket to the agent or model that will build it",
+    "explorable": (
+        "when a decision turns on values a person may judge differently or on how options work "
+        "in ways text compares poorly, a person must learn a mechanism by trying it, or many "
+        "questions are easier to answer on a page"
+    ),
 }
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
 # adopt's, so `--check` reads its files stale and the next install removes them.
@@ -2144,7 +2149,7 @@ edges: those the selected fragments declare, and a floor loosening where a floor
 Text for people: with --human-style ste, text an agent writes for a person in the style of
 ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers: the local
 fragment inline, then one line per fragment in --fragments, copied under
-.outcomebound/fragments/, and per skill: the nine working skills. The workspace fragment also gets
+.outcomebound/fragments/, and per skill: the ten working skills. The workspace fragment also gets
 .agents/.gitignore, which keeps its four folders out of Git, and every install gets
 .outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
 validation logs) out of Git. A fact it cannot observe is left out, and the install report names

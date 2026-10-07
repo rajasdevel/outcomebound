@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:outcomebound:schema:explorable-source:1",
+  "title": "OutcomeBound explorable source header v1",
+  "description": "The header of an explorable source: the JSON in its first element, `<script type=\"application/json\" data-explorable>`, which `outcomebound explorable build` reads. Python checks beside this schema hold what it cannot say: `brief` is required for a decision and refused for the other kinds, it is a bounded path relative to the source's folder, and nothing comes before the header.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "id",
+    "title"
+  ],
+  "properties": {
+    "kind": {
+      "enum": [
+        "decision",
+        "learning",
+        "interview"
+      ],
+      "description": "What the page is: a decision explorable puts decision briefs in a form the person can explore; a learning one teaches a mechanism by questions; an interview one asks the questions the work waits on."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The page's id: it heads the person's reply and keys the values the browser saves."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^\\r\\n]+$",
+      "description": "The page's title, in one line."
+    },
+    "brief": {
+      "type": "string",
+      "minLength": 1,
+      "description": "A decision's only: the path of the brief document `outcomebound brief` reads, relative to the source's folder and inside it."
+    }
+  }
+}

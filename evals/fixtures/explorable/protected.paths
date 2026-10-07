@@ -1,0 +1,13 @@
+# The project note, the data the decisions rest on, the graders, the installed core skill and
+# repository exclusion state copied into the candidate-writable fixture.
+AGENTS.md
+docs/storage.md
+logs/uploads.csv
+logs/endpoints.csv
+checks/brief.py
+checks/brief_each.py
+checks/page.py
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

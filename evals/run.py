@@ -10,7 +10,7 @@ Four arms: `earlier`, an earlier wording of the operating-contract kernel, kept 
 `evals/arms/earlier-kernel.md`; `current`,
 what `outcomebound adopt --harness codex` installs from this checkout: the kernel rendered as
 adopt renders it, at codex's skill path the whole folder of each skill that install carries
-(the nine every install carries), and this
+(the ten every install carries), and this
 checkout's launcher first on the call's PATH; `unsized`, the current arm without the kernel's
 sizing paragraph, which asks whether that paragraph earns its place; and `none`, no kernel,
 skill or launcher, each fixture's note without its pointer to the core skill. The model is
@@ -239,7 +239,7 @@ class Arm(NamedTuple):
 def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     """The arm as it runs, for an install that selects the fragments `selected`. `current`
     mirrors a codex install of this checkout: the whole folder of each skill that install
-    carries, which is every install's nine, at the skill path the harness table gives codex, and
+    carries, which is every install's ten, at the skill path the harness table gives codex, and
     this checkout's launcher. The earlier arm is its kernel alone and the kernel-off arm has
     nothing, whatever is selected."""
 
@@ -804,7 +804,7 @@ def _parser() -> argparse.ArgumentParser:
             f"arms: {EARLIER} is an earlier wording of the kernel ({EARLIER_KERNEL.name}); "
             f"current is what `outcomebound adopt --harness {HARNESS}` installs from this "
             f"checkout: {TEMPLATE} rendered as adopt renders it, the whole folder of each "
-            f"skill that install carries at {HARNESS}'s skill path (the nine every install "
+            f"skill that install carries at {HARNESS}'s skill path (the ten every install "
             f"carries), and {LAUNCHER} "
             f"first on the call's PATH; {UNSIZED} is current without the kernel's sizing "
             f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher. "

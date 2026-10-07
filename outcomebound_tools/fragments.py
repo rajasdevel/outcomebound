@@ -57,6 +57,7 @@ SKILLS = (
     "explain-spec",
     "slice-tickets",
     "hand-off-tickets",
+    "explorable",
 )
 ENGINE_ROOT = home.ROOT
 PREAMBLE = (
@@ -173,7 +174,7 @@ def _frontmatter(text: str, source: str) -> tuple[dict, str]:
                 f"{source}:{number}: unknown frontmatter key {key!r}; "
                 f"allowed: {', '.join(FRONTMATTER_KEYS + OPTIONAL_KEYS)}"
                 + (
-                    "; 'skills' was retired because every install carries all nine skills"
+                    "; 'skills' was retired because every install carries all ten skills"
                     if key == "skills"
                     else ""
                 )

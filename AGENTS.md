@@ -87,6 +87,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
+- when a decision turns on values a person may judge differently or on how options work in ways text compares poorly, a person must learn a mechanism by trying it, or many questions are easier to answer on a page: read .claude/skills/explorable/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual
@@ -99,7 +100,7 @@ standard library only.
 | Source | Role |
 | --- | --- |
 | `OutcomeBound.md` | the operating contract |
-| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision brief, instructions, finish check, research |
+| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check, sources, research |
 | `docs/prompt-standard.md`, `docs/evaluations.md` | the prompt standard and this project's own evaluation record; read only when a task needs them |
 | [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, one advice file per model (`models/`) and implementer tiers (`applications/implementer-tiers.md`); read only when a task needs them |
 | Released `CHANGELOG.md` sections | history |
@@ -114,7 +115,7 @@ standard library only.
 | `make scrub` | the public-text check plus the local list of private names `OB_SCRUB_LIST` names, over the tracked files and the commits since `OB_BASE`; `UNVERIFIED` without the list |
 | `make canary` | this checkout's engine beside the installed release, read-only, on each project of the local list `OB_CANARY_LIST` names, under Python 3.10 and the installed release's Python: `adopt --dry-run`, `adopt --check` and `instructions check`, `floor check --base HEAD` where a floor is installed, `tickets check --draft` on each draft set the project's claims plan names, and `tickets check` on an `issues.json` export in the project root (else `UNVERIFIED`; it calls no tracker); fails on a candidate crash, refusal or invalid report, or on any change to a project's tree, ignored entries included; reports by project number and records the verdict for HEAD's tree; `UNVERIFIED` without the list; run before a pull request that changes adopt, tickets, floor, instructions or discovery lands (one run on a commit that holds every change of several such pull requests covers all of them, before the first of them lands), and on the committed release commit (docs/VERSIONING.md gives the release sequence) |
 | `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: a PASS record of `make canary` for this tree, `VERSION`, changelog, README and CI templates agree (and, once named, the tag, and a passing CI run on main for its commit), the install is current, and gate, floor and suite pass |
-| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `sources`, `review`, `home` |
+| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `sources`, `explorable`, `review`, `home` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |
 | `bash scripts/new-spec.sh <slug> [--with-plan]` | scaffold a design under `docs/specs/<slug>/` from `templates/spec/design.md`, and with `--with-plan` a plan from `templates/spec/plan.md` |
 | `python3 scripts/build_backend.py [--sdist]` | build the package adopters install, into `dist/` |
@@ -127,7 +128,7 @@ OutcomeBound.md       the contract
 outcomebound_tools/   the engine
 scripts/              the `outcomebound` launcher, the package's build backend and this repository's scripts
 pyproject.toml        names the build backend; the package's metadata is in the backend
-skills/               the nine working skills, and the adopt skill, which stays in this checkout
+skills/               the ten working skills, and the adopt skill, which stays in this checkout
 fragments/            stack and setup guidance, copied under .outcomebound/fragments/ and pointed at from AGENTS.md
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       outcomebound.mk, Make targets a project may include for the floor and a validation plan
@@ -135,7 +136,7 @@ adapters/             harnesses.json, the harness table adopt routes by; surface
 schemas/              wire formats
 docs/                 designs, references, guides
 references/           portability.md, the harness matrix as adapters/harnesses.json records it
-evals/                fourteen kernel and skill fixtures under four arms (earlier, current, unsized, none), and twelve
+evals/                thirty-one kernel and skill fixtures under four arms (earlier, current, unsized, none), and twelve
                       hand-off fixtures that run only when named; evals/README.md says how to run them
 tests/                the engine's behavior
 .agents/tools/        tools for agents working in this repository

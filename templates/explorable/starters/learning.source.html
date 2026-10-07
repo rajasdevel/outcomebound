@@ -1,0 +1,87 @@
+<script type="application/json" data-explorable>
+{"kind": "learning", "id": "cache-basics", "title": "How a cache answers a request"}
+</script>
+
+<section>
+  <h2>Start here</h2>
+  <p>This page teaches one idea: a cache answers a read so the database does not have to. You will guess first, then see the answer.</p>
+  <p>If you know this already, <a href="#recall">skip to the recall question</a>.</p>
+  <fieldset data-question="Q1" data-kind="predict" data-answer="12" data-tolerance="0">
+    <legend>A cache answers 9 of every 10 reads. 120 reads arrive each second. How many reads each second reach the database?</legend>
+    <input type="number" data-unit="reads/s" min="0" step="1">
+    <div data-explain>One read in ten misses the cache. 120 reads times one tenth is 12 reads each second.</div>
+  </fieldset>
+</section>
+
+<section>
+  <h2>Follow one read</h2>
+  <p>Step through the path of one read. The blue box is where the read is now.</p>
+  <ul data-legend>
+    <li data-kind="k1">Where the read is now</li>
+    <li data-kind="k2">Already passed</li>
+  </ul>
+  <section data-steps aria-label="One read, step by step">
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 1" data-diagram-desc="The client sends a read to the cache.">flowchart LR
+  client[client]:::k1 --> cache[(cache)]
+  cache --> db[(database)]</pre>
+      <pre data-diagram-fallback>client (now) --> cache --> database</pre>
+      <figcaption>The client asks the cache first.</figcaption>
+    </figure>
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 2" data-diagram-desc="The cache has no answer, so it asks the database.">flowchart LR
+  client[client]:::k2 --> cache[(cache)]:::k1
+  cache -->|miss| db[(database)]</pre>
+      <pre data-diagram-fallback>client --> cache (now, a miss) --> database</pre>
+      <figcaption>The cache has no copy. This is a miss, so it asks the database.</figcaption>
+    </figure>
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 3" data-diagram-desc="The database answers and the cache keeps a copy.">flowchart LR
+  client[client]:::k2 --> cache[(cache)]:::k2
+  cache --> db[(database)]:::k1
+  db -->|answer, kept| cache</pre>
+      <pre data-diagram-fallback>client --> cache --> database (now) --answer, kept--> cache</pre>
+      <figcaption>The database answers. The cache keeps a copy of the answer.</figcaption>
+    </figure>
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 4" data-diagram-desc="The next read for the same report is answered by the cache alone.">flowchart LR
+  client[client]:::k2 --> cache[(cache)]:::k1
+  cache -->|hit| client
+  db[(database)]</pre>
+      <pre data-diagram-fallback>client --> cache (now, a hit) --> client; the database is not asked</pre>
+      <figcaption>The next read for the same report is a hit. The database is not asked.</figcaption>
+    </figure>
+  </section>
+</section>
+
+<section>
+  <h2>Try it</h2>
+  <p>Change the values and watch the database load.</p>
+  <label>Reads each second
+    <input type="range" data-input="rps" data-unit="reads/s" data-source="assumed" min="10" max="500" step="10" value="120"></label>
+  <label>Hit rate
+    <input type="range" data-input="hit" data-unit="%" data-source="assumed" min="0" max="100" step="5" value="90"></label>
+  <p>Reads that reach the database: <output data-output="dbLoad"></output></p>
+</section>
+
+<section id="recall">
+  <h2>Recall</h2>
+  <fieldset data-question="Q2" data-kind="choice" data-answer="B">
+    <legend>What does the cache do on a miss?</legend>
+    <label><input type="radio" value="A"> It sends an error to the client</label>
+    <label><input type="radio" value="B"> It asks the database and keeps the answer</label>
+    <label><input type="radio" value="C"> It asks the client to try again</label>
+    <div data-explain>On a miss the cache asks the database and keeps the answer, so the next read for it is a hit.</div>
+  </fieldset>
+</section>
+
+<script>
+  // Working for the expectations below, by hand: reads that reach the database = reads * (1 - hit / 100).
+  // 120 reads each second at 90 percent: 120 * 0.10 = 12.
+  // 200 reads each second at 75 percent: 200 * 0.25 = 50.
+  explorable.onChange((v) => {
+    explorable.show("dbLoad", v.rps * (1 - v.hit / 100), { unit: "reads/s" });
+  });
+  explorable.expect("120 reads at a 90 percent hit rate", { rps: 120, hit: 90 }, { dbLoad: 12 });
+  explorable.expect("200 reads at a 75 percent hit rate", { rps: 200, hit: 75 }, { dbLoad: 50 });
+</script>

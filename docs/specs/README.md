@@ -13,8 +13,9 @@ the same change.
 - [skills](skills/design.md): which skills ship, to whom, and the bar that each one meets.
 - [floor](floor/design.md): the quality floor, `outcomebound floor`.
 - [tickets](tickets/design.md): the ticket layer, `outcomebound tickets`.
-- [decision-brief](decision-brief/design.md): how a decision goes to a person,
-  `outcomebound brief`.
+- [decision-support](decision-support/design.md): how a decision, a lesson or a question goes to
+  a person. The decision brief, `outcomebound brief`, and the explorable page,
+  `outcomebound explorable`.
 - [instructions](instructions/design.md): read-only checks on the instruction files of a project,
   `outcomebound instructions`.
 - [finish-check](finish-check/design.md): at the stop hook of `claude-code` and `codex`, the

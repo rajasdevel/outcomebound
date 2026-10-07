@@ -1,0 +1,27 @@
+<script type="application/json" data-explorable>
+{"kind": "interview", "id": "release-questions", "title": "Questions before the cache work starts"}
+</script>
+
+<section>
+  <h2>Before we start</h2>
+  <p>Each question below holds up the work. The most important one is first. The answer marked as recommended is the agent's own view: nothing is chosen for you, and you can say that you do not know.</p>
+
+  <fieldset data-question="Q1" data-kind="choice" data-recommended="B">
+    <legend>Who reads the reports when the cache is cold?</legend>
+    <label><input type="radio" value="A"> Only staff, who can wait a few seconds</label>
+    <label><input type="radio" value="B"> Staff and customers, so a slow read matters</label>
+    <label><input type="radio" value="C"> Automated jobs, which never wait on a read</label>
+  </fieldset>
+
+  <fieldset data-question="Q2" data-kind="choice" data-recommended="A">
+    <legend>May the first release show a report that is a minute old?</legend>
+    <label><input type="radio" value="A"> Yes, a report a minute old is fine</label>
+    <label><input type="radio" value="B"> No, every report must be current</label>
+    <label><input type="radio" value="C"> Only for reports with no live totals</label>
+  </fieldset>
+
+  <fieldset data-question="Q3" data-kind="text">
+    <legend>What would make you stop this work?</legend>
+    <textarea rows="3"></textarea>
+  </fieldset>
+</section>

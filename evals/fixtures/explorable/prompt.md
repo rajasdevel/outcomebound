@@ -1,0 +1,3 @@
+Two decisions wait for me in shopfront, and both are mine. First, the uploads disk is filling up, and I must choose between growing the disk and moving old uploads to archive storage. How much is uploaded each month is in `logs/uploads.csv`, and what the disk and the archive can do is in `docs/storage.md`. I may judge how fast uploads will grow differently from you. Second, I must decide whether the next release removes the old `/v1/export` endpoint; its use is in `logs/endpoints.csv`.
+
+Prepare what I need to make each decision. Keep any working files under `.agents/work/`, and change nothing else in the repository.
