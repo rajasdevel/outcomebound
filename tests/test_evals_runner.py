@@ -256,6 +256,8 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
         "decision-brief",
         "gather-requirements",
         "tests-worth-keeping",
+        "diagnose",
+        "review-findings",
         "explain-spec",
         "slice-tickets",
         "hand-off-tickets",
@@ -273,7 +275,7 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
 
 def test_the_current_arm_carries_every_installs_skills_and_the_fixtures_fragments_only() -> None:
     """A fixture's `fragments` file selects fragments as adopt's `--fragments` does: the
-    current arm carries every install's eight skills and each selected fragment's file, and
+    current arm carries every install's ten skills and each selected fragment's file, and
     the earlier and kernel-off arms carry nothing whatever is selected."""
 
     from outcomebound_tools import adopt, fragments
@@ -292,18 +294,22 @@ def test_the_current_arm_carries_every_installs_skills_and_the_fixtures_fragment
         RUN.load_arm("current", ("no-such-fragment",))
 
 
-def test_the_ticket_fixtures_select_the_tickets_fragment_and_the_others_none(
+def test_each_fixture_selects_the_fragment_it_names_and_the_others_none(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     selecting = {name for name in RUN.fixture_names() if RUN.selected_fragments(name)}
-    assert selecting == {
+    tickets = {
         "slice-a-spec",
         "slice-gate-findings",
         "slice-parity-registry",
         "slice-shared-ledger",
     }
-    for name in selecting:
-        assert RUN.selected_fragments(name) == ("tickets",)
+    runtime = {"runtime-check", "runtime-none"}
+    deploy = {"deploy-authorized", "deploy-none", "deploy-wrong-version"}
+    assert selecting == tickets | runtime | deploy
+    for names, fragment in ((tickets, "tickets"), (runtime, "runtime"), (deploy, "deploy")):
+        for name in names:
+            assert RUN.selected_fragments(name) == (fragment,)
     fixtures = tmp_path / "fixtures"
     (fixtures / "noted").mkdir(parents=True)
     (fixtures / "noted" / "fragments").write_text(
@@ -552,7 +558,7 @@ def test_the_hand_off_fixtures_run_only_when_named() -> None:
     handoff = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
     assert len(handoff) == 12
     assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in handoff]
-    assert len(RUN.default_fixtures()) == 15
+    assert len(RUN.default_fixtures()) == 31
     assert RUN._parser().parse_args([]).fixtures.split(",") == RUN.default_fixtures()
 
 

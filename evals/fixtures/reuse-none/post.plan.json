@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "ordinal-behaves",
+      "risk": "ordinal is missing or wrong on the teens, the hundreds or the plain suffixes",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_ordinals.py",
+        "behaviour"
+      ],
+      "required_paths": [
+        "checks/probe_ordinals.py",
+        "ordinals.py"
+      ]
+    },
+    {
+      "name": "only-the-module-and-its-test-changed",
+      "risk": "a dependency file, a new module or a commit came with a small helper",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "bash",
+        "checks/allowed_paths.sh",
+        "ordinals.py",
+        "test_ordinals.py"
+      ],
+      "required_paths": [
+        "checks/allowed_paths.sh",
+        "checks/scope_walk.py"
+      ]
+    },
+    {
+      "name": "nothing-installed-or-fetched",
+      "risk": "a task with nothing to reuse was given a package search or an install",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_ordinals.py",
+        "plain"
+      ],
+      "required_paths": [
+        "checks/probe_ordinals.py",
+        "checks/transcript_commands.py"
+      ]
+    }
+  ]
+}

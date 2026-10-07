@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import dataclasses
+import hashlib
 import json
 import math
 import re
@@ -26,10 +27,11 @@ import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from outcomebound_tools import home, programs, schemacheck
+from outcomebound_tools.paths import names_git
 
 PASSED = "PASS"
 FAIL = "FAIL"
@@ -50,8 +52,10 @@ CLAIM_KEYS = frozenset(
         "required_paths",
         "timeout_seconds",
         "executes_tests",
+        "produces",
     }
 )
+PRODUCES_KEYS = frozenset({"paths", "when_missing"})
 TESTS_KEYS = frozenset({"no_tests_exit", "ran_output", "when_none"})
 
 _PLAN_SCHEMA_PATH = home.ROOT / "schemas" / "validation-plan.schema.json"
@@ -87,6 +91,18 @@ class CountContract:
 
 
 @dataclass(frozen=True)
+class Produces:
+    """Output a claim's command must leave: each path new or changed by this run.
+
+    `when_missing` is the verdict for a command that exited 0 and left a path
+    unchanged or absent: UNVERIFIED (default) or FAIL.
+    """
+
+    paths: tuple[str, ...]
+    when_missing: str
+
+
+@dataclass(frozen=True)
 class Claim:
     name: str
     risk: str
@@ -96,6 +112,7 @@ class Claim:
     required_paths: tuple[str, ...]
     timeout_seconds: float | None
     tests: CountContract | None = None
+    produces: Produces | None = None
 
 
 @dataclass(frozen=True)
@@ -175,6 +192,37 @@ def _tests_contract(value: Any, field: str) -> CountContract:
     return CountContract(exit_code_value, pattern, when_none)
 
 
+def _produces(value: Any, field: str) -> Produces:
+    if not isinstance(value, dict):
+        raise PlanError(f"{field} must be an object")
+    unknown = sorted(set(value) - PRODUCES_KEYS)
+    if unknown:
+        raise PlanError(f"{field} has unknown field(s): {', '.join(unknown)}")
+    if "paths" not in value:
+        raise PlanError(f"{field}.paths is required")
+    paths = _string_list(value["paths"], f"{field}.paths", allow_empty=False)
+    for raw in paths:
+        parts = re.split(r"[\\/]", raw)
+        if (
+            Path(raw).is_absolute()
+            or PureWindowsPath(raw).anchor
+            or raw.startswith(("/", "\\"))
+            or ".." in parts
+        ):
+            raise PlanError(
+                f"{field}.paths item must be relative, inside the project, without '..': {raw}"
+            )
+        if "." in parts or any(names_git(part) for part in parts):
+            raise PlanError(
+                f"{field}.paths item must name a file or folder under the project, "
+                f"not the project itself or anything in .git: {raw}"
+            )
+    when_missing = value.get("when_missing", UNVERIFIED)
+    if when_missing not in (UNVERIFIED, FAIL):
+        raise PlanError(f"{field}.when_missing must be {UNVERIFIED} or {FAIL}")
+    return Produces(paths, when_missing)
+
+
 def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float | None) -> Claim:
     """One claim after its name was read; every other field is checked here."""
 
@@ -203,6 +251,9 @@ def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float 
             _tests_contract(item["executes_tests"], f"{prefix}.executes_tests")
             if "executes_tests" in item
             else None
+        ),
+        produces=(
+            _produces(item["produces"], f"{prefix}.produces") if "produces" in item else None
         ),
     )
 
@@ -284,6 +335,99 @@ def _resolve_required_path(cwd: Path, raw: str) -> Path:
     return path if path.is_absolute() else cwd / path
 
 
+class _OutsideProject(OSError):
+    """A produced path resolves, through a link, outside the plan's working directory."""
+
+
+def _file_state(path: Path) -> tuple[int, int, str]:
+    stat = path.stat()
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    return stat.st_mtime_ns, stat.st_size, digest
+
+
+def _snapshot(cwd: Path, raw: str) -> object | None:
+    """What a produced path holds now: None where absent, else its state.
+
+    A file is its modification time, size and content digest; a directory is each
+    file in it the same way. The path may not resolve outside `cwd`. Nothing is
+    created, moved or deleted.
+    """
+
+    path = cwd / raw
+    if not path.resolve().is_relative_to(cwd.resolve()):
+        raise _OutsideProject(raw)
+    if not path.exists():
+        return None
+    if path.is_dir():
+        root = cwd.resolve()
+        files = [entry for entry in sorted(path.rglob("*")) if entry.is_file()]
+        if any(not entry.resolve().is_relative_to(root) for entry in files):
+            raise _OutsideProject(raw)
+        return {entry.relative_to(path).as_posix(): _file_state(entry) for entry in files}
+    return _file_state(path)
+
+
+PRODUCED_CAVEAT = (
+    "a produced file proves only that the command wrote it, not that its content is right"
+)
+
+
+def _state_or_absent(cwd: Path, raw: str) -> object | None:
+    """One path's state now; a path the runner cannot read reads as absent."""
+
+    try:
+        return _snapshot(cwd, raw)
+    except OSError:
+        return None
+
+
+def _states(cwd: Path, paths: Sequence[str]) -> dict[str, object | None]:
+    return {raw: _state_or_absent(cwd, raw) for raw in paths}
+
+
+def _refusal(claim: Claim, cwd: Path, raw: str) -> Result | None:
+    try:
+        _snapshot(cwd, raw)
+    except _OutsideProject:
+        return Result(claim, UNVERIFIED, f"produces path is outside the project: {raw}")
+    except OSError as error:
+        return Result(claim, UNVERIFIED, f"cannot read produces path {raw}: {error}")
+    return None
+
+
+def _before(claim: Claim, cwd: Path) -> dict[str, object | None] | Result:
+    """The declared paths' states before the command, or the result that refuses to run it."""
+
+    if claim.produces is None:
+        return {}
+    refusals = (_refusal(claim, cwd, raw) for raw in claim.produces.paths)
+    refused = next((result for result in refusals if result is not None), None)
+    return refused or _states(cwd, claim.produces.paths)
+
+
+def _produced(
+    produces: Produces, before: Mapping[str, object | None], cwd: Path, result: Result
+) -> Result:
+    """A claim that exited 0, held to the output it declares.
+
+    A path counts as produced when it is absent before and present after, or its
+    state changed. The stricter of this verdict and the claim's own wins; both
+    facts stay in the detail.
+    """
+
+    after = _states(cwd, produces.paths)
+    missing = [raw for raw in produces.paths if after[raw] is None or after[raw] == before[raw]]
+    if not missing:
+        detail = f"{result.detail}; produced: {', '.join(produces.paths)} ({PRODUCED_CAVEAT})"
+        return dataclasses.replace(result, detail=detail)
+    detail = (
+        f"{result.detail}; declared output missing or unchanged by this run: {', '.join(missing)}"
+    )
+    rank = {PASSED: 0, UNVERIFIED: 1, FAIL: 2}
+    status = max(result.status, produces.when_missing, key=rank.__getitem__)
+    return dataclasses.replace(result, status=status, detail=detail)
+
+
 def _log_path(log_dir: Path, name: str) -> Path:
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-") or "claim"
     return log_dir / f"{safe}.log"
@@ -345,6 +489,9 @@ def run_claim(claim: Claim, cwd: Path, log_dir: Path | None) -> Result:
     missing = [raw for raw in claim.required_paths if not _resolve_required_path(cwd, raw).exists()]
     if missing:
         return Result(claim, UNVERIFIED, f"required path missing: {', '.join(missing)}")
+    before = _before(claim, cwd)
+    if isinstance(before, Result):
+        return before
     log_path = None if log_dir is None else _log_path(log_dir, claim.name)
     if log_path is not None:
         try:
@@ -363,7 +510,10 @@ def run_claim(claim: Claim, cwd: Path, log_dir: Path | None) -> Result:
     if timed_out:
         detail = f"timeout after {claim.timeout_seconds:g} seconds"
         return Result(claim, UNVERIFIED, detail, log_path)
-    return _judge(claim, status, output, log_path)
+    result = _judge(claim, status, output, log_path)
+    if claim.produces is not None and status == 0:
+        return _produced(claim.produces, before, cwd, result)
+    return result
 
 
 def _none_ran(

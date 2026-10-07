@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "reported-case-and-its-class-fixed",
+      "risk": "the holiday the report names was patched, or the loader still never matches the holidays the file lists",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_bizdays.py", "fixed"],
+      "required_paths": ["checks/probe_bizdays.py", "bizdays.py"]
+    },
+    {
+      "name": "project-tests-intact",
+      "risk": "a fix broke or removed a test the project had",
+      "kind": "test",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_bizdays.py", "suite"],
+      "required_paths": ["checks/probe_bizdays.py"]
+    },
+    {
+      "name": "function-called-in-a-command",
+      "risk": "no command the run executed names next_business_day, so the run did not call it (a case run only through a file the harness edited reads the same)",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_bizdays.py", "reproduced"],
+      "required_paths": ["checks/probe_bizdays.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "reproduction-and-cause-reported",
+      "risk": "the answer does not say whether the failure was reproduced, or does not name its cause",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_bizdays.py", "reported"],
+      "required_paths": ["checks/probe_bizdays.py"]
+    }
+  ]
+}

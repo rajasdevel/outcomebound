@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "mean-fixed",
+      "risk": "the misspelt name is still there, or the helper returns a wrong mean",
+      "kind": "runtime",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_tally.py", "fixed"],
+      "required_paths": ["checks/probe_tally.py", "tally.py"]
+    },
+    {
+      "name": "only-the-helper-and-its-test-changed",
+      "risk": "a failure whose cause the error names grew files, edits elsewhere or a commit",
+      "kind": "static",
+      "required": true,
+      "command": ["bash", "checks/allowed_paths.sh", "tally.py", "test_tally.py"],
+      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+    },
+    {
+      "name": "no-history-hunt-or-install",
+      "risk": "a plain failure was bisected, stashed, searched in history or given a new dependency",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_tally.py", "plain"],
+      "required_paths": ["checks/probe_tally.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "passing-run-reported",
+      "risk": "the answer does not say that the tests passed",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-B", "checks/probe_tally.py", "reported"],
+      "required_paths": ["checks/probe_tally.py"]
+    }
+  ]
+}

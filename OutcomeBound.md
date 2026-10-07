@@ -120,7 +120,7 @@ coordination than the task is worth. Each delegate receives the same four inputs
 ## Adoption and compatibility
 
 Default adoption installs a compact managed instruction block, the project facts and guidance
-pointers the engine generates beside it, and the eight working skills.
+pointers the engine generates beside it, and the ten working skills.
 Guidance fragments, specs, goals, harness adapters, and project-authoritative policy
 integration are optional components, each selected and wired explicitly: the fragments from
 `fragments/`, the harness adapters from `adapters/harnesses.json`, and the rest from `templates/`,

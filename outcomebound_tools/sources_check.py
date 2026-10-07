@@ -49,12 +49,18 @@ LIMITS = {
     "MANIFEST_DIFFERS": (
         "anything about a source with no file to read; the manifest's items are then unverified"
     ),
+    "CLAIM_MISSING": "that the claim compares anything, or that it passes; only that it is named",
+    "PLAN_UNREADABLE": "anything about the reference rows' claims",
     "SOURCE_FRESHNESS": "that the manifest's items are the ones its source file splits into",
     "MANIFEST_ABSENT": "anything about the items of that manifest",
     "SOURCE_PARTIAL": "what the partial item left out",
     "RANGE_CANDIDATES": (
         "lexical candidates only (English modal and decision words); a requirement the list "
         "misses is not shown"
+    ),
+    "REFERENCE_NOT_COMPARED": (
+        "that the built result matches the reference, or that anyone compared them; a claim "
+        "that exists, a reviewer named or a judgment recorded is not a comparison"
     ),
     "SUSPECT": (
         "that a flagged item is an attack, nor that an unflagged item is safe; the flags are "
@@ -63,6 +69,10 @@ LIMITS = {
     "DROP_ASSUMED": "that the drop is right; the person may reverse it",
     "REQUIREMENT_UNSOURCED": "that the requirement is wrong; it may rest on the person's word",
     "SOURCE_CONVERTED": "how faithful the conversion to text was",
+    "IMAGE_NOT_READ": (
+        "what a picture shows; the engine read its header only, and a requirement taken from it "
+        "is its reader's inference"
+    ),
 }
 # What settles a line that did not pass, after `next:`. A line with no entry has no next step.
 NEXT = {
@@ -82,6 +92,9 @@ NEXT = {
     "SOURCE_FRESHNESS": "run the check where the source file is, or pass --root",
     "SOURCE_PARTIAL": "read the source itself for what the partial item left out",
     "RANGE_CANDIDATES": "give each candidate its own row, or read them and say so",
+    "CLAIM_MISSING": "name a claim the plan defines, or add the claim to the plan",
+    "PLAN_UNREADABLE": "name the validation plan file the project commits",
+    "REFERENCE_NOT_COMPARED": "run the comparison the row names and report what it found",
 }
 ORDER = tuple(LIMITS)
 _PLAIN = str.maketrans(
@@ -131,7 +144,7 @@ ItemMap = dict[str, tuple[dict[str, Any], dict[str, Any]]]
 class _Run:
     """One check's state: the manifests read, the ledger, and the findings so far."""
 
-    def __init__(self, ledger_path: Path, root: Path) -> None:
+    def __init__(self, ledger_path: Path, root: Path, plan_path: Path | None = None) -> None:
         self.ledger_path, self.root = ledger_path, root
         self.findings: list[Finding] = []
         self.manifests: dict[str, dict[str, Any]] = {}
@@ -140,6 +153,10 @@ class _Run:
         self.covered: dict[str, list[Row]] = {}
         self.unchecked = 0
         self.resplit = 0
+        self.plan_path = plan_path
+        self.claims: set[str] | None = None
+        self.references: list[Row] = []
+        self.reference_kinds: set[str] = set()
         self.ledger = ledger_module.parse(textio.read_text(ledger_path))
 
     def add(self, code: str, verdict: str, subject: str, text: str) -> None:
@@ -167,6 +184,21 @@ class _Run:
         for document in self.manifests.values():
             for item in document["items"]:
                 self.items[item["id"]] = (document, item)
+
+    def load_plan(self) -> None:
+        """The claim names of the validation plan, read as `outcomebound validation` reads its
+        names (stripped, in `claims`). Nothing in it is run."""
+
+        if self.plan_path is None:
+            return
+        try:
+            document = json.loads(textio.read_text(self.plan_path))
+            names = {str(claim["name"]).strip() for claim in document["claims"]}
+        except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError) as error:
+            text = f"cannot be read as a plan with a list of named claims ({error})"
+            self.add("PLAN_UNREADABLE", FAIL, self.plan_path.as_posix(), text)
+            return
+        self.claims = names
 
     def rows(self) -> None:
         if not self.ledger.present:
@@ -227,14 +259,65 @@ class _Run:
         if row.last is not None and kind not in ("carried", "not requirement-bearing"):
             text = f"only a not requirement-bearing row may name a range, not a {kind} row"
             self.add("ROW_MALFORMED", FAIL, self.where(row), text)
+        stated = row.basis.lower().startswith("stated")
+        if kind == "carried" and stated and any(self.is_image(item) for item in members):
+            text = "a requirement taken from an image is inferred: the engine read no pixels"
+            self.add("ROW_MALFORMED", FAIL, self.where(row), text)
         if kind == "carried":
             self.carried(row, members)
         elif kind in ("dropped (assumed)", "dropped (decided)", "not requirement-bearing"):
             if not row.basis:
                 self.add("ROW_MALFORMED", FAIL, self.where(row), f"a {kind} row gives its reason")
+        elif kind == "reference":
+            self.reference(row, members)
         elif kind == "deferred" and not row.where_text:
             text = "a deferred row names a ticket or a later design in Where"
             self.add("ROW_MALFORMED", FAIL, self.where(row), text)
+
+    def is_image(self, item: dict[str, Any]) -> bool:
+        document, _ = self.items[item["id"]]
+        return bool(document["sources"][item["source"]]["format"] == "image")
+
+    def reference(self, row: Row, members: list[dict[str, Any]]) -> None:
+        """A reference row: the item is the standard a later check compares the built result
+        with. Its requirement ids must be defined; its claim, where it is a command, must be in
+        the plan given. No comparison is made, and the row says none was."""
+
+        where = self.where(row)
+        if row.last is not None:
+            self.add("ROW_MALFORMED", FAIL, where, "a reference row names one item, not a range")
+        if not row.where:
+            self.add(
+                "ROW_MALFORMED", FAIL, where, "a reference row names a requirement id in Where"
+            )
+        for identifier in row.where:
+            if identifier not in self.ledger.requirements:
+                self.add("TARGET_MISSING", FAIL, where, f"{identifier} is not in `## Requirements`")
+        self.references.append(row)
+        self.reference_kinds.update("picture" if self.is_image(i) else "text" for i in members)
+        if row.by == "command" and self.claims is not None and row.by_name not in self.claims:
+            plan = self.plan_path.as_posix() if self.plan_path else "the plan"
+            self.add("CLAIM_MISSING", FAIL, where, f"the claim {row.by_name} is not in {plan}")
+
+    def reference_note(self) -> None:
+        """One line for the ledger: how many references, by what, and that none was compared."""
+
+        if not self.references:
+            return
+        counts = {
+            kind: sum(1 for row in self.references if row.by == kind)
+            for kind in ("command", "review", "judgment")
+        }
+        parts = ", ".join(f"{count} by {kind}" for kind, count in counts.items() if count)
+        unchecked = ""
+        if counts["command"] and self.claims is None:
+            unchecked = "; the claim names were not checked against a plan (--plan)"
+        compared = " or ".join(sorted(self.reference_kinds, reverse=True)) or "item"
+        text = (
+            f"{len(self.references)} reference row(s): {parts}; no {compared} was compared"
+            f"{unchecked}"
+        )
+        self.add("REFERENCE_NOT_COMPARED", UNVERIFIED, self.ledger_path.as_posix(), text)
 
     def carried(self, row: Row, members: list[dict[str, Any]]) -> None:
         where = self.where(row)
@@ -266,7 +349,7 @@ class _Run:
 
     def coverage(self) -> None:
         for identifier, rows in self.covered.items():
-            live = [row for row in rows if row.disposition != "todo"]
+            live = [row for row in rows if row.disposition not in ("todo", "reference")]
             if len(live) > 1:
                 lines = ", ".join(str(row.line) for row in live)
                 self.add("ITEM_DUPLICATE", FAIL, identifier, f"{len(live)} rows (lines {lines})")
@@ -293,7 +376,7 @@ class _Run:
             requirement
             for rows in self.covered.values()
             for row in rows
-            if row.disposition == "carried"
+            if row.disposition in ("carried", "reference")
             for requirement in row.where
         }
         for requirement, number in sorted(self.ledger.requirements.items(), key=lambda p: p[1]):
@@ -302,6 +385,13 @@ class _Run:
                 self.add(
                     "REQUIREMENT_UNSOURCED", INFO, f"{self.ledger_path.as_posix()}:{number}", text
                 )
+        images = [identifier for identifier, (_, item) in self.items.items() if self.is_image(item)]
+        if images:
+            text = (
+                f"{len(images)} image item(s) recorded and disposed; content not read by the "
+                f"engine: {', '.join(images)}"
+            )
+            self.add("IMAGE_NOT_READ", INFO, "all", text)
         self.add_all(
             ("SOURCE_CONVERTED", INFO, source["file"], "imported as converted text")
             for document in self.manifests.values()
@@ -340,21 +430,37 @@ class _Run:
                         "against the source",
                     )
                     continue
-                if hashlib.sha256(textio.fold(data)).hexdigest() != source["raw_sha256"]:
+                if manifest_module.raw_digest(source["format"], data) != source["raw_sha256"]:
                     text = "the file differs from the one imported"
                     self.add("SOURCE_CHANGED", FAIL, source["file"], text)
                     continue
-                self.compare(document, index, source, file_slug)
+                self.compare(document, index, source, file_slug, data)
 
     def compare(
-        self, document: dict[str, Any], index: int, source: dict[str, Any], file_slug: str
+        self,
+        document: dict[str, Any],
+        index: int,
+        source: dict[str, Any],
+        file_slug: str,
+        data: bytes,
     ) -> None:
+        """An image is re-digested and its header read again; text is split again as `import`
+        splits it."""
+
         try:
-            _, text, _ = manifest_module.read_source(self.root / source["file"], source["format"])
+            if source["format"] == "image":
+                shown = display(source["file"])
+                expected = [manifest_module.image_item(data, document["name"], file_slug, shown)]
+            else:
+                _, text, _ = manifest_module.read_source(
+                    self.root / source["file"], source["format"]
+                )
+                expected = manifest_module.split_items(
+                    text, source["format"], document["name"], file_slug
+                )
         except ValueError as error:
-            self.add("MANIFEST_DIFFERS", FAIL, source["file"], f"cannot be read as text ({error})")
+            self.add("MANIFEST_DIFFERS", FAIL, source["file"], f"cannot be read ({error})")
             return
-        expected = manifest_module.split_items(text, source["format"], document["name"], file_slug)
         held = {item["id"]: item for item in document["items"] if item["source"] == index}
         self.resplit += 1
         missing = [item.id for item in expected if item.id not in held]
@@ -413,6 +519,7 @@ class _Run:
         skipped = f" ({self.unchecked} row(s) unchecked: manifest absent)" if self.unchecked else ""
         held = {
             "MANIFEST_INVALID": f"{len(self.manifests)} manifest(s) read",
+            "PLAN_UNREADABLE": "the validation plan was read",
             "LEDGER_MISSING": "the `## Sources` section is there",
             "ROW_MALFORMED": f"{len(self.ledger.rows)} row(s) read",
             "ITEM_UNDISPOSED": f"{len(self.items)} item(s) each have a row",
@@ -429,6 +536,10 @@ class _Run:
             return
         if not self.resplit:
             del held["MANIFEST_DIFFERS"]
+        if self.plan_path is None:
+            del held["PLAN_UNREADABLE"]
+        if self.claims is not None and any(row.by == "command" for row in self.references):
+            held["CLAIM_MISSING"] = "every `by: command` claim is in the plan"
         self.findings.extend(
             Finding(code, PASS, "all", text) for code, text in held.items() if code not in failed
         )
@@ -447,16 +558,23 @@ def _inside_root(root: Path, name: str) -> bool:
         return False
 
 
-def check(manifest_paths: Sequence[Path], ledger_path: Path, root: Path) -> list[Finding]:
+def check(
+    manifest_paths: Sequence[Path],
+    ledger_path: Path,
+    root: Path,
+    plan_path: Path | None = None,
+) -> list[Finding]:
     """Every finding of one check, in the order of `ORDER`. Raises `OSError` and
     `UnicodeDecodeError` where the ledger file cannot be read."""
 
-    run = _Run(ledger_path, root)
+    run = _Run(ledger_path, root, plan_path)
     run.load(manifest_paths)
+    run.load_plan()
     run.freshness()
     run.rows()
     run.coverage()
     run.notes()
+    run.reference_note()
     run.candidates()
     run.passes()
     rank = {code: index for index, code in enumerate(ORDER)}

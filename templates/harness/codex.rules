@@ -1,0 +1,43 @@
+# Example only. Copy it to <repo>/.codex/rules/<name>.rules and change it to match your project.
+# Codex loads project rules only when the project's .codex/ layer is trusted.
+# Each rule makes Codex ask before it runs a command that starts with the pattern.
+# A pattern matches the command's words, so a script, an alias or a tool that runs the act
+# is not covered. Keep the list equal to the edges the project declares.
+# Codex's page describes these rules for commands that run outside the sandbox; whether a rule
+# fires for a command the sandbox already allows is UNVERIFIED.
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Pushing is an irreversible edge of this project.",
+)
+
+prefix_rule(
+    pattern = ["git", "tag"],
+    decision = "prompt",
+    justification = "Tagging is an irreversible edge of this project.",
+)
+
+prefix_rule(
+    pattern = ["npm", "publish"],
+    decision = "prompt",
+    justification = "Publishing a package is an irreversible edge of this project.",
+)
+
+prefix_rule(
+    pattern = ["gh", "release"],
+    decision = "prompt",
+    justification = "A release is an irreversible edge of this project.",
+)
+
+prefix_rule(
+    pattern = ["terraform", "apply"],
+    decision = "prompt",
+    justification = "Applying to a shared environment is an irreversible edge of this project.",
+)
+
+prefix_rule(
+    pattern = ["kubectl", "apply"],
+    decision = "prompt",
+    justification = "Applying to a shared environment is an irreversible edge of this project.",
+)

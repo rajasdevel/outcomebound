@@ -1,0 +1,1 @@
+I take over the notifier tomorrow and I did not write its design, `docs/specs/notify/design.md`. I do not follow why it retries on a fixed delay, or what becomes of a mail that keeps failing. Explain the design to me, and check that I understood it. Report what you did.

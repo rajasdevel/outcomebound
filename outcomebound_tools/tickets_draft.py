@@ -190,6 +190,7 @@ def read_draft(
         blocked_by=fields.blocked_by,
         parent=fields.parent,
         discovered_from=fields.discovered_from,
+        satisfies=fields.satisfies,
         waits_on=fields.waits_on,
         content=content_identity(title, brief, fields),
     )

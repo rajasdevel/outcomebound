@@ -66,6 +66,7 @@ def block(
     blocked_by: Sequence[str] | None = None,
     parent: str | None = None,
     waits_on: str = "",
+    satisfies: str = "",
 ) -> list[str]:
     """One `id=ticket` block, with only the keys a test spells out.
 
@@ -91,6 +92,8 @@ def block(
         lines.append(f"parent: {parent}")
     if waits_on:
         lines.append(f"waits-on: {waits_on}")
+    if satisfies:
+        lines.append(f"satisfies: {satisfies}")
     lines.append("<!-- outcomebound:end id=ticket -->")
     return lines
 
@@ -1041,6 +1044,177 @@ def test_a_ticket_waiting_on_a_brief_reads_waiting_and_holds_no_other(
     _, paths = drafts(tmp_path, waiting=draft_text(waits_on="D1"))
     drafted = report(tmp_path / "repo", "--draft", *paths, capsys=capsys, expect=0)
     assert codes(drafted, "waiting") == ["WAITS_ON_BRIEF"]
+
+
+# --- requirements a ticket satisfies -----------------------------------------------
+
+DESIGN = "docs/specs/example/design.md"
+DESIGN_TEXT = """# Example - design
+
+## Outcome
+
+Something.
+
+## Requirements
+
+- R1 The first requirement.
+- R2 The second requirement.
+- R3 The third requirement. [deferred]
+- R4 The fourth requirement. [excluded]
+
+## Decisions
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| A | B | agent | assumed |
+"""
+
+
+def with_design(root: Path, text: str = DESIGN_TEXT) -> Path:
+    write(root, DESIGN, text)
+    return root
+
+
+def test_a_requirement_the_read_design_does_not_hold_is_an_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An id the design a ticket reads lacks is `REQUIREMENT_UNKNOWN`, an ERROR; a held
+    id passes, and so does a ticket that reads no design but names none."""
+
+    root = checkout(
+        tmp_path,
+        document("#1", reads=[f"{DESIGN}#decisions"], satisfies="R1, R9"),
+        document("#2", reads=[f"{DESIGN}#decisions"], satisfies="R2"),
+        document("#3", satisfies="R1"),
+        document("#4"),
+    )
+    with_design(root)
+
+    found = report(root, capsys=capsys, expect=1)
+
+    assert codes(found, "#1") == ["REQUIREMENT_UNKNOWN"]
+    assert about(found, "#1")["result"] == "FAIL"
+    [unknown] = messages_of(about(found, "#1"))
+    assert unknown["level"] == "ERROR" and "R9" in str(unknown["text"])
+    assert "R9" in str(unknown["text"]) and "R1" not in str(unknown["text"])
+    assert codes(found, "#2") == []
+    assert codes(found, "#3") == ["REQUIREMENT_UNKNOWN"], "a ticket that reads no design holds none"
+    assert "reads no design" in said(found, "REQUIREMENT_UNKNOWN")[1]
+    assert codes(found, "#4") == []
+    assert validate(found, json.loads(REPORT_SCHEMA.read_text(encoding="utf-8"))) == []
+
+
+def epic_breakdown(*children: dict[str, object], epic: str = "") -> list[dict[str, object]]:
+    return [
+        document("#1", bounds=(), reads=[DESIGN], satisfies=epic),
+        *children,
+    ]
+
+
+def test_an_epic_over_a_design_warns_for_each_active_requirement_no_child_satisfies(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """R2 is active and uncovered: a WARNING on the epic, which still passes. R3 is
+    deferred and R4 excluded in the design, so neither is named."""
+
+    root = checkout(
+        tmp_path,
+        *epic_breakdown(
+            document("#2", parent="#1", reads=[f"{DESIGN}#decisions"], satisfies="R1"),
+            document("#3", parent="#1", reads=[f"{DESIGN}#outcome"]),
+        ),
+    )
+    with_design(root)
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == ["REQUIREMENT_UNCOVERED"]
+    [warned] = messages_of(about(found, "#1"))
+    assert warned["level"] == "WARNING" and about(found, "#1")["result"] == "PASS"
+    text = str(warned["text"])
+    assert "R2" in text and "R1" not in text and "R3" not in text and "R4" not in text
+    assert codes(found, "#2") == [] and codes(found, "#3") == []
+
+
+def test_no_satisfies_in_the_set_means_no_coverage_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = checkout(
+        tmp_path,
+        *epic_breakdown(document("#2", parent="#1", reads=[f"{DESIGN}#decisions"])),
+    )
+    with_design(root)
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert every_code(found) == []
+
+
+def test_a_requirement_is_covered_by_a_closed_child_or_by_the_epic_naming_existing_work(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = checkout(
+        tmp_path,
+        *epic_breakdown(
+            document("#2", parent="#1", reads=[DESIGN], satisfies="R1", status="closed"),
+            document("#3", parent="#1", reads=[DESIGN], satisfies="R1"),
+            epic="R2",
+        ),
+    )
+    with_design(root)
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert every_code(found) == []
+
+
+def test_a_dropped_child_covers_no_requirement(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = checkout(
+        tmp_path,
+        *epic_breakdown(
+            document("#2", parent="#1", reads=[DESIGN], satisfies="R1, R2", status="dropped"),
+            document("#3", parent="#1", reads=[DESIGN]),
+        ),
+    )
+    with_design(root)
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == ["REQUIREMENT_UNCOVERED"]
+    assert "R1" in said(found, "REQUIREMENT_UNCOVERED")[0]
+
+
+def test_a_ticket_that_lists_every_requirement_is_not_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = checkout(
+        tmp_path,
+        *epic_breakdown(document("#2", parent="#1", reads=[DESIGN], satisfies="R1, R2, R3, R4")),
+    )
+    with_design(root)
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert every_code(found) == []
+
+
+def test_drafts_are_checked_for_satisfies_and_coverage_alike(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root, paths = drafts(
+        tmp_path,
+        epic=draft_text(bounds=(), reads=[DESIGN]),
+        child=draft_text(reads=[f"{DESIGN}#decisions"], parent="epic", satisfies="R1, R7"),
+    )
+    with_design(root)
+
+    found = report(root, "--draft", *paths, capsys=capsys, expect=1)
+
+    assert codes(found, "child") == ["REQUIREMENT_UNKNOWN"]
+    assert codes(found, "epic") == ["REQUIREMENT_UNCOVERED"]
+    assert "R2" in said(found, "REQUIREMENT_UNCOVERED")[0]
 
 
 # --- what the reader said ----------------------------------------------------------

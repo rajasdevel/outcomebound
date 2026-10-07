@@ -27,6 +27,8 @@ CHECKOUT_ONLY = {
         "templates/tickets/github-export.graphql",
     ),
     "tests-worth-keeping": (),
+    "diagnose": (),
+    "review-findings": (),
     "explain-spec": (),
     "hand-off-tickets": (),
     "explorable": (),

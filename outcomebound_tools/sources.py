@@ -35,14 +35,17 @@ def _parser() -> argparse.ArgumentParser:
     imported = commands.add_parser(
         "import",
         prog="outcomebound sources import",
-        help="read markdown or plain-text files into a manifest of items",
+        help="read markdown, plain-text or image files into a manifest of items",
         description=(
-            "Read markdown or plain-text files into a manifest: one item per heading section "
-            "(per paragraph of plain text), each with an id from where it stands, a revision "
-            "digest of its text, and flags for partial and suspect text. The manifest is the "
-            "same for the same input. Nothing is run, and nothing but the manifest is written. "
-            "A source in another format is converted to markdown first, and imported with "
-            "--converted."
+            "Read markdown, plain-text or image files into a manifest: one item per heading "
+            "section (per paragraph of plain text), each with an id from where it stands, a "
+            "revision digest of its text, and flags for partial and suspect text. A PNG, JPEG, "
+            "GIF, WebP or SVG file is one item whose id and revision come from the digest of "
+            "the file, with its format and pixel size read from the header; the pixels are "
+            "never read. The manifest is the same for the same input. Nothing is run, and "
+            "nothing but the manifest is written. A source in another format, a design "
+            "tool's JSON included, is exported as an image or converted to markdown first, "
+            "and imported with --converted."
         ),
         epilog=(
             "The manifest holds the source text, so by default it goes to "
@@ -54,7 +57,7 @@ def _parser() -> argparse.ArgumentParser:
             "Partial text reads UNVERIFIED. " + _EXITS
         ),
     )
-    imported.add_argument("paths", nargs="+", metavar="PATH", help="a markdown or text file")
+    imported.add_argument("paths", nargs="+", metavar="PATH", help="a markdown, text or image file")
     imported.add_argument(
         "--name", required=True, metavar="SLUG", help="the id prefix: a-z, 0-9, -"
     )
@@ -66,7 +69,7 @@ def _parser() -> argparse.ArgumentParser:
     imported.add_argument(
         "--as",
         dest="kind",
-        choices=("markdown", "text"),
+        choices=("markdown", "text", "image"),
         help="read each file as this kind, whatever its name",
     )
     imported.add_argument(
@@ -86,8 +89,10 @@ def _parser() -> argparse.ArgumentParser:
             "which are the declared input set. FAIL codes: ITEM_UNDISPOSED, ITEM_UNKNOWN, "
             "ITEM_DUPLICATE, TARGET_MISSING, QUOTE_NOT_FOUND (quote occurrence only), "
             "ITEM_CHANGED, SOURCE_CHANGED, MANIFEST_DIFFERS, ROW_MALFORMED, REQUIREMENT_DUPLICATE, "
-            "LEDGER_MISSING, MANIFEST_INVALID. UNVERIFIED: an absent or partial manifest, a "
-            "source file not found, a not-requirement-bearing range with lexical candidates. "
+            "LEDGER_MISSING, MANIFEST_INVALID, CLAIM_MISSING, PLAN_UNREADABLE. UNVERIFIED: an "
+            "absent or partial manifest, a "
+            "source file not found, a not-requirement-bearing range with lexical candidates, "
+            "and any reference row, since nothing is compared. "
             "An UNVERIFIED line hides no FAIL. Each report line says what it does not "
             "establish."
         ),
@@ -119,6 +124,11 @@ def _parser() -> argparse.ArgumentParser:
         metavar="FIRST..LAST",
         dest="ranges",
         help="with --skeleton: one row, digest filled, for the items from FIRST to LAST",
+    )
+    checked.add_argument(
+        "--plan",
+        metavar="FILE",
+        help="the validation plan a `reference ... by: command <claim>` row names a claim of",
     )
     checked.add_argument("--verbose", action="store_true", help="also print the checks that passed")
     return parser
@@ -171,6 +181,12 @@ def _import_report(document: dict, path: Path, ignored: bool) -> None:
             f"source {display(source['file'])}: raw sha256 {source['raw_sha256']}, "
             f"{source['bytes']} bytes. Does not establish that the file is the whole source."
         )
+    for item, source in ((i, document["sources"][i["source"]]) for i in items):
+        if source["format"] == "image":
+            print(
+                f"image {item['id']}: {item['text']}. Does not establish what the picture "
+                "shows; the engine did not read it."
+            )
     for item in partial:
         print(
             f"UNVERIFIED partial {item['id']}: {', '.join(item['partial'])}. "
@@ -226,7 +242,10 @@ def _check(options: argparse.Namespace) -> int:
     *manifests, ledger = options.paths
     try:
         findings = sources_check.check(
-            [Path(path) for path in manifests], Path(ledger), Path(options.root)
+            [Path(path) for path in manifests],
+            Path(ledger),
+            Path(options.root),
+            Path(options.plan) if options.plan else None,
         )
     except (OSError, UnicodeDecodeError) as error:
         raise SourceRefusal("LEDGER_UNREADABLE", f"{display(ledger)}: {error}") from error

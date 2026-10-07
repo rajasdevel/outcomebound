@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "query-params-behave",
+      "risk": "query_params is missing or returns a wrong dict on a case a hand parse gets wrong",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_links.py",
+        "behaviour"
+      ],
+      "required_paths": [
+        "checks/probe_links.py",
+        "links.py"
+      ]
+    },
+    {
+      "name": "standard-library-reused",
+      "risk": "the query was parsed by hand where urllib.parse already does it",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_links.py",
+        "reuses"
+      ],
+      "required_paths": [
+        "checks/probe_links.py",
+        "links.py"
+      ]
+    },
+    {
+      "name": "only-the-module-and-its-test-changed",
+      "risk": "a dependency file, a new module or a commit came with a small helper",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "bash",
+        "checks/allowed_paths.sh",
+        "links.py",
+        "test_links.py"
+      ],
+      "required_paths": [
+        "checks/allowed_paths.sh",
+        "checks/scope_walk.py"
+      ]
+    },
+    {
+      "name": "no-dependency-installed",
+      "risk": "a package was installed or fetched in a project that allows only the standard library",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_links.py",
+        "plain"
+      ],
+      "required_paths": [
+        "checks/probe_links.py",
+        "checks/transcript_commands.py"
+      ]
+    }
+  ]
+}

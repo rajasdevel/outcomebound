@@ -23,14 +23,34 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import hashing, home, instruction_audit, schemacheck, textio
+from outcomebound_tools import (
+    hashing,
+    home,
+    instruction_audit,
+    schemacheck,
+    sources_image,
+    textio,
+)
 
 VERSION = 1
-KIND_BY_SUFFIX = {".md": "markdown", ".markdown": "markdown", ".txt": "text", ".text": "text"}
+KIND_BY_SUFFIX = {
+    ".md": "markdown",
+    ".markdown": "markdown",
+    ".txt": "text",
+    ".text": "text",
+    ".png": "image",
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".gif": "image",
+    ".webp": "image",
+    ".svg": "image",
+}
+_PARTIAL_SIZE = "size-unverified"
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 REVISION_SHOWN = 12
 _HEADING = re.compile(r"(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*")
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
+_CLOSING = re.compile(r"[ ]{0,3}(`{3,}|~{3,})[ \t]*")
 _PARTIAL_UNCLOSED = "unclosed-code-fence"
 _PARTIAL_REPLACEMENT = "replacement-character"
 
@@ -51,10 +71,11 @@ class Item:
     line_end: int
     text: str
     partial: list[str] = field(default_factory=list)
+    digest: str | None = None  # an image item's revision: the digest of the file's bytes
 
     @property
     def revision(self) -> str:
-        return hashing.sha256_text(self.text)
+        return self.digest or hashing.sha256_text(self.text)
 
 
 def slug(text: str, fallback: str = "section") -> str:
@@ -75,11 +96,12 @@ def _markdown_sections(lines: Sequence[str]) -> list[tuple[str | None, int, int,
     starts: list[tuple[str | None, int]] = []
     fence: str | None = None
     for number, line in enumerate(lines, 1):
-        opening = _FENCE.match(line)
         if fence is not None:
-            if opening and opening.group(1)[0] == fence[0] and len(opening.group(1)) >= len(fence):
+            closing = _CLOSING.fullmatch(line)
+            if closing and closing.group(1)[0] == fence[0] and len(closing.group(1)) >= len(fence):
                 fence = None
             continue
+        opening = _FENCE.match(line)
         if opening:
             fence = opening.group(1)
             continue
@@ -174,17 +196,66 @@ def display(text: str, limit: int | None = None) -> str:
     return shown if limit is None or len(shown) <= limit else shown[: limit - 3] + "..."
 
 
+def kind_of(path: Path, kind: str | None) -> str:
+    """The kind a file is read as: `kind` where named, else by its suffix, or a refusal."""
+
+    resolved = kind or KIND_BY_SUFFIX.get(path.suffix.lower())
+    if resolved is not None:
+        return resolved
+    shown = display(str(path))
+    json_note = (
+        "; a design tool's JSON is not read, so export the frames as PNG, JPEG, GIF, WebP or "
+        "SVG, or the text as markdown"
+        if path.suffix.lower() == ".json"
+        else ""
+    )
+    raise SourceRefusal(
+        "SOURCE_KIND_UNKNOWN",
+        f"{shown} is not .md, .markdown, .txt, .text, .png, .jpg, .jpeg, .gif, .webp or .svg; "
+        "name its kind with --as markdown, --as text or --as image, or convert it to markdown "
+        f"first{json_note}",
+    )
+
+
+def raw_digest(kind: str, data: bytes) -> str:
+    """The digest a manifest records for a file: of its bytes, with CRLF as LF for a text kind
+    and SVG, and as they are for a binary image."""
+
+    return hashlib.sha256(textio.fold(data) if _folds(kind, data) else data).hexdigest()
+
+
+def _is_svg(data: bytes) -> bool:
+    info = sources_image.sniff(data)
+    return info is not None and info.media_type == "image/svg+xml"
+
+
+def image_item(data: bytes, name: str, file_slug: str, shown: str) -> Item:
+    """The one item of an image file: its id and revision come from the file's digest, and its
+    text is what the header says. The pixels are not read."""
+
+    info = sources_image.sniff(data)
+    if info is None:
+        raise SourceRefusal(
+            "SOURCE_IMAGE_INVALID", f"{shown} is not a PNG, JPEG, GIF, WebP or SVG file"
+        )
+    digest = raw_digest("image", data)
+    if info.width is None or info.height is None:
+        size, partial = "size UNVERIFIED", [_PARTIAL_SIZE]
+    else:
+        size = f"{info.width}x{info.height} px" + (f" ({info.note})" if info.note else "")
+        partial = []
+    size_bytes = len(textio.fold(data) if _folds("image", data) else data)
+    text = f"{info.media_type}, {size}, {size_bytes} bytes; the pixels were not read"
+    return Item(f"{name}:{file_slug}:image-{digest[:12]}", None, 1, 1, text, partial, digest)
+
+
 def read_source(path: Path, kind: str | None) -> tuple[str, str, bytes]:
-    """(kind, text, bytes) of one file, or an `SourceRefusal`."""
+    """(kind, text, bytes) of one text file, or an `SourceRefusal`."""
 
     shown = display(str(path))
-    resolved = kind or KIND_BY_SUFFIX.get(path.suffix.lower())
-    if resolved is None:
-        raise SourceRefusal(
-            "SOURCE_KIND_UNKNOWN",
-            f"{shown} is not .md, .markdown, .txt or .text; name its kind with --as markdown "
-            "or --as text, or convert it to markdown first",
-        )
+    resolved = kind_of(path, kind)
+    if resolved == "image":
+        raise SourceRefusal("SOURCE_KIND_UNKNOWN", f"{shown} is an image, which has no text")
     try:
         data = path.read_bytes()
     except OSError as error:
@@ -198,6 +269,20 @@ def read_source(path: Path, kind: str | None) -> tuple[str, str, bytes]:
     if "\x00" in text:
         raise SourceRefusal("SOURCE_ENCODING", f"{shown} holds a NUL byte, so it is not text")
     return resolved, text, data
+
+
+def read_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as error:
+        shown = display(str(path))
+        raise SourceRefusal("SOURCE_UNREADABLE", f"{shown}: {error.strerror or error}") from error
+
+
+def _folds(kind: str, data: bytes) -> bool:
+    """Whether CRLF folds to LF in the file's digest and size: a text kind and SVG do."""
+
+    return kind != "image" or _is_svg(data)
 
 
 def relative_name(path: Path, base: Path) -> str:
@@ -248,18 +333,22 @@ def build(
     items: list[dict[str, Any]] = []
     slugs: dict[str, int] = {}
     for recorded, path in named:
-        file_kind, text, data = read_source(path, kind)
         file_slug = unique(slug(path.stem, "file"), slugs)
-        found = split_items(text, file_kind, name, file_slug)
+        if kind_of(path, kind) == "image":
+            file_kind, data = "image", read_bytes(path)
+            found = [image_item(data, name, file_slug, display(str(path)))]
+        else:
+            file_kind, text, data = read_source(path, kind)
+            found = split_items(text, file_kind, name, file_slug)
         if not found:
             raise SourceRefusal("SOURCE_EMPTY", f"{display(recorded)} holds no text to read")
         sources.append(
             {
                 "file": recorded,
                 "format": file_kind,
-                "raw_sha256": hashlib.sha256(textio.fold(data)).hexdigest(),
-                "bytes": len(textio.fold(data)),
-                "converted": converted,
+                "raw_sha256": raw_digest(file_kind, data),
+                "bytes": len(textio.fold(data) if _folds(file_kind, data) else data),
+                "converted": converted and file_kind != "image",
             }
         )
         items.extend(_item_document(item, len(sources) - 1) for item in found)

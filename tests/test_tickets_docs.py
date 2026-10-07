@@ -31,9 +31,9 @@ ISSUE_TEMPLATE = REPOSITORY / "templates/tickets/issue-template.md"
 # verb.
 VERB_SECTION = "## The verbs"
 
-# `discovered-from` is optional; the other five decision keys are what a
+# `discovered-from` and `satisfies` are optional; the other four decision keys are what a
 # ticket block skeleton carries, so the template offers exactly those.
-SKELETON_KEYS = tuple(key for key in DECISION_KEYS if key != "discovered-from")
+SKELETON_KEYS = tuple(key for key in DECISION_KEYS if key not in ("discovered-from", "satisfies"))
 
 
 def _read(path: Path) -> str:

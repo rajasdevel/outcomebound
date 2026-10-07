@@ -48,6 +48,7 @@ VERBS = (
     "instructions",
     "finish-check",
     "sources",
+    "review",
     "explorable",
 )
 
@@ -169,6 +170,7 @@ SUBVERBS = {
     "floor": ("propose", "apply", "check", "baseline", "ratchet", "provision", "remove"),
     "fragments": ("compose", "detect"),
     "sources": ("import", "check"),
+    "review": ("check",),
     "explorable": ("new", "build", "check"),
 }
 HELPS = [(verb,) for verb in VERBS] + [

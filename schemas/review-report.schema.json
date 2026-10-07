@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:review-report:1",
+  "title": "OutcomeBound review check report v1",
+  "description": "What `outcomebound review check --json` prints. Each finding says what it does not establish.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "verdict", "counts", "findings"],
+  "properties": {
+    "version": {"const": 1},
+    "verdict": {"enum": ["PASS", "FAIL"]},
+    "reviewed": {"type": "string"},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["PASS", "FAIL", "WARN", "INFO"],
+      "properties": {
+        "PASS": {"type": "integer"},
+        "FAIL": {"type": "integer"},
+        "WARN": {"type": "integer"},
+        "INFO": {"type": "integer"}
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "verdict", "subject", "text", "does_not_establish"],
+        "properties": {
+          "code": {"type": "string"},
+          "verdict": {"enum": ["PASS", "FAIL", "WARN", "INFO"]},
+          "subject": {"type": "string"},
+          "text": {"type": "string"},
+          "does_not_establish": {"type": "string"},
+          "next": {"type": "string"}
+        }
+      }
+    }
+  }
+}

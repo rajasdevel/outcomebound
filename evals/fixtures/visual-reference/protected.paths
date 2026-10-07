@@ -1,0 +1,11 @@
+# The project note, the graders, the installed core skill and repository exclusion state
+# copied into the candidate-writable fixture.
+AGENTS.md
+checks/probe_card.py
+checks/scope_walk.py
+checks/transcript_commands.py
+checks/allowed_paths.sh
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

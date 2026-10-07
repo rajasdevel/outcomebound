@@ -184,7 +184,7 @@
         "deny": null
       },
       "docs": "https://learn.chatgpt.com/docs/permissions",
-      "source": "https://learn.chatgpt.com/docs/config-file/config-reference, read 2026-09-27: project config loads only in a trusted project and ignores the provider, notification, approval and sandbox keys; where project config holds deny rules is not settled; .codex/hooks.json per https://learn.chatgpt.com/docs/hooks, read 2026-09-29: project hooks, loaded only in a trusted project"
+      "source": "https://learn.chatgpt.com/docs/config-file/config-reference, read 2026-09-27: project config loads only in a trusted project and ignores the provider, notification, approval and sandbox keys; project config holds no deny key: command rules are `prefix_rule` calls in `.codex/rules/*.rules`, loaded only in a trusted project, per https://learn.chatgpt.com/docs/agent-configuration/rules, read 2026-10-06; .codex/hooks.json per https://learn.chatgpt.com/docs/hooks, read 2026-09-29: project hooks, loaded only in a trusted project"
     },
     "finish_hook": {
       "event": "Stop",
