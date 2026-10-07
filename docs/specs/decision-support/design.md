@@ -1,18 +1,13 @@
 ---
 name: decision-support
-status: draft
+status: ratified
 ---
 
 # Decision support — design
 
 This design joins the decision brief, whose design was ratified as `docs/specs/decision-brief/`,
-and the explorable, a draft, into one area: every way an agent puts a judgment, a lesson or a
-question to a person. The `draft` status covers the explorable sections only: the decision-brief
-rows bind as before, and at landing the status becomes `ratified` and this note goes. This draft lands with the change that adds `outcomebound explorable`
-and the `explorable` skill. Before it lands: an independent review of the skill text and of the
-contract's count of skills (the `review` mechanism, since the change alters what a skill and the
-contract tell a model), the run of the library pins under the policy recorded in the pull request,
-and the release canary (`make canary`), because the change adds a verb and a default skill.
+and the explorable into one area: every way an agent puts a judgment, a lesson or a question to a
+person.
 
 ## Outcome
 
@@ -323,7 +318,8 @@ checks and removes the skill beside the core skill.
   instructions check`, and one eval fixture whose prompt holds two decisions: one that turns on
   values the person judges, where a page helps, and a yes-or-no choice with one clear downside,
   where a page must add no work. Its post-checks run `outcomebound explorable check` without
-  `--browser` on the page the agent left, and read the answer for the brief. Until the fixture
+  `--browser` on the page the agent left, refuse a starter built unchanged, and read the answer
+  for a brief on each decision. Until the fixture
   runs, what the skill does for an adopter is `UNVERIFIED`.
 - Before landing, recorded in the pull request: the pins load from a page opened from disk in a
   headless browser, with the policy in place, in light and dark. Run on 2026-10-07 with Chrome 154

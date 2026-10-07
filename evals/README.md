@@ -8,8 +8,8 @@ verdict. No model grades another.
 
 There are two families of fixtures:
 
-- **Fourteen kernel and skill fixtures.** They measure the kernel and the skills against the
-  task alone. Each arm runs all fourteen by default.
+- **Fifteen kernel and skill fixtures.** They measure the kernel and the skills against the
+  task alone. Each arm runs all fifteen by default.
 - **Twelve hand-off fixtures.** They measure the hand-off package for one implementer. They run
   only when `--fixtures` names them.
 
@@ -34,8 +34,8 @@ for repetition in 1 2 3; do
 done
 ```
 
-- With no `--fixtures`, each call runs the fourteen fixtures that are not hand-off fixtures. Each
-  fixture is one codex call. The two arms above are 84 runs. Each other arm adds 42 runs.
+- With no `--fixtures`, each call runs the fifteen fixtures that are not hand-off fixtures. Each
+  fixture is one codex call. The two arms above are 90 runs. Each other arm adds 45 runs.
 - The measurement of the ladder is its four fixtures under `current`, `unsized` and `none`, with
   three repetitions each: 36 runs.
 - `--fixtures` narrows the run. `--effort` sets the reasoning effort of codex (default `medium`).
@@ -151,6 +151,14 @@ Each skill has one fixture whose checks read the behavior that the skill is for:
   drafts read PASS under `tickets check --draft`. There is exactly one draft, the count that the
   sizing rule of the skill gives a design of one outcome with no edge, no decision between and one
   implementer. Each draft names bounds, and each bound is a path that the seed holds.
+- `explorable`, for `explorable`. The task holds two decisions for the person: grow the uploads
+  disk or move old uploads to the archive, which turns on how fast uploads grow and on how often
+  old uploads are opened, and whether to remove an old endpoint, a yes or no with one clear
+  downside. Nothing outside `.agents/work/` changed. There is exactly one page that the engine
+  built, and `outcomebound explorable check`, without `--browser`, passes on it. Its content
+  calls `explorable.expect` at least once and is not a starter built unchanged. The answer has
+  a brief for each decision and names the page. The starter of the `decision` kind shows a cache
+  choice, so the fixture's decision is a different one.
 
 Three more fixtures, also for `slice-tickets`, each plant one way that a cut of real work went
 wrong. Each task is to break a short design into ticket drafts. In each, the drafts read PASS

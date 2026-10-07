@@ -134,7 +134,7 @@ adapters/             harnesses.json, the harness table adopt routes by; surface
 schemas/              wire formats
 docs/                 designs, references, guides
 references/           portability.md, the harness matrix as adapters/harnesses.json records it
-evals/                fourteen kernel and skill fixtures under four arms (earlier, current, unsized, none), and twelve
+evals/                fifteen kernel and skill fixtures under four arms (earlier, current, unsized, none), and twelve
                       hand-off fixtures that run only when named; evals/README.md says how to run them
 tests/                the engine's behavior
 .agents/tools/        tools for agents working in this repository

@@ -34,6 +34,7 @@ FIXTURES = ROOT / "evals" / "fixtures"
 NAMES = (
     "decision",
     "dirty-review",
+    "explorable",
     "long-run",
     "slice-a-spec",
     "slice-gate-findings",
@@ -601,6 +602,106 @@ def test_a_test_that_only_errors_without_the_fix_does_not_catch_it(
     assert "error instead" in verdicts["_output"]
 
 
+# The explorable fixture: a page for the decision on the uploads disk, built with this
+# checkout's engine, a brief for each decision, and no page for the yes-or-no one.
+PYTHON = shlex.quote(sys.executable)
+ENGINE = f"PYTHONPATH={shlex.quote(str(ROOT))} {PYTHON} -m outcomebound_tools"
+NEW_PAGE = f"""mkdir -p .agents/work
+{ENGINE} explorable new .agents/work/disk.source.html --kind decision
+"""
+OWN_CONTENT = "printf '<p>Disk use by month.</p>\\n' >> .agents/work/disk.source.html\n"
+BUILD_PAGE = f"{ENGINE} explorable build .agents/work/disk.source.html\n"
+DISK_PAGE = NEW_PAGE + OWN_CONTENT + BUILD_PAGE
+NO_EXPECTATION = (
+    NEW_PAGE
+    + "printf '%s\\n' '<script type=\"application/json\" data-explorable>' "
+    + '\'{"kind": "decision", "id": "disk", "title": "Disk", "brief": "briefs.json"}\' '
+    + "'</script>' '<p>Disk use by month.</p>' > .agents/work/disk.source.html\n"
+    + BUILD_PAGE
+)
+EDIT_THE_BUILT_PAGE = (
+    f"{PYTHON} -c \"import pathlib; p = pathlib.Path('.agents/work/disk.html'); "
+    "p.write_text(p.read_text().replace('THRESHOLD_STEPS', 'STEPS'))\"\n"
+)
+EXPORT_PAGE = (
+    f"{ENGINE} explorable new .agents/work/export.source.html --kind decision\n"
+    "printf '<p>Calls by month.</p>\\n' >> .agents/work/export.source.html\n"
+    f"{ENGINE} explorable build .agents/work/export.source.html\n"
+)
+OUTSIDE_THE_WORKING_AREA = (
+    f"{ENGINE} explorable new disk.source.html --kind decision\n"
+    "printf '<p>Disk use by month.</p>\\n' >> disk.source.html\n"
+    f"{ENGINE} explorable build disk.source.html\n"
+)
+DISK_BRIEF = """### D1 · Grow the uploads disk, or move uploads older than 90 days to the archive?
+- 👉 Recommend: B — the disk then holds about three months of uploads
+- Options:
+  - A grow the disk to 2 TB — one step, offline for about 30 minutes
+    - 🔻 Downside: a disk that has grown never shrinks
+  - B archive old uploads — a nightly job moves them
+    - 🔻 Downside: an archived upload opens in about 2 s, and how often is unknown
+- ↩️ Undo: B is undone by moving uploads back; A cannot be undone
+"""
+EXPORT_BRIEF = """### D2 · Remove /v1/export in the next release?
+- 👉 Recommend: A — one caller made 9 calls in 30 days
+- Options:
+  - A remove it — that caller moves to /v2/export
+    - 🔻 Downside: the caller breaks if it has not moved
+  - B keep it one more release
+- ↩️ Undo: a removed endpoint comes back in the next release
+"""
+NAMES_THE_PAGE = "\nThe page for D1 is `.agents/work/disk.html`.\n"
+BOTH_BRIEFS = DISK_BRIEF + "\n" + EXPORT_BRIEF + NAMES_THE_PAGE
+READ_THE_DATA = ("cat logs/uploads.csv", "cat docs/storage.md", "cat logs/endpoints.csv")
+
+
+def test_explorable_items_reject_their_planted_fail_and_accept_their_planted_pass(
+    workspace: Callable[..., Path],
+) -> None:
+    _every_claim_reads(
+        workspace,
+        "explorable",
+        (DISK_PAGE, READ_THE_DATA, BOTH_BRIEFS),
+        ("printf 'ARCHIVE_AFTER_DAYS = 90\\n' >> app.py\n", ("ls",), "I archived old uploads.\n"),
+    )
+
+
+# A slip from the passing run, the answer beside it, and the one claim it fails.
+ONE_SLIP = {
+    "starter-built-unchanged": (NEW_PAGE + BUILD_PAGE, BOTH_BRIEFS, "page-is-not-the-starter"),
+    "no-expectation": (NO_EXPECTATION, BOTH_BRIEFS, "page-declares-an-expectation"),
+    "built-page-edited": (DISK_PAGE + EDIT_THE_BUILT_PAGE, BOTH_BRIEFS, "page-built-and-checked"),
+    "a-page-for-the-yes-or-no-choice": (
+        DISK_PAGE + EXPORT_PAGE,
+        BOTH_BRIEFS + "The page for D2 is `.agents/work/export.html`.\n",
+        "one-page-only",
+    ),
+    "one-brief-for-two-decisions": (
+        DISK_PAGE,
+        DISK_BRIEF + NAMES_THE_PAGE + "Remove /v1/export too.\n",
+        "brief-for-each-decision",
+    ),
+    "page-not-named": (DISK_PAGE, DISK_BRIEF + "\n" + EXPORT_BRIEF, "page-named-in-the-answer"),
+    "page-outside-the-working-area": (
+        OUTSIDE_THE_WORKING_AREA,
+        BOTH_BRIEFS,
+        "only-working-files-added",
+    ),
+}
+
+
+@pytest.mark.parametrize("slip", sorted(ONE_SLIP))
+def test_each_slip_from_the_explorable_pass_fails_its_own_claim_alone(
+    workspace: Callable[..., Path], slip: str
+) -> None:
+    script, answer, claim = ONE_SLIP[slip]
+    target = workspace("explorable", slip)
+    _act(target, script)
+    verdicts = _grade(target, "explorable", transcript(target, *READ_THE_DATA), answer)
+    failing = sorted(name for name, verdict in verdicts.items() if verdict == "FAIL")
+    assert failing == [claim], verdicts["_output"]
+
+
 CSV_TICKET = """# The report prints CSV on request
 
 ## Outcome
@@ -1059,6 +1160,7 @@ def test_no_name_mode_link_ignore_or_index_bit_hides_a_write_from_the_scope_chec
 WORKSPACE_CLAIMS = {
     **{name: (claim, act) for name, (claim, _tracked, act) in SCOPED.items()},
     "decision": ("workspace-unchanged", ""),
+    "explorable": ("only-working-files-added", ""),
 }
 
 
