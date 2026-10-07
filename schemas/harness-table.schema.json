@@ -411,6 +411,7 @@
       "additionalProperties": false,
       "required": [
         "event",
+        "mark_event",
         "file",
         "guard",
         "accept",
@@ -422,6 +423,11 @@
           "type": "string",
           "minLength": 1,
           "description": "The event key the entry goes under, inside the document's top-level hooks object."
+        },
+        "mark_event": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The event key the turn-start entry goes under, in the same document: the event that fires at each prompt, so that the check can tell a turn that changed nothing from one that did."
         },
         "file": {
           "type": "string",

@@ -171,11 +171,11 @@ With `adopt --finish-check`, your Done commands decide when a turn can end:
 
 ```mermaid
 flowchart TD
-    turn(["The agent ends its turn"]) --> changed{"Has the working tree changed<br/>since Done last ran?"}
+    turn(["The agent ends its turn"]) --> changed{"Has the working tree or HEAD changed<br/>since the turn began?"}
     changed -- no --> idle["The turn ends. Nothing runs.<br/>A failure is shown to you again."]
     changed -- yes --> cmds["Your Done commands run"]
     cmds -- PASS --> pass["The turn ends. You see PASS:<br/>not reviewed, not landed."]
-    cmds -- FAIL --> known{"Did it fail in the same way<br/>when adopt measured Done?"}
+    cmds -- FAIL --> known{"Did it fail in the same way<br/>when the turn began,<br/>or when adopt measured Done?"}
     known -- yes --> told["The turn ends.<br/>You see the known failure."]
     known -- no --> retry{"Sent back<br/>once already?"}
     retry -- no --> back["The failure goes back to the agent.<br/>It keeps working."]
@@ -201,6 +201,21 @@ agent back; the message says so. Split your Done into smaller commands to make t
 failure that is new since that record. Read these lines: an agent that runs it after its change
 broke code makes those failures known. An install without `--finish-check` does not run Done.
 
+A second entry in the same settings file runs at each prompt and records the commit and the
+working tree (tracked and untracked files; ignored files are not compared) at the start of the
+turn; it prints nothing. A turn that ends on that commit and tree runs nothing and holds nothing, so a failure that the environment caused while the agent only
+read does not send it back. A failure that the tree already had at the start of the turn, with the
+same failing test names, is shown to you as known before the turn, and does not send the agent
+back; a new failure does. The check compares with the last Done run on the tree at the start, so
+a tree that Done never ran on has no such record. A failure that the agent caused in an earlier
+turn and left unfixed is also known before the later turns, and is shown to you each time. Without the entry (an install from before it,
+or a harness that does not fire the event), the check behaves as before. Each time the record
+decides a stop, the message to you names the time it was written. The record is trusted only for
+the same session and, where the harness gives a transcript to check against, only if it was written
+before the agent's first reply or tool call of the turn. Where it gives none, the session alone
+decides. An agent that forges the prompt input, edits the transcript or writes the Git directory
+can still write one; the contract forbids it, and the message shows each use.
+
 The hook checks the checkout at the working directory of the session. If the agent works in a
 worktree and the session stays in the main checkout, a PASS tells you nothing about the worktree.
 In that flow, the agent runs the Done commands in the worktree before it lands the work.
@@ -208,8 +223,8 @@ In that flow, the agent runs the Done commands in the worktree before it lands t
 It is observed in Claude Code. It is built for Codex, but not yet observed there. The install
 report itself says `UNVERIFIED` for the hook, until you see its PASS message end a run. In Codex,
 the agent sees the reason of a hold; you see the other messages. Codex runs a new or changed hook
-only after you trust it in `/hooks`. A change to Done or to the timeout changes the entry, so trust
-it again; `adopt` tells you when. The Done commands may take up to 600 seconds, the harnesses'
+only after you trust it in `/hooks`. A change to Done or to the timeout changes the entry, and the
+prompt entry is a new entry in an upgraded install, so trust them again; `adopt` tells you when. The Done commands may take up to 600 seconds, the harnesses'
 default. If Done takes longer when `adopt` measures it, `adopt` tells you, and
 `adopt --finish-timeout <seconds>` sets a longer time.
 

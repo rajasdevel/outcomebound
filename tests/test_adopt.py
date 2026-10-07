@@ -1653,6 +1653,14 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
         assert list(document) == ["zeta", "hooks", "alpha"]
         assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == "./their-own.sh"
         assert '\n    "alpha": "café"\n}\n' in text
+    began = finish_check.mark_entry(row, finish_check.done_digest(["true"]))
+    assert document["hooks"]["UserPromptSubmit"][-1] == began
+    assert began["hooks"][0] == {
+        "type": "command",
+        "command": f"outcomebound finish-check --mark --harness {row} --done "
+        f"{finish_check.done_digest(['true'])}",
+        "timeout": 30,
+    }
     assert hook_records(target) == [
         {
             "kind": "hook",
@@ -1662,7 +1670,15 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
             "timeout": 600,
             "created": not seeded,
             "sha256": sha(finish_check.canonical(ours)),
-        }
+        },
+        {
+            "kind": "hook",
+            "path": path,
+            "id": "finish-check-mark",
+            "harness": row,
+            "created": not seeded,
+            "sha256": sha(finish_check.canonical(began)),
+        },
     ]
     assert fire(target, ours["hooks"][0]["command"]) == {}
     write(target / "changed.txt", "a change\n")
@@ -1778,7 +1794,7 @@ def test_finish_timeout_is_written_kept_and_changed_in_the_one_entry(
         "command": f"outcomebound finish-check --harness codex --done {digest} --timeout 1200",
         "timeout": 1200,
     }
-    assert [record["timeout"] for record in hook_records(target)] == [1200]
+    assert [r["timeout"] for r in hook_records(target) if r["id"] == "finish-check"] == [1200]
     write(target / "changed.txt", "a change\n")
     assert fire(target, stop()[0]["hooks"][0]["command"])["systemMessage"].startswith(
         "finish-check PASS: true, "
@@ -1858,7 +1874,9 @@ def test_a_mixed_selection_installs_where_a_row_has_one_and_names_the_rest(
     )
 
     assert code == 0, err
-    assert [record["harness"] for record in hook_records(target)] == ["claude-code", "codex"]
+    stop = [r["harness"] for r in hook_records(target) if r["id"] == "finish-check"]
+    assert stop == ["claude-code", "codex"]
+    assert [r["harness"] for r in hook_records(target) if r["id"] == "finish-check-mark"] == stop
     for name in ("gemini", "cursor"):
         assert f"{name} finish-check: not available yet: {finish_check.unavailable(name)}" in out
     table = json.loads((ROOT / "adapters/harnesses.json").read_text(encoding="utf-8"))
@@ -2037,6 +2055,88 @@ def test_a_changed_codex_entry_names_the_new_trust_in_hooks(
     assert "action   codex finish-check: the entry changed" in out and again in out
     assert "claude-code finish-check: the entry changed" not in out
     assert again in run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
+
+
+def test_an_install_with_only_the_stop_entry_gains_the_turn_start_entry(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an upgrade of an install written before the turn-start entry leaves it out,
+    adds a second stop entry, reads `--check` as current meanwhile, or does not say that codex,
+    which skips a new hook until it is trusted, needs the new entry trusted in /hooks."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code,codex", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    for row, path in SETTINGS.items():
+        document = json.loads((target / path).read_text(encoding="utf-8"))
+        document["hooks"] = {"Stop": [finish_check.entry(row, finish_check.done_digest(["true"]))]}
+        write(target / path, json.dumps(document, indent=2) + "\n")
+    record = manifest(target)
+    record["artifacts"] = [r for r in record["artifacts"] if r["id"] != "finish-check-mark"]
+    write(target / adopt.MANIFEST, json.dumps(record))
+    out = run(capsys, str(target), "--check")[1]
+    assert "finish-check-mark" not in out
+
+    code, out, _ = run(capsys, str(target))
+
+    assert code == 0
+    for row, path in SETTINGS.items():
+        hooks = json.loads((target / path).read_text(encoding="utf-8"))["hooks"]
+        digest = finish_check.done_digest(["true"])
+        assert hooks["Stop"] == [finish_check.entry(row, digest)]
+        assert hooks["UserPromptSubmit"] == [finish_check.mark_entry(row, digest)]
+    assert "action   codex finish-check: the turn-start entry was added" in out
+    assert finish_check.REVIEW_AGAIN["codex"] in out
+    assert "claude-code finish-check: the turn-start entry" not in out
+    states_ = states(run(capsys, str(target), "--check")[1])
+    assert {states_[f"{path} (finish-check-mark)"] for path in SETTINGS.values()} == {"current"}
+    assert "turn-start entry" not in run(capsys, str(target), "--fragments", "")[1]
+
+
+def test_check_reads_a_deleted_turn_start_entry_as_missing(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if `--check` calls current an install whose turn-start entry is gone, which leaves
+    the check running on every turn end as before."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    settings = target / ".claude/settings.json"
+    document = json.loads(settings.read_text(encoding="utf-8"))
+    del document["hooks"]["UserPromptSubmit"]
+    write(settings, json.dumps(document, indent=2) + "\n")
+
+    found = states(run(capsys, str(target), "--check")[1])
+
+    assert found[".claude/settings.json (finish-check-mark)"] == "missing"
+    assert found[".claude/settings.json (finish-check)"] == "current"
+
+
+def test_the_turn_start_entry_runs_the_verb_to_a_mark_and_prints_nothing(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the entry's own command does not write the mark or prints anything: a harness
+    adds what a prompt hook prints to the model's context."""
+
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    arguments = ("--harness", "claude-code", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    commit_all(target)
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    command = document["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+
+    done = subprocess.run(
+        engine(*shlex.split(command)[1:]),
+        input=json.dumps(
+            {"cwd": str(target), "session_id": "s", "hook_event_name": "UserPromptSubmit"}
+        ).encode(),
+        cwd=target,
+        capture_output=True,
+        check=False,
+    )
+
+    assert (done.returncode, done.stdout, done.stderr) == (0, b"", b"")
+    assert (target / ".git" / finish_check.MARK).is_file()
 
 
 # --- the writer -------------------------------------------------------------------

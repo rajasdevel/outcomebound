@@ -19,8 +19,8 @@ for your harness. Then read the notes under the table.
 
 | Harness | `--harness` | Skills folder | Reaches `AGENTS.md` through | Finish hook | Verified |
 | --- | --- | --- | --- | --- | --- |
-| Claude Code | `claude-code` | `.claude/skills/` | `CLAUDE.md` with `@AGENTS.md` | `Stop`, in `.claude/settings.json` | 2026-08 |
-| Codex | `codex` | `.agents/skills/` | `AGENTS.md` | `Stop`, in `.codex/hooks.json` | 2026-09 |
+| Claude Code | `claude-code` | `.claude/skills/` | `CLAUDE.md` with `@AGENTS.md` | `Stop` and `UserPromptSubmit`, in `.claude/settings.json` | 2026-08 |
+| Codex | `codex` | `.agents/skills/` | `AGENTS.md` | `Stop` and `UserPromptSubmit`, in `.codex/hooks.json` | 2026-09 |
 | Amp | `amp` | `.agents/skills/` | `AGENTS.md` | none | 2026-08 |
 | Gemini CLI | `gemini` | `.gemini/skills/` | `GEMINI.md` with `@AGENTS.md` | none | 2026-08-23 |
 | Cursor | `cursor` | `.cursor/skills/` | `AGENTS.md` | none | 2026-08-23 |
