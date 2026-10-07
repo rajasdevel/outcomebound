@@ -51,7 +51,7 @@ FRAGMENTS_FILE = "fragments"
 TASK_SCRIPT = "task.sh"
 # The hand-off fixtures measure a hand-off package on a named implementer, not the kernel, so
 # they run only when --fixtures names them.
-NAMED_ONLY = "handoff-"
+NAMED_ONLY = ("handoff-", "lifecycle-", "adopt-")
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
@@ -268,6 +268,35 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     return Arm(name, text, files, REPO / LAUNCHER, tuple(selected), pointers)
 
 
+def fixture_arm(name: str, arm: Arm) -> Arm:
+    """The adoption controller carries its subject skill; ordinary installs do not."""
+
+    if not name.startswith("adopt-") or arm.name == NONE:
+        return arm
+    from outcomebound_tools import adopt
+
+    root = ".agents/skills/adopt-outcomebound"
+    files = {
+        **arm.files,
+        **{
+            f"{root}/{path}": data
+            for path, data in adopt.skill_files(REPO, "adopt-outcomebound").items()
+        },
+    }
+    return arm._replace(files=files)
+
+
+def fixture_write_roots(name: str, workdir: Path) -> tuple[Path, ...]:
+    """Only the upgrade case grants nested Git and exact managed skill directories."""
+
+    if name != "adopt-upgrade":
+        return ()
+    from outcomebound_tools import adopt
+
+    target = workdir / "target" / "project"
+    return (target / ".git", *(target / ".agents" / "skills" / skill for skill in adopt.SKILLS))
+
+
 def as_installed(workdir: Path, arm: Arm) -> str:
     """For an arm that stands for an install, give the built fixture what adopt writes into
     AGENTS.md, and fold it into the seed commit; why it could not, or an empty string.
@@ -356,10 +385,8 @@ def task_text(name: str, workdir: Path) -> str:
     fixture = FIXTURES / name
     if not (fixture / TASK_SCRIPT).is_file():
         return (fixture / "prompt.md").read_text(encoding="utf-8")
-    done = subprocess.run(
+    done = bounded_command(
         ["bash", str(fixture / TASK_SCRIPT), str(workdir)],
-        capture_output=True,
-        text=True,
         env={**child_env(), **HERMETIC_GIT},
         timeout=SETUP_TIMEOUT,
     )
@@ -407,12 +434,19 @@ def source() -> dict[str, Any]:
     }
 
 
-def codex_command(model: str, effort: str, cwd: Path, last_message: Path) -> list[str]:
+def codex_command(
+    model: str,
+    effort: str,
+    cwd: Path,
+    last_message: Path,
+    writable_roots: tuple[Path, ...] = (),
+) -> list[str]:
     """The `codex exec` argv for one call: the model named, the operator's setup left out.
 
     The call may write the workspace and, where it is a Git repository, its `.git`, which
     `workspace-write` otherwise keeps read-only: a fixture would measure the sandbox, not
-    the model, if a commit were impossible.
+    the model, if a commit were impossible. Only `.agents/work` is added for task notes;
+    the installed skills and the rest of `.agents` retain their default protection.
     """
 
     if not model:
@@ -435,29 +469,135 @@ def codex_command(model: str, effort: str, cwd: Path, last_message: Path) -> lis
     ]
     if (Path(cwd) / ".git").is_dir():
         command += ["--add-dir", str(Path(cwd) / ".git")]
+    command += ["--add-dir", str(Path(cwd) / ".agents" / "work")]
+    for root in writable_roots:
+        command += ["--add-dir", str(root)]
     return command
 
 
-def call_codex(prompt: str, model: str, effort: str, cwd: Path, path: str) -> tuple[str, str, int]:
+def stop_descendants(pid: int) -> None:
+    """Stop the task's current POSIX descendants before their parent is reaped.
+
+    A subprocess can start a separate session. The existing process-group stop
+    cannot reach it. Use the host process table only on timeout, with a bounded
+    read; Windows is already covered by the existing taskkill tree helper.
+    """
+
+    import contextlib
+    import signal
+
+    if os.name == "nt":
+        return
+    try:
+        listed = subprocess.run(
+            ["ps", "-e", "-o", "pid=", "-o", "ppid="], capture_output=True, text=True, timeout=1
+        )
+        parents = {
+            int(row.split()[0]): int(row.split()[1])
+            for row in listed.stdout.splitlines()
+            if len(row.split()) == 2
+        }
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return
+    owned = {pid}
+    for _ in range(len(parents)):
+        found = {child for child, parent in parents.items() if parent in owned}
+        if found <= owned:
+            break
+        owned |= found
+    for child in owned - {pid}:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.kill(child, signal.SIGKILL)
+
+
+def bounded_command(
+    command: list[str], *, timeout: float, input: str | None = None, **kwargs: Any
+) -> subprocess.CompletedProcess[str]:
+    """Keep partial output on timeout and stop the command's process group."""
+
+    from outcomebound_tools.programs import new_group, stop_tree
+
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        **new_group(),
+        **kwargs,
+    )
+    try:
+        out, error = process.communicate(input.encode() if input is not None else None, timeout)
+    except subprocess.TimeoutExpired as timed_out:
+        stop_descendants(process.pid)
+        stop_tree(process)
+        try:
+            out, error = process.communicate(timeout=1)
+        except subprocess.TimeoutExpired as remaining:
+            # A detached/reparented writer is outside the observed process tree.
+            # Preserve its partial output without waiting forever on its pipe.
+            out, error = remaining.output or timed_out.output or b"", remaining.stderr or b""
+            if process.stdout is not None:
+                process.stdout.close()
+            if process.stderr is not None:
+                process.stderr.close()
+
+        raise subprocess.TimeoutExpired(
+            command,
+            timeout,
+            output=out.decode("utf-8", "replace"),
+            stderr=error.decode("utf-8", "replace"),
+        ) from None
+    except BaseException:
+        stop_descendants(process.pid)
+        stop_tree(process)
+        process.wait(timeout=1)
+        raise
+    return subprocess.CompletedProcess(
+        command,
+        process.returncode,
+        out.decode("utf-8", "replace"),
+        error.decode("utf-8", "replace"),
+    )
+
+
+def partial_output(problem: BaseException) -> str:
+    """Readable partial process evidence, when an exception carries it."""
+
+    def text(value: str | bytes | None) -> str:
+        return value.decode("utf-8", "replace") if isinstance(value, bytes) else value or ""
+
+    return text(getattr(problem, "output", None)) + text(getattr(problem, "stderr", None))
+
+
+def call_codex(
+    prompt: str,
+    model: str,
+    effort: str,
+    cwd: Path,
+    path: str,
+    writable_roots: tuple[Path, ...] = (),
+) -> tuple[str, str, int | None]:
     """The model's final message, everything codex printed, and codex's exit status; `path`
     is the call's PATH."""
 
     with tempfile.NamedTemporaryFile("r+", suffix=".md", delete=False) as handle:
         last_message = Path(handle.name)
     try:
-        done = subprocess.run(
-            codex_command(model, effort, cwd, last_message),
-            input=prompt,
-            capture_output=True,
-            text=True,
-            env={**child_env(), "PATH": path},
-            cwd=str(cwd),
-            timeout=CALL_TIMEOUT,
-        )
+        try:
+            done = bounded_command(
+                codex_command(model, effort, cwd, last_message, writable_roots),
+                input=prompt,
+                env={**child_env(), "PATH": path},
+                cwd=str(cwd),
+                timeout=CALL_TIMEOUT,
+            )
+            transcript, code = done.stdout + done.stderr, done.returncode
+        except subprocess.TimeoutExpired as problem:
+            transcript, code = partial_output(problem), None
         answer = last_message.read_text(encoding="utf-8") if last_message.is_file() else ""
     finally:
         last_message.unlink(missing_ok=True)
-    return answer, done.stdout + done.stderr, done.returncode
+    return answer, transcript, code
 
 
 def tokens_used(transcript: str) -> int | None:
@@ -552,10 +692,8 @@ def post_check(
     }
     if seed:
         env[SEED_SHA_ENV] = seed
-    done = subprocess.run(
+    done = bounded_command(
         [sys.executable, "-m", "outcomebound_tools.validation", str(plan), "--cwd", str(workdir)],
-        capture_output=True,
-        text=True,
         cwd=str(REPO),
         env=env,
         timeout=POST_CHECK_TIMEOUT,
@@ -595,13 +733,15 @@ def run_fixture(
     )
     extra: dict[str, Any] = {"verdict": "UNVERIFIED", "claims": {}, "fixture_repo": str(workdir)}
     install(workdir, arm.files)
-    built = subprocess.run(
-        ["bash", str(fixture / "setup.sh"), str(workdir)],
-        capture_output=True,
-        text=True,
-        env={**child_env(), **HERMETIC_GIT, "OB_EVAL_ARM": arm.name},
-        timeout=SETUP_TIMEOUT,
-    )
+    try:
+        built = bounded_command(
+            ["bash", str(fixture / "setup.sh"), str(workdir)],
+            env={**child_env(), **HERMETIC_GIT, "OB_EVAL_ARM": arm.name},
+            timeout=SETUP_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as problem:
+        extra["error"] = f"fixture setup {type(problem).__name__}: {problem}"
+        return "", partial_output(problem), None, extra
     if built.returncode != 0:
         extra["error"] = f"fixture setup exited {built.returncode}"
         return "", built.stdout + built.stderr, None, extra
@@ -617,26 +757,37 @@ def run_fixture(
         extra["error"] = f"protected fixture setup failed: {problem}"
         return "", built.stdout + built.stderr, None, extra
     seed = seed_commit(workdir)
+    (workdir / ".agents" / "work").mkdir(parents=True, exist_ok=True)
     try:
         prompt = build_prompt(arm.kernel, task_text(name, workdir))
     except (OSError, ValueError, subprocess.SubprocessError) as problem:
         extra["error"] = f"the fixture's task could not be written: {problem}"
-        return "", built.stdout + built.stderr, None, extra
+        return "", built.stdout + built.stderr + partial_output(problem), None, extra
     extra["prompt"] = prompt
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
     try:
-        answer, transcript, returncode = call_codex(prompt, model, effort, workdir, path)
+        answer, transcript, returncode = call_codex(
+            prompt, model, effort, workdir, path, fixture_write_roots(name, workdir)
+        )
+        if returncode is None:
+            extra["error"] = f"codex call timed out after {CALL_TIMEOUT} seconds"
     except (OSError, subprocess.SubprocessError) as problem:
         # The post-checks still run: a call that timed out may have changed the repository.
         extra["error"] = f"{type(problem).__name__}: {problem}"
+        transcript = partial_output(problem)
     elapsed = round(time.monotonic() - started, 1)
 
     intact, protected_report = check_protected(workdir, protected)
     verdict, output, log_dir = "FAIL", "VERDICT: FAIL\n", None
     if intact:
-        verdict, output, log_dir = post_check(fixture, workdir, seed, transcript, answer)
+        try:
+            verdict, output, log_dir = post_check(fixture, workdir, seed, transcript, answer)
+        except (OSError, subprocess.SubprocessError) as problem:
+            extra["error"] = f"post-check {type(problem).__name__}: {problem}"
+            verdict, output = "UNVERIFIED", partial_output(problem)
+
     extra.update(
         verdict=verdict,
         claims={claim: result for result, claim in CLAIM_LINE.findall(output)},
@@ -662,7 +813,9 @@ def call_error(returncode: int | None, answer: str, extra: dict[str, Any], model
     if not answer.strip():
         return "codex produced no final message"
     seen = extra.get("model_observed")
-    if seen and seen != model:
+    if not seen:
+        return "codex did not report the model it ran"
+    if seen != model:
         return f"codex reported running {seen}, not {model}"
     return ""
 
@@ -811,7 +964,8 @@ def _parser() -> argparse.ArgumentParser:
             "The model is always named and passed to codex with -m, so codex's configured "
             "default never runs. Each arm's measurement is "
             f"{len(default_fixtures())} fixtures x 3 repetitions: "
-            f"{len(default_fixtures()) * len(REPETITIONS)} runs; the {NAMED_ONLY}* "
+            f"{len(default_fixtures()) * len(REPETITIONS)} runs; "
+            "the handoff, lifecycle and adoption "
             "fixtures run only when --fixtures names them."
         ),
     )
@@ -878,7 +1032,7 @@ def _main(argv: list[str] | None = None) -> int:
     arm = load_arm(args.arm)
     # Each fixture's install, read before anything runs: a fragment it names that the engine
     # does not ship stops the run here.
-    arms = {name: load_arm(args.arm, selected_fragments(name)) for name in names}
+    arms = {name: fixture_arm(name, load_arm(args.arm, selected_fragments(name))) for name in names}
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     try:

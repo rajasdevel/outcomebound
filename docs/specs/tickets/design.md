@@ -80,6 +80,13 @@ project's own gate decides done, as above.
 
 ## Validation
 
+The proposed v1.5.0 [lifecycle qualification](../lifecycle/design.md#validation) adds direct
+checks of handoff authoring. The earlier "runs nothing" rule above governs rerunning the
+prepared-package comparison when only skill text changes; it does not supply evidence about
+the skill's behavior. A package-content or rendering change still triggers that comparison.
+A direct skill case does not replace it, and the existing package results are not relabelled.
+
+
 `tests/test_tickets_*.py`, run by the `tickets-*` claims; `outcomebound tickets check` and
 `brief` run against a real export without an engine error; the hand-off fixtures listed in
 `evals/README.md`, run before a release carries the hand-off.

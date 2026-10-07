@@ -142,3 +142,36 @@ row, from 1.0.0 and from the newest release, with a candidate that renders the b
 `tests/test_fragments.py`, `tests/test_fileplan.py`, `tests/test_textio.py`,
 `tests/test_outcomebound_launcher.py` and `tests/test_paths.py`, run by the `adopt` claim; CI checks
 this repository's own install with `scripts/outcomebound adopt . --check`.
+
+## Hook portability diagnostics
+
+Ignored-file diagnostics inspect the final managed paths and manifest on every install and
+dry run, including a repeat that changes no bytes. Removed and unmanaged paths do not enter
+that inventory. A warning changes no ignore rule, index entry, project file or native trust.
+Untracked files alone do not make a machine-local install invalid.
+
+An explicit finish-check measurement also reports when the portable outcomebound command is
+absent from the reduced environment used to measure Done. It does not install a tool or write
+an absolute launcher path into shared settings. Native availability still needs observation.
+
+Repeat adoption without a harness selection preserves the recorded hook order.
+Skill paths can sort in a different order from the original harness selection;
+that difference must not rewrite an otherwise unchanged manifest.
+
+
+## Planned lifecycle support
+
+The v1.5.0 adoption work qualifies persistence and the agent's upgrade workflow in addition to
+the installed bytes. The [lifecycle design](../lifecycle/design.md) owns the release requirement.
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| An adoption report distinguishes installed files, files that survive the project's normal checkout workflow, native discovery, and observed loading | a current manifest treated as evidence of all four | agent | assumed |
+| The adopt skill checks relevant native surfaces and explains a parent-directory ignore that prevents an intended installed file from being tracked; any persistence repair is narrow and respects project policy and existing authority | broad force-add or replacement of project ignore policy; force-adopt over a local edit | agent | assumed |
+| Every confirmed shared adoption class gets a synthetic upgrade case with preserved project instructions, dirty work and local-only data | public fixtures made from a private adopter tree | agent | decided |
+| The engine's supported interpreter and the project's validation toolchain are separate facts; a checker unable to parse the project's supported language is not a reason to weaken its floor or alter its baseline | changing project checks to fit the engine's test environment | agent | decided |
+
+The direct adopt-skill fixture includes upgrade and inspection-only paths. Where a comparison is needed, both arms
+have the same sealed engine and tools. Native discovery and loading need their own observations.
+A new warning or change to an adopter-owned file's meaning follows the upgrade reporting rule in
+`docs/specs/README.md`. No schema or automatic ignore-file rewrite is decided here.

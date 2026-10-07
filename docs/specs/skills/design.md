@@ -68,3 +68,41 @@ Removing a shipped skill removes it from adopters' installs on their next upgrad
 `tests/test_skill_frontmatter.py` holds the frontmatter and length; `tests/test_skill_paths_resolve.py`
 holds every path a skill names; `outcomebound instructions check` reads the installed copies as
 it reads any instruction file; the fixtures are listed in `evals/README.md`.
+
+
+## Planned lifecycle support
+
+The [lifecycle design](../lifecycle/design.md) defines the v1.5.0 outcome and transition
+requirements. This section is planned work; it does not report new behavior evidence.
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| An on-demand lifecycle reference installs with `using-outcomebound` and routes applicable transitions to existing skills, fragments, project gates and evidence. A human guide links to the same route | a stage checklist added to the kernel; a guide available only in this repository | agent | assumed |
+| Every current skill has an identified direct behavior case. Reuse existing evidence only when its instruction, fixture, tool and grader inputs still apply; run the missing or affected cases, including `hand-off-tickets`, `adopt-outcomebound` and `explorable`. Prepared packages, static checks and engine tests remain separate evidence | calling structural agreement or a prepared-package comparison proof of skill execution | agent | decided |
+| Graders preserve tool results and supported execution order, associate provenance with the requirement it labels, reject negated or unrelated matches, and disclose all enforced fixture facts. They check outcomes; a lexical result is not a semantic review | making old runs pass by accepting missing labels, denied effects or unauthorized effects | agent | decided |
+| Each substantive changed instruction is checked against a named failure or product decision, an independent case and an applicable case where it must add no work. Reuse a control across claims when it exposes each risk. Comparable runs isolate the text being compared where that causal claim is made | a bundle comparison credited to one skill; a rewrite tuned only to a seen answer | agent | assumed |
+| `gather-requirements` is checked for source constraints, corrections, stated/inferred provenance and visual gaps. A failing valid case gets a narrow correction; the existing obligations are not diluted | adding another requirements skill or accepting one matched keyword as full source fidelity | agent | decided |
+| `tests-worth-keeping` makes explicit that a refusal or deliberate break must reach the behavior it claims to test; a failure at an earlier guard is not that evidence | a blanket mutation-testing step for every change | agent | assumed |
+| `review-findings` checks an available counterexample on the fixed revision before calling it fixed, and compares a substantive rewrite with its prior meaning where that is the review risk | another review round for every edit; sentence counting as proof of preserved meaning | agent | assumed |
+| An explicit interview orders questions by settled prerequisites and revisits dependent questions when an answer changes the branch; a learning explorable gives feedback on a prediction and permits a retry where useful. These narrow candidates are checked before being credited as improvements | assuming rounds alone preserve question dependencies, or that a reveal always explains a wrong prediction; imposing either workflow on ordinary tasks | agent | assumed |
+| Existing diagnosis narrowing and source/history due diligence stay unchanged unless a valid case shows a missing behavior; upstream boundary-tracing and prior-refusal recipes are candidates for that case, not automatic new instructions | adding a diagnostic recipe or another decision ledger from text comparison alone | agent | decided |
+| A reuse clause is kept only if an existing-project-helper case shows useful behavior against current guidance without adding work to its control | shipping the clause because both arms selected the standard library | agent | decided |
+| An adaptation preserves the useful behavior of its cited inspiration within the shared task and authority. Record a pinned source, retained behavior and intentional differences; use a direct comparison where an uncertain difference could affect the result | assuming shorter text is better, or treating a current-versus-none comparison as proof against the inspiration | agent | assumed |
+| New operation, retirement or specialist skills require a distinct unserved decision after current guidance is exercised; a narrow reference, fragment or deterministic check can be the complete fix | counting new skills as lifecycle coverage | agent | decided |
+
+The method is a pre-release risk check followed by field feedback. It cannot prove every future
+use. Known valid in-scope failures are fixed before release. Claims about comparative benefit state
+the tested tasks, candidate and limits; no blanket superiority claim follows from a small pass.
+The existing rule on repeated no-difference results stays in force; a saturated fixture or an
+underpowered comparison is first checked as a measurement limit.
+
+Use the existing evaluation runner, saved metadata, reports and summary. One qualification table
+links the required cases to those records and the review of their outcomes. Do not add an
+evidence schema, certificate, aggregate checker or model judge merely to validate that table.
+A successful summary command means the summary was produced; its claim verdicts still need
+reading. Native observations remain separate because the runner does not observe native hooks.
+
+Execution and record details stay in `evals/README.md`; dated runs and method corrections stay
+in `docs/evaluations.md`. The latter must correct its stale range and totals without changing
+historical results. The explain-spec fixture declares its own notes area; the skill gains no
+universal notes-folder rule.

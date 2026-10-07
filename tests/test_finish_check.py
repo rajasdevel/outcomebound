@@ -600,6 +600,31 @@ def test_measuring_runs_without_the_projects_and_a_virtual_environments_path(
     assert dropped == (str(root / ".venv" / "bin"), str(elsewhere / "bin"))
 
 
+def test_a_windows_mapping_keeps_one_filtered_path_and_no_virtual_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Mapping with Windows' mixed-case keys keeps the project PATH, gains
+    a second PATH key or retains VIRTUAL_ENV. Real os.environ already normalizes these keys."""
+
+    root = tmp_path / "project"
+    local = root / ".venv" / "Scripts"
+    local.mkdir(parents=True)
+    system = tmp_path / "system"
+    system.mkdir()
+    environment = {
+        "Path": os.pathsep.join([str(local), str(system)]),
+        "Virtual_Env": str(root / ".venv"),
+        "LANG": "C.UTF-8",
+    }
+
+    with monkeypatch.context() as patch:
+        patch.setattr(finish_check.os, "name", "nt")
+        filtered, dropped = finish_check.hook_environment(root, environment)
+
+    assert filtered == {"PATH": str(system), "LANG": "C.UTF-8"}
+    assert dropped == (str(local),)
+
+
 def test_a_virtual_environments_scripts_folder_is_left_out_as_its_bin_folder_is(
     tmp_path: Path,
 ) -> None:
@@ -835,6 +860,77 @@ def test_a_not_found_line_the_command_prints_itself_still_holds(tmp_path: Path) 
         _, verdict = hook("codex", digest, root)
 
         assert verdict.get("decision") == "block", (line, verdict)
+
+
+@pytest.mark.parametrize("failure", ["timeout", "oserror"])
+def test_an_unreadable_module_probe_does_not_excuse_a_failed_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Breaks if a failed confirmation probe turns a command's failure into an unheld
+    environment verdict, even though the probe established no module was absent."""
+
+    printed = f"{Path(sys.executable).as_posix()}: No module named no_such_module_here"
+    line = f"echo {shlex.quote(printed)}; exit 2"
+    root, _ = target(tmp_path / "t", [line])
+    original = subprocess.run
+
+    def probe(argv: list[str], **options: Any) -> subprocess.CompletedProcess[bytes]:
+        if Path(argv[0]) == Path(sys.executable) and argv[1] == "-c":
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(argv, options["timeout"])
+            raise OSError("probe could not start")
+        return original(argv, **options)
+
+    monkeypatch.setattr(finish_check.subprocess, "run", probe)
+
+    result = finish_check.run_one(root, line, 60)
+    verdict = finish_check.verdict_for([result], True, root, 60)
+
+    assert (result.verdict, result.code) == (finish_check.FAIL, 2), result
+    assert verdict.get("decision") == "block", verdict
+
+
+@pytest.mark.parametrize(
+    ("seconds", "probe_limit"),
+    [(1.0, 0.75), (0.1, None), (None, 30.0)],
+)
+def test_a_module_probe_uses_only_time_left_after_the_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds: float | None,
+    probe_limit: float | None,
+) -> None:
+    """Breaks if confirming a missing module spends another thirty seconds after the
+    command's time allowance, or starts after the hook's deadline."""
+
+    now = [100.0]
+    limits: list[float] = []
+    printed = f"{Path(sys.executable).as_posix()}: No module named no_such_module_here"
+
+    class Finished:
+        def wait(self, timeout: float | None = None) -> int:
+            now[0] = 100.25
+            return 2
+
+    def start(argv: list[str], **options: Any) -> Finished:
+        options["stdout"].write((printed + "\n").encode())
+        return Finished()
+
+    def probe(argv: list[str], **options: Any) -> subprocess.CompletedProcess[bytes]:
+        limits.append(options["timeout"])
+        return subprocess.CompletedProcess(argv, 3)
+
+    monkeypatch.setattr(finish_check.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(finish_check.programs, "posix_shell", lambda *a, **k: "/bin/sh")
+    monkeypatch.setattr(finish_check, "project_owned", lambda *a: False)
+    monkeypatch.setattr(finish_check.subprocess, "Popen", start)
+    monkeypatch.setattr(finish_check.subprocess, "run", probe)
+
+    result = finish_check.run_one(tmp_path, "module check", seconds)
+
+    assert limits == ([] if probe_limit is None else [probe_limit])
+    expected = finish_check.FAIL if probe_limit is None else finish_check.UNVERIFIED
+    assert (result.verdict, result.code) == (expected, 2), result
 
 
 def test_a_module_is_the_projects_only_at_its_root_or_under_src(tmp_path: Path) -> None:
@@ -1541,6 +1637,32 @@ def test_a_not_found_line_is_told_in_each_shells_words_and_what_ran_before_it(
     assert named in (None, "nosuchtool-zz")
 
 
+@pytest.mark.parametrize("available", [False, True])
+def test_a_done_command_uses_the_shell_of_the_environment_it_runs_with(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, available: bool
+) -> None:
+    """Breaks if a supplied Windows PATH lacks a shell but the caller's shell runs anyway,
+    or if a shell supplied only by that PATH is ignored."""
+
+    shell = programs.posix_shell()
+    assert shell is not None
+    marker = tmp_path / "ran"
+
+    def choose(environment: dict[str, str] | None = None) -> str | None:
+        present = available if environment is not None else not available
+        return shell if present else None
+
+    monkeypatch.setattr(finish_check.programs, "posix_shell", choose)
+
+    result = finish_check.run_one(tmp_path, f"echo ran > {q(marker)}", 60, {"PATH": ""})
+
+    expected = finish_check.PASS if available else finish_check.UNVERIFIED
+    assert result.verdict == expected, result
+    assert marker.exists() is available
+    if not available:
+        assert "no POSIX shell" in result.why
+
+
 def test_no_posix_shell_reads_unverified_with_the_reason_and_runs_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2098,3 +2220,41 @@ def test_a_line_the_harness_writes_is_not_a_prompt_for_the_order_check(
     turn("claude-code", digest, root)
     forged = stop_input("claude-code", root, transcript_path=str(lines(extra)))
     assert hook("claude-code", digest, root, stdin=forged)[1]["decision"] == "block"
+
+
+def test_absence_confirmation_uses_the_effective_child_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tool added by the shell adapter cannot excuse its own failed check by
+    printing a missing-tool line. Its actual child PATH proves it is present."""
+    folder = tmp_path / "shell-tools"
+    folder.mkdir()
+    tool = folder / "present-tool"
+    write(tool, "#!/bin/sh\nprintf '%s\\n' 'sh: present-tool: command not found'\nexit 2\n")
+    tool.chmod(0o755)
+    root, _ = target(tmp_path / "project", ["present-tool"])
+    compose = programs.shell_environment
+
+    def with_tool(shell: str, environment: Any = None) -> dict[str, str]:
+        effective = dict(compose(shell, environment) or os.environ)
+        effective["PATH"] = str(folder) + os.pathsep + effective.get("PATH", "")
+        return effective
+
+    monkeypatch.setattr(programs, "shell_environment", with_tool)
+    environment = dict(os.environ, PATH=os.pathsep.join(system_path()))
+    result = finish_check.run_one(root, "present-tool", 60, environment)
+    assert (result.verdict, result.code) == (finish_check.FAIL, 2), result
+    assert finish_check.verdict_for([result], True, root, 60).get("decision") == "block"
+
+
+@posix_only
+def test_an_unset_path_cannot_disprove_the_shell_default_path(tmp_path: Path) -> None:
+    line = "command -v cat >/dev/null && printf 'sh: cat: command not found\\n'; exit 2"
+    result = finish_check.run_one(tmp_path, line, 5, {})
+    assert (result.verdict, result.code) == (finish_check.FAIL, 2), result
+
+
+@posix_only
+def test_an_absolute_module_probe_does_not_require_path(tmp_path: Path) -> None:
+    result = finish_check.run_one(tmp_path, f"{q(sys.executable)} -m no_such_module_here", 5, {})
+    assert result.verdict == finish_check.UNVERIFIED, result

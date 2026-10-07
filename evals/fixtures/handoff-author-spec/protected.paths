@@ -1,0 +1,11 @@
+# Repository state the graders rely on, and the installed core skill, copied into the
+# candidate-writable fixture. The graders and the acceptance tests stay outside it.
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude
+AGENTS.md
+durations.py
+entries.py
+store.py
+report.py

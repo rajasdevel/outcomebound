@@ -112,6 +112,26 @@ committed: adopt writes the first and the verb edits it, since a known command t
 it; the verb writes the second. A pull request can write neither, and an agent in the session
 can, as the paragraph above says.
 
+## Runtime portability
+
+The hook uses the installed engine's Python and standard library, Git for working-tree identity,
+and the supported POSIX shell for the project's Done lines: the system shell on POSIX, or the
+shell supplied by Git for Windows. Windows process cleanup uses the operating system's
+taskkill. The hook does not need a package manager, sg, Docker, Node, a network fetch or the
+engine's development tools. A Done command can require a tool for its own work; that requirement
+belongs to the project and is not installed or bypassed by the hook.
+
+Shell selection and missing-tool checks use the environment in which Done runs. An absence
+probe must finish within the remaining command time. A probe that cannot start, times out or
+returns an unrelated failure does not confirm that a tool is missing and does not convert the
+original failure into an environment exception. A confirmed unavailable external tool remains
+UNVERIFIED and is not cached as a successful check.
+
+Shared hook entries keep the portable command name, never one machine's environment path.
+Explicit finish-check measurement reports when that command is absent from its reduced hook
+environment. This is a setup diagnostic, not proof of a desktop process's actual PATH or native
+hook execution, and it changes neither the Done verdict nor the trust decision.
+
 ## Validation
 
 `tests/test_finish_check.py` runs the verb on scratch targets in each row's input form, started as `engine()` starts it (this Python, isolated; the `sh` launcher is a POSIX file, which `tests/test_outcomebound_launcher.py` tests), with the Done lines naming files in forward slashes and every file written as LF text, one
@@ -125,3 +145,24 @@ The turn-start mark is `UNVERIFIED` in a live session on both rows: tests run th
 `claude-code` has been observed in a live session: a turn end ran the Done commands and the PASS
 message reached the transcript, in a session started before the entry too. `codex`, and
 `cursor`, which runs the `claude-code` entry too, stay `UNVERIFIED`, as does each install's harness, whose PATH may lack `outcomebound` or its tools.
+
+An environment that omits PATH can make the shell select its own defaults. The
+absence probe must not treat that as an empty PATH. When the effective search
+path is unknown, it cannot excuse a failed command as a missing executable. An
+absolute Python launcher can still prove that its module is absent.
+
+
+## Planned lifecycle support
+
+v1.5.0 qualifies the native prompt/Stop/retry chain for each harness for which that behavior is
+claimed. This is separate from direct verb tests and the isolated model-evaluation runner.
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| A native observation binds the harness release, installed hook bytes, target checkout, effective tools, prompt mark, Stop result and retry behavior to the same test | configuration or unit tests claimed as an observed native event chain | agent | decided |
+| Required native trust remains the person's act. Without a usable native session, the relevant claim is UNVERIFIED and is not advertised as qualified | editing trust state or bypassing the harness to make the check pass | agent | decided |
+| An observed retry or PATH defect is repaired with a synthetic regression while preserving the gate invariant and its data ownership | recording a new known failure or loosening the hold to conceal the defect | agent | decided |
+
+The existing completion commands, read sets, writers, exits and known-failure semantics stay as
+specified above unless a reviewed change explicitly updates them. Any narrowed finding or new
+exemption carries the required independent adversarial review.

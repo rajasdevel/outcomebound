@@ -40,9 +40,11 @@ and the reply. Leave out everything that does not change the decision, however t
 history and parts no option touches.
 
 **Learning.** Start from what the person says they know and let them skip it. Before each reveal,
-ask for a prediction; let them step through a flow at their own pace; give them a model to change
-where quantities matter; later, ask them to recall what an earlier part showed. Report what they
-answered, never that they understand (`explain-spec` holds the same rule).
+ask for a prediction. After the reveal, explain the outcome and any difference from their
+prediction; let them try again where that helps. Let them step through a flow at their own
+pace; give them a model to change where quantities matter; later, ask them to recall what an
+earlier part showed. Report what they answered, never that they understand (`explain-spec`
+holds the same rule).
 
 **Interview.** Ask the questions the work waits on, drawn from the open forks (`gather-requirements`)
 or from a spec's rows (`explain-spec`): one idea in each, the most important first, options of equal

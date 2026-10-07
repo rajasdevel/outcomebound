@@ -259,13 +259,13 @@ def _inside(path: Path, folder: Path) -> bool:
     return False
 
 
-def _block(command: str, workdir: str) -> str:
+def _block(command: str, workdir: str, status: str = "unverified") -> str:
     """One Bash call as a codex exec block, with forgeable lines defused."""
 
     command = _without_cd(command, workdir)
     body = _neutral(command.rstrip("\n"), closing=True).split("\n")
     body[-1] = f"{body[-1]} in {workdir}"
-    return "exec\n" + "\n".join(body) + "\n succeeded in 0ms:\n"
+    return "exec\n" + "\n".join(body) + f"\n {status} in 0ms:\n"
 
 
 def _events(subagent_jsonl: Path) -> list[dict]:
@@ -283,20 +283,45 @@ def _events(subagent_jsonl: Path) -> list[dict]:
 
 
 def _assistant_parts(
-    parts: list, workdir: str, blocks: list[str], pending: set[object]
+    parts: list, workdir: str, blocks: list[str], pending: dict[object, tuple[int, str]]
 ) -> list[str]:
     """The text of an assistant turn; its Bash calls go to `blocks`, their ids to `pending`."""
 
     texts = []
     for part in parts:
         if part.get("type") == "tool_use" and part.get("name") == "Bash":
-            pending.add(part.get("id") or object())  # a call with no id never gets a result
-            blocks.append(_block(str(part.get("input", {}).get("command", "")), workdir))
+            command = str(part.get("input", {}).get("command", ""))
+            key = part.get("id") or object()  # a call with no id never gets a result
+            if key in pending:
+                raise ValueError("two pending Bash calls share an id")
+            pending[key] = (len(blocks), command)
+            blocks.append(_block(command, workdir))
         elif part.get("type") == "tool_use" and part.get("name") == "SubagentHandback":
             texts.append(str(part.get("input", {}).get("message", "")))
         elif part.get("type") == "text":
             texts.append(part.get("text", ""))
     return texts
+
+
+def _result_parts(
+    parts: list, workdir: str, blocks: list[str], pending: dict[object, tuple[int, str]]
+) -> None:
+    """Bind readable tool results to their matching command attempt."""
+
+    for part in parts:
+        if part.get("type") != "tool_result":
+            continue
+        call = pending.pop(part.get("tool_use_id"), None)
+        if call is None:
+            continue
+        index, command = call
+        error = part.get("is_error", False)
+        status = "unverified"
+        if error is True:
+            status = "failed"
+        elif error is False and isinstance(part.get("content"), (str, list)):
+            status = "succeeded"
+        blocks[index] = _block(command, workdir, status)
 
 
 def _transcript(subagent_jsonl: Path, workdir: str) -> tuple[str, str]:
@@ -307,16 +332,14 @@ def _transcript(subagent_jsonl: Path, workdir: str) -> tuple[str, str]:
     blocks: list[str] = []
     answer = ""
     events = _events(subagent_jsonl)
-    pending: set[object] = set()
+    pending: dict[object, tuple[int, str]] = {}
     for event in events:
         message = event.get("message") or {}
         parts = message.get("content")
         if not isinstance(parts, list):
             continue
         if message.get("role") == "user":
-            pending.difference_update(
-                part.get("tool_use_id") for part in parts if part.get("type") == "tool_result"
-            )
+            _result_parts(parts, workdir, blocks, pending)
         elif message.get("role") == "assistant":
             texts = _assistant_parts(parts, workdir, blocks, pending)
             answer = "\n".join(texts) if texts else answer

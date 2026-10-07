@@ -85,19 +85,61 @@ def _answer() -> str | None:
         return None
 
 
+def _records(text: str) -> list[str]:
+    """Wrapped paragraphs and list records, with their immediate section heading.
+
+    This is a bounded lexical check, not a semantic judge. An explicit source or
+    section replaces the heading; separate sentences never share their labels.
+    """
+
+    records: list[str] = []
+    heading = ""
+    words: list[str] = []
+
+    def flush() -> None:
+        if words:
+            records.extend(heading + " " + part for part in re.split(r"[.!?;]\s+", " ".join(words)))
+            words.clear()
+
+    for raw in text.splitlines():
+        line = raw.strip().strip("*")
+        if not line:
+            flush()
+        elif line.endswith(":") or line.startswith("#") or re.match(r"(?i)^source:", line):
+            flush()
+            heading = line
+        elif re.match(r"^(?:[-*+] |\d+[.)] |\|)", line):
+            flush()
+            words.append(line)
+        else:
+            if not words and records:
+                heading = ""
+            words.append(line)
+    flush()
+    return records
+
+
 def _lines(answer_checks):
     def run() -> list[str]:
         text = _answer()
         if text is None:
             return ["no answer was supplied"]
-        return answer_checks(text.splitlines())
+        clauses = _records(text)
+        return answer_checks(clauses)
 
     return run
 
 
 @_lines
 def inferred(lines: list[str]) -> list[str]:
-    if any(INFERRED.search(line) and REGION.search(line) for line in lines):
+    negated = re.compile(
+        r"(?i)\b(?:no|not|never)\s+(?:(?:explicitly|directly|independently|actually)\s+)?inferred\b"
+        r"|\b(?:isn't|wasn't|aren't|weren't)\s+inferred\b"
+        r"|\binferred\b[^.!?;]*:\s*none\b"
+    )
+    if any(
+        INFERRED.search(line) and REGION.search(line) and not negated.search(line) for line in lines
+    ):
         return []
     return ["no line marks a requirement inferred and names a region of the picture"]
 
@@ -111,7 +153,14 @@ def unverified(lines: list[str]) -> list[str]:
 
 @_lines
 def gaps(lines: list[str]) -> list[str]:
-    if any(LEFT_OUT.search(line) and TOPIC.search(line) for line in lines):
+    closed = re.compile(
+        r"(?i)\bno\b(?:\W+\w+){0,3}\W+gaps?\b"
+        r"|\bgaps?\b(?:\W+\w+){0,3}\W+(?:resolved|closed|verified|none)\b"
+        r"|\bno\b[^.!?;]*\bmissing from\b"
+    )
+    if any(
+        LEFT_OUT.search(line) and TOPIC.search(line) and not closed.search(line) for line in lines
+    ):
         return []
     return ["no line names what the picture does not show as a gap"]
 

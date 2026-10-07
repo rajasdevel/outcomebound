@@ -186,12 +186,17 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("skill", ".claude/skills/slice-tickets/references/github.md", "slice-tickets"),
         ("skill", ".claude/skills/tests-worth-keeping/SKILL.md", "tests-worth-keeping"),
         ("skill", CLAUDE_SKILL, "using-outcomebound"),
+        (
+            "skill",
+            ".claude/skills/using-outcomebound/references/lifecycle.md",
+            "using-outcomebound",
+        ),
     ]
     assert records[1]["fragments"] == ["python"]
     assert records[6]["harnesses"] == records[7]["harnesses"] == ["claude-code"]
     for record in records:
         assert adopt.state(target, ROOT, record, records) == "current"
-    assert (records[6]["sha256"], records[-1]["sha256"]) == (sha(brief), sha(skill))
+    assert (records[6]["sha256"], records[-2]["sha256"]) == (sha(brief), sha(skill))
     assert records[3]["sha256"] == sha(shipped)
 
 
@@ -1010,6 +1015,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         ".claude/skills/slice-tickets/SKILL.md": "current",
         ".claude/skills/slice-tickets/references/github.md": "current",
         ".claude/skills/tests-worth-keeping/SKILL.md": "current",
+        ".claude/skills/using-outcomebound/references/lifecycle.md": "current",
     }
     assert out.splitlines()[-1] == (
         "next: move each edit out of OutcomeBound's blocks and files, then "
@@ -1946,6 +1952,59 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
 
 
+@pytest.mark.parametrize("place", ["missing", "project", "virtual-environment", "tool-bin"])
+def test_an_explicit_measurement_names_a_launcher_missing_from_its_hook_environment(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch, place: str
+) -> None:
+    """Breaks if a launcher found only in the project or an activated environment passes
+    unnamed, if a launcher on the kept PATH is reported absent, or if this diagnostic changes
+    Done's verdict, hook bytes, a dry run or an install that does not measure Done."""
+
+    target = repo(tmp_path / "t", {".claude/settings.json": PROJECT_SETTINGS})
+    folder = target / "bin" if place == "project" else tmp_path / place / "bin"
+    folder.mkdir(parents=True)
+    if place == "virtual-environment":
+        write(folder.parent / "pyvenv.cfg", "home = /synthetic/python\n")
+    if place != "missing":
+        launcher = folder / ("outcomebound.cmd" if WINDOWS else "outcomebound")
+        write(launcher, "@exit /b 0\n" if WINDOWS else "#!/bin/sh\nexit 0\n")
+        launcher.chmod(0o755)
+    monkeypatch.setenv("PATH", str(folder))
+
+    def measure(root: Path, done: list[str], timeout: int) -> finish_check.Measured:
+        # Only the Done runner is a double: launcher lookup and PATH filtering are real.
+        _, dropped = finish_check.hook_environment(root, os.environ)
+        return finish_check.Measured(
+            (finish_check.Result(":", finish_check.PASS, 0.0),), 0.0, True, dropped=dropped
+        )
+
+    monkeypatch.setattr(finish_check, "measure", measure)
+    arguments = ("--harness", "claude-code", "--done", ":", "--finish-check")
+
+    code, out, err = run(capsys, str(target), *arguments)
+
+    assert code == 0, err
+    missing = "`outcomebound` was not found on the PATH used to measure Done"
+    assert (missing in out) == (place != "tool-bin")
+    if place != "tool-bin":
+        [line] = [line for line in out.splitlines() if missing in line]
+        assert line.startswith("UNVERIFIED ") and "desktop PATH" in line
+        assert "whether it runs the hook remain UNVERIFIED" in line
+    assert "PASS     finish-check: `:` in 0 s" in out
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == "./their-own.sh"
+    digest = finish_check.done_digest([":"])
+    assert document["hooks"]["Stop"][-1] == finish_check.entry("claude-code", digest)
+    assert document["hooks"]["UserPromptSubmit"][-1] == finish_check.mark_entry(
+        "claude-code", digest
+    )
+    before = snapshot(target)
+    for extra in (("--finish-check", "--dry-run"), ()):
+        code, out, err = run(capsys, str(target), *extra)
+        assert code == 0, err
+        assert missing not in out and snapshot(target) == before
+
+
 def test_a_new_measurement_names_the_failures_new_since_the_record_it_replaces(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -2300,6 +2359,50 @@ def test_an_install_warns_for_each_path_git_ignores(tmp_path: Path, capsys: Capt
     assert all("(.gitignore:1: .claude/)" in line for line in warnings(out))
 
 
+@pytest.mark.parametrize("extra", [(), ("--dry-run",)], ids=["install", "dry-run"])
+def test_a_repeat_install_warns_for_unchanged_owned_paths_and_preserves_unmanaged_paths(
+    tmp_path: Path, capsys: Capture, extra: tuple[str, ...]
+) -> None:
+    """Breaks if an unchanged ignored hook, skill or manifest is omitted, if an unmanaged
+    path or a dropped harness is warned about, or if the diagnostic edits project bytes."""
+
+    prefixes = (".claude/", ".agents/", ".codex/")
+    unmanaged = ".claude/local-skill/SKILL.md"
+    target = repo(
+        tmp_path / "t",
+        {
+            ".gitignore": "\n".join([*prefixes, adopt.MANIFEST, ""]),
+            ".claude/settings.json": PROJECT_SETTINGS,
+            unmanaged: "# A project's own skill\n",
+        },
+    )
+    assert (
+        run(
+            capsys,
+            str(target),
+            "--harness",
+            "claude-code,codex",
+            "--done",
+            ":",
+            "--finish-check",
+        )[0]
+        == 0
+    )
+    before = snapshot(target)
+    expected = sorted(
+        {adopt.MANIFEST, *(path for path in manifest_paths(target) if path.startswith(prefixes))}
+    )
+
+    code, out, err = run(capsys, str(target), "--harness", "claude-code,codex", *extra)
+
+    assert code == 0, err
+    assert [line.split()[1].rstrip(":") for line in warnings(out)] == expected
+    assert unmanaged not in out and snapshot(target) == before
+    _, out, _ = run(capsys, str(target), "--harness", "codex", "--dry-run")
+    assert not any(".claude/" in line for line in warnings(out))
+    assert unmanaged not in out and snapshot(target) == before
+
+
 def manifest_paths(target: Path) -> list[str]:
     return sorted({record["path"] for record in manifest(target)["artifacts"]})
 
@@ -2476,3 +2579,20 @@ def test_an_install_says_nothing_of_a_plan_no_tickets_declaration_names(
     (planless / ".outcomebound/ticket-claims.json").unlink()
     code, out, _ = run(capsys, str(planless))
     assert code == 0 and tickets_lines(out) == []
+
+
+@pytest.mark.parametrize("harnesses", ["claude-code,codex", "codex,claude-code"])
+def test_implicit_adoption_preserves_a_multi_harness_install(
+    tmp_path: Path, capsys: Capture, harnesses: str
+) -> None:
+    target = repo(tmp_path / "target")
+    commit_all(target)
+    code, _, _ = run(
+        capsys, str(target), "--harness", harnesses, "--done", "true", "--finish-check"
+    )
+    assert code == 0
+    before = snapshot(target)
+    assert run(capsys, str(target), "--check")[0] == 0
+    assert run(capsys, str(target))[0] == 0
+    assert snapshot(target) == before
+    assert run(capsys, str(target), "--check")[0] == 0

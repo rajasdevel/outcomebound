@@ -1,5 +1,5 @@
 ---
-last_checked: 2026-10-03
+last_checked: 2026-10-08
 volatility: STABLE (dated results of named models and codex versions; the method) / MONITOR (codex isolation and sign-in facts under Method)
 sources:
   - https://learn.chatgpt.com/docs/agent-approvals-security
@@ -41,7 +41,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | The under-engineering side is not separated | E8 | No fixture separates the arms |
 | A test-first hand-off took a smaller model from 6 to 9 of 9 | E17, the hand-off comparison, and E18, its rerun | gpt-6-luna at xhigh, three small tasks, 9 runs a cell. The whole gain is one row of one ticket, in both passes |
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
-| OpenAI models through Codex, three runs a cell | Model choice, Runs per cell and power | Every candidate model ran through codex. The hand-off comparison has nine runs a cell |
+| OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
 
 ## The scope of every result
@@ -52,7 +52,8 @@ another effort. Deterministic post-checks graded the runs, except where a sectio
 model judge scored them.
 
 - **Models.** Every candidate model under Results is an OpenAI model that ran through codex,
-  except E19, a single run of Claude Sonnet 5.5 through Claude Code subagents. Claude models also
+  except E19 and E20, which ran Claude Sonnet 5.5 through Claude Code subagents, once per
+  case and arm. Claude models also
   appear under "Results not kept here": as the judge of one proposal-only sample, and as
   candidates in the slicing arms. Behavior on other model families and other harnesses is not
   measured.
@@ -95,10 +96,14 @@ recorded run, because a model call does not repeat exactly.
 | Ticket-skill probes, probed, before and after two skill fixes | 2026-09-24 | gpt-6-sol medium, gpt-6-luna max | 18 | E13, E14 | Judge-scored probes of a ticket-working skill |
 | Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
+| Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
+| Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
 
-In all there are 289 model runs. 243 were graded by deterministic checks alone: the first seven
-passes above, 117 runs, the hand-off comparison, 63 runs, and its rerun, 63 runs. 46 were judged
-by a model beside deterministic post-checks: the last four passes.
+Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
+and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
+(sixteen cases in each of two arms). The documented total is therefore 349 calls. The additional
+sixty used deterministic checks with the stated harness and fixture limits. A call count includes
+an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
 `--summary` reads them. The records of the judge-scored runs also hold the raw answers, and the
@@ -107,7 +112,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E18). Other documents may cite the id.
+Each finding has an id (E1 to E20). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -312,8 +317,11 @@ the text.
 
 An eval answers a narrower question. For one task, one repository and one model, what changes in
 what the agent does and says, and at what cost, when one piece of text is added, removed or
-reworded? To answer it, run arms that differ only in that text. Run each arm several times. Read
-what each run left behind.
+reworded? For a comparative claim, run matched arms that differ only in that text and repeat
+calls enough to support the stated claim. Read what each run left behind. A finite diagnostic
+case can instead test one changed risk or reproduce a known failure. State its inputs, call cap
+and limit before running it; one call is not a superiority claim. A release does not require an
+automatic full comparison grid merely because a runner or an unrelated skill changed.
 
 A run can be checked on five things:
 
@@ -338,7 +346,7 @@ arm.
 
 | Arm | What it carries | Against the install it measures |
 | --- | --- | --- |
-| `current` | What `outcomebound adopt --harness codex` installs. This is the kernel block as adopt renders it, and each skill that the install carries: the seven working skills. The skills are at the skill path of codex. The launcher is first on the PATH of the model. The `AGENTS.md` of the fixture has the project facts and pointers that adopt writes | — |
+| `current` | What `outcomebound adopt --harness codex` installs. This is the kernel block as adopt renders it, and each skill that the install carries: the ten working skills. The skills are at the skill path of codex. The launcher is first on the PATH of the model. The `AGENTS.md` of the fixture has the project facts and pointers that adopt writes | — |
 | `none` | The task alone. No kernel, no skill, no launcher. The note of the fixture has no sentence that points at the core skill | What the text of OutcomeBound adds at all |
 | `unsized` | `current` without the sizing paragraph of the kernel, the one that opens "Satisfy all four completely" | Whether that paragraph changes anything. Every install loads it. This is the one-group ablation of S11 in the prompt standard |
 | `earlier` | An earlier wording of the kernel (`evals/arms/earlier-kernel.md`), with the core skill of the checkout where the run starts | A change in the wording of the kernel |
@@ -1326,3 +1334,36 @@ them. `evals/README.md` gives their cells.
   §13.1, T1 (instruction files shrink; test a skill by eval).
   [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md)
   (the slicing arms).
+
+
+## Instrument correction after E20
+
+[Issue #95](https://github.com/rajasdevel/outcomebound/issues/95) separates measurement defects
+from model behavior. The corrected Claude adapter retains failed, denied and unreadable tool
+results. The command reader preserves result status and per-call working directory. Deployment
+checks accept completed straight-line `&&` chains, and reject quoted mentions, comments and
+commands unreachable after `exec`. Unsupported shell syntax is not inferred as a successful
+observation. Authority checks continue to retain unauthorized attempts, including denied ones.
+
+The requirements and visual probes read bounded report records, including wrapped paragraphs
+and a heading with its list. They reject the calibrated negative and unrelated-source cases.
+These remain lexical checks; they do not prove requirement meaning or visual fidelity. The
+explanation fixture now discloses its allowed `.agents/work/` note area. The decision probe
+accepts the identifier format that the brief schema and renderer allow.
+
+Synthetic controls establish these instrument repairs. They do not change E19 or E20 into new
+model outcomes. Regrading an original transcript can correct a measurement under the same
+inputs; a changed fixture input, such as the disclosed note area, needs a new call for a new
+behavior claim. Retain actual unauthorized staging, unsupported claims and skipped or excessive
+work as failures. Keep the original result and explain each changed interpretation.
+
+The validation engine still records a nonzero grader exit as raw FAIL. Explicit unavailable-
+effect observations support a separate UNVERIFIED adjudication when execution was denied or
+unreadable. Keep that raw result and its cause. A known wrong effect or unauthorized attempt
+remains FAIL. Do not change the validation contract to reinterpret one fixture.
+
+The runner rejects a call whose model identity is not observed. Setup, task-generation, model
+and post-check timeouts retain partial evidence. Timeout cleanup stops the task process group
+and currently observed descendants, then bounds pipe draining. A process already reparented or
+outside the observed tree is not proof of complete cleanup. Native sandbox writes and native
+skill or hook loading require their own observation.

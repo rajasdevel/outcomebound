@@ -9,6 +9,11 @@ report of every check, and only the decisions that are yours. It is a short cont
 `AGENTS.md`, and a small tool that installs the contract and keeps it current. The tool is Python
 standard library only, and it does not run your agent.
 
+For work that spans stages, the installed core skill points to the
+[lifecycle reference](skills/using-outcomebound/references/lifecycle.md). It covers the applicable
+route from an idea through delivery, operation, maintenance and retirement, with conditions for
+skipping stages that the outcome does not need.
+
 ## What it asks of your agent
 
 A one-line fix should not come back with a design note. A risky change should not come back
@@ -72,7 +77,7 @@ result, its method and its limits are in the [evaluation record](docs/evaluation
 | **Honest reports** | Shown: a skipped check is named `UNVERIFIED`, with the reason | More harnesses and surfaces |
 | **Autonomy in your bounds** | In the contract and the skills. No ladder run put a question to the person. Runs in other passes did, and unnecessary questions are not yet measured | Measure it on long, multi-session work |
 | **Efficiency** | A test-first hand-off took a smaller model from 6 to 9 passes of 9 on three small tasks | Cost per finished task. The install adds text, and text costs tokens: about 27% more per run in one pass (`gpt-6-sol`, skill fixtures); the ladder rerun went both ways. The bet is fewer rounds, and that bet is not yet measured |
-| **Models** | OpenAI models through Codex, three runs a cell (nine in the hand-off comparison) | Claude, Gemini and open-weight models; more runs |
+| **Models** | OpenAI through Codex, usually three runs a cell (nine in hand-off); Claude Sonnet 5.5 through Claude Code, one per case and arm, with the limits in E19 and E20 | More runs; Gemini and open-weight models |
 
 Two things hold by design. OutcomeBound sizes only process that a project suggests: what your
 project requires stays required (no fixture yet tests a project whose process is required). And its checks inform you; they are not an authority boundary.
@@ -167,6 +172,17 @@ deployment, or observation never stands in for another.
 ## When you want more
 
 ### The finish check
+
+The hook needs the installed OutcomeBound command, its Python, Git and the shell described
+under [Try it](#try-it). It does not install packages or need sg, Docker, Node, make or a package
+manager for its own work. Your Done commands can need tools for the checks they perform.
+Use the project's supported check entrypoint; the hook does not activate your interactive
+shell's virtual environment or remove a check because its tool is unavailable.
+
+The harness process must be able to find `outcomebound` on its PATH. Explicit finish-check setup
+reports when the command is missing from the reduced environment used for measurement.
+A terminal's PATH does not prove a desktop app's PATH; the native hook remains UNVERIFIED until
+observed. Shared settings retain the command name so they carry across machines.
 
 With `adopt --finish-check`, your Done commands decide when a turn can end:
 

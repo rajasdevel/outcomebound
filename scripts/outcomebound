@@ -36,27 +36,23 @@ python_on_path() {
 	return 1
 }
 
-self=$0
-while [ -L "$self" ]; do
-	link=$(readlink "$self")
-	case $link in
-	/*) self=$link ;;
-	*) self=$(dirname -- "$self")/$link ;;
-	esac
-done
-here=$(CDPATH='' cd -P -- "$(dirname -- "$self")" && pwd -P)
-root=$(dirname -- "$here")
-
-if [ ! -d "$root/outcomebound_tools" ]; then
-	printf '%s\n' "outcomebound: no engine beside $self; this launcher runs a checkout, and an installed package has its own command" >&2
-	exit 127
-fi
 python=$(python_on_path) || {
 	printf '%s\n' "outcomebound: no Python 3.10 or later (python3 or python) on an absolute PATH entry" >&2
 	exit 127
 }
-exec "$python" -I -X utf8 -c 'import runpy, sys
-sys.path.insert(0, sys.argv[1])
+exec "$python" -I -X utf8 -c 'from pathlib import Path
+import runpy, sys
+try:
+    self = Path(sys.argv[1]).resolve(strict=True)
+    root = self.parent.parent
+    has_engine = (root / "outcomebound_tools").is_dir()
+except (OSError, RuntimeError) as error:
+    print(f"outcomebound: cannot resolve launcher {sys.argv[1]}: {error}", file=sys.stderr)
+    raise SystemExit(127)
+if not has_engine:
+    print(f"outcomebound: no engine beside {self}; this launcher runs a checkout, and an installed package has its own command", file=sys.stderr)
+    raise SystemExit(127)
+sys.path.insert(0, str(root))
 sys.argv = ["outcomebound", *sys.argv[2:]]
 runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)
-' "$root" "$@"
+' "$0" "$@"

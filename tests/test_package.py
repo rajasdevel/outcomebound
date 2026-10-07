@@ -13,8 +13,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import importlib.util
+import json
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -159,6 +162,167 @@ def test_the_installed_command_adopts_exactly_as_the_checkout_does(
     assert second.returncode == 0, second.stderr
     assert tree(by_package) == tree(by_checkout)
     assert checked.returncode == 0, checked.stdout + checked.stderr
+
+
+@pytest.mark.parametrize(
+    ("row", "settings"),
+    [("claude-code", ".claude/settings.json"), ("codex", ".codex/hooks.json")],
+)
+def test_the_installed_hooks_run_done_without_development_tools(
+    installed: Path, tmp_path: Path, row: str, settings: str
+) -> None:
+    """The saved entries run the installed wheel on a path with spaces, hold a new failure,
+    and retry an unavailable project tool. POSIX PATH holds only OutcomeBound and real Git;
+    native Windows also needs Git's own folders for its executable and POSIX shell."""
+
+    found = shutil.which("git")
+    assert found is not None, "this package test needs real Git"
+    git = Path(found).resolve()
+    tools = tmp_path / "hook tools"
+    tools.mkdir()
+    if os.name == "nt":
+        # Copy the installed entry point, which embeds its environment's Python path. Keep
+        # Git in its install: relocating its executable can separate it from its DLLs.
+        shutil.copy2(installed, tools / installed.name)
+        shells = [
+            parent / relative / "sh.exe"
+            for parent in git.parents[:3]
+            for relative in ("bin", "usr/bin")
+        ]
+        shell = next((candidate for candidate in shells if candidate.is_file()), None)
+        assert shell is not None, "native Windows finish hooks need Git for Windows' sh.exe"
+        entries = [tools, git.parent, shell.parent]
+    else:
+        shell = Path("/bin/sh")
+        assert shell.is_file(), "POSIX finish hooks need /bin/sh"
+        (tools / installed.name).symlink_to(installed)
+        (tools / "git").symlink_to(git)
+        entries = [tools]
+    restricted = os.pathsep.join(map(str, entries))
+    if os.name != "nt":
+        for absent in ("uv", "pipx", "make", "sg", "rg", "ps", "curl", "node", "docker"):
+            assert shutil.which(absent, path=restricted) is None
+    environment = {key: value for key, value in os.environ.items() if key.upper() != "PATH"}
+    environment["PATH"] = restricted
+
+    project = repository(tmp_path / "project with spaces")
+    state = project / "check state.txt"
+    state.write_text("accepted\n", encoding="utf-8")
+    counter = tmp_path / "done invocations.txt"  # outside the tree the hook checks
+    checker = project / "done check.py"
+    checker.write_text(
+        "from pathlib import Path\n"
+        "import subprocess\n"
+        "import sys\n"
+        "with Path(sys.argv[1]).open('a', encoding='utf-8') as count:\n"
+        "    count.write('run\\n')\n"
+        "state = Path('check state.txt').read_text(encoding='utf-8').strip()\n"
+        "if state == 'missing':\n"
+        "    try:\n"
+        "        subprocess.run(['synthetic-project-check-tool'], check=True)\n"
+        "    except FileNotFoundError:\n"
+        "        print('synthetic-project-check-tool is unavailable')\n"
+        "        raise SystemExit(127)\n"
+        "if state != 'accepted':\n"
+        "    print('project check failed: expected accepted, got ' + state)\n"
+        "    raise SystemExit(3)\n",
+        encoding="utf-8",
+    )
+    python = installed.parent / ("python.exe" if os.name == "nt" else "python")
+    done = " ".join(shlex.quote(path.as_posix()) for path in (python, checker, counter))
+    adopted = run(
+        installed,
+        "adopt",
+        str(project),
+        "--harness",
+        row,
+        "--done",
+        done,
+        "--finish-check",
+        cwd=tmp_path,
+        PATH=restricted,
+    )
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    assert "PASS     finish-check:" in adopted.stdout
+    subprocess.run([str(git), "-C", str(project), "add", "."], check=True)
+    subprocess.run(
+        [
+            str(git),
+            "-C",
+            str(project),
+            "-c",
+            "user.name=Package test",
+            "-c",
+            "user.email=package-test@example.com",
+            "commit",
+            "-qm",
+            "Initial project",
+        ],
+        check=True,
+    )
+    hooks = json.loads((project / settings).read_text(encoding="utf-8"))["hooks"]
+
+    def fire(event: str) -> dict[str, str]:
+        command = hooks[event][0]["hooks"][0]["command"]
+        result = subprocess.run(
+            [str(shell), "-c", command],
+            cwd=project,
+            env=environment,
+            input=json.dumps(
+                {
+                    "cwd": str(project),
+                    "session_id": "package-test",
+                    "hook_event_name": event,
+                    "stop_hook_active": False,
+                }
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        if event == "UserPromptSubmit":
+            assert result.stdout == ""  # marking a turn is silent
+            return {}
+        return json.loads(result.stdout)
+
+    def runs() -> int:
+        return len(counter.read_text(encoding="utf-8").splitlines())
+
+    measured = runs()
+    assert measured == 1
+    assert fire("UserPromptSubmit") == {}
+    unchanged = fire("Stop")
+    assert unchanged["systemMessage"].startswith("finish-check: the tree is the one this turn")
+    assert runs() == measured
+
+    assert fire("UserPromptSubmit") == {}
+    (project / "README.md").write_text("# Changed project\n", encoding="utf-8")
+    passed = fire("Stop")
+    assert list(passed) == ["systemMessage"]
+    assert passed["systemMessage"].startswith("finish-check PASS: ")
+    assert runs() == measured + 1
+    assert fire("Stop") == {} and runs() == measured + 1
+
+    assert fire("UserPromptSubmit") == {}
+    state.write_text("rejected\n", encoding="utf-8")
+    failed = fire("Stop")
+    assert failed["decision"] == "block" and "systemMessage" not in failed
+    assert failed["reason"].startswith("finish-check FAIL: ")
+    assert "exit 3" in failed["reason"]
+    assert "project check failed: expected accepted, got rejected" in failed["reason"]
+    assert runs() == measured + 2
+
+    state.write_text("missing\n", encoding="utf-8")
+    for expected in (measured + 3, measured + 4):
+        unavailable = fire("Stop")
+        assert list(unavailable) == ["systemMessage"]
+        assert unavailable["systemMessage"].startswith("finish-check UNVERIFIED: ")
+        assert "could not run in the hook's environment" in unavailable["systemMessage"]
+        assert "synthetic-project-check-tool is unavailable" in unavailable["systemMessage"]
+        assert runs() == expected  # same tree, no cached success or environmental refusal
 
 
 def test_home_holds_every_file_the_shipped_skills_name(installed: Path, tmp_path: Path) -> None:

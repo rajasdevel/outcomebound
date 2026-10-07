@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 from tests.portable import needs_posix_bash
 
 # Maintainer tooling beside evals/run.py: skipped, with the reason, where its tests are.
@@ -57,7 +59,15 @@ def _write(tmp_path: Path, *lines: str, results: bool = True) -> Path:
         for part in json.loads(line).get("message", {}).get("content", [])
         if part.get("name") == "Bash"
     ]
-    done = [_event(*({"type": "tool_result", "tool_use_id": i} for i in found), role="user")]
+    done = [
+        _event(
+            *(
+                {"type": "tool_result", "tool_use_id": i, "content": "", "is_error": False}
+                for i in found
+            ),
+            role="user",
+        )
+    ]
     path = tmp_path / "subagent.jsonl"
     path.write_text("\n".join([*lines, *(done if results and found else [])]) + "\n", "utf-8")
     return path
@@ -353,3 +363,27 @@ def test_the_cd_prefix_is_stripped_when_it_names_the_workdir_by_another_spelling
         path = _write(tmp_path, _event(_bash(f"cd {spelling} && make test")))
         transcript, _answer = ARM._transcript(path, str(link))
         assert f"exec\nmake test in {link}\n" in transcript, spelling
+
+
+@pytest.mark.parametrize(
+    ("result", "status"),
+    [
+        ({"is_error": True, "content": "Permission denied"}, "failed"),
+        ({"is_error": False, "content": ""}, "succeeded"),
+        ({"content": "completed"}, "succeeded"),
+        ({}, "unverified"),
+        ({"is_error": "false", "content": "unreadable flag"}, "unverified"),
+    ],
+)
+def test_tool_results_control_command_outcomes(tmp_path: Path, result: dict, status: str) -> None:
+    call = _bash("echo fixture")
+    path = _write(
+        tmp_path,
+        _event(call),
+        _event({"type": "tool_result", "tool_use_id": call["id"], **result}, role="user"),
+        results=False,
+    )
+    transcript, _ = ARM._transcript(path, WORKDIR)
+    assert f" {status} in 0ms:" in transcript
+    if status != "succeeded":
+        assert " succeeded in " not in transcript

@@ -939,7 +939,11 @@ _NO_MODULE = 3
 
 
 def confirmed_absent(
-    target: Path, output: bytes, environment: Mapping[str, str] | None = None
+    target: Path,
+    output: bytes,
+    environment: Mapping[str, str] | None = None,
+    *,
+    deadline: float | None = None,
 ) -> bool:
     """Whether the tool the last line names is in fact absent where the command ran, and not only
     said to be: a name `programs.find` does not find on that PATH, or a module the named Python
@@ -951,7 +955,13 @@ def confirmed_absent(
         return False
     # Done runs from the target's root, so an empty or relative entry names a folder of it.
     source = environment if environment is not None else os.environ
-    entries = source.get("PATH", "")
+    entries = programs.environment_value(source, "PATH")
+    if entries is None:
+        # A shell can supply its own default PATH. Absence on an unknown child
+        # PATH is not established; an absolute Python launcher can still probe.
+        if not found["module"] or not _folder_in(found["launcher"]):
+            return False
+        entries = ""
     path = os.pathsep.join(str((target / entry).resolve()) for entry in entries.split(os.pathsep))
     # What the shell could find: on Windows a script with no extension, which Git's shell runs.
     where = {"PATH": path}
@@ -974,17 +984,20 @@ def confirmed_absent(
         "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 3)"
     )
     top = found["module"].split(".")[0]
+    seconds = 30.0 if deadline is None else min(30.0, deadline - time.monotonic())
+    if seconds <= 0:
+        return False
     try:
         done = subprocess.run(
             [program, "-c", probe, top],
             cwd=target,
             env=environment,
             capture_output=True,
-            timeout=30,
+            timeout=seconds,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return True
+        return False
     return done.returncode == _NO_MODULE
 
 
@@ -1222,10 +1235,11 @@ def run_one(
     the command starts is acted on once it has started, so its group is stopped too."""
 
     started = time.monotonic()
-    shell = programs.posix_shell()
+    shell = programs.posix_shell(environment)
     if shell is None:
         why = "could not start: no POSIX shell; install Git for Windows, or put its sh.exe on PATH"
         return Result(line, UNVERIFIED, 0.0, why, cause=ENVIRONMENT)
+    environment = programs.shell_environment(shell, environment)
     with tempfile.TemporaryFile() as sink:
         held: list[int] = []
         previous = _hold(held)
@@ -1236,7 +1250,7 @@ def run_one(
                 stdin=subprocess.DEVNULL,
                 stdout=sink,
                 stderr=subprocess.STDOUT,
-                env=programs.shell_environment(shell, environment),
+                env=environment,
                 **programs.new_group(),
             )
         except OSError as error:
@@ -1272,7 +1286,9 @@ def run_one(
             missing is not None
             and not project_owned(target, missing)
             and not other_failure(tail)
-            and confirmed_absent(target, tail, environment)
+            and confirmed_absent(
+                target, tail, environment, deadline=None if seconds is None else started + seconds
+            )
         ):
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             note = f"its output says `{missing}` is not on this PATH"
@@ -1419,7 +1435,7 @@ def hook_environment(
     root = target.resolve()
     kept: list[str] = []
     dropped: list[str] = []
-    for entry in environ.get("PATH", "").split(os.pathsep):
+    for entry in (programs.environment_value(environ, "PATH") or "").split(os.pathsep):
         # Done runs from the target's root, so an empty entry (the current folder) and a
         # relative entry name folders of the target.
         folder = (root / entry).resolve()
@@ -1433,7 +1449,11 @@ def hook_environment(
             dropped.append(entry)
         else:
             kept.append(entry)
-    environment = {key: value for key, value in environ.items() if key != "VIRTUAL_ENV"}
+    environment = {
+        key: value
+        for key, value in environ.items()
+        if (key.upper() if os.name == "nt" else key) not in ("PATH", "VIRTUAL_ENV")
+    }
     environment["PATH"] = os.pathsep.join(kept)
     return environment, tuple(dropped)
 

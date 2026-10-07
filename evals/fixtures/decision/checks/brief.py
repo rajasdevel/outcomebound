@@ -16,7 +16,7 @@ from pathlib import Path
 # \u26d4 cannot be undone; \u00b7 middle dot, \u2014 em dash, \u2013 en dash, \u2019 apostrophe.
 _HEADING = re.compile(
     r"^\s*(?:#{1,6}\s+|[-*+]\s+)?(?:\*\*)?(?:(?i:decision|question)\s+)?"
-    r"[A-Za-z]{1,8}-?\d+[A-Za-z0-9-]*(?:\*\*)?\s*[\u00b7:|.)\u2014\u2013-].*\?"
+    r"[A-Za-z][A-Za-z0-9-]*(?:\*\*)?\s*[\u00b7:|.)\u2014\u2013-].*\?"
 )
 _OPTION = re.compile(
     r"^\s*(?:[-*+]\s+|\d+[.)]\s+|\|\s*)?(?:\*\*)?(?:(?i:option)\s+)?\(?(?P<letter>[A-J])\)?"

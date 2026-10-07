@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "authoring-scope",
+      "risk": "existing files or unauthorized paths changed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/handoff-author/probe_author.py\" bounds spec"
+      ]
+    },
+    {
+      "name": "review-inputs-present",
+      "risk": "the report or execution trace cannot be reviewed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/handoff-author/probe_author.py\" inputs spec"
+      ]
+    },
+    {
+      "name": "authored-tests-red-and-green",
+      "risk": "authored tests do not distinguish seed from correct implementation",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/handoff-author/probe_author.py\" tests spec"
+      ]
+    }
+  ]
+}

@@ -7,8 +7,9 @@ fragment inline and then one line per selected fragment, copied under
 `.outcomebound/fragments/`, and per skill in `SKILLS`. Selecting the workspace fragment also
 installs `.agents/.gitignore`, which keeps its four folders out of Git; every install writes
 `.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
-report warns where Git ignores a path it writes, where AGENTS.md holds changes not committed, and
-where a harness also loads instructions from a folder above the target. `--finish-check` adds one
+report warns where Git ignores a path the install owns, where AGENTS.md holds changes not
+committed, and where a harness also loads instructions from a folder above the target.
+`--finish-check` adds one
 entry to the settings document of each selected harness whose table row has a `finish_hook`
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
@@ -771,9 +772,12 @@ def load_manifest(target: Path) -> Manifest:
 
 
 def recorded_harnesses(own: Sequence[Record]) -> list[str]:
-    names = [
+    # Hooks keep the selected harness order. Skills are sorted by path, which
+    # can reverse that order and rewrite an otherwise unchanged manifest.
+    names = [record["harness"] for record in own if record["kind"] == HOOK]
+    names.extend(
         name for record in own if record["kind"] == "skill" for name in record.get("harnesses", [])
-    ]
+    )
     return list(dict.fromkeys(names))
 
 
@@ -1710,15 +1714,14 @@ def claims_plan_notes(target: Path) -> Notes:
     return notes
 
 
-def ignored_notes(target: Path, planned: Planned) -> Notes:
-    """A warning for each path this run writes that Git ignores: the manifest records it, so
-    every other clone, which never gets it, reads it missing in `--check`. A tracked path is
-    never ignored, as Git keeps tracking it."""
+def ignored_notes(target: Path, owned: Sequence[str]) -> Notes:
+    """A warning for each path the final install owns that Git ignores, unchanged paths too:
+    the manifest records it, so every other clone, which never gets it, reads it missing in
+    `--check`. A tracked path is never ignored, as Git keeps tracking it."""
 
-    written = [path for path, (_, after) in planned.items() if after is not None]
-    if not written:
+    if not owned:
         return []
-    data = b"".join(os.fsencode(path) + b"\0" for path in written)
+    data = b"".join(os.fsencode(path) + b"\0" for path in owned)
     raw = discovery.git_read(target, "check-ignore", "-v", "-z", "--stdin", data=data)
     fields = os.fsdecode(raw or b"").split("\0")
     notes: Notes = []
@@ -1811,7 +1814,8 @@ def install(
     run.notes.extend(codex_sandbox_notes(target, found))
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
-    run.notes.extend(ignored_notes(target, planned))
+    owned = sorted({MANIFEST, *(record["path"] for record in run.records)})
+    run.notes.extend(ignored_notes(target, owned))
     run.notes.extend(uncommitted_notes(target, planned))
     return planned, run.edited, run.notes, run.measure
 
@@ -2364,6 +2368,14 @@ def _measure(target: Path, done: list[str], timeout: int) -> int:
     def stopped(number: int, frame: object) -> None:
         raise _Stopped(number)
 
+    environment, _ = finish_check.hook_environment(target, os.environ)
+    if programs.find("outcomebound", environment, extensionless=True) is None:
+        print(
+            f"{'UNVERIFIED':<8} finish-check: `outcomebound` was not found on the PATH used to "
+            "measure Done. Put the installed launcher on the harness process's PATH; its "
+            "desktop PATH and whether it runs the hook remain UNVERIFIED",
+            flush=True,
+        )
     print(
         f"{'running':<8} finish-check: the Done commands, once, to measure them; Ctrl-C stops "
         "them, and nothing is then kept",

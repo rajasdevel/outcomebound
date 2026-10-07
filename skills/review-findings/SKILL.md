@@ -13,7 +13,9 @@ skill is for what a review says about the code.
 ## Acting on findings
 
 Check each finding against the code at the revision you hold before you act on it: run the case
-it describes, or read the lines it names. Then give it one disposition:
+it describes, or read the lines it names. Where the finding gives a counterexample you can
+run, run it on the fixed revision before calling the finding fixed; report an unavailable
+check `UNVERIFIED`. Then give it one disposition:
 
 - `fixed`, and where: the commit, file or test that holds the change.
 - `rejected`, and why: the evidence that the claim is wrong, such as the case you ran or the line
@@ -30,9 +32,10 @@ it.
 ## Writing a review
 
 A review states the revision it read. Each finding names the claim and where it holds, so that a
-reader can check it without you. Call a finding you did not check `UNVERIFIED`. Leave the
-`Disposition:` line to whoever acts on the finding: a finding is open until then, and
-`outcomebound review check` reads it as FAIL.
+reader can check it without you. Where a substantive rewrite risks changing meaning or bounds,
+compare the old and new text against the requirements it carries. Call a finding you did not
+check `UNVERIFIED`. Leave the `Disposition:` line to whoever acts on the finding: a finding
+is open until then, and `outcomebound review check` reads it as FAIL.
 
 ## The review file
 

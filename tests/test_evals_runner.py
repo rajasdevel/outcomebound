@@ -556,7 +556,7 @@ def test_the_hand_off_fixtures_run_only_when_named() -> None:
     ones, which measure a package on a named implementer."""
 
     handoff = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
-    assert len(handoff) == 12
+    assert len(handoff) == 17
     assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in handoff]
     assert len(RUN.default_fixtures()) == 31
     assert RUN._parser().parse_args([]).fixtures.split(",") == RUN.default_fixtures()
@@ -755,3 +755,67 @@ def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
         check=True,
     ).stdout
     assert status == (workdir / ".baseline-status").read_text(encoding="utf-8")
+
+
+def test_missing_observed_model_does_not_count_as_requested_model():
+    assert RUN.call_error(0, "Finished", {"model_observed": None}, "requested")
+    assert RUN.call_error(0, "Finished", {"model_observed": "requested"}, "requested") == ""
+
+
+@pytest.mark.parametrize("new_session", [False, True])
+def test_bounded_command_keeps_partial_output_and_stops_descendant(tmp_path, new_session):
+    from tests.processes import running
+
+    child_pid = tmp_path / "child.pid"
+    code = (
+        "import subprocess, sys, time; "
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], "
+        f"start_new_session={new_session}); "
+        f"open({str(child_pid)!r}, 'w').write(str(child.pid)); "
+        "print('partial evidence', flush=True); time.sleep(60)"
+    )
+    with pytest.raises(subprocess.TimeoutExpired) as caught:
+        RUN.bounded_command([sys.executable, "-c", code], timeout=1)
+    assert "partial evidence" in caught.value.output
+    import time
+
+    pid = int(child_pid.read_text())
+    for _ in range(30):
+        if not running(pid):
+            break
+        time.sleep(0.05)
+    assert not running(pid), "timed-out child still runs"
+
+
+def test_fixture_timeout_still_returns_a_record(tmp_path, monkeypatch):
+    fixtures = tmp_path / "definitions"
+    fixture = fixtures / "slow"
+    fixture.mkdir(parents=True)
+    (fixture / "setup.sh").write_text("echo 'setup partial'; sleep 60\n")
+    monkeypatch.setattr(RUN, "FIXTURES", fixtures)
+    monkeypatch.setattr(RUN, "SETUP_TIMEOUT", 0.1)
+    answer, report, code, extra = RUN.run_fixture(
+        "slow", "requested", "medium", RUN.load_arm("none"), ""
+    )
+    assert code is None and not answer
+    assert extra["verdict"] == "UNVERIFIED"
+    assert "TimeoutExpired" in extra["error"]
+    assert "setup partial" in report
+
+
+@pytest.mark.parametrize("phase", ["task", "post-check"])
+def test_phase_timeout_preserves_partial_evidence(monkeypatch, phase):
+    def timed_out(*_args):
+        raise subprocess.TimeoutExpired("synthetic", 0.1, output=f"{phase} partial evidence")
+
+    if phase == "task":
+        monkeypatch.setattr(RUN, "task_text", timed_out)
+    else:
+        monkeypatch.setattr(RUN, "post_check", timed_out)
+        monkeypatch.setattr(RUN, "call_codex", lambda *_args: ("partial answer", "", 0))
+    _answer, report, _code, extra = RUN.run_fixture(
+        "small-fix", "requested", "medium", RUN.load_arm("none"), ""
+    )
+    assert f"{phase} partial evidence" in report
+    assert extra["error"]
+    assert extra["verdict"] == "UNVERIFIED"

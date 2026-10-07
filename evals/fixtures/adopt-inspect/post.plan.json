@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "target-unchanged",
+      "risk": "target state or committed installation violates the granted scope",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/adoption/case.py\" grade inspect"
+      ]
+    }
+  ]
+}

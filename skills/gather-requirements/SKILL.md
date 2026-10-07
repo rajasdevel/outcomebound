@@ -40,9 +40,10 @@ what you need back, the context, each question one idea with the most important 
 don't know" accepted.
 
 When the person asks to be interviewed about a plan, their request grants the questions and widens
-this: ask each fork, a round at a time, until none that the work depends on is open. Where the
-questions are many, they can go in an interview explorable (the `explorable` skill), whose reply
-carries every answer back.
+this: ask each fork, a round at a time, until none that the work depends on is open. In each
+round, ask questions whose prerequisites are settled; revise dependent questions when an
+answer changes an earlier decision. Where the questions are many, they can go in an interview
+explorable (the `explorable` skill), whose reply carries every answer back.
 
 ## Requirements from an existing source
 

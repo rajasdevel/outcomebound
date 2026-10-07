@@ -108,14 +108,62 @@ def corrected() -> list[str]:
     return ["no line says that the later comment changed the amounts"]
 
 
+SOURCE = re.compile(r"(?i)\bissue(?:[-_ ]+#?\s*|#)31\b")
+STATED = re.compile(r"(?i)\bstated\b")
+NEGATED_STATED = re.compile(
+    r"(?i)\b(?:no|not|never)\s+(?:(?:explicitly|directly|clearly)\s+)?stated\b"
+    r"|\b(?:isn't|wasn't|aren't|weren't)\s+stated\b"
+)
+
+
+def _records(text: str) -> list[str]:
+    """Wrapped paragraphs and list records, with their immediate section heading.
+
+    This is a bounded lexical check, not a semantic judge. An explicit source or
+    section replaces the heading; separate sentences never share their labels.
+    """
+
+    records: list[str] = []
+    heading = ""
+    words: list[str] = []
+
+    def flush() -> None:
+        if words:
+            records.extend(heading + " " + part for part in re.split(r"[.!?;]\s+", " ".join(words)))
+            words.clear()
+
+    for raw in text.splitlines():
+        line = raw.strip().strip("*")
+        if not line:
+            flush()
+        elif line.endswith(":") or line.startswith("#") or re.match(r"(?i)^source:", line):
+            flush()
+            heading = line
+        elif re.match(r"^(?:[-*+] |\d+[.)] |\|)", line):
+            flush()
+            words.append(line)
+        else:
+            if not words and records:
+                heading = ""
+            words.append(line)
+    flush()
+    return records
+
+
 def provenance() -> list[str]:
     text = _text()
     if text is None:
         return ["no answer was supplied"]
-    stated = any(re.search(r"\bstated\b", line, re.I) for line in text.splitlines())
-    if stated and "issue-31" in text:
-        return []
-    return ["no line marks a requirement stated, or the report never names issue-31"]
+    for record in _records(text):
+        if (
+            SOURCE.search(record)
+            and STATED.search(record)
+            and not NEGATED_STATED.search(record)
+            and not re.search(r"(?i)\bnot\s+(?:from|in|by)\s+(?:source/)?issue", record)
+            and any(re.search(rule, record) for rule in NAMED.values())
+        ):
+            return []
+    return ["no positive stated requirement is bound to issue 31 in a report record"]
 
 
 CHECKS = {

@@ -294,7 +294,11 @@ the runtime fixture starts only its own server on the loopback interface. `allow
   notes changed (so the data file is as it was), the report names each of the four requirements, a
   line says that the later comment changed the amounts, and a line marks a requirement `stated`
   with the issue named. The report checks read words, not meaning: they do not show that each
-  reading in the report is right.
+  reading in the report is right. A failed label check also does not prove that source
+  attribution is absent. Review the saved report against the original issue and later correction
+  to establish which requirements came from each source and which choices were inferred. Record
+  that source-based verdict separately, with the reviewed input identities and reviewer type.
+  Keep the raw check and aggregate verdict unchanged.
 - `runtime-check`, for the `runtime` fragment. The unit tests of a small service call its `route`
   function, and the server hands a path to a route only where `SERVED` lists it, so a route that is
   added to `ROUTES` alone passes every test and is a 404 in the service. The task adds `GET /health`.
@@ -528,3 +532,31 @@ reads whether the implementer applies a near-complete package and stays in its b
 Recorded results, each with the scope that it covers, are in
 [`docs/evaluations.md`](../docs/evaluations.md). The run records are not in the repository. Git
 ignores `evals/results/raw/`.
+
+
+## Direct preparation cases
+
+Five additional cases run only when named with `--fixtures`. They reuse the existing runner,
+local scripts and validation plans; no case contacts a service, tracker or model on its own.
+
+- `handoff-author-spec` and `handoff-author-outcome` ask for a handoff, not implementation.
+  Both receive the duration ticket and the engine-rendered brief. The spec post-check runs
+  submitted tests against the seed and reference in a disposable copy. It preserves submitted
+  tests; the reference's own tests never stand in for them.
+- `lifecycle-retirement` supplies finite local diagnostics, unavailable telemetry, a stale
+  delivery note, a required consumer and unexpired retention. It grants recovery preparation.
+  The existing `deploy-none` case is its unchanged simple-edit control.
+- `adopt-upgrade` and `adopt-inspect` are special controller cases with a nested target. They
+  use the local `v1.3.0` tag as a valid older install and the supplied engine as the new release.
+  No download occurs. Both arms can reach that engine. The subject adopt skill is a protected,
+  digest-recorded controller input in the skill arms; ordinary adopter installs do not carry it.
+  The upgrade grants only nested target Git and exact managed skill directories, alongside the
+  ordinary task area. It checks a real commit through a clean local clone. The inspection grants
+  no target write. Both preserve distinct HEAD, index and working bytes and ignored local files.
+
+Each case has a `review.md` rubric outside the workspace. Automatic PASS establishes only its
+named mechanical claim. Review the completed calls, answer, assertions and effects before giving
+an authoring, adoption or lifecycle behavior verdict. Missing evidence is UNVERIFIED. A source
+seal must cover the engine, fixture, controller payload and grader inputs before a model call;
+a dirty-checkout flag alone does not identify those bytes. The current/none comparison also
+changes other guidance and is not an isolated test of one skill.

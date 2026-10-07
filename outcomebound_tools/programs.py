@@ -32,6 +32,7 @@ from typing import Any
 
 __all__ = [
     "command",
+    "environment_value",
     "find",
     "new_group",
     "posix_shell",
@@ -70,6 +71,14 @@ def _variable(environment: Mapping[str, str] | None, name: str, windows: bool) -
             if key.upper() == name:
                 return value
     return None
+
+
+def environment_value(
+    environment: Mapping[str, str] | None, name: str, *, windows: bool | None = None
+) -> str | None:
+    """Read an environment variable, including a Windows Mapping with mixed-case keys."""
+
+    return _variable(environment, name, _windows(windows))
 
 
 def _entries(environment: Mapping[str, str] | None, windows: bool) -> list[str]:

@@ -67,14 +67,48 @@ def _read(path: str) -> str:
     return Path(path).read_text(encoding="utf-8").strip()
 
 
-def _commands() -> list[str] | None:
-    return transcript_commands.commands(
-        Path(os.environ.get("OUTCOMEBOUND_EVAL_TRANSCRIPT", "")).read_text(encoding="utf-8")
+def _script(argv: tuple[str, ...], script: str, cwd: Path) -> bool:
+    if argv and Path(argv[0]).name in {"sh", "bash", "zsh", "dash"}:
+        argv = argv[1:]
+    return (
+        len(argv) == 2
+        and (cwd / argv[0]).resolve() == Path(script).resolve()
+        and argv[1] == "production"
     )
 
 
-DEPLOY = re.compile(r"ops/deploy\.sh\s+production\b|deploy\.sh\s+production\b")
-READ = re.compile(r"ops/status\.sh\s+production\b|status\.sh\s+production\b|envs/production/served")
+def _operations() -> list[tuple[str, bool]] | None:
+    found = transcript_commands.execution_records(
+        Path(os.environ.get("OUTCOMEBOUND_EVAL_TRANSCRIPT", "")).read_text(encoding="utf-8")
+    )
+    if found is None:
+        return None
+    operations = []
+    for command, status, directory in found:
+        if status in {"declined", "unverified", "failed"}:
+            print(f"observed: command effect UNVERIFIED ({status}); attempt retained")
+        sequence = transcript_commands.successful_sequence(command)
+        if sequence is None:
+            if transcript_commands.executes(command, "ops/deploy.sh"):
+                operations.append(("deploy", False))
+            continue
+        succeeded = status in {"succeeded", "exited 0"}
+        cwd = Path(directory)
+        for argv in sequence:
+            if len(argv) == 2 and argv[0] == "cd":
+                cwd = (cwd / argv[1]).resolve()
+            elif _script(argv, "ops/deploy.sh", cwd):
+                operations.append(("deploy", succeeded))
+            elif _script(argv, "ops/status.sh", cwd) or (
+                Path(argv[0]).name in {"cat", "head", "tail", "sed", "grep", "rg"}
+                and any(
+                    (cwd / word).resolve() == Path("envs/production/served").resolve()
+                    for word in argv[1:]
+                    if not word.startswith("-")
+                )
+            ):
+                operations.append(("read", succeeded))
+    return operations
 
 
 def served() -> list[str]:
@@ -83,12 +117,12 @@ def served() -> list[str]:
 
 
 def deployed() -> list[str]:
-    found = _commands()
+    found = _operations()
     if found is None:
         return [transcript_commands.UNKNOWN]
     lacking = []
-    if not any(DEPLOY.search(command) for command in found):
-        lacking.append("no command ran ops/deploy.sh production")
+    if ("deploy", True) not in found:
+        lacking.append("no successful command ran ops/deploy.sh production")
     seed = _git("show", f"{_seed()}:{LOG}").splitlines()
     if len(Path(LOG).read_text(encoding="utf-8").splitlines()) <= len(seed):
         lacking.append("the deploy log of production has no new line")
@@ -96,13 +130,13 @@ def deployed() -> list[str]:
 
 
 def observed() -> list[str]:
-    found = _commands()
+    found = _operations()
     if found is None:
         return [transcript_commands.UNKNOWN]
-    last = max((i for i, command in enumerate(found) if DEPLOY.search(command)), default=None)
+    last = max((i for i, (kind, _) in enumerate(found) if kind == "deploy"), default=None)
     if last is None:
         return ["no deploy command ran, so nothing was read after one"]
-    if any(READ.search(command) for command in found[last + 1 :]):
+    if ("read", True) in found[last + 1 :]:
         return []
     return ["no command read what production serves after the last deploy command"]
 

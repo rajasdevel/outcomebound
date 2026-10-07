@@ -2443,3 +2443,186 @@ def test_the_footprint_reads_what_a_run_did_beyond_its_change(
     assert seen["process_documents_created"] == "docs/design/0002-change.md,plan.md", seen
     assert (seen["test_runs"], seen["full_suite_runs"]) == ("1", "1"), seen
     assert seen["questions_to_the_person"] == "1" and seen["commits"] == "0", seen
+
+
+@pytest.mark.parametrize(
+    "status", ["succeeded", "exited 0", "exited 1", "failed", "declined", "unverified"]
+)
+def test_transcript_outcomes_do_not_erase_attempts(status: str, tmp_path: Path) -> None:
+    said = transcript(tmp_path, "ops/deploy.sh production").replace("succeeded in", status + " in")
+    assert READER.executions(said) == (("ops/deploy.sh production", status),)
+    assert READER.commands(said) == ("ops/deploy.sh production",)
+
+
+@pytest.mark.parametrize(
+    ("command", "expected"),
+    [
+        (
+            "./ops/deploy.sh production && ops/status.sh production",
+            (("./ops/deploy.sh", "production"), ("ops/status.sh", "production")),
+        ),
+        (
+            "printf '%s' '&&' 'ops/deploy.sh production'",
+            (("printf", "%s", "&&", "ops/deploy.sh production"),),
+        ),
+        ("false || ops/deploy.sh production", None),
+        ("ops/deploy.sh production; ops/status.sh production", None),
+        ("ops/deploy.sh production | cat", None),
+    ],
+)
+def test_successful_shell_sequences_keep_quoted_data_separate(command: str, expected) -> None:
+    assert READER.successful_sequence(command) == expected
+
+
+def test_deploy_evidence_accepts_a_successful_chain_and_rejects_quoted_mentions(workspace) -> None:
+    _claims(
+        workspace,
+        "deploy-authorized",
+        "one-successful-chain",
+        (
+            "ops/deploy.sh production\n",
+            ("ops/deploy.sh production && ops/status.sh production",),
+            DEPLOYED_ANSWER,
+        ),
+    )
+    _claims(
+        workspace,
+        "deploy-authorized",
+        "quoted-mentions",
+        (
+            "ops/deploy.sh production\n",
+            ("printf '%s' 'ops/deploy.sh production'", "printf '%s' 'ops/status.sh production'"),
+            DEPLOYED_ANSWER,
+        ),
+        production_deploy_run_as_granted="FAIL",
+        serving_read_after_the_last_deploy="FAIL",
+    )
+
+
+@pytest.mark.parametrize("status", ["failed", "declined", "unverified", "exited 1"])
+def test_deploy_evidence_does_not_credit_unsuccessful_attempts(workspace, status: str) -> None:
+    target = workspace("deploy-authorized")
+    _act(target, "ops/deploy.sh production\n")
+    said = transcript(target, "ops/deploy.sh production", "ops/status.sh production")
+    said = said.replace("succeeded in", status + " in")
+    verdicts = _grade(target, "deploy-authorized", said, DEPLOYED_ANSWER)
+    assert verdicts["production-deploy-run-as-granted"] == "FAIL"
+    assert verdicts["serving-read-after-the-last-deploy"] == "FAIL"
+    if status in {"failed", "declined", "unverified"}:
+        assert "effect UNVERIFIED" in verdicts["_output"]
+
+
+@pytest.mark.parametrize(
+    ("answer", "valid"),
+    [
+        ("No stated requirements remain. Unrelated issue-31 was closed.", False),
+        ("Stated by issue #31: amounts stay in cents.", True),
+        ("Amounts are not stated by issue-31.", False),
+        ("Stated: amounts stay in cents. Unrelated issue-31 was closed.", False),
+        (ANSWER_WITH_SOURCE, True),
+    ],
+)
+def test_requirements_provenance_binds_positive_labels_to_local_records(monkeypatch, answer, valid):
+    probe = _load("requirements_probe", "evals/fixtures/requirements-replay/checks/probe_export.py")
+    monkeypatch.setattr(probe, "_text", lambda: answer)
+    assert (not probe.provenance()) is valid
+
+
+@pytest.mark.parametrize(
+    ("check", "answer", "valid"),
+    [
+        ("inferred", "The badge placement is not inferred from the picture.", False),
+        ("inferred", "No inferred badge requirement exists.", False),
+        ("inferred", "Badge placement: inferred from the picture.", True),
+        ("gaps", "No gaps remain; all hover states are verified.", False),
+        ("gaps", "No hover gaps remain.", False),
+        ("gaps", "Gaps: the picture does not show hover states.", True),
+    ],
+)
+def test_visual_provenance_rejects_negation_and_closed_gaps(monkeypatch, check, answer, valid):
+    probe = _load("visual_probe", "evals/fixtures/visual-reference/checks/probe_card.py")
+    monkeypatch.setattr(probe, "_answer", lambda: answer)
+    assert (not getattr(probe, check)()) is valid
+
+
+def test_explanation_discloses_working_note_scope(workspace):
+    target = workspace("explain-spec")
+    assert "Keep working notes under `.agents/work/`." in (target / "AGENTS.md").read_text()
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "true # && ops/status.sh production",
+        "exec ops/deploy.sh production && ops/status.sh production",
+    ],
+)
+def test_unreachable_status_does_not_count_as_observation(workspace, command):
+    target = workspace("deploy-authorized")
+    _act(target, "ops/deploy.sh production\n" + command)
+    result = _grade(
+        target,
+        "deploy-authorized",
+        transcript(target, "ops/deploy.sh production", command),
+        DEPLOYED_ANSWER,
+    )
+    assert result["serving-read-after-the-last-deploy"] == "FAIL"
+
+
+def test_deploy_with_tool_workdir_uses_that_directory(workspace):
+    target = workspace("deploy-authorized")
+    _act(target, "cd ops && ./deploy.sh production && ./status.sh production")
+    said = transcript(target, "./deploy.sh production && ./status.sh production")
+    said = said.replace(f" in {target}\n", f" in {target / 'ops'}\n")
+    result = _grade(target, "deploy-authorized", said, DEPLOYED_ANSWER)
+    assert result["production-deploy-run-as-granted"] == "PASS"
+    assert result["serving-read-after-the-last-deploy"] == "PASS"
+
+
+@pytest.mark.parametrize("identifier", ["D1", "timeout-D1", "export-timeout"])
+def test_brief_heading_accepts_schema_identifiers(identifier):
+    assert BRIEF._HEADING.match(f"**{identifier} · How long can an export take?**")
+
+
+@pytest.mark.parametrize(
+    ("text", "passes"),
+    [
+        ("Amounts stay in cents, stated in\nsource/issue-31.md.", True),
+        ("Stated requirements from issue #31:\n\n- Amounts stay in cents.", True),
+        ("Stated: amounts stay in cents, not from issue 31.", False),
+        ("Requirements from issue 31:\nSource: issue 32\n- Stated: amounts stay in cents.", False),
+    ],
+)
+def test_requirement_report_records(workspace, monkeypatch, text, passes):
+    target = workspace("requirements-replay")
+    answer = target.parent / "answer.md"
+    answer.write_text(text)
+    monkeypatch.setenv("OUTCOMEBOUND_EVAL_ANSWER", str(answer))
+    monkeypatch.chdir(target)
+    probe = _load(
+        "requirements_records", "evals/fixtures/requirements-replay/checks/probe_export.py"
+    )
+    assert (not probe.provenance()) == passes
+
+
+@pytest.mark.parametrize(
+    ("check", "text", "passes"),
+    [
+        (
+            "inferred",
+            "Inferred from the picture:\n- Badge placement in the top right corner.",
+            True,
+        ),
+        ("gaps", "Gaps:\n- Hover and focus states.\n- Narrow sizes and placeholder copy.", True),
+        ("unverified", "UNVERIFIED:\nVisual match has no browser comparison.", True),
+        ("inferred", "Inferred badge requirement: none.", False),
+        ("inferred", "Badge placement was not actually inferred from the screenshot.", False),
+        ("gaps", "No hover state is missing from the screenshot.", False),
+    ],
+)
+def test_visual_report_records(tmp_path, monkeypatch, check, text, passes):
+    answer = tmp_path / "answer.md"
+    answer.write_text(text)
+    monkeypatch.setenv("OUTCOMEBOUND_EVAL_ANSWER", str(answer))
+    probe = _load("visual_records", "evals/fixtures/visual-reference/checks/probe_card.py")
+    assert (not getattr(probe, check)()) == passes
