@@ -92,7 +92,7 @@ loads the files. pi is not verified yet, so `adopt` refuses it
 ([references/portability.md](references/portability.md)).
 
 ```sh
-uv tool install git+https://github.com/rajasdevel/outcomebound@v1.3.0
+uv tool install git+https://github.com/rajasdevel/outcomebound@v1.4.0
 cd your-repo
 outcomebound adopt . --detect
 ```
