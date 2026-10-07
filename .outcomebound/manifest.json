@@ -1,12 +1,12 @@
 {
   "format_version": 2,
-  "engine_version": "1.3.0",
+  "engine_version": "1.4.0",
   "artifacts": [
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "b5e6e26c3de0a7a79cd4e09d84ad47b9cfb7349a308d680a62ac32421ade87e6"
+      "sha256": "acea5efc269548302dd6e90678448cb737f11bf4cd5aac533cdd5935eebd47ff"
     },
     {
       "kind": "block",

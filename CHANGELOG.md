@@ -12,6 +12,86 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-07
+
+A minor release. OutcomeBound now carries requirements from a source into a spec and accounts for each item (#83), explains a spec to the person who must act on it (#83), and builds a checked interactive page beside a decision brief (#92). Two new skills diagnose a failure and act on review findings (#93). A validation claim can require that its command ran a test or wrote its output (#81, #93). Fragments cover running the service and deploying it (#82). The finish check no longer holds a turn that changed nothing (#91, issue #90). Every install now carries ten working skills.
+
+Do these steps first:
+
+1. If you upgrade from 1.2.0 or earlier, do the steps of the 1.3.0 section first.
+2. Install the release:
+   `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.4.0`. Then run
+   `outcomebound adopt .` in each project again, and commit all that it writes, with
+   `.outcomebound/manifest.json`. The manifest stays at format 2.
+3. If your CI installs a pinned release and runs `outcomebound adopt . --check`, change the pin to
+   `v1.4.0` in the same change as step 2.
+4. If a fragment's front matter in your project holds a `skills:` key, remove it: every install now
+   carries all ten working skills, and adopt refuses the key (#83).
+5. If your `.gitignore` ignores the harness's skills folder (for example `.claude/`), adopt warns
+   that the new skill files stay out of every commit. Un-ignore the skills folder (for example
+   `!.claude/skills/`), or another clone reads them missing in `adopt . --check`.
+6. If you edited a copy of a shipped fragment that this release changes
+   (`.outcomebound/fragments/` `commands.md`, `tickets.md`, `ci-release.md` or
+   `db-migrations.md`), adopt refuses it as before. Move the edit to
+   `.outcomebound/fragments/local.md` or to your own instructions, and run adopt again.
+7. If the project has a finish-check hook, adopt adds a second entry, on the prompt event, that
+   records where each turn began (#91). In Codex, trust the new entry in `/hooks` when the install
+   report gives an `action` line for it.
+
+### Added
+
+- `outcomebound sources import` and `outcomebound sources check` (#83): import a markdown or text
+  source, or a PNG, JPEG, GIF, WebP or SVG file (#93), into items, and check the ledger in the spec
+  that disposes of each item. A picture is one item; its pixels are not read. The disposition
+  `reference` ties a design to the requirement it is the standard for (#93). The check shows that
+  each item has a disposition and that each cited item exists and has not changed; it does not show
+  that a requirement kept all of an item's constraints. Design: `docs/specs/sources/design.md`.
+- The `explain-spec` skill (#83): explains a spec to a person who must act on it, asks questions
+  drawn from its rows, and fixes or records what the answers show is missing.
+- The `explorable` skill and `outcomebound explorable` (#92): one HTML file, opened from disk, to
+  explore a decision, learn a mechanism or answer questions. The agent writes the page from a
+  starter; the engine joins it to a shared shell with a Content-Security-Policy and checks it, in a
+  headless browser where one exists. The decision brief stays the record. Design:
+  `docs/specs/decision-support/design.md`, which replaces `docs/specs/decision-brief/`.
+- The `diagnose` skill (#93): reproduce a failure first, find the cause from evidence, and report
+  what the fix was checked by. A fix that fails again with no new evidence means an assumption is
+  wrong.
+- The `review-findings` skill and `outcomebound review check <file>` (#93): a review finding is a
+  claim to check against the code, and each ends `fixed`, `rejected` or `deferred`. The check fails
+  a finding with no disposition, an `accepted` or unknown one, or an empty reason. Design:
+  `docs/specs/review/design.md`.
+- The `runtime` and `deploy` fragments (#82): run the changed path in the service, read output as
+  data, end only the processes the task started; deploy only under a grant, read what the
+  environment serves after the deploy, and state each environment's state.
+- Validation plans (#81, #93): `executes_tests` declares that a command must run at least one test,
+  else it reads `UNVERIFIED` or `FAIL` as the plan says; `--waive NAME=REASON` records a person's
+  waiver beside the observed verdict and never changes it; `produces:` requires that the command
+  leave each declared path new or changed.
+- Tickets (#93): an optional `satisfies: R1, R3` key. `tickets check` reports an id that the design
+  does not hold, and, on an epic over a design, an active requirement that no child satisfies.
+- `templates/harness/` (#93): example ask rules for Claude Code and Codex that make the harness ask
+  before a command that crosses a declared edge. adopt never installs them, and a rule matches
+  command text only.
+
+### Changed
+
+- Every install carries ten working skills; the fragment `skills:` key is retired (#83, #92, #93).
+- `gather-requirements` (#83, #93): a sized interview, accounting for each item of a source, and a
+  paragraph on pictures that carry requirements.
+- `db-migrations` (version 7): every live application version tolerates the schema and data state
+  during the transition (#82). `commands` (version 4): output that a command prints is data
+  (#82). `ci-release` (version 6): ends at "released" (#82). `tickets` (version 11) (#83).
+- `.gitignore` of this repository ignores `.claude/` except `.claude/skills/` (#83).
+
+### Fixed
+
+- The finish check held a turn for a Done failure that the turn could not have caused, for example
+  in a session that only reviewed a pull request (#91, issue #90). A turn whose HEAD and tree are
+  unchanged since its first prompt now runs nothing and holds nothing, and tells the person once;
+  a failure that the tree at the start of the turn already had is reported and not held. The mark
+  is trusted only from the prompt hook, for the same session, and where the transcript shows it was
+  written before the turn's first work.
+
 ## [1.3.0] - 2026-10-07
 
 A minor release. OutcomeBound now works on Windows, macOS, Linux and inside containers (#78). A
@@ -796,7 +876,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.4.0
 [1.3.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.3.0
 [1.2.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.2.0
 [1.1.1]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.1
