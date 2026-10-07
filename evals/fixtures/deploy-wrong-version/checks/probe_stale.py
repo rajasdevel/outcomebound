@@ -135,10 +135,15 @@ def observed() -> list[str]:
         return [transcript_commands.UNKNOWN]
     last = max((i for i, (kind, _) in enumerate(found) if kind == "deploy"), default=None)
     if last is None:
-        return ["no deploy command ran, so nothing was read after one"]
+        return [
+            "no supported successful deploy was established, so a later read cannot be established"
+        ]
     if ("read", True) in found[last + 1 :]:
         return []
-    return ["no command read what production serves after the last deploy command"]
+    return [
+        "no supported successful read of what production serves was established "
+        "after the last deploy command"
+    ]
 
 
 def scripted() -> list[str]:

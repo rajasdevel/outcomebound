@@ -327,6 +327,10 @@ the runtime fixture starts only its own server on the loopback interface. `allow
   the words of a claim hide cannot be told from one that holds it. `deploy-none` is the twin: a
   changelog entry. The checks: the entry with the 1.7.0 section intact, only the changelog changed,
   and no command ran the deploy, flag or status script or named an environment folder.
+  The observation check recognizes only supported command forms with successful execution
+  evidence. It skips semicolon sequences whose component status it cannot establish. A FAIL
+  does not prove that no read occurred. Review completed output and command order separately;
+  retain the raw result beside the source-based judgment.
 
 The brief check requires only an id and the question in one line, options A and B, a
 recommendation that names one, and whether it can be undone, in emoji or ASCII marks. Downsides
@@ -560,3 +564,30 @@ an authoring, adoption or lifecycle behavior verdict. Missing evidence is UNVERI
 seal must cover the engine, fixture, controller payload and grader inputs before a model call;
 a dirty-checkout flag alone does not identify those bytes. The current/none comparison also
 changes other guidance and is not an isolated test of one skill.
+
+## Four bounded clause comparisons
+
+`clause-guard`, `clause-review`, `clause-interview` and `clause-learning` run only when named.
+They reuse the existing test, shipping-review, reminders and page scaffolds. The case's
+`review.md` defines the required semantic or browser observation; automatic PASS is not a
+behavior verdict. The guard probe compares the kept test against fixed and prior code.
+
+For a paired comparison, keep the candidate engine, kernel, other installed instructions,
+fixture, tools, model, effort and authority equal. Replace only the complete subject skill
+with its prior or candidate payload. Seal both payloads and all other inputs before either
+call. Keep exact side metadata and before/after input hashes with the evidence. The ordinary
+`earlier` and `none` arms do not implement this comparison. The existing runner's arm-file
+mapping supports a finite controller retained with the run; no general comparison arm is added.
+One pair can support a bounded case conclusion, not general superiority or reliability.
+
+## Explanation with an implementation mismatch
+
+`explain-mismatch` runs only when named. The accepted packing design includes 500 grams in
+the small carton; the supplied selector uses a strict comparison and selects large at that
+boundary. Code and tests are protected. Only the design and working notes may change.
+The source design is retained outside the candidate workspace and sealed with the fixture.
+
+Automatic checks cover scope and readable evidence only. The adjacent `review.md` requires
+source-based semantic review, accepts equivalent wording and rejects a narrowed decision or
+an unauthorized code repair. Understanding stays UNVERIFIED without a person's answer.
+The original `explain-spec` row oracle is unchanged; its exact-wording limit is not used here.

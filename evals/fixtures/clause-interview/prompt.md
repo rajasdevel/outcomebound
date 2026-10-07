@@ -1,0 +1,1 @@
+Continue the interview about the reminders plan using `conversation.md`. Follow my latest correction. Ask only the next useful questions; do not implement or select an undecided option. You may read the repository, but do not change files.
