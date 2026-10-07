@@ -42,6 +42,10 @@ way forward leads to and what its downside is, so the evidence chooses your reco
   `If unanswered`;
 - a diagram only when order, dependency, flow or before/after is the point.
 
+Where the answer turns on values the person may judge differently from you, or on how the options
+work in ways text compares poorly, also give them a decision explorable (the `explorable` skill):
+the brief stays in the text, and the page's path goes beside it.
+
 Give each brief an id no other session or record can take. Where the project's instructions keep one
 numbering for briefs, take the next id from it; otherwise put your task's or worktree's name, in
 letters, digits and hyphens, before the number (`fix-login-D1`), so that two sessions on one

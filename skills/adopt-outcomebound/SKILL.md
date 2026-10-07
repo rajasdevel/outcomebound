@@ -19,7 +19,7 @@ preserved.
    (Done, the CI test command, irreversible edges, precedence); and the pointers, the `local`
    fragment in full and a `- <condition>: read <path>` line per fragment and skill. It copies the
    selected fragments under `.outcomebound/fragments/`, the skills per harness, each folder whole:
-   the seven every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
+   the eight every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
    import a harness needs to load it, and `.outcomebound/manifest.json` last. It
    refuses a harness that would not load the contract. It also refuses to overwrite an owned
    file someone edited, unless `--force` is given. Running it again from a newer release or checkout

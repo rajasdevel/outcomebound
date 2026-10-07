@@ -26,7 +26,9 @@ Draw the questions from the spec's rows, not from your own idea of what matters:
 decision with a rejected alternative, "why not" that alternative; for each assumed row, what is
 assumed and what would reverse it; for each edge, what happens. Ask for a prediction or an
 answer and wait for it; reading the explanation back is not understanding. Make the options of a
-multiple-choice question equal in length so the format gives no clue.
+multiple-choice question equal in length so the format gives no clue. Where trying a mechanism
+teaches more than reading about it, or the questions are many, the explanation and the questions
+can go in an explorable (the `explorable` skill), whose reply brings the answers back.
 
 ## What a wrong answer means
 

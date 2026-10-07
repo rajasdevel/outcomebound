@@ -1,0 +1,25 @@
+{
+  "briefs": [
+    {
+      "id": "D1",
+      "heading": "Where should the reports API keep its cache?",
+      "recommend": "the hit rate is still a guess, and the in-process cache needs no new service",
+      "recommend_way": "in-process cache",
+      "confidence": "70% (inferred)",
+      "options": [
+        ["in-process cache", "each server keeps its own copy, so there is nothing new to run",
+         "each server warms up alone, so a restart sends a burst of reads to the database"],
+        ["shared cache service", "all servers read one copy, so the hit rate is higher",
+         "one more service to run, and every read crosses the network"]
+      ],
+      "checked": {"verdicts": ["PASS"],
+                  "text": "`reports.log` shows 120 requests per second at the busy hour"},
+      "not_checked": "the real hit rate, which a week of trial traffic would show",
+      "undo": {"can_be_undone": true, "text": "switch the cache flag back and redeploy"},
+      "diagram": {
+        "caption": "How a report request is served",
+        "edges": [["request", "cache", "look up"], ["cache", "database", "miss"], ["database", "cache", "fill"]]
+      }
+    }
+  ]
+}
