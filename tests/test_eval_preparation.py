@@ -75,6 +75,74 @@ def test_spec_authoring_checks_preserve_originals_and_exercise_submitted_tests(t
     assert result["authoring-scope"] == "FAIL"
 
 
+def test_spec_authoring_can_import_seed_helper_without_running_seed_tests(tmp_path):
+    target = build("handoff-author-spec", tmp_path / "workspace")
+    helpers = (target / "tests/test_cli.py").read_bytes()
+    authored = target / "tests/test_authored.py"
+    authored.write_text(
+        "import tempfile, unittest\n"
+        "from pathlib import Path\n"
+        "from test_cli import CommandTest, run\n"
+        "class Borrowed(CommandTest): pass\n"
+        "class Forms(unittest.TestCase):\n"
+        "    def test_forms(self):\n"
+        "        for form in ('1h30m', '2h', '45m', '90m'):\n"
+        "            with self.subTest(form=form), tempfile.TemporaryDirectory() as folder:\n"
+        "                result = run(Path(folder) / 'log', 'add', '2026-09-01', 'acme', form)\n"
+        "                self.assertEqual(result[0], 0)\n"
+    )
+    said = transcript(target, "python3 -B -m unittest discover -s tests")
+    result = _grade(target, "handoff-author-spec", said, "Spec tier package")
+    assert result["authored-tests-red-and-green"] == "PASS", result["_output"]
+    assert (target / "tests/test_cli.py").read_bytes() == helpers
+    log = tmp_path / "grading/.outcomebound-checks/authored-tests-red-and-green.log"
+    assert log.read_text().count("observed-tests=1\n") == 2
+    # Passing the reference without all required inputs still lacks acceptance coverage.
+    authored.write_text(
+        AUTHORED_TESTS.replace('        self.assertEqual(parse_duration("90m"), 90)\n', "")
+    )
+    result = _grade(target, "handoff-author-spec", said, "Spec tier package")
+    assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
+    # Merely importing the helper cannot borrow seed tests or supply authored coverage.
+    authored.write_text("from test_cli import run\n")
+    result = _grade(target, "handoff-author-spec", said, "Spec tier package")
+    assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
+    # A reference failure must not count as a meaningful seed failure.
+    authored.write_text(
+        AUTHORED_TESTS
+        + "\n    def test_unconditional_failure(self):\n        self.fail('unrelated')\n"
+    )
+    result = _grade(target, "handoff-author-spec", said, "Spec tier package")
+    assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
+
+
+def test_spec_authoring_rejects_borrowed_cases_and_import_time_coverage(tmp_path):
+    target = build("handoff-author-spec", tmp_path / "workspace")
+    authored = target / "tests/test_authored.py"
+    said = transcript(target, "python3 -B -m unittest discover -s tests")
+    top_level_calls = (
+        "from durations import parse_duration\n"
+        "for text in ('1h30m', '2h', '45m', '90m'):\n"
+        "    parse_duration(text)\n"
+    )
+    controls = (
+        # Exact reported false admission: no authored tests or assertions.
+        "from test_cli import CommandTest\n" + top_level_calls,
+        # A loader failure is not a red execution of the authored tests.
+        top_level_calls + AUTHORED_TESTS,
+        # Import-time calls must not complete partial coverage from actual tests.
+        "from durations import parse_duration\n"
+        "for text in ('1h30m', '2h', '45m', '90m'):\n"
+        "    try: parse_duration(text)\n"
+        "    except ValueError: pass\n"
+        + AUTHORED_TESTS.replace('        self.assertEqual(parse_duration("90m"), 90)\n', ""),
+    )
+    for control in controls:
+        authored.write_text(control)
+        result = _grade(target, "handoff-author-spec", said, "Spec tier package")
+        assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
+
+
 def test_outcome_authoring_rejects_added_test_work(tmp_path):
     target = build("handoff-author-outcome", tmp_path / "workspace")
     said = transcript(target, "cat AGENTS.md")

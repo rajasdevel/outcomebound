@@ -63,7 +63,11 @@ def inputs(_tier: str) -> list[str]:
     return shared.unread()
 
 
-RUN_TESTS = """import json, sys, unittest
+RUN_TESTS = """import inspect, json, sys, unittest
+from pathlib import Path
+# Match project discovery imports without selecting the seed test suite.
+# This directory contains only immutable seed files; authored tests stay separate.
+sys.path.insert(0, "tests")
 import durations
 calls = []
 original = durations.parse_duration
@@ -71,7 +75,23 @@ def observed(text):
     calls.append(text)
     return original(text)
 durations.parse_duration = observed
-suite = unittest.defaultTestLoader.discover("submitted_tests", pattern="*.py")
+loader = unittest.TestLoader()
+suite = loader.discover("submitted_tests", pattern="*.py")
+if loader.errors:
+    sys.exit("authored test discovery failed: " + "\\n".join(loader.errors))
+submitted = Path("submitted_tests").resolve()
+def authored_cases(tests):
+    for test in tests:
+        if isinstance(test, unittest.TestSuite):
+            yield from authored_cases(test)
+        else:
+            method = getattr(test, test._testMethodName, None)
+            code = getattr(inspect.unwrap(method), "__code__", None)
+            if code and Path(code.co_filename).resolve().is_relative_to(submitted):
+                yield test
+suite = unittest.TestSuite(authored_cases(suite))
+# Imports can execute parser calls, but those are not authored test coverage.
+calls.clear()
 result = unittest.TextTestRunner(verbosity=2).run(suite)
 print("observed-inputs=" + json.dumps(calls))
 print("observed-tests=" + str(result.testsRun))
@@ -123,7 +143,12 @@ def authored_tests(_tier: str) -> list[str]:
     print("reference authored tests:\n" + green.stdout + green.stderr)
     lines = [line for line in green.stdout.splitlines() if line.startswith("observed-inputs=")]
     called = json.loads(lines[-1].split("=", 1)[1]) if lines else []
-    if red.returncode == 0 or green.returncode != 0:
+    red_counts = [
+        line.split("=", 1)[1]
+        for line in red.stdout.splitlines()
+        if line.startswith("observed-tests=")
+    ]
+    if red.returncode == 0 or green.returncode != 0 or not red_counts or int(red_counts[-1]) == 0:
         return ["authored tests must fail on the seed and pass on the correct implementation"]
     if not {"1h30m", "2h", "45m", "90m"} <= set(called):
         return ["authored tests did not call parse_duration for all four required forms"]
