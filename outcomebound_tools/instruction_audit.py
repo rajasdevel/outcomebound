@@ -967,19 +967,23 @@ def _own_entry(
     """Whether a group under a hook event is the one adopt writes for `harness` at `path`: its
     canonical JSON is byte for byte `finish_check.entry` for the row whose `finish_hook` names
     this file, the recorded Done commands' digest and the timeout the hook carries, where the row
-    admits it; and a manifest `hook` record for this file holds that digest. Any other key, hook
-    type, argument or Done digest makes it an ordinary entry."""
+    admits it, or `finish_check.mark_entry`, the turn-start entry beside it; and a manifest `hook`
+    record for this file holds that digest. Any other key, hook type, argument or Done digest
+    makes it an ordinary entry."""
 
     hook = finish_check.hook_of(_row(harness))
     hooks = value.get("hooks") if isinstance(value, dict) else None
     if done is None or hook is None or hook.get("file") != path or not isinstance(hooks, list):
         return False
+    digest = finish_check.done_digest(done)
+    written = canonical(value)
+    if written == canonical(finish_check.mark_entry(harness, digest)):
+        return hashlib.sha256(written).hexdigest() in own
     first = hooks[0] if hooks and isinstance(hooks[0], dict) else {}
     timeout = first.get("timeout")
     if not isinstance(timeout, int) or not finish_check.admits_timeout(timeout):
         return False
-    expected = canonical(finish_check.entry(harness, finish_check.done_digest(done), timeout))
-    written = canonical(value)
+    expected = canonical(finish_check.entry(harness, digest, timeout))
     return written == expected and hashlib.sha256(written).hexdigest() in own
 
 
@@ -1050,9 +1054,17 @@ def _config_hits(
                     (
                         _line_of(text, (*path_keys, event)),
                         UNVERIFIED,
-                        f"adopt's finish-check entry {key}.{event}[{index}] "
-                        f"({_quote(command, 120)}) runs the Done commands the manifest records: "
-                        f"{commands}{settled}",
+                        (
+                            f"adopt's finish-check turn-start entry {key}.{event}[{index}] "
+                            f"({_quote(command, 120)}) keeps the commit and working tree a turn "
+                            "begins with in the Git directory and runs no Done command; the "
+                            f"stop entry runs the Done commands the manifest records: "
+                            f"{commands}{settled}"
+                            if "--mark" in command.split()
+                            else f"adopt's finish-check entry {key}.{event}[{index}] "
+                            f"({_quote(command, 120)}) runs the Done commands the manifest "
+                            f"records: {commands}{settled}"
+                        ),
                         not done_shown,
                     )
                     for event, index, command in recognised

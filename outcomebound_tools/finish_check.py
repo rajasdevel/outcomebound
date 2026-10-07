@@ -24,7 +24,9 @@ is not told apart from the known one.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -36,6 +38,7 @@ import threading
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any, NoReturn
 
@@ -68,6 +71,15 @@ STATE = "outcomebound-finish-check"
 # Where the Done commands that failed when adopt last measured them are kept, in the Git common
 # directory, so that every worktree of the repository reads the one record.
 KNOWN = "outcomebound-finish-check-known"
+# The tree a turn began with, kept beside the checked-tree record, and the entry that writes it.
+MARK = f"{STATE}-mark"
+# The (session, tree) pair the person was last told an unchanged turn ended on.
+TOLD = f"{STATE}-told"
+# The seconds the entry gives the verb: 30 is the documented default of `UserPromptSubmit` on
+# claude-code (research harnesses/claude-code.md §7.3), written out so that both rows carry it;
+# the tree is read within the first 20 of them.
+MARK_TIMEOUT = 30
+MARK_SECONDS = 20
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 STDIN_LIMIT = 16 * 1024 * 1024
 TAIL_BYTES = 64 * 1024
@@ -125,6 +137,18 @@ def command(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     return f"outcomebound {ID} --harness {harness} --done {digest} --timeout {timeout}"
 
 
+def mark_command(harness: str, digest: str) -> str:
+    return f"outcomebound {ID} --mark --harness {harness} --done {digest}"
+
+
+def mark_entry(harness: str, digest: str) -> dict[str, Any]:
+    """The group adopt adds under the row's turn-start event: it records the tree the turn
+    begins with and prints nothing, which a harness would add to the model's context."""
+
+    line = mark_command(harness, digest)
+    return {"hooks": [{"type": "command", "command": line, "timeout": MARK_TIMEOUT}]}
+
+
 def entry(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
     """The group adopt adds under the row's event, in the order it is written: the harness
     cancels the hook at `timeout` seconds, and the verb is told the same number."""
@@ -145,14 +169,16 @@ def canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
 
-def marked(value: object) -> bool:
-    """Whether a group runs this verb: what makes an entry adopt's where its digest is not."""
+def marked(value: object, mark: bool = False) -> bool:
+    """Whether a group runs this verb, as the turn-start mark where `mark`, else at the stop:
+    what makes an entry adopt's where its digest is not."""
 
     hooks = value.get("hooks") if isinstance(value, dict) else None
     return isinstance(hooks, list) and any(
         isinstance(hook, dict)
         and isinstance(hook.get("command"), str)
         and hook["command"].split()[:2] == ["outcomebound", ID]
+        and ("--mark" in hook["command"].split()) == mark
         for hook in hooks
     )
 
@@ -285,9 +311,9 @@ def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str
     return total.hexdigest()
 
 
-def _state(target: Path, deadline: float | None = None) -> Path | None:
+def _state(target: Path, deadline: float | None = None, name: str = STATE) -> Path | None:
     directory = _git(target, "rev-parse", "--absolute-git-dir", deadline=deadline)
-    return Path(os.fsdecode(directory.strip())) / STATE if directory else None
+    return Path(os.fsdecode(directory.strip())) / name if directory else None
 
 
 @dataclass(frozen=True)
@@ -364,6 +390,201 @@ def remember(target: Path, checked: Checked, deadline: float | None = None) -> N
         stage.unlink(missing_ok=True)
 
 
+@dataclass(frozen=True)
+class Mark:
+    """The commit and the working tree a turn began with, the session that wrote them and when."""
+
+    head: str
+    tree: str
+    session: str
+    written: datetime
+
+    def clock(self) -> str:
+        """The time of day it was written, as the person's clock reads it."""
+
+        return self.written.astimezone().strftime("%H:%M:%S")
+
+
+def stamp(text: object) -> datetime | None:
+    """A UTC-offset time as a transcript or a mark writes it, or None."""
+
+    if not isinstance(text, str):
+        return None
+    try:
+        when = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo is not None else None
+
+
+def read_mark(target: Path, deadline: float | None = None) -> Mark | None:
+    """The mark the turn's first prompt wrote, or None: none written (an older install, a
+    harness without the event), or unreadable."""
+
+    path = _state(target, deadline, MARK)
+    if path is None:
+        return None
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+        head, tree = document["head"], document["tree"]
+        session, written = document["session"], stamp(document["time"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not (isinstance(head, str) and HEAD.fullmatch(head) and isinstance(tree, str)):
+        return None
+    if not (isinstance(session, str) and session and written is not None):
+        return None
+    return Mark(head, tree, session, written) if DIGEST.fullmatch(tree) else None
+
+
+def prompt_input(row: Any, payload: dict[str, Any] | None) -> str | None:
+    """The session id of a turn-start hook's input, or None where `payload` is not that input:
+    the event the row documents named, and a session id. A mark written on any other input,
+    such as the agent running the verb itself, is refused."""
+
+    hook = hook_of(row)
+    if payload is None or hook is None or payload.get("hook_event_name") != hook["mark_event"]:
+        return None
+    session = payload.get("session_id")
+    return session if isinstance(session, str) and session else None
+
+
+def begin_turn(digest: str, payload: dict[str, Any] | None, cwd: Path, session: str) -> None:
+    """Keep the target's HEAD and tree as the turn's start, in the Git directory, with the
+    session and the time. Where the HEAD or tree cannot be read in time, the mark of the turn
+    before goes, so that no turn is compared with a tree it did not begin with. Errors are the
+    caller's to swallow; nothing is printed."""
+
+    deadline = time.monotonic() + MARK_SECONDS
+    target, found = find_target(payload, cwd)
+    path = _state(target, deadline, MARK) if found else None
+    if path is None:
+        return
+    live = read_mark(target, deadline)
+    if live is not None and live.session == session:
+        # A prompt inside the turn (a queued message): the turn's first mark stays, since this
+        # tree holds the turn's edits. The stop that ends the turn removes it.
+        return
+    head, tree = _head(target, deadline), tree_digest(target, digest, deadline)
+    if head is None or tree is None:
+        path.unlink(missing_ok=True)
+        return
+    stage = path.with_name(f"{MARK}.{os.getpid()}")
+    document = {
+        "head": head,
+        "tree": tree,
+        "session": session,
+        "time": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        stage.write_text(json.dumps(document) + "\n", encoding="utf-8")
+        os.replace(stage, path)
+    except OSError:
+        stage.unlink(missing_ok=True)
+
+
+def end_turn(target: Path, deadline: float | None = None) -> None:
+    """Remove the turn's mark, so that the next prompt writes the next turn's."""
+
+    path = _state(target, deadline, MARK)
+    if path is not None:
+        path.unlink(missing_ok=True)
+
+
+# Text the harness writes into a `user` line of its own accord: a slash command's echo and
+# output, an interrupt, and a task notification; none is a person's prompt.
+HARNESS_TEXT = ("<command-name>", "<local-command-", "[Request interrupted", "<task-notification")
+
+
+def _person_wrote(line: dict[str, Any]) -> bool:
+    """Whether a claude-code `user` line is what the harness writes for a person's prompt: not
+    a tool result, meta, side-chain, compaction summary or system-origin line, and no text the
+    harness writes itself. Only the line's keys and the opening of its text are read."""
+
+    message = line.get("message")
+    content = message.get("content") if isinstance(message, dict) else None
+    if line.get("isMeta") or line.get("isCompactSummary") or line.get("promptSource") == "system":
+        return False
+    if "toolUseResult" in line or "sourceToolAssistantUUID" in line:
+        return False
+    origin = line.get("origin")
+    if isinstance(origin, dict) and origin.get("kind") != "human":
+        return False
+    blocks = content if isinstance(content, list) else [{"type": "text", "text": content}]
+    if any(isinstance(block, dict) and block.get("type") == "tool_result" for block in blocks):
+        return False
+    texts = [b.get("text") for b in blocks if isinstance(b, dict) and b.get("type") == "text"]
+    return not any(isinstance(text, str) and text.startswith(HARNESS_TEXT) for text in texts)
+
+
+def _kind(harness: str, line: object) -> str | None:
+    """What a transcript line is for the order check: `prompt` where it begins a turn, `work`
+    where the model or a tool has acted since. Only the shape of a line is read, never its
+    text. claude-code: a `user` line a person's prompt writes (`_person_wrote`); an `assistant`
+    line. codex: an `event_msg` `task_started`; any `response_item` but a user or developer
+    message."""
+
+    if not isinstance(line, dict) or line.get("isSidechain") is True:
+        return None
+    kind, inner = line.get("type"), line.get("payload")
+    if harness == "claude-code":
+        if kind == "assistant":
+            return "work"
+        return "prompt" if kind == "user" and _person_wrote(line) else None
+    if not isinstance(inner, dict):
+        return None
+    if kind == "event_msg":
+        return "prompt" if inner.get("type") == "task_started" else None
+    if kind == "response_item":
+        user = inner.get("type") == "message" and inner.get("role") in ("user", "developer")
+        return None if user else "work"
+    return None
+
+
+def first_work(harness: str, path: Path, deadline: float) -> datetime | None:
+    """When the model or a tool first acted after the last prompt of the transcript at `path`;
+    None where it cannot be read or parsed, names no such prompt or no such work, or `deadline`
+    passes first."""
+
+    began = False
+    found: datetime | None = None
+    try:
+        with path.open("rb") as handle:
+            for number, raw in enumerate(handle):
+                if number % 256 == 0 and time.monotonic() > deadline:
+                    return None
+                if not raw.strip():
+                    continue
+                line = json.loads(raw)
+                kind = _kind(harness, line)
+                if kind == "prompt":
+                    began, found = True, None
+                elif kind == "work" and began and found is None:
+                    found = stamp(line.get("timestamp"))
+                    if found is None:
+                        return None
+    except (OSError, ValueError):
+        return None
+    return found
+
+
+def trusted(harness: str, mark: Mark, payload: dict[str, Any] | None, deadline: float) -> bool:
+    """Whether the stop may use `mark`: it was written for this session, and, where the input
+    names the session's transcript, before the model or a tool first acted in this turn. A
+    transcript that cannot be read or parsed makes it no mark. A row whose stop input names no
+    transcript gets the session check alone."""
+
+    if payload is None or payload.get("session_id") != mark.session:
+        return False
+    name = payload.get("transcript_path")
+    if name is None or name == "":
+        return True
+    if not isinstance(name, str):
+        return False
+    first = first_work(harness, Path(name), deadline)
+    return first is not None and mark.written < first
+
+
 # --- The failures that were there before the change -------------------------------
 
 # How each runner names a failing test or target in its own summary lines, one pattern per
@@ -397,17 +618,24 @@ def failure_ids(output: bytes) -> frozenset[str]:
     return frozenset(found)
 
 
+# Who named a failure's ids, in the words of a note: adopt when it measured Done, or the tree a
+# turn began with.
+BY_ADOPT = "adopt measured"
+BY_TURN = "the tree at the start of this turn held"
+
+
 @dataclass(frozen=True)
 class Failure:
-    """A Done command's failure when adopt measured Done: its exit code, and the failure ids its
-    output named, None where it named none."""
+    """A Done command's failure when adopt measured Done, or on the tree a turn began with: its
+    exit code, and the failure ids its output named, None where it named none."""
 
     code: int
     ids: frozenset[str] | None = None
 
-    def tolerates(self, result: Result) -> tuple[bool, str]:
+    def tolerates(self, result: Result, by: str = BY_ADOPT) -> tuple[bool, str]:
         """(whether `result` is this failure again, why): the same exit code, and where either
-        side names failure ids, ids that are all among the recorded ones."""
+        side names failure ids, ids that are all among the recorded ones; `by` says who named
+        them."""
 
         if result.verdict != FAIL or result.code != self.code:
             return False, ""
@@ -415,9 +643,9 @@ class Failure:
         if self.ids is None and not now:
             return True, "known by its exit code only, since its output names no failure ids"
         if self.ids is None:
-            return False, "not known: its output now names failure ids, and adopt measured none"
+            return False, f"not known: its output now names failure ids, and {by} none"
         if not now:
-            return False, "not known: its output names none of the failure ids adopt measured"
+            return False, f"not known: its output names none of the failure ids {by}"
         new = sorted(now - self.ids)
         if new:
             shown = ", ".join(shorten(item, 80) for item in new[:5])
@@ -839,11 +1067,18 @@ class Result:
     note: str = ""
     # For a known failure: the commit adopt measured it on.
     commit: str = ""
+    # Whether a known failure is one the working tree a turn began with already had.
+    before: bool = False
 
     def line(self) -> str:
         shown = shorten(self.command)
         if self.verdict == PASS:
             return f"PASS {shown} ({self.seconds:.0f} s)"
+        if self.known and self.before:
+            return (
+                f"FAIL {shown}: {self.why}, as on the working tree this turn began with "
+                f"({self.note}; known before this turn, not held)"
+            )
         if self.known:
             on = f" on commit {self.commit[:12]}" if self.commit else ""
             return (
@@ -865,6 +1100,7 @@ class Result:
             "known": self.known,
             "note": self.note,
             "commit": self.commit,
+            "before": self.before,
         }
 
     @classmethod
@@ -877,7 +1113,7 @@ class Result:
         command, verdict, why = item.get("command"), item.get("verdict"), item.get("why")
         output, cause, seconds = item.get("output"), item.get("cause"), item.get("seconds")
         code, known, note = item.get("code"), item.get("known", False), item.get("note", "")
-        commit = item.get("commit", "")
+        commit, before = item.get("commit", ""), item.get("before", False)
         if not (
             isinstance(command, str)
             and verdict in (PASS, FAIL, UNVERIFIED)
@@ -890,11 +1126,22 @@ class Result:
             and isinstance(known, bool)
             and isinstance(note, str)
             and isinstance(commit, str)
+            and isinstance(before, bool)
         ):
             return None
         data = output.encode("utf-8")
         return cls(
-            command, str(verdict), float(seconds), why, data, cause, code, known, note, commit
+            command,
+            str(verdict),
+            float(seconds),
+            why,
+            data,
+            cause,
+            code,
+            known,
+            note,
+            commit,
+            before,
         )
 
 
@@ -1039,12 +1286,15 @@ def run_all(
     done: Sequence[str],
     deadline: float,
     record: Known | None = None,
+    earlier: Mapping[str, Failure] | None = None,
 ) -> list[Result]:
     """Each Done command in run order until `deadline`, stopping at the first that does not
     pass, a known failure aside: a FAIL that the command's `Failure` in `record` tolerates is
-    marked known, with the record's commit, and the next command runs."""
+    marked known, with the record's commit, and the next command runs; so is one that its
+    `Failure` in `earlier`, the working tree a turn began with, tolerates."""
 
     known = record.failing if record is not None else {}
+    before = earlier or {}
     commit = record.head if record is not None else ""
     results: list[Result] = []
     for line in done:
@@ -1057,6 +1307,9 @@ def run_all(
         if result.verdict == FAIL and line in known:
             tolerated, note = known[line].tolerates(result)
             result = replace(result, known=tolerated, note=note, commit=commit if tolerated else "")
+        if result.verdict == FAIL and not result.known and line in before:
+            tolerated, why = before[line].tolerates(result, BY_TURN)
+            result = replace(result, known=tolerated, before=tolerated, note=why)
         results.append(result)
         if result.verdict != PASS and not result.known:
             break
@@ -1271,6 +1524,17 @@ def _unverified_head(last: Result, target: Path, timeout: int) -> str:
     )
 
 
+def failures_of(results: Sequence[Result]) -> dict[str, Failure]:
+    """The failure of each command a checked-tree record's results show failing: its exit code
+    and the failure ids its output names, None where it names none."""
+
+    return {
+        result.command: Failure(result.code, failure_ids(result.output) or None)
+        for result in results
+        if result.verdict == FAIL and result.code is not None
+    }
+
+
 def verdict_for(
     results: Sequence[Result], held: bool, target: Path, timeout: int, repeated: bool = False
 ) -> Verdict:
@@ -1292,6 +1556,14 @@ def verdict_for(
         )
         commits = sorted({result.commit[:12] for result in results if result.commit})
         on = f"on commit {', '.join(commits)}, which" if commits else "on a commit"
+        earlier = any(result.before for result in results)
+        if earlier and all(result.before for result in results if result.known):
+            head = (
+                "finish-check FAIL, known before this turn: each Done command that failed here "
+                "failed as it did on the working tree this turn began with: the same exit code, "
+                "and no failure id its output names is new; so nothing was held." + limit + again
+            )
+            return told(report(head, results))
         head = (
             "finish-check FAIL, known: each Done command that failed here failed as it did when "
             f"adopt measured Done {on} this checkout descends from: the same exit code, and no "
@@ -1300,6 +1572,11 @@ def verdict_for(
             f"`outcomebound adopt {paths.shell_path(target)} --finish-check` measures Done again."
             + again
         )
+        if earlier:
+            head += (
+                " A command marked known before this turn failed the same way on the working "
+                "tree this turn began with."
+            )
         return told(report(head, results))
     if held and not repeated:
         head = (
@@ -1310,10 +1587,14 @@ def verdict_for(
             "work is done."
         )
         if known:
+            when = "when adopt measured Done"
+            if any(result.before for result in results):
+                every = all(result.before for result in results if result.known)
+                when = "when this turn began" if every else f"{when} or when this turn began"
             head += (
-                " A command marked known failed the same way before your change, when adopt "
-                "measured Done; it does not hold this turn. One that names new failure ids, or a "
-                "new exit code, does."
+                f" A command marked known failed the same way before your change, {when}; it "
+                "does not hold this turn. One that names new failure ids, or a new exit code, "
+                "does."
             )
         return {"decision": "block", "reason": report(head, results)}
     why = (
@@ -1339,7 +1620,126 @@ def drop_fixed(
         keep_known(target, replace(record, failing=left), deadline)
 
 
+def marked_told(verdict: Verdict, mark: Mark, unchanged: bool) -> Verdict:
+    """`verdict`, where the turn-start mark has decided it, with what the person sees: that
+    Done was not run on the tree the turn began with, or that a failure was known before the
+    turn, and when the mark was written. A hold is the model's and gets nothing added."""
+
+    if "decision" in verdict:
+        return verdict
+    when = mark.clock()
+    if unchanged and not verdict:
+        text = (
+            f"finish-check: the tree is the one this turn began with (marked {when}); Done was "
+            "not run."
+        )
+        return told(text)
+    note = (
+        f" The tree is the one this turn began with (marked {when})."
+        if unchanged
+        else f" The turn began with these failures (marked {when})."
+    )
+    head, _, rest = str(verdict.get("systemMessage", "")).partition("\n")
+    return told(head + note + (f"\n{rest}" if rest else ""))
+
+
+def _turn(
+    harness: str, target: Path, tree: str | None, payload: dict[str, Any] | None, deadline: float
+) -> Mark | None:
+    """The mark of this turn where there is one the stop may use."""
+
+    mark = read_mark(target, deadline) if tree is not None else None
+    return mark if mark is not None and trusted(harness, mark, payload, deadline) else None
+
+
+def _credited(verdict: Verdict, turn: Mark | None, results: Sequence[Result]) -> Verdict:
+    """`verdict`, told with the mark's time where a failure was known before the turn."""
+
+    if turn is not None and any(result.before for result in results):
+        return marked_told(verdict, turn, False)
+    return verdict
+
+
+def _already_told(target: Path, mark: Mark, deadline: float) -> bool:
+    """Whether the person was told that this session's turns end on this tree; where not, keep
+    that it is now, so that a session that only reads is told once, not after every reply."""
+
+    path = _state(target, deadline, TOLD)
+    if path is None:
+        return False
+    pair = {"session": mark.session, "tree": mark.tree}
+    try:
+        if json.loads(path.read_text(encoding="utf-8")) == pair:
+            return True
+    except (OSError, ValueError):
+        pass
+    stage = path.with_name(f"{TOLD}.{os.getpid()}")
+    try:
+        stage.write_text(json.dumps(pair) + "\n", encoding="utf-8")
+        os.replace(stage, path)
+    except OSError:
+        stage.unlink(missing_ok=True)
+    return False
+
+
+def _same(
+    turn: Mark | None, tree: str | None, last: Checked | None, target: Path, deadline: float
+) -> Verdict | None:
+    """What a turn that changed nothing since its mark prints, or None where it changed
+    something or has no mark."""
+
+    if turn is None or turn.tree != tree or _head(target, deadline) != turn.head:
+        return None
+    verdict = _unchanged(last, tree, target)
+    if not verdict and _already_told(target, turn, deadline):
+        return verdict
+    return marked_told(verdict, turn, True)
+
+
+def _unchanged(last: Checked | None, tree: str | None, target: Path) -> Verdict:
+    """What a turn that changed nothing prints: the verdict recorded for this tree, where it is
+    not a pass, as the person's to see again; else nothing."""
+
+    if last is not None and last.tree == tree and last.verdict != PASS:
+        return verdict_for(last.results, False, target, last.timeout, repeated=True)
+    return {}
+
+
+def _began(turn: Mark | None, last: Checked | None) -> dict[str, Failure]:
+    """The failures the working tree a turn began with had, as the checked-tree record holds
+    them: none where there is no mark, or the record is for another tree or a pass."""
+
+    if turn is None or last is None or last.tree != turn.tree or last.verdict == PASS:
+        return {}
+    return failures_of(last.results)
+
+
 def check(
+    harness: str,
+    hook: Mapping[str, Any],
+    digest: str,
+    payload: dict[str, Any] | None,
+    cwd: Path,
+    timeout: int,
+) -> Verdict:
+    """What the hook prints for this input; then the turn's mark ends, unless the stop holds
+    (the turn goes on) or the session is only paused."""
+
+    started = time.monotonic()
+    verdict = _decide(harness, hook, digest, payload, cwd, timeout)
+    paused = (
+        harness == "claude-code"
+        and payload is not None
+        and (payload.get("background_tasks") or payload.get("session_crons"))
+    )
+    if "decision" not in verdict and not paused:
+        target, found = find_target(payload, cwd)
+        if found:
+            end_turn(target, started + timeout - MARGIN_SECONDS + REMEMBER_SECONDS)
+    return verdict
+
+
+def _decide(
     harness: str,
     hook: Mapping[str, Any],
     digest: str,
@@ -1372,12 +1772,18 @@ def check(
     deadline = started + timeout - MARGIN_SECONDS
     before = tree_digest(target, digest, deadline)
     last = last_checked(target, deadline) if before is not None else None
+    # The tree the turn began with, where the turn's first prompt marked it.
+    turn = _turn(harness, target, before, payload, deadline)
+    same = _same(turn, before, last, target, deadline)
+    if same is not None:
+        return same
     if last is not None and last.repeats(before, timeout):
         if last.verdict == PASS:
             return {}
         return verdict_for(last.results, False, target, last.timeout, repeated=True)
     record = known_record(target, digest, deadline) if before is not None else None
-    results = run_all(target, done, deadline, record)
+    began = _began(turn, last)
+    results = run_all(target, done, deadline, record, began)
     if results[-1].verdict == UNVERIFIED:
         verdict = UNVERIFIED
     else:
@@ -1398,7 +1804,7 @@ def check(
         seconds = time.monotonic() - started
         listed = ", ".join(shorten(line, 80) for line in done)
         return told(f"finish-check PASS: {listed}, {seconds:.0f}s; not reviewed, not landed")
-    return verdict_for(results, held, target, timeout)
+    return _credited(verdict_for(results, held, target, timeout), turn, results)
 
 
 # --- Command line ----------------------------------------------------------------
@@ -1418,7 +1824,12 @@ false holds the finish, its report the reason the agent reads; a pass, a failure
 failure alone, a repeated verdict, a digest that no longer matches, a missing manifest, a command
 stopped at the time limit and one the hook's environment could not run (exit 126 or 127) go to the
 person as systemMessage and hold nothing. On claude-code nothing runs while background_tasks or
-session_crons is non-empty."""
+session_crons is non-empty.
+
+With --mark it runs at a turn's first prompt instead: it keeps the target's HEAD and working tree
+in the Git directory, prints nothing, and exits 0 whatever goes wrong. A stop on that same HEAD and
+tree runs nothing and holds nothing; where the tree changed, a failure the tree it began with
+already had, with the same failure ids, is reported and not held."""
 EPILOG = """\
 exit: 0 whenever it ran, its verdict as JSON on stdout; 1 on a usage error, never 2, which a
 harness reads as holding the finish."""
@@ -1444,6 +1855,12 @@ def _parser() -> argparse.ArgumentParser:
         "--done", required=True, metavar="DIGEST", help="the digest of the Done list it runs"
     )
     parser.add_argument(
+        "--mark",
+        action="store_true",
+        help="at a turn's first prompt: keep the commit and tree the turn begins with, print "
+        "nothing and exit 0 whatever goes wrong",
+    )
+    parser.add_argument(
         "--timeout",
         type=_seconds,
         default=DEFAULT_TIMEOUT,
@@ -1464,9 +1881,27 @@ def _seconds(text: str) -> int:
     return value
 
 
+def _begin(words: Sequence[str]) -> int:
+    """The `--mark` mode: what a prompt must never fail on, so every error ends as exit 0 with
+    nothing printed and nothing written."""
+
+    with contextlib.suppress(Exception, SystemExit):
+        with contextlib.redirect_stderr(io.StringIO()):
+            args = _parser().parse_args(words)
+        row = adapters.table().get(args.harness)
+        payload = read_input(getattr(sys.stdin, "buffer", None))
+        session = prompt_input(row, payload) if DIGEST.fullmatch(args.done) else None
+        if session is not None:
+            begin_turn(args.done, payload, Path.cwd(), session)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    words = list(sys.argv[1:] if argv is None else argv)
+    if "--mark" in words:
+        return _begin(words)
     parser = _parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(words)
     try:
         hook = hook_of(adapters.table().get(args.harness))
     except adapters.AdapterError as error:

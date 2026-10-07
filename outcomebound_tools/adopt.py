@@ -109,6 +109,8 @@ FILE_KINDS = ("skill", "fragment", "ignore")
 # One entry in a harness's JSON settings document, recorded by the entry's canonical digest.
 HOOK = "hook"
 FINISH_CHECK = finish_check.ID
+# The record of the turn-start entry written beside the finish check's own.
+FINISH_MARK = f"{finish_check.ID}-mark"
 # The workspace fragment's folders stay out of Git: selecting it installs this file too.
 WORKSPACE = "workspace"
 WORKSPACE_IGNORE = ".agents/.gitignore"
@@ -579,16 +581,16 @@ class Settings:
             raise AdoptError(f"{self.path}: its hooks key is not an object")
         return hooks
 
-    def find(self, digest: str | None) -> Spot | None:
+    def find(self, digest: str | None, mark: bool = False) -> Spot | None:
         """Where adopt's entry is: the one whose digest is `digest`, else the first that runs
-        the finish check."""
+        the finish check at the stop, or with `mark` at the turn's start."""
 
         found = None
         for event, entries in self.hooks().items():
             for index, value in enumerate(entries if isinstance(entries, list) else []):
                 if digest and sha256(finish_check.canonical(value)) == digest:
                     return event, index
-                if found is None and finish_check.marked(value):
+                if found is None and finish_check.marked(value, mark):
                     found = (event, index)
         return found
 
@@ -666,7 +668,11 @@ def _own(record: object) -> bool:
         )
         or (kind == "ignore" and name == WORKSPACE and record.get("path") == WORKSPACE_IGNORE)
         or (kind == "ignore" and name == LOCAL_RECORDS and record.get("path") == LOCAL_IGNORE)
-        or (kind == HOOK and name == FINISH_CHECK and isinstance(record.get("harness"), str))
+        or (
+            kind == HOOK
+            and name in (FINISH_CHECK, FINISH_MARK)
+            and isinstance(record.get("harness"), str)
+        )
     )
 
 
@@ -790,7 +796,7 @@ def recorded_timeout(own: Sequence[Record]) -> int:
     """The finish check's timeout the hook records hold; one written without it, the default."""
 
     for record in own:
-        if record["kind"] == HOOK:
+        if record["kind"] == HOOK and record["id"] == FINISH_CHECK:
             return int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
     return finish_check.DEFAULT_TIMEOUT
 
@@ -1037,7 +1043,7 @@ class Run:
         created the document."""
 
         settings = self.document(want.path)
-        spot = settings.find(record["sha256"] if record else None)
+        spot = settings.find(record["sha256"] if record else None, want.id == FINISH_MARK)
         self._judge(label(want.path, want.id), settings.at(spot), want.data, record)
         settings.put(want.event, want.entry, spot)
         created = settings.before is None or bool(record and record.get("created"))
@@ -1069,7 +1075,7 @@ class Run:
         if data is None or finish_check.MARKER not in data:
             return
         settings = self.document(path)
-        spot = settings.find(record["sha256"])
+        spot = settings.find(record["sha256"], record["id"] == FINISH_MARK)
         self._judge(label(path, record["id"]), settings.at(spot), None, record)
         if spot is not None:
             settings.take(spot)
@@ -1298,7 +1304,21 @@ def finish_hooks(
         wants.append(
             HookWant(HOOK, hook["file"], FINISH_CHECK, data, extra, event=event, entry=entry)
         )
+        began = finish_check.mark_entry(name, digest)
+        began_data = finish_check.canonical(began)
+        wants.append(
+            HookWant(
+                HOOK,
+                hook["file"],
+                FINISH_MARK,
+                began_data,
+                {"harness": name},
+                event=hook["mark_event"],
+                entry=began,
+            )
+        )
         run.notes.extend(review_again(name, data, own))
+        run.notes.extend(review_again(name, began_data, own, FINISH_MARK))
         caution = f"; {finish_check.CAUTION[name]}" if name in finish_check.CAUTION else ""
         run.notes.append(
             (
@@ -1314,20 +1334,33 @@ def finish_hooks(
     return wants
 
 
-def review_again(name: str, data: bytes, own: Sequence[Record]) -> Notes:
+def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FINISH_CHECK) -> Notes:
     """The line asking each person to trust `name`'s entry again, where its harness skips a
-    changed entry until then and this install changes the one recorded."""
+    changed entry until then and this install changes the one recorded; for the turn-start
+    entry (`entry` is `FINISH_MARK`), also where an install that has the stop entry adds it."""
 
-    before = [r["sha256"] for r in own if r["kind"] == HOOK and r.get("harness") == name]
-    if name not in finish_check.REVIEW_AGAIN or not before or sha256(data) in before:
+    def kept(of: str) -> list[str]:
+        return [
+            r["sha256"] for r in own if r["kind"] == HOOK and r["id"] == of and r["harness"] == name
+        ]
+
+    before = kept(entry)
+    if name not in finish_check.REVIEW_AGAIN or sha256(data) in before:
         return []
-    return [
-        (
-            "action",
-            f"{name} finish-check: the entry changed, since its Done commands or its timeout "
-            f"changed; {finish_check.REVIEW_AGAIN[name]}",
-        )
-    ]
+    if entry == FINISH_CHECK:
+        if not before:
+            return []
+        why = "since its Done commands or its timeout changed"
+        return [
+            (
+                "action",
+                f"{name} finish-check: the entry changed, {why}; {finish_check.REVIEW_AGAIN[name]}",
+            )
+        ]
+    if not before and not kept(FINISH_CHECK):
+        return []
+    what = "the turn-start entry changed" if before else "the turn-start entry was added"
+    return [("action", f"{name} finish-check: {what}; {finish_check.REVIEW_AGAIN[name]}")]
 
 
 def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
@@ -1801,7 +1834,7 @@ def _observed(target: Path, record: Record) -> bytes | None:
         if data is None or finish_check.MARKER not in data:
             return None
         settings = Settings.parse(record["path"], data)
-        return settings.at(settings.find(record["sha256"]))
+        return settings.at(settings.find(record["sha256"], record["id"] == FINISH_MARK))
     if data is None:
         return None
     if record["kind"] in FILE_KINDS:
@@ -1855,9 +1888,11 @@ def _hook_rendered(source: Path, record: Record, own: Sequence[Record]) -> bytes
         raise AdoptError(
             f"this engine writes no finish-check entry for {harness} at {record['path']}"
         )
+    digest = finish_check.done_digest(done)
+    if record["id"] == FINISH_MARK:
+        return finish_check.canonical(finish_check.mark_entry(harness, digest))
     timeout = int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
-    entry = finish_check.entry(harness, finish_check.done_digest(done), timeout)
-    return finish_check.canonical(entry)
+    return finish_check.canonical(finish_check.entry(harness, digest, timeout))
 
 
 def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> str:

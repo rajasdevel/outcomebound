@@ -49,8 +49,9 @@ as one brief (`outcomebound brief --help`).
 - A CI line that fails when the install drifts: `outcomebound adopt . --check` (`templates/ci/`
   has snippets). Never change CI, hooks, credentials or harness settings without the yes.
 - A finish check, for `claude-code` and `codex` only: `outcomebound adopt <target> --finish-check`
-  adds a stop-hook entry to that harness's settings, so when the agent ends a turn on a changed
-  tree the Done commands run and a failure goes back to it. It needs a Done command, and
+  adds a stop-hook entry and a prompt-hook entry that records where each turn began to that
+  harness's settings, so when the agent ends a turn on a changed tree the Done commands run and a
+  failure that the turn caused goes back to it. It needs a Done command, and
   `outcomebound` on the harness process's PATH, which a harness launched from a desktop may not
   share with the shell. A Done command names the project's interpreter or runner
   (`.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH),

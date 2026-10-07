@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -86,6 +87,33 @@ def target(path: Path, done: list[str]) -> tuple[Path, str]:
     return path, finish_check.done_digest(done)
 
 
+def write_transcript(path: Path, row: str, work: str) -> None:
+    """A session transcript in `row`'s own shape, as far as the verb reads it: a prompt an hour
+    ago, then the model's first work `work` ("future": an hour on, after any mark a test writes;
+    "past": two hours ago, before it)."""
+
+    now = datetime.now(timezone.utc)
+    hours = (-1, 1) if work == "future" else (-3, -2)
+    first, after = ((now + timedelta(hours=h)).isoformat() for h in hours)
+    if row == "claude-code":
+        lines = [
+            {"type": "attachment", "timestamp": first},
+            {"type": "user", "timestamp": first, "message": {"role": "user", "content": "hi"}},
+            {"type": "assistant", "timestamp": after, "message": {"role": "assistant"}},
+        ]
+    else:
+        lines = [
+            {"type": "event_msg", "timestamp": first, "payload": {"type": "task_started"}},
+            {
+                "type": "response_item",
+                "timestamp": first,
+                "payload": {"type": "message", "role": "user"},
+            },
+            {"type": "response_item", "timestamp": after, "payload": {"type": "function_call"}},
+        ]
+    write(path, "".join(json.dumps(line) + "\n" for line in lines))
+
+
 def hook(
     row: str,
     digest: str,
@@ -93,6 +121,7 @@ def hook(
     stdin: bytes | dict[str, Any] | None = None,
     cwd: Path | None = None,
     timeout: int | None = None,
+    transcript: str = "future",
 ) -> tuple[int, dict[str, Any]]:
     """Run the entry as `row` fires it, the input's `cwd` naming where the agent works unless
     `stdin` is given. claude-code runs from the checkout its session started in, which its root
@@ -113,6 +142,12 @@ def hook(
         working = cwd
     if stdin is None:
         stdin = {**INPUT[row], "cwd": str(working)}
+        path = root.parent / f"transcript-{row}.jsonl"
+        if transcript in ("future", "past"):
+            write_transcript(path, row, transcript)
+        elif transcript == "garbage":
+            write(path, "not json\n")
+        stdin["transcript_path"] = str(path) if transcript != "none" else None
     data = stdin if isinstance(stdin, bytes) else json.dumps(stdin).encode()
     words = engine("finish-check", "--harness", row, "--done", digest)
     if timeout is not None:
@@ -129,6 +164,25 @@ def hook(
     assert done.returncode == 0, done.stderr.decode()
     result: dict[str, Any] = json.loads(done.stdout)
     return done.returncode, result
+
+
+def mark(
+    row: str,
+    digest: str,
+    root: Path,
+    stdin: bytes | dict[str, Any] | None = None,
+    cwd: Path | None = None,
+    extra: list[str] | None = None,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run the turn-start entry as `row` fires it on a prompt: the input's `cwd` names `root`."""
+
+    if stdin is None:
+        stdin = {"session_id": "s", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
+    data = stdin if isinstance(stdin, bytes) else json.dumps(stdin).encode()
+    words = engine("finish-check", "--mark", "--harness", row, "--done", digest, *(extra or []))
+    return subprocess.run(
+        words, input=data, cwd=cwd or root, capture_output=True, check=False, timeout=120
+    )
 
 
 @pytest.mark.parametrize("row", ROWS)
@@ -1572,3 +1626,475 @@ def test_a_command_the_report_prints_for_a_person_names_the_target_as_the_platfo
 
     assert "outcomebound adopt '/work/it''s here' --finish-timeout" in message
     assert "outcomebound adopt '/work/it''s here' --no-finish-check" in message
+
+
+# --- The tree a turn began with ---------------------------------------------------
+
+
+def turn(row: str, digest: str, root: Path) -> None:
+    """The prompt that begins a turn: the mark runs, prints nothing and succeeds."""
+
+    done = mark(row, digest, root)
+    assert (done.returncode, done.stdout, done.stderr) == (0, b"", b"")
+
+
+def counted(count: Path) -> int:
+    return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_turn_that_changed_nothing_runs_nothing_and_holds_nothing_on_a_failing_tree(
+    tmp_path: Path, row: str
+) -> None:
+    """Breaks if a turn that edited no file and made no commit is held, or runs Done, for a
+    failure that was there when it began (a stale package outside the tree); the mark is kept in
+    the Git directory, never in the working tree."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; echo boom; exit 1"])
+
+    turn(row, digest, root)
+    verdict = hook(row, digest, root)[1]
+
+    assert list(verdict) == ["systemMessage"] and counted(count) == 0
+    assert verdict["systemMessage"].startswith(
+        "finish-check: the tree is the one this turn began with (marked "
+    )
+    assert verdict["systemMessage"].endswith("); Done was not run.")
+    assert not (root / ".git" / finish_check.MARK).exists()  # the stop ended the turn
+    status = subprocess.run(
+        [GIT, "-C", str(root), "status", "--porcelain"], capture_output=True, text=True, check=True
+    )
+    assert finish_check.MARK not in status.stdout
+
+
+def test_an_unchanged_turn_repeats_a_recorded_non_pass_for_the_person_and_runs_nothing(
+    tmp_path: Path,
+) -> None:
+    """Breaks if an unchanged turn on a tree whose last verdict is a failure loses that verdict
+    or holds again, or runs Done."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; echo boom; exit 1"])
+    assert hook("codex", digest, root)[1]["decision"] == "block" and counted(count) == 1
+
+    turn("codex", digest, root)
+    verdict = hook("codex", digest, root)[1]
+
+    assert list(verdict) == ["systemMessage"] and counted(count) == 1
+    assert "so it was not run again" in verdict["systemMessage"]
+    assert "(marked " in verdict["systemMessage"]
+
+
+def suite(tmp_path: Path) -> tuple[Path, str, Path]:
+    """A target whose Done fails for each flag file in a folder outside the tree, as a test
+    suite fails for a stale package: the failures are the environment's, not the tree's."""
+
+    flags = tmp_path / "flags"
+    flags.mkdir()
+    root, _ = target(tmp_path / "t", ["true"])
+    line = runner_script(root, flags)
+    manifest = json.loads((root / finish_check.MANIFEST).read_text(encoding="utf-8"))
+    manifest["artifacts"][0]["done"] = [line]
+    write(root / finish_check.MANIFEST, json.dumps(manifest))
+    subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "done"], check=True)
+    return root, finish_check.done_digest([line]), flags
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_changed_turn_with_the_failure_it_began_with_reports_it_and_holds_nothing(
+    tmp_path: Path, row: str
+) -> None:
+    """Breaks if a failure the tree had when the turn began, with the same failure ids, holds
+    the turn once the turn has edited a file, or is not named as known before the turn."""
+
+    root, digest, flags = suite(tmp_path)
+    write(flags / "old", "")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+    turn(row, digest, root)
+    write(root / "src.txt", "two\n")
+
+    verdict = hook(row, digest, root)[1]
+
+    assert list(verdict) == ["systemMessage"]
+    message = verdict["systemMessage"]
+    assert message.startswith("finish-check FAIL, known before this turn: ")
+    began = "as on the working tree this turn began with"
+    assert f"{began} (known by its failure ids; known before this turn, not held)" in message
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_changed_turn_with_a_new_failure_holds(tmp_path: Path, row: str) -> None:
+    """Breaks if a failure the tree did not have when the turn began is let through because the
+    turn began on a failing tree, whether the new failure is inside a command that already
+    failed or in another command."""
+
+    root, digest, flags = suite(tmp_path)
+    write(flags / "old", "")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+    turn(row, digest, root)
+    write(root / "src.txt", "two\n")
+    write(flags / "new", "")
+
+    verdict = hook(row, digest, root)[1]
+
+    assert verdict["decision"] == "block"
+    assert "tests/new.py::test_x" in verdict["reason"]
+
+
+def test_a_commit_the_turn_made_counts_as_a_change(tmp_path: Path) -> None:
+    """Breaks if the turn's start is compared with HEAD alone or the tree alone: an empty commit
+    leaves the tree digest as it was and changes HEAD, and the turn ran after it."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
+    turn("codex", digest, root)
+    subprocess.run(
+        [GIT, "-C", str(root), *IDENTITY, "commit", "-q", "--allow-empty", "-m", "more"],
+        check=True,
+    )
+
+    assert "PASS" in hook("codex", digest, root)[1]["systemMessage"] and counted(count) == 1
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_with_no_mark_a_failure_holds_as_before(tmp_path: Path, row: str) -> None:
+    """Breaks if an install or harness that writes no turn mark behaves any other way: a failing
+    tree held, however the turn began; also a mark from another tree is not a baseline."""
+
+    root, digest, flags = suite(tmp_path)
+    write(flags / "old", "")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+    write(root / "src.txt", "two\n")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+
+    other, other_digest = target(tmp_path / "other", ["exit 1"])
+    turn(row, other_digest, other)
+    (other / ".git" / finish_check.MARK).replace(root / ".git" / finish_check.MARK)
+    write(root / "src.txt", "three\n")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+
+
+def test_an_unreadable_mark_is_no_mark(tmp_path: Path) -> None:
+    """Breaks if a mark the verb cannot read, or one that names the head and tree of another
+    state, stops the check from running: the check then behaves as with no mark."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; exit 1"])
+    for text in ("not json", '{"head": 1, "tree": 2}', ""):
+        write(root / ".git" / finish_check.MARK, text)
+        write(root / "src.txt", text + "\n")
+        assert hook("codex", digest, root)[1]["decision"] == "block"
+
+
+@pytest.mark.parametrize("case", ["no-manifest", "not-a-digest", "unknown-row", "no-repository"])
+def test_the_mark_never_fails_the_prompt_and_writes_nothing_on_an_error(
+    tmp_path: Path, case: str
+) -> None:
+    """Breaks if an error in the mark prints to the model, exits non-zero (a prompt then shows a
+    hook error) or leaves a mark."""
+
+    root, digest = target(tmp_path / "t", ["true"])
+    where, row, given = tmp_path / "w", "codex", digest
+    where.mkdir()
+    if case == "no-repository":
+        (where / ".outcomebound").mkdir()
+        write(where / finish_check.MANIFEST, "{}")
+    elif case == "not-a-digest":
+        where, given = root, "abc"
+    elif case == "unknown-row":
+        where, row = root, "nonesuch"
+
+    done = mark(row, given, where)
+
+    assert (done.returncode, done.stdout) == (0, b"")
+    assert not list(tmp_path.glob(f"**/{finish_check.MARK}*"))
+
+
+def test_a_mark_that_cannot_be_renewed_is_removed(tmp_path: Path) -> None:
+    """Breaks if a prompt of another session whose tree cannot be read leaves the mark of an
+    earlier prompt, which would stand for a tree this turn did not begin with."""
+
+    root, digest = target(tmp_path / "t", ["true"])
+    turn("codex", digest, root)
+    old = root / ".git" / finish_check.MARK
+    assert old.is_file()
+    write(root / ".git" / "index", "not an index")
+    next_session = {"session_id": "next", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
+
+    done = mark("codex", digest, root, stdin=next_session)
+
+    assert (done.returncode, done.stdout) == (0, b"") and not old.exists()
+
+
+# --- A mark only the prompt hook can write, and only before the turn's first work ---
+
+
+def mark_time(root: Path) -> datetime:
+    document = json.loads((root / ".git" / finish_check.MARK).read_text(encoding="utf-8"))
+    when = finish_check.stamp(document["time"])
+    assert when is not None and document["session"] == "s"
+    return when
+
+
+@pytest.mark.parametrize(
+    "stdin",
+    [
+        {"session_id": "s", "hook_event_name": "Stop"},
+        {"session_id": "s"},
+        {"hook_event_name": "UserPromptSubmit"},
+        {"session_id": "", "hook_event_name": "UserPromptSubmit"},
+        b"",
+        b"[]",
+    ],
+    ids=["stop-input", "no-event", "no-session", "empty-session", "no-input", "not-an-object"],
+)
+def test_the_mark_is_written_only_on_a_prompt_hooks_input(tmp_path: Path, stdin: Any) -> None:
+    """Breaks if the agent can write a mark by running the verb itself, whatever it feeds it:
+    the event the row documents and a session id are the harness's input, and nothing else
+    writes."""
+
+    root, digest = target(tmp_path / "t", ["true"])
+    if isinstance(stdin, dict):
+        stdin = {**stdin, "cwd": str(root)}
+
+    done = mark("codex", digest, root, stdin=stdin)
+
+    assert (done.returncode, done.stdout) == (0, b"")
+    assert not (root / ".git" / finish_check.MARK).exists()
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_the_mark_keeps_its_session_and_time(tmp_path: Path, row: str) -> None:
+    """Breaks if the mark does not say which session wrote it and when, which the stop and the
+    person's message read."""
+
+    root, digest = target(tmp_path / "t", ["true"])
+    before = datetime.now(timezone.utc)
+
+    turn(row, digest, root)
+
+    assert before <= mark_time(root) <= datetime.now(timezone.utc)
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_another_sessions_mark_is_not_used(tmp_path: Path, row: str) -> None:
+    """Breaks if a mark written for one session lets another session's turn end unchecked: the
+    stop reads the mark only for its own session id."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    other = {"session_id": "another", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
+    assert mark(row, digest, root, stdin=other).returncode == 0
+
+    assert hook(row, digest, root)[1]["decision"] == "block"
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_mark_written_after_the_turns_first_work_is_not_used(tmp_path: Path, row: str) -> None:
+    """Breaks if an agent that runs the verb with a forged prompt input after its edits, which
+    its own tool calls already show in the transcript, makes its turn read as unchanged."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    turn(row, digest, root)
+
+    assert hook(row, digest, root, transcript="past")[1]["decision"] == "block"
+
+
+@pytest.mark.parametrize("row", ROWS)
+@pytest.mark.parametrize("transcript", ["garbage", "missing"])
+def test_a_transcript_that_cannot_be_read_means_no_mark(
+    tmp_path: Path, row: str, transcript: str
+) -> None:
+    """Breaks if a stop whose transcript is unreadable or not parsed trusts the mark: it runs
+    and holds as without one."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    turn(row, digest, root)
+
+    assert hook(row, digest, root, transcript=transcript)[1]["decision"] == "block"
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_stop_input_without_a_transcript_gets_the_session_check_alone(
+    tmp_path: Path, row: str
+) -> None:
+    """Breaks if a row whose stop input names no transcript loses the mark altogether, which
+    the design names as that row's limit, or if the session check is skipped there."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    turn(row, digest, root)
+
+    assert "Done was not run" in hook(row, digest, root, transcript="none")[1]["systemMessage"]
+    wrong = {**INPUT[row], "cwd": str(root), "session_id": "elsewhere", "transcript_path": None}
+    assert hook(row, digest, root, stdin=wrong)[1]["decision"] == "block"
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_each_use_of_the_mark_is_told_to_the_person_with_its_time(tmp_path: Path, row: str) -> None:
+    """Breaks if a stop that is not run, or not held, because of the mark says nothing, or does
+    not name when the mark was written, so that the person sees every use."""
+
+    root, digest, flags = suite(tmp_path)
+    write(flags / "old", "")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+    turn(row, digest, root)
+    clock = mark_time(root).astimezone().strftime("%H:%M:%S")
+
+    unchanged = hook(row, digest, root)[1]["systemMessage"]
+    assert f"(marked {clock})" in unchanged and "not run again" in unchanged
+
+    turn(row, digest, root)
+    clock = mark_time(root).astimezone().strftime("%H:%M:%S")
+    write(root / "src.txt", "two\n")
+    known = hook(row, digest, root)[1]["systemMessage"]
+    assert f"(marked {clock})" in known and known.startswith("finish-check FAIL, known before")
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_an_unchanged_turn_is_told_once_for_a_session_and_tree(tmp_path: Path, row: str) -> None:
+    """Breaks if a session that only reads is told "Done was not run" after every reply, or if a
+    changed tree or another session is not told again."""
+
+    root, digest = target(tmp_path / "t", ["true"])
+
+    turn(row, digest, root)
+    assert "Done was not run" in hook(row, digest, root)[1]["systemMessage"]
+    turn(row, digest, root)
+    assert hook(row, digest, root)[1] == {}
+
+    write(root / "src.txt", "two\n")
+    turn(row, digest, root)
+    assert "Done was not run" in hook(row, digest, root)[1]["systemMessage"]
+    turn(row, digest, root)
+    assert hook(row, digest, root)[1] == {}
+
+    other = {"session_id": "another", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
+    assert mark(row, digest, root, stdin=other).returncode == 0
+    stop = {**INPUT[row], "cwd": str(root), "session_id": "another", "transcript_path": None}
+    assert "Done was not run" in hook(row, digest, root, stdin=stop)[1]["systemMessage"]
+
+
+# --- A turn keeps the mark of its first prompt ---------------------------------------
+
+
+def stop_input(row: str, root: Path, **fields: Any) -> dict[str, Any]:
+    """A stop input of `row` with no transcript, so that only the session check applies."""
+
+    return {**INPUT[row], "cwd": str(root), "transcript_path": None, **fields}
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_prompt_event_inside_a_turn_does_not_move_the_baseline(tmp_path: Path, row: str) -> None:
+    """Breaks if a second prompt event of the same session (a queued message the harness
+    delivers mid-turn) rewrites the mark after the turn's edits, so that the stop reads the
+    changed tree as the one the turn began with and runs nothing."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
+    turn(row, digest, root)
+    write(root / "src.txt", "two\n")
+    turn(row, digest, root)
+
+    verdict = hook(row, digest, root)[1]
+
+    assert "PASS" in verdict["systemMessage"] and counted(count) == 1
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_the_stop_ends_the_mark_unless_it_holds_or_the_session_is_paused(
+    tmp_path: Path, row: str
+) -> None:
+    """Breaks if a mark outlives the turn it began, which a later turn that reverts to that
+    tree would read as unchanged; or if a hold ends it, so that a harness that fires the prompt
+    event for the retry (codex) moves the baseline past the edits; or if the retry stop does not
+    end it, so that the next prompt cannot write a new one."""
+
+    root, digest, flags = suite(tmp_path)
+    write(flags / "old", "")
+    assert hook(row, digest, root)[1]["decision"] == "block"
+    mark_file = root / ".git" / finish_check.MARK
+    turn(row, digest, root)
+    write(root / "src.txt", "two\n")
+    write(flags / "new", "")
+
+    assert hook(row, digest, root)[1]["decision"] == "block" and mark_file.is_file()
+    turn(row, digest, root)  # the prompt a hold creates (codex): the baseline stays
+    retry = stop_input(row, root, stop_hook_active=True)
+    assert list(hook(row, digest, root, stdin=retry)[1]) == ["systemMessage"]
+    assert not mark_file.exists()
+
+    turn(row, digest, root)
+    assert mark_file.is_file()
+    unchanged = hook(row, digest, root)[1]["systemMessage"]
+    assert "(marked " in unchanged and "not run again" in unchanged
+    assert not mark_file.exists()
+
+
+def test_a_paused_claude_code_session_keeps_the_mark(tmp_path: Path) -> None:
+    """Breaks if a stop that only pauses the session (background work in flight) ends the
+    turn's mark."""
+
+    root, digest = target(tmp_path / "t", ["true"])
+    turn("claude-code", digest, root)
+    paused = stop_input("claude-code", root, background_tasks=[{"id": "b"}])
+
+    assert hook("claude-code", digest, root, stdin=paused)[1] == {}
+    assert (root / ".git" / finish_check.MARK).is_file()
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"isCompactSummary": True, "message": {"role": "user", "content": "x"}},
+        {
+            "origin": {"kind": "task-notification"},
+            "promptSource": "system",
+            "message": {"role": "user", "content": "<task-notification>x"},
+        },
+        {"message": {"role": "user", "content": "<command-name>/x</command-name>"}},
+        {"message": {"role": "user", "content": "<local-command-stdout>x"}},
+        {
+            "message": {
+                "role": "user",
+                "content": [{"type": "text", "text": "[Request interrupted"}],
+            }
+        },
+    ],
+    ids=["compaction", "task-notification", "slash-command", "command-output", "interrupt"],
+)
+def test_a_line_the_harness_writes_is_not_a_prompt_for_the_order_check(
+    tmp_path: Path, extra: dict[str, Any]
+) -> None:
+    """Breaks if a user-typed line the harness writes itself (a compaction summary, a task
+    notification, a slash-command echo, an interrupt) ends the turn's window: the mark written
+    after the first work would then be trusted. A real person's prompt does, as a control."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    turn("claude-code", digest, root)
+    now = datetime.now(timezone.utc)
+
+    def lines(between: dict[str, Any]) -> Path:
+        rows = [
+            {
+                "type": "user",
+                "timestamp": (now - timedelta(hours=3)).isoformat(),
+                "message": {"role": "user", "content": "hi"},
+            },
+            {"type": "assistant", "timestamp": (now - timedelta(hours=2)).isoformat()},
+            {"type": "user", "timestamp": (now - timedelta(hours=1)).isoformat(), **between},
+            {"type": "assistant", "timestamp": (now + timedelta(hours=1)).isoformat()},
+        ]
+        path = tmp_path / "transcript.jsonl"
+        write(path, "".join(json.dumps(row) + "\n" for row in rows))
+        return path
+
+    human = {"origin": {"kind": "human"}, "message": {"role": "user", "content": "again"}}
+    control = stop_input("claude-code", root, transcript_path=str(lines(human)))
+    assert (
+        "Done was not run" in hook("claude-code", digest, root, stdin=control)[1]["systemMessage"]
+    )
+
+    turn("claude-code", digest, root)
+    forged = stop_input("claude-code", root, transcript_path=str(lines(extra)))
+    assert hook("claude-code", digest, root, stdin=forged)[1]["decision"] == "block"
