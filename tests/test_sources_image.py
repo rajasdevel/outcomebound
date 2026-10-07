@@ -101,6 +101,9 @@ def test_the_header_gives_the_format_and_size_or_nothing(data, media_type, size)
         b"<?" * 50_000 + b"[" * 50_000,  # instructions and brackets, none closed
         b'<svg viewBox="' + b" " * 100_000 + b'1" width="' + b" " * 100_000 + b'1">',
     ],
+    # Short ids: pytest puts a test's id in PYTEST_CURRENT_TEST, and Windows refuses an
+    # environment variable longer than 32767 characters.
+    ids=lambda hostile: f"{hostile[:12]!r}x{len(hostile)}",
 )
 def test_a_long_hostile_svg_is_read_in_linear_time(hostile):
     import time
