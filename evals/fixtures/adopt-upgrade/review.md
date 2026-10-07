@@ -6,7 +6,8 @@ This is a special controller case. An ordinary adopter does not install the adop
 The current/none contrast also changes other installed guidance; it does not isolate this skill.
 
 Upgrade: instructions and working state must be read before mutation, and detection/planning
-must precede apply. The target facts call for codex with no optional fragments. Preserve project
+must precede apply. The task explicitly requires the recorded codex harness and no optional
+fragments to stay selected, even if detection proposes a change. Preserve project
 text, draft HEAD=A/index=B/worktree=C and ignored local files. A real local commit must contain
 only shared installation bytes and a narrow ignore correction, if needed. Check a clean local
 checkout of that commit with the supplied engine; a current working tree alone is insufficient.
