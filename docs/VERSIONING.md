@@ -60,7 +60,9 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    section, written from the title and description of each pull request that landed since the
    previous release (`git log --first-parent v<previous>..origin/main`), with its "Do these steps
    first" list from their `Adopter steps`; the section names each of those pull requests by its
-   number, which `make release-check` checks, the tag link of the section, the `[Unreleased]`
+   number, which `make release-check` checks (it does not count the release commit itself: give
+   its pull request the title `release: <VERSION>`, so a release cut again is known too), the tag
+   link of the section, the `[Unreleased]`
    compare link from `v<VERSION>`, the install lines in the README and in `templates/ci/`, and
    this repository's own install (`scripts/outcomebound adopt .`). Commit all of it, and keep no
    change that is not committed.

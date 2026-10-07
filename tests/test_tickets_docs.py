@@ -93,17 +93,18 @@ def test_documented_verbs_equal_the_parser_s() -> None:
 
 
 def test_the_export_command_reads_the_query_from_the_engine_checkout() -> None:
-    """The guide's export command reads the pinned query from the OutcomeBound
-    checkout `outcomebound home` prints, so it runs from the project, where the ticket
-    skills run it, and not from a path relative to wherever it runs."""
+    """The guide's export command gives `gh` the pinned query as a file (`-F query=@...`)
+    in the OutcomeBound checkout `outcomebound home` prints, so it runs from the project,
+    where the ticket skills run it, and not from a path relative to wherever it runs, and
+    it holds no shell substitution."""
 
     section = _section(_read(GUIDE), "## Producing the export for the `github` store")
     blocks = _fenced(section, "sh")
     assert len(blocks) == 1, f"the export section holds {len(blocks)} sh blocks, not one"
-    anchored = '"$(outcomebound home)/templates/tickets/github-export.graphql"'
-    assert anchored in blocks[0]
+    shipped = "templates/tickets/github-export.graphql"
+    assert f"-F query=@<outcomebound home>/{shipped}" in blocks[0]
+    assert "$(" not in blocks[0]
     assert "cat templates/" not in blocks[0]
-    shipped = anchored.strip('"').removeprefix("$(outcomebound home)/")
     assert (REPOSITORY / shipped).is_file(), f"{shipped} is not in this checkout"
 
 
