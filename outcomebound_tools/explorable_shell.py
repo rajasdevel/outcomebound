@@ -141,10 +141,10 @@ def escape(text: str) -> str:
 
 
 def _json(document: Mapping[str, Any]) -> str:
-    """`document` as JSON for a script element: `</` and `<!--` cannot end or hide it."""
+    """`document` as JSON for a script element: every `<` is escaped, so no text in it can end,
+    hide or open an element, and the config never holds what `check` refuses there."""
 
-    text = json.dumps(document, ensure_ascii=False)
-    return text.replace("</", "<\\/").replace("<!--", "\\u003c!--")
+    return json.dumps(document, ensure_ascii=False).replace("<", "\\u003c")
 
 
 def build_page(

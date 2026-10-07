@@ -97,9 +97,9 @@ CONDITIONS = {
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": "when handing an accepted ticket to the agent or model that will build it",
     "explorable": (
-        "when a decision turns on values a person may judge differently or on how options work, "
-        "a person must learn a mechanism by trying it, or many questions are easier to answer "
-        "on a page"
+        "when a decision turns on values a person may judge differently or on how options work "
+        "in ways text compares poorly, a person must learn a mechanism by trying it, or many "
+        "questions are easier to answer on a page"
     ),
 }
 # Skills an earlier install carried and this engine no longer ships. A record of one is still

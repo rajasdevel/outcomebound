@@ -221,6 +221,10 @@ def _write_page(target: Path, text: str) -> None:
     try:
         with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as stream:
             stream.write(text)
+        # `mkstemp` makes the file readable by its owner alone; a page is an ordinary file.
+        mask = os.umask(0)
+        os.umask(mask)
+        os.chmod(name, 0o666 & ~mask)
         os.replace(name, target)
     except BaseException:
         Path(name).unlink(missing_ok=True)

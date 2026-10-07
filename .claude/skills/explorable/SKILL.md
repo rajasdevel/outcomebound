@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use when a decision turns on values a person may judge differently or on how options work, when a person must learn a mechanism by trying it, when many questions are easier to answer on a page, or when the person asks for an interactive page. Builds and checks an HTML page beside the brief.
+description: Use when a decision turns on values a person may judge differently or on how options work in ways text compares poorly, when a person must learn a mechanism by trying it, when many questions are easier to answer on a page, or when the person asks for an interactive page. Builds and checks an HTML page beside the brief.
 ---
 
 # Explorable
@@ -65,6 +65,9 @@ A page can mislead as well as inform. Hold these:
 - Colour never carries meaning alone: a label, mark or shape goes with it.
 - Page code never navigates, opens a window, fetches, or loads anything; the page's data is in the
   page. The policy stops loads and sends but not navigation, so this one is yours to hold.
+- What the person enters stays in the browser, where Chrome lets any page opened from disk read
+  it. Where the answers are private, tell the person to press "Forget what I entered" once the
+  reply is copied.
 
 ## Diagrams
 
@@ -93,13 +96,14 @@ A page can mislead as well as inform. Hold these:
 4. For each number the recommendation rests on, add `explorable.expect` with input values and the
    output each must show. Work the expected value out by hand or with another tool, never by
    running the page's code, and keep that working in a file beside the source.
-5. `outcomebound explorable build <name>.source.html` writes `<name>.html` and checks it. When it
-   refuses, fix the source and build again; never edit the built page, which the next build
+5. `outcomebound explorable build <name>.source.html` writes `<name>.html`. When it refuses the
+   source, fix the source and build again; never edit the built page, which the next build
    replaces.
 6. `outcomebound explorable check <name>.html --browser` runs the page and its expectations.
 7. Put the brief in your message and name the page's path. Open the page for the person with the
-   system's opener (`open`, `xdg-open`, `wslview`) only when they ask, or when they are at the
-   machine and the work waits on them.
+   system's opener (`open` on macOS, `xdg-open` on Linux, `wslview` under WSL; on Windows
+   `Invoke-Item` or `start ""`, which have not been run) only when they ask, or when they are at
+   the machine and the work waits on them.
 
 ## The reply
 

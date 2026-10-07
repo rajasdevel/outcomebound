@@ -283,6 +283,7 @@
   }
 
   // ---- Threshold
+  var THRESHOLD_STEPS = 10000;
   function threshold(inputName, chooser) {
     var rec = inputByName[inputName];
     if (!rec || rec.type !== "number" || typeof chooser !== "function") return null;
@@ -292,6 +293,9 @@
     var now = readInput(rec);
     if (!isFinite(min) || !isFinite(max) || now === null) return null;
     if (!isFinite(step) || step <= 0) step = 1;
+    // A fine step over a wide range would hold the page in its change handler: scan at most
+    // THRESHOLD_STEPS points across the range, the input's own step where that is coarser.
+    step = Math.max(step, (max - min) / THRESHOLD_STEPS);
     var base = values();
     function letterAt(x) {
       var v = Object.assign({}, base);
@@ -1218,10 +1222,13 @@
     copy.type = "button";
     var restore = el("button", "xp-btn", "Restore the agent’s values");
     restore.type = "button";
+    var forget = el("button", "xp-btn", "Forget what I entered");
+    forget.type = "button";
     statusEl = el("span", "xp-copy-status");
     statusEl.setAttribute("role", "status");
     actions.appendChild(copy);
     actions.appendChild(restore);
+    actions.appendChild(forget);
     actions.appendChild(statusEl);
     body.appendChild(actions);
     section.appendChild(body);
@@ -1236,6 +1243,30 @@
       runHandlers();
       refreshAll();
       statusEl.textContent = "The agent’s values are back.";
+    });
+    // Chrome lets every page opened from disk read one shared local storage, so a person can
+    // clear what they entered once the reply is copied.
+    forget.addEventListener("click", function () {
+      restoring = true;
+      inputs.forEach(function (rec) { writeInput(rec, defaultValues[rec.name]); });
+      briefChoices.forEach(function (b) {
+        $$("input[type=radio]", b.el).forEach(function (r) { r.checked = false; });
+      });
+      questions.forEach(function (q) {
+        if (q.dk) q.dk.checked = false;
+        if (q.radios) q.radios.forEach(function (r) { r.checked = false; });
+        if (q.field) { q.field.value = ""; q.field.disabled = false; }
+        q.revealed = false;
+      });
+      if (noteEl) noteEl.value = "";
+      restoring = false;
+      lastSig = sig();
+      runHandlers();
+      refreshAll();
+      if (storageKey) {
+        try { localStorage.removeItem(storageKey); } catch (err) { /* storage may be refused */ }
+      }
+      statusEl.textContent = "What you entered is gone from this page and from the browser’s storage.";
     });
     section.addEventListener("input", refreshAll);
     section.addEventListener("change", refreshAll);

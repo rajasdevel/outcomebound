@@ -85,7 +85,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
-- when a decision turns on values a person may judge differently or on how options work, a person must learn a mechanism by trying it, or many questions are easier to answer on a page: read .claude/skills/explorable/SKILL.md
+- when a decision turns on values a person may judge differently or on how options work in ways text compares poorly, a person must learn a mechanism by trying it, or many questions are easier to answer on a page: read .claude/skills/explorable/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

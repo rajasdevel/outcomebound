@@ -88,7 +88,7 @@ Call `show` for every output in each `onChange`, so that no output keeps an old 
 
 ## Charts
 
-`explorable.chart(target, config)` takes an element, often `<div data-chart data-chart-title="…">`,
+`explorable.chart(target, config)` takes an element, often `<div data-chart data-chart-title="...">`,
 and a Chart.js configuration. It returns a handle: call `handle.update(newConfig)` to change it.
 
 - The runtime sets theme colours, shapes and dash patterns for series that name none, turns
@@ -204,9 +204,12 @@ their view, not about the facts.
 ## Saved state
 
 The runtime saves the person's values, answers and note in the browser's local storage, under a key
-made of the page id and build time. A browser that refuses storage still works. A button restores
-your values. A rebuild starts from your values again. Local storage is per browser: a page sent
-to someone else opens with your values.
+made of the page id and build time. A browser that refuses storage still works. One button restores
+your values; another, "Forget what I entered", clears the person's entries from the page and from
+storage. A rebuild starts from your values again. Local storage is per browser: a page sent to
+someone else opens with your values. Chrome shares one local storage area across every file opened
+from disk, so any other local page can read what the person entered until they press "Forget what
+I entered".
 
 ## Gotchas
 
@@ -217,6 +220,14 @@ to someone else opens with your values.
   address.
 - Page code registers through `ready` and `onChange`. It never navigates, opens a window or loads
   anything, and it never calls `fetch`: the page cannot reach a host.
+- An `onChange` handler computes and calls `show` before it returns. Expectations read each output
+  right after the handlers run, so a value computed later, in a promise or a timer, reads as stale.
+- Page code is a plain `<script>` with no `type`; data is `<script type="application/json">`.
+  `build` refuses any other script type, a self-closing `<script/>`, and any `on...` attribute such
+  as `onclick`: attach handlers in page code with `addEventListener`.
+- `<!` and `<?` are refused anywhere after the header, script text included, so write no HTML
+  comment and no such string in code. Write `</html` as `<\/html` inside a string.
+- An image is `src` with a `data:` URL; `srcset` is refused.
 - An empty input is unknown, not zero. Test for `null` before you compute.
 - A range is two inputs. An uncertain value is a range, never one exact number.
 - Name every input and output once. A repeated name is an error.

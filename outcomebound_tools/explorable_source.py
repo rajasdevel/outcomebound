@@ -81,6 +81,10 @@ _HEADER_END = re.compile(r"</script[^>]*>", re.IGNORECASE)
 # own markup after the content: no comment, declaration, CDATA section or processing instruction
 # anywhere after the header (script text included), and these elements and end tags.
 _MARKUP_OPENERS = re.compile(r"<[!?]")
+# An end of the document inside script text would end the browser's printed document early.
+_DOCUMENT_END = re.compile(r"</html", re.IGNORECASE)
+# The script types a source may hold: classic page code, and JSON data, whose text is read too.
+SCRIPT_TYPES = frozenset({"", "text/javascript", "application/javascript", "application/json"})
 REFUSED_START = frozenset({"title", "plaintext", "xmp", "noembed", "noframes"})
 REFUSED_END = frozenset({*FORBIDDEN_ELEMENTS, "title", "main"})
 RESERVED_PREFIXES = ("explorable-", "brief-")
@@ -247,8 +251,25 @@ class _Scanner(HTMLParser):
                 self._reserved(tag, name, value or "")
         if tag == "a":
             self._citation(attrs, closed)
-        if tag == "script" and not closed and not _is_data(attrs):
-            self._script = (self.line(), [])
+        if tag == "script":
+            self._page_script(attrs, closed)
+
+    def _page_script(self, attrs: list[tuple[str, str | None]], closed: bool) -> None:
+        """A script that is not the header: a type this scan reads, and an end tag."""
+
+        kind = (dict(attrs).get("type") or "").strip().lower()
+        if kind not in SCRIPT_TYPES:
+            self.refuse(
+                f'<script type="{kind}">: a source holds page code (no type) or JSON data '
+                '(type="application/json") only'
+            )
+        if closed:
+            self.refuse(
+                "a self-closing <script/>: a browser runs what follows it; "
+                "write <script>...</script>"
+            )
+            return
+        self._script = (self.line(), [])
 
     def _open_header(self, attrs: list[tuple[str, str | None]], closed: bool) -> None:
         kind = dict(attrs).get("type") or ""
@@ -273,27 +294,30 @@ class _Scanner(HTMLParser):
             self.refuse("data-explorable belongs to the header alone")
 
     def _attribute(self, tag: str, name: str, value: str) -> None:
-        if name in LOADING_ATTRIBUTES:
+        if name.startswith("on"):
+            self.refuse(
+                f"{name}= holds script that no check reads; register handlers in page code "
+                "(explorable.ready, explorable.onChange, addEventListener)"
+            )
+        elif name == "srcset":
+            self.refuse("srcset: a source shows an image with src and a data: URL")
+        elif name in LOADING_ATTRIBUTES:
             self._loading(tag, name, value)
         elif name == "style":
             self._style(value)
 
     def _loading(self, tag: str, name: str, value: str) -> None:
-        candidates = re.split(r",\s+", value) if name == "srcset" else [value]
-        for candidate in candidates:
-            address = _normal(candidate.strip().split(" ")[0] if name == "srcset" else candidate)
-            lowered = address.lower()
-            if lowered.startswith("javascript:"):
-                self.refuse(f"{name}={value!r} is a javascript: URL, which is refused everywhere")
-            elif (
-                address.startswith("#")
-                or lowered.startswith("data:")
-                or (tag == "a" and name == "href" and _CITATION.match(address))
-            ):
-                continue
-            else:
-                allowed = "a fragment (#...), a data: URL, or on an `a` an https: URL"
-                self.refuse(f"{name}={value!r} loads or sends: it may hold only {allowed}")
+        address = _normal(value)
+        lowered = address.lower()
+        if lowered.startswith("javascript:"):
+            self.refuse(f"{name}={value!r} is a javascript: URL, which is refused everywhere")
+        elif not (
+            address.startswith("#")
+            or lowered.startswith("data:")
+            or (tag == "a" and name == "href" and _CITATION.match(address))
+        ):
+            allowed = "a fragment (#...), a data: URL, or on an `a` an https: URL"
+            self.refuse(f"{name}={value!r} loads or sends: it may hold only {allowed}")
 
     def _style(self, value: str) -> None:
         if "\\" in value or "image-set(" in value.lower():
@@ -338,13 +362,6 @@ def _attribute_value(value: str) -> str:
     return html.escape(value, quote=False).replace('"', "&quot;")
 
 
-def _is_data(attrs: list[tuple[str, str | None]]) -> bool:
-    """Whether a script's `type` makes it data, not code."""
-
-    kind = (dict(attrs).get("type") or "").strip().lower()
-    return bool(kind) and kind not in ("text/javascript", "module", "application/javascript")
-
-
 def scan(text: str, *, source: bool, first_line: int = 1, reserved: bool | None = None) -> Scan:
     """One pass over `text`. With `source`, the header must come first and is read, and each
     citation is queued for rewriting; otherwise `text` is a built page's content, and a citation
@@ -371,6 +388,11 @@ def scan(text: str, *, source: bool, first_line: int = 1, reserved: bool | None 
                 f"`{found.group()}` opens a comment, declaration, CDATA section or processing "
                 "instruction; a page needs none, and script code uses // or /* */",
             )
+        )
+    for found in _DOCUMENT_END.finditer(text, start):
+        line = first_line + text.count("\n", 0, found.start())
+        result.findings.append(
+            Finding(line, "`</html` ends the shell's document; in script text write `<\\/html`")
         )
     for found in re.finditer("\x00", text):
         line = first_line + text.count("\n", 0, found.start())

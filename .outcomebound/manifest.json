@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "0b2e018e67eeb248fa9ba3034241370202a74eeed79b39d5748c910a9cd7632c",
-      "sha256": "a61b38760ee7b9eab88712ecdbbe96bc9071e7c5cacaf44252748f5bf9c5971a"
+      "frame": "08600e441dad2d4aeee7fc8833c244e484f59d0310c99d86a1e2bb690248d66d",
+      "sha256": "1240fdbdf590f9e7e1063587e5dc81c8f8af1f6631c449d4a4d2e4e9437ef9cb"
     },
     {
       "kind": "fragment",
@@ -107,7 +107,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "768043e1a39274a9eb430fd091014c42e7609af2a2afdfc570fee2494f42ec4d"
+      "sha256": "745230e66a0779bb2009a23840885d8a1cbcc78e5eec55bff46a75b07bd2e5ca"
     },
     {
       "kind": "skill",
@@ -116,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "24f975161870f2f6a02753d57ce9e6ad41d6d70069e5fde7d54bec75779e053b"
+      "sha256": "e011d87ad46580d0363c60fa3c89919487ee77210dfad8c8849c2bfc89923d3a"
     },
     {
       "kind": "skill",

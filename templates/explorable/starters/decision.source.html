@@ -72,6 +72,7 @@
   <p>Leading option for these values: <output data-output="answer"></output></p>
   <p>Option A stops fitting under the database limit at: <output data-output="breakEven"></output></p>
   <p>The answer changes when the low guess moves to: <output data-output="flipPoint"></output></p>
+  <p>The option that then leads: <output data-output="flipLeader"></output></p>
 
   <div data-chart data-chart-title="Database load against requests per second"></div>
 </section>
@@ -176,24 +177,24 @@
 
   explorable.onChange((v) => {
     const m = model(v);
-    const range = (r) => (r === null ? null : r);
-    explorable.show("dbLoadA", m && range(m.a), { unit: "req/s", waits });
-    explorable.show("dbLoadB", m && range(m.b), { unit: "req/s", waits });
+    explorable.show("dbLoadA", m && m.a, { unit: "req/s", waits });
+    explorable.show("dbLoadB", m && m.b, { unit: "req/s", waits });
     explorable.show("answer", m ? LETTERS[chooser(v)] : null, { waits });
     explorable.show("breakEven", m && m.breakEven, { unit: "req/s", waits });
     const t = m ? explorable.threshold("hitLow", chooser) : null;
-    explorable.show(
-      "flipPoint",
-      m ? (t ? t.value : "no change within 0 to 100") : null,
-      { unit: t ? "% (then " + t.letter + " leads)" : "", waits }
-    );
+    explorable.show("flipPoint", m ? (t ? t.value : "no change within the range") : null,
+      { unit: t ? "%" : "", waits });
+    explorable.show("flipLeader", m ? (t ? LETTERS[t.letter] : "the same option") : null, { waits });
     if (chartHandle) chartHandle.update(chartConfig(v, m));
   });
 
   explorable.expect("120 req/s, guesses 60 and 80", { rps: 120, servers: 4, dbMax: 60, hitLow: 60, hitHigh: 80 },
-    { dbLoadA: [31.2, 55.2], dbLoadB: [24, 48], answer: "A in-process cache", breakEven: 130, flipPoint: 55 });
+    { dbLoadA: [31.2, 55.2], dbLoadB: [24, 48], answer: "A in-process cache", breakEven: 130, flipPoint: 55,
+      flipLeader: "B shared cache service" });
   explorable.expect("120 req/s, guesses 50 and 80", { rps: 120, servers: 4, dbMax: 60, hitLow: 50, hitHigh: 80 },
-    { dbLoadA: [31.2, 67.2], dbLoadB: [24, 60], answer: "B shared cache service", breakEven: 107, flipPoint: 56 });
+    { dbLoadA: [31.2, 67.2], dbLoadB: [24, 60], answer: "B shared cache service", breakEven: 107, flipPoint: 56,
+      flipLeader: "A in-process cache" });
   explorable.expect("no hit rate guess yet", { hitLow: null, hitHigh: null },
-    { dbLoadA: null, dbLoadB: null, answer: null, breakEven: null, flipPoint: null });
+    { dbLoadA: null, dbLoadB: null, answer: null, breakEven: null, flipPoint: null,
+      flipLeader: null });
 </script>

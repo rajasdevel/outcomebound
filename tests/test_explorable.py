@@ -179,6 +179,19 @@ REFUSED = [
     ("a noembed element", "<noembed>"),
     ("a noframes element", "<noframes>"),
     ("a script that is never closed", "<script>var a = 1;"),
+    ("a self-closing script", '<script/>var u = "https://evil.example/leak?";</script>'),
+    (
+        "an event handler attribute",
+        "<button onclick=\"location.href='https://evil.example/'\">x</button>",
+    ),
+    (
+        "an import map",
+        '<script type="importmap">{"imports":{"x":"https://evil.example/m.js"}}</script>',
+    ),
+    ("speculation rules", '<script type="speculationrules">{"prefetch":[]}</script>'),
+    ("a module script", '<script type="module">var a = 1;</script>'),
+    ("a srcset of several candidates", '<img srcset="#a 1x,https://evil.example/b 2x">'),
+    ("the document's end in script text", '<script>var s = "</html>";</script>'),
 ]
 
 
@@ -955,3 +968,23 @@ def test_check_browser_fails_a_page_whose_document_holds_two_results(fake, tmp_p
     assert run("check", built(tmp_path), "--browser") == 1
 
     assert "2 elements" in report(capsys)
+
+
+def test_a_title_and_a_brief_with_script_markup_build_and_pass_the_shell(tmp_path, capsys):
+    source = started(tmp_path)
+    text = source.read_text(encoding="utf-8")
+    header_end = text.index("</script>")
+    header = json.loads(text[text.index("{") : header_end])
+    header["title"] = "Which <script> tag?"
+    source.write_text(
+        text.replace(text[text.index("{") : header_end], json.dumps(header)), encoding="utf-8"
+    )
+    briefs = tmp_path / "briefs.json"
+    document = json.loads(briefs.read_text(encoding="utf-8"))
+    document["briefs"][0]["heading"] = "Keep the </script><script> tag?"
+    briefs.write_text(json.dumps(document), encoding="utf-8")
+
+    assert run("build", source) == 0
+    assert run("check", tmp_path / "page.html") == 0
+
+    assert "shell: PASS" in capsys.readouterr().out
