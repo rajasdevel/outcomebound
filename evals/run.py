@@ -170,6 +170,19 @@ def child_env() -> dict[str, str]:
     return {name: value for name, value in os.environ.items() if not _stripped(name)}
 
 
+def fixture_setup_env() -> dict[str, str]:
+    """Keep fixture Git isolated, but retain caller config for read-only source access."""
+
+    caller = child_env()
+    return {
+        **caller,
+        **HERMETIC_GIT,
+        "OUTCOMEBOUND_SOURCE_GIT_CONFIG": json.dumps(
+            {key: caller.get(key) for key in HERMETIC_GIT}
+        ),
+    }
+
+
 def stripped_from_environment() -> list[str]:
     """The names this run actually removed: the policy acted, beside the policy declared."""
 
@@ -495,17 +508,28 @@ def stop_descendants(pid: int) -> None:
 
     if os.name == "nt":
         return
-    try:
-        listed = subprocess.run(
-            ["ps", "-e", "-o", "pid=", "-o", "ppid="], capture_output=True, text=True, timeout=1
-        )
-        parents = {
-            int(row.split()[0]): int(row.split()[1])
-            for row in listed.stdout.splitlines()
-            if len(row.split()) == 2
-        }
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return
+    parents: dict[int, int] = {}
+    if Path("/proc/self/stat").is_file():
+        # Linux slim images need no external ps package for their process table.
+        for entry in Path("/proc").iterdir():
+            if entry.name.isdigit():
+                try:
+                    fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+                    parents[int(entry.name)] = int(fields[1])
+                except (OSError, ValueError, IndexError):
+                    continue  # A process can exit while the table is read.
+    else:
+        try:
+            listed = subprocess.run(
+                ["ps", "-e", "-o", "pid=", "-o", "ppid="], capture_output=True, text=True, timeout=1
+            )
+            parents = {
+                int(row.split()[0]): int(row.split()[1])
+                for row in listed.stdout.splitlines()
+                if len(row.split()) == 2
+            }
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return
     owned = {pid}
     for _ in range(len(parents)):
         found = {child for child, parent in parents.items() if parent in owned}
@@ -743,7 +767,7 @@ def run_fixture(
     try:
         built = bounded_command(
             ["bash", str(fixture / "setup.sh"), str(workdir)],
-            env={**child_env(), **HERMETIC_GIT, "OB_EVAL_ARM": arm.name},
+            env={**fixture_setup_env(), "OB_EVAL_ARM": arm.name},
             timeout=SETUP_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError) as problem:

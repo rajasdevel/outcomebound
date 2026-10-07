@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The release canary: this checkout's engine beside the installed release, read-only, on the
+"""The release canary: this checkout's engine beside the installed release, on the
 projects of a local list.
 
 The list is the file that `OB_CANARY_LIST` names: one project path a line, `#` for a comment, a
@@ -13,7 +13,8 @@ and the candidate (this checkout) each run `adopt <p> --dry-run`, `adopt <p> --c
 
 - `floor check <p> --base HEAD` where `.outcomebound/floor.json` exists. HEAD as the base makes
   the change range empty, so every claim runs over the tree, the secrets claim scans no commit,
-  and nothing needs the network or the adoption commit. A floor run has no time limit; its
+  and no adoption commit is needed. Floor commands may use the network or write.
+  A floor run has no time limit; its
   seconds are reported.
 - `tickets check <p> --json --draft <files>` for each draft set the project names: each
   `tickets check --draft` command of the claims plan that `.outcomebound/tickets.json` names,
@@ -26,10 +27,15 @@ and the candidate (this checkout) each run `adopt <p> --dry-run`, `adopt <p> --c
 Each command that does not run gets a line that says why. The candidate runs under each
 `--python`; by default the oldest supported Python (3.10, from `uv python find 3.10` or
 `python3.10` on PATH) and the Python the installed release runs under, since a Python version
-can change what the standard library raises. Nothing is written into a project: every run gets
+can change what the standard library raises. Every run gets
 `RUFF_CACHE_DIR` and `MYPY_CACHE_DIR` in a temporary folder, and `git status --porcelain
 --untracked-files=all` and the ignored entries (a folder Git ignores named once) are read
-before the runs and after each engine's run.
+before the runs and after each engine's run. These checks detect reported changes after execution;
+they compare status and entry names, not file contents. They do not prevent writes or prove
+unchanged contents, including files that are already dirty, untracked or ignored. Inspect custom
+floor commands first. Where they may write, use an owned isolated checkout with the required
+inputs and retain its identity; distinguish its results from original-checkout observations.
+Cache redirection is not a sandbox for arbitrary commands. No gate is skipped.
 
 The report names, per project and per run, a crash (a traceback, a signal, or an exit that is
 not the command's documented verdict), an exception adopt reports (`adopt: [Errno N] ...`), a
@@ -41,8 +47,9 @@ verdict; a floor claim by its name (a name the engine's recipes do not give show
 and its result; a ticket message by its level and its code. The verdict is the last line. A
 crash, an exception or a refusal of the candidate, a command of the candidate that printed no
 valid report (`--json` with no JSON, a required field missing or of the wrong type, a result
-that disagrees with its exit, or a floor exit that its claim lines do not explain), a project
-tree that changed, or a project that is not a Git work tree is FAIL; a valid report whose
+that disagrees with its exit, or a floor exit that its claim lines do not explain), a difference
+in the before/after Git status or ignored-entry list, or a project that is not a Git work tree
+is FAIL; a valid report whose
 result is UNVERIFIED is a verdict, compared as any other; anything else is PASS, and the kinds
 added and removed are printed for a person to judge. Where the installed release failed and the
 candidate did not, the line says `no baseline: installed engine failed`, and nothing of that
@@ -766,9 +773,10 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run this checkout's engine beside the installed release, read-only, on each "
+        description="Run this checkout's engine beside the installed release on each "
         f"project of the local list that {LIST_ENV} names, and record the verdict for HEAD's "
-        "tree. Exit 0: PASS; 1: FAIL; 2: UNVERIFIED (no list, no installed release or no "
+        "tree. Inspect custom floor commands; use owned isolated checkouts where they may write. "
+        "Exit 0: PASS; 1: FAIL; 2: UNVERIFIED (no list, no installed release or no "
         "interpreter)."
     )
     parser.add_argument(

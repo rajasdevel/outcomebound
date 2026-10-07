@@ -33,8 +33,22 @@ ENV = {
 
 
 def git(target: Path, *args: str) -> bytes:
+    env = dict(ENV)
+    if target == REPO:
+        # Setup retains the caller values before applying fixture isolation.
+        # Direct calls already have the caller environment. No trust is added.
+        env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
+        saved = os.environ.get("OUTCOMEBOUND_SOURCE_GIT_CONFIG")
+        if saved is not None:
+            for key, value in json.loads(saved).items():
+                if key not in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM"):
+                    raise ValueError("unexpected source Git configuration key")
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
     return subprocess.run(
-        ["git", "-C", str(target), *args], check=True, capture_output=True, env=ENV, timeout=60
+        ["git", "-C", str(target), *args], check=True, capture_output=True, env=env, timeout=60
     ).stdout
 
 

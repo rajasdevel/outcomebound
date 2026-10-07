@@ -4,7 +4,13 @@
 # ones into `checks/`, installs the core skill (none in the kernel-off arm), and makes the seed
 # commit and its tag.
 mkdir -p checks
-cp "$here"/checks/* checks/
+for check in "$here"/checks/*; do
+    # Importing a grader can leave a bytecode directory; it is not a fixture input.
+    if [ "${check##*/}" = __pycache__ ]; then
+        continue
+    fi
+    cp "$check" checks/
+done
 cp "$repo/evals/graders/scope_walk.py" "$repo/evals/graders/transcript_commands.py" \
   "$repo/evals/graders/allowed_paths.sh" checks/
 chmod +x checks/*

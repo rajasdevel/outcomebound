@@ -45,7 +45,8 @@ check: gate
 scrub:
 	$(PYTHON) scripts/check-public-text.py --private --base $(OB_BASE)
 
-# The release canary: this checkout's engine beside the installed release, read-only, on each
+# Inspect custom commands as CONTRIBUTING.md requires before running the canary.
+# The release canary: this checkout's engine beside the installed release on each
 # project of the local list that OB_CANARY_LIST names, under Python 3.10 and the installed
 # release's Python. The list stays outside this repository, and the report names each project
 # by its number. The verdict is recorded in the Git common directory for HEAD's tree; without

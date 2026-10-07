@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
 import zipfile
 from pathlib import Path
+
+import pytest
 
 from tests.portable import needs_posix_bash
 from tests.test_eval_scenarios import (
@@ -19,6 +22,7 @@ from tests.test_eval_scenarios import (
 from tests.test_eval_scenarios import (
     _grade as grade_scenario,
 )
+from tests.test_evals_runner import RUN
 
 pytestmark = needs_posix_bash
 
@@ -28,7 +32,7 @@ def build(name: str, target: Path) -> Path:
         ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
         check=True,
         capture_output=True,
-        env={**os.environ, **HERMETIC_GIT},
+        env=RUN.fixture_setup_env(),
     )
     return target
 
@@ -267,3 +271,75 @@ def test_adoption_requires_committed_owned_bytes_and_preserves_staged_work(tmp_p
         env={**os.environ, **HERMETIC_GIT},
     )
     assert _grade(target, "adopt-upgrade", said, "done")["target-state-and-persistence"] == "FAIL"
+
+
+def test_shared_fixture_close_does_not_copy_grader_bytecode(tmp_path):
+    here = tmp_path / "definition"
+    checks = here / "checks"
+    (checks / "__pycache__").mkdir(parents=True)
+    (checks / "__pycache__/probe.cpython.pyc").write_bytes(b"cached grader")
+    (checks / "probe.py").write_text("print('fixture probe')\n")
+    work = tmp_path / "workspace"
+    work.mkdir()
+    (work / "AGENTS.md").write_text("# Synthetic project\n")
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'here="$1"; repo="$2"; . "$3"',
+            "fixture-close",
+            str(here),
+            str(FIXTURES.parents[1]),
+            str(FIXTURES / "skills-close/close.sh"),
+        ],
+        cwd=work,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **HERMETIC_GIT},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (work / "checks/probe.py").read_bytes() == (checks / "probe.py").read_bytes()
+    assert not (work / "checks/__pycache__").exists()
+
+
+@pytest.mark.parametrize("caller_config", ["system", "no-system", "custom-global"])
+def test_adoption_source_preserves_caller_git_config(tmp_path, monkeypatch, caller_config):
+    system = tmp_path / "system-config"
+    global_config = tmp_path / "global-config"
+    system.write_text("[fixture-check]\n    marker = system-owned\n")
+    global_config.write_text("[fixture-check]\n    marker = global-owned\n")
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(system))
+    monkeypatch.setenv(
+        "GIT_CONFIG_GLOBAL", str(global_config) if caller_config == "custom-global" else os.devnull
+    )
+    monkeypatch.delenv("GIT_CONFIG_NOSYSTEM", raising=False)
+    if caller_config == "no-system":
+        monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    expected = subprocess.run(
+        ["git", "config", "--get", "fixture-check.marker"], capture_output=True
+    )
+    # Exercise the runner's actual setup boundary, then the case's source reader.
+    setup_env = RUN.fixture_setup_env()
+    for key in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_NOSYSTEM", "OUTCOMEBOUND_SOURCE_GIT_CONFIG"):
+        monkeypatch.setenv(key, setup_env[key])
+    path = FIXTURES / "adoption/case.py"
+    spec = importlib.util.spec_from_file_location("adoption_trust_case", path)
+    assert spec and spec.loader
+    case = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(case)
+    source = tmp_path / "source"
+    fixture = tmp_path / "fixture"
+    source.mkdir()
+    fixture.mkdir()
+    case.init(source)
+    case.init(fixture)
+    monkeypatch.setattr(case, "REPO", source)
+    if expected.returncode:
+        with pytest.raises(subprocess.CalledProcessError):
+            case.git(source, "config", "--get", "fixture-check.marker")
+    else:
+        assert case.git(source, "config", "--get", "fixture-check.marker") == expected.stdout
+    with pytest.raises(subprocess.CalledProcessError):
+        case.git(fixture, "config", "--get", "fixture-check.marker")
+    assert system.read_text() == "[fixture-check]\n    marker = system-owned\n"
+    assert global_config.read_text() == "[fixture-check]\n    marker = global-owned\n"

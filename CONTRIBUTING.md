@@ -259,8 +259,8 @@ of a pull request. CI applies the list only when the repository has the secret `
 a fork does not get the secret, so for that pull request CI reads `UNVERIFIED` for the list and
 does not fail.
 
-`make canary` runs the engine of your checkout beside the installed release, and changes
-nothing. It runs on each project of a local list, under Python 3.10 and under the Python of the
+`make canary` runs the engine of your checkout beside the installed release. It runs on each
+project of a local list, under Python 3.10 and under the Python of the
 installed release. The environment variable `OB_CANARY_LIST` names the list: one project path on
 each line, and `#` for a comment. The list stays outside this repository, and the report names
 each project by its number only. On each project, both engines run `adopt --dry-run`,
@@ -270,9 +270,15 @@ the claims plan of the project's ticket declaration has a `tickets check --draft
 run `tickets check --draft` on those draft files. Where `issues.json` is in the project root,
 they run `tickets check` on that export. If a command does not run, the report gives the
 reason; with no export, the report says `UNVERIFIED`, because the canary calls no tracker. The
-caches of the floor's tools go to a temporary folder. A crash, an exception, a refusal, a
-command that prints no valid report, or a change to a project's tree (ignored entries included)
-is FAIL. If the installed release fails and the candidate does not, the report says
+caches of the floor's tools go to a temporary folder. This does not make arbitrary custom floor
+commands read-only: they can write to a mounted checkout or use the network. Inspect those
+commands before a run. Where they can write, use an owned isolated checkout with the required
+project inputs; retain its identity and distinguish its results from the original checkout.
+Do not skip a gate. The before/after Git-state checks detect reported changes after execution;
+they compare status and entry names, not file contents. They do not prevent writes or prove
+unchanged contents, including files that are already dirty, untracked or ignored. A crash,
+an exception, a refusal, a command that prints no valid report, or a difference in the
+before/after Git status or ignored-entry list is FAIL. If the installed release fails and the candidate does not, the report says
 `no baseline: installed engine failed`, and it does not compare that command. The report also gives the warning and finding kinds that the candidate adds or
 removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIED`. Run
 `make canary` before a pull request that changes `adopt`, `tickets`, `floor`, `instructions` or

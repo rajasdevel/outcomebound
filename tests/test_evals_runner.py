@@ -763,9 +763,13 @@ def test_missing_observed_model_does_not_count_as_requested_model():
 
 
 @pytest.mark.parametrize("new_session", [False, True])
-def test_bounded_command_keeps_partial_output_and_stops_descendant(tmp_path, new_session):
+def test_bounded_command_keeps_partial_output_and_stops_descendant(
+    tmp_path, new_session, monkeypatch
+):
     from tests.processes import running
 
+    if Path("/proc/self/stat").is_file():
+        monkeypatch.setenv("PATH", str(tmp_path / "no-external-tools"))
     child_pid = tmp_path / "child.pid"
     code = (
         "import subprocess, sys, time; "
