@@ -64,6 +64,25 @@
               "type": "string"
             }
           },
+          "executes_tests": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Optional contract that the command executes at least one test, declared by the project: no_tests_exit, the command's own exit code for \"no tests collected\" (pytest's is 5), or ran_output, a regular expression the output holds where a test ran; exactly one. A run that executed none reads when_none (UNVERIFIED by default, or FAIL), with the command's own result kept in the detail. Without it, only the exit status counts.",
+            "properties": {
+              "no_tests_exit": {
+                "type": "integer"
+              },
+              "ran_output": {
+                "type": "string"
+              },
+              "when_none": {
+                "enum": [
+                  "UNVERIFIED",
+                  "FAIL"
+                ]
+              }
+            }
+          },
           "timeout_seconds": {
             "type": "number",
             "description": "Seconds after which this claim's command, with everything it started, is stopped and reads UNVERIFIED; it takes the place of the plan's timeout_seconds. Optional: with neither set there is no timeout."

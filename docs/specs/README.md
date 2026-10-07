@@ -19,7 +19,8 @@ the same change.
   `outcomebound instructions`.
 - [finish-check](finish-check/design.md): at the stop hook of `claude-code` and `codex`, the
   recorded Done commands run, and a failure goes back to the agent. The verb is
-  `outcomebound finish-check`.
+  `outcomebound finish-check`. It also holds the result contract of `outcomebound validation`
+  (`outcomebound_tools/validation.py`, plan schema `schemas/validation-plan.schema.json`).
 - [sources](sources/design.md): requirement sources, `outcomebound sources`. Import a markdown or
   text source into items, and check the ledger that disposes of each item.
 - [research](research/design.md): the research repository. How the engine finds, prints and
