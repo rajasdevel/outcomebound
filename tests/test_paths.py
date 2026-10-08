@@ -133,8 +133,8 @@ def test_bounded_relative_gives_the_grammar_verdict_on_every_corpus_value():
 
     # Non-strings are refused rather than coerced: a reader that accepted a
     # Path here would admit `PurePosixPath("..")` by its repr.
-    for value in (None, 1, b"a", Path("a")):
-        assert paths.admits(value) is False
+    for non_path in (None, 1, b"a", Path("a")):
+        assert paths.admits(non_path) is False
 
 
 @needs_symlinks

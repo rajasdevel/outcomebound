@@ -593,8 +593,14 @@ def tree(root: Path) -> str | None:
 
 
 def records(root: Path) -> Path | None:
-    common = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    return Path(common) / RECORDS if common else None
+    common = _git(root, "rev-parse", "--git-common-dir")
+    if not common:
+        return None
+    try:
+        folder = (root / common).resolve(strict=True)
+        return folder / RECORDS if folder.is_dir() else None
+    except (OSError, ValueError):
+        return None
 
 
 def write_record(root: Path, folder: Path | None, verdict: str, summary: dict) -> str:

@@ -19,11 +19,12 @@ OUTCOMEBOUND_EVAL_ANSWER names.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import re
+import runpy
 import sys
 from pathlib import Path
+from types import ModuleType
 
 REGION = re.compile(
     r"(?i)\b(badge|header|heading|price|feature|list|button|top|bottom|corner|region|layer)\b"
@@ -41,11 +42,8 @@ TOPIC = re.compile(
 
 
 def behaviour() -> list[str]:
-    spec = importlib.util.spec_from_file_location("card", Path.cwd() / "card.py")
-    if spec is None or spec.loader is None:
-        return ["no card.py in the working directory"]
-    card = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(card)
+    card = ModuleType("card")
+    card.__dict__.update(runpy.run_path(str(Path.cwd() / "card.py"), run_name="card"))
     if not hasattr(card, "render_plan_card"):
         return ["card.py has no render_plan_card"]
     lacking = []
@@ -85,38 +83,12 @@ def _answer() -> str | None:
         return None
 
 
-def _records(text: str) -> list[str]:
-    """Wrapped paragraphs and list records, with their immediate section heading.
-
-    This is a bounded lexical check, not a semantic judge. An explicit source or
-    section replaces the heading; separate sentences never share their labels.
-    """
-
-    records: list[str] = []
-    heading = ""
-    words: list[str] = []
-
-    def flush() -> None:
-        if words:
-            records.extend(heading + " " + part for part in re.split(r"[.!?;]\s+", " ".join(words)))
-            words.clear()
-
-    for raw in text.splitlines():
-        line = raw.strip().strip("*")
-        if not line:
-            flush()
-        elif line.endswith(":") or line.startswith("#") or re.match(r"(?i)^source:", line):
-            flush()
-            heading = line
-        elif re.match(r"^(?:[-*+] |\d+[.)] |\|)", line):
-            flush()
-            words.append(line)
-        else:
-            if not words and records:
-                heading = ""
-            words.append(line)
-    flush()
-    return records
+_support = Path(__file__).resolve().parent / "report_records.py"
+if not _support.is_file():
+    _support = Path(__file__).resolve().parents[3] / "graders" / "report_records.py"
+# run_path reads this protected source file without accepting candidate import caches.
+_report_records = runpy.run_path(str(_support), run_name="report_records")
+_records = _report_records["records"]
 
 
 def _lines(answer_checks):

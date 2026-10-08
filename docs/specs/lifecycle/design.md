@@ -121,8 +121,9 @@ adds stable confirmed failures to the same regression suite.
 [E21](../../evaluations.md#e21-direct-skill-and-lifecycle-qualification) records the scoped
 diagnostics and matched clause comparisons, with raw and semantic verdicts separate.
 The separate native CLI hook observations are recorded there with their source and limits.
-Native skill discovery and browser interactions remain `UNVERIFIED`. These results do not establish
-parity with inspirations or general reliability.
+Native skill discovery remains `UNVERIFIED`. The later browser observations in E21 qualify the
+named interactions on the saved artifacts; they do not establish human learning, parity with
+inspirations or general reliability.
 
 ## Research basis
 

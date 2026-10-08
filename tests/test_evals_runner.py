@@ -13,30 +13,16 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
+from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
 from tests.portable import needs_posix_bash
 
-ROOT = Path(__file__).resolve().parent.parent
-
-# Maintainer tooling: each fixture is built by `bash setup.sh`. Skipped with the reason, shown by
-# -rs, where there is no bash (Alpine) or the fixtures cannot run (Windows).
+# The fixture runner uses bash; this marker reports unavailable platforms explicitly.
 pytestmark = needs_posix_bash
-HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
-
-
-def _load() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("eval_run", ROOT / "evals" / "run.py")
-    assert spec is not None and spec.loader is not None, "evals/run.py"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-RUN = _load()
 
 METERED = (
     "OPENAI_API_KEY",
@@ -61,8 +47,8 @@ METERED = (
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
-  --version) echo "codex-cli 0.0.0-fake"; exit 0 ;;
-  login) echo "${OB_FAKE_LOGIN:-Logged in using ChatGPT}"; exit 0 ;;
+  --version) echo "${OB_FAKE_VERSION:-codex-cli 0.0.0-fake}"; exit 0 ;;
+  login) echo "${OB_FAKE_LOGIN:-Logged in using ChatGPT}"; exit "${OB_FAKE_LOGIN_EXIT:-0}" ;;
 esac
 printf '%s\n' "$@" > "$OB_FAKE_ARGV"
 out=""; model=""; prev=""
@@ -82,7 +68,16 @@ sh "$OB_FAKE_ACTION" >/dev/null 2>&1 || exit 9
 OB_TEST_MODEL="${OB_FAKE_MODEL:-$model}" python3 - <<'EVENTS'
 import json,os
 from pathlib import Path
-print(json.dumps({"type":"thread.started","thread_id":"test-session","model":os.environ["OB_TEST_MODEL"]}))
+key="11111111-1111-4111-8111-111111111111"
+started={"type":"thread.started","thread_id":key}
+if not os.environ.get("OB_FAKE_UNOBSERVED_MODEL"):
+    started["model"]=os.environ["OB_TEST_MODEL"]
+print(json.dumps(started))
+if os.environ.get("OB_FAKE_NATIVE_SESSIONS"):
+    folder=Path(os.environ["OB_FAKE_NATIVE_SESSIONS"])
+    folder.mkdir(parents=True,exist_ok=True)
+    record={"type":"session_meta","payload":{"id":key}}
+    (folder/f"rollout-test-{key}.jsonl").write_text(json.dumps(record)+"\n")
 for number,command in enumerate(Path(os.environ["OB_FAKE_COMMANDS"]).read_text().splitlines()):
     item={"id":str(number),"type":"command_execution","command":command,"cwd":os.getcwd()}
     print(json.dumps({"type":"item.started","item":item}))
@@ -115,6 +110,7 @@ def _invoke(
     arguments: tuple[str, ...] = SMALL_FIX,
     action: str = FIX_THE_DATE,
     env: dict[str, str] | None = None,
+    output_dir: Path | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
     """`evals/run.py` with the fake codex first on PATH and every metered key planted."""
 
@@ -126,7 +122,7 @@ def _invoke(
     (tmp_path / "commands.txt").write_text("\n".join(CHECKED) + "\n", encoding="utf-8")
     (tmp_path / "answer.md").write_text(REPORTED, encoding="utf-8")
     (tmp_path / "fixtures").mkdir(exist_ok=True)
-    out = tmp_path / "out"
+    out = output_dir or tmp_path / "out"
     environment = {
         **os.environ,
         **{name: f"should-not-survive-{name.lower()}" for name in METERED},
@@ -893,3 +889,208 @@ def test_command_event_boundaries_fail_closed(boundary):
     result = reader.execution_records(RUN.command_transcript(stdout, ""))
     expected = {"failed": "exited 1", "unknown-cwd": "succeeded"}.get(boundary)
     assert result == (("echo check", expected, ""),) if expected else result is None
+
+
+def test_known_unsupported_json_transport_spends_no_model_call(tmp_path):
+    done, out = _invoke(tmp_path, env={"OB_FAKE_VERSION": "codex-cli 0.160.1"})
+    assert done.returncode == RUN.PREFLIGHT_EXIT
+    assert "No model call started" in done.stderr
+    assert "--retain-native" in done.stderr
+    assert (tmp_path / "calls.txt").read_text().splitlines() == ["--version"]
+    assert json.loads((out / "STATUS.json").read_text())["status"] == "UNVERIFIED"
+    assert not (out / "small-fix.meta.json").exists()
+
+
+def test_batch_stops_after_first_unobserved_model(tmp_path):
+    done, out = _invoke(
+        tmp_path,
+        ("--arm", "current", "--model", "gpt-6-sol", "--fixtures", "small-fix,ladder-2-last-units"),
+        env={"OB_FAKE_UNOBSERVED_MODEL": "1"},
+    )
+    assert done.returncode == 1
+    calls = (tmp_path / "calls.txt").read_text().splitlines()
+    assert sum(line.startswith("exec ") for line in calls) == 1
+    assert not (out / "ladder-2-last-units.meta.json").exists()
+    state = json.loads((out / "STATUS.json").read_text())
+    assert state["completed_fixtures"] == ["small-fix"]
+    assert _meta(out)["error"] == "codex did not report the model it ran"
+
+
+def test_retained_single_case_keeps_native_bytes_and_automatic_failure(tmp_path, capsys):
+    # Receipt files must be outside both the fixture and the sandbox's implicit temp grants.
+    trusted = ROOT / ".agents" / "work" / "eval-native-tests"
+    trusted.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="receipt-", dir=trusted) as folder:
+        saved = Path(folder)
+        sessions = saved / "sessions"
+        sessions.mkdir()
+        done, out = _invoke(
+            tmp_path,
+            (*SMALL_FIX, "--retain-native", str(sessions)),
+            env={
+                "OB_FAKE_VERSION": "codex-cli 0.160.1",
+                "OB_FAKE_UNOBSERVED_MODEL": "1",
+                "OB_FAKE_NATIVE_SESSIONS": str(sessions),
+            },
+            output_dir=saved / "out",
+        )
+        assert done.returncode == 1
+        assert _meta(out)["error"] == "codex did not report the model it ran"
+        copied = out / "small-fix.native.jsonl"
+        assert copied.read_bytes() == next(sessions.glob("*.jsonl")).read_bytes()
+        receipt = json.loads((out / "small-fix.native.receipt.json").read_text())
+        assert receipt["exact_session_copy"] == "PASS"
+        assert receipt["sha256"] == hashlib.sha256(copied.read_bytes()).hexdigest()
+        assert receipt["identity_qualification"] == "UNVERIFIED"
+        assert receipt["behavioral_verdict"] == "UNVERIFIED"
+        argv = (tmp_path / "argv.txt").read_text().splitlines()
+        assert "--ephemeral" not in argv
+        assert "--ignore-user-config" in argv and "--ignore-rules" in argv
+        assert RUN.summarize([out]) == 0
+        summary = capsys.readouterr().out
+        assert "small-fix" in summary and "PASS 0/0" in summary
+
+
+def test_native_retention_requires_one_named_case_before_any_call(tmp_path):
+    done, out = _invoke(
+        tmp_path, (*SMALL_FIX[:-1], "small-fix,decision", "--retain-native", str(tmp_path))
+    )
+    assert done.returncode == 2
+    assert "exactly one named fixture" in done.stderr
+    assert not out.exists()
+    assert not (tmp_path / "calls.txt").exists()
+
+
+def test_native_receipt_never_becomes_model_writable(tmp_path):
+    from evals.native_receipts import NativeCapture
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    capture = NativeCapture(tmp_path / "sessions", workspace / "evidence.jsonl")
+    with pytest.raises(ValueError, match="model writable root"):
+        RUN.call_codex("Task", "named", "high", workspace, "", RUN.CallOptions((), capture))
+    assert not capture.destination.exists()
+
+
+@pytest.mark.parametrize("problem", ["missing", "duplicate", "wrong-id", "symlink", "forged"])
+def test_native_receipt_rejects_ambiguous_or_unmatched_session(tmp_path, problem):
+    from evals.native_receipts import NativeCapture, retain
+
+    key = "11111111-1111-4111-8111-111111111111"
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    source = sessions / f"rollout-test-{key}.jsonl"
+    original = json.dumps({"type": "session_meta", "payload": {"id": key}}) + "\n"
+    if problem != "missing":
+        source.write_text(original)
+    if problem == "duplicate":
+        (sessions / f"another-{key}.jsonl").write_text(original)
+    elif problem == "wrong-id":
+        source.write_text(original.replace(key, "22222222-2222-4222-8222-222222222222"))
+    elif problem == "symlink":
+        external = tmp_path / "external.jsonl"
+        external.write_text(original)
+        source.unlink()
+        source.symlink_to(external)
+    stdout = json.dumps({"type": "thread.started", "thread_id": key}) + "\n"
+    if problem == "forged":
+        stdout = json.dumps({"type": "item.completed", "item": {"aggregated_output": stdout}})
+    destination = tmp_path / "retained.jsonl"
+    transcript = RUN.command_transcript(stdout, "")
+    receipt = retain(transcript, NativeCapture(sessions, destination))
+    assert receipt["exact_session_copy"] == "UNVERIFIED"
+    assert receipt["error"]
+    assert not destination.exists()
+
+
+def test_failed_login_output_does_not_authorize_a_model_call(tmp_path):
+    done, out = _invoke(tmp_path, env={"OB_FAKE_LOGIN_EXIT": "1"})
+    assert done.returncode == RUN.PREFLIGHT_EXIT
+    assert not (out / "small-fix.meta.json").exists()
+    assert not any(
+        line.startswith("exec ") for line in (tmp_path / "calls.txt").read_text().splitlines()
+    )
+
+
+def test_native_receipt_source_cannot_overlap_model_writable_roots(tmp_path):
+    from evals.native_receipts import NativeCapture
+
+    workspace = tmp_path / "workspace"
+    capture = NativeCapture(workspace / "sessions", tmp_path / "copy.jsonl")
+    with pytest.raises(ValueError, match="sessions directory overlaps"):
+        capture.check_roots((workspace,))
+
+
+@pytest.mark.parametrize("kind", ["mcp_tool_call", "custom_tool_call", "future_tool", None])
+def test_unknown_cli_tool_items_do_not_prove_no_commands(kind):
+    events = [
+        {"type": "thread.started", "thread_id": "synthetic", "model": "named"},
+        {"type": "item.completed", "item": {"type": kind}},
+        {"type": "turn.completed"},
+    ]
+    transcript = RUN.command_transcript("\n".join(map(json.dumps, events)), "")
+    assert json.loads(transcript)["commands"] is None
+    assert RUN.observed_model(transcript) is None
+
+
+def test_conflicting_actual_model_events_do_not_qualify_identity():
+    events = [
+        {"type": "thread.started", "thread_id": "synthetic", "model": "first"},
+        {"type": "turn.started", "model": "different"},
+        {"type": "turn.completed"},
+    ]
+    transcript = RUN.command_transcript("\n".join(map(json.dumps, events)), "")
+    assert RUN.observed_model(transcript) is None
+
+
+@pytest.mark.parametrize("path_kind", ["source", "destination"])
+def test_implicit_temporary_write_grants_refuse_retained_evidence(tmp_path, path_kind):
+    from evals.native_receipts import NativeCapture, temporary_write_roots
+
+    trusted = ROOT / ".agents" / "work"
+    for temporary in temporary_write_roots():
+        source = temporary / "sessions" if path_kind == "source" else trusted / "sessions"
+        destination = (
+            temporary / "receipt.jsonl" if path_kind == "destination" else trusted / "copy"
+        )
+        capture = NativeCapture(source, destination)
+        with pytest.raises(ValueError, match="model writable root"):
+            RUN.call_codex(
+                "Task", "named", "high", trusted / "fixture", "", RUN.CallOptions((), capture)
+            )
+
+
+def test_unknown_top_level_execution_form_is_not_an_empty_command_record():
+    events = [
+        {"type": "thread.started", "thread_id": "synthetic", "model": "named"},
+        {"type": "custom_tool_call", "name": "exec", "input": "uninterpreted code"},
+        {"type": "turn.completed"},
+    ]
+    transcript = RUN.command_transcript("\n".join(map(json.dumps, events)), "")
+    assert json.loads(transcript)["commands"] is None
+    assert RUN.call_error(0, "done", {"model_observed": RUN.observed_model(transcript)}, "named")
+
+
+def test_cli_refuses_implicit_temp_receipts_before_model_spawn(tmp_path):
+    sessions = tmp_path / "sessions"
+    sessions.mkdir()
+    done, out = _invoke(
+        tmp_path,
+        (*SMALL_FIX, "--retain-native", str(sessions)),
+        env={"OB_FAKE_VERSION": "codex-cli 0.160.1"},
+    )
+    assert done.returncode == 1
+    assert "model writable root" in _meta(out)["error"]
+    assert not any(
+        line.startswith("exec ") for line in (tmp_path / "calls.txt").read_text().splitlines()
+    )
+
+
+def test_native_retention_refuses_relative_temporary_root_before_spawn(monkeypatch):
+    from evals.native_receipts import NativeCapture
+
+    name = "TEMP" if os.name == "nt" else "TMPDIR"
+    monkeypatch.setenv(name, "relative-temp")
+    capture = NativeCapture(ROOT / ".agents" / "sessions", ROOT / ".agents" / "receipt.jsonl")
+    with pytest.raises(ValueError, match=r"temporary write root.*relative"):
+        RUN.call_codex("Task", "named", "high", ROOT / "fixture", "", RUN.CallOptions((), capture))

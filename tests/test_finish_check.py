@@ -2290,3 +2290,27 @@ def test_exit_code_without_environment_evidence_is_a_failure(tmp_path: Path, cod
     verdict = hook("codex", digest, root)[1]
     assert verdict["decision"] == "block"
     assert f"exit {code}" in verdict["reason"]
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_known_records_resolve_git_common_dir_without_path_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool
+) -> None:
+    root, digest = target(tmp_path / "project with spaces", ["exit 1"])
+    where = root / "component" if nested else root
+    where.mkdir(exist_ok=True)
+    original_git = finish_check._git
+
+    def older_git(target_path, *arguments, **options):
+        if any(arg.startswith("--path-format") for arg in arguments):
+            return None
+        return original_git(target_path, *arguments, **options)
+
+    monkeypatch.setattr(finish_check, "_git", older_git)
+    record = finish_check.Known(
+        digest, "component/" if nested else "", "", "2026-10-08T00:00:00+00:00", 0.0, {}
+    )
+    assert finish_check.keep_known(where, record)
+    saved = root / ".git" / finish_check.KNOWN
+    assert saved.is_file()
+    assert finish_check.parse_known(saved.read_text(encoding="utf-8")) == [record]

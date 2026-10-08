@@ -212,12 +212,69 @@ def _allowed(path: bytes, patterns) -> bool:
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
 
 
+def _workspace_changes(recorded, digest_of, prune: set, skip: set) -> tuple:
+    """Content changes, uncomparable entries, and present paths outside Git's own state."""
+
+    changed = set()
+    # An allowed path may change content, but must stay a readable regular file.
+    uncomparable = set()
+    present = set()
+    for relative, kind in entries(b".", prune, {b".git"}):
+        if relative.startswith(b"./"):
+            relative = relative[2:]
+        if relative in skip:
+            continue
+        present.add(relative)
+        if kind != "file":
+            # Check the kind BEFORE the bytecode skip: a symlink, socket, device
+            # or unreadable entry wearing a .pyc name is still a change.
+            changed.add(relative)
+            uncomparable.add(relative)
+            continue
+        if _bytecode(relative):
+            # Only regular .pyc/.pyo files under __pycache__ are expected churn.
+            continue
+        digest = digest_of(relative)
+        if digest is None:
+            changed.add(relative)
+            uncomparable.add(relative)
+        elif recorded.get(relative) != digest:
+            changed.add(relative)
+    return changed, uncomparable, present
+
+
+def _git_changes(prune: set, skip: set) -> set:
+    """Entries inside the two Git directories included in the bounded scope model."""
+
+    changed = set()
+    for start in GIT_ENUMERATED:
+        if not os.path.isdir(start):
+            continue
+        for relative, _kind in entries(start, prune, set(), prefix=start):
+            if relative not in GIT_RECORDED and relative not in skip:
+                changed.add(relative)
+    return changed
+
+
+def _index_effects(suppressed: bool, status_baseline: str) -> set:
+    """Suppressed index paths and status changes, including changes to allowed paths."""
+
+    changed = set(suppressed_paths(b".")) if suppressed else set()
+    if status_baseline:
+        try:
+            with open(status_baseline, encoding="utf-8") as handle:
+                baseline = [line for line in handle.read().splitlines() if line]
+        except OSError as problem:
+            raise WalkError(f"cannot read the status baseline: {problem}") from problem
+        differing = set(status_paths(b".")).symmetric_difference(baseline)
+        changed.update(os.fsencode(_status_name(line)) for line in differing)
+    return changed
+
+
 def observe(arguments) -> tuple:
     root = os.fsencode(arguments.root)
     prune = {os.fsencode(name) for name in arguments.prune}
-    top_prune = {b".git"}
     skip = {os.fsencode(name) for name in arguments.skip}
-
     if arguments.seed:
         recorded = seed_blobs(root, arguments.seed)
         digest_of = blob_digest
@@ -225,70 +282,15 @@ def observe(arguments) -> tuple:
         recorded = baseline_hashes(arguments.baseline_hashes)
         digest_of = sha256_digest
 
-    changed = set()
-    # An entry whose content could not be compared at all -- a symlink, a socket,
-    # a device, a file whose bytes cannot be read. An allowed path may change its
-    # content; it may not stop being a readable regular file, so the allow list
-    # does not reach these either.
-    uncomparable = set()
-    present = set()
     cwd = os.getcwd()
     os.chdir(root)
     try:
-        for relative, kind in entries(b".", prune, top_prune):
-            if relative.startswith(b"./"):
-                relative = relative[2:]
-            if relative in skip:
-                continue
-            present.add(relative)
-            if kind != "file":
-                # A symlink, socket, device or unreadable entry has no content to
-                # compare, so it is a change by construction, and it is never
-                # followed. This is tested BEFORE the bytecode skip: the skip is
-                # a statement about the `.pyc` FILES a run writes, and a symlink
-                # named `__pycache__/x.pyc` is not one of them. Skipping on the
-                # name alone would let any uncomparable entry wearing that name
-                # out of the count entirely.
-                changed.add(relative)
-                uncomparable.add(relative)
-                continue
-            if _bytecode(relative):
-                # The one thing under `__pycache__` a run is expected to write.
-                # Anything else there is enumerated like any other path.
-                continue
-            digest = digest_of(relative)
-            if digest is None:
-                changed.add(relative)
-                uncomparable.add(relative)
-            elif recorded.get(relative) != digest:
-                changed.add(relative)
-        # `.git` is not walked, but two of its directories are: see the module
-        # docstring for the bounded model this makes explicit.
-        inside_git = set()
-        for start in GIT_ENUMERATED:
-            if not os.path.isdir(start):
-                continue
-            for relative, kind in entries(start, prune, set(), prefix=start):
-                if relative in GIT_RECORDED or relative in skip:
-                    continue
-                present.add(relative)
-                changed.add(relative)
-                inside_git.add(relative)
-        for relative in recorded:
-            if relative not in present:
-                changed.add(relative)
-        index_paths = set()
-        if arguments.suppressed:
-            index_paths |= {path for path in suppressed_paths(b".")}
-        if arguments.status_baseline:
-            try:
-                with open(arguments.status_baseline, encoding="utf-8") as handle:
-                    baseline = [line for line in handle.read().splitlines() if line]
-            except OSError as problem:
-                raise WalkError(f"cannot read the status baseline: {problem}") from problem
-            now = status_paths(b".")
-            differing = set(now).symmetric_difference(baseline)
-            index_paths |= {os.fsencode(_status_name(line)) for line in differing}
+        changed, uncomparable, present = _workspace_changes(recorded, digest_of, prune, skip)
+        inside_git = _git_changes(prune, skip)
+        present.update(inside_git)
+        changed.update(inside_git)
+        changed.update(relative for relative in recorded if relative not in present)
+        index_paths = _index_effects(arguments.suppressed, arguments.status_baseline)
     finally:
         os.chdir(cwd)
 

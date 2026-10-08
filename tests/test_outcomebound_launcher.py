@@ -24,18 +24,13 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import launcher
+from tests.launcher_helpers import engine
 
 ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = ROOT / "scripts" / "outcomebound"
 POSIX_ONLY = pytest.mark.skipif(
     os.name == "nt", reason="the checkout's launcher is a POSIX sh script"
 )
-# What the checkout's launcher runs after `python -I -X utf8 -c`: the checkout first on the path.
-CHECKOUT_ENGINE = """import runpy, sys
-sys.path.insert(0, sys.argv[1])
-sys.argv = ["outcomebound", *sys.argv[2:]]
-runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)
-"""
 VERBS = (
     "adopt",
     "tickets",
@@ -50,22 +45,6 @@ VERBS = (
     "review",
     "explorable",
 )
-
-
-def engine(
-    *arguments: str, cwd: Path, environment: dict[str, str] | None = None
-) -> subprocess.CompletedProcess[str]:
-    """This checkout's engine, run as `scripts/outcomebound` runs it, through the running Python."""
-
-    return subprocess.run(
-        [sys.executable, "-I", "-X", "utf8", "-c", CHECKOUT_ENGINE, str(ROOT), *arguments],
-        cwd=cwd,
-        env=environment,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
 
 
 def launch(

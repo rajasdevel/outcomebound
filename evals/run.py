@@ -40,9 +40,14 @@ import uuid
 from pathlib import Path
 from typing import Any, NamedTuple
 
+# Direct script execution also needs the repository package path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from evals.codex_events import command_transcript, observed_model, tokens_used
+from evals.native_receipts import NativeCapture, retain
+from evals.processes import bounded_command, partial_output
+
 REPO = Path(__file__).resolve().parent.parent
-if str(REPO) not in sys.path:  # the current arm is rendered by the engine's own adopt
-    sys.path.insert(0, str(REPO))
 FIXTURES = REPO / "evals" / "fixtures"
 # A fixture's own file naming the fragments its install selects, one id a line.
 FRAGMENTS_FILE = "fragments"
@@ -129,9 +134,6 @@ CODEX_ISOLATION = (
     "features.memories=false",
 )
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
-MODEL_LINE = re.compile(r"^model: (\S+)$", re.MULTILINE)
-# codex ends its output with this line and the call's token count on the line after it.
-TOKENS_LINE = re.compile(r"^tokens used\s*\n\s*([\d,]+)\s*$", re.MULTILINE)
 OBSERVED = "observed: "
 
 
@@ -425,14 +427,14 @@ def build_prompt(kernel_text: str, task: str) -> str:
 def preflight() -> dict[str, Any]:
     """Observe a ChatGPT login before any call; a login codex does not name is not observed."""
 
-    _status, out, error = _run(["codex", "login", "status"])
+    status, out, error = _run(["codex", "login", "status"])
     output = (out + error).strip()
     line = next(
         (row.strip() for row in output.splitlines() if "Logged in using ChatGPT" in row), ""
     )
     return {
-        "ok": bool(line),
-        "auth": "subscription" if line else "not-observed",
+        "ok": status == 0 and bool(line),
+        "auth": "subscription" if status == 0 and line else "not-observed",
         "auth_evidence": line,
         "preflight": output[:2000],
     }
@@ -460,6 +462,8 @@ def codex_command(
     cwd: Path,
     last_message: Path,
     writable_roots: tuple[Path, ...] = (),
+    *,
+    retain_native: bool = False,
 ) -> list[str]:
     """The `codex exec` argv for one call: the model named, the operator's setup left out.
 
@@ -475,7 +479,7 @@ def codex_command(
         "codex",
         "exec",
         "--json",
-        *CODEX_ISOLATION,
+        *(flag for flag in CODEX_ISOLATION if not (retain_native and flag == "--ephemeral")),
         "-s",
         "workspace-write",
         "-m",
@@ -496,195 +500,11 @@ def codex_command(
     return command
 
 
-def stop_descendants(pid: int) -> None:
-    """Stop the task's current POSIX descendants before their parent is reaped.
+class CallOptions(NamedTuple):
+    """The additional model write grants and optional operator-owned native receipt."""
 
-    A subprocess can start a separate session. The existing process-group stop
-    cannot reach it. Use the host process table only on timeout, with a bounded
-    read; Windows is already covered by the existing taskkill tree helper.
-    """
-
-    import contextlib
-    import signal
-
-    if os.name == "nt":
-        return
-    parents: dict[int, int] = {}
-    if Path("/proc/self/stat").is_file():
-        # Linux slim images need no external ps package for their process table.
-        for entry in Path("/proc").iterdir():
-            if entry.name.isdigit():
-                try:
-                    fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
-                    parents[int(entry.name)] = int(fields[1])
-                except (OSError, ValueError, IndexError):
-                    continue  # A process can exit while the table is read.
-    else:
-        try:
-            listed = subprocess.run(
-                ["ps", "-e", "-o", "pid=", "-o", "ppid="], capture_output=True, text=True, timeout=1
-            )
-            parents = {
-                int(row.split()[0]): int(row.split()[1])
-                for row in listed.stdout.splitlines()
-                if len(row.split()) == 2
-            }
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return
-    owned = {pid}
-    for _ in range(len(parents)):
-        found = {child for child, parent in parents.items() if parent in owned}
-        if found <= owned:
-            break
-        owned |= found
-    for child in owned - {pid}:
-        with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.kill(child, signal.SIGKILL)
-
-
-def bounded_command(
-    command: list[str], *, timeout: float, input: str | None = None, **kwargs: Any
-) -> subprocess.CompletedProcess[str]:
-    """Keep partial output on timeout and stop the command's process group."""
-
-    from outcomebound_tools.programs import new_group, stop_tree
-
-    process = subprocess.Popen(
-        command,
-        stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **new_group(),
-        **kwargs,
-    )
-    try:
-        out, error = process.communicate(input.encode() if input is not None else None, timeout)
-    except subprocess.TimeoutExpired as timed_out:
-        stop_descendants(process.pid)
-        stop_tree(process)
-        try:
-            out, error = process.communicate(timeout=1)
-        except subprocess.TimeoutExpired as remaining:
-            # A detached/reparented writer is outside the observed process tree.
-            # Preserve its partial output without waiting forever on its pipe.
-            out, error = remaining.output or timed_out.output or b"", remaining.stderr or b""
-            if process.stdout is not None:
-                process.stdout.close()
-            if process.stderr is not None:
-                process.stderr.close()
-
-        raise subprocess.TimeoutExpired(
-            command,
-            timeout,
-            output=out.decode("utf-8", "replace"),
-            stderr=error.decode("utf-8", "replace"),
-        ) from None
-    except BaseException:
-        stop_descendants(process.pid)
-        stop_tree(process)
-        process.wait(timeout=1)
-        raise
-    return subprocess.CompletedProcess(
-        command,
-        process.returncode,
-        out.decode("utf-8", "replace"),
-        error.decode("utf-8", "replace"),
-    )
-
-
-def partial_output(problem: BaseException) -> str:
-    """Readable partial process evidence, when an exception carries it."""
-
-    def text(value: str | bytes | None) -> str:
-        return value.decode("utf-8", "replace") if isinstance(value, bytes) else value or ""
-
-    return text(getattr(problem, "output", None)) + text(getattr(problem, "stderr", None))
-
-
-def _completed_command(item: dict, prior: list[str]) -> list[str] | None:
-    command, directory = item.get("command"), item.get("cwd", "")
-    if command != prior[0] or not isinstance(directory, str):
-        return None
-    if directory and not Path(directory).is_absolute():
-        directory = ""
-        prior = [prior[0], prior[1], ""]
-    if directory and prior[2] and directory != prior[2]:
-        return None
-    code, status = item.get("exit_code"), item.get("status")
-    outcome = "unverified"
-    if status == "completed" and type(code) is int:
-        outcome = "succeeded" if code == 0 else f"exited {code}"
-    elif status in ("failed", "declined"):
-        outcome = status
-    return [command, outcome, directory or prior[2]]
-
-
-def _command_records(events: list[dict]) -> list[list[str]] | None:
-    records: list[list[str]] = []
-    pending: dict[str, int] = {}
-    seen: set[str] = set()
-    overlapping: set[str] = set()
-    for event in events:
-        item = event.get("item")
-        if not isinstance(item, dict) or item.get("type") != "command_execution":
-            continue
-        key, command, directory = item.get("id"), item.get("command"), item.get("cwd", "")
-        if (
-            not isinstance(key, str)
-            or not isinstance(command, str)
-            or not isinstance(directory, str)
-        ):
-            return None
-        directory = directory if Path(directory).is_absolute() else ""
-        kind = event.get("type")
-        if kind == "item.started" and key not in seen:
-            if pending:
-                overlapping.update(pending)
-                overlapping.add(key)
-            pending[key] = len(records)
-            seen.add(key)
-            records.append([command, "unverified", directory])
-        elif kind == "item.completed" and key in pending:
-            index = pending.pop(key)
-            completed = _completed_command(item, records[index])
-            if completed is None:
-                return None
-            if key in overlapping and completed[1] == "succeeded":
-                completed[1] = "unverified"
-            records[index] = completed
-        else:
-            return None
-    return records if not pending else None
-
-
-def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
-    """Keep actual CLI events separate from output; incomplete/unknown evidence stays so."""
-
-    if isinstance(stdout, bytes):
-        stdout = stdout.decode("utf-8", "replace")
-    if isinstance(stderr, bytes):
-        stderr = stderr.decode("utf-8", "replace")
-    try:
-        events = [json.loads(line) for line in stdout.split("\n") if line.strip()]
-    except ValueError:
-        events = []
-    valid = (
-        bool(events)
-        and all(isinstance(event, dict) for event in events)
-        and events[0].get("type") == "thread.started"
-        and sum(event.get("type") == "thread.started" for event in events) == 1
-        and events[-1].get("type") == "turn.completed"
-        and sum(event.get("type") == "turn.completed" for event in events) == 1
-    )
-    return json.dumps(
-        {
-            "format": "outcomebound-command-events-v1",
-            "commands": _command_records(events) if valid else None,
-            "events": events if valid else [],
-            "stdout": stdout,
-            "stderr": stderr,
-        }
-    )
+    writable_roots: tuple[Path, ...] = ()
+    native: NativeCapture | None = None
 
 
 def call_codex(
@@ -693,17 +513,27 @@ def call_codex(
     effort: str,
     cwd: Path,
     path: str,
-    writable_roots: tuple[Path, ...] = (),
+    options: CallOptions | None = None,
 ) -> tuple[str, str, int | None]:
     """The model's final message, everything codex printed, and codex's exit status; `path`
     is the call's PATH."""
 
+    options = options or CallOptions()
+    if options.native:
+        options.native.check_roots((cwd, *options.writable_roots))
     with tempfile.NamedTemporaryFile("r+", suffix=".md", delete=False) as handle:
         last_message = Path(handle.name)
     try:
         try:
             done = bounded_command(
-                codex_command(model, effort, cwd, last_message, writable_roots),
+                codex_command(
+                    model,
+                    effort,
+                    cwd,
+                    last_message,
+                    options.writable_roots,
+                    retain_native=options.native is not None,
+                ),
                 input=prompt,
                 env={**child_env(), "PATH": path},
                 cwd=str(cwd),
@@ -716,45 +546,6 @@ def call_codex(
     finally:
         last_message.unlink(missing_ok=True)
     return answer, transcript, code
-
-
-def tokens_used(transcript: str) -> int | None:
-    """The token count codex printed last, or None where it printed none."""
-
-    try:
-        document = json.loads(transcript.split("\n--- post-checks ---\n", 1)[0])
-    except ValueError:
-        document = None
-    if isinstance(document, dict):
-        for event in reversed(document.get("events", [])):
-            if event.get("type") == "turn.completed":
-                usage = event.get("usage", {})
-                counts = [usage.get("input_tokens"), usage.get("output_tokens")]
-                return sum(counts) if all(type(n) is int for n in counts) else None
-        return None
-    found = TOKENS_LINE.findall(transcript)
-    return int(found[-1].replace(",", "")) if found else None
-
-
-def observed_model(transcript: str) -> str | None:
-    """The model codex's own header names, after its `workdir:` line, or None."""
-
-    try:
-        document = json.loads(transcript.split("\n--- post-checks ---\n", 1)[0])
-    except ValueError:
-        document = None
-    if isinstance(document, dict):
-        if document.get("commands") is None:
-            return None
-        for event in document.get("events", []):
-            if event.get("type") in ("thread.started", "turn.started"):
-                model = event.get("model")
-                if isinstance(model, str) and model:
-                    return model
-        return None
-    _before, found, after = transcript.partition("\nworkdir: ")
-    named = MODEL_LINE.search(after) if found else None
-    return named.group(1) if named else None
 
 
 def protected_snapshot(
@@ -858,7 +649,12 @@ def observations(log_dir: Path | None) -> list[str]:
 
 
 def run_fixture(
-    name: str, model: str, effort: str, arm: Arm, path: str
+    name: str,
+    model: str,
+    effort: str,
+    arm: Arm,
+    path: str,
+    capture: NativeCapture | None = None,
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     """Install the arm's files, build the fixture, write its prompt (the arm's kernel, then
     the fixture's task), let the model act in it, then judge what it left.
@@ -911,11 +707,16 @@ def run_fixture(
     answer, transcript, returncode = "", "", None
     try:
         answer, transcript, returncode = call_codex(
-            prompt, model, effort, workdir, path, fixture_write_roots(name, workdir)
+            prompt,
+            model,
+            effort,
+            workdir,
+            path,
+            CallOptions(fixture_write_roots(name, workdir), capture),
         )
         if returncode is None:
             extra["error"] = f"codex call timed out after {CALL_TIMEOUT} seconds"
-    except (OSError, subprocess.SubprocessError) as problem:
+    except (OSError, ValueError, subprocess.SubprocessError) as problem:
         # The post-checks still run: a call that timed out may have changed the repository.
         extra["error"] = f"{type(problem).__name__}: {problem}"
         transcript = partial_output(problem)
@@ -969,9 +770,17 @@ def _write(path: Path, document: dict[str, Any]) -> None:
 def run_one(out: Path, status: dict[str, Any], name: str, arm: Arm, path: str) -> bool:
     """One fixture under the run's arm, recorded in `out`; True where its call failed."""
 
-    answer, report, returncode, extra = run_fixture(
-        name, status["model"], status["effort"], arm, path
+    capture = (
+        NativeCapture(Path(status["native_sessions"]), out / f"{name}.native.jsonl")
+        if status.get("native_sessions")
+        else None
     )
+    answer, report, returncode, extra = run_fixture(
+        name, status["model"], status["effort"], arm, path, capture
+    )
+    if capture:
+        receipt = retain(report.split("\n--- post-checks ---\n", 1)[0], capture)
+        _write(capture.destination.with_suffix(".receipt.json"), receipt)
     (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
     error = call_error(returncode, answer, extra, status["model"])
     extra.pop("error", None)
@@ -1143,6 +952,12 @@ def _parser() -> argparse.ArgumentParser:
         "--out", default="", help="a new directory for the run (default: evals/results/raw/<id>)"
     )
     parser.add_argument(
+        "--retain-native",
+        metavar="SESSIONS_DIR",
+        default="",
+        help="retain one exact native session for separate review; requires one named fixture",
+    )
+    parser.add_argument(
         "--summary",
         nargs="+",
         metavar="DIR",
@@ -1162,6 +977,11 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
     unknown = sorted(set(names) - set(fixture_names()))
     if unknown or not names:
         parser.error(f"no fixture {', '.join(unknown)}; there are {', '.join(fixture_names())}")
+    if args.retain_native:
+        if len(names) != 1:
+            parser.error("--retain-native requires exactly one named fixture")
+        if not Path(args.retain_native).is_dir():
+            parser.error("--retain-native needs the readable sessions directory of this codex home")
     return names
 
 
@@ -1194,6 +1014,16 @@ def _main(argv: list[str] | None = None) -> int:
         "api_keys_stripped": list(STRIP_POLICY),
         "api_keys_removed_from_environment": stripped_from_environment(),
     }
+    if args.retain_native:
+        status["native_sessions"] = str(Path(args.retain_native).resolve())
+    elif status["cli_version"] == "codex-cli 0.160.1":
+        _write(out / "STATUS.json", {**status, "status": "UNVERIFIED", "fixtures": names})
+        sys.stderr.write(
+            "run: UNVERIFIED - Codex CLI 0.160.1 JSON events do not report observed model/cwd. "
+            "No model call started. Use one named fixture with --retain-native SESSIONS_DIR "
+            "for separate native-event review; its automatic report stays unchanged.\n"
+        )
+        return PREFLIGHT_EXIT
     login = preflight()
     status.update({key: login[key] for key in ("auth", "auth_evidence", "preflight")})
     if not login["ok"]:
@@ -1207,10 +1037,24 @@ def _main(argv: list[str] | None = None) -> int:
     found = shutil.which("outcomebound", path=path)
     status["outcomebound_on_path"] = os.path.realpath(found) if found else None
     _write(out / "STATUS.json", {**status, "status": "running", "fixtures": names})
-    failures = sum(run_one(out, status, name, arms[name], path) for name in names)
+    completed = []
+    failures = 0
+    for name in names:
+        failed = run_one(out, status, name, arms[name], path)
+        completed.append(name)
+        if failed:
+            failures = 1
+            break  # Inspect unsupported/failed call evidence before spending on another.
     state = "ran with failures" if failures else "ran"
     _write(
-        out / "STATUS.json", {**status, "status": state, "fixtures": names, "failures": failures}
+        out / "STATUS.json",
+        {
+            **status,
+            "status": state,
+            "fixtures": names,
+            "completed_fixtures": completed,
+            "failures": failures,
+        },
     )
     return 1 if failures else 0
 

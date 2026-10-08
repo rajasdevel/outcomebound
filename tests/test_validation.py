@@ -283,7 +283,8 @@ def test_relative_cwd_is_bound_to_plan_directory_not_invocation_directory(tmp_pa
                 [
                     sys.executable,
                     "-c",
-                    "from pathlib import Path; raise SystemExit(not Path('expected.txt').is_file())",
+                    "from pathlib import Path; "
+                    "raise SystemExit(not Path('expected.txt').is_file())",
                 ],
                 required_paths=["expected.txt"],
             )
@@ -305,7 +306,8 @@ def test_failing_check_writes_a_log_and_prints_its_tail(tmp_path):
     command = [
         sys.executable,
         "-c",
-        "import sys; print('line-from-stdout'); print('line-from-stderr', file=sys.stderr); raise SystemExit(3)",
+        "import sys; print('line-from-stdout'); "
+        "print('line-from-stderr', file=sys.stderr); raise SystemExit(3)",
     ]
     r = _run(tmp_path, [_claim(command)])
     assert r.returncode == 1

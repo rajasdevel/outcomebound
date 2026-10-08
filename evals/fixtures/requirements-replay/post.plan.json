@@ -8,7 +8,7 @@
       "risk": "the export misses a requirement of the issue: an ISO date, the column order, the cancelled orders left out, or the amounts, which the later comment keeps in cents",
       "kind": "runtime",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_export.py", "behaviour"],
+      "command": ["python3", "-I", "-B", "checks/probe_export.py", "behaviour"],
       "required_paths": ["checks/probe_export.py", "export.py"]
     },
     {
@@ -24,7 +24,7 @@
       "risk": "the report drops a requirement or a constraint that the issue holds",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_export.py", "kept"],
+      "command": ["python3", "-I", "-B", "checks/probe_export.py", "kept"],
       "required_paths": ["checks/probe_export.py"]
     },
     {
@@ -32,7 +32,7 @@
       "risk": "the report does not say that the later comment changed the amounts",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_export.py", "corrected"],
+      "command": ["python3", "-I", "-B", "checks/probe_export.py", "corrected"],
       "required_paths": ["checks/probe_export.py"]
     },
     {
@@ -40,7 +40,7 @@
       "risk": "no requirement is marked stated beside the source it came from",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_export.py", "provenance"],
+      "command": ["python3", "-I", "-B", "checks/probe_export.py", "provenance"],
       "required_paths": ["checks/probe_export.py"]
     }
   ]

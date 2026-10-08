@@ -1510,3 +1510,22 @@ establish native skill discovery, an installed-wheel native session, desktop beh
 behavior, general reliability, browser interaction or release acceptance. They are separate
 from the diagnostic, comparison and retained qualification calls above and do not change those
 results.
+
+### Current bounded retention support
+
+The current runner supports `--retain-native SESSIONS_DIR` for one explicitly named fixture.
+It runs without `--ephemeral` and retains the exact matching native session outside the model's
+writable roots, including implicit temporary roots. The record and its receipt digest support
+separate review; retention does not establish model identity, execution order or behavior.
+Automatic missing-model or working-directory evidence stays missing. The
+[evaluation guide](../evals/README.md) defines the invocation and retained files.
+
+Normal runs on the known unsupported Codex CLI 0.160.1 transport refuse before a model call.
+For an unknown transport, the first call error stops the remaining batch. Unknown executable
+or tool-event forms cannot prove that no command ran. No extra model preflight or automatic
+retry is added.
+
+This instrument update adds no model result or call count. A fresh `handoff-author-spec`
+delivery follow-up is selected but unrun. The original missing-brief failure, separate
+outcome-tier result and seven retained high-effort calls above stay unchanged; no new
+spec-tier delivery PASS is claimed.

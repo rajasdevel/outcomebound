@@ -23,4 +23,7 @@ source = source.replace(line, line + '\nif [ "$env" = production ]; then\n  vers
 path.write_text(source)
 PYTHON
 
+mkdir -p checks
+cp "$repo/evals/graders/deploy_probe.py" checks/
+
 . "$here/../skills-close/close.sh"

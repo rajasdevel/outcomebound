@@ -33,6 +33,30 @@ bytecode; a checkout whose Git cannot list its files, and a tree without the eng
 nothing. A shipped file is executable when it starts with a `#!` line. The source archive holds what rebuilds
 the same wheel, byte for byte.
 
+## Dependencies and their limits
+
+The engine and build backend import only the Python standard library. The package declares
+Python 3.10 or later and no third-party Python runtime or build requirements. Git is required
+for adoption and repository operations. The installed entry point runs Python; the checkout
+launcher uses POSIX `sh`. The finish check uses a POSIX shell to run Done lines and needs only
+the additional tools that those lines require. Windows uses the shell supplied by Git for
+Windows. These distinctions, the optional browser libraries and the contributor tools are
+listed in [the dependency inventory](../../dependencies.md).
+
+No minimum Git release is qualified by the current CI matrix. The common-directory readers in
+`finish_check.py` and `scripts/canary.py` use `rev-parse --git-common-dir` and resolve a relative
+result against the command's working directory. They do not require `--path-format=absolute`,
+which [Git 2.31.0](https://raw.githubusercontent.com/git/git/v2.31.0/Documentation/RelNotes/2.31.0.txt)
+introduced. This removes that option requirement; it does not establish support for every older
+Git. Qualification must check the returned path in a main checkout, a linked worktree and a
+subdirectory. A test with a relative result checks path handling, not an actual old Git binary.
+
+Development tools have direct version pins. Indirect packages and CI container tags are not
+locked. Keep those limits separate from the reproducible wheel build. A development lock is
+conditional on a demonstrated change in clean-install resolution that changes a required
+check's result. Record the interpreter, platform and resolution first. A new runtime dependency
+or lock generator is not required by that decision.
+
 ## Decisions
 
 | Decision | Rejected alternative | Owner | Status |

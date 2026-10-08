@@ -3,8 +3,9 @@
 These evals measure whether the operating-contract kernel, and each skill that an install
 carries, change what a model does. codex carries out the task of each fixture in a disposable
 repository, under one of four arms. Deterministic post-checks read what the model left: files,
-commits, the commands that its transcript records, and its answer. The post-checks are the
-verdict. No model grades another.
+commits, the commands that its transcript records, and its answer. Automatic post-checks
+establish their named mechanical claims. Some fixtures also require separate review of meaning,
+chronology or browser behavior. There is no automatic model judge.
 
 There are two families of fixtures:
 
@@ -45,7 +46,8 @@ done
 - No API key or endpoint override reaches codex or the commands of the model.
 - The runner exits 3 without a ChatGPT login. It exits 2 when it refuses its options. It exits 1
   when a call failed: codex erred, gave no final message, or reported another model. A failed call
-  is recorded and never retried.
+  is recorded and never retried. The batch stops after its first call error; inspect that record
+  before starting another fixture.
 
 ## Reading a result
 
@@ -68,17 +70,22 @@ Each run directory holds four files for each fixture. Each name starts with the 
 - `<fixture>.transcript.txt`: a JSON document of command records from actual CLI events,
   with raw stdout/stderr retained as data, then the post-check output. Codex runs with
   `--json`; plain printed logs are not command evidence. Incomplete calls retain
-  unknown command evidence. Overlapping calls cannot prove ordered effects. Only a complete stream
+  unknown command evidence. Unknown executable event and tool forms cannot prove that no command ran. Overlapping
+  calls cannot prove ordered effects. Only a complete stream
   can establish that no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`; missing observed
   model still prevents a call from counting. Neither is inferred from requested arguments. The observed
   Codex CLI 0.160.1 JSON stream did not supply those observations, so automatic counted qualification
-  remains unavailable on that transport. A bounded manual qualification may retain the exact
-  non-ephemeral session rollout by matching its session id to this subprocess's thread id.
+  remains unavailable on that transport. Normal runs on that known CLI version refuse before
+  a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
+  explicitly named fixture without `--ephemeral`, and copies the unique native session rollout
+  whose initial session id matches this subprocess's actual first `thread.started` id.
   Record its hash outside the writable fixture. Review actual turn context and linked tool
   calls/results, terminal completeness and ordering. Arbitrary JavaScript in a custom tool
   call is not automatically interpreted; dynamic or ambiguous execution stays UNVERIFIED.
   Keep manual findings separate from the automatic report, and disclose instrumentation in
-  the prompt. This is a per-run evidence limit, not a new runner mode.
+  the prompt. Retention does not change the automatic report or infer identity, working directory,
+  tool effects or semantic PASS from requested arguments. A missing receipt or identity is
+  UNVERIFIED; automatic failures stay intact. No extra model preflight or retry occurs.
 - `<fixture>.meta.json`: the verdict, the claims, the observations, the arm, the model, the
   commit, and the contents of the arm. These are the digest of the kernel, the digest of each
   file that the install of that fixture wrote, the launcher, and the `outcomebound` that the
@@ -86,6 +93,27 @@ Each run directory holds four files for each fixture. Each name starts with the 
 
 Runs of one fixture that installed different files are flagged as not comparable. A PASS
 establishes only what its check reads, for that model on that day.
+
+For a single retained case, use the sessions directory of the same Codex home that supplies
+hosted authentication. Keep the new output directory outside the fixture and all of its writable
+roots, including implicit system temporary write grants. Keep the sessions directory outside
+those grants too. The runner checks both boundaries before starting the model:
+
+```sh
+python3 evals/run.py --arm current --model <model> --effort high \
+  --fixtures <one-case> --retain-native <codex-home>/sessions --out <new-run-directory>
+```
+
+`<fixture>.native.jsonl` is the exact copied record. `<fixture>.native.receipt.json` keeps its thread
+id, byte digest and retention verdict; identity, sequence and behavior remain UNVERIFIED until
+separate review. A completed native record can support that review even when the automatic CLI
+transport report fails. Never treat copying the record as semantic qualification. For an unknown
+CLI transport, the first call error stops the remaining batch; later versions are not assumed
+to be compatible from their version number alone.
+
+The entrypoints coordinate fixture setup, source records and grading. `processes.py` bounds
+subprocess lifetimes, `codex_events.py` and `claude_events.py` decode their declared event forms,
+and `native_receipts.py` retains one matching native session without grading its meaning.
 
 ## The arms
 

@@ -8,23 +8,10 @@ chose, so every call names the model itself. No test here calls a model: it read
 the runner builds.
 """
 
-import importlib.util
 import subprocess
 from pathlib import Path
-from types import ModuleType
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
-def _load_run() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("eval_run_isolation", ROOT / "evals/run.py")
-    assert spec is not None and spec.loader is not None, "evals/run.py"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-run = _load_run()
+from tests.eval_helpers import RUN as run
 
 
 def _argv(tmp_path: Path, model: str = "gpt-6-sol", git: bool = True) -> tuple[list[str], Path]:

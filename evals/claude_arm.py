@@ -35,15 +35,17 @@ import importlib
 import json
 import os
 import re
-import shlex
 import sys
 import tempfile
 from pathlib import Path
 
+# Direct script execution also needs the repository package path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from evals.claude_events import _transcript
+
 REPO = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(REPO / "evals"))
-sys.path.insert(0, str(REPO))
-run = importlib.import_module("run")
+run = importlib.import_module("evals.run")
 
 # Prepared fixtures and results stay outside the tree: `--state DIR` moves them.
 STATE = Path(tempfile.gettempdir()) / "outcomebound-claude-arm"
@@ -111,7 +113,6 @@ def _refuse_changed_engine(sealed: dict) -> None:
 
 def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     import os
-    import subprocess
     import tempfile
 
     arm = run.load_arm(arm_name, run.selected_fragments(fixture))
@@ -120,11 +121,9 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     work.mkdir(parents=True, exist_ok=True)
     workdir = Path(tempfile.mkdtemp(prefix=f"{fixture}-{arm_name}-", dir=work))
     run.install(workdir, arm.files)
-    built = subprocess.run(
+    built = run.bounded_command(
         ["bash", str(fixture_dir / "setup.sh"), str(workdir)],
-        capture_output=True,
-        text=True,
-        env={**run.child_env(), **run.HERMETIC_GIT, "OB_EVAL_ARM": arm.name},
+        env={**run.fixture_setup_env(), "OB_EVAL_ARM": arm.name},
         timeout=run.SETUP_TIMEOUT,
     )
     if built.returncode != 0:
@@ -189,24 +188,6 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     )
 
 
-_CD = re.compile(r"^cd[ \t]+(?P<dir>\"[^\"]*\"|'[^']*'|\S+)[ \t]*&&[ \t]*")
-
-
-def _without_cd(command: str, workdir: str) -> str:
-    """The command without a leading `cd <dir> && ` where <dir> is the workdir, compared as the
-    OS resolves it (symlinks, a trailing slash, `.` and `..`), not as a string."""
-
-    found = _CD.match(command)
-    if found:
-        try:
-            named = shlex.split(found.group("dir"))
-            if len(named) == 1 and os.path.realpath(named[0]) == os.path.realpath(workdir):
-                return command[found.end() :]
-        except ValueError:
-            pass
-    return command
-
-
 def _inside(path: Path, folder: Path) -> bool:
     """Whether `path` is `folder` or below it, as the OS resolves both: through symlinks and
     `..`, and by file identity where the file system folds case."""
@@ -221,132 +202,6 @@ def _inside(path: Path, folder: Path) -> bool:
         except OSError:
             pass
     return False
-
-
-def _block(command: str, workdir: str, status: str = "unverified") -> list[str]:
-    """One actual Bash call and matched result, kept separate from printed text."""
-
-    return [_without_cd(command, workdir) if workdir else command, status, workdir]
-
-
-def _events(subagent_jsonl: Path) -> list[dict]:
-    """Read JSONL strictly; a damaged line cannot prove the absence of an attempt."""
-
-    found = []
-    for line in subagent_jsonl.read_text(encoding="utf-8").split("\n"):
-        if not line.strip():
-            continue
-        event = json.loads(line)
-        if not isinstance(event, dict):
-            raise ValueError("a session event is not an object")
-        found.append(event)
-    return found
-
-
-def _start_tool(part: dict, workdir: str, blocks: list[list[str]], state: dict) -> None:
-    name, key, args = part.get("name"), part.get("id"), part.get("input")
-    if not isinstance(name, str) or not isinstance(args, dict):
-        raise ValueError("malformed tool call")
-    if not isinstance(key, str) or not key or key in state["seen"]:
-        raise ValueError("missing or reused tool call id")
-    state["seen"].add(key)
-    index, command = None, ""
-    if name == "Bash":
-        value = args.get("command")
-        if not isinstance(value, str):
-            raise ValueError("Bash command is not a string")
-        command = value
-        index = len(blocks)
-        active = {i for i, _ in state["pending"].values() if i is not None}
-        if active:
-            state["overlap"].update(active | {index})
-        blocks.append(_block(command, workdir))
-    state["pending"][key] = (index, command)
-
-
-def _assistant_parts(parts: list, workdir: str, blocks: list[list[str]], state: dict) -> list[str]:
-    texts = []
-    for part in parts:
-        if part["type"] == "tool_use":
-            _start_tool(part, workdir, blocks, state)
-            if part.get("name") == "SubagentHandback":
-                text = part["input"].get("message", "")
-                if not isinstance(text, str):
-                    raise ValueError("handback is not text")
-                texts.append(text)
-        elif part["type"] == "text":
-            if not isinstance(part.get("text"), str):
-                raise ValueError("assistant text is not a string")
-            texts.append(part["text"])
-    return texts
-
-
-def _result_parts(parts: list, blocks: list[list[str]], state: dict) -> None:
-    for part in parts:
-        if part["type"] != "tool_result":
-            continue
-        key = part.get("tool_use_id")
-        if not isinstance(key, str) or key in state["results"] or key not in state["pending"]:
-            raise ValueError("unmatched or repeated tool result")
-        state["results"].add(key)
-        index, command = state["pending"].pop(key)
-        if index is None:
-            continue
-        error = part.get("is_error", False)
-        status = "unverified"
-        if error is True:
-            status = "failed"
-        elif (
-            error is False
-            and isinstance(part.get("content"), (str, list))
-            and index not in state["overlap"]
-        ):
-            status = "succeeded"
-        blocks[index] = _block(command, blocks[index][2], status)
-
-
-def _message_parts(event: dict) -> tuple[str, list] | None:
-    message = event.get("message")
-    if message is None:
-        return None
-    if not isinstance(message, dict) or not isinstance(message.get("role"), str):
-        raise ValueError("malformed session message")
-    parts = message.get("content")
-    if isinstance(parts, str):
-        parts = [{"type": "text", "text": parts}]
-    if not isinstance(parts, list) or not all(
-        isinstance(part, dict) and isinstance(part.get("type"), str) for part in parts
-    ):
-        raise ValueError("malformed message parts")
-    return message["role"], parts
-
-
-def _transcript(subagent_jsonl: Path, workdir: str) -> tuple[str, str]:
-    """Pair actual tool identities; incomplete or ambiguous command evidence is refused."""
-
-    blocks: list[list[str]] = []
-    answer = ""
-    events = _events(subagent_jsonl)
-    state: dict = {"pending": {}, "seen": set(), "results": set(), "overlap": set()}
-    for event in events:
-        message = _message_parts(event)
-        if message is None:
-            continue
-        role, parts = message
-        if role == "user":
-            _result_parts(parts, blocks, state)
-        elif role == "assistant":
-            cwd = event.get("cwd", "")
-            cwd = cwd if isinstance(cwd, str) and Path(cwd).is_absolute() else ""
-            texts = _assistant_parts(parts, cwd, blocks, state)
-            answer = "\n".join(texts) if texts else answer
-    if not events:
-        raise ValueError("no readable event")
-    if state["pending"]:
-        raise ValueError("a tool call has no result in the transcript")
-    return json.dumps(
-        {"format": "outcomebound-command-events-v1", "commands": blocks, "answer": answer}
-    ), answer
 
 
 REQUIRED = ("fixture", "arm", "workdir", "seed", "protected", "kernel_sha256", "engine")

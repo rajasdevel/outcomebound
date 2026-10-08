@@ -22,7 +22,7 @@ if [ -z "$seed" ] || ! git cat-file -e "$seed^{commit}" 2>/dev/null; then
 fi
 allow=()
 for pattern in "$@"; do allow+=(--allow "$pattern"); done
-if ! walk="$(python3 checks/scope_walk.py --seed "$seed" --suppressed ${allow[@]+"${allow[@]}"})"; then
+if ! walk="$(python3 -I -B checks/scope_walk.py --seed "$seed" --suppressed ${allow[@]+"${allow[@]}"})"; then
   echo "the content walk could not run" >&2
   exit 1
 fi

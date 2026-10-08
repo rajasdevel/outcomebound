@@ -165,7 +165,7 @@ def test_missing_extra_or_misordered_slots_are_rejected(mutation):
 
 def test_slots_out_of_order_are_rejected():
     lines = GOOD.splitlines(keepends=True)
-    swapped = "".join(lines[:7] + [lines[8], lines[7]] + lines[9:])
+    swapped = "".join([*lines[:7], lines[8], lines[7], *lines[9:]])
     with pytest.raises(FragmentError, match="slots"):
         parse_fragment(swapped, "x.md")
 
@@ -616,7 +616,7 @@ def test_inline_is_a_library_call_too(source):
 def test_a_duplicate_fragment_id_is_rejected_rather_than_silently_deduped(source):
     """A repeated id is a typo, and a silent dedupe answers a question nobody asked."""
 
-    with pytest.raises(FragmentError, match="duplicate fragment id.*python"):
+    with pytest.raises(FragmentError, match=r"duplicate fragment id.*python"):
         select(load_all(source), ["python", "solo", "python"])
 
 

@@ -2,99 +2,37 @@
 
 [![CI](https://github.com/rajasdevel/outcomebound/actions/workflows/ci.yml/badge.svg)](https://github.com/rajasdevel/outcomebound/actions/workflows/ci.yml)
 
-**Toward trustworthy delegation to coding agents.**
+**Work sized to the outcome. Evidence for each step.**
 
-Hand a coding agent the outcome. OutcomeBound asks it for work sized to that outcome, a true
-report of every check, and only the decisions that are yours. It is a short contract in your
-`AGENTS.md`, and a small tool that installs the contract and keeps it current. The tool is Python
-standard library only, and it does not run your agent.
+A coding task can need more than a patch: an accepted requirement, a deployment check, or a
+handoff to the next owner. A small fix can need much less. OutcomeBound helps your coding agent
+carry the outcome through the work and choose the engineering it needs.
 
-For work that spans stages, the installed core skill points to the
-[lifecycle reference](skills/using-outcomebound/references/lifecycle.md). It covers the applicable
-route from an idea through delivery, operation, maintenance and retirement, with conditions for
-skipping stages that the outcome does not need.
+It adds a short contract to `AGENTS.md`, focused skills that the agent reads when needed, and
+optional tools for checks and handoffs. It uses your agent harness and your project's commands.
+The engine uses the Python standard library only; it does not run your agent.
 
-## What it asks of your agent
+[Try it](#try-it) · [How it works](#what-it-asks-of-your-agent) ·
+[Evidence and limits](#what-it-changes-measured) · [Harness support](references/portability.md)
 
-A one-line fix should not come back with a design note. A risky change should not come back
-without a test, or with a report that says "done" when nothing was pushed. The contract asks for:
+## From idea to delivery
 
-- **Right-sized work.** Exactly the engineering the outcome needs, in code and in process.
-- **Honest reports.** Each check is `PASS`, `FAIL` or `UNVERIFIED`, and missing evidence is never
-  success. A passing test is never reported as a push, and a push never as a deployment.
-- **Autonomy within your bounds.** The agent decides what it can, states its assumptions, and
-  holds only an act you did not grant, and continues the rest. Your decisions come back as short **decision
-  briefs**, each with the options, a recommendation, and whether the choice can be undone.
+![Outcome, context, bounds and completion bar carry through requirements, design and accepted work, build and validation, release and delivery, operation and maintenance, and retirement. Start at the current state and use only the stages the outcome needs.](docs/assets/outcomebound-lifecycle.svg)
 
-Here is one, as an agent puts it to you. `outcomebound brief` draws it from the agent's JSON, and
-the words follow the plain style of `--human-style ste`:
+For an export feature, the agent keeps the format and privacy constraints with the accepted
+work. It builds and checks the change, uses your landing route, and checks the requested
+delivery. If operation or retirement is in scope, the handoff keeps the owner, observations,
+remaining consumers and authority limits visible. A local bug fix can go straight to its
+regression check.
 
-> #### D1 · The fix needs a migration that rewrites the orders table. When do we run it?
-> - 👉 Recommend: C — It stops the bug today and keeps the table rewrite in the window your team already uses · confidence 75% (inferred)
-> - Options:
->   - A Run it on Sunday in the maintenance window — No customer sees a slow checkout
->     - 🔻 Downside: The bug stays in production for four more days
->   - B Run it online now, in batches of 10,000 rows — The bug is fixed today
->     - 🔻 Downside: Checkout is slower for about 40 minutes while it runs
->   - C Ship a code-only workaround now, and run the migration on Sunday — The bug stops today, and no one sees a slow checkout
->     - 🔻 Downside: Two changes to review, and the workaround must come out after Sunday
-> - Why now: The workaround can ship today only if you choose it before the 16:00 deploy
-> - ✅ Checked: The fix and the workaround pass the unit tests, and the migration ran on a copy of staging in 38 minutes
-> - ⚠️ Not checked: Load on production during an online run; only a run under real traffic would settle it
-> - ⛔ Undo: The migration rewrites 4.2 million rows; going back needs a restore from backup
-
-A second aim is the same quality for less: no ceremony that a change does not need, and
-hand-offs that let a smaller, lower-priced model build what a strong model planned
-([below](#hand-off-to-a-smaller-model)). This is an aim, not yet a measured result.
-
-## What it changes, measured
-
-The test project suggested a design note, a decision record, the full slow suite and a second
-reader for every change. The task was a two-character bug fix, then a small new option. Without
-OutcomeBound, every run treated the fix like a feature. With it, every run treated the fix like
-a fix.
-
-| Three runs of each task, one model | With OutcomeBound | Without |
-| --- | --- | --- |
-| Made the change correctly, with a regression test | 6 of 6 | 6 of 6 |
-| Skipped the design note and decision record the change did not need | 6 of 6 | 0 of 6 |
-| Ran focused tests instead of the slow full suite | 5 of 6 | 0 of 6 |
-| **Right-sized, by the task's own bar** | **6 of 6** | **0 of 6** |
-
-Same correctness and less ceremony. On the fix, every run with OutcomeBound named the skipped
-suite as `UNVERIFIED` and gave the reason. The model was `gpt-6.1-sol` through Codex, 2026-09-30.
-An earlier pass on `gpt-6-sol`, with an earlier install that had no project-facts line about
-suggested process, did not stop that process on these two tasks. The rerun changed the model and
-the install together ([E7 and E10](docs/evaluations.md)). The run records are not published, and
-in these passes models sometimes read the graders (E12): rerun the fixtures to check. Every
-result, its method and its limits are in the [evaluation record](docs/evaluations.md).
-
-## Where it stands
-
-| | Today | Not yet measured |
-| --- | --- | --- |
-| **Right-sized work** | Shown on the over-engineering side: process a change does not need stops | The under-engineering side: a shortcut that breaks something. No task separates the arms there yet |
-| **Honest reports** | Shown: a skipped check is named `UNVERIFIED`, with the reason | More harnesses and surfaces |
-| **Autonomy in your bounds** | In the contract and the skills. No ladder run put a question to the person. Runs in other passes did, and unnecessary questions are not yet measured | Measure it on long, multi-session work |
-| **Efficiency** | A test-first hand-off took a smaller model from 6 to 9 passes of 9 on three small tasks | Cost per finished task. The install adds text, and text costs tokens: about 27% more per run in one pass (`gpt-6-sol`, skill fixtures); the ladder rerun went both ways. The bet is fewer rounds, and that bet is not yet measured |
-| **Models** | OpenAI through Codex, usually three runs a cell (nine in hand-off); Claude Sonnet 5.5 through Claude Code, one per case and arm, with the limits in E19 and E20 | More runs; Gemini and open-weight models |
-
-Two things hold by design. OutcomeBound sizes only process that a project suggests: what your
-project requires stays required (no fixture yet tests a project whose process is required). And its checks inform you; they are not an authority boundary.
-The instruction check is lexical, and you judge what it finds. The quality floor makes a
-loosening visible, and your branch protection is what prevents one.
+The [lifecycle reference](skills/using-outcomebound/references/lifecycle.md) is part of the
+v1.5.0 candidate on this branch. The quick start stays pinned to the released v1.4.0 until
+v1.5.0 ships.
 
 ## Try it
 
-You need Python 3.10 or later, and a Git work tree: Git is the undo. OutcomeBound runs on
-Windows (PowerShell, cmd or Git Bash), macOS and Linux, and in containers, such as Debian and
-Alpine images. CI runs the test suite on a hosted Windows runner and in a Debian and an Alpine
-container. On Windows, install [Git for Windows](https://gitforwindows.org): `adopt` needs Git,
-and the finish check runs your Done commands with the `sh` of Git for Windows. On macOS and
-Linux the finish check uses the system `sh`. The tool installs for Claude Code, Codex, Cursor,
-Gemini CLI and Amp. Another harness can use `--harness generic`, and then you check that it
-loads the files. pi is not verified yet, so `adopt` refuses it
-([references/portability.md](references/portability.md)).
+You need Python 3.10 or later and a Git work tree. Install the tagged release, then inspect
+what your repository needs:
 
 ```sh
 uv tool install git+https://github.com/rajasdevel/outcomebound@v1.4.0
@@ -102,243 +40,201 @@ cd your-repo
 outcomebound adopt . --detect
 ```
 
-`pipx install` and `pip install` into a virtual environment work too. The install commands are the
-same in PowerShell, cmd and a POSIX shell. The commands that OutcomeBound prints for you to paste
-are for POSIX shells and PowerShell, not cmd. They give an `outcomebound` program: an `.exe` on
-Windows. `pip install --user` does not work, because `outcomebound` runs Python isolated (`-I`),
-which ignores the user site. Where `PYTHONPATH` is set in the environment that runs
-OutcomeBound, it must hold absolute folders only: a relative entry such as `.` or `src` lets a
-file of the repository replace the command's first step.
+`--detect` writes nothing. It prints an install command based on your files, such as:
 
-`--detect` writes nothing. It prints the install command that your files suggest, for example
-`outcomebound adopt <your-repo> --harness claude-code --fragments python,commands --done 'python3 -m pytest'`
-(it prints the absolute path of the repository). Run it, read
-the diff, and commit. Your agent's next session reads the contract. The install writes:
-
-```text
-AGENTS.md             the contract; Done, CI test and irreversible edges from your files
-.claude/skills/       ten skills: sizing, decision briefs, requirements, tests, diagnosing a failure,
-                      review findings, explaining a spec, slicing tickets, handing one off,
-                      explorable pages (per harness)
-.outcomebound/        the fragments you select, and a manifest of what adopt wrote
-CLAUDE.md, GEMINI.md  an @AGENTS.md import, only where the harness needs one
+```sh
+outcomebound adopt . --harness claude-code --fragments python,commands --done 'python3 -m pytest'
 ```
 
-Put `outcomebound adopt . --check` in CI: it fails while a block or file is stale, edited or
-missing. To upgrade, install a newer tag with `uv tool install --force`, then run
-`outcomebound adopt .` again. `adopt` overwrites a block that you edited only with `--force`, and
-`outcomebound adopt . --remove` takes out exactly what it wrote.
+Run the command that detection gives you, read the diff, and commit the intended shared files.
+Start a new agent session and check that your harness loads them. For a machine-local install,
+a commit is not required. The install adds:
+
+| File or folder | Purpose |
+| --- | --- |
+| `AGENTS.md` | The contract, project Done commands, CI commands and irreversible edges found in your files |
+| Your harness's skills folder | Guidance for sizing work, requirements, decisions, tests, diagnosis, review, specs, tickets, handoffs and explorable pages |
+| `.outcomebound/` | Selected fragments and a manifest of installed files |
+| Harness instruction files | An `@AGENTS.md` import where the harness needs one |
+
+Claude Code, Codex, Cursor, Gemini CLI and Amp have install adapters. The
+[harness guide](references/portability.md) names their paths and evidence limits. Another
+harness can use `--harness generic`; check its loading yourself. The unverified pi adapter is
+refused.
+
+Add `outcomebound adopt . --check` to CI to detect stale, edited or missing managed files.
+To upgrade, install a newer tag with `uv tool install --force`, then run `outcomebound adopt .`.
+An edited managed block is overwritten only with `--force`. `outcomebound adopt . --remove`
+removes what the install owns.
 
 <details>
-<summary>The contract, in full</summary>
+<summary>Other installers and environment requirements</summary>
 
-Source: [templates/managed-block.agents.md.tmpl](templates/managed-block.agents.md.tmpl). Long form: [OutcomeBound.md](OutcomeBound.md).
+`pipx` is also supported:
 
-```markdown
-**OutcomeBound** — neither underengineer nor overengineer: exactly the engineering the
-outcome requires.
-
-Frame every task by four inputs. **Outcome**: what becomes observably true, and for whom.
-**Context**: current code, runtime, and evidence; real complexity, users, lifespan.
-**Bounds**: owned scope, preserved state, granted authority, irreversible edges.
-**Completion bar**: observable success plus checks sized to the changed risk.
-
-Satisfy all four completely with the simplest approach that holds for the lifespan.
-Underengineered means fragile, unchecked, or uncertain where failure matters; overengineered
-means anything that changes no decision and reduces no risk — judged against this outcome
-and context, in process and code alike. Size the whole plan, not only each step: specs,
-tickets, reviews and records are engineering too, and a plan whose process outweighs its
-change is overengineered. Smallest complete, not least work.
-
-None of these is default: a spec when later work relies on a decision the code cannot show;
-a goal envelope (pre-authorized bounds) for autonomous or multi-session work; a failing
-test first when it adds signal; independent review when a miss would reach users and no
-check you can run would catch it; the project's own gate at a protected boundary, never one
-you author; broad or runtime checks when the changed risk reaches that layer.
-
-Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
-Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
-crosses an ungranted irreversible edge: write its decision brief (the `decision-brief` skill); all
-other work continues.
-Delegates receive the same four inputs and bounds.
-
-Report each named check as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
-`UNVERIFIED`, never success. Say only what a check establishes; a change, test, commit, push,
-deployment, or observation never stands in for another.
+```sh
+pipx install git+https://github.com/rajasdevel/outcomebound@v1.4.0
 ```
+
+Or, inside an activated virtual environment:
+
+```sh
+python -m pip install git+https://github.com/rajasdevel/outcomebound@v1.4.0
+```
+
+These install commands work in PowerShell, cmd and POSIX shells. Detection prints commands
+for POSIX shells and PowerShell, not cmd. On Windows, install
+[Git for Windows](https://gitforwindows.org); the finish check uses its POSIX `sh`. On macOS
+and Linux, the finish check uses the system `sh`.
+
+`pip install --user` is not supported: the isolated Python process ignores the user site.
+If the environment sets `PYTHONPATH`, use absolute folders only. A relative entry can let a
+repository file replace the launcher's first step.
+
+See [dependencies and portability](docs/dependencies.md) for the engine, optional features,
+project checks, development and evaluation requirements.
 
 </details>
 
+## What it asks of your agent
+
+The contract frames the work with four inputs:
+
+| Input | Question it answers |
+| --- | --- |
+| **Outcome** | What must become observably true, and for whom? |
+| **Context** | What do the code, runtime and evidence show? |
+| **Bounds** | What work and authority are granted, and what state must be preserved? |
+| **Completion bar** | Which result and checks establish success for this change? |
+
+The agent decides what it can, states assumptions and continues authorized work. It adds a
+spec, test, review or wider check when the outcome and risk require one. Your project's
+required process stays required; suggested process is sized to the task.
+
+An act that expands authority or crosses an ungranted irreversible edge comes back as a
+[decision brief](skills/decision-brief/SKILL.md): options, a recommendation, evidence, unknowns
+and what can be undone. Independent authorized work continues.
+
+Each named check is `PASS`, `FAIL` or `UNVERIFIED`. Missing evidence is never success.
+Built, committed, pushed, deployed and observed are separate states.
+
+Read the [short contract](templates/managed-block.agents.md.tmpl) or the
+[full operating contract](OutcomeBound.md). Skills and stack fragments apply that contract
+where the work needs more guidance.
+
+## What it changes, measured
+
+Small-task comparisons showed less suggested process while retaining correct changes.
+Other comparisons passed on both sides and showed no gain. The model and install changed
+together in the sizing rerun, so that result does not isolate their effects. See
+[E7 and E10](docs/evaluations.md).
+
+[E21](docs/evaluations.md#e21-direct-skill-and-lifecycle-qualification) records direct skill
+and lifecycle cases, failures, checked repairs, and separate browser and native hook
+observations. It keeps automatic results separate from agent reviews and records command
+evidence limits. Prepared-package comparisons are separate from handoff-authoring evidence.
+
+These are bounded observations, not proof of general reliability, parity with inspirations
+or superiority. Prevention of underengineering and cost per accepted task are not established.
+The [evaluation record](docs/evaluations.md) holds the methods and limits; the
+[evaluation guide](evals/README.md) describes the fixtures.
+
+## Where it stands
+
+The engine installs and checks managed files; the skills guide model behavior. Installation
+alone does not prove that a native session loaded a skill or ran a hook. The
+[harness guide](references/portability.md) and [E21](docs/evaluations.md#e21-direct-skill-and-lifecycle-qualification)
+separate configuration, direct command checks and observed native behavior.
+
+OutcomeBound's checks inform your decisions. The instruction check is lexical; a person
+judges its findings. The quality floor exposes configured findings and rule changes. Your
+permissions, normal harness trust and branch protection enforce the project's authority.
+A passing floor does not establish every quality dimension or maintainable design.
+
 ## When you want more
+
+Select these features when they close a gap in your project. They are not required for every task.
 
 ### The finish check
 
-The hook needs the installed OutcomeBound command, its Python, Git and the shell described
-under [Try it](#try-it). It does not install packages or need sg, Docker, Node, make or a package
-manager for its own work. Your Done commands can need tools for the checks they perform.
-Use the project's supported check entrypoint; the hook does not activate your interactive
-shell's virtual environment or remove a check because its tool is unavailable.
+With `outcomebound adopt . --finish-check`, your Done commands can send a changed turn back
+to the agent once when a new failure appears. A second failure is reported to you. A PASS
+means those commands passed on the checked tree; it does not mean reviewed or landed.
 
-The harness process must be able to find `outcomebound` on its PATH. Explicit finish-check setup
-reports when the command is missing from the reduced environment used for measurement.
-A terminal's PATH does not prove a desktop app's PATH; the native hook remains UNVERIFIED until
-observed. Shared settings retain the command name so they carry across machines.
+<details>
+<summary>Setup, known failures and native limits</summary>
 
-With `adopt --finish-check`, your Done commands decide when a turn can end:
+Setup runs Done once and records existing failures. A prompt hook records the turn's starting
+commit and tree. An unchanged turn runs no checks. A matching known failure is shown rather
+than sent back; a newly passing command leaves the known-failure record.
 
-```mermaid
-flowchart TD
-    turn(["The agent ends its turn"]) --> changed{"Has the working tree or HEAD changed<br/>since the turn began?"}
-    changed -- no --> idle["The turn ends. Nothing runs.<br/>A failure is shown to you again."]
-    changed -- yes --> cmds["Your Done commands run"]
-    cmds -- PASS --> pass["The turn ends. You see PASS:<br/>not reviewed, not landed."]
-    cmds -- FAIL --> known{"Did it fail in the same way<br/>when the turn began,<br/>or when adopt measured Done?"}
-    known -- yes --> told["The turn ends.<br/>You see the known failure."]
-    known -- no --> retry{"Sent back<br/>once already?"}
-    retry -- no --> back["The failure goes back to the agent.<br/>It keeps working."]
-    back --> turn
-    retry -- yes --> report["The turn ends.<br/>The report goes to you."]
-    classDef ok fill:#d5f5e3,stroke:#1e8449,color:#0b3d1f
-    classDef bad fill:#fadbd8,stroke:#c0392b,color:#641e16
-    class pass ok
-    class back,report,told bad
-```
+Known failures compare exit codes and captured failing test names. If a command supplies no
+supported test summary, only its exit code is compared; a different failure with the same code
+can remain known. Measuring Done again replaces the record and reports new failures. Read that
+report before accepting a new baseline.
 
-With `--finish-check`, `adopt` runs your Done commands one time. It shows the verdict and the
-time of each command. It records each command that fails now as a known failure, with its exit
-code, the names of the failing tests that its output gives, and the commit. A known failure does
-not send the agent back while it fails in the same way: the same exit code, and no new failing
-test name. All other failures send the agent back. The record applies only in a checkout whose
-history contains the measured commit. When a known command passes, the check removes it from the
-record, and its next failure sends the agent back. The check reads test names from the summary
-lines of pytest, unittest, go test, cargo test, jest, vitest and make. If a command prints no such
-names, only its exit code is compared, so a new failure in that same command does not send the
-agent back; the message says so. Split your Done into smaller commands to make this gap smaller.
-`adopt --finish-check` measures Done again. When it replaces an earlier record, it names each
-failure that is new since that record. Read these lines: an agent that runs it after its change
-broke code makes those failures known. An install without `--finish-check` does not run Done.
+The hook needs the installed command, its Python, Git, the platform shell and the tools your
+Done commands need. It does not activate an interactive virtual environment or install missing
+project tools. The harness must find `outcomebound` on its own `PATH`; a terminal's `PATH` does
+not prove a desktop app's `PATH`.
 
-A second entry in the same settings file runs at each prompt and records the commit and the
-working tree (tracked and untracked files; ignored files are not compared) at the start of the
-turn; it prints nothing. A turn that ends on that commit and tree runs nothing and holds nothing, so a failure that the environment caused while the agent only
-read does not send it back. A failure that the tree already had at the start of the turn, with the
-same failing test names, is shown to you as known before the turn, and does not send the agent
-back; a new failure does. The check compares with the last Done run on the tree at the start, so
-a tree that Done never ran on has no such record. A failure that the agent caused in an earlier
-turn and left unfixed is also known before the later turns, and is shown to you each time. Without the entry (an install from before it,
-or a harness that does not fire the event), the check behaves as before. Each time the record
-decides a stop, the message to you names the time it was written. The record is trusted only for
-the same session and, where the harness gives a transcript to check against, only if it was written
-before the agent's first reply or tool call of the turn. Where it gives none, the session alone
-decides. An agent that forges the prompt input, edits the transcript or writes the Git directory
-can still write one; the contract forbids it, and the message shows each use.
+The hook checks the session's working directory. A PASS in the main checkout says nothing
+about a different worktree. Trust new or changed Codex hooks through the normal `/hooks` flow.
+The [finish-check design](docs/specs/finish-check/design.md) explains records, timeout settings
+and refusal behavior. [E21](docs/evaluations.md#separate-native-hook-observations) records the
+observed CLI environments; installed-wheel, desktop and Windows native sessions remain separate
+claims.
 
-The hook checks the checkout at the working directory of the session. If the agent works in a
-worktree and the session stays in the main checkout, a PASS tells you nothing about the worktree.
-In that flow, the agent runs the Done commands in the worktree before it lands the work.
-
-It is observed in Claude Code. It is built for Codex, but not yet observed there. The install
-report itself says `UNVERIFIED` for the hook, until you see its PASS message end a run. In Codex,
-the agent sees the reason of a hold; you see the other messages. Codex runs a new or changed hook
-only after you trust it in `/hooks`. A change to Done or to the timeout changes the entry, and the
-prompt entry is a new entry in an upgraded install, so trust them again; `adopt` tells you when. The Done commands may take up to 600 seconds, the harnesses'
-default. If Done takes longer when `adopt` measures it, `adopt` tells you, and
-`adopt --finish-timeout <seconds>` sets a longer time.
+</details>
 
 ### Hand off to a smaller model
 
-Where a project declares a ticket store, a strong model slices large work into tickets that you accept. The
-`hand-off-tickets` skill then gives each implementer what its tier needs: the ticket's brief alone
-at the outcome tier, plus the approach, signatures, invariants, edge cases and milestones at the
-design tier. At the spec tier, the brief comes from `outcomebound tickets brief <id> --detail full`,
-and the work goes one step at a time:
+The `slice-tickets` skill cuts work into outcomes that you accept. `hand-off-tickets` delivers
+the compiled brief and the guidance the receiving implementer's tier needs. The tier comes
+from you, committed project instructions or the research placement table.
 
-```mermaid
-sequenceDiagram
-    participant S as Strong model
-    participant M as Smaller model
-    loop Each step of the ticket
-        S->>S: Write failing tests and stubs
-        S->>M: The step's package
-        M->>M: Make the tests pass, change none of them
-        M->>S: Commit and hand over
-        S->>S: Review the step
-    end
-    Note over S,M: The ticket lands through your project's own gate.
-```
+The outcome tier receives the brief. The design tier also receives the approach, interfaces,
+invariants, edge cases and milestones. The spec tier uses
+`outcomebound tickets brief <id> --detail full` and works one step at a time with checked
+failing tests, stubs and review. Every tier lands through your project's own gate.
 
-The tier comes from you, or from the research library's placement table. In 63 runs, the spec
-package raised `gpt-6-luna` at `xhigh` from 6 to 9 passes of 9, and `gpt-6-astra` at `high`
-passed 9 of 9 with it or without it. The whole gain was one requirement on one of three small
-tasks, and the design package's effect did not show. Each tier had one model, all from one maker,
-through one harness. The comparison measured hand-written packages, not the `hand-off-tickets`
-skill. `--detail full` alone scored 6 of 9, the same as the ticket alone, and by the rules written
-before the runs it would be cut. The project keeps it as the default brief of the spec tier, to be
-judged on longer work.
+See the [ticket guide](docs/tickets.md) and [handoff skill](skills/hand-off-tickets/SKILL.md).
+The [evaluation record](docs/evaluations.md) separates prepared-package effects from direct
+skill authoring and keeps each tier's limits visible.
 
 ### A quality floor for a project with history
 
-Most projects already carry lint and type debt. Fixing all of it first blocks real work, and
-ignoring it lets it grow. The floor records the findings you have today, and fails only what is
-new. This repository runs on its own floor: 26 old lint findings and 46 old type findings are in
-a baseline, and every change since has added none. When a change adds new ones, the check names
-them:
+Keep existing lint and type debt visible while rejecting new findings. The floor uses your
+project's tools and configurations, then checks changes against its accepted baseline:
 
-```text
-FAIL python.lint (2 new, 26 baselined)
-  +1 outcomebound_tools/tickets.py:F401
-    260:12 `os` imported but unused
-  +1 outcomebound_tools/tickets.py:S307
-    261:12 Use of possibly insecure function; consider using `ast.literal_eval`
-FAIL python.types (1 new, 46 baselined)
-  +1 outcomebound_tools/tickets.py:no-untyped-def
-    259:0 Function is missing a type annotation
+```sh
+outcomebound floor propose . > floor.json
+outcomebound floor apply . --floor floor.json --accept
 ```
 
-An agent that hides a finding instead of fixing it fails too. A new suppression comment, a
-baseline that grows or a changed tool config is a loosening, and it passes only when the commit
-that makes it names the decision that allowed it:
-
-```text
-FAIL loosening (1 in origin/main..HEAD, 1 not ruled; the commit that makes a loosening carries Floor-Loosening: <what>; ruled <id>)
-  outcomebound_tools/tickets.py adds # noqa: s307 (not ruled: <commit> carries no Floor-Loosening line)
-```
-
-`outcomebound floor propose . > floor.json` prints the claims for your stack (Python and shell)
-and a secrets claim for every project, and `outcomebound floor apply . --floor floor.json --accept`
-fits them to the findings you have today. It runs your own ruff, mypy, gitleaks and shellcheck with your own configs. The floor makes
-a loosening visible; your branch protection is what holds it to a person's decision.
+A suppression, larger baseline or changed tool configuration is a loosening that needs a
+recorded ruling. The floor makes it visible; branch protection holds the change to your
+project's decision. A green floor does not mean that all old debt is fixed.
+See the [floor design](docs/specs/floor/design.md).
 
 ### Also optional
 
-- **Instruction check** (`outcomebound instructions check .`): reports hidden characters, override
-  phrases and risky harness settings in the files your agents load. It writes nothing. A hit you
-  judge safe, you record with `outcomebound instructions rule . <id>`, in your own file outside the
-  project; it then stops changing the result until that file changes.
-- **Review check** (`outcomebound review check <file>`): fails where a finding in a review file has no disposition (`fixed`, `rejected` or `deferred`), or no `Reviewed:` ref.
-- **Sources** (`outcomebound sources import`, `outcomebound sources check`): where requirements come
-  from a document, an issue or a transcript saved as markdown or text, `import` splits it into items
-  that each have an id and a revision digest, and `check` fails where the ledger in your spec leaves
-  an item without a disposition, cites an item that is not there, quotes words the item lacks, or
-  records an item that has changed since. It says what it does not establish: a requirement that
-  keeps one item's words may still lose its other constraints. The manifest holds the source text,
-  so Git ignores it unless you opt in.
-- **Text for people** (`adopt --human-style ste`): agents write reports and commit messages for
-  people in the style of ASD-STE100 Simplified Technical English.
-- **Workspace** (the `workspace` fragment): where several agents share one machine's checkout, four
-  folders under `.agents/` hold each task's worktree, working files, hand-off page and shared
-  notes, and Git ignores them. The [workspace guide](docs/workspace.md) says what it gives you and
-  what it does not.
-- **Command habits** (the `commands` fragment): habits that stop a pager, editor or prompt from
-  hanging a run and keep long output out of context, without hiding an error. `adopt --detect`
-  proposes it for every repository. The [command habits guide](docs/commands.md) gives each
-  habit's reason and source.
-- **Research** (the `research` fragment): [outcomebound-research](https://github.com/rajasdevel/outcomebound-research)
-  is a separate, neutral library about models, providers, harnesses and practices. From a clone
-  (`outcomebound research clone <folder> --accept`), `outcomebound research <path>` prints a file
-  headed by the clone's commit and the sha256 of its text. An agent cites the file by its path,
-  that commit and that digest. A finding goes back with `outcomebound research ingest`, which
-  prints a prefilled issue link.
+- **Instruction check:** `outcomebound instructions check .` reads agent instructions for hidden
+  characters, override phrases and risky settings. It writes nothing. Safe findings can be
+  recorded with `outcomebound instructions rule . <id>` in your file outside the project.
+- **Review check:** `outcomebound review check <file>` checks for a `Reviewed:` reference and
+  a disposition for each finding. It does not prove that a fix is correct.
+- **Sources:** `outcomebound sources import` and `outcomebound sources check` track source items,
+  digests and dispositions. They check accounting, not preservation of every constraint's meaning.
+  The manifest contains source text and is ignored by Git unless you opt in.
+- **Text for people:** `adopt --human-style ste` selects the style of ASD-STE100 Simplified
+  Technical English for reports and commit messages.
+- **Workspace and commands:** optional fragments support shared checkouts and reliable command
+  habits. Read the [workspace guide](docs/workspace.md) and [command guide](docs/commands.md).
+- **Research:** the [research library](https://github.com/rajasdevel/outcomebound-research) holds
+  dated model, harness, provider and practice evidence. `outcomebound research clone <folder> --accept`
+  prepares a local clone; `outcomebound research <path>` returns a file with its commit and digest.
+  `outcomebound research ingest` prepares an issue link and local record; it sends nothing.
 
 ## Contributing and license
 
@@ -352,8 +248,8 @@ OutcomeBound is not affiliated with them.
 
 ## Acknowledgements
 
-Ideas in OutcomeBound come from these GitHub repositories, named for credit. The text is our own,
-and none of them is affiliated with OutcomeBound or endorses it:
+Ideas in OutcomeBound come from these repositories. The text is our own. None of them is
+affiliated with OutcomeBound or endorses it:
 [obra/superpowers](https://github.com/obra/superpowers),
 [mattpocock/skills](https://github.com/mattpocock/skills),
 [anthropics/skills](https://github.com/anthropics/skills),
@@ -364,6 +260,6 @@ and none of them is affiliated with OutcomeBound or endorses it:
 [UKGovernmentBEIS/inspect_ai](https://github.com/UKGovernmentBEIS/inspect_ai),
 [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills),
 [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail),
-[worrydream/Tangle](https://github.com/worrydream/Tangle). The research
-library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
-page is where sources are recorded.
+[worrydream/Tangle](https://github.com/worrydream/Tangle).
+The research library's [credited ideas](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/skills.md)
+page records the sources.

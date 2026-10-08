@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 
+from tests.eval_helpers import RUN
 from tests.portable import needs_posix_bash
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,8 +102,6 @@ def _reference(target: Path, base: str) -> None:
 
 
 def _transcript(workdir: Path, *commands: str) -> str:
-    from tests.test_evals_runner import RUN
-
     events: list[dict] = [{"type": "thread.started", "thread_id": "synthetic-handoff"}]
     for index, command in enumerate(commands):
         item = {

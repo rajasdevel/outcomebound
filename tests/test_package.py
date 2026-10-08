@@ -28,7 +28,7 @@ from types import ModuleType
 
 import pytest
 
-from tests.test_outcomebound_launcher import engine
+from tests.launcher_helpers import engine
 
 ROOT = Path(__file__).resolve().parent.parent
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()

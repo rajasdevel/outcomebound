@@ -10,6 +10,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_deploy.py",
         "served"
@@ -27,6 +28,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_deploy.py",
         "deployed"
@@ -62,6 +64,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_deploy.py",
         "observed"
@@ -78,6 +81,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_deploy.py",
         "scripted"
@@ -93,6 +97,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_deploy.py",
         "reported"

@@ -7,10 +7,14 @@ skipped, with the reason, where no browser is found.
 """
 
 import html
+import json
 import os
 import re
 import subprocess
 import sys
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
@@ -30,6 +34,31 @@ TIME_LIMIT = 90
 
 BROWSER, WHERE = explorable_browser.find_browser()
 needs_browser = pytest.mark.skipif(BROWSER is None, reason=WHERE)
+
+
+@pytest.fixture
+def unavailable_libraries() -> Iterator[tuple[str, list[str]]]:
+    """Both libraries reach an owned loopback server and receive a real HTTP 404."""
+
+    requested: list[str] = []
+
+    class MissingScript(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            requested.append(self.path)
+            self.send_error(404, "The test library is unavailable")
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), MissingScript)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", requested
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -142,6 +171,97 @@ def test_an_output_with_no_expectation_reads_unverified(tmp_path: Path) -> None:
     assert checked.returncode == 0, checked.stdout + checked.stderr
     assert "UNVERIFIED" in checked.stdout and "extra" in checked.stdout
     assert "extra" in result_of(dump_dom(page))["outputs"]["uncovered"]
+
+
+@needs_browser
+def test_unavailable_libraries_keep_fallbacks_and_controls_usable(
+    tmp_path: Path, unavailable_libraries: tuple[str, list[str]]
+) -> None:
+    """Catch a hidden fallback or an input handler that stops after library rejection."""
+
+    observation = """
+<pre id="offline-observation"></pre>
+<script>
+  window.addEventListener("error", (event) => {
+    document.getElementById("offline-observation").textContent =
+      JSON.stringify({ observationError: event.message });
+  });
+  explorable.ready(() => {
+    const visible = (node) => node && node.getClientRects().length > 0 &&
+      getComputedStyle(node).visibility !== "hidden";
+    const output = (name) => document.querySelector(`[data-output="${name}"]`).textContent;
+    const setInput = (name, value) => {
+      const node = document.querySelector(`[data-input="${name}"]`);
+      node.value = value;
+      node.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    const watcher = new MutationObserver(() => {
+      const report = document.getElementById("explorable-check-result");
+      if (!report) return;
+      const state = JSON.parse(report.textContent);
+      const diagrams = document.querySelectorAll("[data-tabs] .xp-diagram-screen pre");
+      if (state.libraries.chart !== "failed" || state.libraries.mermaid !== "failed" ||
+          diagrams.length !== 2) return;
+      watcher.disconnect();
+      setInput("hitLow", "60");
+      setInput("hitHigh", "80");
+      const first = { answer: output("answer"), load: output("dbLoadA") };
+      setInput("rps", "200");
+      const firstDiagramVisible = visible(diagrams[0]);
+      document.querySelectorAll(".xp-tab")[1].click();
+      const table = document.querySelector("[data-chart] table");
+      const banner = document.getElementById("explorable-network");
+      document.getElementById("offline-observation").textContent = JSON.stringify({
+        first,
+        second: { answer: output("answer"), load: output("dbLoadA") },
+        notice: { visible: visible(banner), text: banner.textContent },
+        diagramA: { visible: firstDiagramVisible, text: diagrams[0].textContent },
+        diagramB: { visible: visible(diagrams[1]), text: diagrams[1].textContent },
+        chart: { visible: visible(table), rows: Array.from(table.querySelectorAll("tbody tr"),
+          (row) => Array.from(row.children, (cell) => cell.textContent)) }
+      });
+    });
+    watcher.observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+</script>
+"""
+    _, page = make_page("decision", tmp_path, lambda source: source + observation)
+    base, requested = unavailable_libraries
+    document = page.read_text(encoding="utf-8")
+    pins = json.loads((ROOT / "templates/explorable/libraries.json").read_text(encoding="utf-8"))
+    for name, suffix in (("chart", "chart.js"), ("mermaid", "mermaid.mjs")):
+        pin = pins[name]
+        document = document.replace(pin["url"], f"{base}/{suffix}")
+        document = document.replace(
+            f"https://cdn.jsdelivr.net/npm/{pin['package']}@{pin['version']}/", f"{base}/"
+        )
+    # Only the test's resource URLs and matching CSP differ. Runtime and CSS stay as built.
+    page.write_text(document, encoding="utf-8")
+    dom = dump_dom(page)
+    result = result_of(dom)
+    assert {"/chart.js", "/mermaid.mjs"} <= set(requested)
+    assert result["libraries"] == {"chart": "failed", "mermaid": "failed"}
+    assert result["errors"] == []
+    assert result["expectations"] and all(item["pass"] for item in result["expectations"])
+    found = re.search(r'<pre id="offline-observation">(.*?)</pre>', dom, re.S)
+    assert found and found.group(1), "the browser did not record the post-failure controls"
+    shown = json.loads(html.unescape(found.group(1)))
+    assert "observationError" not in shown, shown
+    assert shown["first"] == {"answer": "A in-process cache", "load": "31.2 to 55.2 req/s"}
+    assert shown["second"] == {"answer": "B shared cache service", "load": "52 to 92 req/s"}
+    assert shown["notice"]["visible"]
+    assert "charts show their data tables" in shown["notice"]["text"]
+    assert "diagrams show their source text" in shown["notice"]["text"]
+    assert shown["diagramA"]["visible"] and "in-process cache (new)" in shown["diagramA"]["text"]
+    assert (
+        shown["diagramB"]["visible"] and "shared cache service (new)" in shown["diagramB"]["text"]
+    )
+    assert shown["chart"]["visible"]
+    row = next(row for row in shown["chart"]["rows"] if row[0] == "100")
+    # A and B have points at 100; the limit is stored at 0 and 500, not interpolated in the table.
+    assert [float(value) for value in row[1:3]] == pytest.approx([36, 30])
+    zero = next(row for row in shown["chart"]["rows"] if row[0] == "0")
+    assert float(zero[3]) == 60
 
 
 def test_NEGATIVE_CONTROL_the_reply_grammar_refuses_a_stray_line() -> None:

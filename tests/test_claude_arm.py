@@ -9,27 +9,16 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
+from tests.eval_helpers import ROOT, load
 from tests.portable import needs_posix_bash
 
 # Maintainer tooling beside evals/run.py: skipped, with the reason, where its tests are.
 pytestmark = needs_posix_bash
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
-def _load() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("claude_arm", ROOT / "evals" / "claude_arm.py")
-    assert spec is not None and spec.loader is not None, "evals/claude_arm.py"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-ARM = _load()
+ARM = load("claude_arm", "evals/claude_arm.py")
 WORKDIR = "/work/fixture-repo"
 
 
@@ -487,3 +476,19 @@ def test_claude_pairs_nonbash_results_without_inventing_commands(tmp_path):
     path = _write(tmp_path, *lines, results=False)
     text, _ = ARM._transcript(path, WORKDIR)
     assert json.loads(text)["commands"] == [["echo checked", "succeeded", WORKDIR]]
+
+
+@pytest.mark.parametrize("name", ["exec", "functions.exec", "Task", "unknown_tool"])
+def test_unknown_non_bash_tools_cannot_prove_no_commands(tmp_path, name):
+    part = {"type": "tool_use", "id": "unknown", "name": name, "input": {"code": "opaque"}}
+    path = _write(tmp_path, _event(part))
+    with pytest.raises(ValueError, match="unsupported tool form"):
+        ARM._transcript(path, WORKDIR)
+
+
+@pytest.mark.parametrize("name", ["Read", "Edit", "Write"])
+def test_known_passive_tool_forms_remain_readable(tmp_path, name):
+    part = {"type": "tool_use", "id": "passive", "name": name, "input": {"file_path": "x"}}
+    path = _write(tmp_path, _event(part))
+    transcript, _answer = ARM._transcript(path, WORKDIR)
+    assert json.loads(transcript)["commands"] == []

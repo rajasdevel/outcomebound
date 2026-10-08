@@ -2061,9 +2061,11 @@ def default_base(target: Path) -> str | None:
     return None
 
 
-def _proposal(target: Path) -> tuple[list[str], str | None]:
+def _proposal(target: Path) -> tuple[list[str], str | None, bool]:
     """What `--detect` proposes for Done, in run order, and, where its test command came from
-    discovery rather than CI, the files that suggested it: such a command runs on the host."""
+    discovery rather than CI, the files that suggested it: such a command runs on the host.
+    The last field names whether CI commands were excluded for a non-POSIX or unresolved shell.
+    All proposals remain unexecuted candidates, including those read from bash steps."""
 
     try:
         floor = paths.read_bounded(target, facts.FLOOR)
@@ -2073,9 +2075,11 @@ def _proposal(target: Path) -> tuple[list[str], str | None]:
     if floor is not None:
         base = default_base(target)
         done.append(FLOOR_RUNNER + (f" --base {shlex.quote(base)}" if base else ""))
-    ci = [command for item in facts.read_ci(target) for command in item.tests]
+    files = facts.read_ci(target)
+    ci = [command for item in files for command in item.done]
+    excluded = any(command not in item.done for item in files for command in item.tests)
     if ci:
-        return [*done, ci[0]], None
+        return [*done, ci[0]], None, excluded
     try:
         components = discovery.discover(target)["inferred"]["components"]
     except (discovery.DiscoveryError, OSError):
@@ -2083,15 +2087,16 @@ def _proposal(target: Path) -> tuple[list[str], str | None]:
     for item in components:
         if item["root"] == "." and item["check_candidates"]:
             evidence = ", ".join(item["evidence"]) or "the target's files"
-            return [*done, item["check_candidates"][0]["command"]], evidence
-    return done, None
+            return [*done, item["check_candidates"][0]["command"]], evidence, excluded
+    return done, None, excluded
 
 
 def proposed_done(target: Path) -> list[str]:
     """What `--detect` proposes for Done, in run order: the floor's runner where a floor is
     installed, with `--base` the remote's default branch where one resolves, then the first
-    test command the project's CI runs, as the CI test fact reads it, or, where CI names none,
-    the first check command discovery offers for the target's root."""
+    test command read from a CI step with a resolved sh or bash shell, or, where none qualifies,
+    the first independent check candidate discovery offers for the target's root. Neither a
+    shell family nor a file observation establishes that the candidate runs through POSIX sh."""
 
     return _proposal(target)[0]
 
@@ -2111,10 +2116,15 @@ def detect(target: Path, source: Path) -> int:
     words.append(harnesses)
     if ids:
         words += ["--fragments", ",".join(ids)]
-    done, suggested_by = _proposal(target)
+    done, suggested_by, excluded = _proposal(target)
     for command in done:
         words += ["--done", command]
     line = " ".join(map(paths.shell_word, words))
+    if excluded:
+        line += (
+            "  # CI commands with a non-POSIX or unresolved shell were not copied into Done; "
+            "give a project POSIX equivalent to --done. Done runs through sh"
+        )
     if suggested_by is not None:
         line += (
             f"  # {done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on "

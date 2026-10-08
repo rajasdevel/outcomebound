@@ -258,6 +258,34 @@ def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float 
     )
 
 
+def _claims(raw_claims: Any, default_timeout: float | None) -> tuple[Claim, ...]:
+    """Read the claim collection, preserving its order and unique names."""
+
+    if not isinstance(raw_claims, list) or not raw_claims:
+        raise PlanError("claims must be a non-empty list")
+
+    claims: list[Claim] = []
+    names: set[str] = set()
+    # 0-based to match the schema check's `$.claims[0]` paths: both reach the
+    # same stderr, so two numbering schemes for one claim would misdirect a reader.
+    for index, item in enumerate(raw_claims):
+        prefix = f"claims[{index}]"
+        if not isinstance(item, dict):
+            raise PlanError(f"{prefix} must be an object")
+        unknown = sorted(set(item) - CLAIM_KEYS)
+        if unknown:
+            raise PlanError(f"{prefix} has unknown field(s): {', '.join(unknown)}")
+        name = _nonempty_string(item.get("name"), f"{prefix}.name")
+        if name in names:
+            raise PlanError(f"duplicate claim name: {name}")
+        names.add(name)
+        claims.append(_claim(item, prefix, name, default_timeout))
+
+    if not any(claim.required for claim in claims):
+        raise PlanError("at least one claim must be required")
+    return tuple(claims)
+
+
 def parse_plan(
     raw: Any,
     *,
@@ -286,31 +314,9 @@ def parse_plan(
         raise PlanError(f"cwd is not a directory: {cwd}")
 
     default_timeout = _optional_seconds(raw.get("timeout_seconds"), "timeout_seconds")
-    raw_claims = raw.get("claims")
-    if not isinstance(raw_claims, list) or not raw_claims:
-        raise PlanError("claims must be a non-empty list")
-
-    claims: list[Claim] = []
-    names: set[str] = set()
-    # 0-based to match the schema check's `$.claims[0]` paths: both reach the
-    # same stderr, so two numbering schemes for one claim would misdirect a reader.
-    for index, item in enumerate(raw_claims):
-        prefix = f"claims[{index}]"
-        if not isinstance(item, dict):
-            raise PlanError(f"{prefix} must be an object")
-        unknown = sorted(set(item) - CLAIM_KEYS)
-        if unknown:
-            raise PlanError(f"{prefix} has unknown field(s): {', '.join(unknown)}")
-        name = _nonempty_string(item.get("name"), f"{prefix}.name")
-        if name in names:
-            raise PlanError(f"duplicate claim name: {name}")
-        names.add(name)
-        claims.append(_claim(item, prefix, name, default_timeout))
-
-    if not any(claim.required for claim in claims):
-        raise PlanError("at least one claim must be required")
+    claims = _claims(raw.get("claims"), default_timeout)
     resolved_log_dir = log_dir if log_dir is not None else cwd / LOG_DIR_NAME
-    return Plan(cwd=cwd, claims=tuple(claims), log_dir=resolved_log_dir)
+    return Plan(cwd=cwd, claims=claims, log_dir=resolved_log_dir)
 
 
 def load_plan(path: Path, *, cwd_override: str | None = None) -> Plan:

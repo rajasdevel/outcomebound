@@ -105,8 +105,11 @@ Use the existing evaluation runner, saved metadata, reports and summary. One qua
 links the required cases to those records and the review of their outcomes. Do not add an
 evidence schema, certificate, aggregate checker or model judge merely to validate that table.
 A successful summary command means the summary was produced; its claim verdicts still need
-reading. Native observations remain separate because the runner does not observe native hooks.
+reading. Native hook acceptance needs separate observations; retaining a CLI record alone
+does not establish it.
 
 Execution and record details stay in `evals/README.md`; dated runs and method corrections stay
-in `docs/evaluations.md`. The explain-spec fixture declares its own notes area; the skill gains no
-universal notes-folder rule.
+in `docs/evaluations.md`. The runner's bounded native-retention option keeps one matched session
+for separate review, not an automatic identity, sequence or behavior verdict. Its current limits
+are recorded in [E21](../../evaluations.md#current-bounded-retention-support).
+The explain-spec fixture declares its own notes area; the skill gains no universal notes-folder rule.

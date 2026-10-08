@@ -168,3 +168,9 @@ error, and both pass once `RUFF_CACHE_DIR` and `MYPY_CACHE_DIR` name a scratch f
 gitleaks 8.30.1 with `--redact` reads `.gitleaksignore` from the project root, and a fingerprint
 without a commit, `path:rule:line`, allowlists its line in the directory scan and in every commit
 scan; shellcheck 0.9.0, 0.10.0 and 0.11.0 print the same `json1` report over one script.
+
+## Engine repository quality floor
+
+The engine repository runs lint and type checks as gates after clearing its accepted findings.
+Its empty baseline files retain no debt. This does not change the adoption recipe: a project
+with existing findings can keep a baseline and ratchet it as the findings are repaired.

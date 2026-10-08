@@ -4,6 +4,20 @@ OutcomeBound keeps one short contract. Each harness loads it in its own way. Thi
 `outcomebound adopt --harness <name>` does for each harness, and what is verified. Read the row
 for your harness. Then read the notes under the table.
 
+## Machine requirements
+
+The installed engine needs Python 3.10 or later and Git for repository operations. Its Python
+imports and build backend use only the standard library. A finish check also needs a POSIX
+shell: `/bin/sh` on macOS and Linux, or the `sh.exe` supplied by Git for Windows. Its Done
+commands need the project's own check tools. The installed command uses Python; the checkout
+launcher uses `sh`.
+
+Charts and diagrams on an explorable page load pinned libraries from a CDN. Automatic browser
+checks need a Chromium-family browser. These are feature requirements. They are not required
+to adopt the contract or run the finish hook. The [dependency inventory](../docs/dependencies.md)
+lists installation, feature, development, evaluation and CI requirements, including the current
+limits of the Git and offline-browser evidence.
+
 ## What `adopt` does for a harness
 
 - `AGENTS.md` holds the project instructions and the contract.
@@ -40,7 +54,9 @@ The refusal lists the harnesses that can.
   already imports `@AGENTS.md` or is a link to `AGENTS.md`.
 - With none of those files, Claude Code reads `AGENTS.md` itself. It does this from v2.1.277.
   `adopt` relies on it from v2.1.281, the version from which every session reads `AGENTS.md`.
-- The finish check is observed in a live session.
+- The finish check is observed in a finite native CLI sequence with Claude Code 2.1.292.
+  [The evaluation record](../docs/evaluations.md#separate-native-hook-observations) states its
+  cases and limits. This does not establish every harness version or desktop environment.
 
 ### Codex
 
@@ -49,7 +65,10 @@ The refusal lists the harnesses that can.
   edit them, and it cannot write the `.agents/` folders of the workspace fragment.
 - With `--add-dir <repository>/.agents`, a session can write them. This is observed with
   codex-cli 0.159.2 on 2026-10-01. To commit, add `--add-dir <repository>/.git` as well.
-- The finish check is built for Codex. It is not yet observed there.
+- The finish check is observed in a finite native CLI sequence with Codex CLI 0.160.1.
+  [The evaluation record](../docs/evaluations.md#separate-native-hook-observations) states its
+  cases and limits. An installed-wheel native session, desktop behavior and native Windows
+  hook behavior remain UNVERIFIED.
 - The hooks page says that the `reason` of a hold becomes a new user prompt, which the model sees,
   and that a `systemMessage` is shown as a warning in the UI or event stream. Thus the model sees a
   hold, and only the person sees a PASS, a known failure or an `UNVERIFIED`.

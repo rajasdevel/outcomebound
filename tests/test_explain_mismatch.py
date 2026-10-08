@@ -8,10 +8,10 @@ import sys
 
 import pytest
 
+from tests.eval_helpers import FIXTURES, HERMETIC_GIT, RUN, transcript
+from tests.eval_helpers import build_fixture as build
+from tests.eval_helpers import grade as _grade
 from tests.portable import needs_posix_bash
-from tests.test_eval_preparation import build
-from tests.test_eval_scenarios import FIXTURES, HERMETIC_GIT, _grade, transcript
-from tests.test_evals_runner import RUN
 
 pytestmark = needs_posix_bash
 DESIGN = "docs/specs/packing/design.md"

@@ -749,13 +749,19 @@ def parse_known(text: str) -> list[Known] | None:
 def _known_path(target: Path, deadline: float | None = None) -> tuple[Path, str] | None:
     """(the records' path in the Git common directory, the target's prefix), or None."""
 
-    common = _git(
-        target, "rev-parse", "--path-format=absolute", "--git-common-dir", deadline=deadline
-    )
+    common = _git(target, "rev-parse", "--git-common-dir", deadline=deadline)
     prefix = _git(target, "rev-parse", "--show-prefix", deadline=deadline)
     if not common or prefix is None:
         return None
-    return Path(os.fsdecode(common.strip())) / KNOWN, os.fsdecode(prefix.strip())
+    # Git can return a path relative to the command's cwd, including in a subdirectory.
+    # Resolve it here instead of requiring Git's newer --path-format option.
+    try:
+        folder = (target / os.fsdecode(common.strip())).resolve(strict=True)
+        if not folder.is_dir():
+            return None
+    except (OSError, ValueError):
+        return None
+    return folder / KNOWN, os.fsdecode(prefix.strip())
 
 
 def _head(target: Path, deadline: float | None = None) -> str | None:

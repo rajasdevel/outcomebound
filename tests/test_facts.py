@@ -181,6 +181,102 @@ def test_a_gitlab_pipeline_yields_its_script_test_command(tmp_path: Path) -> Non
         ("pytest --junitxml=report.xml",),
         (),
     )
+    assert read.done == ()  # Its runner's shell is not established by script entries.
+
+
+@pytest.mark.parametrize(
+    ("shell", "eligible"),
+    [
+        ("sh", True),
+        ("bash", True),
+        ("pwsh", False),
+        ("powershell", False),
+        ("cmd", False),
+        ("custom-shell {0}", False),
+        ("${{ matrix.shell }}", False),
+    ],
+)
+def test_ci_facts_keep_commands_while_done_candidates_respect_step_shell(
+    tmp_path: Path, shell: str, eligible: bool
+) -> None:
+    command = 'python -m pytest "$env:TEST_PATH"' if shell == "pwsh" else "pytest -q"
+    workflow = (
+        "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        f"      - run: {command}\n        shell: {shell}\n"
+    )
+    (read,) = facts.read_ci(project(tmp_path, workflows(ci=workflow)))
+
+    assert read.tests == (command,) and read.unread == ()
+    assert read.done == ((command,) if eligible else ())
+
+
+@pytest.mark.parametrize(
+    ("workflow_shell", "job_shell", "step_shell", "eligible"),
+    [
+        ("pwsh", None, None, False),
+        ("pwsh", "sh", None, True),
+        ("sh", "pwsh", None, False),
+        ("pwsh", "pwsh", "sh", True),
+        ("sh", "sh", "pwsh", False),
+    ],
+)
+def test_ci_done_shell_uses_step_then_job_then_workflow_defaults(
+    tmp_path: Path,
+    workflow_shell: str,
+    job_shell: str | None,
+    step_shell: str | None,
+    eligible: bool,
+) -> None:
+    workflow = f"defaults:\n  run:\n    shell: {workflow_shell}\njobs:\n  test:\n"
+    workflow += "    runs-on: windows-latest\n"
+    if job_shell:
+        workflow += f"    defaults:\n      run:\n        shell: {job_shell}\n"
+    workflow += "    steps:\n      - run: pytest -q\n"
+    if step_shell:
+        workflow += f"        shell: {step_shell}\n"
+    (read,) = facts.read_ci(project(tmp_path, workflows(ci=workflow)))
+
+    assert read.tests == ("pytest -q",)
+    assert read.done == (("pytest -q",) if eligible else ())
+
+
+@pytest.mark.parametrize(
+    ("runner", "eligible"),
+    [
+        ("ubuntu-latest", True),
+        ("macos-14", True),
+        ("windows-latest", False),
+        ("${{ matrix.os }}", False),
+        ("self-hosted", False),
+        (None, False),
+    ],
+)
+def test_ci_done_default_shell_is_inferred_only_from_a_known_runner(
+    tmp_path: Path, runner: str | None, eligible: bool
+) -> None:
+    workflow = "jobs:\n  test:\n"
+    if runner:
+        workflow += f"    runs-on: {runner}\n"
+    workflow += "    steps:\n      - run: pytest -q\n"
+    (read,) = facts.read_ci(project(tmp_path, workflows(ci=workflow)))
+
+    assert read.tests == ("pytest -q",)
+    assert read.done == (("pytest -q",) if eligible else ())
+
+
+@pytest.mark.parametrize(
+    "defaults",
+    ["defaults: {run: {shell: pwsh}}\n", "defaults:\n  run: {shell: pwsh}\n"],
+)
+def test_unreadable_shell_defaults_do_not_fall_back_to_the_runner_shell(
+    tmp_path: Path, defaults: str
+) -> None:
+    workflow = defaults + "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+    workflow += "      - run: pytest -q\n      - shell: sh\n        run: pytest tests/unit\n"
+    (read,) = facts.read_ci(project(tmp_path, workflows(ci=workflow)))
+
+    assert read.tests == ("pytest -q", "pytest tests/unit")
+    assert read.done == ("pytest tests/unit",)
 
 
 def test_a_step_that_runs_an_expression_cannot_be_settled(tmp_path: Path) -> None:

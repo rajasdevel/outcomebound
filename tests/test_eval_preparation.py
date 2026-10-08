@@ -4,51 +4,28 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import shutil
 import subprocess
 import zipfile
 from pathlib import Path
 
 import pytest
 
+from tests.eval_helpers import FIXTURES, HERMETIC_GIT, RUN, grade, transcript
+from tests.eval_helpers import act as _act
+from tests.eval_helpers import build_fixture as build
 from tests.portable import needs_posix_bash
-from tests.test_eval_scenarios import (
-    DEPLOYED_ANSWER,
-    FIXTURES,
-    HERMETIC_GIT,
-    _act,
-    transcript,
-)
-from tests.test_eval_scenarios import (
-    _grade as grade_scenario,
-)
-from tests.test_evals_runner import RUN
 
 pytestmark = needs_posix_bash
 
 
-def build(name: str, target: Path) -> Path:
-    subprocess.run(
-        ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-        check=True,
-        capture_output=True,
-        env=RUN.fixture_setup_env(),
-    )
-    return target
-
-
 def _grade(target, name, said, answer):
-    # The existing scenario helper targets copied graders; these plans use sealed external ones.
-    shutil.rmtree(target.parent / "grading", ignore_errors=True)
-    previous = os.environ.get("OUTCOMEBOUND_EVAL_DIR")
-    os.environ["OUTCOMEBOUND_EVAL_DIR"] = str(FIXTURES.parent)
-    try:
-        return grade_scenario(target, name, said, answer)
-    finally:
-        if previous is None:
-            os.environ.pop("OUTCOMEBOUND_EVAL_DIR", None)
-        else:
-            os.environ["OUTCOMEBOUND_EVAL_DIR"] = previous
+    return grade(target, name, said, answer, eval_dir=FIXTURES.parent)
+
+
+DEPLOYED_ANSWER = (
+    "Deployed 1.8.0 to production. ops/status.sh production reads release=1.8.0, health=ok, "
+    "flag.new-checkout=off.\n"
+)
 
 
 AUTHORED_TESTS = """import unittest
@@ -99,7 +76,7 @@ def test_spec_authoring_can_import_seed_helper_without_running_seed_tests(tmp_pa
     result = _grade(target, "handoff-author-spec", said, "Spec tier package")
     assert result["authored-tests-red-and-green"] == "PASS", result["_output"]
     assert (target / "tests/test_cli.py").read_bytes() == helpers
-    log = tmp_path / "grading/.outcomebound-checks/authored-tests-red-and-green.log"
+    log = Path(result["_grading_dir"]) / ".outcomebound-checks/authored-tests-red-and-green.log"
     assert log.read_text().count("observed-tests=1\n") == 2
     # Passing the reference without all required inputs still lacks acceptance coverage.
     authored.write_text(
@@ -154,6 +131,23 @@ def test_outcome_authoring_rejects_added_test_work(tmp_path):
     assert result["authoring-scope"] == "PASS", result["_output"]
     (target / "tests/test_added.py").write_text(AUTHORED_TESTS)
     assert _grade(target, "handoff-author-outcome", said, "Package")["authoring-scope"] == "FAIL"
+
+
+def test_grading_keeps_prior_evidence_and_the_callers_environment(tmp_path, monkeypatch):
+    target = build("handoff-author-outcome", tmp_path / "workspace")
+    monkeypatch.setenv("OUTCOMEBOUND_EVAL_DIR", "unrelated-eval-location")
+    monkeypatch.setenv("OUTCOMEBOUND_SEED_SHA", "unrelated-seed")
+    said = transcript(target, "cat AGENTS.md")
+    first = _grade(target, "handoff-author-outcome", said, "Outcome tier package")
+    first_dir = Path(first["_grading_dir"])
+    retained = first_dir / "answer.md"
+    before = retained.read_bytes()
+    second = _grade(target, "handoff-author-outcome", said, "A second package")
+    assert first["authoring-scope"] == second["authoring-scope"] == "PASS"
+    assert first["_grading_dir"] != second["_grading_dir"]
+    assert retained.read_bytes() == before
+    assert os.environ["OUTCOMEBOUND_EVAL_DIR"] == "unrelated-eval-location"
+    assert os.environ["OUTCOMEBOUND_SEED_SHA"] == "unrelated-seed"
 
 
 def test_retirement_preparation_keeps_original_data_and_protects_consumers(tmp_path):

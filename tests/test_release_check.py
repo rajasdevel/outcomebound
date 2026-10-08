@@ -3,6 +3,7 @@ only that one."""
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from datetime import date
@@ -273,3 +274,31 @@ def test_a_release_cut_again_is_known_by_its_subject(
         assert line.startswith("FAIL ") and "not named: #7" in line, result.stdout
     else:
         assert line.startswith("PASS "), result.stdout
+
+
+def _assert_release_waits_for_platforms(workflow: str) -> None:
+    """Read this workflow's release fields, not an arbitrary YAML document."""
+
+    found = re.search(r"(?ms)^  release:\n(.*?)(?=^  [\w-]+:\n|\Z)", workflow)
+    assert found is not None, "CI has no release job"
+    fields = dict(re.findall(r"(?m)^    (needs|if): (.+)$", found[1]))
+    needed = {name.strip().strip("'\"") for name in fields.get("needs", "").strip("[]").split(",")}
+    missing = {"test", "windows", "container"} - needed
+    assert not missing, "release omits required jobs: " + ", ".join(sorted(missing))
+    assert fields.get("if") == "startsWith(github.ref, 'refs/tags/v')", (
+        "release must run only for a version tag after its dependencies succeed"
+    )
+
+
+def test_release_publication_waits_for_every_platform_job() -> None:
+    workflow = SCRIPT.parent.parent / ".github/workflows/ci.yml"
+    _assert_release_waits_for_platforms(workflow.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("omitted", ["test", "windows", "container"])
+def test_release_contract_rejects_an_omitted_platform_job(omitted: str) -> None:
+    workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    needed = ", ".join(name for name in ("test", "windows", "container") if name != omitted)
+    broken = re.sub(r"(?m)^    needs: .+$", f"    needs: [{needed}]", workflow)
+    with pytest.raises(AssertionError, match=f"release omits required jobs: {omitted}"):
+        _assert_release_waits_for_platforms(broken)

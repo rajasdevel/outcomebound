@@ -25,7 +25,9 @@ def test_all_skills_have_name_and_description_only_frontmatter():
             f"{s} frontmatter keys = {keys}; portability requires name+description only"
         )
         # name must equal parent dir, lowercase-hyphen
-        name = re.search(r"^name:\s*(.+)$", fm, re.M).group(1).strip()
+        named = re.search(r"^name:\s*(.+)$", fm, re.M)
+        assert named is not None, f"{s}: name has no value"
+        name = named.group(1).strip()
         assert name == Path(s).parent.name, f"{s}: name '{name}' != dir"
         assert re.fullmatch(r"[a-z0-9-]+", name), f"{s}: name not lowercase-hyphen"
 

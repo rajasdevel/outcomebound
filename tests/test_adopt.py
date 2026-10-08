@@ -26,11 +26,21 @@ import pytest
 
 from outcomebound_tools import adopt, facts, fileplan, finish_check, fragments, identity, paths
 from outcomebound_tools.declared_tests import PYTEST
+from tests.adopt_helpers import (
+    GIT,
+    ROOT,
+    Capture,
+    change_kernel,
+    engine_copy,
+    manifest,
+    repo,
+    run,
+    snapshot,
+    states,
+)
 from tests.portable import WINDOWS, engine, needs_symlinks, write
 from tests.processes import running
 
-ROOT = Path(__file__).resolve().parent.parent
-GIT = shutil.which("git") or "git"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 CLAUDE_SKILL = ".claude/skills/using-outcomebound/SKILL.md"
 CLAUDE_BRIEF = ".claude/skills/decision-brief/SKILL.md"
@@ -45,7 +55,6 @@ SKILL_RECORDS = ["skill"] * len(SKILL_FILES)
 GENERIC_SKILL = ".outcomebound/skills/using-outcomebound/SKILL.md"
 PYTHON_FRAGMENT = ".outcomebound/fragments/python.md"
 LAUNCHER = ROOT / "scripts" / "outcomebound"
-Capture = pytest.CaptureFixture[str]
 
 
 def commit_all(target: Path) -> None:
@@ -58,54 +67,9 @@ def commit_all(target: Path) -> None:
     )
 
 
-def repo(path: Path, files: dict[str, str] | None = None) -> Path:
-    """A fresh Git repository at `path` holding `files`, by relative path."""
-
-    path.mkdir(parents=True)
-    subprocess.run([GIT, "init", "-q", str(path)], check=True)
-    for name, text in (files or {}).items():
-        (path / name).parent.mkdir(parents=True, exist_ok=True)
-        write(path / name, text)
-    return path
-
-
-def run(capsys: Capture, *argv: str, source: Path = ROOT) -> tuple[int, str, str]:
-    code = adopt.main(list(argv), source=source)
-    out, err = capsys.readouterr()
-    return code, out, err
-
-
-def snapshot(root: Path) -> dict[str, bytes]:
-    """Every file and symlink under `root` outside `.git`, by relative path."""
-
-    found: dict[str, bytes] = {}
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if relative.parts[0] == ".git":
-            continue
-        if path.is_symlink():
-            found[relative.as_posix()] = b"-> " + os.readlink(path).encode()
-        elif path.is_file():
-            found[relative.as_posix()] = path.read_bytes()
-    return found
-
-
-def manifest(target: Path) -> dict[str, Any]:
-    document: dict[str, Any] = json.loads((target / adopt.MANIFEST).read_text(encoding="utf-8"))
-    return document
-
-
 def blocks(target: Path, name: str) -> dict[str, identity.ManagedBlock]:
     text = (target / name).read_text(encoding="utf-8")
     return {block.block_id: block for block in identity.find_managed_blocks(text)}
-
-
-def states(out: str) -> dict[str, str]:
-    """`--check` output as {record label: state}, any detail after the label and the closing
-    `next:` line left out."""
-
-    rows = [line.split(None, 1) for line in out.splitlines() if not line.startswith("next: ")]
-    return {name.split(": ", 1)[0]: found for found, name in rows}
 
 
 def next_lines(out: str) -> list[str]:
@@ -114,25 +78,6 @@ def next_lines(out: str) -> list[str]:
 
 def kinds(target: Path) -> list[str]:
     return [record["kind"] for record in manifest(target)["artifacts"]]
-
-
-def engine_copy(tmp_path: Path) -> Path:
-    """The parts of this checkout adopt renders from, copied so a test can change them."""
-
-    source = tmp_path / "engine"
-    for directory in ("fragments", "adapters", "skills"):
-        shutil.copytree(ROOT / directory, source / directory)
-    for name in ("VERSION", adopt.KERNEL_TEMPLATE, "templates/fragment-local.md"):
-        (source / name).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / name, source / name)
-    return source
-
-
-def change_kernel(source: Path, version: str) -> None:
-    template = source / adopt.KERNEL_TEMPLATE
-    text = template.read_text(encoding="utf-8")
-    write(template, text.replace("not least work.", "not least work, now."))
-    write(source / "VERSION", version + "\n")
 
 
 def sha(data: bytes) -> str:
@@ -1120,7 +1065,7 @@ def test_detect_prints_one_command_that_installs(tmp_path: Path, capsys: Capture
 def test_detect_proposes_the_test_command_ci_runs(tmp_path: Path, capsys: Capture) -> None:
     """Where the project's CI names its tests, Done is that command, not discovery's guess."""
 
-    workflow = "jobs:\n  test:\n    steps:\n      - run: pytest -q\n"
+    workflow = "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
     files = {"pyproject.toml": "[project]\n", ".github/workflows/ci.yml": workflow}
     target = repo(tmp_path / "t", files)
 
@@ -1128,6 +1073,34 @@ def test_detect_proposes_the_test_command_ci_runs(tmp_path: Path, capsys: Captur
 
     words = shlex.split(out, comments=True)
     assert code == 0 and words[words.index("--done") + 1] == "pytest -q"
+
+
+@pytest.mark.parametrize("discovered", [False, True])
+def test_detect_keeps_powershell_ci_out_of_posix_done(
+    tmp_path: Path, capsys: Capture, discovered: bool
+) -> None:
+    command = 'python -m pytest "$env:TEST_PATH"'
+    workflow = (
+        "jobs:\n  test:\n    runs-on: windows-latest\n    steps:\n"
+        f"      - shell: pwsh\n        run: {command}\n"
+    )
+    files = {".github/workflows/ci.yml": workflow}
+    if discovered:
+        files["pytest.ini"] = "[pytest]\n"
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    words = shlex.split(out, comments=True)
+    done = [words[index + 1] for index, word in enumerate(words) if word == "--done"]
+    assert code == 0 and done == ([PYTEST] if discovered else [])
+    assert snapshot(target) == before
+    assert "POSIX equivalent" in out and "--done" in out
+    if discovered:
+        assert f"{PYTEST} is what pytest.ini suggests" in out
+    rendered = facts.render(target, [], [], ["AGENTS.md"], [])
+    assert f"- CI test: `{command}` (.github/workflows/ci.yml)" in rendered.facts
 
 
 def test_detect_refuses_a_target_outside_git_as_the_install_would(
@@ -2315,7 +2288,7 @@ def test_detect_says_a_test_command_it_did_not_read_from_ci_runs_on_the_host(
     tmp_path: Path, capsys: Capture
 ) -> None:
     guessed = repo(tmp_path / "guessed", {"pytest.ini": "[pytest]\n"})
-    workflow = "jobs:\n  test:\n    steps:\n      - run: pytest -q\n"
+    workflow = "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
     from_ci = repo(
         tmp_path / "ci", {"pytest.ini": "[pytest]\n", ".github/workflows/c.yml": workflow}
     )

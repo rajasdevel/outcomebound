@@ -35,6 +35,22 @@ A test command is a runner named as a whole word or command (`pytest`, `make tes
 test:ci`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`; `make
 test-data` and `npm run test:watch` are not.
 
+Detection keeps the observed CI test commands separate from its Done candidates. Done runs
+through POSIX `sh`. A GitHub Actions step is a candidate only where its shell reads as `sh` or
+`bash`: the step's `shell`, then the job's `defaults.run.shell`, then the workflow's default,
+then a known hosted runner's default. Windows defaults to `pwsh`; Ubuntu and macOS default to
+`bash`. A dynamic, custom or unreadable shell or runner is unsettled. GitLab script entries do
+not establish the runner's shell. These rules follow
+[GitHub's shell and defaults contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsshell).
+
+Other CI commands stay in the CI test fact. Detection says they were not copied into Done and
+asks for a project POSIX equivalent. A command found independently in the project's test
+configuration can still be proposed, marked as a host candidate rather than a CI command.
+Neither a `bash` shell nor a lexical reading proves compatibility with `sh`: Bash syntax,
+CI-only variables, tools and setup still need project review. Detection runs no command and
+does not change or refuse a Done command the user already recorded. No shell translation or
+new runtime is added, and the installed block and manifest formats do not change.
+
 The facts record holds the selection (`fragments`), the `done` commands, any `style`, and `inputs`: each source
 path read, with its sha256. `--check` recomputes the block: bytes other than both the record's and
 the recomputation's read `edited`; a record other than the recomputation reads `stale`, naming each

@@ -2,6 +2,7 @@
 # copied into the candidate-writable fixture.
 AGENTS.md
 checks/probe_export.py
+checks/report_records.py
 checks/scope_walk.py
 checks/transcript_commands.py
 checks/allowed_paths.sh

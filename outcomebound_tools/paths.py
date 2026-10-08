@@ -13,7 +13,9 @@ from __future__ import annotations
 import re
 import shlex
 import sys
+from os import PathLike
 from pathlib import Path, PurePosixPath
+from typing import TypeGuard
 
 # The path grammar. A segment equal to any of these is refused wherever it
 # appears, which is what forbids a leading, trailing or doubled separator.
@@ -136,7 +138,7 @@ def redirects(path: Path) -> bool:
         return False
 
 
-def admits(value, *, allow_root=False) -> bool:
+def admits(value: object, *, allow_root: bool = False) -> TypeGuard[str]:
     """Whether ``value`` is a bounded repository-relative path. Never raises."""
 
     if not isinstance(value, str) or not value:
@@ -152,7 +154,7 @@ def admits(value, *, allow_root=False) -> bool:
     return not any(part in FORBIDDEN_SEGMENTS or names_git(part) for part in value.split("/"))
 
 
-def bounded_relative(value, *, allow_root=False) -> str:
+def bounded_relative(value: object, *, allow_root: bool = False) -> str:
     """``value`` if it is a bounded repository-relative path, else refuse.
 
     ``allow_root`` additionally admits exactly ``"."``, the whole-target
@@ -164,7 +166,7 @@ def bounded_relative(value, *, allow_root=False) -> str:
     return value
 
 
-def resolve_bounded(root, relative, *, allow_root=False) -> Path:
+def resolve_bounded(root: str | PathLike[str], relative: str, *, allow_root: bool = False) -> Path:
     """``root``/``relative`` with no symlink on the way and no escape.
 
     Every ancestor is checked rather than the final path alone: a symlinked
@@ -187,7 +189,7 @@ def resolve_bounded(root, relative, *, allow_root=False) -> Path:
     return candidate
 
 
-def read_bounded(root, relative) -> bytes:
+def read_bounded(root: str | PathLike[str], relative: str) -> bytes:
     """The bytes of one bounded file inside ``root``.
 
     Reading is where a path stops being a string and starts being evidence, so

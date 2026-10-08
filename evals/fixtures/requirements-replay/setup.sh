@@ -80,4 +80,7 @@ Run the tests with `python3 -B -m unittest`.
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
 
+mkdir -p checks
+cp "$repo/evals/graders/report_records.py" checks/
+
 . "$here/../skills-close/close.sh"
