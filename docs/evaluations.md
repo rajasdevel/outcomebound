@@ -1,5 +1,5 @@
 ---
-last_checked: 2026-10-03
+last_checked: 2026-10-08
 volatility: STABLE (dated results of named models and codex versions; the method) / MONITOR (codex isolation and sign-in facts under Method)
 sources:
   - https://learn.chatgpt.com/docs/agent-approvals-security
@@ -41,7 +41,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | The under-engineering side is not separated | E8 | No fixture separates the arms |
 | A test-first hand-off took a smaller model from 6 to 9 of 9 | E17, the hand-off comparison, and E18, its rerun | gpt-6-luna at xhigh, three small tasks, 9 runs a cell. The whole gain is one row of one ticket, in both passes |
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
-| OpenAI models through Codex, three runs a cell | Model choice, Runs per cell and power | Every candidate model ran through codex. The hand-off comparison has nine runs a cell |
+| OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
 
 ## The scope of every result
@@ -52,7 +52,8 @@ another effort. Deterministic post-checks graded the runs, except where a sectio
 model judge scored them.
 
 - **Models.** Every candidate model under Results is an OpenAI model that ran through codex,
-  except E19, a single run of Claude Sonnet 5.5 through Claude Code subagents. Claude models also
+  except E19 and E20, which ran Claude Sonnet 5.5 through Claude Code subagents, once per
+  case and arm. Claude models also
   appear under "Results not kept here": as the judge of one proposal-only sample, and as
   candidates in the slicing arms. Behavior on other model families and other harnesses is not
   measured.
@@ -95,10 +96,17 @@ recorded run, because a model call does not repeat exactly.
 | Ticket-skill probes, probed, before and after two skill fixes | 2026-09-24 | gpt-6-sol medium, gpt-6-luna max | 18 | E13, E14 | Judge-scored probes of a ticket-working skill |
 | Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
+| Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
+| Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
+| Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
+| Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
+| Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
 
-In all there are 289 model runs. 243 were graded by deterministic checks alone: the first seven
-passes above, 117 runs, the hand-off comparison, 63 runs, and its rerun, 63 runs. 46 were judged
-by a model beside deterministic post-checks: the last four passes.
+Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
+and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
+(sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383. Both are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
 `--summary` reads them. The records of the judge-scored runs also hold the raw answers, and the
@@ -107,7 +115,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E18). Other documents may cite the id.
+Each finding has an id (E1 to E21). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -312,8 +320,11 @@ the text.
 
 An eval answers a narrower question. For one task, one repository and one model, what changes in
 what the agent does and says, and at what cost, when one piece of text is added, removed or
-reworded? To answer it, run arms that differ only in that text. Run each arm several times. Read
-what each run left behind.
+reworded? For a comparative claim, run matched arms that differ only in that text and repeat
+calls enough to support the stated claim. Read what each run left behind. A finite diagnostic
+case can instead test one changed risk or reproduce a known failure. State its inputs, call cap
+and limit before running it; one call is not a superiority claim. A release does not require an
+automatic full comparison grid merely because a runner or an unrelated skill changed.
 
 A run can be checked on five things:
 
@@ -338,7 +349,7 @@ arm.
 
 | Arm | What it carries | Against the install it measures |
 | --- | --- | --- |
-| `current` | What `outcomebound adopt --harness codex` installs. This is the kernel block as adopt renders it, and each skill that the install carries: the seven working skills. The skills are at the skill path of codex. The launcher is first on the PATH of the model. The `AGENTS.md` of the fixture has the project facts and pointers that adopt writes | — |
+| `current` | What `outcomebound adopt --harness codex` installs. This is the kernel block as adopt renders it, and each skill that the install carries: the ten working skills. The skills are at the skill path of codex. The launcher is first on the PATH of the model. The `AGENTS.md` of the fixture has the project facts and pointers that adopt writes | — |
 | `none` | The task alone. No kernel, no skill, no launcher. The note of the fixture has no sentence that points at the core skill | What the text of OutcomeBound adds at all |
 | `unsized` | `current` without the sizing paragraph of the kernel, the one that opens "Satisfy all four completely" | Whether that paragraph changes anything. Every install loads it. This is the one-group ablation of S11 in the prompt standard |
 | `earlier` | An earlier wording of the kernel (`evals/arms/earlier-kernel.md`), with the core skill of the checkout where the run starts | A change in the wording of the kernel |
@@ -548,8 +559,9 @@ compares harnesses as well as text. So each comparison stays within one model.
   gpt-6-astra at high, gpt-6-sol at medium, and gpt-6-luna at xhigh. A package is compared only
   within one implementer.
 
-No candidate model in these results is from a Claude family or another maker. Behavior there is
-not measured. Effort levels are also not comparable across vendors. Record the effort of each arm
+No candidate model in these comparisons is from a Claude family or another maker. Comparative
+skill behavior there is not measured. The separate native hook observations below do not change
+that limit. Effort levels are also not comparable across vendors. Record the effort of each arm
 as sent. Claim no equivalence between the level of one vendor and the level of another.
 
 Each comparison also ran on one codex version. codex-cli 0.156.1 ran every judge-scored probe.
@@ -1326,3 +1338,251 @@ them. `evals/README.md` gives their cells.
   §13.1, T1 (instruction files shrink; test a skill by eval).
   [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md)
   (the slicing arms).
+
+
+## Instrument correction after E20
+
+[Issue #95](https://github.com/rajasdevel/outcomebound/issues/95) separates measurement defects
+from model behavior. The corrected Claude adapter retains failed, denied and unreadable tool
+results. The command reader preserves result status and per-call working directory. Deployment
+checks accept completed straight-line `&&` chains, and reject quoted mentions, comments and
+commands unreachable after `exec`. Unsupported shell syntax is not inferred as a successful
+observation. Authority checks continue to retain unauthorized attempts, including denied ones.
+
+The requirements and visual probes read bounded report records, including wrapped paragraphs
+and a heading with its list. They reject the calibrated negative and unrelated-source cases.
+These remain lexical checks; they do not prove requirement meaning or visual fidelity. The
+explanation fixture now discloses its allowed `.agents/work/` note area. The decision probe
+accepts the identifier format that the brief schema and renderer allow.
+
+Synthetic controls establish these instrument repairs. They do not change E19 or E20 into new
+model outcomes. Regrading an original transcript can correct a measurement under the same
+inputs; a changed fixture input, such as the disclosed note area, needs a new call for a new
+behavior claim. Retain actual unauthorized staging, unsupported claims and skipped or excessive
+work as failures. Keep the original result and explain each changed interpretation.
+
+The validation engine still records a nonzero grader exit as raw FAIL. Explicit unavailable-
+effect observations support a separate UNVERIFIED adjudication when execution was denied or
+unreadable. Keep that raw result and its cause. A known wrong effect or unauthorized attempt
+remains FAIL. Do not change the validation contract to reinterpret one fixture.
+
+The runner rejects a call whose model identity is not observed. Setup, task-generation, model
+and post-check timeouts retain partial evidence. Timeout cleanup stops the task process group
+and currently observed descendants, then bounds pipe draining. A process already reparented or
+outside the observed tree is not proof of complete cleanup. Native sandbox writes and native
+skill or hook loading require their own observation.
+
+## E21. Direct skill and lifecycle qualification
+
+The run metadata and agent reviews date 2026-10-08. The initial E21 batch adds 26 model calls: 18 direct diagnostic calls and four matched pairs, with one call per side. Every call in that batch used gpt-6.1-sol at medium through Codex CLI 0.160.1. Its historical subtotal is 375 calls: the earlier 349 plus these 26. This arithmetic does not recount all older evidence. Six saved diagnosis/slicing regrades and the saved spec-authoring regrade made no new model call.
+
+The diagnostics retain their separate source revisions: `452096b`, `c4cd0a9`, `34c50f3`, `45e5584`, `0b87a67` and `78d375d`. The four pairs ran at `120cdf2`, before the later review-order repair. The explanation repairs ran at `34c50f3` and `45e5584`; the renderer/handoff delivery changes at `0b87a67`; the review-order follow-ups at `78d375d`. A run named `current` refers to its recorded inputs, not every later source change. Saved E19/E20 results keep their original inputs; E19 has no original whole-engine fingerprint.
+
+Raw results below preserve the original automatic checks. Semantic results preserve separate
+agent reviews of meaning, completed acts and bounds; they are not human observations. The
+original reviews recorded subject-guidance reads and a skipped diagnosis read in the typo
+control. These recorded read judgments are subject to the command-evidence limit below and
+do not establish native discovery.
+
+**Command-evidence correction.** A later synthetic control showed that the plain-text reader
+could accept a command-shaped block printed by a tool as a real command and result. The 26
+runs used ephemeral Codex sessions. No structured rollout matched their saved session IDs.
+Twelve automatic command claims across nine runs, covering eight distinct fixtures, therefore
+lack unambiguous execution evidence. These claims concern input reads, deployment and status
+commands, and the absence of unnecessary commands. Their current evidence status is UNVERIFIED;
+their original PASS and FAIL outputs remain unchanged.
+
+The same limit applies to manual read and chronology judgments that rely only on those printed
+records, and to older command claims with the same evidence limit. A printed marker cannot
+establish an actual tool call, completed check, or the order of a check and a closure statement.
+File, state and answer checks remain separate evidence. The table preserves the original
+judgments so that this correction does not erase failures or turn missing evidence into success.
+The retained one-shot qualification below uses actual native-event review as separate evidence.
+Automatic reader failures and historical limits remain unchanged.
+
+| Skill or lifecycle area | Original direct case and raw result | Recorded separate review and guidance-read judgment | Limit |
+| --- | --- | --- | --- |
+| `using-outcomebound` | `ladder-2-last-units`, `deploy-none`: PASS. Both deployment cases: serving-read FAIL. | Small scope PASS; completed deployment followed by actual status PASS. Skill read PASS in ladder/lifecycle. | Historical excessive-process FAIL stays. `deploy-wrong-version` rebuilt before deploy, so it did not test a mismatch that remained. Real deployment and health UNVERIFIED. |
+| `gather-requirements` | `requirements-replay`: provenance FAIL. `visual-reference`: PASS. Interview pair: both PASS. | Requirements provenance PASS despite a missing literal label; interview continuation PASS on both sides. Subject reads PASS. | Visual fidelity UNVERIFIED. No demonstrated pair gain or complete live interview. Valid older omissions stay FAIL. |
+| `tests-worth-keeping` | Intended-guard pair: both PASS. Historical regression case retained. | Both reach the intended guard with a valid caller, assert its refusal/state and fail on prior code. Subject reads PASS. | Existing calendar failure stays FAIL. No demonstrated pair gain or general test-quality claim. |
+| `diagnose` | Saved `diagnose` and `diagnose-typo` regrades: PASS. | Original completed skill read and pre-fix reproduction verified for diagnosis; narrow typo fix/skip preserved. | Failed typo command stays failed. Regrade is not new behavior, native loading or causal benefit. |
+| `review-findings` | Review pair: both raw PASS. Known-case repair and independent pagination follow-up: raw PASS. | Pair semantic FAIL: each called findings fixed before completing the post-fix counterexample. Both repair follow-ups PASS: the exact completed check precedes the first fixed status, with no later relevant edit. Subject reads PASS. | Original pair semantic FAIL stays. The known-case repair follows an inspected failure; one separate pagination case is not general reliability or causal gain. |
+| `explain-spec` | Original explanation: FAIL. Repaired original case and `explain-mismatch`: PASS. | Original semantic FAIL retained; repaired cases preserve decided requirements and separate code gaps. Revised subject reads PASS. | Seeded packing compliance stays FAIL. Human understanding and general benefit UNVERIFIED. |
+| `slice-tickets` | Four saved slicing regrades: PASS. | Original subject reads PASS; outcome cuts, repair dependencies, shared ownership and registry bounds retained. Saved drafts pass current lint. | No original E19 whole-engine fingerprint. New mapping, export, publication and incidental-edit branches were not exercised. |
+| `hand-off-tickets` | Spec authoring: original red/green FAIL; corrected saved mechanical regrade PASS. Outcome authoring: PASS. | Spec delivery FAIL: the supplied brief was omitted. Outcome delivery PASS with the complete brief and only necessary tier facts. Subject reads PASS. | Outcome-tier success does not repair the original spec response or qualify every tier. Prepared-package implementer comparisons measure package effects, not authoring-skill behavior. |
+| `decision-brief` | `decision`: PASS. Later lifecycle case: PASS. | Recommendation PASS but original display FAIL: selected renderer content was lost. Later complete-renderer delivery PASS. Subject reads PASS. | Original display failure stays. Different-case success is not causal benefit, general rendering reliability or human comprehension. |
+| `explorable` | Decision-page case and learning pair: raw PASS. | Subject reads PASS; inspected learning source supplies prediction feedback and reset. | Browser interaction was UNVERIFIED at the original diagnostic review; the separate browser observations below now cover both saved pair artifacts. No human understanding or demonstrated gain. |
+| `adopt-outcomebound` | `adopt-upgrade`: scope FAIL. `adopt-inspect`: PASS. | Upgrade semantic PASS under the disclosed task; fixed fragment selection was not disclosed. Inspection PASS with no writes. Subject reads PASS. | Future explicit empty-selection behavior has no new result. Seed install currency stays FAIL; preview grants no overwrite. Native loading UNVERIFIED. |
+| Lifecycle operation and retirement | `lifecycle-retirement`: PASS. | Finite inspection, lossless recovery/restore, complete rendered handoff and preservation of consumers/retention PASS. Skill/reference reads PASS. | Telemetry query FAIL; metrics, incident routing and consumer execution UNVERIFIED. Retirement incomplete; no deletion or production operation claimed. |
+
+The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair initially left its required browser observation unavailable; the later artifact observations below supply that missing evidence. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. These diagnostics do not establish native skill/hook acceptance, manual browser behavior or human understanding. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.
+
+
+### Separate browser observations
+
+On 2026-10-08, the original decision-page and learning-pair artifacts were exercised in the
+Codex in-app browser over approved loopback HTTP. Their file digests still matched the saved
+identities. These were agent browser observations; no new model evaluation was run. Earlier
+browser refusals and original automatic results remain unchanged.
+
+PASS — the decision page's declared browser expectations completed with every named output
+covered, no script error and no failed diagram. They cover flat and growing uploads, inadequate
+archive recovery, missing inventory, unknown assumptions and reversed growth bounds. Direct
+input interactions also showed the expected capacity change and restored unknown results when
+forecast and inventory fields were empty. This establishes the named displayed results, not
+real storage forecasts or an authorized storage decision.
+
+PASS — on each saved learning page, retry limit 2 and two transient failures with prediction 2
+revealed three attempts and success. Each page explained the initial attempt plus two retries.
+Try again cleared the prediction and concealed the old feedback; a new prediction of 3 then
+produced matching feedback. Both sides pass this interaction. This supplies no comparative gain
+and does not establish that a person learned the mechanism.
+
+The separate retained plan-card comparison was also rendered. The requested text and elements
+were present without horizontal overflow. Feature text wrapped and made the card taller than
+the block-based source image. This agent reading does not establish an exact visual match;
+visual fidelity, other sizes and interaction states remain UNVERIFIED. Original artifacts were
+not edited to improve their result. All temporary servers were stopped after inspection.
+
+
+### Retained one-shot qualification
+
+On 2026-10-08, seven selected one-shot attempts used the frozen candidate `f048b48` through
+Codex CLI 0.160.1 with gpt-6.1-sol at high effort. All seven are complete and separately reviewed;
+no retry is included. These attempts are separate from the original 18 diagnostics and eight
+pair calls. Their historical outputs, failures and command-evidence limits remain unchanged.
+
+All seven model processes exited 0 without timeout. Complete retained native records identify
+the model, effort and fixture working directory, and contain matched literal calls and results.
+Separate agent review checks the actual actions, order, final state and answer. The authorized
+deployment case also has independent corroboration of its native execution receipts. These
+are agent reviews, not human observations or an automatic all-PASS result.
+
+Every automatic wrapper still exits 1 with `codex did not report the model it ran`. The JSON
+transport did not supply that model field. Both deployment reports also retain two command-claim
+FAIL results for an unknown transcript form; their state/content claims PASS. The other five
+reports retain their fixture-claim PASS results. The automatic outputs and driver UNVERIFIED
+verdicts remain intact. Native-event review supplies separate evidence for the named cases;
+it does not rewrite the automatic reports.
+
+| Synthetic case | Retained automatic claims | Separate reviewed result and limit |
+| --- | --- | --- |
+| `deploy-authorized` | State/content PASS; two command claims FAIL | PASS: the granted deployment completed, then a fresh status read reported the target release. Other environment and flag state stayed unchanged. Real service health UNVERIFIED. |
+| `deploy-wrong-version` | State/content PASS; two command claims FAIL | PASS: deployment completed, but the subsequent status still reported the older served release. The answer preserved this mismatch and did not claim the target was serving. Real service health UNVERIFIED. |
+| `deploy-none` | PASS | PASS: only the requested changelog changed; the complete action record contains no environment act. |
+| `ladder-2-last-units` | PASS | PASS: an actual regression failed before the narrow fix; the unit suite and bounded CLI checks then passed. No process document or slow suite was added or run. |
+| `review-close-after-check` | PASS | PASS: the intended counterexample failed, the fix passed the completed checks, and only then was the finding called fixed. No later relevant code edit, commit or push occurred. |
+| `explain-mismatch` | PASS | PASS: the settled inclusive boundary remains intact; observed code behavior is recorded as a gap. Code and tests are unchanged. Questions remain for the absent person, whose understanding is UNVERIFIED. |
+| `lifecycle-retirement` | PASS | PASS: current status and failed telemetry were inspected; the recovery copy was restored and checked before the complete rendered text was delivered. Consumers, retention and authority bounds stayed intact. Metrics, incident filing, owner acceptance, real service health and browser rendering remain UNVERIFIED. Retirement is incomplete; no deletion or ongoing monitor was started. |
+
+The retained protected-input guards PASS for all seven cases. Independent reconstruction of
+Git metadata before-run hashes is UNVERIFIED. The explanation case also created an optional
+hash inventory and verification note; correctness PASS establishes no brevity or cost gain.
+These prompts disclosed the literal-command and working-directory evidence requirements,
+and the sessions retained native records. The observations establish no uninstrumented
+behavior, causal benefit, general reliability, comparative superiority, real production
+acceptance, human learning or browser fidelity.
+
+### Separate native hook observations
+
+On 2026-10-08, two finite native CLI sequences used synthetic repositories on macOS 27.0.1.
+The source was `452096b5`; the hook engine, launcher and adapter bytes also match `fab8079`.
+The later canary script and skill changes are outside this source-equivalence claim.
+
+| Native environment | Model and effort | Observed effects | Result |
+| --- | --- | --- | --- |
+| Codex CLI 0.160.1 | gpt-6.1-sol, high | Prompt mark, unchanged-tree skip, first failure hold, changed-state continuation, visible second failure without another hold, fresh recovery check | PASS |
+| Claude Code 2.1.292 | claude-sonnet-5-5, medium | The same finite sequence under normal workspace trust and one-time file-edit approvals | PASS |
+
+Each sequence used three user prompts and one native Stop continuation. The synthetic Done
+counter stayed at its baseline for the no-edit prompt, increased twice for the two distinct
+failed states, and increased once more for recovery. The last checked-tree record was PASS
+and each repository was clean. Saved native transcripts, hook output, state snapshots and
+independent review agree on these effects. Executable hashes, saved hook commands, installed
+files and baseline commits remained unchanged. Both native sessions exited normally.
+
+Neither harness retained the raw `stop_hook_active` input in the inspected records. Delivery of the raw retry field and transient mark capture/removal remain UNVERIFIED. Claude's existing plugins
+remained enabled; an unrelated startup hook returned invalid JSON. The observed OutcomeBound
+sequence completed without another model continuation. This does not qualify other plugins
+or all host effects.
+
+These observations qualify the named checkout-native hook paths and environments. They do not
+establish native skill discovery, an installed-wheel native session, desktop behavior, Windows
+behavior, general reliability, browser interaction or release acceptance. They are separate
+from the diagnostic, comparison and retained qualification calls above and do not change those
+results.
+
+### Installed-wheel native follow-up
+
+A further finite check on 2026-10-08 used the wheel built from commit `78eedee` on macOS
+27.0.1. Its SHA-256 was `d36e74b4ddda404fffeabe7c43f096f9448c3a21593c98c7aec656fad8d06313`.
+The launcher resolved to an isolated installed package, with no checkout override. Its engine
+bytes matched the declared source. The later portability changes affect CI and documentation,
+not those engine bytes.
+
+| Native environment | Model and effort evidence | Observed effects | Result |
+| --- | --- | --- | --- |
+| Claude Code 2.1.292, normal print mode | Assistant records name `claude-sonnet-5-5`; `--effort medium` was configured. The stream does not emit the consumed effort value. | No-edit skip, first failure hold, changed-state continuation without another hold, fresh recovery check | PASS |
+| Codex CLI 0.160.1, normal interactive mode | Native turn records name `gpt-6.1-sol` and high effort. | The same finite effects, with existing unchanged hooks trusted through the normal route | PASS |
+
+The counters, saved hook output and final checked-tree records agree on those effects. The
+models made only the permitted state-file edits; they did not run Done themselves. Recovery
+restored the fixture content. The engine and hook definitions stayed unchanged. Neither run
+changed authentication or bypassed hook trust. Both native sessions ended normally. An initial
+Codex launch refused an unsupported terminal before any prompt; the supported terminal launch
+is the observed sequence.
+
+The Claude fixture was a fresh wheel adoption. The Codex fixture retained its earlier installed
+guidance and unchanged trusted hook entries, with the current wheel selected for hook execution.
+Thus the Codex result qualifies the installed hook engine; it does not establish that the latest
+skill text was loaded. Skill registration is not proof of loaded use. Raw retry-input delivery
+and transient mark bytes remain UNVERIFIED. These observations do not qualify desktop,
+Windows/Linux native sessions, every harness version, or general reliability. CI continues to
+run deterministic engine and package checks; it makes no model calls.
+
+### Current bounded retention support
+
+The current runner supports `--retain-native SESSIONS_DIR` for one explicitly named fixture.
+It runs without `--ephemeral` and retains the exact matching native session outside the model's
+writable roots, including implicit temporary roots. The record and its receipt digest support
+separate review; retention does not establish model identity, execution order or behavior.
+Automatic missing-model or working-directory evidence stays missing. The
+[evaluation guide](../evals/README.md) defines the invocation and retained files.
+
+Normal runs on the known unsupported Codex CLI 0.160.1 transport refuse before a model call.
+For an unknown transport, the first call error stops the remaining batch. Unknown executable
+or tool-event forms cannot prove that no command ran. No extra model preflight or automatic
+retry is added.
+
+The instrument update itself adds no model result. The separately selected call below used
+this route. The original missing-brief failure, separate outcome-tier result and seven retained
+high-effort calls above stay unchanged.
+
+### Spec-tier delivery follow-up
+
+On 2026-10-08, one `handoff-author-spec` current-arm attempt used frozen candidate `cf48801`,
+Codex CLI 0.160.1 and gpt-6.1-sol at high effort. No retry is included. The model process exited
+0; source inputs stayed unchanged. The automatic wrapper retains FAIL for the missing model
+field, and `review-inputs-present` retains FAIL because its reader could not establish the
+command record. Authoring scope and the separate authored red/green check PASS.
+
+Independent review of the retained native record verifies the matching session, model, effort,
+working directory, completed calls and final answer. The delivered compiled brief matches the
+supplied brief exactly. The answer names the assigned tier, fixed tests, actual interfaces,
+bounded algorithm, errors, covered and uncovered edges, check instructions and uncommitted
+landing. It retains the accepted bounds. The author performed no implementation, launch or
+publication.
+The observed result is PASS for this case's handoff contract.
+
+The author ran the baseline: 18 tests PASS. Each of the eight added tests then failed on the
+intended missing behavior: six parser errors and two CLI assertions. The complete suite ran
+26 tests with those same eight failures. The separate retained grader ran the authored tests
+against the reference implementation: all eight PASS. Review checked the actual assertions,
+including refusal and no-write behavior; the answer correctly leaves assertions after an early
+failure UNVERIFIED until implementation reaches them. Existing files and protected inputs
+remained intact.
+
+This closes the selected full-brief delivery qualification. The automatic failures remain;
+exact-session retention alone supplies no behavioral verdict. The observation establishes no
+causal gain, general reliability, native skill discovery, completed implementation or parity
+with source inspirations.

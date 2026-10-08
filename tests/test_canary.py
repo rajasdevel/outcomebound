@@ -3,7 +3,6 @@ what fails it, that no project path reaches the report, and the record keyed by 
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import subprocess
@@ -12,12 +11,18 @@ from pathlib import Path
 
 import pytest
 
+from tests.canary_helpers import (
+    SCRIPT,
+    assert_no_path,
+    canary,
+    git,
+    instructions,
+    load_canary,
+    project,
+    stub,
+)
 from tests.portable import WINDOWS
 
-ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "scripts" / "canary.py"
-LAUNCHER = ROOT / "scripts" / "outcomebound"
-IDENTITY = ("-c", "user.name=Canary", "-c", "user.email=canary@example.test")
 # The canary is maintainer tooling: it runs the installed release's sh launcher, and its tests
 # stand in for interpreters and floor tools with sh scripts, which Windows cannot start.
 pytestmark = pytest.mark.skipif(
@@ -25,65 +30,9 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def git(where: Path, *args: str) -> None:
-    subprocess.run(["git", *IDENTITY, *args], cwd=where, check=True, capture_output=True)
-
-
-def project(path: Path) -> Path:
-    """A Git project with one commit, then OutcomeBound installed by this checkout and committed."""
-
-    path.mkdir()
-    git(path, "init", "-q")
-    (path / "README.md").write_text("# a synthetic project\n", encoding="utf-8")
-    git(path, "add", "-A")
-    git(path, "commit", "-qm", "start")
-    subprocess.run([str(LAUNCHER), "adopt", str(path)], check=True, capture_output=True)
-    git(path, "add", "-A")
-    git(path, "commit", "-qm", "adopt")
-    return path
-
-
 @pytest.fixture
 def projects(tmp_path: Path) -> list[Path]:
     return [project(tmp_path / "private-alpha"), project(tmp_path / "private-beta")]
-
-
-def stub(tmp_path: Path, body: str) -> Path:
-    """An interpreter for the candidate that runs `body`; it is called as the canary calls a
-    Python: `-I -c <code> <checkout> <verb> <project> ...`, so $5 is the verb, $6 the project."""
-
-    path = tmp_path / "stub-python"
-    path.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
-    path.chmod(0o755)
-    return path
-
-
-def canary(tmp_path: Path, listed: list[Path], python: Path | str) -> subprocess.CompletedProcess:
-    listing = tmp_path / "canary-projects.txt"
-    listing.write_text("# private\n" + "".join(f"{p}\n" for p in listed), encoding="utf-8")
-    env = {**os.environ, "OB_CANARY_LIST": str(listing)}
-    return subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT),
-            "--installed",
-            str(LAUNCHER),
-            "--python",
-            str(python),
-            "--records",
-            str(tmp_path / "records"),
-        ],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def assert_no_path(output: str, tmp_path: Path) -> None:
-    assert str(tmp_path) not in output
-    assert "private-alpha" not in output
-    assert "private-beta" not in output
 
 
 def test_the_same_engine_on_both_sides_passes_with_no_change(
@@ -169,16 +118,6 @@ def test_without_a_list_it_reads_unverified(tmp_path: Path) -> None:
     assert not (tmp_path / "records").exists()
 
 
-def load_canary():
-    spec = importlib.util.spec_from_file_location("canary", SCRIPT)
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    # Its dataclasses read their annotations through the module's entry in sys.modules.
-    sys.modules["canary"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 def test_the_record_is_keyed_by_tree_and_verify_reads_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -210,10 +149,6 @@ def test_the_record_is_keyed_by_tree_and_verify_reads_it(
     assert module.verify(repo, folder) == 1
     module.write_record(repo, folder, "FAIL", {})
     assert module.verify(repo, folder) == 1
-
-
-def instructions(module):
-    return next(c for c in module.COMMANDS if c.label == "instructions check")
 
 
 def report_text(result: str = "UNVERIFIED", **changes: object) -> str:
@@ -261,3 +196,24 @@ def test_a_valid_unverified_report_is_a_verdict_and_no_report_is_a_failure() -> 
     result = module.Result(1)
     module._compare(result, instructions(module), valid, missing, "python 3")
     assert result.failures == {"no report": 1}
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_canary_records_resolve_git_common_dir_without_path_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool
+) -> None:
+    module = load_canary()
+    root = tmp_path / "project with spaces"
+    root.mkdir()
+    git(root, "init", "-q")
+    where = root / "component" if nested else root
+    where.mkdir(exist_ok=True)
+    original_git = module._git
+
+    def older_git(target_path, *arguments):
+        if any(arg.startswith("--path-format") for arg in arguments):
+            return None
+        return original_git(target_path, *arguments)
+
+    monkeypatch.setattr(module, "_git", older_git)
+    assert module.records(where) == root / ".git" / module.RECORDS

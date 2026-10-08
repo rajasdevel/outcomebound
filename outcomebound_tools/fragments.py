@@ -27,8 +27,11 @@ import hashlib
 import json
 import re
 import sys
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
+from os import PathLike
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 from outcomebound_tools import adapters, home, textio
 from outcomebound_tools.mechanisms import MECHANISMS, unknown
@@ -120,7 +123,7 @@ def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
     return tuple(item.strip() for item in parsed)
 
 
-def _detect_patterns(value, source: str, number: int) -> tuple[str, ...]:
+def _detect_patterns(value: str, source: str, number: int) -> tuple[str, ...]:
     """Parse and constrain the detect list.
 
     Detection walks a target repository the operator did not necessarily write,
@@ -154,14 +157,30 @@ def _detect_patterns(value, source: str, number: int) -> tuple[str, ...]:
 LISTS = {"detect": _detect_patterns, "edges": _edges}
 
 
-def _frontmatter(text: str, source: str) -> tuple[dict, str]:
+def _frontmatter_value(
+    key: str, value: str, source: str, number: int
+) -> str | int | tuple[str, ...]:
+    """Read one declared field after its key and uniqueness were checked."""
+
+    if key in LISTS:
+        return LISTS[key](value, source, number)
+    if key == "version":
+        if not value.isdigit():
+            raise FragmentError(f"{source}:{number}: version must be an integer")
+        return int(value)
+    if not value:
+        raise FragmentError(f"{source}:{number}: {key} must not be empty")
+    return value
+
+
+def _frontmatter(text: str, source: str) -> tuple[dict[str, Any], str]:
     if not text.startswith("---\n"):
         raise FragmentError(f"{source}: fragment must open with a '---' frontmatter block")
     end = text.find("\n---\n", 3)
     if end == -1:
         raise FragmentError(f"{source}: frontmatter block is not closed with '---'")
     raw, body = text[4:end], text[end + 5 :]
-    fields: dict = {}
+    fields: dict[str, Any] = {}
     for number, line in enumerate(raw.splitlines(), 2):
         if not line.strip():
             continue
@@ -181,16 +200,7 @@ def _frontmatter(text: str, source: str) -> tuple[dict, str]:
             )
         if key in fields:
             raise FragmentError(f"{source}:{number}: duplicate frontmatter key {key!r}")
-        if key in LISTS:
-            fields[key] = LISTS[key](value, source, number)
-        elif key == "version":
-            if not value.isdigit():
-                raise FragmentError(f"{source}:{number}: version must be an integer")
-            fields[key] = int(value)
-        else:
-            if not value:
-                raise FragmentError(f"{source}:{number}: {key} must not be empty")
-            fields[key] = value
+        fields[key] = _frontmatter_value(key, value, source, number)
     missing = [key for key in FRONTMATTER_KEYS if key not in fields]
     if missing:
         raise FragmentError(f"{source}: frontmatter is missing {', '.join(missing)}")
@@ -248,13 +258,15 @@ def parse_fragment(text: str, source: str = "<fragment>") -> Fragment:
     )
 
 
-def load_fragment(path) -> Fragment:
+def load_fragment(path: str | PathLike[str]) -> Fragment:
     path = Path(path)
     fragment = parse_fragment(_read_text(path, "fragment"), str(path))
     return replace(fragment, path=path)
 
 
-def load_all(source_root, local=None) -> dict[str, Fragment]:
+def load_all(
+    source_root: str | PathLike[str], local: str | PathLike[str] | None = None
+) -> dict[str, Fragment]:
     """Load the shipped catalog, then `local`, the target's own fragment."""
 
     root = Path(source_root)
@@ -275,15 +287,19 @@ def load_all(source_root, local=None) -> dict[str, Fragment]:
     return catalog
 
 
-def select(catalog: dict[str, Fragment], ids) -> list[Fragment]:
+def select(catalog: dict[str, Fragment], ids: Iterable[str]) -> list[Fragment]:
     ids = list(ids)
     if not ids:
         raise FragmentError(
             "no fragments selected; pass --fragments id[,id…]. A default adoption ships no "
             "project guidance, so an empty selection writes no block rather than an empty one."
         )
-    seen = set()
-    duplicates = [name for name in ids if name in seen or seen.add(name)]
+    seen: set[str] = set()
+    duplicates = []
+    for name in ids:
+        if name in seen:
+            duplicates.append(name)
+        seen.add(name)
     if duplicates:
         # A repeated id is a typo. Deduping silently would compose a different
         # document than the one asked for and say nothing about the difference.
@@ -298,14 +314,14 @@ def select(catalog: dict[str, Fragment], ids) -> list[Fragment]:
     return [catalog[name] for name in ids]
 
 
-def compose_body(selected) -> str:
+def compose_body(selected: Iterable[Fragment]) -> str:
     """Render the block body: one section per fragment, in the order given."""
 
     parts = [PREAMBLE]
-    for fragment in selected:
-        parts.append(
-            f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
-        )
+    parts.extend(
+        f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
+        for fragment in selected
+    )
     return "\n\n".join(parts)
 
 
@@ -335,7 +351,7 @@ def _strip_frontmatter(text: str) -> str:
     return text.strip()
 
 
-def inline(source_root, selected) -> str:
+def inline(source_root: str | PathLike[str], selected: Iterable[Fragment]) -> str:
     """Emit kernel, the skills an install carries, and fragments as one unmanaged blob.
 
     For a target that cannot host a managed block — a pasted prompt, a harness
@@ -389,7 +405,7 @@ def _matches(root: Path, pattern: str) -> bool:
     return False
 
 
-def detect(target, catalog: dict[str, Fragment]) -> list[str]:
+def detect(target: str | PathLike[str], catalog: dict[str, Fragment]) -> list[str]:
     """Propose fragment ids whose detect globs match under ``target``.
 
     Detection proposes; it never applies. Setup fragments usually ship an empty
@@ -398,11 +414,11 @@ def detect(target, catalog: dict[str, Fragment]) -> list[str]:
     """
 
     root = Path(target)
-    proposed = []
-    for fragment in catalog.values():
-        if any(_matches(root, pattern) for pattern in fragment.detect):
-            proposed.append(fragment.id)
-    return proposed
+    return [
+        fragment.id
+        for fragment in catalog.values()
+        if any(_matches(root, pattern) for pattern in fragment.detect)
+    ]
 
 
 def _harness_table() -> dict:
@@ -430,7 +446,9 @@ def byte_cap(harness: str | None) -> int | None:
         raise FragmentError(str(error)) from error
 
 
-def _report_size(output: str, count: int, harness, cap, known: bool) -> None:
+def _report_size(
+    output: str, count: int, harness: str | None, cap: int | None, known: bool
+) -> None:
     """Size report on stderr, so stdout stays the composed document alone."""
 
     size = len(output.encode("utf-8"))
@@ -465,7 +483,7 @@ def _blocks(args: argparse.Namespace, catalog: dict[str, Fragment], ids: list[st
     return "\n\n".join(filter(None, [made.rendered.facts, made.rendered.pointers])) + "\n"
 
 
-def _main(argv=None) -> int:
+def _main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="outcomebound fragments",
         description="Fragments are facts about a stack or a setup that adopt copies under "

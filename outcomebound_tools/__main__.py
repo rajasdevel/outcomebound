@@ -33,7 +33,11 @@ VERBS = {
     "review": "review_check",
     "explorable": "explorable",
 }
-USAGE = "usage: outcomebound <verb> [argument ...]\nverbs: home " + " ".join(VERBS)
+USAGE = (
+    "usage: outcomebound <verb> [argument ...]\nverbs: home "
+    + " ".join(VERBS)
+    + "\nPrinted commands use POSIX shell syntax; on Windows they use PowerShell syntax."
+)
 
 
 def _utf8_lf_streams() -> None:

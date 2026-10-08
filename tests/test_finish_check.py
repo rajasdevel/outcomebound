@@ -409,19 +409,21 @@ def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_noth
     """Breaks if a tool missing from the hook's PATH, or a file that cannot be executed, holds
     the finish as a failure the agent's change caused."""
 
+    external = tmp_path / "not-executable"
+    if code == 126:
+        line = q(external)
     root, digest = target(tmp_path / "t", [line])
-    write(root / "not-executable", "#!/bin/sh\nexit 0\n")
+    write(external, "#!/bin/sh\nexit 0\n")
 
     _, verdict = hook("codex", digest, root)
 
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
-    assert message.startswith(
-        f"finish-check UNVERIFIED: `{line}` could not run in the hook's environment"
-    )
-    assert f"UNVERIFIED {line}: exit {code} after " in message
+    assert message.startswith("finish-check UNVERIFIED:")
+    assert "could not run in the hook's environment" in message
+    assert f"exit {code} after " in message
     # Not remembered: once the environment is fixed, the same tree runs again.
-    (root / "not-executable").chmod(0o755)
+    external.chmod(0o755)
     if code == 127:
         assert hook("codex", digest, root)[1]["systemMessage"].startswith(
             "finish-check UNVERIFIED: `no-such-tool-here --check` could not run"
@@ -598,6 +600,31 @@ def test_measuring_runs_without_the_projects_and_a_virtual_environments_path(
     assert environment["PATH"] == "/usr/bin"
     assert "VIRTUAL_ENV" not in environment and environment["LANG"] == "C.UTF-8"
     assert dropped == (str(root / ".venv" / "bin"), str(elsewhere / "bin"))
+
+
+def test_a_windows_mapping_keeps_one_filtered_path_and_no_virtual_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Mapping with Windows' mixed-case keys keeps the project PATH, gains
+    a second PATH key or retains VIRTUAL_ENV. Real os.environ already normalizes these keys."""
+
+    root = tmp_path / "project"
+    local = root / ".venv" / "Scripts"
+    local.mkdir(parents=True)
+    system = tmp_path / "system"
+    system.mkdir()
+    environment = {
+        "Path": os.pathsep.join([str(local), str(system)]),
+        "Virtual_Env": str(root / ".venv"),
+        "LANG": "C.UTF-8",
+    }
+
+    with monkeypatch.context() as patch:
+        patch.setattr(finish_check.os, "name", "nt")
+        filtered, dropped = finish_check.hook_environment(root, environment)
+
+    assert filtered == {"PATH": str(system), "LANG": "C.UTF-8"}
+    assert dropped == (str(local),)
 
 
 def test_a_virtual_environments_scripts_folder_is_left_out_as_its_bin_folder_is(
@@ -837,6 +864,77 @@ def test_a_not_found_line_the_command_prints_itself_still_holds(tmp_path: Path) 
         assert verdict.get("decision") == "block", (line, verdict)
 
 
+@pytest.mark.parametrize("failure", ["timeout", "oserror"])
+def test_an_unreadable_module_probe_does_not_excuse_a_failed_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Breaks if a failed confirmation probe turns a command's failure into an unheld
+    environment verdict, even though the probe established no module was absent."""
+
+    printed = f"{Path(sys.executable).as_posix()}: No module named no_such_module_here"
+    line = f"echo {shlex.quote(printed)}; exit 2"
+    root, _ = target(tmp_path / "t", [line])
+    original = subprocess.run
+
+    def probe(argv: list[str], **options: Any) -> subprocess.CompletedProcess[bytes]:
+        if Path(argv[0]) == Path(sys.executable) and argv[1] == "-c":
+            if failure == "timeout":
+                raise subprocess.TimeoutExpired(argv, options["timeout"])
+            raise OSError("probe could not start")
+        return original(argv, **options)
+
+    monkeypatch.setattr(finish_check.subprocess, "run", probe)
+
+    result = finish_check.run_one(root, line, 60)
+    verdict = finish_check.verdict_for([result], True, root, 60)
+
+    assert (result.verdict, result.code) == (finish_check.FAIL, 2), result
+    assert verdict.get("decision") == "block", verdict
+
+
+@pytest.mark.parametrize(
+    ("seconds", "probe_limit"),
+    [(1.0, 0.75), (0.1, None), (None, 30.0)],
+)
+def test_a_module_probe_uses_only_time_left_after_the_command(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    seconds: float | None,
+    probe_limit: float | None,
+) -> None:
+    """Breaks if confirming a missing module spends another thirty seconds after the
+    command's time allowance, or starts after the hook's deadline."""
+
+    now = [100.0]
+    limits: list[float] = []
+    printed = f"{Path(sys.executable).as_posix()}: No module named no_such_module_here"
+
+    class Finished:
+        def wait(self, timeout: float | None = None) -> int:
+            now[0] = 100.25
+            return 2
+
+    def start(argv: list[str], **options: Any) -> Finished:
+        options["stdout"].write((printed + "\n").encode())
+        return Finished()
+
+    def probe(argv: list[str], **options: Any) -> subprocess.CompletedProcess[bytes]:
+        limits.append(options["timeout"])
+        return subprocess.CompletedProcess(argv, 3)
+
+    monkeypatch.setattr(finish_check.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(finish_check.programs, "posix_shell", lambda *a, **k: "/bin/sh")
+    monkeypatch.setattr(finish_check, "project_owned", lambda *a: False)
+    monkeypatch.setattr(finish_check.subprocess, "Popen", start)
+    monkeypatch.setattr(finish_check.subprocess, "run", probe)
+
+    result = finish_check.run_one(tmp_path, "module check", seconds)
+
+    assert limits == ([] if probe_limit is None else [probe_limit])
+    expected = finish_check.FAIL if probe_limit is None else finish_check.UNVERIFIED
+    assert (result.verdict, result.code) == (expected, 2), result
+
+
 def test_a_module_is_the_projects_only_at_its_root_or_under_src(tmp_path: Path) -> None:
     """Breaks if a folder deep in the tree that shares a module's name makes a missing
     third-party module read as the project's own."""
@@ -910,19 +1008,21 @@ def test_a_tree_the_commands_changed_is_not_remembered_as_passed(tmp_path: Path)
 
 
 @posix_only
-def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path) -> None:
+@pytest.mark.parametrize("name", ["check.sh", "denied check.sh"])
+def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path, name: str) -> None:
     """Breaks if a pass cached for an untracked script survives the script becoming unrunnable."""
 
-    root, digest = target(tmp_path / "t", ["./check.sh"])
-    script = root / "check.sh"
+    line = "./" + q(name)
+    root, digest = target(tmp_path / "t", [line])
+    script = root / name
     write(script, "#!/bin/sh\nexit 0\n")
     script.chmod(0o755)
 
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"]
     script.chmod(0o644)
     verdict = hook("codex", digest, root)[1]
-    assert list(verdict) == ["systemMessage"]
-    assert "UNVERIFIED ./check.sh: exit 126" in verdict["systemMessage"]
+    assert verdict["decision"] == "block"
+    assert f"FAIL {line}: exit 126" in verdict["reason"]
 
 
 @pytest.mark.skipif(
@@ -1524,7 +1624,7 @@ def test_a_missing_tool_that_is_the_commands_only_word_is_unverified_at_exit_127
             True,
         ),
         (b"built\nsh: nosuchtool-zz: not found\n", True),
-        (b"built\nsh: 1: ./not-executable: Permission denied\n", False),
+        (b"built\nsh: 1: ./not-executable: Permission denied\n", True),
     ],
 )
 def test_a_not_found_line_is_told_in_each_shells_words_and_what_ran_before_it(
@@ -1539,6 +1639,32 @@ def test_a_not_found_line_is_told_in_each_shells_words_and_what_ran_before_it(
     named = finish_check.missing_tool(output)
     assert (named is None) is (ran or b"Permission" in output)
     assert named in (None, "nosuchtool-zz")
+
+
+@pytest.mark.parametrize("available", [False, True])
+def test_a_done_command_uses_the_shell_of_the_environment_it_runs_with(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, available: bool
+) -> None:
+    """Breaks if a supplied Windows PATH lacks a shell but the caller's shell runs anyway,
+    or if a shell supplied only by that PATH is ignored."""
+
+    shell = programs.posix_shell()
+    assert shell is not None
+    marker = tmp_path / "ran"
+
+    def choose(environment: dict[str, str] | None = None) -> str | None:
+        present = available if environment is not None else not available
+        return shell if present else None
+
+    monkeypatch.setattr(finish_check.programs, "posix_shell", choose)
+
+    result = finish_check.run_one(tmp_path, f"echo ran > {q(marker)}", 60, {"PATH": ""})
+
+    expected = finish_check.PASS if available else finish_check.UNVERIFIED
+    assert result.verdict == expected, result
+    assert marker.exists() is available
+    if not available:
+        assert "no POSIX shell" in result.why
 
 
 def test_no_posix_shell_reads_unverified_with_the_reason_and_runs_nothing(
@@ -2098,3 +2224,93 @@ def test_a_line_the_harness_writes_is_not_a_prompt_for_the_order_check(
     turn("claude-code", digest, root)
     forged = stop_input("claude-code", root, transcript_path=str(lines(extra)))
     assert hook("claude-code", digest, root, stdin=forged)[1]["decision"] == "block"
+
+
+def test_absence_confirmation_uses_the_effective_child_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A tool added by the shell adapter cannot excuse its own failed check by
+    printing a missing-tool line. Its actual child PATH proves it is present."""
+    folder = tmp_path / "shell-tools"
+    folder.mkdir()
+    tool = folder / "present-tool"
+    write(tool, "#!/bin/sh\nprintf '%s\\n' 'sh: present-tool: command not found'\nexit 2\n")
+    tool.chmod(0o755)
+    root, _ = target(tmp_path / "project", ["present-tool"])
+    compose = programs.shell_environment
+
+    def with_tool(shell: str, environment: Any = None) -> dict[str, str]:
+        effective = dict(compose(shell, environment) or os.environ)
+        effective["PATH"] = str(folder) + os.pathsep + effective.get("PATH", "")
+        return effective
+
+    monkeypatch.setattr(programs, "shell_environment", with_tool)
+    environment = dict(os.environ, PATH=os.pathsep.join(system_path()))
+    result = finish_check.run_one(root, "present-tool", 60, environment)
+    assert (result.verdict, result.code) == (finish_check.FAIL, 2), result
+    assert finish_check.verdict_for([result], True, root, 60).get("decision") == "block"
+
+
+@posix_only
+def test_an_unset_path_cannot_disprove_the_shell_default_path(tmp_path: Path) -> None:
+    line = "command -v cat >/dev/null && printf 'sh: cat: command not found\\n'; exit 2"
+    result = finish_check.run_one(tmp_path, line, 5, {})
+    assert (result.verdict, result.code) == (finish_check.FAIL, 2), result
+
+
+@posix_only
+def test_an_absolute_module_probe_does_not_require_path(tmp_path: Path) -> None:
+    result = finish_check.run_one(tmp_path, f"{q(sys.executable)} -m no_such_module_here", 5, {})
+    assert result.verdict == finish_check.UNVERIFIED, result
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "./removed-check.sh",
+        "sh scripts/removed-check.sh",
+        "'./removed check.sh'",
+        "sh 'scripts/removed check.sh'",
+        "'./removed:check.sh'",
+        "'./missing\nhelper.sh'",
+    ],
+)
+def test_a_missing_project_helper_fails_and_holds(tmp_path, line):
+    root, digest = target(tmp_path / "t", [line])
+    result = finish_check.run_one(root, line, 60)
+    assert result.verdict == finish_check.FAIL
+    _, verdict = hook("codex", digest, root)
+    assert verdict["decision"] == "block"
+    assert "FAIL" in verdict["reason"]
+
+
+@pytest.mark.parametrize("code", [126, 127])
+def test_exit_code_without_environment_evidence_is_a_failure(tmp_path: Path, code: int) -> None:
+    root, digest = target(tmp_path / "t", [f"exit {code}"])
+    verdict = hook("codex", digest, root)[1]
+    assert verdict["decision"] == "block"
+    assert f"exit {code}" in verdict["reason"]
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_known_records_resolve_git_common_dir_without_path_format(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool
+) -> None:
+    root, digest = target(tmp_path / "project with spaces", ["exit 1"])
+    where = root / "component" if nested else root
+    where.mkdir(exist_ok=True)
+    original_git = finish_check._git
+
+    def older_git(target_path, *arguments, **options):
+        if any(arg.startswith("--path-format") for arg in arguments):
+            return None
+        return original_git(target_path, *arguments, **options)
+
+    monkeypatch.setattr(finish_check, "_git", older_git)
+    record = finish_check.Known(
+        digest, "component/" if nested else "", "", "2026-10-08T00:00:00+00:00", 0.0, {}
+    )
+    assert finish_check.keep_known(where, record)
+    saved = root / ".git" / finish_check.KNOWN
+    assert saved.is_file()
+    assert finish_check.parse_known(saved.read_text(encoding="utf-8")) == [record]

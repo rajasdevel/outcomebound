@@ -5,5 +5,9 @@
     "label": "ob-ticket",
     "human_label": "human-only",
     "request_label": "human-requested",
-    "claims": ".outcomebound/ticket-claims.json"
+    "claims": ".outcomebound/ticket-claims.json",
+    "writes": {
+        "granted_by": "rajasdevel",
+        "on": "2026-10-08"
+    }
 }

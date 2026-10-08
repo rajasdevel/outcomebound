@@ -16,7 +16,7 @@ import shutil
 from pathlib import Path
 
 from outcomebound_tools import adopt, textio
-from tests.test_adopt import (
+from tests.adopt_helpers import (
     ROOT,
     Capture,
     change_kernel,

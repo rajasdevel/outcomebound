@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -25,18 +24,13 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import launcher
+from tests.launcher_helpers import engine
 
 ROOT = Path(__file__).resolve().parent.parent
 LAUNCHER = ROOT / "scripts" / "outcomebound"
 POSIX_ONLY = pytest.mark.skipif(
     os.name == "nt", reason="the checkout's launcher is a POSIX sh script"
 )
-# What the checkout's launcher runs after `python -I -X utf8 -c`: the checkout first on the path.
-CHECKOUT_ENGINE = """import runpy, sys
-sys.path.insert(0, sys.argv[1])
-sys.argv = ["outcomebound", *sys.argv[2:]]
-runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)
-"""
 VERBS = (
     "adopt",
     "tickets",
@@ -51,22 +45,6 @@ VERBS = (
     "review",
     "explorable",
 )
-
-
-def engine(
-    *arguments: str, cwd: Path, environment: dict[str, str] | None = None
-) -> subprocess.CompletedProcess[str]:
-    """This checkout's engine, run as `scripts/outcomebound` runs it, through the running Python."""
-
-    return subprocess.run(
-        [sys.executable, "-I", "-X", "utf8", "-c", CHECKOUT_ENGINE, str(ROOT), *arguments],
-        cwd=cwd,
-        env=environment,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
 
 
 def launch(
@@ -109,6 +87,58 @@ def test_a_symlink_on_another_directory_runs_this_checkout(tmp_path: Path) -> No
 
 
 @POSIX_ONLY
+def test_a_symlink_chain_bootstraps_with_only_python_on_path(tmp_path: Path) -> None:
+    bin_dir, links, caller = (tmp_path / name for name in ("bin with spaces", "links", "caller"))
+    for folder in (bin_dir, links, caller):
+        folder.mkdir()
+    (bin_dir / "python3").symlink_to(sys.executable)
+    (links / "checkout").symlink_to(LAUNCHER)
+    (links / "next link").symlink_to("checkout")
+    link = bin_dir / "outcomebound"
+    link.symlink_to("../links/next link")
+    decoy = caller / "outcomebound_tools"
+    decoy.mkdir()
+    (decoy / "__init__.py").write_text("raise SystemExit(99)\n", encoding="utf-8")
+    environment = {
+        **os.environ,
+        "PATH": str(bin_dir),
+        "PYTHONPATH": str(caller),
+        "CDPATH": str(links),
+    }
+    probe = (
+        "import os, sys; "
+        "sys.exit(0 if os.getcwd() == sys.argv[1] "
+        "and os.environ.get('PYTHONPATH') == sys.argv[1] else 1)"
+    )
+    plan = caller / "plan with spaces.json"
+    plan.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "cwd": ".",
+                "claims": [
+                    {
+                        "name": "environment",
+                        "risk": "the launcher changes the caller working directory or environment",
+                        "kind": "test",
+                        "required": True,
+                        "command": [sys.executable, "-c", probe, str(caller)],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    home = launch("home", cwd=caller, launcher=link, environment=environment)
+    assert home.returncode == 0, home.stderr
+    assert Path(home.stdout.strip()) == ROOT
+    checked = launch("validation", plan.name, cwd=caller, launcher=link, environment=environment)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert "PASS environment" in checked.stdout
+
+
+@POSIX_ONLY
 def test_the_launcher_runs_a_python_on_an_absolute_path_entry_and_never_a_relative_one(
     tmp_path: Path,
 ) -> None:
@@ -118,9 +148,6 @@ def test_the_launcher_runs_a_python_on_an_absolute_path_entry_and_never_a_relati
     bin_dir, here = tmp_path / "bin", tmp_path / "here"
     bin_dir.mkdir()
     here.mkdir()
-    tools = {name: shutil.which(name) for name in ("dirname", "readlink")}
-    for name, path in tools.items():
-        (bin_dir / name).symlink_to(str(path))
     stub = "#!/bin/sh\nexit 9\n"
     for folder in (bin_dir, here):
         (folder / "python3").write_text(stub, encoding="utf-8")
@@ -144,7 +171,11 @@ def test_the_launcher_beside_no_engine_exits_127(tmp_path: Path) -> None:
     copy.write_bytes(LAUNCHER.read_bytes())
     copy.chmod(0o755)
 
-    done = launch("home", cwd=tmp_path, launcher=copy)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "python3").symlink_to(sys.executable)
+
+    done = launch("home", cwd=tmp_path, launcher=copy, environment={"PATH": str(bin_dir)})
 
     assert done.returncode == 127 and "no engine beside" in done.stderr
 

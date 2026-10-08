@@ -18,6 +18,8 @@ cat > AGENTS.md <<'NOTE'
 
 Run the tests with `python3 -B -m unittest discover -s tests`.
 
+Keep working notes under `.agents/work/`.
+
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
 

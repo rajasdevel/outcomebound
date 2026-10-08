@@ -1,0 +1,1 @@
+Build a small local page under `.agents/work/` to help me learn and practice the retry mechanism in `docs/retries.md`. I want to predict the total number of attempts, reveal the outcome and try again. Use the supplied page-building tools. Do not change the application, choose a production policy, or claim I understand. Report the page path and what you checked.

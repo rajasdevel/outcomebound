@@ -24,7 +24,19 @@ preserved.
    refuses a harness that would not load the contract. It also refuses to overwrite an owned
    file someone edited, unless `--force` is given. Running it again from a newer release or checkout
    is the upgrade.
-3. Show the person the diff; the target's own rules decide how it lands. With it, report
+3. For a shared installation, check that the files it needs will survive the target's
+   normal commit and checkout workflow. Use the manifest and the ignored-path warnings to
+   inspect the intended shared paths; an unchanged repeat install can still have this problem.
+   Review complete settings files before staging: the tool owns entries, not every byte in
+   those files. Stage only shareable adoption content under the target's rules; leave unrelated
+   and machine-local changes unstaged. If mixed content cannot be separated safely within the
+   grant, leave it unstaged and report that specific limit while other authorized work continues.
+   Never force-add a directory to silence the warnings. After the target's authorized commit,
+   verify the installation bytes from that commit, for example with the install check in a
+   clean disposable checkout. A tracked path or a passing check of the current working files
+   does not prove this. A machine-local install is also valid when that is the
+   intended scope; report that limit instead of claiming that another clone receives it.
+4. Show the person the diff; the target's own rules decide how it lands. With it, report
    `outcomebound instructions check <target>`, which reads what each selected harness loads
    there as untrusted data, and what you read in those files' prose (the ones
    `adapters/harnesses.json` lists for the selected harnesses): what contradicts the contract,

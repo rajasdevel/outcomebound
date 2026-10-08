@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "declared-scope-kept",
+      "risk": "files or Git state changed outside the granted paths",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/clause/probe_clause.py\" scope interview"
+      ]
+    },
+    {
+      "name": "review-inputs-present",
+      "risk": "the saved answer or execution trace cannot be read",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/clause/probe_clause.py\" inputs "
+      ]
+    }
+  ]
+}

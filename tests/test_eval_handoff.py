@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 
+from tests.eval_helpers import RUN
 from tests.portable import needs_posix_bash
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,11 +102,20 @@ def _reference(target: Path, base: str) -> None:
 
 
 def _transcript(workdir: Path, *commands: str) -> str:
-    lines = ["Done.", "Reading prompt from stdin...", "Codex v0.0.0", "--------"]
-    lines += [f"workdir: {workdir}", "model: gpt-6-luna", "--------", "user", "the task", ""]
-    for command in commands:
-        lines += ["exec", f"/bin/zsh -lc '{command}' in {workdir}", " succeeded in 0ms:", ""]
-    return "\n".join([*lines, "codex", "Done.", "tokens used", "1", ""])
+    events: list[dict] = [{"type": "thread.started", "thread_id": "synthetic-handoff"}]
+    for index, command in enumerate(commands):
+        item = {
+            "id": str(index),
+            "type": "command_execution",
+            "command": command,
+            "cwd": str(workdir),
+        }
+        events.append({"type": "item.started", "item": item})
+        events.append(
+            {"type": "item.completed", "item": {**item, "status": "completed", "exit_code": 0}}
+        )
+    events.append({"type": "turn.completed"})
+    return RUN.command_transcript("\n".join(map(json.dumps, events)), "")
 
 
 def _seed(target: Path) -> str:

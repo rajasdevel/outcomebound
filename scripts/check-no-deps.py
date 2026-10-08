@@ -13,7 +13,7 @@ import os
 import sys
 
 STDLIB = set(sys.stdlib_module_names)
-ROOTED_PATTERNS = ("outcomebound_tools/*.py", "scripts/*.py")
+ROOTED_PATTERNS = ("outcomebound_tools/**/*.py", "scripts/**/*.py")
 ALLOWED_FIRST_PARTY = {"outcomebound_tools"}
 
 
@@ -31,15 +31,17 @@ def _module_names(node):
 
 
 def violations(root="."):
-    out = []
+    out: list[tuple[str, str]] = []
     for pattern in ROOTED_PATTERNS:
-        for path in sorted(glob.glob(os.path.join(root, pattern))):
+        for path in sorted(glob.glob(os.path.join(root, pattern), recursive=True)):
             with open(path, encoding="utf-8") as handle:
                 tree = ast.parse(handle.read(), filename=path)
             for node in ast.walk(tree):
-                for module in _module_names(node):
-                    if module and module not in STDLIB and module not in ALLOWED_FIRST_PARTY:
-                        out.append((path, module))
+                out.extend(
+                    (path, module)
+                    for module in _module_names(node)
+                    if module and module not in STDLIB and module not in ALLOWED_FIRST_PARTY
+                )
     return out
 
 

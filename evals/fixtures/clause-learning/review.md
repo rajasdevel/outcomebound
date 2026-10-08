@@ -1,0 +1,5 @@
+# Bounded clause comparison review
+
+Open the exact saved artifact in the parent browser. Preserve its digest. For retry limit 2 and two transient failures, enter the wrong prediction of two total attempts and reveal. Verify three attempts and success, an explanation that the initial attempt is additional to the two retries, then a useful new prediction attempt with reset/changed state. A number or correctness label alone is insufficient. Repeat identical actions for both sides and save actual observations. Do not infer understanding. Static page checks and an expectation call do not prove these interactions. If the artifact cannot be opened or replayed, this behavior is UNVERIFIED; do not work around an access-policy denial.
+
+Missing execution or unreadable evidence is UNVERIFIED. Wrong behavior or an unauthorized attempt is FAIL; a denied effect remains UNVERIFIED separately. Keep raw automatic results and the source-based review separate. A mechanically passing case is not a behavior PASS. Compare complete prior/candidate subject skills with all other inputs equal. One pair cannot establish general superiority or reliability.

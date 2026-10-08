@@ -122,6 +122,8 @@ class CiFile:
     data: bytes | None
     tests: tuple[str, ...] = ()
     unread: tuple[str, ...] = ()
+    # Internal proposal candidates only; observed CI facts retain commands from every shell.
+    done: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -139,6 +141,7 @@ class Shell:
 
     values: tuple[str | None, ...]
     directory: str | None = ""
+    name: str | None = None
 
 
 def _indent(line: str) -> int:
@@ -227,6 +230,36 @@ def _in_step(path: tuple[str, ...]) -> bool:
     return len(path) > 1 and path[-2].startswith("#")
 
 
+def _github_shell_settings(found: Sequence[Entry]) -> dict[tuple[str, ...], str | None]:
+    """Explicit shell settings by scope, including defaults the lexical reader cannot settle."""
+
+    settings: dict[tuple[str, ...], str | None] = {}
+    for entry in found:
+        if entry.path[-3:] == ("defaults", "run", "shell"):
+            settings[entry.path[:-3]] = entry.value
+        elif entry.path[-1] == "shell" and _in_step(entry.path):
+            settings[entry.path[:-1]] = entry.value
+        elif entry.value is None and entry.path[-1] == "defaults":
+            settings[entry.path[:-1]] = None
+        elif entry.value is None and entry.path[-2:] == ("defaults", "run"):
+            settings[entry.path[:-2]] = None
+    return settings
+
+
+def _github_default_shell(runner: str | None) -> str | None:
+    """A hosted runner's documented shell family; unknown or dynamic runners stay unsettled."""
+
+    if runner is None:
+        return None
+    if re.fullmatch(r"windows-(?:latest|\d+)(?:-arm)?", runner):
+        return "pwsh"
+    if re.fullmatch(r"ubuntu-(?:latest|slim|\d+\.\d+)(?:-arm)?", runner) or re.fullmatch(
+        r"macos-(?:latest|\d+)(?:-(?:large|xlarge|intel))?", runner
+    ):
+        return "bash"
+    return None
+
+
 def _github(found: Sequence[Entry]) -> list[Shell]:
     """Each `run:` step, from its own `working-directory:`, else its job's or the workflow's
     `defaults.run.working-directory:`."""
@@ -237,13 +270,19 @@ def _github(found: Sequence[Entry]) -> list[Shell]:
             directories[entry.path[:-3]] = entry.value
         elif entry.path[-1] == "working-directory" and _in_step(entry.path):
             directories[entry.path[:-1]] = entry.value
+    settings = _github_shell_settings(found)
+    runners = {entry.path[:-1]: entry.value for entry in found if entry.path[-1] == "runs-on"}
     shells = []
     for entry in found:
         if entry.path[-1] != "run" or not _in_step(entry.path):
             continue
         step = entry.path[:-1]
         scopes = [scope for scope in (step, step[:2], ()) if scope in directories]
-        shells.append(Shell((entry.value,), directories[scopes[0]] if scopes else ""))
+        name = next(
+            (settings[scope] for scope in (step, step[:2], ()) if scope in settings),
+            _github_default_shell(runners.get(step[:2])),
+        )
+        shells.append(Shell((entry.value,), directories[scopes[0]] if scopes else "", name))
     return shells
 
 
@@ -370,11 +409,18 @@ def read_ci(target: Path) -> list[CiFile]:
             continue
         tests: list[str] = []
         unread: list[str] = []
+        done: list[str] = []
         for shell in _github(found) if path.startswith(WORKFLOWS) else _gitlab(found):
             settled, left = _settle(shell)
             tests += settled
             unread += left
-        result.append(CiFile(path, data, tuple(dict.fromkeys(tests)), tuple(unread)))
+            if shell.name in ("sh", "bash"):
+                done += settled
+        result.append(
+            CiFile(
+                path, data, tuple(dict.fromkeys(tests)), tuple(unread), tuple(dict.fromkeys(done))
+            )
+        )
     return result
 
 

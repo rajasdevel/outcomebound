@@ -26,11 +26,21 @@ import pytest
 
 from outcomebound_tools import adopt, facts, fileplan, finish_check, fragments, identity, paths
 from outcomebound_tools.declared_tests import PYTEST
+from tests.adopt_helpers import (
+    GIT,
+    ROOT,
+    Capture,
+    change_kernel,
+    engine_copy,
+    manifest,
+    repo,
+    run,
+    snapshot,
+    states,
+)
 from tests.portable import WINDOWS, engine, needs_symlinks, write
 from tests.processes import running
 
-ROOT = Path(__file__).resolve().parent.parent
-GIT = shutil.which("git") or "git"
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 CLAUDE_SKILL = ".claude/skills/using-outcomebound/SKILL.md"
 CLAUDE_BRIEF = ".claude/skills/decision-brief/SKILL.md"
@@ -45,7 +55,6 @@ SKILL_RECORDS = ["skill"] * len(SKILL_FILES)
 GENERIC_SKILL = ".outcomebound/skills/using-outcomebound/SKILL.md"
 PYTHON_FRAGMENT = ".outcomebound/fragments/python.md"
 LAUNCHER = ROOT / "scripts" / "outcomebound"
-Capture = pytest.CaptureFixture[str]
 
 
 def commit_all(target: Path) -> None:
@@ -58,54 +67,9 @@ def commit_all(target: Path) -> None:
     )
 
 
-def repo(path: Path, files: dict[str, str] | None = None) -> Path:
-    """A fresh Git repository at `path` holding `files`, by relative path."""
-
-    path.mkdir(parents=True)
-    subprocess.run([GIT, "init", "-q", str(path)], check=True)
-    for name, text in (files or {}).items():
-        (path / name).parent.mkdir(parents=True, exist_ok=True)
-        write(path / name, text)
-    return path
-
-
-def run(capsys: Capture, *argv: str, source: Path = ROOT) -> tuple[int, str, str]:
-    code = adopt.main(list(argv), source=source)
-    out, err = capsys.readouterr()
-    return code, out, err
-
-
-def snapshot(root: Path) -> dict[str, bytes]:
-    """Every file and symlink under `root` outside `.git`, by relative path."""
-
-    found: dict[str, bytes] = {}
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root)
-        if relative.parts[0] == ".git":
-            continue
-        if path.is_symlink():
-            found[relative.as_posix()] = b"-> " + os.readlink(path).encode()
-        elif path.is_file():
-            found[relative.as_posix()] = path.read_bytes()
-    return found
-
-
-def manifest(target: Path) -> dict[str, Any]:
-    document: dict[str, Any] = json.loads((target / adopt.MANIFEST).read_text(encoding="utf-8"))
-    return document
-
-
 def blocks(target: Path, name: str) -> dict[str, identity.ManagedBlock]:
     text = (target / name).read_text(encoding="utf-8")
     return {block.block_id: block for block in identity.find_managed_blocks(text)}
-
-
-def states(out: str) -> dict[str, str]:
-    """`--check` output as {record label: state}, any detail after the label and the closing
-    `next:` line left out."""
-
-    rows = [line.split(None, 1) for line in out.splitlines() if not line.startswith("next: ")]
-    return {name.split(": ", 1)[0]: found for found, name in rows}
 
 
 def next_lines(out: str) -> list[str]:
@@ -114,25 +78,6 @@ def next_lines(out: str) -> list[str]:
 
 def kinds(target: Path) -> list[str]:
     return [record["kind"] for record in manifest(target)["artifacts"]]
-
-
-def engine_copy(tmp_path: Path) -> Path:
-    """The parts of this checkout adopt renders from, copied so a test can change them."""
-
-    source = tmp_path / "engine"
-    for directory in ("fragments", "adapters", "skills"):
-        shutil.copytree(ROOT / directory, source / directory)
-    for name in ("VERSION", adopt.KERNEL_TEMPLATE, "templates/fragment-local.md"):
-        (source / name).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(ROOT / name, source / name)
-    return source
-
-
-def change_kernel(source: Path, version: str) -> None:
-    template = source / adopt.KERNEL_TEMPLATE
-    text = template.read_text(encoding="utf-8")
-    write(template, text.replace("not least work.", "not least work, now."))
-    write(source / "VERSION", version + "\n")
 
 
 def sha(data: bytes) -> str:
@@ -186,12 +131,17 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("skill", ".claude/skills/slice-tickets/references/github.md", "slice-tickets"),
         ("skill", ".claude/skills/tests-worth-keeping/SKILL.md", "tests-worth-keeping"),
         ("skill", CLAUDE_SKILL, "using-outcomebound"),
+        (
+            "skill",
+            ".claude/skills/using-outcomebound/references/lifecycle.md",
+            "using-outcomebound",
+        ),
     ]
     assert records[1]["fragments"] == ["python"]
     assert records[6]["harnesses"] == records[7]["harnesses"] == ["claude-code"]
     for record in records:
         assert adopt.state(target, ROOT, record, records) == "current"
-    assert (records[6]["sha256"], records[-1]["sha256"]) == (sha(brief), sha(skill))
+    assert (records[6]["sha256"], records[-2]["sha256"]) == (sha(brief), sha(skill))
     assert records[3]["sha256"] == sha(shipped)
 
 
@@ -1010,6 +960,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         ".claude/skills/slice-tickets/SKILL.md": "current",
         ".claude/skills/slice-tickets/references/github.md": "current",
         ".claude/skills/tests-worth-keeping/SKILL.md": "current",
+        ".claude/skills/using-outcomebound/references/lifecycle.md": "current",
     }
     assert out.splitlines()[-1] == (
         "next: move each edit out of OutcomeBound's blocks and files, then "
@@ -1114,7 +1065,7 @@ def test_detect_prints_one_command_that_installs(tmp_path: Path, capsys: Capture
 def test_detect_proposes_the_test_command_ci_runs(tmp_path: Path, capsys: Capture) -> None:
     """Where the project's CI names its tests, Done is that command, not discovery's guess."""
 
-    workflow = "jobs:\n  test:\n    steps:\n      - run: pytest -q\n"
+    workflow = "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
     files = {"pyproject.toml": "[project]\n", ".github/workflows/ci.yml": workflow}
     target = repo(tmp_path / "t", files)
 
@@ -1122,6 +1073,34 @@ def test_detect_proposes_the_test_command_ci_runs(tmp_path: Path, capsys: Captur
 
     words = shlex.split(out, comments=True)
     assert code == 0 and words[words.index("--done") + 1] == "pytest -q"
+
+
+@pytest.mark.parametrize("discovered", [False, True])
+def test_detect_keeps_powershell_ci_out_of_posix_done(
+    tmp_path: Path, capsys: Capture, discovered: bool
+) -> None:
+    command = 'python -m pytest "$env:TEST_PATH"'
+    workflow = (
+        "jobs:\n  test:\n    runs-on: windows-latest\n    steps:\n"
+        f"      - shell: pwsh\n        run: {command}\n"
+    )
+    files = {".github/workflows/ci.yml": workflow}
+    if discovered:
+        files["pytest.ini"] = "[pytest]\n"
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    words = shlex.split(out, comments=True)
+    done = [words[index + 1] for index, word in enumerate(words) if word == "--done"]
+    assert code == 0 and done == ([PYTEST] if discovered else [])
+    assert snapshot(target) == before
+    assert "POSIX equivalent" in out and "--done" in out
+    if discovered:
+        assert f"{PYTEST} is what pytest.ini suggests" in out
+    rendered = facts.render(target, [], [], ["AGENTS.md"], [])
+    assert f"- CI test: `{command}` (.github/workflows/ci.yml)" in rendered.facts
 
 
 def test_detect_refuses_a_target_outside_git_as_the_install_would(
@@ -1946,6 +1925,59 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
 
 
+@pytest.mark.parametrize("place", ["missing", "project", "virtual-environment", "tool-bin"])
+def test_an_explicit_measurement_names_a_launcher_missing_from_its_hook_environment(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch, place: str
+) -> None:
+    """Breaks if a launcher found only in the project or an activated environment passes
+    unnamed, if a launcher on the kept PATH is reported absent, or if this diagnostic changes
+    Done's verdict, hook bytes, a dry run or an install that does not measure Done."""
+
+    target = repo(tmp_path / "t", {".claude/settings.json": PROJECT_SETTINGS})
+    folder = target / "bin" if place == "project" else tmp_path / place / "bin"
+    folder.mkdir(parents=True)
+    if place == "virtual-environment":
+        write(folder.parent / "pyvenv.cfg", "home = /synthetic/python\n")
+    if place != "missing":
+        launcher = folder / ("outcomebound.cmd" if WINDOWS else "outcomebound")
+        write(launcher, "@exit /b 0\n" if WINDOWS else "#!/bin/sh\nexit 0\n")
+        launcher.chmod(0o755)
+    monkeypatch.setenv("PATH", str(folder))
+
+    def measure(root: Path, done: list[str], timeout: int) -> finish_check.Measured:
+        # Only the Done runner is a double: launcher lookup and PATH filtering are real.
+        _, dropped = finish_check.hook_environment(root, os.environ)
+        return finish_check.Measured(
+            (finish_check.Result(":", finish_check.PASS, 0.0),), 0.0, True, dropped=dropped
+        )
+
+    monkeypatch.setattr(finish_check, "measure", measure)
+    arguments = ("--harness", "claude-code", "--done", ":", "--finish-check")
+
+    code, out, err = run(capsys, str(target), *arguments)
+
+    assert code == 0, err
+    missing = "`outcomebound` was not found on the PATH used to measure Done"
+    assert (missing in out) == (place != "tool-bin")
+    if place != "tool-bin":
+        [line] = [line for line in out.splitlines() if missing in line]
+        assert line.startswith("UNVERIFIED ") and "desktop PATH" in line
+        assert "whether it runs the hook remain UNVERIFIED" in line
+    assert "PASS     finish-check: `:` in 0 s" in out
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == "./their-own.sh"
+    digest = finish_check.done_digest([":"])
+    assert document["hooks"]["Stop"][-1] == finish_check.entry("claude-code", digest)
+    assert document["hooks"]["UserPromptSubmit"][-1] == finish_check.mark_entry(
+        "claude-code", digest
+    )
+    before = snapshot(target)
+    for extra in (("--finish-check", "--dry-run"), ()):
+        code, out, err = run(capsys, str(target), *extra)
+        assert code == 0, err
+        assert missing not in out and snapshot(target) == before
+
+
 def test_a_new_measurement_names_the_failures_new_since_the_record_it_replaces(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -2256,7 +2288,7 @@ def test_detect_says_a_test_command_it_did_not_read_from_ci_runs_on_the_host(
     tmp_path: Path, capsys: Capture
 ) -> None:
     guessed = repo(tmp_path / "guessed", {"pytest.ini": "[pytest]\n"})
-    workflow = "jobs:\n  test:\n    steps:\n      - run: pytest -q\n"
+    workflow = "jobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q\n"
     from_ci = repo(
         tmp_path / "ci", {"pytest.ini": "[pytest]\n", ".github/workflows/c.yml": workflow}
     )
@@ -2298,6 +2330,50 @@ def test_an_install_warns_for_each_path_git_ignores(tmp_path: Path, capsys: Capt
     ignored = [line.split()[1].rstrip(":") for line in warnings(out)]
     assert ignored == sorted(path for path in manifest_paths(target) if path.startswith(".claude/"))
     assert all("(.gitignore:1: .claude/)" in line for line in warnings(out))
+
+
+@pytest.mark.parametrize("extra", [(), ("--dry-run",)], ids=["install", "dry-run"])
+def test_a_repeat_install_warns_for_unchanged_owned_paths_and_preserves_unmanaged_paths(
+    tmp_path: Path, capsys: Capture, extra: tuple[str, ...]
+) -> None:
+    """Breaks if an unchanged ignored hook, skill or manifest is omitted, if an unmanaged
+    path or a dropped harness is warned about, or if the diagnostic edits project bytes."""
+
+    prefixes = (".claude/", ".agents/", ".codex/")
+    unmanaged = ".claude/local-skill/SKILL.md"
+    target = repo(
+        tmp_path / "t",
+        {
+            ".gitignore": "\n".join([*prefixes, adopt.MANIFEST, ""]),
+            ".claude/settings.json": PROJECT_SETTINGS,
+            unmanaged: "# A project's own skill\n",
+        },
+    )
+    assert (
+        run(
+            capsys,
+            str(target),
+            "--harness",
+            "claude-code,codex",
+            "--done",
+            ":",
+            "--finish-check",
+        )[0]
+        == 0
+    )
+    before = snapshot(target)
+    expected = sorted(
+        {adopt.MANIFEST, *(path for path in manifest_paths(target) if path.startswith(prefixes))}
+    )
+
+    code, out, err = run(capsys, str(target), "--harness", "claude-code,codex", *extra)
+
+    assert code == 0, err
+    assert [line.split()[1].rstrip(":") for line in warnings(out)] == expected
+    assert unmanaged not in out and snapshot(target) == before
+    _, out, _ = run(capsys, str(target), "--harness", "codex", "--dry-run")
+    assert not any(".claude/" in line for line in warnings(out))
+    assert unmanaged not in out and snapshot(target) == before
 
 
 def manifest_paths(target: Path) -> list[str]:
@@ -2476,3 +2552,20 @@ def test_an_install_says_nothing_of_a_plan_no_tickets_declaration_names(
     (planless / ".outcomebound/ticket-claims.json").unlink()
     code, out, _ = run(capsys, str(planless))
     assert code == 0 and tickets_lines(out) == []
+
+
+@pytest.mark.parametrize("harnesses", ["claude-code,codex", "codex,claude-code"])
+def test_implicit_adoption_preserves_a_multi_harness_install(
+    tmp_path: Path, capsys: Capture, harnesses: str
+) -> None:
+    target = repo(tmp_path / "target")
+    commit_all(target)
+    code, _, _ = run(
+        capsys, str(target), "--harness", harnesses, "--done", "true", "--finish-check"
+    )
+    assert code == 0
+    before = snapshot(target)
+    assert run(capsys, str(target), "--check")[0] == 0
+    assert run(capsys, str(target))[0] == 0
+    assert snapshot(target) == before
+    assert run(capsys, str(target), "--check")[0] == 0

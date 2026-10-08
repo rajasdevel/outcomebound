@@ -30,7 +30,7 @@ QUERY = home.ROOT / "templates" / "tickets" / "github-export.graphql"
 def export_command(declaration: Declaration) -> str:
     """The `gh` command that writes the declared repository's export to `issues.json`.
 
-    It is one command for POSIX shells, PowerShell and Git Bash: the query is read by `gh` from
+    It is a command for POSIX shells, or PowerShell on Windows: the query is read by `gh` from
     its path. PowerShell 5.1 saves `>` output as UTF-16, which `--input` reads.
     """
 

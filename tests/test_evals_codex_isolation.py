@@ -8,23 +8,10 @@ chose, so every call names the model itself. No test here calls a model: it read
 the runner builds.
 """
 
-import importlib.util
 import subprocess
 from pathlib import Path
-from types import ModuleType
 
-ROOT = Path(__file__).resolve().parent.parent
-
-
-def _load_run() -> ModuleType:
-    spec = importlib.util.spec_from_file_location("eval_run_isolation", ROOT / "evals/run.py")
-    assert spec is not None and spec.loader is not None, "evals/run.py"
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-run = _load_run()
+from tests.eval_helpers import RUN as run
 
 
 def _argv(tmp_path: Path, model: str = "gpt-6-sol", git: bool = True) -> tuple[list[str], Path]:
@@ -51,6 +38,25 @@ def test_a_call_in_a_git_workspace_may_write_its_git_directory(tmp_path: Path) -
     assert argv[argv.index("--add-dir") + 1] == str(workspace / ".git")
 
 
-def test_a_call_without_a_git_directory_adds_none(tmp_path: Path) -> None:
-    argv, _ = _argv(tmp_path, git=False)
-    assert "--add-dir" not in argv
+def test_a_call_without_git_adds_only_the_task_note_directory(tmp_path: Path) -> None:
+    argv, workspace = _argv(tmp_path, git=False)
+    additions = [argv[i + 1] for i, arg in enumerate(argv) if arg == "--add-dir"]
+    assert additions == [str(workspace / ".agents" / "work")]
+
+
+def test_nested_adoption_writes_are_confined_to_upgrade_owned_roots(tmp_path):
+    roots = run.fixture_write_roots("adopt-upgrade", tmp_path)
+    assert tmp_path / "target/project/.git" in roots
+    assert tmp_path / "target/project/.agents" not in roots
+    assert tmp_path / "target/project/.codex" not in roots
+    assert all(
+        path == tmp_path / "target/project/.git"
+        or path.parent == tmp_path / "target/project/.agents/skills"
+        for path in roots
+    )
+    assert run.fixture_write_roots("adopt-inspect", tmp_path) == ()
+    current = run.fixture_arm("adopt-upgrade", run.load_arm("current"))
+    baseline = run.fixture_arm("adopt-upgrade", run.load_arm("none"))
+    subject = ".agents/skills/adopt-outcomebound/SKILL.md"
+    assert subject in current.files and subject in current.record()["arm_files"]
+    assert subject not in baseline.files

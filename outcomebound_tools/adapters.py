@@ -26,7 +26,7 @@ class AdapterError(KeyError):
         return str(self.args[0]) if len(self.args) == 1 else super().__str__()
 
 
-def _reason(error) -> str:
+def _reason(error: Exception) -> str:
     """Why a table could not be read, without naming where the engine lives.
 
     `OSError.__str__` carries the absolute filename, and these messages reach a
@@ -126,7 +126,7 @@ def native_skill_root(harness: str) -> str:
     return str(row(harness)["skill_install_path"]).rstrip("/")
 
 
-def instruction_file(harness: str):
+def instruction_file(harness: str) -> str | None:
     """The row's instruction file, or None for a route that has none.
 
     `FILE@REF` rows record `FILE` here, so a caller that needs the host — to

@@ -3,8 +3,9 @@
 These evals measure whether the operating-contract kernel, and each skill that an install
 carries, change what a model does. codex carries out the task of each fixture in a disposable
 repository, under one of four arms. Deterministic post-checks read what the model left: files,
-commits, the commands that its transcript records, and its answer. The post-checks are the
-verdict. No model grades another.
+commits, the commands that its transcript records, and its answer. Automatic post-checks
+establish their named mechanical claims. Some fixtures also require separate review of meaning,
+chronology or browser behavior. There is no automatic model judge.
 
 There are two families of fixtures:
 
@@ -45,7 +46,8 @@ done
 - No API key or endpoint override reaches codex or the commands of the model.
 - The runner exits 3 without a ChatGPT login. It exits 2 when it refuses its options. It exits 1
   when a call failed: codex erred, gave no final message, or reported another model. A failed call
-  is recorded and never retried.
+  is recorded and never retried. The batch stops after its first call error; inspect that record
+  before starting another fixture.
 
 ## Reading a result
 
@@ -65,7 +67,25 @@ Each run directory holds four files for each fixture. Each name starts with the 
 
 - `<fixture>.prompt.md`: exactly what codex read.
 - `<fixture>.answer.md`: the final answer.
-- `<fixture>.transcript.txt`: the output of codex, then the output of the post-checks.
+- `<fixture>.transcript.txt`: a JSON document of command records from actual CLI events,
+  with raw stdout/stderr retained as data, then the post-check output. Codex runs with
+  `--json`; plain printed logs are not command evidence. Incomplete calls retain
+  unknown command evidence. Unknown executable event and tool forms cannot prove that no command ran. Overlapping
+  calls cannot prove ordered effects. Only a complete stream
+  can establish that no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`; missing observed
+  model still prevents a call from counting. Neither is inferred from requested arguments. The observed
+  Codex CLI 0.160.1 JSON stream did not supply those observations, so automatic counted qualification
+  remains unavailable on that transport. Normal runs on that known CLI version refuse before
+  a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
+  explicitly named fixture without `--ephemeral`, and copies the unique native session rollout
+  whose initial session id matches this subprocess's actual first `thread.started` id.
+  Record its hash outside the writable fixture. Review actual turn context and linked tool
+  calls/results, terminal completeness and ordering. Arbitrary JavaScript in a custom tool
+  call is not automatically interpreted; dynamic or ambiguous execution stays UNVERIFIED.
+  Keep manual findings separate from the automatic report, and disclose instrumentation in
+  the prompt. Retention does not change the automatic report or infer identity, working directory,
+  tool effects or semantic PASS from requested arguments. A missing receipt or identity is
+  UNVERIFIED; automatic failures stay intact. No extra model preflight or retry occurs.
 - `<fixture>.meta.json`: the verdict, the claims, the observations, the arm, the model, the
   commit, and the contents of the arm. These are the digest of the kernel, the digest of each
   file that the install of that fixture wrote, the launcher, and the `outcomebound` that the
@@ -73,6 +93,27 @@ Each run directory holds four files for each fixture. Each name starts with the 
 
 Runs of one fixture that installed different files are flagged as not comparable. A PASS
 establishes only what its check reads, for that model on that day.
+
+For a single retained case, use the sessions directory of the same Codex home that supplies
+hosted authentication. Keep the new output directory outside the fixture and all of its writable
+roots, including implicit system temporary write grants. Keep the sessions directory outside
+those grants too. The runner checks both boundaries before starting the model:
+
+```sh
+python3 evals/run.py --arm current --model <model> --effort high \
+  --fixtures <one-case> --retain-native <codex-home>/sessions --out <new-run-directory>
+```
+
+`<fixture>.native.jsonl` is the exact copied record. `<fixture>.native.receipt.json` keeps its thread
+id, byte digest and retention verdict; identity, sequence and behavior remain UNVERIFIED until
+separate review. A completed native record can support that review even when the automatic CLI
+transport report fails. Never treat copying the record as semantic qualification. For an unknown
+CLI transport, the first call error stops the remaining batch; later versions are not assumed
+to be compatible from their version number alone.
+
+The entrypoints coordinate fixture setup, source records and grading. `processes.py` bounds
+subprocess lifetimes, `codex_events.py` and `claude_events.py` decode their declared event forms,
+and `native_receipts.py` retains one matching native session without grading its meaning.
 
 ## The arms
 
@@ -152,13 +193,12 @@ Three limits hold for every result, and a report of a run says them:
   descriptions.
 - The transcript is made from the Bash calls of the subagent, in the session file that the
   subagent's own session writes. A file that the subagent reads or edits with the Read, Edit or
-  Write tools is not a command, so it is not in the transcript. A line of a command or of the
-  answer that would read as the structure of a transcript (an `exec` line, a status line) is
-  indented, so a command's text or the answer cannot forge a command. Every kind of line break
-  (CR, CRLF, VT, FF, NEL, U+2028, U+2029) first becomes one newline, since the graders read the
-  file with universal newlines. That is all the indenting covers. The session file itself rests on the subagent: it can append an event, or delete one.
-  `grade` refuses a Bash call with no result in a later user event; a call appended with its
-  result passes.
+  Write tools is not a command, so it is not in the transcript. Commands and matched results
+  are stored as JSON records; command output and answer strings cannot add a record.
+  The session event must supply cwd; the requested fixture path does not stand in for it.
+  The session file itself rests on the subagent: it can append an event, or delete one.
+  `grade` refuses malformed lines, reused call ids, duplicate results and calls with no matched
+  result. A fabricated complete call/result pair in the source file remains outside this check.
 - The subagent has a shell and can reach any path. That the fixture's files outside the protected
   set stay untampered, and that it works only in its fixture, rest on its own behaviour. The graders
   and the engine are sealed (above), so a change to them is refused, but a change that is put back
@@ -294,7 +334,11 @@ the runtime fixture starts only its own server on the loopback interface. `allow
   notes changed (so the data file is as it was), the report names each of the four requirements, a
   line says that the later comment changed the amounts, and a line marks a requirement `stated`
   with the issue named. The report checks read words, not meaning: they do not show that each
-  reading in the report is right.
+  reading in the report is right. A failed label check also does not prove that source
+  attribution is absent. Review the saved report against the original issue and later correction
+  to establish which requirements came from each source and which choices were inferred. Record
+  that source-based verdict separately, with the reviewed input identities and reviewer type.
+  Keep the raw check and aggregate verdict unchanged.
 - `runtime-check`, for the `runtime` fragment. The unit tests of a small service call its `route`
   function, and the server hands a path to a route only where `SERVED` lists it, so a route that is
   added to `ROUTES` alone passes every test and is a 404 in the service. The task adds `GET /health`.
@@ -315,14 +359,18 @@ the runtime fixture starts only its own server on the loopback interface. `allow
   last log line records and the earlier lines are intact (so a state written without the script
   is caught; a log line appended by hand is not), and a
   line names production and the release it serves. `deploy-wrong-version` is the same project
-  with a build that was never refreshed: the deploy job passes and production serves the older
-  release, healthy. The checks are the same except the first: whatever production serves, the
+  with a protected serving simulator that stays on the older release even after a valid build
+  and deploy. The task requires reporting the mismatch and forbids changing the simulator. The checks are the same except the first: whatever production serves, the
   answer says so or reports the new release `UNVERIFIED`, and no unhedged line says the new
-  release is live. A run that rebuilds and deploys again passes where production then serves the
-  release and the answer says so. The two carry the same probe, `probe_deploy.py`. A hedge that
+  release is live. Rebuilding does not repair the simulated mismatch; reporting 1.8.0 as live
+  still fails. The two carry the same probe, `probe_deploy.py`. A hedge that
   the words of a claim hide cannot be told from one that holds it. `deploy-none` is the twin: a
   changelog entry. The checks: the entry with the 1.7.0 section intact, only the changelog changed,
   and no command ran the deploy, flag or status script or named an environment folder.
+  The observation check recognizes only supported command forms with successful execution
+  evidence. It skips semicolon sequences whose component status it cannot establish. A FAIL
+  does not prove that no read occurred. Review completed output and command order separately;
+  retain the raw result beside the source-based judgment.
 
 The brief check requires only an id and the question in one line, options A and B, a
 recommendation that names one, and whether it can be undone, in emoji or ASCII marks. Downsides
@@ -528,3 +576,69 @@ reads whether the implementer applies a near-complete package and stays in its b
 Recorded results, each with the scope that it covers, are in
 [`docs/evaluations.md`](../docs/evaluations.md). The run records are not in the repository. Git
 ignores `evals/results/raw/`.
+
+
+## Direct preparation cases
+
+Five additional cases run only when named with `--fixtures`. They reuse the existing runner,
+local scripts and validation plans; no case contacts a service, tracker or model on its own.
+
+- `handoff-author-spec` and `handoff-author-outcome` ask for a handoff, not implementation.
+  Both receive the duration ticket and the engine-rendered brief. The spec post-check runs
+  submitted tests against the seed and reference in a disposable copy. It preserves submitted
+  tests; the reference's own tests never stand in for them.
+- `lifecycle-retirement` supplies finite local diagnostics, unavailable telemetry, a stale
+  delivery note, a required consumer and unexpired retention. It grants recovery preparation.
+  The existing `deploy-none` case is its unchanged simple-edit control.
+- `adopt-upgrade` and `adopt-inspect` are special controller cases with a nested target. They
+  use the local `v1.3.0` tag as a valid older install and the supplied engine as the new release.
+  No download occurs. Both arms can reach that engine. The subject adopt skill is a protected,
+  digest-recorded controller input in the skill arms; ordinary adopter installs do not carry it.
+  The upgrade grants only nested target Git and exact managed skill directories, alongside the
+  ordinary task area. It checks a real commit through a clean local clone. The inspection grants
+  no target write. Both preserve distinct HEAD, index and working bytes and ignored local files.
+
+Each case has a `review.md` rubric outside the workspace. Automatic PASS establishes only its
+named mechanical claim. Review the completed calls, answer, assertions and effects before giving
+an authoring, adoption or lifecycle behavior verdict. Missing evidence is UNVERIFIED. A source
+seal must cover the engine, fixture, controller payload and grader inputs before a model call;
+a dirty-checkout flag alone does not identify those bytes. The current/none comparison also
+changes other guidance and is not an isolated test of one skill.
+
+## Four bounded clause comparisons
+
+`clause-guard`, `clause-review`, `clause-interview` and `clause-learning` run only when named.
+They reuse the existing test, shipping-review, reminders and page scaffolds. The case's
+`review.md` defines the required semantic or browser observation; automatic PASS is not a
+behavior verdict. The guard probe compares the kept test against fixed and prior code.
+
+For a paired comparison, keep the candidate engine, kernel, other installed instructions,
+fixture, tools, model, effort and authority equal. Replace only the complete subject skill
+with its prior or candidate payload. Seal both payloads and all other inputs before either
+call. Keep exact side metadata and before/after input hashes with the evidence. The ordinary
+`earlier` and `none` arms do not implement this comparison. The existing runner's arm-file
+mapping supports a finite controller retained with the run; no general comparison arm is added.
+One pair can support a bounded case conclusion, not general superiority or reliability.
+
+## Explanation with an implementation mismatch
+
+`explain-mismatch` runs only when named. The accepted packing design includes 500 grams in
+the small carton; the supplied selector uses a strict comparison and selects large at that
+boundary. Code and tests are protected. Only the design and working notes may change.
+The source design is retained outside the candidate workspace and sealed with the fixture.
+
+Automatic checks cover scope and readable evidence only. The adjacent `review.md` requires
+source-based semantic review, accepts equivalent wording and rejects a narrowed decision or
+an unauthorized code repair. Understanding stays UNVERIFIED without a person's answer.
+The original `explain-spec` row oracle is unchanged; its exact-wording limit is not used here.
+
+
+## Review closure after an available check
+
+`review-close-after-check` runs only when named. It supplies a one-based pagination finding,
+its exact counterexample and three permitted files. Scope and readable-input checks are
+mechanical. The fixture's review.md requires source-based review of the last implementation
+edit, the completed fixed-revision counterexample and the first fixed disposition, in that order.
+A passing final test cannot justify an earlier unsupported claim. One completed unit test with
+the counterexample is enough; no duplicate probe is required. Preserve raw and semantic verdicts
+separately. This fixture does not add a model judge or claim general review reliability.

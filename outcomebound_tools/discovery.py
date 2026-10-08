@@ -18,8 +18,11 @@ import re
 import stat
 import subprocess
 import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
+from typing import Any, Literal, TypedDict
 
 from outcomebound_tools import declared_tests, home, paths, programs, schemacheck, textio
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
@@ -129,7 +132,79 @@ CANDIDATE_SCRIPT_NAMES = ("check", "format:check", "lint", "test", "typecheck", 
 CANDIDATE_SCRIPT_PREFIXES = ("lint:", "test:")
 
 
-def is_check_candidate(name) -> bool:
+_Path = str | os.PathLike[str]
+
+
+class _CheckCandidate(TypedDict):
+    command: str
+    label: str
+    confirmed: bool
+
+
+class _ObservedManager(TypedDict):
+    status: Literal["observed"]
+    name: str
+    evidence: list[str]
+
+
+class _UnresolvedManager(TypedDict):
+    status: Literal["unresolved"]
+    candidates: list[str]
+    evidence: list[str]
+
+
+_Manager = _ObservedManager | _UnresolvedManager
+
+
+class _PackageScript(TypedDict):
+    name: str
+    command: str
+    invocation: str | None
+    execution_status: Literal["UNVERIFIED"]
+
+
+class _PackageProblem(TypedDict):
+    path: str
+    status: Literal["bounded", "malformed", "unreadable"]
+    evidence: str
+    scripts: list[_PackageScript]
+
+
+class _ParsedPackage(TypedDict):
+    path: str
+    status: Literal["parsed"]
+    evidence: str
+    manager: _Manager
+    scripts: list[_PackageScript]
+
+
+_Package = _PackageProblem | _ParsedPackage
+
+
+class _Component(TypedDict):
+    id: str
+    root: str
+    modules: list[str]
+    evidence: list[str]
+    test_options: list[str]
+    check_candidates: list[_CheckCandidate]
+
+
+@dataclass
+class _Scan:
+    """The bounded walk's observations, before metadata and component interpretation."""
+
+    markers: list[dict[str, str]] = field(default_factory=list)
+    shell_scripts: list[str] = field(default_factory=list)
+    skipped: list[dict[str, str]] = field(default_factory=list)
+    seen_relevant: set[str] = field(default_factory=set)
+    entry_count: int = 0
+    truncated: bool = False
+    depth_limited: bool = False
+    shell_truncated: bool = False
+
+
+def is_check_candidate(name: object) -> bool:
     """True when an observed script name is on the check-candidate allowlist."""
 
     return isinstance(name, str) and (
@@ -137,7 +212,7 @@ def is_check_candidate(name) -> bool:
     )
 
 
-def _candidates(commands) -> list[dict]:
+def _candidates(commands: Iterable[str]) -> list[_CheckCandidate]:
     """Every offered command, labeled unverified and explicitly unconfirmed."""
 
     return [
@@ -204,7 +279,7 @@ def _relative(path: Path, target: Path) -> str:
     return value or "."
 
 
-def _bounded_root(value) -> str:
+def _bounded_root(value: _Path) -> str:
     """The path grammar for a component root.
 
     A leading `~` and every control character (code point < 32, or DEL)
@@ -233,11 +308,13 @@ def _is_regular(path: Path) -> bool:
         return False
 
 
-def _worktree_workflows(target: Path) -> tuple[list[dict], list[dict]]:
+def _worktree_workflows(
+    target: Path,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Observe the known repository-level workflow documents, without following links."""
 
-    observed = []
-    skipped = []
+    observed: list[dict[str, str]] = []
+    skipped: list[dict[str, str]] = []
     for relative, kind in sorted(WORKFLOW_FILES.items()):
         path = target / relative
         if path.is_symlink():
@@ -253,7 +330,8 @@ def _worktree_workflows(target: Path) -> tuple[list[dict], list[dict]]:
     return observed, skipped
 
 
-def _normal_roots(target: Path, roots) -> list[Path]:
+def _normal_roots(target: Path, roots: _Path | Iterable[_Path] | None) -> list[Path]:
+    values: list[_Path]
     if roots is None:
         values = ["."]
     elif isinstance(roots, (str, os.PathLike)):
@@ -327,7 +405,7 @@ def _script_invocation(manager: str, name: str) -> str:
     return f"{manager} {name}"
 
 
-def _manager(document: dict, lock_evidence: list[tuple[str, str]]) -> dict:
+def _manager(document: dict[str, object], lock_evidence: list[tuple[str, str]]) -> _Manager:
     evidence = list(lock_evidence)
     declaration = document.get("packageManager")
     if declaration is not None:
@@ -356,7 +434,7 @@ def _manager(document: dict, lock_evidence: list[tuple[str, str]]) -> dict:
     }
 
 
-def _read_package(path: Path, relative: str, lock_evidence: list[tuple[str, str]]) -> dict:
+def _read_package(path: Path, relative: str, lock_evidence: list[tuple[str, str]]) -> _Package:
     try:
         size = path.lstat().st_size
         if size > MAX_PACKAGE_BYTES:
@@ -406,7 +484,7 @@ def _read_package(path: Path, relative: str, lock_evidence: list[tuple[str, str]
         }
 
     manager = _manager(document, lock_evidence)
-    observed = []
+    observed: list[_PackageScript] = []
     for name, command in sorted(scripts.items()):
         if (
             not isinstance(name, str)
@@ -453,7 +531,10 @@ def _component_id(root: str) -> str:
 
 
 def _test_options(
-    target: Path | str | None, root: str, markers: list[dict], packages: list[dict]
+    target: _Path | None,
+    root: str,
+    markers: Sequence[dict[str, str]],
+    packages: Sequence[_Package],
 ) -> list[str]:
     """The runners this root declares, in order (`declared_tests.runner_options`)."""
 
@@ -462,18 +543,40 @@ def _test_options(
     )
 
 
-def _directory_markers(current: Path, target: Path, file_names, directory_names) -> list[dict]:
+def _nested_marker_directory(path: Path, target: Path, ignored_folders: frozenset[str]) -> bool:
+    """A nested marker must pass the same exclusions before it supplies evidence."""
+
+    if _relative(path, target) in ignored_folders or path.name in IGNORED_DIRECTORIES:
+        return False
+    try:
+        mode = path.lstat().st_mode
+    except OSError:
+        return False
+    # lstat rejects a link before the .git probe can follow it into another tree.
+    return stat.S_ISDIR(mode) and not os.path.lexists(path / ".git")
+
+
+def _directory_markers(
+    current: Path,
+    target: Path,
+    file_names: Iterable[str],
+    directory_names: Iterable[str],
+    ignored_folders: frozenset[str],
+    depth: int,
+) -> list[dict[str, str]]:
     """Markers a directory listing carries, for the kinds no filename names.
 
-    Only `os.scandir` results the walk already produced and one `is_dir` test
-    for the nested pair are read; no file is opened and nothing is executed.
+    Direct names come from the admitted walk listing. A nested directory must
+    also pass the ignored, symlink, nested-repository and depth exclusions;
+    paired metadata must be a regular admitted file. No file is opened and
+    nothing is executed.
     Shell is not decided here: it depends on which roots the other markers
     infer, which is only known once the whole walk is done (`_shell_markers`).
     """
 
     root = _relative(current, target)
     names = set(directory_names)
-    rows = []
+    rows: list[dict[str, str]] = []
     rows.extend(
         {
             "kind": MIGRATION_DIRECTORIES[name],
@@ -483,17 +586,21 @@ def _directory_markers(current: Path, target: Path, file_names, directory_names)
         for name in sorted(names & set(MIGRATION_DIRECTORIES))
     )
     for parts, kind in sorted(NESTED_MIGRATION_DIRECTORIES.items()):
-        if parts[0] in names and (current.joinpath(*parts)).is_dir():
+        if (
+            parts[0] in names
+            and depth + 1 < MAX_DEPTH
+            and _nested_marker_directory(current.joinpath(*parts), target, ignored_folders)
+        ):
             rows.append(
                 {"kind": kind, "path": _relative(current.joinpath(*parts), target), "root": root}
             )
     for (filename, directory), kind in sorted(PAIRED_MARKERS.items()):
-        if filename in set(file_names) and directory in names:
+        if filename in set(file_names) and directory in names and _is_regular(current / filename):
             rows.append({"kind": kind, "path": _relative(current / filename, target), "root": root})
     return rows
 
 
-def _nearest_root(path: str, roots) -> str:
+def _nearest_root(path: str, roots: Iterable[str]) -> str:
     """The deepest candidate root that contains `path`; the target root contains everything.
 
     A script belongs to ONE component: the nearest one. `api/run.sh` beside
@@ -512,7 +619,9 @@ def _nearest_root(path: str, roots) -> str:
     return deepest
 
 
-def _shell_markers(scripts, markers: list[dict]) -> list[dict]:
+def _shell_markers(
+    scripts: Iterable[str], markers: Sequence[dict[str, str]]
+) -> list[dict[str, str]]:
     """Shell roots: the target root, and every root another marker already infers.
 
     A shell component is a component the project already has, not any
@@ -534,8 +643,10 @@ def _shell_markers(scripts, markers: list[dict]) -> list[dict]:
     return [{"kind": "shell", "path": found[root], "root": root} for root in sorted(found)]
 
 
-def _components(markers: list[dict], packages: list[dict], target=None) -> list[dict]:
-    by_root: dict[str, dict] = {}
+def _components(
+    markers: Sequence[dict[str, str]], packages: Sequence[_Package], target: _Path | None = None
+) -> list[_Component]:
+    by_root: dict[str, _Component] = {}
     for marker in markers:
         row = by_root.setdefault(
             marker["root"],
@@ -544,15 +655,17 @@ def _components(markers: list[dict], packages: list[dict], target=None) -> list[
                 "root": marker["root"],
                 "modules": [],
                 "evidence": [],
+                "test_options": [],
+                "check_candidates": [],
             },
         )
         module = MODULE_FOR_KIND.get(marker["kind"])
         if module is not None and module not in row["modules"]:
             row["modules"].append(module)
         row["evidence"].append(marker["path"])
-    result = []
+    result: list[_Component] = []
     for root, row in sorted(by_root.items()):
-        row["modules"].sort(key=MODULE_ORDER.get)
+        row["modules"].sort(key=MODULE_ORDER.__getitem__)
         row["evidence"].sort()
         row["test_options"] = _test_options(target, root, markers, packages)
         row["check_candidates"] = _candidates(row["test_options"])
@@ -560,136 +673,139 @@ def _components(markers: list[dict], packages: list[dict], target=None) -> list[
     return result
 
 
-def discover(target, roots=None) -> dict:
-    """Return dated filesystem observations without changing or executing the target.
-
-    ``roots`` optionally bounds component-marker discovery to target-relative
-    directories.  Worktree-level workflow references are still observed at the
-    target root because they govern every component.
-    """
-
+def _target_directory(target: _Path) -> Path:
     requested = Path(target).expanduser()
     try:
         if stat.S_ISLNK(requested.lstat().st_mode):
             raise DiscoveryError(f"target is a symlink: {requested}")
         if not requested.is_dir():
             raise DiscoveryError(f"target is not a directory: {requested}")
-        target_path = requested.resolve(strict=True)
+        return requested.resolve(strict=True)
     except FileNotFoundError as error:
         raise DiscoveryError(f"target does not exist: {requested}") from error
     except OSError as error:
         raise DiscoveryError(f"cannot inspect target {requested}: {error}") from error
 
-    scan_roots = _normal_roots(target_path, roots)
-    ignored = git_ignored(target_path)
-    ignored_folders, ignored_files = ignored or (frozenset(), frozenset())
-    markers = []
-    shell_scripts: list[str] = []
-    shell_truncated = False
-    workflow_refs = []
-    skipped = []
-    seen_relevant = set()
-    entry_count = 0
-    truncated = False
-    depth_limited = False
 
-    for scan_root in scan_roots:
+def _safe_directories(
+    current: Path,
+    target: Path,
+    names: Sequence[str],
+    depth: int,
+    ignored_folders: frozenset[str],
+    scan: _Scan,
+) -> list[str]:
+    safe = []
+    for name in sorted(names):
+        path = current / name
+        relative = _relative(path, target)
+        try:
+            symlink = stat.S_ISLNK(path.lstat().st_mode)
+        except OSError:
+            symlink = False
+        if symlink:
+            scan.skipped.append({"path": relative, "reason": "symlink"})
+        elif relative in ignored_folders or os.path.lexists(path / ".git"):
+            continue
+        elif name not in IGNORED_DIRECTORIES:
+            if depth < MAX_DEPTH:
+                safe.append(name)
+            else:
+                scan.depth_limited = True
+    return safe
+
+
+def _scan_shell_scripts(
+    current: Path, target: Path, file_names: Sequence[str], scan: _Scan
+) -> None:
+    for name in sorted(file_names):
+        if not name.endswith(SHELL_SUFFIX) or not _is_regular(current / name):
+            continue
+        if len(scan.shell_scripts) >= MAX_SHELL_SCRIPTS:
+            scan.shell_truncated = True
+            break
+        scan.shell_scripts.append(_relative(current / name, target))
+
+
+def _scan_file_markers(current: Path, target: Path, file_names: Sequence[str], scan: _Scan) -> None:
+    for name in sorted(file_names):
+        path = current / name
+        relative = _relative(path, target)
+        marker_kind = MARKERS.get(name)
+        if not marker_kind:
+            continue
+        try:
+            mode = path.lstat().st_mode
+        except OSError:
+            continue
+        if stat.S_ISLNK(mode):
+            scan.skipped.append({"path": relative, "reason": "symlink"})
+            continue
+        if not stat.S_ISREG(mode) or relative in scan.seen_relevant:
+            continue
+        if len(scan.seen_relevant) >= MAX_RELEVANT_FILES:
+            scan.truncated = True
+            continue
+        scan.seen_relevant.add(relative)
+        root = Path(relative).parent.as_posix()
+        scan.markers.append({"kind": marker_kind, "path": relative, "root": root})
+
+
+def _scan_roots(
+    target: Path,
+    roots: Sequence[Path],
+    ignored_folders: frozenset[str],
+    ignored_files: frozenset[str],
+) -> _Scan:
+    scan = _Scan()
+    for root in roots:
         for current_text, directory_names, file_names in os.walk(
-            scan_root, topdown=True, followlinks=False
+            root, topdown=True, followlinks=False
         ):
             current = Path(current_text)
-            relative_current = current.relative_to(scan_root)
-            depth = len(relative_current.parts)
-            entry_count += len(directory_names) + len(file_names)
-            if entry_count > MAX_ENTRIES:
-                truncated = True
+            depth = len(current.relative_to(root).parts)
+            scan.entry_count += len(directory_names) + len(file_names)
+            if scan.entry_count > MAX_ENTRIES:
+                scan.truncated = True
                 directory_names[:] = []
                 break
-
-            safe_directories = []
-            for name in sorted(directory_names):
-                path = current / name
-                relative = _relative(path, target_path)
-                try:
-                    symlink = stat.S_ISLNK(path.lstat().st_mode)
-                except OSError:
-                    symlink = False
-                if symlink:
-                    skipped.append({"path": relative, "reason": "symlink"})
-                elif relative in ignored_folders or os.path.lexists(path / ".git"):
-                    continue
-                elif name not in IGNORED_DIRECTORIES:
-                    if depth < MAX_DEPTH:
-                        safe_directories.append(name)
-                    else:
-                        depth_limited = True
-            directory_names[:] = safe_directories
-
-            if len(seen_relevant) < MAX_RELEVANT_FILES:
-                for row in _directory_markers(current, target_path, file_names, safe_directories):
-                    if row["path"] not in seen_relevant:
-                        seen_relevant.add(row["path"])
-                        markers.append(row)
+            directory_names[:] = _safe_directories(
+                current, target, directory_names, depth, ignored_folders, scan
+            )
             file_names[:] = [
                 name
                 for name in file_names
-                if _relative(current / name, target_path) not in ignored_files
+                if _relative(current / name, target) not in ignored_files
             ]
-            for name in sorted(file_names):
-                if not name.endswith(SHELL_SUFFIX) or not _is_regular(current / name):
-                    continue
-                if len(shell_scripts) >= MAX_SHELL_SCRIPTS:
-                    shell_truncated = True
-                    break
-                shell_scripts.append(_relative(current / name, target_path))
-
-            for name in sorted(file_names):
-                path = current / name
-                relative = _relative(path, target_path)
-                marker_kind = MARKERS.get(name)
-                if not marker_kind:
-                    continue
-                try:
-                    mode = path.lstat().st_mode
-                except OSError:
-                    continue
-                if stat.S_ISLNK(mode):
-                    skipped.append({"path": relative, "reason": "symlink"})
-                    continue
-                if not stat.S_ISREG(mode) or relative in seen_relevant:
-                    continue
-                if len(seen_relevant) >= MAX_RELEVANT_FILES:
-                    truncated = True
-                    continue
-                seen_relevant.add(relative)
-                if marker_kind:
-                    root = Path(relative).parent.as_posix()
-                    markers.append(
-                        {
-                            "kind": marker_kind,
-                            "path": relative,
-                            "root": "." if root == "." else root,
-                        }
-                    )
-        if truncated:
+            if len(scan.seen_relevant) < MAX_RELEVANT_FILES:
+                for row in _directory_markers(
+                    current, target, file_names, directory_names, ignored_folders, depth
+                ):
+                    if row["path"] not in scan.seen_relevant:
+                        scan.seen_relevant.add(row["path"])
+                        scan.markers.append(row)
+            _scan_shell_scripts(current, target, file_names, scan)
+            _scan_file_markers(current, target, file_names, scan)
+        # The marker cap finishes this root's walk (including its shell population),
+        # but the entry cap stops that walk immediately. Both stop the next root.
+        if scan.truncated:
             break
+    return scan
 
-    markers.extend(_shell_markers(shell_scripts, markers))
-    workflow_refs, workflow_skipped = _worktree_workflows(target_path)
-    skipped.extend(workflow_skipped)
-    markers.sort(key=lambda row: (row["path"], row["kind"]))
-    workflow_refs.sort(key=lambda row: row["path"])
-    skipped = sorted({(row["path"], row["reason"]) for row in skipped})
-    skipped_rows = [{"path": path, "reason": reason} for path, reason in skipped]
+
+def _packages(target: Path, markers: Sequence[dict[str, str]]) -> list[_Package]:
     marker_paths = {row["path"] for row in markers}
     packages = []
     for marker in markers:
         if Path(marker["path"]).name == "package.json":
-            path = target_path.joinpath(*marker["path"].split("/"))
+            path = target.joinpath(*marker["path"].split("/"))
             lock_evidence = _package_manager_evidence(marker_paths, marker["root"])
             packages.append(_read_package(path, marker["path"], lock_evidence))
     packages.sort(key=lambda row: row["path"])
+    return packages
 
+
+def _unknowns(packages: Sequence[_Package], scan: _Scan) -> list[dict[str, str]]:
     unknown = [
         {
             "subject": "outcome",
@@ -722,41 +838,73 @@ def discover(target, roots=None) -> dict:
                     "reason": "; ".join(package["manager"]["evidence"]),
                 }
             )
-    if truncated or depth_limited:
+    if scan.truncated or scan.depth_limited:
         unknown.append(
             {
                 "subject": "discovery-completeness",
                 "reason": "the bounded entry, file, or depth limit was reached",
             }
         )
+    return unknown
 
+
+def _project_state(target: Path) -> str:
     try:
-        project_state = "empty" if not any(target_path.iterdir()) else "populated"
+        return "empty" if not any(target.iterdir()) else "populated"
     except OSError:
-        project_state = "unknown"
-    roots_report = [_relative(path, target_path) for path in scan_roots]
+        return "unknown"
+
+
+def _limits(scan: _Scan, git_ignore_available: bool) -> list[str]:
     limits = [
         f"component scan is limited to depth {MAX_DEPTH} and {MAX_ENTRIES} directory entries",
         "only allowlisted project metadata was read; workflow files were observed by path only",
         "symlinks were not followed and detected commands were not executed",
         "nested repositories were not entered",
         "what Git ignores was not entered"
-        if ignored is not None
+        if git_ignore_available
         else "Git listed no ignored paths here (not a Git work tree, an ignored folder, or Git "
         "could not run), so no .gitignore was applied",
     ]
-    if shell_truncated:
+    if scan.shell_truncated:
         limits.append(
             f"shell-script collection stopped at the {MAX_SHELL_SCRIPTS}-file limit; a shell "
             "component root beyond it was not inferred"
         )
+    return limits
+
+
+def discover(target: _Path, roots: _Path | Iterable[_Path] | None = None) -> dict[str, Any]:
+    """Return dated filesystem observations without changing or executing the target.
+
+    ``roots`` optionally bounds component-marker discovery to target-relative
+    directories. Worktree-level workflow references are still observed at the
+    target root because they govern every component.
+    """
+
+    target_path = _target_directory(target)
+    scan_roots = _normal_roots(target_path, roots)
+    ignored = git_ignored(target_path)
+    ignored_folders, ignored_files = ignored or (frozenset(), frozenset())
+    scan = _scan_roots(target_path, scan_roots, ignored_folders, ignored_files)
+    scan.markers.extend(_shell_markers(scan.shell_scripts, scan.markers))
+    workflow_refs, workflow_skipped = _worktree_workflows(target_path)
+    scan.skipped.extend(workflow_skipped)
+    scan.markers.sort(key=lambda row: (row["path"], row["kind"]))
+    workflow_refs.sort(key=lambda row: row["path"])
+    skipped = sorted({(row["path"], row["reason"]) for row in scan.skipped})
+    packages = _packages(target_path, scan.markers)
+    unknown = _unknowns(packages, scan)
+    project_state = _project_state(target_path)
+    roots_report = [_relative(path, target_path) for path in scan_roots]
+    limits = _limits(scan, ignored is not None)
     return {
         "observed_at": _timestamp(),
         "target": str(target_path),
         "roots": roots_report,
         "observed": {
             "project_state": project_state,
-            "markers": markers,
+            "markers": scan.markers,
             "package_scripts": packages,
             "workflow_refs": workflow_refs,
             "harness_markers": harness_markers(target_path),
@@ -768,9 +916,9 @@ def discover(target, roots=None) -> dict:
             # observation rather than re-derived from a path the document may
             # outlive.
             "git_target": (target_path / ".git").exists(),
-            "skipped": skipped_rows,
+            "skipped": [{"path": path, "reason": reason} for path, reason in skipped],
         },
-        "inferred": {"components": _components(markers, packages, target_path)},
+        "inferred": {"components": _components(scan.markers, packages, target_path)},
         "unknown": unknown,
         "limits": limits,
     }
@@ -789,7 +937,16 @@ def project_skill_roots(target: Path | str) -> list[dict[str, object]]:
     ]
 
 
-def harness_markers(target) -> list:
+def _harness_directory(root: Path, marker: str) -> bool:
+    path = root
+    for part in PurePosixPath(marker.rstrip("/")).parts:
+        path = path / part
+        if path.is_symlink() or not path.is_dir():
+            return False
+    return True
+
+
+def harness_markers(target: _Path) -> list[str]:
     """The recognized harness directories that actually exist, sorted and unique.
 
     Only an existing directory with no symlinked component qualifies: a file
@@ -800,20 +957,12 @@ def harness_markers(target) -> list:
     """
 
     root = Path(target)
-    observed = set()
-    for marker in HARNESS_MARKER_CANDIDATES:
-        path = root
-        for part in PurePosixPath(marker.rstrip("/")).parts:
-            path = path / part
-            if path.is_symlink() or not path.is_dir():
-                path = None
-                break
-        if path is not None:
-            observed.add(marker)
-    return sorted(observed)
+    return sorted(
+        marker for marker in HARNESS_MARKER_CANDIDATES if _harness_directory(root, marker)
+    )
 
 
-def validate_document(data, source_root=ROOT) -> dict:
+def validate_document(data: object, source_root: _Path = ROOT) -> dict[str, Any]:
     """Validate one ephemeral discovery document against its shipped schema."""
 
     if not isinstance(data, dict) or data.get("format_version") != DISCOVERY_FORMAT_VERSION:
@@ -829,7 +978,7 @@ def validate_document(data, source_root=ROOT) -> dict:
     return copy.deepcopy(data)
 
 
-def main(argv=None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="outcomebound discovery",
         formatter_class=argparse.RawDescriptionHelpFormatter,

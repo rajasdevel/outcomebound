@@ -1,0 +1,1 @@
+The protection fix in `records.py` is committed. Assess the proposed regression in `test_records.py` and repair it so it catches that fix. You may change that test file only; do not change production code or the existing calendar failure. Report what you changed and checked.

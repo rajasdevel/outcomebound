@@ -11,4 +11,7 @@ cd "$target"
 
 . "$here/project.sh"
 
+mkdir -p checks
+cp "$repo/evals/graders/deploy_probe.py" checks/
+
 . "$here/../skills-close/close.sh"

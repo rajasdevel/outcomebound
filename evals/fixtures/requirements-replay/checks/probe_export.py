@@ -16,12 +16,13 @@ holds and 1 naming what does not. The answer is the file OUTCOMEBOUND_EVAL_ANSWE
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import re
+import runpy
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 ORDERS = [
     {"id": 7, "placed": "04/03/2026", "customer": "Ada", "cents": 1250, "status": "shipped"},
@@ -32,11 +33,8 @@ WANTED = "7,2026-03-04,Ada,1250,shipped\n9,2025-12-31,Cy,40000,paid\n"
 
 
 def behaviour() -> list[str]:
-    spec = importlib.util.spec_from_file_location("export", Path.cwd() / "export.py")
-    if spec is None or spec.loader is None:
-        return ["no export.py in the working directory"]
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = ModuleType("export")
+    module.__dict__.update(runpy.run_path(str(Path.cwd() / "export.py"), run_name="export"))
     got = module.to_csv([dict(order) for order in ORDERS])
     if got == WANTED:
         return []
@@ -108,14 +106,36 @@ def corrected() -> list[str]:
     return ["no line says that the later comment changed the amounts"]
 
 
+SOURCE = re.compile(r"(?i)\bissue(?:[-_ ]+#?\s*|#)31\b")
+STATED = re.compile(r"(?i)\bstated\b")
+NEGATED_STATED = re.compile(
+    r"(?i)\b(?:no|not|never)\s+(?:(?:explicitly|directly|clearly)\s+)?stated\b"
+    r"|\b(?:isn't|wasn't|aren't|weren't)\s+stated\b"
+)
+
+
+_support = Path(__file__).resolve().parent / "report_records.py"
+if not _support.is_file():
+    _support = Path(__file__).resolve().parents[3] / "graders" / "report_records.py"
+# run_path reads this protected source file without accepting candidate import caches.
+_report_records = runpy.run_path(str(_support), run_name="report_records")
+_records = _report_records["records"]
+
+
 def provenance() -> list[str]:
     text = _text()
     if text is None:
         return ["no answer was supplied"]
-    stated = any(re.search(r"\bstated\b", line, re.I) for line in text.splitlines())
-    if stated and "issue-31" in text:
-        return []
-    return ["no line marks a requirement stated, or the report never names issue-31"]
+    for record in _records(text):
+        if (
+            SOURCE.search(record)
+            and STATED.search(record)
+            and not NEGATED_STATED.search(record)
+            and not re.search(r"(?i)\bnot\s+(?:from|in|by)\s+(?:source/)?issue", record)
+            and any(re.search(rule, record) for rule in NAMED.values())
+        ):
+            return []
+    return ["no positive stated requirement is bound to issue 31 in a report record"]
 
 
 CHECKS = {

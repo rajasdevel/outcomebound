@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "fcbc34c4eed2132c5507d29cb7927620817888cfb2075e3b7cf21eaad871575d"
+      "sha256": "3627049d7d2d630a2f4e6b04020fcb3f530568bdceed7496a824623be5fb91d6"
     },
     {
       "kind": "skill",
@@ -107,7 +107,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e6cf0bab4f63a9f2f2c78045e36c5e414e0f9222d6067bc9b26208586d4d9778"
+      "sha256": "09d47135387895950b6d00db1ef3871c5faa45cd120772d80b6a1733b11fdfd2"
     },
     {
       "kind": "skill",
@@ -116,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "745230e66a0779bb2009a23840885d8a1cbcc78e5eec55bff46a75b07bd2e5ca"
+      "sha256": "46025e1654a5aee47b348a29c0bd2dd04f6c9ee90089cac4c87136d6589380c0"
     },
     {
       "kind": "skill",
@@ -134,7 +134,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "558eeb7ddb1fff31459092c203d7bcb3abd203f906c887f95bdc71adaced333b"
+      "sha256": "a4b4569f58cb94c220a31ef49adbd43a64d340beaec83f6f9762aab85e4bd049"
     },
     {
       "kind": "skill",
@@ -143,7 +143,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "8631ea43b30e7d343620987bfe26f3ef205f7099bf05f69212b21cc37af78215"
+      "sha256": "fe3374298b60298a7438f1cf89a093f5dd45cb8706ee003a9690327f842d85ef"
     },
     {
       "kind": "skill",
@@ -152,7 +152,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "0343b6fcff66c1cbc907a051edb06f5de518ba4a1d3d1adaebed27ed2ffd52dd"
+      "sha256": "35cb8fd18047a1348b3cd09c48dc30db5d5eee131e9f3e468da4a669b5cedd72"
     },
     {
       "kind": "skill",
@@ -179,7 +179,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "a599a866c2dd070dbf3eba2c70f0ab7bed66efaffba9c28dd18e8b28c667bf1b"
+      "sha256": "d0519040944a1f96c27e7bdf2a7554e77bbeb5cc6586e9ca8d240d6bfa226c77"
     },
     {
       "kind": "skill",
@@ -188,7 +188,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "f6f89d9d6008e22da6502586cbd60296b8005191451d2841aac895da1411ca46"
+      "sha256": "b623cc0907a97a3969b07d4a9c106328001a6f277b43154c79af3a60e9ec0db7"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/using-outcomebound/references/lifecycle.md",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "28138a8a21099478fdf5570d7b5e95073c36d17624c725e1097389d5a573b948"
     }
   ]
 }

@@ -63,6 +63,30 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # The oldest Python leg also checks the supported Git minimum. Build tools are CI-only;
+      # the installed engine does not need them. The checksum comes from kernel.org's
+      # sha256sums.asc. The other legs keep their platform's Git.
+      - name: Set up Git 2.52.0
+        if: matrix.python-version == '3.10'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential libcurl4-openssl-dev libexpat1-dev gettext zlib1g-dev xz-utils
+          archive="$RUNNER_TEMP/git-2.52.0.tar.xz"
+          curl -fsSLo "$archive" https://www.kernel.org/pub/software/scm/git/git-2.52.0.tar.xz
+          echo "3cd8fee86f69a949cb610fee8cd9264e6873d07fa58411f6060b3d62729ed7c5  $archive" | sha256sum -c -
+          tar -xJf "$archive" -C "$RUNNER_TEMP"
+          prefix="$RUNNER_TEMP/git-minimum"
+          make -C "$RUNNER_TEMP/git-2.52.0" -j2 prefix="$prefix" NO_TCLTK=YesPlease install
+          test "$("$prefix/bin/git" --version)" = "git version 2.52.0"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+          echo "GIT_EXEC_PATH=$prefix/libexec/git-core" >> "$GITHUB_ENV"
+
+      - name: Verify minimum Git selection
+        if: matrix.python-version == '3.10'
+        run: |
+          test "$(git --version)" = "git version 2.52.0"
+          test "$(git --exec-path)" = "$RUNNER_TEMP/git-minimum/libexec/git-core"
+
       - name: Standard-library boundary gate
         run: make gate
 
@@ -211,16 +235,17 @@ jobs:
         run: |
           python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider
 
-  # A release tag that passed every leg of `test` is published, and nothing else is: the job
-  # needs `test`, so a failing tag publishes nothing. It builds the wheel and the source archive
-  # from the tagged commit (reproducible: dated from the commit), attests them with signed build
+  # A release tag is published only after every Linux, Windows and container job passes.
+  # The job needs all three, so a failed platform check publishes nothing. It builds the wheel
+  # and source archive from the tagged commit (reproducible: dated from the commit), attests
+  # them with signed build
   # provenance, and attaches them to a draft release whose notes are the tag's changelog
   # section. Then it publishes the draft. Where the repository has immutable releases on, the
   # published release, its tag and its files cannot change. Only this job can write, and only
   # here: the release, the provenance signature and its record.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
+    needs: [test, windows, container]
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -40,9 +40,14 @@ import uuid
 from pathlib import Path
 from typing import Any, NamedTuple
 
+# Direct script execution also needs the repository package path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from evals.codex_events import command_transcript, observed_model, tokens_used
+from evals.native_receipts import NativeCapture, retain
+from evals.processes import bounded_command, partial_output
+
 REPO = Path(__file__).resolve().parent.parent
-if str(REPO) not in sys.path:  # the current arm is rendered by the engine's own adopt
-    sys.path.insert(0, str(REPO))
 FIXTURES = REPO / "evals" / "fixtures"
 # A fixture's own file naming the fragments its install selects, one id a line.
 FRAGMENTS_FILE = "fragments"
@@ -51,7 +56,14 @@ FRAGMENTS_FILE = "fragments"
 TASK_SCRIPT = "task.sh"
 # The hand-off fixtures measure a hand-off package on a named implementer, not the kernel, so
 # they run only when --fixtures names them.
-NAMED_ONLY = "handoff-"
+NAMED_ONLY = (
+    "handoff-",
+    "lifecycle-",
+    "adopt-",
+    "clause-",
+    "explain-mismatch",
+    "review-close-after-check",
+)
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
@@ -122,9 +134,6 @@ CODEX_ISOLATION = (
     "features.memories=false",
 )
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
-MODEL_LINE = re.compile(r"^model: (\S+)$", re.MULTILINE)
-# codex ends its output with this line and the call's token count on the line after it.
-TOKENS_LINE = re.compile(r"^tokens used\s*\n\s*([\d,]+)\s*$", re.MULTILINE)
 OBSERVED = "observed: "
 
 
@@ -161,6 +170,19 @@ def child_env() -> dict[str, str]:
     """The environment every child gets: this one, less each metered credential and override."""
 
     return {name: value for name, value in os.environ.items() if not _stripped(name)}
+
+
+def fixture_setup_env() -> dict[str, str]:
+    """Keep fixture Git isolated, but retain caller config for read-only source access."""
+
+    caller = child_env()
+    return {
+        **caller,
+        **HERMETIC_GIT,
+        "OUTCOMEBOUND_SOURCE_GIT_CONFIG": json.dumps(
+            {key: caller.get(key) for key in HERMETIC_GIT}
+        ),
+    }
 
 
 def stripped_from_environment() -> list[str]:
@@ -268,6 +290,35 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     return Arm(name, text, files, REPO / LAUNCHER, tuple(selected), pointers)
 
 
+def fixture_arm(name: str, arm: Arm) -> Arm:
+    """The adoption controller carries its subject skill; ordinary installs do not."""
+
+    if not name.startswith("adopt-") or arm.name == NONE:
+        return arm
+    from outcomebound_tools import adopt
+
+    root = ".agents/skills/adopt-outcomebound"
+    files = {
+        **arm.files,
+        **{
+            f"{root}/{path}": data
+            for path, data in adopt.skill_files(REPO, "adopt-outcomebound").items()
+        },
+    }
+    return arm._replace(files=files)
+
+
+def fixture_write_roots(name: str, workdir: Path) -> tuple[Path, ...]:
+    """Only the upgrade case grants nested Git and exact managed skill directories."""
+
+    if name != "adopt-upgrade":
+        return ()
+    from outcomebound_tools import adopt
+
+    target = workdir / "target" / "project"
+    return (target / ".git", *(target / ".agents" / "skills" / skill for skill in adopt.SKILLS))
+
+
 def as_installed(workdir: Path, arm: Arm) -> str:
     """For an arm that stands for an install, give the built fixture what adopt writes into
     AGENTS.md, and fold it into the seed commit; why it could not, or an empty string.
@@ -356,10 +407,8 @@ def task_text(name: str, workdir: Path) -> str:
     fixture = FIXTURES / name
     if not (fixture / TASK_SCRIPT).is_file():
         return (fixture / "prompt.md").read_text(encoding="utf-8")
-    done = subprocess.run(
+    done = bounded_command(
         ["bash", str(fixture / TASK_SCRIPT), str(workdir)],
-        capture_output=True,
-        text=True,
         env={**child_env(), **HERMETIC_GIT},
         timeout=SETUP_TIMEOUT,
     )
@@ -378,14 +427,14 @@ def build_prompt(kernel_text: str, task: str) -> str:
 def preflight() -> dict[str, Any]:
     """Observe a ChatGPT login before any call; a login codex does not name is not observed."""
 
-    _status, out, error = _run(["codex", "login", "status"])
+    status, out, error = _run(["codex", "login", "status"])
     output = (out + error).strip()
     line = next(
         (row.strip() for row in output.splitlines() if "Logged in using ChatGPT" in row), ""
     )
     return {
-        "ok": bool(line),
-        "auth": "subscription" if line else "not-observed",
+        "ok": status == 0 and bool(line),
+        "auth": "subscription" if status == 0 and line else "not-observed",
         "auth_evidence": line,
         "preflight": output[:2000],
     }
@@ -407,12 +456,21 @@ def source() -> dict[str, Any]:
     }
 
 
-def codex_command(model: str, effort: str, cwd: Path, last_message: Path) -> list[str]:
+def codex_command(
+    model: str,
+    effort: str,
+    cwd: Path,
+    last_message: Path,
+    writable_roots: tuple[Path, ...] = (),
+    *,
+    retain_native: bool = False,
+) -> list[str]:
     """The `codex exec` argv for one call: the model named, the operator's setup left out.
 
     The call may write the workspace and, where it is a Git repository, its `.git`, which
     `workspace-write` otherwise keeps read-only: a fixture would measure the sandbox, not
-    the model, if a commit were impossible.
+    the model, if a commit were impossible. Only `.agents/work` is added for task notes;
+    the installed skills and the rest of `.agents` retain their default protection.
     """
 
     if not model:
@@ -420,7 +478,8 @@ def codex_command(model: str, effort: str, cwd: Path, last_message: Path) -> lis
     command = [
         "codex",
         "exec",
-        *CODEX_ISOLATION,
+        "--json",
+        *(flag for flag in CODEX_ISOLATION if not (retain_native and flag == "--ephemeral")),
         "-s",
         "workspace-write",
         "-m",
@@ -435,44 +494,58 @@ def codex_command(model: str, effort: str, cwd: Path, last_message: Path) -> lis
     ]
     if (Path(cwd) / ".git").is_dir():
         command += ["--add-dir", str(Path(cwd) / ".git")]
+    command += ["--add-dir", str(Path(cwd) / ".agents" / "work")]
+    for root in writable_roots:
+        command += ["--add-dir", str(root)]
     return command
 
 
-def call_codex(prompt: str, model: str, effort: str, cwd: Path, path: str) -> tuple[str, str, int]:
+class CallOptions(NamedTuple):
+    """The additional model write grants and optional operator-owned native receipt."""
+
+    writable_roots: tuple[Path, ...] = ()
+    native: NativeCapture | None = None
+
+
+def call_codex(
+    prompt: str,
+    model: str,
+    effort: str,
+    cwd: Path,
+    path: str,
+    options: CallOptions | None = None,
+) -> tuple[str, str, int | None]:
     """The model's final message, everything codex printed, and codex's exit status; `path`
     is the call's PATH."""
 
+    options = options or CallOptions()
+    if options.native:
+        options.native.check_roots((cwd, *options.writable_roots))
     with tempfile.NamedTemporaryFile("r+", suffix=".md", delete=False) as handle:
         last_message = Path(handle.name)
     try:
-        done = subprocess.run(
-            codex_command(model, effort, cwd, last_message),
-            input=prompt,
-            capture_output=True,
-            text=True,
-            env={**child_env(), "PATH": path},
-            cwd=str(cwd),
-            timeout=CALL_TIMEOUT,
-        )
+        try:
+            done = bounded_command(
+                codex_command(
+                    model,
+                    effort,
+                    cwd,
+                    last_message,
+                    options.writable_roots,
+                    retain_native=options.native is not None,
+                ),
+                input=prompt,
+                env={**child_env(), "PATH": path},
+                cwd=str(cwd),
+                timeout=CALL_TIMEOUT,
+            )
+            transcript, code = command_transcript(done.stdout, done.stderr), done.returncode
+        except subprocess.TimeoutExpired as problem:
+            transcript, code = command_transcript(problem.stdout or "", problem.stderr or ""), None
         answer = last_message.read_text(encoding="utf-8") if last_message.is_file() else ""
     finally:
         last_message.unlink(missing_ok=True)
-    return answer, done.stdout + done.stderr, done.returncode
-
-
-def tokens_used(transcript: str) -> int | None:
-    """The token count codex printed last, or None where it printed none."""
-
-    found = TOKENS_LINE.findall(transcript)
-    return int(found[-1].replace(",", "")) if found else None
-
-
-def observed_model(transcript: str) -> str | None:
-    """The model codex's own header names, after its `workdir:` line, or None."""
-
-    _before, found, after = transcript.partition("\nworkdir: ")
-    named = MODEL_LINE.search(after) if found else None
-    return named.group(1) if named else None
+    return answer, transcript, code
 
 
 def protected_snapshot(
@@ -552,10 +625,8 @@ def post_check(
     }
     if seed:
         env[SEED_SHA_ENV] = seed
-    done = subprocess.run(
+    done = bounded_command(
         [sys.executable, "-m", "outcomebound_tools.validation", str(plan), "--cwd", str(workdir)],
-        capture_output=True,
-        text=True,
         cwd=str(REPO),
         env=env,
         timeout=POST_CHECK_TIMEOUT,
@@ -578,7 +649,12 @@ def observations(log_dir: Path | None) -> list[str]:
 
 
 def run_fixture(
-    name: str, model: str, effort: str, arm: Arm, path: str
+    name: str,
+    model: str,
+    effort: str,
+    arm: Arm,
+    path: str,
+    capture: NativeCapture | None = None,
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     """Install the arm's files, build the fixture, write its prompt (the arm's kernel, then
     the fixture's task), let the model act in it, then judge what it left.
@@ -595,13 +671,15 @@ def run_fixture(
     )
     extra: dict[str, Any] = {"verdict": "UNVERIFIED", "claims": {}, "fixture_repo": str(workdir)}
     install(workdir, arm.files)
-    built = subprocess.run(
-        ["bash", str(fixture / "setup.sh"), str(workdir)],
-        capture_output=True,
-        text=True,
-        env={**child_env(), **HERMETIC_GIT, "OB_EVAL_ARM": arm.name},
-        timeout=SETUP_TIMEOUT,
-    )
+    try:
+        built = bounded_command(
+            ["bash", str(fixture / "setup.sh"), str(workdir)],
+            env={**fixture_setup_env(), "OB_EVAL_ARM": arm.name},
+            timeout=SETUP_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as problem:
+        extra["error"] = f"fixture setup {type(problem).__name__}: {problem}"
+        return "", partial_output(problem), None, extra
     if built.returncode != 0:
         extra["error"] = f"fixture setup exited {built.returncode}"
         return "", built.stdout + built.stderr, None, extra
@@ -617,26 +695,42 @@ def run_fixture(
         extra["error"] = f"protected fixture setup failed: {problem}"
         return "", built.stdout + built.stderr, None, extra
     seed = seed_commit(workdir)
+    (workdir / ".agents" / "work").mkdir(parents=True, exist_ok=True)
     try:
         prompt = build_prompt(arm.kernel, task_text(name, workdir))
     except (OSError, ValueError, subprocess.SubprocessError) as problem:
         extra["error"] = f"the fixture's task could not be written: {problem}"
-        return "", built.stdout + built.stderr, None, extra
+        return "", built.stdout + built.stderr + partial_output(problem), None, extra
     extra["prompt"] = prompt
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
     try:
-        answer, transcript, returncode = call_codex(prompt, model, effort, workdir, path)
-    except (OSError, subprocess.SubprocessError) as problem:
+        answer, transcript, returncode = call_codex(
+            prompt,
+            model,
+            effort,
+            workdir,
+            path,
+            CallOptions(fixture_write_roots(name, workdir), capture),
+        )
+        if returncode is None:
+            extra["error"] = f"codex call timed out after {CALL_TIMEOUT} seconds"
+    except (OSError, ValueError, subprocess.SubprocessError) as problem:
         # The post-checks still run: a call that timed out may have changed the repository.
         extra["error"] = f"{type(problem).__name__}: {problem}"
+        transcript = partial_output(problem)
     elapsed = round(time.monotonic() - started, 1)
 
     intact, protected_report = check_protected(workdir, protected)
     verdict, output, log_dir = "FAIL", "VERDICT: FAIL\n", None
     if intact:
-        verdict, output, log_dir = post_check(fixture, workdir, seed, transcript, answer)
+        try:
+            verdict, output, log_dir = post_check(fixture, workdir, seed, transcript, answer)
+        except (OSError, subprocess.SubprocessError) as problem:
+            extra["error"] = f"post-check {type(problem).__name__}: {problem}"
+            verdict, output = "UNVERIFIED", partial_output(problem)
+
     extra.update(
         verdict=verdict,
         claims={claim: result for result, claim in CLAIM_LINE.findall(output)},
@@ -662,7 +756,9 @@ def call_error(returncode: int | None, answer: str, extra: dict[str, Any], model
     if not answer.strip():
         return "codex produced no final message"
     seen = extra.get("model_observed")
-    if seen and seen != model:
+    if not seen:
+        return "codex did not report the model it ran"
+    if seen != model:
         return f"codex reported running {seen}, not {model}"
     return ""
 
@@ -674,9 +770,17 @@ def _write(path: Path, document: dict[str, Any]) -> None:
 def run_one(out: Path, status: dict[str, Any], name: str, arm: Arm, path: str) -> bool:
     """One fixture under the run's arm, recorded in `out`; True where its call failed."""
 
-    answer, report, returncode, extra = run_fixture(
-        name, status["model"], status["effort"], arm, path
+    capture = (
+        NativeCapture(Path(status["native_sessions"]), out / f"{name}.native.jsonl")
+        if status.get("native_sessions")
+        else None
     )
+    answer, report, returncode, extra = run_fixture(
+        name, status["model"], status["effort"], arm, path, capture
+    )
+    if capture:
+        receipt = retain(report.split("\n--- post-checks ---\n", 1)[0], capture)
+        _write(capture.destination.with_suffix(".receipt.json"), receipt)
     (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
     error = call_error(returncode, answer, extra, status["model"])
     extra.pop("error", None)
@@ -811,7 +915,8 @@ def _parser() -> argparse.ArgumentParser:
             "The model is always named and passed to codex with -m, so codex's configured "
             "default never runs. Each arm's measurement is "
             f"{len(default_fixtures())} fixtures x 3 repetitions: "
-            f"{len(default_fixtures()) * len(REPETITIONS)} runs; the {NAMED_ONLY}* "
+            f"{len(default_fixtures()) * len(REPETITIONS)} runs; "
+            "the handoff, lifecycle and adoption "
             "fixtures run only when --fixtures names them."
         ),
     )
@@ -847,6 +952,12 @@ def _parser() -> argparse.ArgumentParser:
         "--out", default="", help="a new directory for the run (default: evals/results/raw/<id>)"
     )
     parser.add_argument(
+        "--retain-native",
+        metavar="SESSIONS_DIR",
+        default="",
+        help="retain one exact native session for separate review; requires one named fixture",
+    )
+    parser.add_argument(
         "--summary",
         nargs="+",
         metavar="DIR",
@@ -866,6 +977,11 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
     unknown = sorted(set(names) - set(fixture_names()))
     if unknown or not names:
         parser.error(f"no fixture {', '.join(unknown)}; there are {', '.join(fixture_names())}")
+    if args.retain_native:
+        if len(names) != 1:
+            parser.error("--retain-native requires exactly one named fixture")
+        if not Path(args.retain_native).is_dir():
+            parser.error("--retain-native needs the readable sessions directory of this codex home")
     return names
 
 
@@ -878,7 +994,7 @@ def _main(argv: list[str] | None = None) -> int:
     arm = load_arm(args.arm)
     # Each fixture's install, read before anything runs: a fragment it names that the engine
     # does not ship stops the run here.
-    arms = {name: load_arm(args.arm, selected_fragments(name)) for name in names}
+    arms = {name: fixture_arm(name, load_arm(args.arm, selected_fragments(name))) for name in names}
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     try:
@@ -898,6 +1014,16 @@ def _main(argv: list[str] | None = None) -> int:
         "api_keys_stripped": list(STRIP_POLICY),
         "api_keys_removed_from_environment": stripped_from_environment(),
     }
+    if args.retain_native:
+        status["native_sessions"] = str(Path(args.retain_native).resolve())
+    elif status["cli_version"] == "codex-cli 0.160.1":
+        _write(out / "STATUS.json", {**status, "status": "UNVERIFIED", "fixtures": names})
+        sys.stderr.write(
+            "run: UNVERIFIED - Codex CLI 0.160.1 JSON events do not report observed model/cwd. "
+            "No model call started. Use one named fixture with --retain-native SESSIONS_DIR "
+            "for separate native-event review; its automatic report stays unchanged.\n"
+        )
+        return PREFLIGHT_EXIT
     login = preflight()
     status.update({key: login[key] for key in ("auth", "auth_evidence", "preflight")})
     if not login["ok"]:
@@ -911,10 +1037,24 @@ def _main(argv: list[str] | None = None) -> int:
     found = shutil.which("outcomebound", path=path)
     status["outcomebound_on_path"] = os.path.realpath(found) if found else None
     _write(out / "STATUS.json", {**status, "status": "running", "fixtures": names})
-    failures = sum(run_one(out, status, name, arms[name], path) for name in names)
+    completed = []
+    failures = 0
+    for name in names:
+        failed = run_one(out, status, name, arms[name], path)
+        completed.append(name)
+        if failed:
+            failures = 1
+            break  # Inspect unsupported/failed call evidence before spending on another.
     state = "ran with failures" if failures else "ran"
     _write(
-        out / "STATUS.json", {**status, "status": state, "fixtures": names, "failures": failures}
+        out / "STATUS.json",
+        {
+            **status,
+            "status": state,
+            "fixtures": names,
+            "completed_fixtures": completed,
+            "failures": failures,
+        },
     )
     return 1 if failures else 0
 

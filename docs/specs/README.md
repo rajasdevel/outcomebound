@@ -28,6 +28,8 @@ the same change.
 - [research](research/design.md): the research repository. How the engine finds, prints and
   updates its clone, and how it takes findings back.
 
+- [lifecycle](lifecycle/design.md): the proposed complete lifecycle route, cross-area handoffs and v1.5.0 qualification scope. Draft; area contracts stay in their current designs.
+
 ## The rules for a design in this repository
 
 These rules are for the maintainers of this repository and its own designs only.

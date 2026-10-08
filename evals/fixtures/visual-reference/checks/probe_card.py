@@ -19,11 +19,12 @@ OUTCOMEBOUND_EVAL_ANSWER names.
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import re
+import runpy
 import sys
 from pathlib import Path
+from types import ModuleType
 
 REGION = re.compile(
     r"(?i)\b(badge|header|heading|price|feature|list|button|top|bottom|corner|region|layer)\b"
@@ -41,11 +42,8 @@ TOPIC = re.compile(
 
 
 def behaviour() -> list[str]:
-    spec = importlib.util.spec_from_file_location("card", Path.cwd() / "card.py")
-    if spec is None or spec.loader is None:
-        return ["no card.py in the working directory"]
-    card = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(card)
+    card = ModuleType("card")
+    card.__dict__.update(runpy.run_path(str(Path.cwd() / "card.py"), run_name="card"))
     if not hasattr(card, "render_plan_card"):
         return ["card.py has no render_plan_card"]
     lacking = []
@@ -85,19 +83,35 @@ def _answer() -> str | None:
         return None
 
 
+_support = Path(__file__).resolve().parent / "report_records.py"
+if not _support.is_file():
+    _support = Path(__file__).resolve().parents[3] / "graders" / "report_records.py"
+# run_path reads this protected source file without accepting candidate import caches.
+_report_records = runpy.run_path(str(_support), run_name="report_records")
+_records = _report_records["records"]
+
+
 def _lines(answer_checks):
     def run() -> list[str]:
         text = _answer()
         if text is None:
             return ["no answer was supplied"]
-        return answer_checks(text.splitlines())
+        clauses = _records(text)
+        return answer_checks(clauses)
 
     return run
 
 
 @_lines
 def inferred(lines: list[str]) -> list[str]:
-    if any(INFERRED.search(line) and REGION.search(line) for line in lines):
+    negated = re.compile(
+        r"(?i)\b(?:no|not|never)\s+(?:(?:explicitly|directly|independently|actually)\s+)?inferred\b"
+        r"|\b(?:isn't|wasn't|aren't|weren't)\s+inferred\b"
+        r"|\binferred\b[^.!?;]*:\s*none\b"
+    )
+    if any(
+        INFERRED.search(line) and REGION.search(line) and not negated.search(line) for line in lines
+    ):
         return []
     return ["no line marks a requirement inferred and names a region of the picture"]
 
@@ -111,7 +125,14 @@ def unverified(lines: list[str]) -> list[str]:
 
 @_lines
 def gaps(lines: list[str]) -> list[str]:
-    if any(LEFT_OUT.search(line) and TOPIC.search(line) for line in lines):
+    closed = re.compile(
+        r"(?i)\bno\b(?:\W+\w+){0,3}\W+gaps?\b"
+        r"|\bgaps?\b(?:\W+\w+){0,3}\W+(?:resolved|closed|verified|none)\b"
+        r"|\bno\b[^.!?;]*\bmissing from\b"
+    )
+    if any(
+        LEFT_OUT.search(line) and TOPIC.search(line) and not closed.search(line) for line in lines
+    ):
         return []
     return ["no line names what the picture does not show as a gap"]
 

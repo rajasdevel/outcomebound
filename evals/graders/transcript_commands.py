@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""The shell commands a run executed, read from the transcript the runner saved.
+"""The shell command attempts and outcomes in the transcript the runner saved.
 
-`evals/run.py` saves what `codex exec` printed: a header naming the working directory,
-then one block per event; a command block is an `exec` line, the command (one line or
-several), and ` in <directory>` closing it. This
-reads those commands in the order they ran. Every one of them precedes the run's final
-message, which the CLI prints after the last of them, so a command listed here was run
-before the answer was given.
-
-A transcript of any other form is not guessed at: `commands` returns None, and a
-post-check reading it fails its claim with `UNVERIFIED unknown transcript form` as the
-reason, so an unreadable transcript never reads as a good run.
+`evals/run.py` and `claude_arm.py` save command records derived from structured
+call/result events in a JSON document. Output and answers remain data, never events.
+Plain printed transcripts cannot distinguish these sources and return None. A
+post-check then reports UNVERIFIED rather than crediting or inventing an attempt.
+Missing working directories stay empty; effect checks must not infer one.
 
 As a command line, with no condition it prints the commands one per line (a multi-line
 command joined with ` ; `), exit 0, or exits 2 printing `UNVERIFIED unknown transcript
@@ -29,6 +24,7 @@ Standard library only, like the rest of `evals/`.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shlex
@@ -38,35 +34,10 @@ TRANSCRIPT_ENV = "OUTCOMEBOUND_EVAL_TRANSCRIPT"
 UNKNOWN = "UNVERIFIED unknown transcript form"
 # The runner appends the post-checks' own output after this line; it is not the run's.
 POST_CHECKS = "\n--- post-checks ---\n"
-_HEADER = re.compile(r"^[\w ]*Codex v\d\S*$")
-_RULE = "--------"
-_EXEC = "exec"
-_CLOSING = re.compile(r"^(?P<command>.*) in (?P<cwd>/\S*)$")
-_STATUS = re.compile(r"^ (succeeded|exited -?\d+|declined|failed)\b.* in \d+m?s:?$")
 _SHELLS = {"sh", "bash", "zsh", "dash"}
 _SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n"}
 _WRAPPERS = {"env", "exec", "command", "time", "nohup", "builtin"}
 _GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
-
-
-def _header(lines: list[str]) -> tuple[str, int] | None:
-    """The working directory the header names and the index after the header, or None."""
-
-    for index, line in enumerate(lines):
-        if not _HEADER.match(line):
-            continue
-        end = index + 1
-        if end >= len(lines) or lines[end] != _RULE:
-            return None
-        for offset, field in enumerate(lines[end + 1 : end + 40], start=end + 1):
-            if field == _RULE:
-                break
-            if field.startswith("workdir: "):
-                workdir = field[len("workdir: ") :].strip()
-                close = lines.index(_RULE, offset)
-                return workdir, close + 1
-        return None
-    return None
 
 
 def _unwrapped(command: str) -> str:
@@ -81,50 +52,84 @@ def _unwrapped(command: str) -> str:
     return command
 
 
-def _closes(line: str, following: str, workdir: str) -> str | None:
-    """The command's last line where `line` closes an exec block, or None."""
+def execution_records(transcript: str) -> tuple[tuple[str, str, str], ...] | None:
+    """Read only the runner's structured command records, never printed output."""
 
-    found = _CLOSING.match(line)
-    if not found:
+    try:
+        document = json.loads(transcript.split(POST_CHECKS, 1)[0])
+    except (ValueError, TypeError):
         return None
-    cwd = found.group("cwd")
-    if cwd == workdir or cwd.startswith(workdir.rstrip("/") + "/"):
-        return found.group("command")
-    if _STATUS.match(following) or following == _EXEC:
-        return found.group("command")
-    return None
+    if not isinstance(document, dict) or document.get("format") != "outcomebound-command-events-v1":
+        return None
+    records = document.get("commands")
+    if not isinstance(records, list):
+        return None
+    found = []
+    for record in records:
+        if (
+            not isinstance(record, list)
+            or len(record) != 3
+            or not all(isinstance(v, str) for v in record)
+        ):
+            return None
+        command, status, directory = record
+        if not re.fullmatch(r"succeeded|exited -?\d+|declined|failed|unverified", status):
+            return None
+        found.append((_unwrapped(command), status, directory))
+    return tuple(found)
+
+
+def executions(transcript: str) -> tuple[tuple[str, str], ...] | None:
+    """Command attempts with their result status, without working directories."""
+
+    records = execution_records(transcript)
+    return None if records is None else tuple((command, status) for command, status, _ in records)
 
 
 def commands(transcript: str) -> tuple[str, ...] | None:
-    """The commands the run executed, in order, or None for a form this does not read."""
+    """All command attempts, including denied ones, for scope and authority checks."""
 
-    text = transcript.split(POST_CHECKS, 1)[0]
-    lines = text.split("\n")
-    header = _header(lines)
-    if header is None:
+    found = executions(transcript)
+    return None if found is None else tuple(command for command, _ in found)
+
+
+def successful_sequence(command: str) -> tuple[tuple[str, ...], ...] | None:
+    """Arguments of a supported straight-line command or && chain.
+
+    Quoted operators remain arguments. Branches, pipes, expansion, redirects and
+    multiline scripts are not execution proof from one final success status.
+    This is deliberately not a general shell interpreter.
+    """
+
+    if any(char in command for char in ("\n", "$", "`", "\\")):
         return None
-    workdir, start = header
-    found: list[str] = []
-    index = start
-    while index < len(lines):
-        if lines[index] != _EXEC:
-            index += 1
-            continue
-        body: list[str] = []
-        cursor = index + 1
-        while cursor < len(lines):
-            following = lines[cursor + 1] if cursor + 1 < len(lines) else ""
-            last = _closes(lines[cursor], following, workdir)
-            if last is not None:
-                body.append(last)
-                break
-            body.append(lines[cursor])
-            cursor += 1
-        else:
-            return None
-        found.append(_unwrapped("\n".join(body)))
-        index = cursor + 1
-    return tuple(found)
+    lexer = shlex.shlex(command, posix=False, punctuation_chars=";&|()<>")
+    lexer.commenters = "#"
+    lexer.whitespace_split = True
+    sequence: list[tuple[str, ...]] = []
+    words: list[str] = []
+    try:
+        for word in lexer:
+            if word == "&&":
+                if not words:
+                    return None
+                sequence.append(tuple(_program(words)))
+                if "exec" in words[: len(words) - len(sequence[-1])]:
+                    return tuple(sequence)
+                words = []
+            elif word and all(char in ";&|()<>" for char in word):
+                return None
+            else:
+                parsed = shlex.split(word)
+                if len(parsed) != 1:
+                    return None
+                words.append(parsed[0])
+    except ValueError:
+        return None
+    if not words:
+        return None
+    sequence.append(tuple(_program(words)))
+    return tuple(sequence) if all(sequence) else None
 
 
 def _simple_commands(command: str) -> list[list[str]]:

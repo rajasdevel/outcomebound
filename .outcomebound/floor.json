@@ -11,7 +11,7 @@
     },
     {
       "name": "python.lint",
-      "mode": "baseline",
+      "mode": "gate",
       "tool": "ruff",
       "min_version": "0.16.7",
       "argv": ["ruff", "check", "--output-format", "json", "."],
@@ -19,7 +19,7 @@
     },
     {
       "name": "python.types",
-      "mode": "baseline",
+      "mode": "gate",
       "tool": "mypy",
       "min_version": "2.3.1",
       "argv": ["mypy", "--output", "json"],

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from outcomebound_tools import discovery
 from outcomebound_tools.declared_tests import PYTEST, UNITTEST
 from outcomebound_tools.discovery import DiscoveryError, discover
 from tests.portable import needs_symlinks, write
@@ -61,6 +62,51 @@ def test_monorepo_observes_markers_scripts_and_workflow_paths_without_runtime_cl
     assert components["frontend"]["test_options"][0] == "npm test"
     assert components["backend"]["modules"] == ["go"]
     assert components["backend"]["test_options"] == ["go test ./..."]
+
+
+def test_entry_limit_counts_ignored_directories_before_observing_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(discovery, "MAX_ENTRIES", 2)
+    (tmp_path / "node_modules").mkdir()
+    write(tmp_path / "pyproject.toml", "[project]\nname = 'bounded'\n")
+    write(tmp_path / "requirements.txt", "pytest\n")
+
+    result = discover(tmp_path)
+
+    assert result["observed"]["markers"] == []
+    assert result["inferred"]["components"] == []
+    assert result["unknown"][-1] == {
+        "subject": "discovery-completeness",
+        "reason": "the bounded entry, file, or depth limit was reached",
+    }
+    assert result["limits"][0] == "component scan is limited to depth 4 and 2 directory entries"
+
+
+def test_marker_limit_finishes_current_root_shell_scan_and_does_not_enter_next_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(discovery, "MAX_RELEVANT_FILES", 1)
+    (tmp_path / "first" / "child").mkdir(parents=True)
+    (tmp_path / "second").mkdir()
+    write(tmp_path / "first" / "pyproject.toml", "[project]\nname = 'bounded'\n")
+    write(tmp_path / "first" / "tox.ini", "[tox]\n")
+    write(tmp_path / "first" / "child" / "check.sh", "exit 0\n")
+    write(tmp_path / "first" / "child" / "go.mod", "module example.invalid/child\n")
+    write(tmp_path / "second" / "package.json", "{}\n")
+
+    result = discover(tmp_path, roots=["first", "second"])
+
+    assert result["roots"] == ["first", "second"]
+    assert result["observed"]["markers"] == [
+        {"kind": "shell", "path": "first/child/check.sh", "root": "first"},
+        {"kind": "python", "path": "first/pyproject.toml", "root": "first"},
+    ]
+    assert result["observed"]["package_scripts"] == []
+    assert result["unknown"][-1] == {
+        "subject": "discovery-completeness",
+        "reason": "the bounded entry, file, or depth limit was reached",
+    }
 
 
 @needs_symlinks
@@ -540,8 +586,9 @@ def test_discovery_document_roundtrips_against_its_schema(tmp_path):
         (target / marker).mkdir(parents=True)
         write(target / "pyproject.toml", "[project]\nname = 'greeting'\n")
         write(target / "CONTRIBUTING.md", "Keep changes in scope.\n")
-        document = {"format_version": 1, "result": "PASS", "observations": discover(target)}
-        markers = document["observations"]["observed"]["harness_markers"]
+        observations = discover(target)
+        document = {"format_version": 1, "result": "PASS", "observations": observations}
+        markers = observations["observed"]["harness_markers"]
         assert markers == expected == sorted(set(markers))
         assert validate_document(json.loads(json.dumps(document))) == document
 
@@ -598,6 +645,96 @@ def test_markers_are_observed_from_the_filesystem_only(tmp_path):
     assert set(components) == {"."}
     assert components["."]["modules"] == ["python"]
     assert sorted(path.relative_to(target).as_posix() for path in target.rglob("*")) == before
+
+
+def _directory_marker_shape(target: Path, candidate: str) -> Path:
+    target.mkdir()
+    if candidate in {"config.yaml", "models"}:
+        (target / "models").mkdir()
+        write(target / "config.yaml", "version: 1\n")
+    else:
+        (target / candidate).mkdir(parents=True)
+        if candidate == "db/migrate":
+            # Keep the parent admitted when Git ignores only the nested marker.
+            write(target / "db" / "README.md", "Project database files.\n")
+    return target / candidate
+
+
+@pytest.mark.parametrize("candidate", ["migrations", "alembic", "db/migrate", "config.yaml"])
+def test_admitted_directory_marker_shapes_remain_observed(tmp_path: Path, candidate: str) -> None:
+    target = tmp_path / "project"
+    _directory_marker_shape(target, candidate)
+
+    result = discover(target)
+
+    assert result["observed"]["markers"] == [{"kind": "sql", "path": candidate, "root": "."}]
+    assert [row["root"] for row in result["inferred"]["components"]] == ["."]
+
+
+@needs_symlinks
+@pytest.mark.parametrize("candidate", ["db/migrate", "config.yaml", "models"])
+def test_symlinked_directory_marker_inputs_cannot_support_components(
+    tmp_path: Path, candidate: str
+) -> None:
+    target = tmp_path / "project"
+    path = _directory_marker_shape(target, candidate)
+    outside = tmp_path / "outside"
+    if path.is_dir():
+        path.rmdir()
+        outside.mkdir()
+        path.symlink_to(outside, target_is_directory=True)
+    else:
+        path.unlink()
+        write(outside, "version: 1\n")
+        path.symlink_to(outside)
+
+    result = discover(target)
+
+    assert result["observed"]["markers"] == []
+    assert result["inferred"]["components"] == []
+
+
+@pytest.mark.parametrize("candidate", ["db/migrate", "config.yaml", "models"])
+def test_git_ignored_directory_marker_inputs_cannot_support_components(
+    tmp_path: Path, candidate: str
+) -> None:
+    target = tmp_path / "project"
+    path = _directory_marker_shape(target, candidate)
+    subprocess.run(["git", "init", "-q", str(target)], check=True)
+    write(target / ".gitignore", candidate + ("/\n" if path.is_dir() else "\n"))
+
+    result = discover(target)
+
+    assert result["observed"]["markers"] == []
+    assert result["inferred"]["components"] == []
+
+
+def test_a_nested_repository_cannot_supply_a_directory_marker(tmp_path: Path) -> None:
+    target = tmp_path / "project"
+    nested = _directory_marker_shape(target, "db/migrate")
+    subprocess.run(["git", "init", "-q", str(nested)], check=True)
+
+    result = discover(target)
+
+    assert result["observed"]["markers"] == []
+    assert result["inferred"]["components"] == []
+
+
+def test_a_nested_directory_marker_outside_the_depth_limit_is_not_observed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / "project"
+    _directory_marker_shape(target, "db/migrate")
+    monkeypatch.setattr(discovery, "MAX_DEPTH", 1)
+
+    result = discover(target)
+
+    assert result["observed"]["markers"] == []
+    assert result["inferred"]["components"] == []
+    assert result["unknown"][-1] == {
+        "subject": "discovery-completeness",
+        "reason": "the bounded entry, file, or depth limit was reached",
+    }
 
 
 def test_shell_markers_only_qualify_roots_other_markers_infer(tmp_path):

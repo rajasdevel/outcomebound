@@ -25,7 +25,9 @@ we can agree on the aim before you write the code.
    you edit is the code that runs. It picks the first `python3` or `python` on an absolute
    `PATH` entry that is Python 3.10 or later. On Windows, work in Git Bash (it brings `sh`);
    `make` is not part of Git for Windows, so install it, or run the commands of the `Makefile`
-   by hand. That route is UNVERIFIED on Windows: CI runs the test suite there, not the launcher.
+   by hand. That contributor route is UNVERIFIED on Windows. CI tests the engine and installed
+   command there; it does not establish the contributor's Git Bash and Make setup. The
+   [dependency inventory](docs/dependencies.md) distinguishes these tools from adopter needs.
 2. **Branch.** Make one branch from `main` for each change.
 3. **Change.** If the change alters behavior, add or change a test
    ([Writing a test](#writing-a-test)). Do not edit `CHANGELOG.md`: the release writes its
@@ -43,18 +45,19 @@ we can agree on the aim before you write the code.
 
 What happens next:
 
-- CI runs the gate, this repository's own install check and the suite on the oldest and the
-  newest supported Python. It runs the quality floor once.
+- Linux CI runs the gate, this repository's own install check and the suite on Python 3.10,
+  3.11, 3.12, 3.13 and 3.14. The suite also runs on Windows with Python 3.10 and 3.14, and in
+  Debian slim and Alpine containers with Python 3.13. CI runs the quality floor once.
 - When CI is green, a maintainer reviews the pull request.
-- A maintainer lands it by rebasing it onto `main`. If its history is not worth keeping, the
-  maintainer squashes it. `main` has no merge commits.
+- Each pull request lands as one squash commit on `main`, through the
+  [agents and releases](#agents-and-releases) route. `main` has no merge commits.
 
 Review goes where no check reaches. When a change alters what the kernel, the contract, a skill,
 a fragment or a template tells a model (its bounds, its holds, or what it asks for), the pull
 request carries the label `needs-maintainer` and an independent review, and a maintainer approves
 and lands it. Every other change lands when its checks pass.
 
-`main` accepts changes only through a pull request: a ruleset requires both CI checks, a linear
+`main` accepts changes only through a pull request: a ruleset requires the configured CI checks, a linear
 history, and no force push or deletion. This holds for maintainers and agents alike.
 
 ## Local checks
@@ -74,12 +77,15 @@ make test
   Use `OB_BASE=<ref>` to name another base. The floor runs ruff, mypy, gitleaks, `bash -n`, the
   shell injection scan, `scripts/check-structure.py` and `scripts/check-public-text.py`. The rules
   are in `ruff.toml` and `mypy.ini`.
-- `make test` runs the suite across CPUs. If your `python3` has no pytest, it runs pytest through
-  `uv run --with pytest`.
+- `make test` uses xdist to run the suite across CPUs where xdist is installed, else runs it
+  serially. If your `python3` has no pytest and `uv` is on `PATH`, the fallback runs the pinned
+  pytest and xdist versions from the `Makefile` through uv.
 - `make scrub` applies a local list of private names to the same text as the public-text check
   ([Agents and releases](#agents-and-releases)). A maintainer runs it before a merge.
 
-The floor needs ruff and mypy. Get them in one of three ways:
+The floor needs ruff, mypy, gitleaks and Bash. The Python tools are pinned in
+`requirements-dev.txt`; the floor records each tool's least version. Get ruff and mypy in one
+of three ways:
 
 - Run `python3 -m pip install -r requirements-dev.txt` in a virtual environment.
 - Leave the tools to uv. If your `python3` lacks them and `uv` is on `PATH`, `make check` runs
@@ -90,10 +96,19 @@ The floor needs ruff and mypy. Get them in one of three ways:
   refuses a system Python. A tool that is on `PATH` at that version or later is not installed.
 
 `scripts/outcomebound floor provision .` also prints the command that installs gitleaks. A missing
-or older tool reads `UNVERIFIED`, and the check fails.
+or older tool reads `UNVERIFIED`, and the check fails. Bash comes from the operating system or
+Git for Windows. Neither gitleaks nor Bash is installed by `requirements-dev.txt`.
 
-The floor lists the findings that existed before it in `.outcomebound/floor/`. Any other finding
-fails. Fix a finding. Do not list it. These changes make the floor weaker, so they fail the check:
+Keep the direct tool pins current. A resolved development environment can still differ because
+indirect packages are not locked. Record the Python version, platform and resolved packages
+when a clean install changes a check's result. Add a development lock only when that evidence
+shows a need for it; do not add a runtime package or a new lock generator to address an
+unobserved difference. See [Development tools](docs/dependencies.md#development-tools).
+
+This repository has no accepted lint or type findings. Both claims are gates: every finding
+fails. Fix the code; do not add a baseline or suppression to make a check pass. Adopting projects
+can retain an existing baseline and ratchet it as they repair debt. These changes make a floor
+weaker, so they fail its check:
 a new baseline line, a changed tool configuration, and a new suppression comment. The commit
 that makes the change can allow it with this line:
 `Floor-Loosening: <what>; ruled #123`. The line allows only the changes of its own commit. After
@@ -259,8 +274,8 @@ of a pull request. CI applies the list only when the repository has the secret `
 a fork does not get the secret, so for that pull request CI reads `UNVERIFIED` for the list and
 does not fail.
 
-`make canary` runs the engine of your checkout beside the installed release, and changes
-nothing. It runs on each project of a local list, under Python 3.10 and under the Python of the
+`make canary` runs the engine of your checkout beside the installed release. It runs on each
+project of a local list, under Python 3.10 and under the Python of the
 installed release. The environment variable `OB_CANARY_LIST` names the list: one project path on
 each line, and `#` for a comment. The list stays outside this repository, and the report names
 each project by its number only. On each project, both engines run `adopt --dry-run`,
@@ -270,9 +285,15 @@ the claims plan of the project's ticket declaration has a `tickets check --draft
 run `tickets check --draft` on those draft files. Where `issues.json` is in the project root,
 they run `tickets check` on that export. If a command does not run, the report gives the
 reason; with no export, the report says `UNVERIFIED`, because the canary calls no tracker. The
-caches of the floor's tools go to a temporary folder. A crash, an exception, a refusal, a
-command that prints no valid report, or a change to a project's tree (ignored entries included)
-is FAIL. If the installed release fails and the candidate does not, the report says
+caches of the floor's tools go to a temporary folder. This does not make arbitrary custom floor
+commands read-only: they can write to a mounted checkout or use the network. Inspect those
+commands before a run. Where they can write, use an owned isolated checkout with the required
+project inputs; retain its identity and distinguish its results from the original checkout.
+Do not skip a gate. The before/after Git-state checks detect reported changes after execution;
+they compare status and entry names, not file contents. They do not prevent writes or prove
+unchanged contents, including files that are already dirty, untracked or ignored. A crash,
+an exception, a refusal, a command that prints no valid report, or a difference in the
+before/after Git status or ignored-entry list is FAIL. If the installed release fails and the candidate does not, the report says
 `no baseline: installed engine failed`, and it does not compare that command. The report also gives the warning and finding kinds that the candidate adds or
 removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIED`. Run
 `make canary` before a pull request that changes `adopt`, `tickets`, `floor`, `instructions` or
@@ -280,7 +301,8 @@ removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIE
 every change of all of them, before the first of them lands; a pull request with no such companion
 gets its own run. Run it also on the committed release commit. Adopters install from tags, so the
 release canary is the one that blocks a release; the earlier run finds a crash on a real project
-before it reaches `main`. Each of those pull requests gives the summary in counts.
+before it reaches `main`. Each of those pull requests gives the canary verdict and the limits of the checks, without
+counts or anecdotes from private runs.
 
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit, and it fails unless `make canary` recorded PASS for the tree of that commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)

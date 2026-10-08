@@ -1,0 +1,9 @@
+AGENTS.md
+.gitignore
+target-before.json
+sealed-engine.txt
+.git/config
+.git/info/exclude
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.agents/skills/adopt-outcomebound/SKILL.md

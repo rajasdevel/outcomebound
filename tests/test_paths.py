@@ -4,9 +4,15 @@ A leading `~` and every code point below 32 plus DEL are refused wherever a path
 is read, and a spelling that reaches `.git` on any filesystem is refused too.
 """
 
+import json
+import shlex
+import shutil
 import subprocess
+import sys
+import venv
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -127,8 +133,8 @@ def test_bounded_relative_gives_the_grammar_verdict_on_every_corpus_value():
 
     # Non-strings are refused rather than coerced: a reader that accepted a
     # Path here would admit `PurePosixPath("..")` by its repr.
-    for value in (None, 1, b"a", Path("a")):
-        assert paths.admits(value) is False
+    for non_path in (None, 1, b"a", Path("a")):
+        assert paths.admits(non_path) is False
 
 
 @needs_symlinks
@@ -180,9 +186,7 @@ def test_admits_refuses_every_spelling_that_reaches_git() -> None:
 
 
 def test_a_printed_command_word_is_quoted_for_the_shells_that_run_it(monkeypatch) -> None:
-    """POSIX shells read `shlex.quote`. On Windows the two shells that run an engine-printed
-    command, PowerShell and Git Bash, both read a single-quoted word whole, and a path is
-    written with forward slashes, which each Windows shell and program takes."""
+    """Printed commands use POSIX syntax, or PowerShell syntax on Windows."""
 
     monkeypatch.setattr("sys.platform", "linux")
     assert paths.shell_word("plain-word_1.txt") == "plain-word_1.txt"
@@ -193,6 +197,9 @@ def test_a_printed_command_word_is_quoted_for_the_shells_that_run_it(monkeypatch
     assert paths.shell_word("it's here") == "'it''s here'"
     assert paths.shell_word("C:\\Users\\x") == "'C:\\Users\\x'", "a backslash is kept, not read"
     assert paths.shell_word("$x; rm") == "'$x; rm'"
+    assert paths.shell_word("@args") == "'@args'"
+    assert paths.shell_word("@response") == "'@response'"
+    assert paths.shell_word("@owner's") == "'@owner''s'"
     assert paths.shell_path("C:/Program Files/app/repo") == "'C:/Program Files/app/repo'"
 
 
@@ -275,3 +282,62 @@ def test_a_real_junction_is_a_way_in_that_a_symlink_is(tmp_path) -> None:
     with pytest.raises(paths.PathError, match="symlink"):
         paths.read_bounded(tmp_path, "junction/x.md")
     assert paths.read_bounded(tmp_path, "real/x.md") == b"x\n"
+
+
+@pytest.mark.parametrize(
+    "word", ["C:/work/owner's repo", "$value; echo altered", "plain-path", "@args"]
+)
+def test_printed_word_round_trips_through_its_supported_shell(tmp_path, word):
+    from outcomebound_tools import tickets_brief
+
+    space = tmp_path / "executable path"
+    venv.EnvBuilder(with_pip=False, symlinks=not WINDOWS).create(space)
+    executable = str(space / ("Scripts/python.exe" if WINDOWS else "bin/python"))
+    definition = SimpleNamespace(
+        command=[executable, "-c", "import json,sys; print(json.dumps(sys.argv[1:]))", word],
+        timeout_seconds=10,
+    )
+    compiled = Mock(plan=SimpleNamespace(claims={"argv": definition}), cwd=".")
+    body = tickets_brief._check_body(Mock(human=None, claim="argv"), compiled)
+    command = body.split("`", 2)[1]
+    if WINDOWS:
+        shell = shutil.which("pwsh") or shutil.which("powershell")
+        if shell is None:
+            pytest.skip("PowerShell is unavailable")
+        argv = [shell, "-NoProfile", "-NonInteractive", "-Command", command]
+    else:
+        argv = ["/bin/sh", "-c", command]
+    result = subprocess.run(argv, capture_output=True, text=True, check=True)
+    assert json.loads(result.stdout) == [word]
+
+
+def test_generated_done_base_reaches_posix_shell_unchanged_on_windows(tmp_path, monkeypatch):
+    from outcomebound_tools import adopt, programs
+
+    shell = programs.posix_shell()
+    if shell is None:
+        pytest.skip("POSIX Done shell is unavailable")
+    (tmp_path / ".outcomebound").mkdir()
+    (tmp_path / ".outcomebound/floor.json").write_text("{}")
+    monkeypatch.setattr(paths, "on_windows", lambda: True)
+    monkeypatch.setattr(adopt, "default_base", lambda _: "origin/owner's")
+    line = adopt._proposal(tmp_path)[0][0]
+    capture = " ".join(
+        shlex.quote(v)
+        for v in [
+            Path(sys.executable).as_posix(),
+            "-c",
+            "import json,sys;print(json.dumps(sys.argv[1:]))",
+        ]
+    )
+    result = subprocess.run(
+        [shell, "-c", capture + " " + line], capture_output=True, text=True, check=True
+    )
+    assert json.loads(result.stdout) == [
+        "outcomebound",
+        "floor",
+        "check",
+        ".",
+        "--base",
+        "origin/owner's",
+    ]

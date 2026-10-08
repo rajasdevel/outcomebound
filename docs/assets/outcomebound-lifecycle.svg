@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="426" viewBox="0 0 560 426" role="img" aria-labelledby="title desc">
+  <title id="title">Carry the outcome through the applicable lifecycle</title>
+  <desc id="desc">Outcome, context, bounds and completion bar stay with the work. Follow requirements, design and accepted work, build and validation, release and delivery, operation and maintenance, and retirement. Start at the current state; skip stages the outcome does not need.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M1 1L6 4L1 7" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect x="1" y="1" width="558" height="424" rx="18" fill="#f8fafc" stroke="#dbe3ec"/>
+  <g font-family="system-ui, -apple-system, Segoe UI, sans-serif">
+    <rect x="24" y="24" width="512" height="44" rx="10" fill="#e8eef9"/>
+    <text x="280" y="51" text-anchor="middle" font-size="14" font-weight="600" fill="#233e70">Outcome · Context · Bounds · Completion bar</text>
+    <g fill="#ffffff" stroke="#cbd5e1">
+      <rect x="24" y="92" width="236" height="76" rx="10"/>
+      <rect x="300" y="92" width="236" height="76" rx="10"/>
+      <rect x="300" y="200" width="236" height="76" rx="10"/>
+      <rect x="24" y="200" width="236" height="76" rx="10"/>
+      <rect x="24" y="308" width="236" height="76" rx="10"/>
+      <rect x="300" y="308" width="236" height="76" rx="10"/>
+    </g>
+    <g fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)">
+      <path d="M266 130H292"/>
+      <path d="M418 174V192"/>
+      <path d="M294 238H268"/>
+      <path d="M142 282V300"/>
+      <path d="M266 346H292"/>
+    </g>
+    <g font-size="18" font-weight="650" fill="#172b49">
+      <text x="40" y="121">Clarify the outcome</text>
+      <text x="316" y="121">Shape the work</text>
+      <text x="316" y="229">Build and check</text>
+      <text x="40" y="229">Deliver</text>
+      <text x="40" y="337">Operate and maintain</text>
+      <text x="316" y="337">Retire</text>
+    </g>
+    <g font-size="13" fill="#475569">
+      <text x="40" y="146">Idea · requirements · constraints</text>
+      <text x="316" y="146">Design · accepted task · bounds</text>
+      <text x="316" y="254">Code · validation · review</text>
+      <text x="40" y="254">Release · deploy · handoff</text>
+      <text x="40" y="362">Observe · recover · use feedback</text>
+      <text x="316" y="362">Consumers · retention · removal</text>
+    </g>
+    <text x="280" y="408" text-anchor="middle" font-size="12" fill="#475569">Start at the current state. Use only the stages the outcome needs.</text>
+  </g>
+</svg>

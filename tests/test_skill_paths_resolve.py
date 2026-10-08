@@ -36,6 +36,7 @@ CHECKOUT_ONLY = {
 
 # skill name -> further files shipped beside its entrypoint
 SHIPPED_BESIDE = {
+    CORE: ("references/lifecycle.md",),
     "explorable": ("references/runtime.md",),
     "slice-tickets": ("references/github.md",),
 }

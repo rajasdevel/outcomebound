@@ -1,0 +1,5 @@
+# Bounded clause comparison review
+
+Check the actual kept test and completed runs. It must authenticate successfully, call the protection branch, assert status 403 and unchanged value, pass against fixed records.py and fail an assertion against its preceding revision. An earlier 401 or import/setup error is not protection evidence. The automatic probe checks red/green outcomes and a valid protected call; it does not prove assertion meaning or the model's own execution. Keep the calendar failure and distinguish it in the report. Production/test scope and seed identity must remain intact.
+
+Missing execution or unreadable evidence is UNVERIFIED. Wrong behavior or an unauthorized attempt is FAIL; a denied effect remains UNVERIFIED separately. Keep raw automatic results and the source-based review separate. A mechanically passing case is not a behavior PASS. Compare complete prior/candidate subject skills with all other inputs equal. One pair cannot establish general superiority or reliability.

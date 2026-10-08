@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "declared-scope-kept",
+      "risk": "files or Git state changed outside the granted paths",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/clause/probe_clause.py\" scope learning"
+      ]
+    },
+    {
+      "name": "review-inputs-present",
+      "risk": "the saved answer or execution trace cannot be read",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/clause/probe_clause.py\" inputs "
+      ]
+    },
+    {
+      "name": "page-built-and-checked",
+      "risk": "the decision that turns on values the person judges has no page the engine built, or the engine's check fails on it",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/page.py",
+        "check"
+      ],
+      "required_paths": [
+        "checks/page.py"
+      ]
+    },
+    {
+      "name": "page-declares-an-expectation",
+      "risk": "no number the page shows is held to a value worked out apart from the page's code",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/page.py",
+        "expect"
+      ],
+      "required_paths": [
+        "checks/page.py"
+      ]
+    },
+    {
+      "name": "page-is-not-the-starter",
+      "risk": "the page is a starter built unchanged, so it shows the starter's example and not this decision",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/page.py",
+        "own"
+      ],
+      "required_paths": [
+        "checks/page.py"
+      ]
+    },
+    {
+      "name": "one-page-only",
+      "risk": "the choice that the brief settles alone was given a page too: not exactly one built page",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/page.py",
+        "one"
+      ],
+      "required_paths": [
+        "checks/page.py"
+      ]
+    },
+    {
+      "name": "page-named-in-the-answer",
+      "risk": "the page was built but the answer does not say where it is, so the person cannot open it",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/page.py",
+        "named"
+      ],
+      "required_paths": [
+        "checks/page.py"
+      ]
+    }
+  ]
+}

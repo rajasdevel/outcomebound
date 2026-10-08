@@ -35,6 +35,22 @@ A test command is a runner named as a whole word or command (`pytest`, `make tes
 test:ci`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`; `make
 test-data` and `npm run test:watch` are not.
 
+Detection keeps the observed CI test commands separate from its Done candidates. Done runs
+through POSIX `sh`. A GitHub Actions step is a candidate only where its shell reads as `sh` or
+`bash`: the step's `shell`, then the job's `defaults.run.shell`, then the workflow's default,
+then a known hosted runner's default. Windows defaults to `pwsh`; Ubuntu and macOS default to
+`bash`. A dynamic, custom or unreadable shell or runner is unsettled. GitLab script entries do
+not establish the runner's shell. These rules follow
+[GitHub's shell and defaults contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsshell).
+
+Other CI commands stay in the CI test fact. Detection says they were not copied into Done and
+asks for a project POSIX equivalent. A command found independently in the project's test
+configuration can still be proposed, marked as a host candidate rather than a CI command.
+Neither a `bash` shell nor a lexical reading proves compatibility with `sh`: Bash syntax,
+CI-only variables, tools and setup still need project review. Detection runs no command and
+does not change or refuse a Done command the user already recorded. No shell translation or
+new runtime is added, and the installed block and manifest formats do not change.
+
 The facts record holds the selection (`fragments`), the `done` commands, any `style`, and `inputs`: each source
 path read, with its sha256. `--check` recomputes the block: bytes other than both the record's and
 the recomputation's read `edited`; a record other than the recomputation reads `stale`, naming each
@@ -102,7 +118,7 @@ an install carries and the fragment bodies, for a delegate's role prompt.
 | Adopt writes into a file in the line ending that file has: CRLF where most of its line endings are CRLF, else LF; a new file is LF. A host whose text no block changed keeps its bytes, and a UTF-8 byte-order mark stays where it was. A host with mixed line endings keeps every line the blocks did not touch as it was, and the lines a block writes take the ending most of its lines use. Between identical neighbouring lines the alignment can move an ending from one of them to another; the content and every byte of unchanged text are kept. A removal gives a host back byte for byte, a mixed one too. `--check` and an upgrade read a file with a mark. The `local` fragment parses with CRLF and with a mark, and its digest is of the LF text | writing LF always, which mixes line endings in a CRLF host and rewrites every line of an owned file; writing CRLF on Windows, since a checkout does not follow the platform; a `.gitattributes` written into the target, which edits the adopter's repository beyond adopt's own files | agent | decided |
 | This repository has a `.gitattributes` with `* text=auto eol=lf`. Every checkout of the engine, with any `core.autocrlf`, holds its skills, fragments and templates as LF, and the engine reads them in LF form, so an engine checked out with CRLF installs the same bytes as one with LF. It holds no binary file; `text=auto` leaves one alone | LF in the checkout only, with the engine reading raw bytes; converting only when the wheel is built | agent | decided |
 | Every text the engine reads names UTF-8, accepts a byte-order mark, and decodes bytes itself: a standard input is read as bytes. An export and a standard input also accept UTF-16 with a mark, which Windows PowerShell 5.1 writes for a redirected file. The engine writes UTF-8 and LF | the console's code page, which decodes the same bytes differently by machine; refusing a file with a mark | agent | decided |
-| A path in a report, a manifest, a record or a printed command is in POSIX form (`as_posix`). A command the engine prints for a person to run quotes each word with `shlex.quote` on POSIX. On Windows it quotes a word that is not plain in single quotes and doubles an apostrophe inside, which PowerShell and Git Bash both read whole, and it writes a path with forward slashes, which every Windows shell and program takes. cmd takes no single quotes, so such a command is for PowerShell or Git Bash. The `writable_roots` line prints POSIX-form paths in double quotes, since the backslash of a Windows path starts a TOML escape | finding the shell and quoting for it, which no variable tells reliably; double quotes, which PowerShell and Git Bash expand; TOML literal strings of native paths, which an apostrophe in a path breaks | agent | decided |
+| A path in a report, a manifest, a record or a printed command is in POSIX form (`as_posix`). A command the engine prints for a person to run quotes each word with `shlex.quote` on POSIX. On Windows it quotes a word that is not plain in single quotes and doubles an apostrophe inside, which PowerShell reads whole, and it writes a path with forward slashes, which every Windows shell and program takes. Windows printed commands are for PowerShell, not Git Bash or cmd; top-level help states this contract. The `writable_roots` line prints POSIX-form paths in double quotes, since the backslash of a Windows path starts a TOML escape | finding the shell and quoting for it, which no variable tells reliably; double quotes, which PowerShell and Git Bash expand; TOML literal strings of native paths, which an apostrophe in a path breaks | agent | decided |
 | The writer refuses a path that Windows cannot make a file of, on Windows only: a character of `< > " ? *` or the vertical bar, a device name with any extension (`CON`, `NUL`, `aux.txt`, `COM1` to `LPT9`), and a name that ends in a dot or a space. It refuses a directory junction on a destination's path as it refuses a symlink, and no other reparse point, since a cloud folder's placeholders carry their own. It tries a rename again a few times, after a short wait, when Windows refuses it, since a scanner or an editor holds the file for a moment | widening the path grammar, which would refuse paths that a recorded manifest holds; treating every reparse point as a link, which refuses a project in a synced folder; stopping at the first refused rename, which leaves an install half written | agent | decided |
 | A name only Windows cannot hold (a device name, a character its file names lack, a trailing dot or space) is refused on Windows and written on every other platform. The engine's own paths are fixed names that hold none, and a name a project chose is not refused on a machine that can hold it: the writer says nothing of where the tree goes next, and Git on a Windows machine refuses such a name when it checks the tree out, which no engine decides. A test of the other platforms' behaviour runs where the file system holds the name and skips on Windows, with its reason | the same refusal on every platform, which stops a person on macOS or Linux from writing a file that their machine holds and their project may need, to protect a checkout the engine does not make; widening the path grammar, which would refuse paths that a recorded manifest holds | agent | decided |
 | Discovery proposes the project's test commands with the Python of the host: `python -m pytest` and `python -m unittest discover -s tests` on Windows, where the installer from python.org and uv put `python` on PATH and `python3` is at most a Store alias that does not run, and `python3 -m ...` everywhere else. `declared_tests.PYTHON`, `PYTEST` and `UNITTEST` name them, and each test compares with those constants. A proposal stays a candidate that a person confirms, and `--detect` reads files only | choosing from what PATH holds when the proposal is made, which makes it depend on what is installed that day; `python` on every platform, which Debian and macOS lack | agent | decided |
@@ -142,3 +158,36 @@ row, from 1.0.0 and from the newest release, with a candidate that renders the b
 `tests/test_fragments.py`, `tests/test_fileplan.py`, `tests/test_textio.py`,
 `tests/test_outcomebound_launcher.py` and `tests/test_paths.py`, run by the `adopt` claim; CI checks
 this repository's own install with `scripts/outcomebound adopt . --check`.
+
+## Hook portability diagnostics
+
+Ignored-file diagnostics inspect the final managed paths and manifest on every install and
+dry run, including a repeat that changes no bytes. Removed and unmanaged paths do not enter
+that inventory. A warning changes no ignore rule, index entry, project file or native trust.
+Untracked files alone do not make a machine-local install invalid.
+
+An explicit finish-check measurement also reports when the portable outcomebound command is
+absent from the reduced environment used to measure Done. It does not install a tool or write
+an absolute launcher path into shared settings. Native availability still needs observation.
+
+Repeat adoption without a harness selection preserves the recorded hook order.
+Skill paths can sort in a different order from the original harness selection;
+that difference must not rewrite an otherwise unchanged manifest.
+
+
+## Planned lifecycle support
+
+The v1.5.0 adoption work qualifies persistence and the agent's upgrade workflow in addition to
+the installed bytes. The [lifecycle design](../lifecycle/design.md) owns the release requirement.
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| An adoption report distinguishes installed files, files that survive the project's normal checkout workflow, native discovery, and observed loading | a current manifest treated as evidence of all four | agent | assumed |
+| The adopt skill checks relevant native surfaces and explains a parent-directory ignore that prevents an intended installed file from being tracked; any persistence repair is narrow and respects project policy and existing authority | broad force-add or replacement of project ignore policy; force-adopt over a local edit | agent | assumed |
+| Every confirmed shared adoption class gets a synthetic upgrade case with preserved project instructions, dirty work and local-only data | public fixtures made from a private adopter tree | agent | decided |
+| The engine's supported interpreter and the project's validation toolchain are separate facts; a checker unable to parse the project's supported language is not a reason to weaken its floor or alter its baseline | changing project checks to fit the engine's test environment | agent | decided |
+
+The direct adopt-skill fixture includes upgrade and inspection-only paths. Where a comparison is needed, both arms
+have the same sealed engine and tools. Native discovery and loading need their own observations.
+A new warning or change to an adopter-owned file's meaning follows the upgrade reporting rule in
+`docs/specs/README.md`. No schema or automatic ignore-file rewrite is decided here.

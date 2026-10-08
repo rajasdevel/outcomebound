@@ -349,7 +349,8 @@
     "pytest",
     "-q",
     "tests/test_evals_runner.py",
-    "tests/test_evals_codex_isolation.py"
+    "tests/test_evals_codex_isolation.py",
+    "tests/test_claude_arm.py"
    ]
   },
   {
@@ -362,7 +363,10 @@
     "-m",
     "pytest",
     "-q",
-    "tests/test_eval_scenarios.py"
+    "tests/test_eval_scenarios.py",
+    "tests/test_eval_preparation.py",
+    "tests/test_clause_variants.py",
+    "tests/test_explain_mismatch.py"
    ]
   },
   {

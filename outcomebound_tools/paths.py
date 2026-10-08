@@ -13,7 +13,9 @@ from __future__ import annotations
 import re
 import shlex
 import sys
+from os import PathLike
 from pathlib import Path, PurePosixPath
+from typing import TypeGuard
 
 # The path grammar. A segment equal to any of these is refused wherever it
 # appears, which is what forbids a leading, trailing or doubled separator.
@@ -26,7 +28,7 @@ class PathError(ValueError):
     """A path this engine will not accept. Callers may translate it."""
 
 
-# What a Windows word may hold unquoted: nothing a PowerShell or Git Bash word treats as syntax.
+# What a Windows word may hold unquoted in a printed PowerShell command.
 _PLAIN_WORD = re.compile(r"[\w@%+=:,./-]+")
 
 
@@ -40,15 +42,14 @@ def on_windows() -> bool:
 def shell_word(word: str) -> str:
     """`word` quoted for the shell a person pastes an engine-printed command into.
 
-    POSIX shells take `shlex.quote`. On Windows the shells that run these commands are PowerShell
-    and Git Bash, and both read a word in single quotes whole; PowerShell doubles an apostrophe
-    inside it. cmd takes no single quotes, so a command with a word that needs them is for
-    PowerShell or Git Bash.
+    POSIX output uses `shlex.quote`. Windows output is for PowerShell: it doubles an
+    apostrophe inside single quotes. It is not Git Bash or cmd syntax. This is printed
+    command text, not a Done line, which the finish check runs under a POSIX shell.
     """
 
     if not on_windows():
         return shlex.quote(word)
-    if _PLAIN_WORD.fullmatch(word):
+    if not word.startswith("@") and _PLAIN_WORD.fullmatch(word):
         return word
     return "'" + word.replace("'", "''") + "'"
 
@@ -137,7 +138,7 @@ def redirects(path: Path) -> bool:
         return False
 
 
-def admits(value, *, allow_root=False) -> bool:
+def admits(value: object, *, allow_root: bool = False) -> TypeGuard[str]:
     """Whether ``value`` is a bounded repository-relative path. Never raises."""
 
     if not isinstance(value, str) or not value:
@@ -153,7 +154,7 @@ def admits(value, *, allow_root=False) -> bool:
     return not any(part in FORBIDDEN_SEGMENTS or names_git(part) for part in value.split("/"))
 
 
-def bounded_relative(value, *, allow_root=False) -> str:
+def bounded_relative(value: object, *, allow_root: bool = False) -> str:
     """``value`` if it is a bounded repository-relative path, else refuse.
 
     ``allow_root`` additionally admits exactly ``"."``, the whole-target
@@ -165,7 +166,7 @@ def bounded_relative(value, *, allow_root=False) -> str:
     return value
 
 
-def resolve_bounded(root, relative, *, allow_root=False) -> Path:
+def resolve_bounded(root: str | PathLike[str], relative: str, *, allow_root: bool = False) -> Path:
     """``root``/``relative`` with no symlink on the way and no escape.
 
     Every ancestor is checked rather than the final path alone: a symlinked
@@ -188,7 +189,7 @@ def resolve_bounded(root, relative, *, allow_root=False) -> Path:
     return candidate
 
 
-def read_bounded(root, relative) -> bytes:
+def read_bounded(root: str | PathLike[str], relative: str) -> bytes:
     """The bytes of one bounded file inside ``root``.
 
     Reading is where a path stops being a string and starts being evidence, so

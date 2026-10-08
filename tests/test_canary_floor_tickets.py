@@ -11,8 +11,16 @@ from pathlib import Path
 
 import pytest
 
+from tests.canary_helpers import (
+    assert_no_path,
+    canary,
+    git,
+    instructions,
+    load_canary,
+    project,
+    stub,
+)
 from tests.portable import WINDOWS
-from tests.test_canary import assert_no_path, canary, git, instructions, load_canary, project, stub
 
 # The canary is maintainer tooling: it runs the installed release's sh launcher, and its tests
 # stand in for interpreters and floor tools with sh scripts, which Windows cannot start.

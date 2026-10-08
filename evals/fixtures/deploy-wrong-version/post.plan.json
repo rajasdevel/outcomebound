@@ -10,6 +10,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_stale.py",
         "deployed"
@@ -45,6 +46,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_stale.py",
         "observed"
@@ -61,6 +63,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_stale.py",
         "scripted"
@@ -76,6 +79,7 @@
       "required": true,
       "command": [
         "python3",
+        "-I",
         "-B",
         "checks/probe_stale.py",
         "reported"

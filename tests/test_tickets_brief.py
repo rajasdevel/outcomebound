@@ -35,7 +35,10 @@ from outcomebound_tools.tickets_brief import brief
 from outcomebound_tools.tickets_declaration import load_declaration
 from outcomebound_tools.tickets_git import git
 from outcomebound_tools.tickets_links import section
+from tests.portable import WINDOWS
 from tests.tickets_export import LABEL, REPO, export, issue
+
+INVOKE = "& " if WINDOWS else ""
 
 SPECS = "docs/specs"
 SLUG = "example"
@@ -50,7 +53,7 @@ BOUNDS = ("outcomebound_tools/tickets_brief.py", "tests/test_tickets_brief.py")
 READS = (f"{CONTRACTS}#11-reports",)
 
 # The whole document the minimal fixture compiles to, byte for byte, with the
-# two values that vary between runs left open. A layout change is a change here:
+# run identities and platform invocation prefix left open. A layout change is a change here:
 # one blank line more or less, one heading moved, one line reworded.
 GOLDEN = """\
 # Brief — #1 Reports exit by the ratified convention
@@ -69,7 +72,7 @@ No new message code.
 - docs/specs/example/contracts.md#11-reports — 11. Reports
 
 ## Checks
-- `example-claim` — `true` in `.`, no timeout
+- `example-claim` — `{INVOKE}true` in `.`, no timeout
 
 ## Bounds
 - outcomebound_tools/tickets_brief.py
@@ -407,7 +410,9 @@ def test_the_whole_document_is_pinned(tmp_path: Path) -> None:
 
     content = header(document)["content"]
     assert re.fullmatch("[0-9a-f]{64}", content), content
-    assert document == GOLDEN.format(commit=_git(root, "rev-parse", "HEAD"), content=content)
+    assert document == GOLDEN.format(
+        INVOKE=INVOKE, commit=_git(root, "rev-parse", "HEAD"), content=content
+    )
 
 
 def test_a_cited_section_is_named_and_never_quoted(tmp_path: Path) -> None:
@@ -460,7 +465,7 @@ def test_a_persons_check_says_what_the_person_observes(tmp_path: Path) -> None:
     root = store(tmp_path, ticket_document(human_only="yes", done_when=[CLAIM, item]))
 
     assert under(compiled(root), "## Checks") == [
-        f"- `{CLAIM}` — `true` in `.`, no timeout",
+        f"- `{CLAIM}` — `{INVOKE}true` in `.`, no timeout",
         "- `seen` — a person's check: the page reads well at 80 columns",
     ]
 
@@ -584,8 +589,8 @@ def test_check_lines_by_kind(tmp_path: Path) -> None:
     )
 
     assert under(compiled(root), "## Checks") == [
-        f"- `{CLAIM}` — `python3 -m pytest 'tests/a test.py'` in `.`, timeout 600s",
-        "- `red-claim` — `make gate` in `.`, timeout 30s",
+        f"- `{CLAIM}` — `{INVOKE}python3 -m pytest 'tests/a test.py'` in `.`, timeout 600s",
+        f"- `red-claim` — `{INVOKE}make gate` in `.`, timeout 30s",
         "- `future-claim` — planned: the plan does not define it yet; this ticket's work adds it",
     ]
 
@@ -605,7 +610,9 @@ def test_a_timeout_that_is_not_whole_seconds(tmp_path: Path) -> None:
 
     root = store(tmp_path, plan=plan_document(timeout_seconds=0.5))
 
-    assert under(compiled(root), "## Checks") == [f"- `{CLAIM}` — `true` in `.`, timeout 0.5s"]
+    assert under(compiled(root), "## Checks") == [
+        f"- `{CLAIM}` — `{INVOKE}true` in `.`, timeout 0.5s"
+    ]
 
 
 def test_a_claim_with_no_timeout_set_says_no_timeout(tmp_path: Path) -> None:
@@ -619,8 +626,12 @@ def test_a_claim_with_no_timeout_set_says_no_timeout(tmp_path: Path) -> None:
         name="set",
     )
 
-    assert under(compiled(unset), "## Checks") == [f"- `{CLAIM}` — `true` in `.`, no timeout"]
-    assert under(compiled(set_), "## Checks") == [f"- `{CLAIM}` — `true` in `.`, timeout 900s"]
+    assert under(compiled(unset), "## Checks") == [
+        f"- `{CLAIM}` — `{INVOKE}true` in `.`, no timeout"
+    ]
+    assert under(compiled(set_), "## Checks") == [
+        f"- `{CLAIM}` — `{INVOKE}true` in `.`, timeout 900s"
+    ]
 
 
 def test_a_claims_plan_working_directory_is_named_relative_to_the_checkout(
@@ -631,7 +642,7 @@ def test_a_claims_plan_working_directory_is_named_relative_to_the_checkout(
     root = store(tmp_path, plan=plan_document(cwd="../outcomebound_tools"))
 
     assert under(compiled(root), "## Checks") == [
-        f"- `{CLAIM}` — `true` in `outcomebound_tools`, no timeout"
+        f"- `{CLAIM}` — `{INVOKE}true` in `outcomebound_tools`, no timeout"
     ]
 
 
@@ -649,7 +660,9 @@ def test_a_working_directory_outside_the_checkout_is_named_with_dot_dot(
 
     document = compiled(root)
 
-    assert under(document, "## Checks") == [f"- `{CLAIM}` — `true` in `../elsewhere`, no timeout"]
+    assert under(document, "## Checks") == [
+        f"- `{CLAIM}` — `{INVOKE}true` in `../elsewhere`, no timeout"
+    ]
     assert str(root) not in document
     assert str(root.resolve()) not in document
     assert str(root.resolve().parent) not in document
@@ -1115,7 +1128,9 @@ def test_the_plain_brief_is_the_same_with_or_without_the_detail_flag(
 
     root = store(tmp_path)
     golden = GOLDEN.format(
-        commit=_git(root, "rev-parse", "HEAD"), content=header(compiled(root))["content"]
+        INVOKE=INVOKE,
+        commit=_git(root, "rev-parse", "HEAD"),
+        content=header(compiled(root))["content"],
     )
 
     assert compiled(root, TICKET, "--detail", "plain") == golden
@@ -1139,7 +1154,7 @@ def test_steps_follow_bounds_in_the_order_an_implementer_meets_them(tmp_path: Pa
         "4. Report what changed, each check's verdict, what you decided beyond the ticket, "
         "and the follow-ups you found."
     )
-    assert "`example-claim` — `true` in `.`, no timeout" in full.split("## Steps", 1)[1]
+    assert f"`example-claim` — `{INVOKE}true` in `.`, no timeout" in full.split("## Steps", 1)[1]
 
     bare = store(tmp_path, ticket_document(reads=[]), name="bare")
     steps = [

@@ -2,6 +2,7 @@
 # copied into the candidate-writable fixture.
 AGENTS.md
 checks/probe_stale.py
+checks/deploy_probe.py
 checks/scope_walk.py
 checks/transcript_commands.py
 checks/allowed_paths.sh
@@ -9,3 +10,7 @@ checks/allowed_paths.sh
 .agents/skills/using-outcomebound/SKILL.md
 .git/config
 .git/info/exclude
+
+# Fixed serving simulator, outside the granted deployment act.
+ops/deploy.sh
+simulator/production-version

@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ def _schema(name):
 # One row per defect: (keyword under test, instance, schema, expected message fragment).
 # test_every_supported_keyword_is_exercised pins this table against SUPPORTED, so a keyword
 # added to the subset without a case here — or without an implementation — goes red.
-KEYWORD_CASES = (
+KEYWORD_CASES: tuple[tuple[str, Any, dict[str, Any], str], ...] = (
     ("required", {"a": 1}, {"type": "object", "required": ["b"]}, "missing required field 'b'"),
     (
         "additionalProperties",
@@ -82,6 +83,53 @@ def test_valid_instances_report_nothing():
     assert (
         validate({"version": 1}, {"type": "object", "properties": {"version": {"const": 1}}}) == []
     )
+
+
+@pytest.mark.parametrize("schema", [None, False, 1, [], "schema"])
+def test_non_object_schemas_keep_the_existing_empty_result(schema):
+    assert validate("value", schema) == []
+
+
+@pytest.mark.parametrize(
+    "expected_type, message",
+    [
+        ("string", "$ must be of type string"),
+        (["string", "array"], "$ must be of type string or array"),
+    ],
+)
+def test_type_mismatch_stops_before_other_constraints(expected_type, message):
+    assert validate(1, {"type": expected_type, "const": 2, "enum": [3]}) == [message]
+
+
+def test_multiple_schema_defects_keep_their_report_order():
+    schema = {
+        "type": "object",
+        "const": {},
+        "enum": [{}],
+        "required": ["missing"],
+        "additionalProperties": False,
+        "properties": {
+            "title": {"type": "string", "minLength": 1, "pattern": "^x$"},
+            "tags": {
+                "type": "array",
+                "minItems": 3,
+                "uniqueItems": True,
+                "items": {"type": "string"},
+            },
+        },
+    }
+    assert validate({"title": "", "tags": [1, 1], "extra": True}, schema) == [
+        "$ must equal {}",
+        "$ must be one of: {}",
+        "$ is missing required field 'missing'",
+        "$ has unknown field(s): extra",
+        "$.title must be at least 1 character(s)",
+        "$.title does not match pattern '^x$'",
+        "$.tags must have at least 3 item(s)",
+        "$.tags must not repeat items",
+        "$.tags[0] must be of type string",
+        "$.tags[1] must be of type string",
+    ]
 
 
 def _shipped_schema_names():

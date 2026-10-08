@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when deciding how much design, testing, review, or process a task needs, or when unsure whether a change is routine or crosses a component or API boundary. Sizes the work to the outcome and picks the mechanisms it needs.
+description: Use when deciding how much design, testing, review, or process a task needs, or coordinating work across lifecycle stages. Sizes the work to the outcome and picks the mechanisms it needs.
 ---
 
 # Using OutcomeBound
@@ -32,6 +32,12 @@ works, and it is no one's approval of this particular action.
 
 An instruction file is engineering too. Change text a model reads only for an observed failure
 or a decision, in the most checkable form that fixes it: a check or a refusal before a sentence.
+
+## Carry work across stages
+
+When work spans stages, or delivery has stopped before the requested outcome, read
+[the lifecycle reference](references/lifecycle.md) beside this skill. It routes the applicable
+transitions; a small change needs no extra stages or records.
 
 ## Put a decision to the user
 

@@ -11,6 +11,8 @@ names them together; they are separate ids because a fragment must be able to
 trigger one without the other.
 """
 
+from collections.abc import Iterable
+
 MECHANISMS = (
     "spec",
     "goal-envelope",
@@ -38,7 +40,7 @@ def is_mechanism(name: str) -> bool:
     return name in LABELS
 
 
-def unknown(names) -> list[str]:
+def unknown(names: Iterable[str]) -> list[str]:
     """Return the supplied names that are not registry ids, in order."""
 
     return [name for name in names if name not in LABELS]

@@ -749,13 +749,19 @@ def parse_known(text: str) -> list[Known] | None:
 def _known_path(target: Path, deadline: float | None = None) -> tuple[Path, str] | None:
     """(the records' path in the Git common directory, the target's prefix), or None."""
 
-    common = _git(
-        target, "rev-parse", "--path-format=absolute", "--git-common-dir", deadline=deadline
-    )
+    common = _git(target, "rev-parse", "--git-common-dir", deadline=deadline)
     prefix = _git(target, "rev-parse", "--show-prefix", deadline=deadline)
     if not common or prefix is None:
         return None
-    return Path(os.fsdecode(common.strip())) / KNOWN, os.fsdecode(prefix.strip())
+    # Git can return a path relative to the command's cwd, including in a subdirectory.
+    # Resolve it here instead of requiring Git's newer --path-format option.
+    try:
+        folder = (target / os.fsdecode(common.strip())).resolve(strict=True)
+        if not folder.is_dir():
+            return None
+    except (OSError, ValueError):
+        return None
+    return folder / KNOWN, os.fsdecode(prefix.strip())
 
 
 def _head(target: Path, deadline: float | None = None) -> str | None:
@@ -838,8 +844,6 @@ def keep_known(target: Path, record: Known, deadline: float | None = None) -> bo
 
 # Why a command reads UNVERIFIED: it met the time limit, or it could not run where the hook runs.
 TIME, ENVIRONMENT = "time", "environment"
-# The exit codes of a shell that could not run the command: 126 not executable, 127 not found.
-NOT_RUN = (126, 127)
 # A tool the command names that this PATH does not hold, as the last line of output says it when a
 # runner between the hook and the tool turns the shell's 127 into its own exit code: make's
 # `make: pytest: No such file or directory`, a script's `run.sh: line 3: pytest: command not
@@ -851,8 +855,10 @@ NOT_RUN = (126, 127)
 _MISSING = re.compile(
     r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
     r"|process_begin: CreateProcess\(NULL, (?P<winmade>[^\s,]+),?(?: .*)?\) failed\."
-    r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
-    r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>[^\s:]+): (?:command )?not found"
+    r"|\S+: (?:line )?\d+: (?P<scripted>.+?): "
+    r"(?:(?:command )?not found|No such file or directory|Permission denied)"
+    r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>.+?): "
+    r"(?:(?:command )?not found|No such file or directory|Permission denied)"
     r"|(?P<launcher>(?:\S*[/\\])?python[\d.]*(?:\.exe)?): No module named (?P<module>[\w.]+))$"
 )
 # GNU make on Windows says it in two lines: `process_begin: CreateProcess(NULL, <tool> ...)
@@ -939,7 +945,11 @@ _NO_MODULE = 3
 
 
 def confirmed_absent(
-    target: Path, output: bytes, environment: Mapping[str, str] | None = None
+    target: Path,
+    output: bytes,
+    environment: Mapping[str, str] | None = None,
+    *,
+    deadline: float | None = None,
 ) -> bool:
     """Whether the tool the last line names is in fact absent where the command ran, and not only
     said to be: a name `programs.find` does not find on that PATH, or a module the named Python
@@ -951,7 +961,13 @@ def confirmed_absent(
         return False
     # Done runs from the target's root, so an empty or relative entry names a folder of it.
     source = environment if environment is not None else os.environ
-    entries = source.get("PATH", "")
+    entries = programs.environment_value(source, "PATH")
+    if entries is None:
+        # A shell can supply its own default PATH. Absence on an unknown child
+        # PATH is not established; an absolute Python launcher can still probe.
+        if not found["module"] or not _folder_in(found["launcher"]):
+            return False
+        entries = ""
     path = os.pathsep.join(str((target / entry).resolve()) for entry in entries.split(os.pathsep))
     # What the shell could find: on Windows a script with no extension, which Git's shell runs.
     where = {"PATH": path}
@@ -962,7 +978,9 @@ def confirmed_absent(
         tool = _tool_named(found)
         if _folder_in(tool):
             # A name with a folder is looked up as it stands, from the target's root.
-            return not (target / tool).is_file()
+            path_tool = target / tool
+            denied = found.group(0).endswith("Permission denied")
+            return not path_tool.is_file() or (denied and not os.access(path_tool, os.X_OK))
         return programs.find(tool, where, extensionless=True) is None
     launcher = found["launcher"]
     program = launcher if _folder_in(launcher) else programs.find(launcher, where)
@@ -974,17 +992,20 @@ def confirmed_absent(
         "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec(sys.argv[1]) else 3)"
     )
     top = found["module"].split(".")[0]
+    seconds = 30.0 if deadline is None else min(30.0, deadline - time.monotonic())
+    if seconds <= 0:
+        return False
     try:
         done = subprocess.run(
             [program, "-c", probe, top],
             cwd=target,
             env=environment,
             capture_output=True,
-            timeout=30,
+            timeout=seconds,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
-        return True
+        return False
     return done.returncode == _NO_MODULE
 
 
@@ -1222,10 +1243,11 @@ def run_one(
     the command starts is acted on once it has started, so its group is stopped too."""
 
     started = time.monotonic()
-    shell = programs.posix_shell()
+    shell = programs.posix_shell(environment)
     if shell is None:
         why = "could not start: no POSIX shell; install Git for Windows, or put its sh.exe on PATH"
         return Result(line, UNVERIFIED, 0.0, why, cause=ENVIRONMENT)
+    environment = programs.shell_environment(shell, environment)
     with tempfile.TemporaryFile() as sink:
         held: list[int] = []
         previous = _hold(held)
@@ -1236,7 +1258,7 @@ def run_one(
                 stdin=subprocess.DEVNULL,
                 stdout=sink,
                 stderr=subprocess.STDOUT,
-                env=programs.shell_environment(shell, environment),
+                env=environment,
                 **programs.new_group(),
             )
         except OSError as error:
@@ -1264,15 +1286,15 @@ def run_one(
         if code == 0:
             return Result(line, PASS, elapsed, code=code)
         tail = _tail(sink)
-        if code in NOT_RUN and not other_failure(tail) and not ran_before_missing(tail):
-            why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
-            return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
         missing = missing_tool(tail)
+        owned = missing is not None and project_owned(target, missing)
         if (
             missing is not None
-            and not project_owned(target, missing)
+            and not owned
             and not other_failure(tail)
-            and confirmed_absent(target, tail, environment)
+            and confirmed_absent(
+                target, tail, environment, deadline=None if seconds is None else started + seconds
+            )
         ):
             why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
             note = f"its output says `{missing}` is not on this PATH"
@@ -1419,7 +1441,7 @@ def hook_environment(
     root = target.resolve()
     kept: list[str] = []
     dropped: list[str] = []
-    for entry in environ.get("PATH", "").split(os.pathsep):
+    for entry in (programs.environment_value(environ, "PATH") or "").split(os.pathsep):
         # Done runs from the target's root, so an empty entry (the current folder) and a
         # relative entry name folders of the target.
         folder = (root / entry).resolve()
@@ -1433,7 +1455,11 @@ def hook_environment(
             dropped.append(entry)
         else:
             kept.append(entry)
-    environment = {key: value for key, value in environ.items() if key != "VIRTUAL_ENV"}
+    environment = {
+        key: value
+        for key, value in environ.items()
+        if (key.upper() if os.name == "nt" else key) not in ("PATH", "VIRTUAL_ENV")
+    }
     environment["PATH"] = os.pathsep.join(kept)
     return environment, tuple(dropped)
 
@@ -1822,9 +1848,9 @@ that measurement did not (kept in the Git common directory), holds nothing and t
 runs; once it passes, it leaves that record. Any other failure while the input's stop_hook_active is
 false holds the finish, its report the reason the agent reads; a pass, a failure after that, a known
 failure alone, a repeated verdict, a digest that no longer matches, a missing manifest, a command
-stopped at the time limit and one the hook's environment could not run (exit 126 or 127) go to the
-person as systemMessage and hold nothing. On claude-code nothing runs while background_tasks or
-session_crons is non-empty.
+stopped at the time limit and one the hook's environment could not run (confirmed from its
+diagnostic) go to the person as systemMessage and hold nothing. On claude-code nothing runs while
+background_tasks or session_crons is non-empty.
 
 With --mark it runs at a turn's first prompt instead: it keeps the target's HEAD and working tree
 in the Git directory, prints nothing, and exits 0 whatever goes wrong. A stop on that same HEAD and

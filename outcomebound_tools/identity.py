@@ -162,6 +162,28 @@ def has_unclosed_fence(text: str) -> bool:
     return _scan_fences(text)[1]
 
 
+def _active_sentinels(text: str) -> list[tuple[str, re.Match[str]]]:
+    """Read the unfenced sentinels and refuse malformed candidates before pairing them."""
+
+    spans = _fenced_spans(text)
+
+    def fenced(position: int) -> bool:
+        return any(start <= position < stop for start, stop in spans)
+
+    strict: dict[int, tuple[str, re.Match[str]]] = {}
+    for match in SENTINEL_BEGIN.finditer(text):
+        strict[match.start()] = ("begin", match)
+    for match in SENTINEL_END.finditer(text):
+        strict[match.start()] = ("end", match)
+    for candidate in SENTINEL_CANDIDATE.finditer(text):
+        if fenced(candidate.start()):
+            continue
+        exact = strict.get(candidate.start())
+        if exact is None or exact[1].end() != candidate.end():
+            raise IdentityError(f"malformed managed block sentinel: {candidate.group(0)!r}")
+    return [strict[position] for position in sorted(strict) if not fenced(position)]
+
+
 def find_managed_blocks(text: str) -> list["ManagedBlock"]:
     """Return every managed block in ``text``, in host order.
 
@@ -178,30 +200,10 @@ def find_managed_blocks(text: str) -> list["ManagedBlock"]:
     leading and trailing newlines trimmed.
     """
 
-    spans = _fenced_spans(text)
-
-    def fenced(position: int) -> bool:
-        return any(start <= position < stop for start, stop in spans)
-
-    strict: dict[int, tuple[str, re.Match]] = {}
-    for match in SENTINEL_BEGIN.finditer(text):
-        strict[match.start()] = ("begin", match)
-    for match in SENTINEL_END.finditer(text):
-        strict[match.start()] = ("end", match)
-    for candidate in SENTINEL_CANDIDATE.finditer(text):
-        if fenced(candidate.start()):
-            continue
-        exact = strict.get(candidate.start())
-        if exact is None or exact[1].end() != candidate.end():
-            raise IdentityError(f"malformed managed block sentinel: {candidate.group(0)!r}")
-
     blocks: list[ManagedBlock] = []
     seen: set[str] = set()
-    opened: re.Match | None = None
-    for position in sorted(strict):
-        if fenced(position):
-            continue
-        kind, match = strict[position]
+    opened: re.Match[str] | None = None
+    for kind, match in _active_sentinels(text):
         if kind == "begin":
             if opened is not None:
                 raise IdentityConflict(

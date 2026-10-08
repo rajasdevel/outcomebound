@@ -9,6 +9,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -16,6 +18,7 @@ def _gate():
     spec = importlib.util.spec_from_file_location(
         "check_no_deps", ROOT / "scripts" / "check-no-deps.py"
     )
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -75,3 +78,13 @@ def test_check_no_deps_checks_the_root_it_is_given_and_the_current_directory_by_
     assert here.returncode == 1, here.stdout + here.stderr
     relative = os.path.join(".", "scripts", "helper.py")
     assert f"FAIL: {relative} imports non-stdlib 'yaml'" in here.stdout, here.stdout
+
+
+@pytest.mark.parametrize("folder", ["outcomebound_tools", "scripts"])
+def test_nested_modules_cannot_bypass_the_standard_library_gate(tmp_path: Path, folder: str):
+    nested = tmp_path / folder / "helpers"
+    nested.mkdir(parents=True)
+    (nested / "allowed.py").write_text("import json\n", encoding="utf-8")
+    (nested / "bad.py").write_text("import json, requests\n", encoding="utf-8")
+
+    assert _gate().violations(str(tmp_path)) == [(str(nested / "bad.py"), "requests")]

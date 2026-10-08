@@ -11,6 +11,7 @@ import argparse
 import os
 import re
 import sys
+from collections.abc import Sequence
 
 from outcomebound_tools import textio
 from outcomebound_tools.identity import IdentityError, parse_managed_block
@@ -79,7 +80,7 @@ def check_document(text: str) -> list[str]:
     return problems
 
 
-def check_spec_file(spec_path) -> list[str]:
+def check_spec_file(spec_path: str | os.PathLike[str]) -> list[str]:
     path = os.fspath(spec_path)
     try:
         with open(path, encoding="utf-8") as source:
@@ -91,7 +92,7 @@ def check_spec_file(spec_path) -> list[str]:
     return [f"{path}: expected design.md or plan.md"]
 
 
-def check_spec_dir(specs_dir) -> list[str]:
+def check_spec_dir(specs_dir: str | os.PathLike[str]) -> list[str]:
     """Check every spec under a selected tree, at any depth.
 
     A directory that holds neither a spec nor further directories is reported:
@@ -123,7 +124,7 @@ def check_spec_dir(specs_dir) -> list[str]:
     return violations
 
 
-def _main(argv=None) -> int:
+def _main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python3 -m outcomebound_tools.artifactcheck")
     parser.add_argument("--managed-block", action="store_true", help="check one block on stdin")
     parser.add_argument(
