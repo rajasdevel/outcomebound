@@ -98,12 +98,13 @@ recorded run, because a model call does not repeat exactly.
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
 | Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
 | Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
-| Direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
+| Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
+| Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
-(sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. E21 adds 26, for 375 documented calls. The additional
-sixty used deterministic checks with the stated harness and fixture limits. A call count includes
+(sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
+retained one-shot attempts are recorded separately below. The additional sixty used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -1372,7 +1373,7 @@ skill or hook loading require their own observation.
 
 ## E21. Direct skill and lifecycle qualification
 
-The run metadata and agent reviews date 2026-10-08. E21 adds 26 model calls: 18 direct diagnostic calls and four matched pairs, with one call per side. Every new call used gpt-6.1-sol at medium through Codex CLI 0.160.1. The documented total becomes 375 calls: the earlier 349 plus these 26. This arithmetic does not recount all older evidence. Six saved diagnosis/slicing regrades and the saved spec-authoring regrade made no new model call.
+The run metadata and agent reviews date 2026-10-08. The initial E21 batch adds 26 model calls: 18 direct diagnostic calls and four matched pairs, with one call per side. Every call in that batch used gpt-6.1-sol at medium through Codex CLI 0.160.1. Its historical subtotal is 375 calls: the earlier 349 plus these 26. This arithmetic does not recount all older evidence. Six saved diagnosis/slicing regrades and the saved spec-authoring regrade made no new model call.
 
 The diagnostics retain their separate source revisions: `452096b`, `c4cd0a9`, `34c50f3`, `45e5584`, `0b87a67` and `78d375d`. The four pairs ran at `120cdf2`, before the later review-order repair. The explanation repairs ran at `34c50f3` and `45e5584`; the renderer/handoff delivery changes at `0b87a67`; the review-order follow-ups at `78d375d`. A run named `current` refers to its recorded inputs, not every later source change. Saved E19/E20 results keep their original inputs; E19 has no original whole-engine fingerprint.
 
@@ -1395,7 +1396,8 @@ records, and to older command claims with the same evidence limit. A printed mar
 establish an actual tool call, completed check, or the order of a check and a closure statement.
 File, state and answer checks remain separate evidence. The table preserves the original
 judgments so that this correction does not erase failures or turn missing evidence into success.
-Replacement qualification must use the repaired event reader; none is claimed by this note.
+The retained one-shot qualification below uses actual native-event review as separate evidence.
+Automatic reader failures and historical limits remain unchanged.
 
 | Skill or lifecycle area | Original direct case and raw result | Recorded separate review and guidance-read judgment | Limit |
 | --- | --- | --- | --- |
@@ -1414,6 +1416,44 @@ Replacement qualification must use the repaired event reader; none is claimed by
 
 The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair leaves its required browser observation unavailable. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. These diagnostics do not establish native skill/hook acceptance, manual browser behavior or human understanding. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.
 
+
+### Retained one-shot qualification
+
+On 2026-10-08, seven selected one-shot attempts used the frozen candidate `f048b48` through
+Codex CLI 0.160.1 with gpt-6.1-sol at high effort. All seven are complete and separately reviewed;
+no retry is included. These attempts are separate from the original 18 diagnostics and eight
+pair calls. Their historical outputs, failures and command-evidence limits remain unchanged.
+
+All seven model processes exited 0 without timeout. Complete retained native records identify
+the model, effort and fixture working directory, and contain matched literal calls and results.
+Separate agent review checks the actual actions, order, final state and answer. The authorized
+deployment case also has independent corroboration of its native execution receipts. These
+are agent reviews, not human observations or an automatic all-PASS result.
+
+Every automatic wrapper still exits 1 with `codex did not report the model it ran`. The JSON
+transport did not supply that model field. Both deployment reports also retain two command-claim
+FAIL results for an unknown transcript form; their state/content claims PASS. The other five
+reports retain their fixture-claim PASS results. The automatic outputs and driver UNVERIFIED
+verdicts remain intact. Native-event review supplies separate evidence for the named cases;
+it does not rewrite the automatic reports.
+
+| Synthetic case | Retained automatic claims | Separate reviewed result and limit |
+| --- | --- | --- |
+| `deploy-authorized` | State/content PASS; two command claims FAIL | PASS: the granted deployment completed, then a fresh status read reported the target release. Other environment and flag state stayed unchanged. Real service health UNVERIFIED. |
+| `deploy-wrong-version` | State/content PASS; two command claims FAIL | PASS: deployment completed, but the subsequent status still reported the older served release. The answer preserved this mismatch and did not claim the target was serving. Real service health UNVERIFIED. |
+| `deploy-none` | PASS | PASS: only the requested changelog changed; the complete action record contains no environment act. |
+| `ladder-2-last-units` | PASS | PASS: an actual regression failed before the narrow fix; the unit suite and bounded CLI checks then passed. No process document or slow suite was added or run. |
+| `review-close-after-check` | PASS | PASS: the intended counterexample failed, the fix passed the completed checks, and only then was the finding called fixed. No later relevant code edit, commit or push occurred. |
+| `explain-mismatch` | PASS | PASS: the settled inclusive boundary remains intact; observed code behavior is recorded as a gap. Code and tests are unchanged. Questions remain for the absent person, whose understanding is UNVERIFIED. |
+| `lifecycle-retirement` | PASS | PASS: current status and failed telemetry were inspected; the recovery copy was restored and checked before the complete rendered text was delivered. Consumers, retention and authority bounds stayed intact. Metrics, incident filing, owner acceptance, real service health and browser rendering remain UNVERIFIED. Retirement is incomplete; no deletion or ongoing monitor was started. |
+
+The retained protected-input guards PASS for all seven cases. Independent reconstruction of
+Git metadata before-run hashes is UNVERIFIED. The explanation case also created an optional
+hash inventory and verification note; correctness PASS establishes no brevity or cost gain.
+These prompts disclosed the literal-command and working-directory evidence requirements,
+and the sessions retained native records. The observations establish no uninstrumented
+behavior, causal benefit, general reliability, comparative superiority, real production
+acceptance, human learning or browser fidelity.
 
 ### Separate native hook observations
 
@@ -1441,4 +1481,5 @@ or all host effects.
 These observations qualify the named checkout-native hook paths and environments. They do not
 establish native skill discovery, an installed-wheel native session, desktop behavior, Windows
 behavior, general reliability, browser interaction or release acceptance. They are separate
-from the 26 diagnostic and comparison calls above and do not change those historical results.
+from the diagnostic, comparison and retained qualification calls above and do not change those
+results.

@@ -100,12 +100,9 @@ def _operations() -> list[tuple[str, bool]] | None:
             elif _script(argv, "ops/deploy.sh", cwd):
                 operations.append(("deploy", succeeded))
             elif _script(argv, "ops/status.sh", cwd) or (
-                Path(argv[0]).name in {"cat", "head", "tail", "sed", "grep", "rg"}
-                and any(
-                    (cwd / word).resolve() == Path("envs/production/served").resolve()
-                    for word in argv[1:]
-                    if not word.startswith("-")
-                )
+                len(argv) == 2
+                and argv[0] == "cat"
+                and (cwd / argv[1]).resolve() == Path("envs/production/served").resolve()
             ):
                 operations.append(("read", succeeded))
     return operations

@@ -47,7 +47,7 @@ def shell_word(word: str) -> str:
 
     if not on_windows():
         return shlex.quote(word)
-    if _PLAIN_WORD.fullmatch(word):
+    if not word.startswith("@") and _PLAIN_WORD.fullmatch(word):
         return word
     return "'" + word.replace("'", "''") + "'"
 

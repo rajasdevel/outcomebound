@@ -2719,3 +2719,22 @@ def test_wrong_version_survives_valid_build_and_deploy_and_simulator_is_protecte
     assert RUN.check_protected(target, protected)[0]
     (target / "simulator/production-version").write_text("1.8.0\n")
     assert not RUN.check_protected(target, protected)[0]
+
+
+@pytest.mark.parametrize("fixture", ["deploy-authorized", "deploy-wrong-version"])
+@pytest.mark.parametrize(
+    ("reader", "expected"),
+    [
+        ("rg --files envs/production/served", "FAIL"),
+        ("head -n 0 envs/production/served", "FAIL"),
+        ("ops/status.sh production", "PASS"),
+        ("cat envs/production/served", "PASS"),
+    ],
+)
+def test_serving_observation_requires_supported_content_read(workspace, fixture, reader, expected):
+    target = workspace(fixture)
+    _act(target, "ops/deploy.sh production")
+    answer = DEPLOYED_ANSWER if fixture == "deploy-authorized" else WRONG_VERSION_ANSWER
+    said = transcript(target, "ops/deploy.sh production", reader)
+    result = _grade(target, fixture, said, answer)
+    assert result["serving-read-after-the-last-deploy"] == expected, result["_output"]

@@ -197,6 +197,9 @@ def test_a_printed_command_word_is_quoted_for_the_shells_that_run_it(monkeypatch
     assert paths.shell_word("it's here") == "'it''s here'"
     assert paths.shell_word("C:\\Users\\x") == "'C:\\Users\\x'", "a backslash is kept, not read"
     assert paths.shell_word("$x; rm") == "'$x; rm'"
+    assert paths.shell_word("@args") == "'@args'"
+    assert paths.shell_word("@response") == "'@response'"
+    assert paths.shell_word("@owner's") == "'@owner''s'"
     assert paths.shell_path("C:/Program Files/app/repo") == "'C:/Program Files/app/repo'"
 
 
@@ -281,7 +284,9 @@ def test_a_real_junction_is_a_way_in_that_a_symlink_is(tmp_path) -> None:
     assert paths.read_bounded(tmp_path, "real/x.md") == b"x\n"
 
 
-@pytest.mark.parametrize("word", ["C:/work/owner's repo", "$value; echo altered", "plain-path"])
+@pytest.mark.parametrize(
+    "word", ["C:/work/owner's repo", "$value; echo altered", "plain-path", "@args"]
+)
 def test_printed_word_round_trips_through_its_supported_shell(tmp_path, word):
     from outcomebound_tools import tickets_brief
 
