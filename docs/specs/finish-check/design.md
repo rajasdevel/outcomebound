@@ -141,10 +141,23 @@ folders, and the tree stop; `tests/test_finish_check.py` also runs `run_one` in 
 diagnostic evidence rule for exits 126 and 127, the missing shell and a held stop on Windows. A test of a POSIX mechanism, a file's execute bit or a signal sent with `os.kill`, skips on Windows with its reason; the Windows hosted job runs the rest. `tests/test_finish_check.py` also has a test per rule of the turn-start mark: a turn that changed nothing on a failing tree runs and holds nothing, says so to the person with the mark's time, and repeats a recorded non-pass; a mark is written only on the prompt hook's input, is ignored for another session, after the turn's first work, or with a transcript that cannot be read, and is used where a stop names no transcript; a changed turn holds a new failure and reports the one it began with as known before the turn; a commit counts as a change; no mark, an unreadable mark and another tree's mark behave as before; and the mark mode exits 0 with nothing printed or written on each error. `tests/test_adopt.py` covers the entry's install, check and removal, with the turn-start entry beside it, an upgrade from an install without it, and the `codex` trust line for it; the one Done run
 at install with its timeout warning and its stop by SIGINT, and the `codex` trust line on a
 changed entry.
-The turn-start mark is `UNVERIFIED` in a live session on both rows: tests run the verb and adopt's entries, and no harness has been observed to fire `UserPromptSubmit` for these entries. Whether `codex` fires `UserPromptSubmit` for the prompt that a Stop `block` reason creates is `UNVERIFIED` (research `harnesses/codex.md` §7.1 says the reason becomes a new user prompt, and is silent on the event). The guard bounds the effect either way: the retry after a hold only ever reports to the person. Where the event fires, the mark moves to the tree that failed, and a retry that changes nothing reads as an unchanged turn, `{}` or the repeated verdict; where it does not, the mark stays at the tree the turn began with, the retry may run Done again on a changed tree, and the record then holds the tree after the first hold, not the mark's, so no failure is known before the turn.
-`claude-code` has been observed in a live session: a turn end ran the Done commands and the PASS
-message reached the transcript, in a session started before the entry too. `codex`, and
-`cursor`, which runs the `claude-code` entry too, stay `UNVERIFIED`, as does each install's harness, whose PATH may lack `outcomebound` or its tools.
+The [native observations in E21](../../evaluations.md#separate-native-hook-observations)
+record prompt marks, an unchanged-tree skip, a first failure hold, one changed-state
+continuation without another hold, and recovery in the named Codex and Claude Code CLI
+versions on macOS. Those observations bind to the source and installed hook bytes that E21
+names. They do not qualify later changed engine bytes or every installation.
+
+Whether Codex fires `UserPromptSubmit` for the prompt that a Stop `block` reason creates
+remains UNVERIFIED. Neither native record retained the raw retry input. The guard bounds
+that retry either way: after a hold it only reports to the person. Where the prompt event
+fires, the mark moves to the failed tree. An unchanged retry then returns an unchanged-turn
+result or repeats the recorded verdict. Where it does not fire, the mark stays at the
+turn's starting tree. A changed retry can run Done again, but the checked-tree record holds
+the tree after the first hold, not the mark's tree.
+
+Native desktop and Cursor behavior, and native Windows and Linux sessions, remain
+UNVERIFIED. Direct invocation of a saved hook command is a separate check. Each install
+must make the command and its tools available on the harness's actual PATH.
 
 An environment that omits PATH can make the shell select its own defaults. The
 absence probe must not treat that as an empty PATH. When the effective search

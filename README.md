@@ -31,8 +31,8 @@ v1.5.0 ships.
 
 ## Try it
 
-You need Python 3.10 or later and a Git work tree. Install the tagged release, then inspect
-what your repository needs:
+You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree. Install the tagged
+release, then inspect what your repository needs:
 
 ```sh
 uv tool install git+https://github.com/rajasdevel/outcomebound@v1.4.0

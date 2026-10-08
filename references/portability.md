@@ -67,8 +67,8 @@ The refusal lists the harnesses that can.
   codex-cli 0.159.2 on 2026-10-01. To commit, add `--add-dir <repository>/.git` as well.
 - The finish check is observed in a finite native CLI sequence with Codex CLI 0.160.1.
   [The evaluation record](../docs/evaluations.md#separate-native-hook-observations) states its
-  cases and limits. An installed-wheel native session, desktop behavior and native Windows
-  hook behavior remain UNVERIFIED.
+  cases and limits, including the later installed-wheel hook check. Desktop behavior and
+  native Windows/Linux hook behavior remain UNVERIFIED.
 - The hooks page says that the `reason` of a hold becomes a new user prompt, which the model sees,
   and that a `systemMessage` is shown as a warning in the UI or event stream. Thus the model sees a
   hold, and only the person sees a PASS, a known failure or an `UNVERIFIED`.

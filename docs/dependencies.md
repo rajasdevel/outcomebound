@@ -9,7 +9,7 @@ and this repository's checks have different needs.
 | Dependency | Where it is needed | Why |
 | --- | --- | --- |
 | Python 3.10 or later | Engine and build backend | Runs the command and its standard-library modules. CI tests Python 3.10 through 3.14. |
-| Git and a Git worktree | Adoption and repository operations | Reads tracked files, history, worktree identity and preservation state. |
+| Git 2.52.0 or later and a Git worktree | Adoption and repository operations | Reads tracked files, history, worktree identity and preservation state. |
 | One of uv, pipx, or pip in a virtual environment | Installation | Installs the package and creates the command. They are alternative routes. A Git URL also needs Git and network access. |
 | POSIX `sh` | Checkout launcher and finish-check Done lines | Runs shell command lines. The installed entry point itself runs Python. On Windows, Git for Windows supplies `sh.exe`. |
 | The project's own check tools | Done lines or a selected floor | Runs the checks that the project declared. A missing tool reads UNVERIFIED. |
@@ -20,12 +20,20 @@ dependency list is in [pyproject.toml](../pyproject.toml). Python isolation is p
 [distribution design](specs/distribution/design.md). `pip install --user` is not a supported
 route because the isolated engine ignores the user site.
 
-No minimum Git release has been qualified. Common-directory readers resolve the result of
-`rev-parse --git-common-dir` against the command's working directory. They do not require
-`--path-format=absolute`, which
-[Git 2.31.0](https://raw.githubusercontent.com/git/git/v2.31.0/Documentation/RelNotes/2.31.0.txt)
-introduced. Removing that option requirement does not establish support for every older Git.
-See the distribution design for the evidence needed before an older-Git support claim.
+Git 2.52.0 is the compatibility minimum. It was
+[released on 17 November 2025](https://www.kernel.org/pub/software/scm/git/). The Linux CI leg
+with Python 3.10 builds that exact version from source, checks its published SHA-256, and runs
+the normal checks with its own executable and helper directory. Hosted CI qualification for
+this minimum is `UNVERIFIED` until that leg passes. Older Git releases are outside the supported
+range, even where they work.
+
+Use a current patched Git release, especially
+[Git for Windows](https://git-scm.com/install/windows). The compatibility minimum is not a
+security update policy: [Git has no LTS release](https://github.com/git/git/blob/master/SECURITY.md)
+and does not guarantee security maintenance for older feature tracks. Common-directory readers
+resolve `rev-parse --git-common-dir` against the command's working directory; they need no
+`--path-format=absolute` option. The [distribution design](specs/distribution/design.md) states
+what the minimum-version checks establish.
 
 The engine and finish hook do not require Node, npm, jq, rg, curl, Docker, sg, make or a package
 manager for their own work. A project can use any of them in its Done commands. Installing a
@@ -120,9 +128,10 @@ through uv or an explicit interpreter path.
 | actions/checkout v7.0.1 and actions/setup-python v7.0.0 | Fetch source and provide Python. Both actions are pinned by commit. |
 | actions/attest-build-provenance v4.2.2 | Attests release files; pinned by commit. |
 | python:3.13-slim and python:3.13-alpine | Check Debian and musl containers. These tags are not pinned by digest. |
-| apt-get or apk, with distribution repositories | Install Git inside the containers. |
+| apt-get or apk, with distribution repositories; sudo on the hosted Linux runner | Install Git inside the containers or the minimum-Git build dependencies on the hosted runner. |
+| Git 2.52.0 source, build-essential, libcurl4-openssl-dev, libexpat1-dev, gettext, zlib1g-dev and xz-utils | Build the pinned minimum Git in the existing Linux Python 3.10 leg. The source SHA-256 is pinned; distribution build packages are not. These are CI build dependencies, not engine requirements. |
 | pip and package-index access | Install development tools and their indirect packages. |
-| curl, uname, sha256sum, tar and mkdir | Download, verify and unpack gitleaks. |
+| curl, uname, sha256sum, tar and mkdir | Download, verify and unpack gitleaks or the minimum Git source. |
 | awk, ls, GitHub CLI and the GitHub release API | Extract release notes, inspect artifacts and publish the release. |
 | GitHub API or a saved CI-run export | Check main CI for the release commit. The release checker uses Python's standard-library HTTP client. |
 | Dependabot | Proposes weekly pip and action updates after a seven-day cooldown. |

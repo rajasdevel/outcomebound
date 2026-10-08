@@ -36,20 +36,38 @@ the same wheel, byte for byte.
 ## Dependencies and their limits
 
 The engine and build backend import only the Python standard library. The package declares
-Python 3.10 or later and no third-party Python runtime or build requirements. Git is required
-for adoption and repository operations. The installed entry point runs Python; the checkout
+Python 3.10 or later and no third-party Python runtime or build requirements. Git 2.52.0 or later
+is required for adoption and repository operations. The installed entry point runs Python; the checkout
 launcher uses POSIX `sh`. The finish check uses a POSIX shell to run Done lines and needs only
 the additional tools that those lines require. Windows uses the shell supplied by Git for
 Windows. These distinctions, the optional browser libraries and the contributor tools are
 listed in [the dependency inventory](../../dependencies.md).
 
-No minimum Git release is qualified by the current CI matrix. The common-directory readers in
-`finish_check.py` and `scripts/canary.py` use `rev-parse --git-common-dir` and resolve a relative
-result against the command's working directory. They do not require `--path-format=absolute`,
-which [Git 2.31.0](https://raw.githubusercontent.com/git/git/v2.31.0/Documentation/RelNotes/2.31.0.txt)
-introduced. This removes that option requirement; it does not establish support for every older
-Git. Qualification must check the returned path in a main checkout, a linked worktree and a
-subdirectory. A test with a relative result checks path handling, not an actual old Git binary.
+Git 2.52.0, [released on 17 November 2025](https://www.kernel.org/pub/software/scm/git/), is the
+compatibility minimum. The Linux Python 3.10 CI leg builds that exact source release with its
+published SHA-256, installs it under the runner's temporary directory, and selects both its
+executable and helper directory before the normal checks. It excludes only the Tcl/Tk GUI;
+network helpers and the commands the engine uses remain in the build. The other CI legs keep
+their platform's Git. Hosted CI qualification for the minimum is `UNVERIFIED` until that leg
+passes. This adds no runtime dependency and no CI job.
+
+The common-directory readers in `finish_check.py` and `scripts/canary.py` use
+`rev-parse --git-common-dir` and resolve a relative result against the command's working
+directory. Qualification with the actual minimum-version binary must check a main checkout,
+a linked worktree and their subdirectories, including paths with spaces. A test that replaces
+a Git result checks path handling but does not qualify a Git release. Older versions can work,
+but are outside the supported range.
+
+A Git 2.52.0 source build on macOS passed those common-directory checks with the actual binary.
+Both readers resolved the same common directory, with the correct subdirectory prefix for
+finish-check records. The focused checks also passed record sharing between worktrees and the
+CI facts and release prerequisites. This establishes those local behaviours; the complete
+minimum-version suite on Linux and a native Git for Windows 2.52.0 check remain `UNVERIFIED`.
+
+Use a current patched Git release; on Windows, use current
+[Git for Windows](https://git-scm.com/install/windows). The compatibility minimum does not mean
+that its feature track still receives security fixes. [Git's security policy](https://github.com/git/git/blob/master/SECURITY.md)
+has no LTS version and guarantees maintenance only for the latest feature track.
 
 Development tools have direct version pins. Indirect packages and CI container tags are not
 locked. Keep those limits separate from the reproducible wheel build. A development lock is

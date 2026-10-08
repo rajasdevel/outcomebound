@@ -1512,6 +1512,34 @@ behavior, general reliability, browser interaction or release acceptance. They a
 from the diagnostic, comparison and retained qualification calls above and do not change those
 results.
 
+### Installed-wheel native follow-up
+
+A further finite check on 2026-10-08 used the wheel built from commit `78eedee` on macOS
+27.0.1. Its SHA-256 was `d36e74b4ddda404fffeabe7c43f096f9448c3a21593c98c7aec656fad8d06313`.
+The launcher resolved to an isolated installed package, with no checkout override. Its engine
+bytes matched the declared source. The later portability changes affect CI and documentation,
+not those engine bytes.
+
+| Native environment | Model and effort evidence | Observed effects | Result |
+| --- | --- | --- | --- |
+| Claude Code 2.1.292, normal print mode | Assistant records name `claude-sonnet-5-5`; `--effort medium` was configured. The stream does not emit the consumed effort value. | No-edit skip, first failure hold, changed-state continuation without another hold, fresh recovery check | PASS |
+| Codex CLI 0.160.1, normal interactive mode | Native turn records name `gpt-6.1-sol` and high effort. | The same finite effects, with existing unchanged hooks trusted through the normal route | PASS |
+
+The counters, saved hook output and final checked-tree records agree on those effects. The
+models made only the permitted state-file edits; they did not run Done themselves. Recovery
+restored the fixture content. The engine and hook definitions stayed unchanged. Neither run
+changed authentication or bypassed hook trust. Both native sessions ended normally. An initial
+Codex launch refused an unsupported terminal before any prompt; the supported terminal launch
+is the observed sequence.
+
+The Claude fixture was a fresh wheel adoption. The Codex fixture retained its earlier installed
+guidance and unchanged trusted hook entries, with the current wheel selected for hook execution.
+Thus the Codex result qualifies the installed hook engine; it does not establish that the latest
+skill text was loaded. Skill registration is not proof of loaded use. Raw retry-input delivery
+and transient mark bytes remain UNVERIFIED. These observations do not qualify desktop,
+Windows/Linux native sessions, every harness version, or general reliability. CI continues to
+run deterministic engine and package checks; it makes no model calls.
+
 ### Current bounded retention support
 
 The current runner supports `--retain-native SESSIONS_DIR` for one explicitly named fixture.
