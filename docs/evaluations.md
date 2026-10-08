@@ -100,11 +100,12 @@ recorded run, because a model call does not repeat exactly.
 | Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
 | Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
 | Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
+| Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts are recorded separately below. The additional sixty used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383. Both are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -1525,7 +1526,34 @@ For an unknown transport, the first call error stops the remaining batch. Unknow
 or tool-event forms cannot prove that no command ran. No extra model preflight or automatic
 retry is added.
 
-This instrument update adds no model result or call count. A fresh `handoff-author-spec`
-delivery follow-up is selected but unrun. The original missing-brief failure, separate
-outcome-tier result and seven retained high-effort calls above stay unchanged; no new
-spec-tier delivery PASS is claimed.
+The instrument update itself adds no model result. The separately selected call below used
+this route. The original missing-brief failure, separate outcome-tier result and seven retained
+high-effort calls above stay unchanged.
+
+### Spec-tier delivery follow-up
+
+On 2026-10-08, one `handoff-author-spec` current-arm attempt used frozen candidate `cf48801`,
+Codex CLI 0.160.1 and gpt-6.1-sol at high effort. No retry is included. The model process exited
+0; source inputs stayed unchanged. The automatic wrapper retains FAIL for the missing model
+field, and `review-inputs-present` retains FAIL because its reader could not establish the
+command record. Authoring scope and the separate authored red/green check PASS.
+
+Independent review of the retained native record verifies the matching session, model, effort,
+working directory, completed calls and final answer. The delivered compiled brief matches the
+supplied brief exactly. The answer names the assigned tier, fixed tests, actual interfaces,
+bounded algorithm, errors, covered and uncovered edges, check instructions and uncommitted
+landing. It retains the accepted bounds and grants no implementation, launch or publication.
+The observed result is PASS for this case's handoff contract.
+
+The author ran the baseline: 18 tests PASS. Each of the eight added tests then failed on the
+intended missing behavior: six parser errors and two CLI assertions. The complete suite ran
+26 tests with those same eight failures. The separate retained grader ran the authored tests
+against the reference implementation: all eight PASS. Review checked the actual assertions,
+including refusal and no-write behavior; the answer correctly leaves assertions after an early
+failure UNVERIFIED until implementation reaches them. Existing files and protected inputs
+remained intact.
+
+This closes the selected full-brief delivery qualification. The automatic failures remain;
+exact-session retention alone supplies no behavioral verdict. The observation establishes no
+causal gain, general reliability, native skill discovery, completed implementation or parity
+with source inspirations.
