@@ -1376,9 +1376,28 @@ The run metadata and agent reviews date 2026-10-08. E21 adds 26 model calls: 18 
 
 The diagnostics retain their separate source revisions: `452096b`, `c4cd0a9`, `34c50f3`, `45e5584`, `0b87a67` and `78d375d`. The four pairs ran at `120cdf2`, before the later review-order repair. The explanation repairs ran at `34c50f3` and `45e5584`; the renderer/handoff delivery changes at `0b87a67`; the review-order follow-ups at `78d375d`. A run named `current` refers to its recorded inputs, not every later source change. Saved E19/E20 results keep their original inputs; E19 has no original whole-engine fingerprint.
 
-Raw results below are the automatic checks. Semantic results are separate agent reviews of meaning, completed acts and bounds, not human observations. A completed read returned the subject guidance in each skill's direct evidence; the typo control correctly skipped the diagnosis skill. These explicit fixture reads do not establish native discovery.
+Raw results below preserve the original automatic checks. Semantic results preserve separate
+agent reviews of meaning, completed acts and bounds; they are not human observations. The
+original reviews recorded subject-guidance reads and a skipped diagnosis read in the typo
+control. These recorded read judgments are subject to the command-evidence limit below and
+do not establish native discovery.
 
-| Skill or lifecycle area | Direct case and raw result | Separate review and actual guidance read | Limit |
+**Command-evidence correction.** A later synthetic control showed that the plain-text reader
+could accept a command-shaped block printed by a tool as a real command and result. The 26
+runs used ephemeral Codex sessions. No structured rollout matched their saved session IDs.
+Twelve automatic command claims across nine runs, covering eight distinct fixtures, therefore
+lack unambiguous execution evidence. These claims concern input reads, deployment and status
+commands, and the absence of unnecessary commands. Their current evidence status is UNVERIFIED;
+their original PASS and FAIL outputs remain unchanged.
+
+The same limit applies to manual read and chronology judgments that rely only on those printed
+records, and to older command claims with the same evidence limit. A printed marker cannot
+establish an actual tool call, completed check, or the order of a check and a closure statement.
+File, state and answer checks remain separate evidence. The table preserves the original
+judgments so that this correction does not erase failures or turn missing evidence into success.
+Replacement qualification must use the repaired event reader; none is claimed by this note.
+
+| Skill or lifecycle area | Original direct case and raw result | Recorded separate review and guidance-read judgment | Limit |
 | --- | --- | --- | --- |
 | `using-outcomebound` | `ladder-2-last-units`, `deploy-none`: PASS. Both deployment cases: serving-read FAIL. | Small scope PASS; completed deployment followed by actual status PASS. Skill read PASS in ladder/lifecycle. | Historical excessive-process FAIL stays. `deploy-wrong-version` rebuilt before deploy, so it did not test a mismatch that remained. Real deployment and health UNVERIFIED. |
 | `gather-requirements` | `requirements-replay`: provenance FAIL. `visual-reference`: PASS. Interview pair: both PASS. | Requirements provenance PASS despite a missing literal label; interview continuation PASS on both sides. Subject reads PASS. | Visual fidelity UNVERIFIED. No demonstrated pair gain or complete live interview. Valid older omissions stay FAIL. |
