@@ -286,7 +286,8 @@ removes, for a person to judge. Without the list, `make canary` reads `UNVERIFIE
 every change of all of them, before the first of them lands; a pull request with no such companion
 gets its own run. Run it also on the committed release commit. Adopters install from tags, so the
 release canary is the one that blocks a release; the earlier run finds a crash on a real project
-before it reaches `main`. Each of those pull requests gives the summary in counts.
+before it reaches `main`. Each of those pull requests gives the canary verdict and the limits of the checks, without
+counts or anecdotes from private runs.
 
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit, and it fails unless `make canary` recorded PASS for the tree of that commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)

@@ -5,11 +5,11 @@ is read, and a spelling that reaches `.git` on any filesystem is refused too.
 """
 
 import json
-import os
 import shlex
 import shutil
 import subprocess
 import sys
+import venv
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -291,8 +291,8 @@ def test_printed_word_round_trips_through_its_supported_shell(tmp_path, word):
     from outcomebound_tools import tickets_brief
 
     space = tmp_path / "executable path"
-    space.mkdir()
-    executable = str(space / ".." / os.path.relpath(sys.executable, tmp_path))
+    venv.EnvBuilder(with_pip=False, symlinks=not WINDOWS).create(space)
+    executable = str(space / ("Scripts/python.exe" if WINDOWS else "bin/python"))
     definition = SimpleNamespace(
         command=[executable, "-c", "import json,sys; print(json.dumps(sys.argv[1:]))", word],
         timeout_seconds=10,
