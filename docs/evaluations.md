@@ -1410,11 +1410,38 @@ Automatic reader failures and historical limits remain unchanged.
 | `slice-tickets` | Four saved slicing regrades: PASS. | Original subject reads PASS; outcome cuts, repair dependencies, shared ownership and registry bounds retained. Saved drafts pass current lint. | No original E19 whole-engine fingerprint. New mapping, export, publication and incidental-edit branches were not exercised. |
 | `hand-off-tickets` | Spec authoring: original red/green FAIL; corrected saved mechanical regrade PASS. Outcome authoring: PASS. | Spec delivery FAIL: the supplied brief was omitted. Outcome delivery PASS with the complete brief and only necessary tier facts. Subject reads PASS. | Outcome-tier success does not repair the original spec response or qualify every tier. Prepared-package implementer comparisons measure package effects, not authoring-skill behavior. |
 | `decision-brief` | `decision`: PASS. Later lifecycle case: PASS. | Recommendation PASS but original display FAIL: selected renderer content was lost. Later complete-renderer delivery PASS. Subject reads PASS. | Original display failure stays. Different-case success is not causal benefit, general rendering reliability or human comprehension. |
-| `explorable` | Decision-page case and learning pair: raw PASS. | Subject reads PASS; inspected learning source supplies prediction feedback and reset. | Required browser interaction UNVERIFIED on both pair sides. Local handler checks and declared expectations do not establish real reveal/retry behavior or understanding. No demonstrated gain. |
+| `explorable` | Decision-page case and learning pair: raw PASS. | Subject reads PASS; inspected learning source supplies prediction feedback and reset. | Browser interaction was UNVERIFIED at the original diagnostic review; the separate browser observations below now cover both saved pair artifacts. No human understanding or demonstrated gain. |
 | `adopt-outcomebound` | `adopt-upgrade`: scope FAIL. `adopt-inspect`: PASS. | Upgrade semantic PASS under the disclosed task; fixed fragment selection was not disclosed. Inspection PASS with no writes. Subject reads PASS. | Future explicit empty-selection behavior has no new result. Seed install currency stays FAIL; preview grants no overwrite. Native loading UNVERIFIED. |
 | Lifecycle operation and retirement | `lifecycle-retirement`: PASS. | Finite inspection, lossless recovery/restore, complete rendered handoff and preservation of consumers/retention PASS. Skill/reference reads PASS. | Telemetry query FAIL; metrics, incident routing and consumer execution UNVERIFIED. Retirement incomplete; no deletion or production operation claimed. |
 
-The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair leaves its required browser observation unavailable. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. These diagnostics do not establish native skill/hook acceptance, manual browser behavior or human understanding. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.
+The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair initially left its required browser observation unavailable; the later artifact observations below supply that missing evidence. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. These diagnostics do not establish native skill/hook acceptance, manual browser behavior or human understanding. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.
+
+
+### Separate browser observations
+
+On 2026-10-08, the original decision-page and learning-pair artifacts were exercised in the
+Codex in-app browser over approved loopback HTTP. Their file digests still matched the saved
+identities. These were agent browser observations; no new model evaluation was run. Earlier
+browser refusals and original automatic results remain unchanged.
+
+PASS — the decision page's declared browser expectations completed with every named output
+covered, no script error and no failed diagram. They cover flat and growing uploads, inadequate
+archive recovery, missing inventory, unknown assumptions and reversed growth bounds. Direct
+input interactions also showed the expected capacity change and restored unknown results when
+forecast and inventory fields were empty. This establishes the named displayed results, not
+real storage forecasts or an authorized storage decision.
+
+PASS — on each saved learning page, retry limit 2 and two transient failures with prediction 2
+revealed three attempts and success. Each page explained the initial attempt plus two retries.
+Try again cleared the prediction and concealed the old feedback; a new prediction of 3 then
+produced matching feedback. Both sides pass this interaction. This supplies no comparative gain
+and does not establish that a person learned the mechanism.
+
+The separate retained plan-card comparison was also rendered. The requested text and elements
+were present without horizontal overflow. Feature text wrapped and made the card taller than
+the block-based source image. This agent reading does not establish an exact visual match;
+visual fidelity, other sizes and interaction states remain UNVERIFIED. Original artifacts were
+not edited to improve their result. All temporary servers were stopped after inspection.
 
 
 ### Retained one-shot qualification
