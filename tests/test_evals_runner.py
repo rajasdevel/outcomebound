@@ -961,14 +961,15 @@ def test_native_retention_requires_one_named_case_before_any_call(tmp_path):
     assert not (tmp_path / "calls.txt").exists()
 
 
-def test_native_receipt_never_becomes_model_writable(tmp_path):
-    from evals.native_receipts import NativeCapture
+def test_native_receipt_never_becomes_model_writable(tmp_path, monkeypatch):
+    from evals import native_receipts
 
+    # Isolate explicit grants; the separate implicit-temp controls cover OS temp roots.
+    monkeypatch.setattr(native_receipts, "temporary_write_roots", lambda: ())
     workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    capture = NativeCapture(tmp_path / "sessions", workspace / "evidence.jsonl")
-    with pytest.raises(ValueError, match="model writable root"):
-        RUN.call_codex("Task", "named", "high", workspace, "", RUN.CallOptions((), capture))
+    capture = native_receipts.NativeCapture(tmp_path / "sessions", workspace / "evidence.jsonl")
+    with pytest.raises(ValueError, match="receipt destination is inside a model writable root"):
+        capture.check_roots((workspace,))
     assert not capture.destination.exists()
 
 
@@ -1012,11 +1013,12 @@ def test_failed_login_output_does_not_authorize_a_model_call(tmp_path):
     )
 
 
-def test_native_receipt_source_cannot_overlap_model_writable_roots(tmp_path):
-    from evals.native_receipts import NativeCapture
+def test_native_receipt_source_cannot_overlap_model_writable_roots(tmp_path, monkeypatch):
+    from evals import native_receipts
 
+    monkeypatch.setattr(native_receipts, "temporary_write_roots", lambda: ())
     workspace = tmp_path / "workspace"
-    capture = NativeCapture(workspace / "sessions", tmp_path / "copy.jsonl")
+    capture = native_receipts.NativeCapture(workspace / "sessions", tmp_path / "copy.jsonl")
     with pytest.raises(ValueError, match="sessions directory overlaps"):
         capture.check_roots((workspace,))
 
@@ -1071,19 +1073,33 @@ def test_unknown_top_level_execution_form_is_not_an_empty_command_record():
     assert RUN.call_error(0, "done", {"model_observed": RUN.observed_model(transcript)}, "named")
 
 
-def test_cli_refuses_implicit_temp_receipts_before_model_spawn(tmp_path):
-    sessions = tmp_path / "sessions"
-    sessions.mkdir()
-    done, out = _invoke(
-        tmp_path,
-        (*SMALL_FIX, "--retain-native", str(sessions)),
-        env={"OB_FAKE_VERSION": "codex-cli 0.160.1"},
-    )
-    assert done.returncode == 1
-    assert "model writable root" in _meta(out)["error"]
-    assert not any(
-        line.startswith("exec ") for line in (tmp_path / "calls.txt").read_text().splitlines()
-    )
+@pytest.mark.parametrize("path_kind", ["source", "destination"])
+def test_cli_refuses_implicit_temp_receipts_before_model_spawn(tmp_path, path_kind):
+    trusted = ROOT / ".agents" / "work" / "eval-native-tests"
+    trusted.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="receipt-", dir=trusted) as folder:
+        saved = Path(folder)
+        model_temp = saved / "model-temp"
+        model_temp.mkdir()
+        sessions = (model_temp if path_kind == "source" else saved) / "sessions"
+        sessions.mkdir()
+        output = (model_temp if path_kind == "destination" else saved) / "out"
+        done, out = _invoke(
+            tmp_path,
+            (*SMALL_FIX, "--retain-native", str(sessions)),
+            env={"OB_FAKE_VERSION": "codex-cli 0.160.1", "TMPDIR": str(model_temp)},
+            output_dir=output,
+        )
+        assert done.returncode == 1
+        boundary = (
+            "sessions directory overlaps"
+            if path_kind == "source"
+            else "receipt destination is inside"
+        )
+        assert boundary in _meta(out)["error"]
+        assert not any(
+            line.startswith("exec ") for line in (tmp_path / "calls.txt").read_text().splitlines()
+        )
 
 
 def test_native_retention_refuses_relative_temporary_root_before_spawn(monkeypatch):
