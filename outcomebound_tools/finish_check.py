@@ -838,8 +838,6 @@ def keep_known(target: Path, record: Known, deadline: float | None = None) -> bo
 
 # Why a command reads UNVERIFIED: it met the time limit, or it could not run where the hook runs.
 TIME, ENVIRONMENT = "time", "environment"
-# The exit codes of a shell that could not run the command: 126 not executable, 127 not found.
-NOT_RUN = (126, 127)
 # A tool the command names that this PATH does not hold, as the last line of output says it when a
 # runner between the hook and the tool turns the shell's 127 into its own exit code: make's
 # `make: pytest: No such file or directory`, a script's `run.sh: line 3: pytest: command not
@@ -851,8 +849,10 @@ NOT_RUN = (126, 127)
 _MISSING = re.compile(
     r"^(?:make(?:\[\d+\])?: (?P<made>[^\s:]+): No such file or directory"
     r"|process_begin: CreateProcess\(NULL, (?P<winmade>[^\s,]+),?(?: .*)?\) failed\."
-    r"|\S+: (?:line )?\d+: (?P<scripted>[^\s:]+): (?:command )?not found"
-    r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>[^\s:]+): (?:command )?not found"
+    r"|\S+: (?:line )?\d+: (?P<scripted>.+?): "
+    r"(?:(?:command )?not found|No such file or directory|Permission denied)"
+    r"|(?:\S*/)?(?:ba|da|z|a)?sh: (?P<shelled>.+?): "
+    r"(?:(?:command )?not found|No such file or directory|Permission denied)"
     r"|(?P<launcher>(?:\S*[/\\])?python[\d.]*(?:\.exe)?): No module named (?P<module>[\w.]+))$"
 )
 # GNU make on Windows says it in two lines: `process_begin: CreateProcess(NULL, <tool> ...)
@@ -972,7 +972,9 @@ def confirmed_absent(
         tool = _tool_named(found)
         if _folder_in(tool):
             # A name with a folder is looked up as it stands, from the target's root.
-            return not (target / tool).is_file()
+            path_tool = target / tool
+            denied = found.group(0).endswith("Permission denied")
+            return not path_tool.is_file() or (denied and not os.access(path_tool, os.X_OK))
         return programs.find(tool, where, extensionless=True) is None
     launcher = found["launcher"]
     program = launcher if _folder_in(launcher) else programs.find(launcher, where)
@@ -1278,13 +1280,11 @@ def run_one(
         if code == 0:
             return Result(line, PASS, elapsed, code=code)
         tail = _tail(sink)
-        if code in NOT_RUN and not other_failure(tail) and not ran_before_missing(tail):
-            why = f"exit {code} after {elapsed:.0f} s: could not run in the hook's environment"
-            return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code)
         missing = missing_tool(tail)
+        owned = missing is not None and project_owned(target, missing)
         if (
             missing is not None
-            and not project_owned(target, missing)
+            and not owned
             and not other_failure(tail)
             and confirmed_absent(
                 target, tail, environment, deadline=None if seconds is None else started + seconds
@@ -1842,9 +1842,9 @@ that measurement did not (kept in the Git common directory), holds nothing and t
 runs; once it passes, it leaves that record. Any other failure while the input's stop_hook_active is
 false holds the finish, its report the reason the agent reads; a pass, a failure after that, a known
 failure alone, a repeated verdict, a digest that no longer matches, a missing manifest, a command
-stopped at the time limit and one the hook's environment could not run (exit 126 or 127) go to the
-person as systemMessage and hold nothing. On claude-code nothing runs while background_tasks or
-session_crons is non-empty.
+stopped at the time limit and one the hook's environment could not run (confirmed from its
+diagnostic) go to the person as systemMessage and hold nothing. On claude-code nothing runs while
+background_tasks or session_crons is non-empty.
 
 With --mark it runs at a turn's first prompt instead: it keeps the target's HEAD and working tree
 in the Git directory, prints nothing, and exits 0 whatever goes wrong. A stop on that same HEAD and

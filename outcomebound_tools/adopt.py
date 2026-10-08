@@ -41,6 +41,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -2071,7 +2072,7 @@ def _proposal(target: Path) -> tuple[list[str], str | None]:
     done = []
     if floor is not None:
         base = default_base(target)
-        done.append(FLOOR_RUNNER + (f" --base {paths.shell_word(base)}" if base else ""))
+        done.append(FLOOR_RUNNER + (f" --base {shlex.quote(base)}" if base else ""))
     ci = [command for item in facts.read_ci(target) for command in item.tests]
     if ci:
         return [*done, ci[0]], None

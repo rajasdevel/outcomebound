@@ -409,19 +409,21 @@ def test_a_command_the_hooks_environment_cannot_run_is_unverified_and_holds_noth
     """Breaks if a tool missing from the hook's PATH, or a file that cannot be executed, holds
     the finish as a failure the agent's change caused."""
 
+    external = tmp_path / "not-executable"
+    if code == 126:
+        line = q(external)
     root, digest = target(tmp_path / "t", [line])
-    write(root / "not-executable", "#!/bin/sh\nexit 0\n")
+    write(external, "#!/bin/sh\nexit 0\n")
 
     _, verdict = hook("codex", digest, root)
 
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
-    assert message.startswith(
-        f"finish-check UNVERIFIED: `{line}` could not run in the hook's environment"
-    )
-    assert f"UNVERIFIED {line}: exit {code} after " in message
+    assert message.startswith("finish-check UNVERIFIED:")
+    assert "could not run in the hook's environment" in message
+    assert f"exit {code} after " in message
     # Not remembered: once the environment is fixed, the same tree runs again.
-    (root / "not-executable").chmod(0o755)
+    external.chmod(0o755)
     if code == 127:
         assert hook("codex", digest, root)[1]["systemMessage"].startswith(
             "finish-check UNVERIFIED: `no-such-tool-here --check` could not run"
@@ -1006,19 +1008,21 @@ def test_a_tree_the_commands_changed_is_not_remembered_as_passed(tmp_path: Path)
 
 
 @posix_only
-def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path) -> None:
+@pytest.mark.parametrize("name", ["check.sh", "denied check.sh"])
+def test_a_script_that_loses_its_execute_bit_is_checked_again(tmp_path: Path, name: str) -> None:
     """Breaks if a pass cached for an untracked script survives the script becoming unrunnable."""
 
-    root, digest = target(tmp_path / "t", ["./check.sh"])
-    script = root / "check.sh"
+    line = "./" + q(name)
+    root, digest = target(tmp_path / "t", [line])
+    script = root / name
     write(script, "#!/bin/sh\nexit 0\n")
     script.chmod(0o755)
 
     assert "PASS" in hook("codex", digest, root)[1]["systemMessage"]
     script.chmod(0o644)
     verdict = hook("codex", digest, root)[1]
-    assert list(verdict) == ["systemMessage"]
-    assert "UNVERIFIED ./check.sh: exit 126" in verdict["systemMessage"]
+    assert verdict["decision"] == "block"
+    assert f"FAIL {line}: exit 126" in verdict["reason"]
 
 
 @pytest.mark.skipif(
@@ -1620,7 +1624,7 @@ def test_a_missing_tool_that_is_the_commands_only_word_is_unverified_at_exit_127
             True,
         ),
         (b"built\nsh: nosuchtool-zz: not found\n", True),
-        (b"built\nsh: 1: ./not-executable: Permission denied\n", False),
+        (b"built\nsh: 1: ./not-executable: Permission denied\n", True),
     ],
 )
 def test_a_not_found_line_is_told_in_each_shells_words_and_what_ran_before_it(
@@ -2258,3 +2262,31 @@ def test_an_unset_path_cannot_disprove_the_shell_default_path(tmp_path: Path) ->
 def test_an_absolute_module_probe_does_not_require_path(tmp_path: Path) -> None:
     result = finish_check.run_one(tmp_path, f"{q(sys.executable)} -m no_such_module_here", 5, {})
     assert result.verdict == finish_check.UNVERIFIED, result
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "./removed-check.sh",
+        "sh scripts/removed-check.sh",
+        "'./removed check.sh'",
+        "sh 'scripts/removed check.sh'",
+        "'./removed:check.sh'",
+        "'./missing\nhelper.sh'",
+    ],
+)
+def test_a_missing_project_helper_fails_and_holds(tmp_path, line):
+    root, digest = target(tmp_path / "t", [line])
+    result = finish_check.run_one(root, line, 60)
+    assert result.verdict == finish_check.FAIL
+    _, verdict = hook("codex", digest, root)
+    assert verdict["decision"] == "block"
+    assert "FAIL" in verdict["reason"]
+
+
+@pytest.mark.parametrize("code", [126, 127])
+def test_exit_code_without_environment_evidence_is_a_failure(tmp_path: Path, code: int) -> None:
+    root, digest = target(tmp_path / "t", [f"exit {code}"])
+    verdict = hook("codex", digest, root)[1]
+    assert verdict["decision"] == "block"
+    assert f"exit {code}" in verdict["reason"]

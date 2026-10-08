@@ -494,7 +494,8 @@ def _check_body(item: DoneWhen, compiled: _Compiled) -> str:
     if not definition.command:
         return _UNRUNNABLE
     return _COMMAND_LINE.format(
-        command=" ".join(map(paths.shell_word, definition.command)),
+        command=("& " if paths.on_windows() else "")
+        + " ".join(map(paths.shell_word, definition.command)),
         cwd=compiled.cwd,
         timeout=_timeout(definition.timeout_seconds),
     )

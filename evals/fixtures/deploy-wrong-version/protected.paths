@@ -9,3 +9,7 @@ checks/allowed_paths.sh
 .agents/skills/using-outcomebound/SKILL.md
 .git/config
 .git/info/exclude
+
+# Fixed serving simulator, outside the granted deployment act.
+ops/deploy.sh
+simulator/production-version

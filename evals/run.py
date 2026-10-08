@@ -474,6 +474,7 @@ def codex_command(
     command = [
         "codex",
         "exec",
+        "--json",
         *CODEX_ISOLATION,
         "-s",
         "workspace-write",
@@ -600,6 +601,92 @@ def partial_output(problem: BaseException) -> str:
     return text(getattr(problem, "output", None)) + text(getattr(problem, "stderr", None))
 
 
+def _completed_command(item: dict, prior: list[str]) -> list[str] | None:
+    command, directory = item.get("command"), item.get("cwd", "")
+    if command != prior[0] or not isinstance(directory, str):
+        return None
+    if directory and not Path(directory).is_absolute():
+        directory = ""
+        prior = [prior[0], prior[1], ""]
+    if directory and prior[2] and directory != prior[2]:
+        return None
+    code, status = item.get("exit_code"), item.get("status")
+    outcome = "unverified"
+    if status == "completed" and type(code) is int:
+        outcome = "succeeded" if code == 0 else f"exited {code}"
+    elif status in ("failed", "declined"):
+        outcome = status
+    return [command, outcome, directory or prior[2]]
+
+
+def _command_records(events: list[dict]) -> list[list[str]] | None:
+    records: list[list[str]] = []
+    pending: dict[str, int] = {}
+    seen: set[str] = set()
+    overlapping: set[str] = set()
+    for event in events:
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") != "command_execution":
+            continue
+        key, command, directory = item.get("id"), item.get("command"), item.get("cwd", "")
+        if (
+            not isinstance(key, str)
+            or not isinstance(command, str)
+            or not isinstance(directory, str)
+        ):
+            return None
+        directory = directory if Path(directory).is_absolute() else ""
+        kind = event.get("type")
+        if kind == "item.started" and key not in seen:
+            if pending:
+                overlapping.update(pending)
+                overlapping.add(key)
+            pending[key] = len(records)
+            seen.add(key)
+            records.append([command, "unverified", directory])
+        elif kind == "item.completed" and key in pending:
+            index = pending.pop(key)
+            completed = _completed_command(item, records[index])
+            if completed is None:
+                return None
+            if key in overlapping and completed[1] == "succeeded":
+                completed[1] = "unverified"
+            records[index] = completed
+        else:
+            return None
+    return records if not pending else None
+
+
+def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
+    """Keep actual CLI events separate from output; incomplete/unknown evidence stays so."""
+
+    if isinstance(stdout, bytes):
+        stdout = stdout.decode("utf-8", "replace")
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    try:
+        events = [json.loads(line) for line in stdout.split("\n") if line.strip()]
+    except ValueError:
+        events = []
+    valid = (
+        bool(events)
+        and all(isinstance(event, dict) for event in events)
+        and events[0].get("type") == "thread.started"
+        and sum(event.get("type") == "thread.started" for event in events) == 1
+        and events[-1].get("type") == "turn.completed"
+        and sum(event.get("type") == "turn.completed" for event in events) == 1
+    )
+    return json.dumps(
+        {
+            "format": "outcomebound-command-events-v1",
+            "commands": _command_records(events) if valid else None,
+            "events": events if valid else [],
+            "stdout": stdout,
+            "stderr": stderr,
+        }
+    )
+
+
 def call_codex(
     prompt: str,
     model: str,
@@ -622,9 +709,9 @@ def call_codex(
                 cwd=str(cwd),
                 timeout=CALL_TIMEOUT,
             )
-            transcript, code = done.stdout + done.stderr, done.returncode
+            transcript, code = command_transcript(done.stdout, done.stderr), done.returncode
         except subprocess.TimeoutExpired as problem:
-            transcript, code = partial_output(problem), None
+            transcript, code = command_transcript(problem.stdout or "", problem.stderr or ""), None
         answer = last_message.read_text(encoding="utf-8") if last_message.is_file() else ""
     finally:
         last_message.unlink(missing_ok=True)
@@ -634,6 +721,17 @@ def call_codex(
 def tokens_used(transcript: str) -> int | None:
     """The token count codex printed last, or None where it printed none."""
 
+    try:
+        document = json.loads(transcript.split("\n--- post-checks ---\n", 1)[0])
+    except ValueError:
+        document = None
+    if isinstance(document, dict):
+        for event in reversed(document.get("events", [])):
+            if event.get("type") == "turn.completed":
+                usage = event.get("usage", {})
+                counts = [usage.get("input_tokens"), usage.get("output_tokens")]
+                return sum(counts) if all(type(n) is int for n in counts) else None
+        return None
     found = TOKENS_LINE.findall(transcript)
     return int(found[-1].replace(",", "")) if found else None
 
@@ -641,6 +739,19 @@ def tokens_used(transcript: str) -> int | None:
 def observed_model(transcript: str) -> str | None:
     """The model codex's own header names, after its `workdir:` line, or None."""
 
+    try:
+        document = json.loads(transcript.split("\n--- post-checks ---\n", 1)[0])
+    except ValueError:
+        document = None
+    if isinstance(document, dict):
+        if document.get("commands") is None:
+            return None
+        for event in document.get("events", []):
+            if event.get("type") in ("thread.started", "turn.started"):
+                model = event.get("model")
+                if isinstance(model, str) and model:
+                    return model
+        return None
     _before, found, after = transcript.partition("\nworkdir: ")
     named = MODEL_LINE.search(after) if found else None
     return named.group(1) if named else None

@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 """The shell command attempts and outcomes in the transcript the runner saved.
 
-`evals/run.py` saves what `codex exec` printed: a header naming the working directory,
-then one block per event; a command block is an `exec` line, the command (one line or
-several), and ` in <directory>` closing it. This
-reads those attempts in order and preserves their reported outcomes. An attempt alone
-is not proof of success or an effect. Authority checks keep denied attempts; checks
-that need success must inspect the outcome.
-
-A transcript of any other form is not guessed at: `commands` returns None, and a
-post-check reading it fails its claim with `UNVERIFIED unknown transcript form` as the
-reason, so an unreadable transcript never reads as a good run.
+`evals/run.py` and `claude_arm.py` save command records derived from structured
+call/result events in a JSON document. Output and answers remain data, never events.
+Plain printed transcripts cannot distinguish these sources and return None. A
+post-check then reports UNVERIFIED rather than crediting or inventing an attempt.
+Missing working directories stay empty; effect checks must not infer one.
 
 As a command line, with no condition it prints the commands one per line (a multi-line
 command joined with ` ; `), exit 0, or exits 2 printing `UNVERIFIED unknown transcript
@@ -29,6 +24,7 @@ Standard library only, like the rest of `evals/`.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shlex
@@ -38,37 +34,10 @@ TRANSCRIPT_ENV = "OUTCOMEBOUND_EVAL_TRANSCRIPT"
 UNKNOWN = "UNVERIFIED unknown transcript form"
 # The runner appends the post-checks' own output after this line; it is not the run's.
 POST_CHECKS = "\n--- post-checks ---\n"
-_HEADER = re.compile(r"^[\w ]*Codex v\d\S*$")
-_RULE = "--------"
-_EXEC = "exec"
-_CLOSING = re.compile(r"^(?P<command>.*) in (?P<cwd>/\S*)$")
-_STATUS = re.compile(
-    r"^ (?P<status>succeeded|exited -?\d+|declined|failed|unverified)\b.* in \d+m?s:?$"
-)
 _SHELLS = {"sh", "bash", "zsh", "dash"}
 _SEPARATORS = {";", "&&", "||", "|", "&", "(", ")", "\n"}
 _WRAPPERS = {"env", "exec", "command", "time", "nohup", "builtin"}
 _GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
-
-
-def _header(lines: list[str]) -> tuple[str, int] | None:
-    """The working directory the header names and the index after the header, or None."""
-
-    for index, line in enumerate(lines):
-        if not _HEADER.match(line):
-            continue
-        end = index + 1
-        if end >= len(lines) or lines[end] != _RULE:
-            return None
-        for offset, field in enumerate(lines[end + 1 : end + 40], start=end + 1):
-            if field == _RULE:
-                break
-            if field.startswith("workdir: "):
-                workdir = field[len("workdir: ") :].strip()
-                close = lines.index(_RULE, offset)
-                return workdir, close + 1
-        return None
-    return None
 
 
 def _unwrapped(command: str) -> str:
@@ -83,58 +52,30 @@ def _unwrapped(command: str) -> str:
     return command
 
 
-def _closes(line: str, following: str, workdir: str) -> str | None:
-    """The command's last line where `line` closes an exec block, or None."""
-
-    found = _CLOSING.match(line)
-    if not found:
-        return None
-    cwd = found.group("cwd")
-    if cwd == workdir or cwd.startswith(workdir.rstrip("/") + "/"):
-        return found.group("command")
-    if _STATUS.match(following) or following == _EXEC:
-        return found.group("command")
-    return None
-
-
 def execution_records(transcript: str) -> tuple[tuple[str, str, str], ...] | None:
-    """Command attempts and their adjacent result status, in call order.
+    """Read only the runner's structured command records, never printed output."""
 
-    An absent or non-adjacent status is unverified; it is not assigned to another
-    command. A denied or failed attempt is retained for authority checks.
-    """
-
-    text = transcript.split(POST_CHECKS, 1)[0]
-    lines = text.split("\n")
-    header = _header(lines)
-    if header is None:
+    try:
+        document = json.loads(transcript.split(POST_CHECKS, 1)[0])
+    except (ValueError, TypeError):
         return None
-    workdir, start = header
-    found: list[tuple[str, str, str]] = []
-    index = start
-    while index < len(lines):
-        if lines[index] != _EXEC:
-            index += 1
-            continue
-        body: list[str] = []
-        cursor = index + 1
-        while cursor < len(lines):
-            following = lines[cursor + 1] if cursor + 1 < len(lines) else ""
-            last = _closes(lines[cursor], following, workdir)
-            if last is not None:
-                body.append(last)
-                break
-            body.append(lines[cursor])
-            cursor += 1
-        else:
+    if not isinstance(document, dict) or document.get("format") != "outcomebound-command-events-v1":
+        return None
+    records = document.get("commands")
+    if not isinstance(records, list):
+        return None
+    found = []
+    for record in records:
+        if (
+            not isinstance(record, list)
+            or len(record) != 3
+            or not all(isinstance(v, str) for v in record)
+        ):
             return None
-        status = _STATUS.match(following)
-        outcome = status.group("status") if status else "unverified"
-        closing = _CLOSING.match(lines[cursor])
-        if closing is None:
+        command, status, directory = record
+        if not re.fullmatch(r"succeeded|exited -?\d+|declined|failed|unverified", status):
             return None
-        found.append((_unwrapped("\n".join(body)), outcome, closing.group("cwd")))
-        index = cursor + 1
+        found.append((_unwrapped(command), status, directory))
     return tuple(found)
 
 

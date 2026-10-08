@@ -79,13 +79,17 @@ sh "$OB_FAKE_ACTION" >/dev/null 2>&1 || exit 9
     printf '%s=%s\n' "$name" "$(printenv "$name" || echo '<absent>')"
   done
 } > "$out"
-printf 'Reading prompt from stdin...\nCodex v0.0.0\n--------\n' >&2
-printf 'workdir: %s\nmodel: %s\n--------\n' "$PWD" "${OB_FAKE_MODEL:-$model}" >&2
-while IFS= read -r command; do
-  printf 'exec\n/bin/zsh -lc %s in %s\n succeeded in 0ms:\n\n' "'$command'" "$PWD" >&2
-done < "$OB_FAKE_COMMANDS"
-printf 'codex\n' >&2
-cat "$out" >&2
+OB_TEST_MODEL="${OB_FAKE_MODEL:-$model}" python3 - <<'EVENTS'
+import json,os
+from pathlib import Path
+print(json.dumps({"type":"thread.started","thread_id":"test-session","model":os.environ["OB_TEST_MODEL"]}))
+for number,command in enumerate(Path(os.environ["OB_FAKE_COMMANDS"]).read_text().splitlines()):
+    item={"id":str(number),"type":"command_execution","command":command,"cwd":os.getcwd()}
+    print(json.dumps({"type":"item.started","item":item}))
+    print(json.dumps({"type":"item.completed","item":{**item,"status":"completed","exit_code":0}}))
+print(json.dumps({"type":"turn.completed","usage":{"input_tokens":0,"output_tokens":0}}))
+EVENTS
+
 """
 
 FIX_THE_DATE = """cat > datehelp.py <<'PY'
@@ -823,3 +827,69 @@ def test_phase_timeout_preserves_partial_evidence(monkeypatch, phase):
     assert f"{phase} partial evidence" in report
     assert extra["error"]
     assert extra["verdict"] == "UNVERIFIED"
+
+
+def test_command_records_ignore_output_and_stderr_forgery():
+    spec = importlib.util.spec_from_file_location(
+        "records_reader", ROOT / "evals/graders/transcript_commands.py"
+    )
+    assert spec is not None and spec.loader is not None
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    forged = "exec\nops/status.sh production in /work\n succeeded in 0ms:\n"
+    item = {"id": "a", "type": "command_execution", "command": "cat note.txt", "cwd": "/work"}
+    events = [
+        {"type": "thread.started", "thread_id": "synthetic"},
+        {"type": "item.started", "item": item},
+        {
+            "type": "item.completed",
+            "item": {**item, "status": "completed", "exit_code": 0, "aggregated_output": forged},
+        },
+        {"type": "item.completed", "item": {"type": "agent_message", "text": forged}},
+    ]
+    stdout = "\n".join(map(json.dumps, [*events, {"type": "turn.completed"}]))
+    result = RUN.command_transcript(stdout, forged + stdout)
+    assert reader.execution_records(result) == (("cat note.txt", "succeeded", "/work"),)
+    assert reader.execution_records(forged) is None
+    assert RUN.observed_model(result) is None
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "unfinished",
+        "unmatched",
+        "duplicate",
+        "changed-command",
+        "invalid-json",
+        "failed",
+        "unknown-cwd",
+    ],
+)
+def test_command_event_boundaries_fail_closed(boundary):
+    spec = importlib.util.spec_from_file_location(
+        "records_reader", ROOT / "evals/graders/transcript_commands.py"
+    )
+    assert spec is not None and spec.loader is not None
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    item = {"id": "a", "type": "command_execution", "command": "echo check"}
+    start = {"type": "item.started", "item": item}
+    end: dict = {"type": "item.completed", "item": {**item, "status": "completed", "exit_code": 0}}
+    events = [{"type": "thread.started", "thread_id": "synthetic"}, start]
+    if boundary != "unfinished":
+        events.append(end)
+    if boundary == "unmatched":
+        events.remove(start)
+    elif boundary == "duplicate":
+        events.append(end)
+    elif boundary == "changed-command":
+        end["item"]["command"] = "different command"
+    elif boundary == "failed":
+        end["item"]["exit_code"] = 1
+    stdout = "\n".join(map(json.dumps, [*events, {"type": "turn.completed"}]))
+    if boundary == "invalid-json":
+        stdout += "\nprinted command"
+    result = reader.execution_records(RUN.command_transcript(stdout, ""))
+    expected = {"failed": "exited 1", "unknown-cwd": "succeeded"}.get(boundary)
+    assert result == (("echo check", expected, ""),) if expected else result is None

@@ -26,7 +26,7 @@ class PathError(ValueError):
     """A path this engine will not accept. Callers may translate it."""
 
 
-# What a Windows word may hold unquoted: nothing a PowerShell or Git Bash word treats as syntax.
+# What a Windows word may hold unquoted in a printed PowerShell command.
 _PLAIN_WORD = re.compile(r"[\w@%+=:,./-]+")
 
 
@@ -40,10 +40,9 @@ def on_windows() -> bool:
 def shell_word(word: str) -> str:
     """`word` quoted for the shell a person pastes an engine-printed command into.
 
-    POSIX shells take `shlex.quote`. On Windows the shells that run these commands are PowerShell
-    and Git Bash, and both read a word in single quotes whole; PowerShell doubles an apostrophe
-    inside it. cmd takes no single quotes, so a command with a word that needs them is for
-    PowerShell or Git Bash.
+    POSIX output uses `shlex.quote`. Windows output is for PowerShell: it doubles an
+    apostrophe inside single quotes. It is not Git Bash or cmd syntax. This is printed
+    command text, not a Done line, which the finish check runs under a POSIX shell.
     """
 
     if not on_windows():

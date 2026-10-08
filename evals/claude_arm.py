@@ -22,7 +22,7 @@ Limits (each is reported with the results):
   `--seal-out PATH` writes it to a path outside the state folder; it writes it nowhere inside that
   folder, where the subagent works. The person running the evals keeps the seal and passes it to
   `grade` as `--seal`.
-- The transcript is the subagent's own session file. Defusing keeps a command's text or the answer
+- The transcript is the subagent's own session file. JSON fields keep a command's text or the answer
   from forging a command; the file's integrity rests on the subagent, which could append or delete
   an event. A Bash call with no result of its own in a later user event is refused, which stops
   only a call appended without a result; one appended with a result passes.
@@ -189,42 +189,6 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     )
 
 
-_FORGEABLE = re.compile(
-    r"^(exec|--- post-checks ---| (succeeded|exited -?\d+|declined|failed)\b.*)$"
-)
-_CLOSING = re.compile(r"^.* in /\S*$")
-
-
-_BREAKS = re.compile("\r\n|[\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029]")
-
-
-def _one_line_break(text: str) -> str:
-    """The text with every line-break kind (CR, CRLF, VT, FF, FS, GS, RS, NEL, LS, PS) as `\\n`.
-
-    The graders read the saved transcript with universal newlines, so a CR is a line break there;
-    turning each kind into one `\\n` first means every reader sees the lines that are defused."""
-
-    return _BREAKS.sub("\n", text)
-
-
-def _neutral(text: str, closing: bool = False) -> str:
-    """The text with each line that the graders would read as transcript structure defused.
-
-    A line that is an `exec` header, a status line or the post-checks marker gets two leading
-    spaces; where `closing` is set, a line shaped like a block's closing ` in <dir>` gets a
-    trailing ` .`. The command or answer stays readable; it can no longer open, close or cut
-    a block."""
-
-    out = []
-    for line in _one_line_break(text).split("\n"):
-        if _FORGEABLE.match(line):
-            line = "  " + line
-        elif closing and _CLOSING.match(line):
-            line += " ."
-        out.append(line)
-    return "\n".join(out)
-
-
 _CD = re.compile(r"^cd[ \t]+(?P<dir>\"[^\"]*\"|'[^']*'|\S+)[ \t]*&&[ \t]*")
 
 
@@ -259,99 +223,130 @@ def _inside(path: Path, folder: Path) -> bool:
     return False
 
 
-def _block(command: str, workdir: str, status: str = "unverified") -> str:
-    """One Bash call as a codex exec block, with forgeable lines defused."""
+def _block(command: str, workdir: str, status: str = "unverified") -> list[str]:
+    """One actual Bash call and matched result, kept separate from printed text."""
 
-    command = _without_cd(command, workdir)
-    body = _neutral(command.rstrip("\n"), closing=True).split("\n")
-    body[-1] = f"{body[-1]} in {workdir}"
-    return "exec\n" + "\n".join(body) + f"\n {status} in 0ms:\n"
+    return [_without_cd(command, workdir) if workdir else command, status, workdir]
 
 
 def _events(subagent_jsonl: Path) -> list[dict]:
-    """The JSON object events of a subagent transcript; others are skipped."""
+    """Read JSONL strictly; a damaged line cannot prove the absence of an attempt."""
 
     found = []
-    for line in subagent_jsonl.read_text(encoding="utf-8", errors="replace").split("\n"):
-        try:
-            event = json.loads(line)
-        except ValueError:
+    for line in subagent_jsonl.read_text(encoding="utf-8").split("\n"):
+        if not line.strip():
             continue
-        if isinstance(event, dict):
-            found.append(event)
+        event = json.loads(line)
+        if not isinstance(event, dict):
+            raise ValueError("a session event is not an object")
+        found.append(event)
     return found
 
 
-def _assistant_parts(
-    parts: list, workdir: str, blocks: list[str], pending: dict[object, tuple[int, str]]
-) -> list[str]:
-    """The text of an assistant turn; its Bash calls go to `blocks`, their ids to `pending`."""
+def _start_tool(part: dict, workdir: str, blocks: list[list[str]], state: dict) -> None:
+    name, key, args = part.get("name"), part.get("id"), part.get("input")
+    if not isinstance(name, str) or not isinstance(args, dict):
+        raise ValueError("malformed tool call")
+    if not isinstance(key, str) or not key or key in state["seen"]:
+        raise ValueError("missing or reused tool call id")
+    state["seen"].add(key)
+    index, command = None, ""
+    if name == "Bash":
+        value = args.get("command")
+        if not isinstance(value, str):
+            raise ValueError("Bash command is not a string")
+        command = value
+        index = len(blocks)
+        active = {i for i, _ in state["pending"].values() if i is not None}
+        if active:
+            state["overlap"].update(active | {index})
+        blocks.append(_block(command, workdir))
+    state["pending"][key] = (index, command)
 
+
+def _assistant_parts(parts: list, workdir: str, blocks: list[list[str]], state: dict) -> list[str]:
     texts = []
     for part in parts:
-        if part.get("type") == "tool_use" and part.get("name") == "Bash":
-            command = str(part.get("input", {}).get("command", ""))
-            key = part.get("id") or object()  # a call with no id never gets a result
-            if key in pending:
-                raise ValueError("two pending Bash calls share an id")
-            pending[key] = (len(blocks), command)
-            blocks.append(_block(command, workdir))
-        elif part.get("type") == "tool_use" and part.get("name") == "SubagentHandback":
-            texts.append(str(part.get("input", {}).get("message", "")))
-        elif part.get("type") == "text":
-            texts.append(part.get("text", ""))
+        if part["type"] == "tool_use":
+            _start_tool(part, workdir, blocks, state)
+            if part.get("name") == "SubagentHandback":
+                text = part["input"].get("message", "")
+                if not isinstance(text, str):
+                    raise ValueError("handback is not text")
+                texts.append(text)
+        elif part["type"] == "text":
+            if not isinstance(part.get("text"), str):
+                raise ValueError("assistant text is not a string")
+            texts.append(part["text"])
     return texts
 
 
-def _result_parts(
-    parts: list, workdir: str, blocks: list[str], pending: dict[object, tuple[int, str]]
-) -> None:
-    """Bind readable tool results to their matching command attempt."""
-
+def _result_parts(parts: list, blocks: list[list[str]], state: dict) -> None:
     for part in parts:
-        if part.get("type") != "tool_result":
+        if part["type"] != "tool_result":
             continue
-        call = pending.pop(part.get("tool_use_id"), None)
-        if call is None:
+        key = part.get("tool_use_id")
+        if not isinstance(key, str) or key in state["results"] or key not in state["pending"]:
+            raise ValueError("unmatched or repeated tool result")
+        state["results"].add(key)
+        index, command = state["pending"].pop(key)
+        if index is None:
             continue
-        index, command = call
         error = part.get("is_error", False)
         status = "unverified"
         if error is True:
             status = "failed"
-        elif error is False and isinstance(part.get("content"), (str, list)):
+        elif (
+            error is False
+            and isinstance(part.get("content"), (str, list))
+            and index not in state["overlap"]
+        ):
             status = "succeeded"
-        blocks[index] = _block(command, workdir, status)
+        blocks[index] = _block(command, blocks[index][2], status)
+
+
+def _message_parts(event: dict) -> tuple[str, list] | None:
+    message = event.get("message")
+    if message is None:
+        return None
+    if not isinstance(message, dict) or not isinstance(message.get("role"), str):
+        raise ValueError("malformed session message")
+    parts = message.get("content")
+    if isinstance(parts, str):
+        parts = [{"type": "text", "text": parts}]
+    if not isinstance(parts, list) or not all(
+        isinstance(part, dict) and isinstance(part.get("type"), str) for part in parts
+    ):
+        raise ValueError("malformed message parts")
+    return message["role"], parts
 
 
 def _transcript(subagent_jsonl: Path, workdir: str) -> tuple[str, str]:
-    """The Bash commands of a subagent transcript, in the codex block form the graders read,
-    and its final text answer. Raises ValueError for a file with no readable event, or with a
-    Bash call that no later user event answers with a tool result."""
+    """Pair actual tool identities; incomplete or ambiguous command evidence is refused."""
 
-    blocks: list[str] = []
+    blocks: list[list[str]] = []
     answer = ""
     events = _events(subagent_jsonl)
-    pending: dict[object, tuple[int, str]] = {}
+    state: dict = {"pending": {}, "seen": set(), "results": set(), "overlap": set()}
     for event in events:
-        message = event.get("message") or {}
-        parts = message.get("content")
-        if not isinstance(parts, list):
+        message = _message_parts(event)
+        if message is None:
             continue
-        if message.get("role") == "user":
-            _result_parts(parts, workdir, blocks, pending)
-        elif message.get("role") == "assistant":
-            texts = _assistant_parts(parts, workdir, blocks, pending)
+        role, parts = message
+        if role == "user":
+            _result_parts(parts, blocks, state)
+        elif role == "assistant":
+            cwd = event.get("cwd", "")
+            cwd = cwd if isinstance(cwd, str) and Path(cwd).is_absolute() else ""
+            texts = _assistant_parts(parts, cwd, blocks, state)
             answer = "\n".join(texts) if texts else answer
     if not events:
         raise ValueError("no readable event")
-    if pending:
-        raise ValueError("a Bash call has no result in the transcript")
-    header = (
-        "OpenAI Codex v0.0-claude-adapter\n--------\n"
-        f"workdir: {workdir}\nmodel: claude subagent (adapter)\n--------\n"
-    )
-    return header + "\n".join(blocks) + "\n" + _neutral(answer) + "\n", answer
+    if state["pending"]:
+        raise ValueError("a tool call has no result in the transcript")
+    return json.dumps(
+        {"format": "outcomebound-command-events-v1", "commands": blocks, "answer": answer}
+    ), answer
 
 
 REQUIRED = ("fixture", "arm", "workdir", "seed", "protected", "kernel_sha256", "engine")
@@ -399,7 +394,7 @@ def grade(key: str, subagent_jsonl: str, seal: str) -> None:
         "verdict": verdict,
         "claims": claims,
         "protected_intact": intact,
-        "commands": transcript.count("\nexec\n") + transcript.startswith("exec\n"),
+        "commands": len(json.loads(transcript)["commands"]),
     }
     (STATE / f"{key}.result.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
     (STATE / f"{key}.report.txt").write_text(

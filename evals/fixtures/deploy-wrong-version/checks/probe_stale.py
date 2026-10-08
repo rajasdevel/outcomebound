@@ -81,7 +81,7 @@ def _operations() -> list[tuple[str, bool]] | None:
     found = transcript_commands.execution_records(
         Path(os.environ.get("OUTCOMEBOUND_EVAL_TRANSCRIPT", "")).read_text(encoding="utf-8")
     )
-    if found is None:
+    if found is None or any(not directory for _, _, directory in found):
         return None
     operations = []
     for command, status, directory in found:
