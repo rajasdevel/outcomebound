@@ -1,12 +1,12 @@
 {
   "format_version": 2,
-  "engine_version": "1.4.0",
+  "engine_version": "1.5.0",
   "artifacts": [
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "acea5efc269548302dd6e90678448cb737f11bf4cd5aac533cdd5935eebd47ff"
+      "sha256": "520ed34dbe9d3ec56a48486da70c8b95ea14a89e368b1fb2df30205d9f9be1b4"
     },
     {
       "kind": "block",
@@ -24,10 +24,10 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "e8bbd13aecb2bdfcf6402daa8a4c74ad3a1e06902b593bbd761cfa241f2138d0",
+        ".github/workflows/ci.yml": "b9209bad2d8f48c5b7d24d496ed783e7849331a4b790a092ea5df651d18bf1a8",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
-        ".outcomebound/floor.json": "eb5b12b5025484ca9f6806242e17803477edac3baf5e043d934581dd79f15db7",
+        ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
         ".outcomebound/fragments/commands.md": "7b6079fcd7cb806b2a98ce356829bbb20841913c55bdc00dd991a48ca9a9dda2",
         ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",
         ".outcomebound/fragments/multi-agent.md": "40de11c6663881454e9d3aed269f16a0d44fce1bb745da638559e261f0b174fb",
