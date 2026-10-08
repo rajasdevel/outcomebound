@@ -557,8 +557,9 @@ compares harnesses as well as text. So each comparison stays within one model.
   gpt-6-astra at high, gpt-6-sol at medium, and gpt-6-luna at xhigh. A package is compared only
   within one implementer.
 
-No candidate model in these results is from a Claude family or another maker. Behavior there is
-not measured. Effort levels are also not comparable across vendors. Record the effort of each arm
+No candidate model in these comparisons is from a Claude family or another maker. Comparative
+skill behavior there is not measured. The separate native hook observations below do not change
+that limit. Effort levels are also not comparable across vendors. Record the effort of each arm
 as sent. Claim no equivalence between the level of one vendor and the level of another.
 
 Each comparison also ran on one codex version. codex-cli 0.156.1 ran every judge-scored probe.
@@ -1392,4 +1393,33 @@ Raw results below are the automatic checks. Semantic results are separate agent 
 | `adopt-outcomebound` | `adopt-upgrade`: scope FAIL. `adopt-inspect`: PASS. | Upgrade semantic PASS under the disclosed task; fixed fragment selection was not disclosed. Inspection PASS with no writes. Subject reads PASS. | Future explicit empty-selection behavior has no new result. Seed install currency stays FAIL; preview grants no overwrite. Native loading UNVERIFIED. |
 | Lifecycle operation and retirement | `lifecycle-retirement`: PASS. | Finite inspection, lossless recovery/restore, complete rendered handoff and preservation of consumers/retention PASS. Skill/reference reads PASS. | Telemetry query FAIL; metrics, incident routing and consumer execution UNVERIFIED. Retirement incomplete; no deletion or production operation claimed. |
 
-The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair leaves its required browser observation unavailable. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. Native skill/hook acceptance, manual browser behavior and human understanding remain UNVERIFIED. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.
+The guard and interview pairs show retained task success, not an observed gain. The review pair exposes a real ordering failure despite passing final-state checks. The learning pair leaves its required browser observation unavailable. Known failures and old raw results remain intact; separate corrected measurements do not turn them into new outcomes. Repairs are qualified only on their named cases. These diagnostics do not establish native skill/hook acceptance, manual browser behavior or human understanding. These disclosed, single-case observations establish neither general reliability, parity with inspirations nor superiority. E17/E18 prepared handoff packages remain separate from direct skill authoring.
+
+
+### Separate native hook observations
+
+On 2026-10-08, two finite native CLI sequences used synthetic repositories on macOS 27.0.1.
+The source was `452096b5`; the hook engine, launcher and adapter bytes also match `fab8079`.
+The later canary script and skill changes are outside this source-equivalence claim.
+
+| Native environment | Model and effort | Observed effects | Result |
+| --- | --- | --- | --- |
+| Codex CLI 0.160.1 | gpt-6.1-sol, high | Prompt mark, unchanged-tree skip, first failure hold, changed-state continuation, visible second failure without another hold, fresh recovery check | PASS |
+| Claude Code 2.1.292 | claude-sonnet-5-5, medium | The same finite sequence under normal workspace trust and one-time file-edit approvals | PASS |
+
+Each sequence used three user prompts and one native Stop continuation. The synthetic Done
+counter stayed at its baseline for the no-edit prompt, increased twice for the two distinct
+failed states, and increased once more for recovery. The last checked-tree record was PASS
+and each repository was clean. Saved native transcripts, hook output, state snapshots and
+independent review agree on these effects. Executable hashes, saved hook commands, installed
+files and baseline commits remained unchanged. Both native sessions exited normally.
+
+Neither harness retained the raw `stop_hook_active` input in the inspected records. Delivery of the raw retry field and transient mark capture/removal remain UNVERIFIED. Claude's existing plugins
+remained enabled; an unrelated startup hook returned invalid JSON. The observed OutcomeBound
+sequence completed without another model continuation. This does not qualify other plugins
+or all host effects.
+
+These observations qualify the named checkout-native hook paths and environments. They do not
+establish native skill discovery, an installed-wheel native session, desktop behavior, Windows
+behavior, general reliability, browser interaction or release acceptance. They are separate
+from the 26 diagnostic and comparison calls above and do not change those historical results.

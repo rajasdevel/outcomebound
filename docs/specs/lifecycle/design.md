@@ -119,8 +119,9 @@ and every platform are not claims this bounded qualification establishes. Post-r
 adds stable confirmed failures to the same regression suite.
 
 [E21](../../evaluations.md#e21-direct-skill-and-lifecycle-qualification) records the scoped
-diagnostics and matched clause comparisons, with raw and semantic verdicts separate. Required
-native observations and browser interactions remain `UNVERIFIED`. These results do not establish
+diagnostics and matched clause comparisons, with raw and semantic verdicts separate.
+The separate native CLI hook observations are recorded there with their source and limits.
+Native skill discovery and browser interactions remain `UNVERIFIED`. These results do not establish
 parity with inspirations or general reliability.
 
 ## Research basis
