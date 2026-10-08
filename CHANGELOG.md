@@ -12,6 +12,63 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-08
+
+A minor release. OutcomeBound connects its existing skills and project gates across the
+applicable lifecycle, from requirements through delivery, operation and retirement (#96).
+Adoption and hooks have fewer external dependencies. The engine remains Python standard
+library only. Small tasks can skip stages they do not need.
+
+Do these steps first:
+
+1. If you upgrade from 1.3.0 or earlier, do the steps of the 1.4.0 section first.
+2. Use Python 3.10 or later and Git 2.52.0 or later. Use current patched Git for normal work.
+3. Install the release:
+   `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.5.0`.
+   Run `outcomebound adopt .` in each project again. Review the managed changes and native
+   hook trust prompts. Retain the intended managed files, including
+   `.outcomebound/manifest.json`, in the project commit and run its own checks (#96).
+4. If your CI installs a pinned release, change the pin to `v1.5.0` in the same change as the
+   managed install. Installed files, native loading and successful hook events are separate
+   checks.
+
+### Added
+
+- Lifecycle guidance connects requirements, design, accepted work, implementation, validation,
+  delivery, operation and retirement through the existing skills and project gates (#96).
+- A dependency guide distinguishes engine requirements, optional features, project checks,
+  development tools and evaluation tools. The README explains the adopter workflow with a
+  lifecycle diagram (#96).
+
+### Changed
+
+- Skill guidance preserves accepted decisions, complete handoffs and rendered briefs. Closing a
+  review finding requires a completed counterexample (#96).
+- Release publication waits for all Linux, Windows and container checks. The existing Linux
+  Python 3.10 CI job checks the Git 2.52.0 compatibility minimum (#96).
+- Internal modules separate scanning, schema decisions, native event readers, process control
+  and retained evidence. Shared graders and test helpers remove duplicated mechanics. Lint and
+  type checks fail on every finding, with no new suppression or exemption (#96).
+
+### Fixed
+
+- Adoption and hooks use the supported Python runtime without unnecessary launcher helpers.
+  Missing setup is checked in the actual child environment. Windows commands preserve executable
+  and argument boundaries (#96).
+- Discovery respects excluded files and directories. Automatic Done suggestions retain CI shell
+  context and omit incompatible or unresolved shells (#96).
+- Evaluation evidence comes from native call and result events. Source-only grader loading and
+  isolated execution reject the tested bytecode-cache and import-shadow bypasses (#96).
+
+### Verification limits
+
+- Platform CI covers Linux, Windows, Debian slim and Alpine. Finite native CLI hook sequences
+  pass on macOS. Native Windows/Linux sessions, Codex desktop and Git for Windows at the exact
+  minimum remain UNVERIFIED. CI runs no models (#96).
+- The evaluation record reports bounded observations and historical failures. It does not claim
+  general skill reliability, causal benefit or parity with the skills that inspired this work.
+  See `docs/evaluations.md` (#96).
+
 ## [1.4.0] - 2026-10-07
 
 A minor release. OutcomeBound now carries requirements from a source into a spec and accounts for each item (#83), explains a spec to the person who must act on it (#83), and builds a checked interactive page beside a decision brief (#92). Two new skills diagnose a failure and act on review findings (#93). A validation claim can require that its command ran a test or wrote its output (#81, #93). Fragments cover running the service and deploying it (#82). The finish check no longer holds a turn that changed nothing (#91, issue #90). Every install now carries ten working skills.
@@ -876,7 +933,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.5.0
 [1.4.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.4.0
 [1.3.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.3.0
 [1.2.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.2.0

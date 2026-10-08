@@ -25,9 +25,8 @@ delivery. If operation or retirement is in scope, the handoff keeps the owner, o
 remaining consumers and authority limits visible. A local bug fix can go straight to its
 regression check.
 
-The [lifecycle reference](skills/using-outcomebound/references/lifecycle.md) is part of the
-v1.5.0 candidate on this branch. The quick start stays pinned to the released v1.4.0 until
-v1.5.0 ships.
+The [lifecycle reference](skills/using-outcomebound/references/lifecycle.md) describes the
+required evidence and handoffs at each applicable stage.
 
 ## Try it
 
@@ -35,7 +34,7 @@ You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree. Install
 release, then inspect what your repository needs:
 
 ```sh
-uv tool install git+https://github.com/rajasdevel/outcomebound@v1.4.0
+uv tool install git+https://github.com/rajasdevel/outcomebound@v1.5.0
 cd your-repo
 outcomebound adopt . --detect
 ```
@@ -73,13 +72,13 @@ removes what the install owns.
 `pipx` is also supported:
 
 ```sh
-pipx install git+https://github.com/rajasdevel/outcomebound@v1.4.0
+pipx install git+https://github.com/rajasdevel/outcomebound@v1.5.0
 ```
 
 Or, inside an activated virtual environment:
 
 ```sh
-python -m pip install git+https://github.com/rajasdevel/outcomebound@v1.4.0
+python -m pip install git+https://github.com/rajasdevel/outcomebound@v1.5.0
 ```
 
 These install commands work in PowerShell, cmd and POSIX shells. Detection prints commands

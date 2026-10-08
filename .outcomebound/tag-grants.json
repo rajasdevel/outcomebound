@@ -12,6 +12,12 @@
             "granted_by": "rajasdevel",
             "on": "2026-10-07",
             "until": "2026-10-08"
+        },
+        {
+            "scope": "1.5.0",
+            "granted_by": "rajasdevel",
+            "on": "2026-10-08",
+            "until": "2026-10-09"
         }
     ]
 }
