@@ -217,19 +217,19 @@ def test_the_installed_hooks_run_done_without_development_tools(
         "with Path(sys.argv[1]).open('a', encoding='utf-8') as count:\n"
         "    count.write('run\\n')\n"
         "state = Path('check state.txt').read_text(encoding='utf-8').strip()\n"
+        "if state == 'unsupported':\n"
+        "    print('synthetic-project-check-tool is unavailable')\n"
+        "    raise SystemExit(127)\n"
         "if state == 'missing':\n"
-        "    try:\n"
-        "        subprocess.run(['synthetic-project-check-tool'], check=True)\n"
-        "    except FileNotFoundError:\n"
-        "        print('synthetic-project-check-tool is unavailable')\n"
-        "        raise SystemExit(127)\n"
+        "    result = subprocess.run([sys.argv[2], '-c', 'synthetic-project-check-tool'])\n"
+        "    raise SystemExit(result.returncode)\n"
         "if state != 'accepted':\n"
         "    print('project check failed: expected accepted, got ' + state)\n"
         "    raise SystemExit(3)\n",
         encoding="utf-8",
     )
     python = installed.parent / ("python.exe" if os.name == "nt" else "python")
-    done = " ".join(shlex.quote(path.as_posix()) for path in (python, checker, counter))
+    done = " ".join(shlex.quote(path.as_posix()) for path in (python, checker, counter, shell))
     adopted = run(
         installed,
         "adopt",
@@ -315,13 +315,20 @@ def test_the_installed_hooks_run_done_without_development_tools(
     assert "project check failed: expected accepted, got rejected" in failed["reason"]
     assert runs() == measured + 2
 
+    state.write_text("unsupported\n", encoding="utf-8")
+    unsupported = fire("Stop")
+    assert unsupported["decision"] == "block"
+    assert "exit 127" in unsupported["reason"]
+    assert "synthetic-project-check-tool is unavailable" in unsupported["reason"]
+    assert runs() == measured + 3
+
     state.write_text("missing\n", encoding="utf-8")
-    for expected in (measured + 3, measured + 4):
+    for expected in (measured + 4, measured + 5):
         unavailable = fire("Stop")
         assert list(unavailable) == ["systemMessage"]
         assert unavailable["systemMessage"].startswith("finish-check UNVERIFIED: ")
         assert "could not run in the hook's environment" in unavailable["systemMessage"]
-        assert "synthetic-project-check-tool is unavailable" in unavailable["systemMessage"]
+        assert "synthetic-project-check-tool" in unavailable["systemMessage"]
         assert runs() == expected  # same tree, no cached success or environmental refusal
 
 
