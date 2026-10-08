@@ -1542,7 +1542,8 @@ Independent review of the retained native record verifies the matching session, 
 working directory, completed calls and final answer. The delivered compiled brief matches the
 supplied brief exactly. The answer names the assigned tier, fixed tests, actual interfaces,
 bounded algorithm, errors, covered and uncovered edges, check instructions and uncommitted
-landing. It retains the accepted bounds and grants no implementation, launch or publication.
+landing. It retains the accepted bounds. The author performed no implementation, launch or
+publication.
 The observed result is PASS for this case's handoff contract.
 
 The author ran the baseline: 18 tests PASS. Each of the eight added tests then failed on the
