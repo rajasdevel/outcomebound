@@ -11,8 +11,9 @@ There are two families of fixtures:
 
 - **thirty-one kernel and skill fixtures.** They measure the kernel and the skills against the
   task alone. Each arm runs all thirty-one by default.
-- **Twelve hand-off fixtures.** They measure the hand-off package for one implementer. They run
-  only when `--fixtures` names them.
+- **Fixtures that run only when named.** The hand-off fixtures measure the hand-off package for
+  one implementer. Later sections describe the others. All of them run only when `--fixtures`
+  names them.
 
 For the results of both families, with the scope of each, read
 [`docs/evaluations.md`](../docs/evaluations.md). This file is the reference for running the evals
