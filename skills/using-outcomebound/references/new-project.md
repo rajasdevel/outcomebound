@@ -50,7 +50,8 @@ bounds; for a personal tool, the outcome, the appetite and the no-gos are the wh
 ## Probe what could end it
 
 For each assumption that would end the idea and that nothing shows, write the question and the
-result that passes before you build anything. Then build the smallest probe that answers it: a
+result that passes in the working note before the first line of probe code, so the bar cannot bend
+to the result. Then build the smallest probe that answers it: a
 spike, a throwaway prototype the person shows to users, a measurement, or an explorable where the
 answer turns on prices or values (`explorable`). Record each as question, probe, result (`PASS`,
 `FAIL` or `UNVERIFIED`) and the decision it led to. Probe code stays in the working area, marked
