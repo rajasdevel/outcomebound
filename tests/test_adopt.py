@@ -1620,6 +1620,7 @@ def test_detect_on_a_folder_with_only_git_names_the_new_project_route(
     empty = repo(tmp_path / "empty")
     code_only = repo(tmp_path / "code", {"app.py": "x = 1\n"})
     reference = source / "skills/using-outcomebound/references/new-project.md"
+    reference.unlink(missing_ok=True)
 
     _, out, _ = run(capsys, str(empty), "--detect", source=source)
     assert "# nothing here but .git: a new project starts from this command\n" in out
