@@ -61,6 +61,26 @@ Claude Code, Codex, Cursor, Gemini CLI and Amp have install adapters. The
 harness can use `--harness generic`; check its loading yourself. The unverified pi adapter is
 refused.
 
+### Start a new project
+
+You can start from an idea, before any code exists:
+
+```sh
+mkdir my-idea
+cd my-idea
+git init
+outcomebound adopt . --harness claude-code
+```
+
+Then ask your agent to start the project. The installed `using-outcomebound` skill sends it to the
+[new-project reference](skills/using-outcomebound/references/new-project.md). The agent sizes the
+idea by who depends on it. It frames the outcome, the appetite, what is out of scope, the strongest
+case against the idea and a stop rule. It probes what could end the idea with throwaway code. It
+records the choices that are costly to reverse. Then it builds a walking skeleton: the thinnest real
+path through the product, with a Done command that can fail. A small idea skips most of these
+stages. When the skeleton has a Done command, record it with
+`outcomebound adopt . --done '<command>'`.
+
 Add `outcomebound adopt . --check` to CI to detect stale, edited or missing managed files.
 To upgrade, install a newer tag with `uv tool install --force`, then run `outcomebound adopt .`.
 An edited managed block is overwritten only with `--force`. `outcomebound adopt . --remove`
