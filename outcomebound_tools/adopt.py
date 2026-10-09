@@ -1721,6 +1721,23 @@ def ancestor_notes(target: Path, found: Sequence[Route]) -> Notes:
     return notes
 
 
+def reference_notes(target: Path, found: Sequence[Route]) -> Notes:
+    """A warning for each path, Make target or package script that the project's own
+    instruction text names and the target no longer holds, as `outcomebound instructions
+    check` reports it (docs/specs/instructions/design.md, `stale-reference`); it refuses
+    nothing. A selection the audit cannot read is passed over, since the check reports it."""
+
+    harnesses = [route.harness for route in found if route.harness != GENERIC]
+    try:
+        stale = instruction_audit.stale_references(target, harnesses)
+    except (instruction_audit.AuditError, OSError):
+        return []
+    return [
+        ("warning", f"stale reference: {finding.path}:{finding.line}: {finding.fact}")
+        for finding in stale
+    ]
+
+
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     """Where the install includes codex, the configuration route that lets an unattended
     session write the workspace folders and commit. Codex's default `workspace-write` sandbox
@@ -1895,6 +1912,7 @@ def install(
     run.notes.append(footprint(wants))
     run.notes.extend(nested_bytes(run, table, found))
     run.notes.extend(ancestor_notes(target, found))
+    run.notes.extend(reference_notes(target, found))
     run.notes.extend(codex_sandbox_notes(target, found))
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))

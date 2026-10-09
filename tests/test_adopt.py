@@ -3304,3 +3304,24 @@ def test_implicit_adoption_preserves_a_multi_harness_install(
     assert run(capsys, str(target))[0] == 0
     assert snapshot(target) == before
     assert run(capsys, str(target), "--check")[0] == 0
+
+
+def test_an_install_warns_of_each_stale_reference_and_refuses_nothing(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install or an upgrade stays silent about a script the project's own
+    instructions name and the target no longer holds, or refuses the install for it."""
+
+    files = {
+        "AGENTS.md": "# Project\n\nRun `npm run gone` and read `docs/kept.md`.\n",
+        "package.json": '{"scripts": {"build": "x"}}\n',
+        "docs/kept.md": "# Kept\n",
+    }
+    target = repo(tmp_path / "t", files)
+
+    code, out, _ = run(capsys, str(target), "--harness", "claude-code")
+
+    assert code == 0
+    stale = [line for line in out.splitlines() if "stale reference" in line]
+    assert len(stale) == 1 and stale[0].startswith("warning") and "AGENTS.md:3" in stale[0]
+    assert "gone" in stale[0] and "kept.md" not in stale[0]
