@@ -925,7 +925,9 @@ def test_a_module_probe_uses_only_time_left_after_the_command(
     monkeypatch.setattr(finish_check.time, "monotonic", lambda: now[0])
     monkeypatch.setattr(finish_check.programs, "posix_shell", lambda *a, **k: "/bin/sh")
     monkeypatch.setattr(finish_check, "project_owned", lambda *a: False)
-    monkeypatch.setattr(finish_check.subprocess, "Popen", start)
+    # The command's start is faked where `run_one` makes it, `programs.start_tree`: a fake
+    # `Popen` would be joined to a job and resumed on Windows, and this one is no process.
+    monkeypatch.setattr(finish_check.programs, "start_tree", start)
     monkeypatch.setattr(finish_check.subprocess, "run", probe)
 
     result = finish_check.run_one(tmp_path, "module check", seconds)
@@ -1201,6 +1203,10 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     assert message.index("--finish-timeout") < message.index("--no-finish-check")
     stopped = re.search(r"stopped at the time limit after (\d+) s", message)
     assert stopped is not None and int(stopped.group(1)) <= limit, message
+    if WINDOWS:
+        # The report names the path that stopped the tree, so that a grandchild left running
+        # says whether the job did not hold it or the job was never used (`taskkill`).
+        assert f"stopped at the time limit after {stopped.group(1)} s, by its job" in message
     assert (root / "child.pid").exists(), f"the command never started: {message}"
     child = int((root / "child.pid").read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10

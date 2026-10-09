@@ -1171,12 +1171,22 @@ def shorten(text: str, limit: int = COMMAND_SHOWN) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
-def _stop(process: subprocess.Popen[bytes]) -> None:
+def _stop(process: subprocess.Popen[bytes]) -> str:
     """Kill the command's whole process group, on Windows its process tree, so nothing it
-    started outlives the limit."""
+    started outlives the limit. Returns the path that ended the tree (`programs.stop_tree`)."""
 
-    programs.stop_tree(process)
+    way = programs.stop_tree(process)
     process.wait()
+    return way
+
+
+# How a report names the path that stopped a command's tree on Windows, where there are three
+# and a stop that leaves a process running needs to say which one it was.
+STOPPED_BY = {
+    "job": "its job",
+    "taskkill": "taskkill",
+    "kill": "a kill of the command alone",
+}
 
 
 def _tail(sink: IO[bytes]) -> bytes:
@@ -1253,14 +1263,13 @@ def run_one(
         held: list[int] = []
         previous = _hold(held)
         try:
-            process = subprocess.Popen(
+            process = programs.start_tree(
                 [shell, "-c", line],
                 cwd=target,
                 stdin=subprocess.DEVNULL,
                 stdout=sink,
                 stderr=subprocess.STDOUT,
                 env=environment,
-                **programs.new_group(),
             )
         except OSError as error:
             _release(previous, held)
@@ -1273,9 +1282,12 @@ def run_one(
             _release(previous, held)
             code = process.wait(timeout=None if seconds is None else max(seconds, 0.0))
         except subprocess.TimeoutExpired:
-            _stop(process)
+            way = _stop(process)
             elapsed = time.monotonic() - started
             why = f"stopped at the time limit after {elapsed:.0f} s"
+            if os.name == "nt":
+                # Only on Windows are there three ways to stop a tree: the report names the one.
+                why += f", by {STOPPED_BY.get(way, way)}"
             return Result(line, UNVERIFIED, elapsed, why, _tail(sink), TIME)
         except BaseException:
             # Stopped from outside, by a KeyboardInterrupt or a signal handler's exception: the

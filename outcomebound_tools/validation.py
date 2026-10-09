@@ -460,14 +460,13 @@ def _execute(
     whole tree (`programs.stop_tree`).
     """
 
-    process = subprocess.Popen(
+    process = programs.start_tree(
         programs.resolve(command, env),
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         shell=False,
         env=env,
-        **programs.new_group(),
     )
     try:
         output, _ = process.communicate(timeout=timeout)
