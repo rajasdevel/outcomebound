@@ -50,12 +50,19 @@ bounds; for a personal tool, the outcome, the appetite and the no-gos are the wh
 ## Probe what could end it
 
 For each assumption that would end the idea and that nothing shows, write the question and the
-result that passes before you build anything. Then build the smallest probe that answers it: a
+result that passes in the working note before the first line of probe code, so the bar cannot bend
+to the result. Then build the smallest probe that answers it: a
 spike, a throwaway prototype the person shows to users, a measurement, or an explorable where the
 answer turns on prices or values (`explorable`). Record each as question, probe, result (`PASS`,
 `FAIL` or `UNVERIFIED`) and the decision it led to. Probe code stays in the working area, marked
 throwaway, and never becomes the product: the skeleton is built fresh. A result that meets the stop
 rule ends or changes the idea, and you report it as such.
+
+A probe that needs people, such as a prototype shown to users or a trial with real customers, is the
+person's to run. Build what the probe itself needs, write its question and the result that passes,
+and hand it to them; build no skeleton until its result is in or the person says to build without
+it. A request to start the project asks for this route and does not waive the probes; a request to
+build now is the person saying so.
 
 Skip when: every assumption that could end the idea already has evidence.
 
@@ -76,8 +83,10 @@ Skip when: the idea is throwaway or personal; a line in the working note per cho
 ## Build the walking skeleton
 
 Build the thinnest path from the user's action through each layer the outcome needs and back, and
-to the delivery destination where one is in scope and the person granted it. Report each line of its bar as `PASS`, `FAIL` or
-`UNVERIFIED`:
+to the delivery destination where one is in scope and the person granted it. For a feature that
+calls a model, write its evaluation tasks and their grader first, before the code that calls the
+model, and commit them first where the project commits. Report each line of its bar as `PASS`,
+`FAIL` or `UNVERIFIED`:
 
 1. One Done command passes on a clean checkout: format, lint, type checks, tests and build, failing
    when any of them fails.
@@ -90,8 +99,8 @@ to the delivery destination where one is in scope and the person granted it. Rep
 5. Secrets and dependencies: an example environment file that holds names only, a secret scan, a
    lockfile, and each new dependency's name checked in its registry before it is installed.
 6. One command starts the app or service.
-7. For a feature that calls a model: seed evaluation tasks drawn from its expected use, with a
-   grader, before the feature.
+7. For a feature that calls a model: evaluation tasks drawn from its expected use and a grader,
+   written before the code that calls the model.
 8. Where delivery is in scope and the person deployed, or granted the deploy and the account it
    needs, the deployed version observed at its destination; else `UNVERIFIED`, with what would
    settle it.
