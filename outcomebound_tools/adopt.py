@@ -9,7 +9,8 @@ installs `.agents/.gitignore`, which keeps its four folders out of Git; every in
 `.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
 report warns where Git ignores a path the install owns, where AGENTS.md holds changes not
 committed, and where a harness also loads instructions from a folder above the target.
-`--finish-check` adds one
+`--detect` prints the install command on its first line and every note after it on a line that
+starts with `#`. `--finish-check` adds one
 entry to the settings document of each selected harness whose table row has a `finish_hook`
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
@@ -2452,6 +2453,19 @@ which it records and names on a kept line, and a pointers block that is the reco
 only the local fragment's own edit in it, which it writes again and names on a render line. A
 refusal writes nothing.
 
+--detect prints the install command this target's files suggest alone on its first line, with
+--setup for the project's own entry point (a Make target or package.json script named setup or
+bootstrap, or an executable bin/setup, script/setup, script/bootstrap or scripts/setup.sh), and
+then every note on a line that starts with #, so that pasting the output into a shell runs the
+command only: why Done holds what it holds, the Setup candidates, the install commands of the
+lockfiles (comments only), the onboarding signals (generated paths, applied migration folders,
+publishing workflows, runtime versions, environment variable names and CI secret names, each
+with the file that shows it and the slot of the local fragment it goes to), the readiness lines
+(each with its verdict and next step), and a last line naming the onboarding guide in the
+engine, an absolute path. In a folder with nothing but .git it names the new-project reference.
+It writes nothing and runs nothing from the target, and escapes every string the target gave.
+Outside a Git work tree, the refusal names the route: git init there, then adopt . --detect.
+
 --finish-check adds one entry to the settings of each selected harness that has a finish hook,
 claude-code (.claude/settings.json) and codex (.codex/hooks.json): when that harness's agent
 ends a turn on a working tree the Done commands have not been checked on, `outcomebound
@@ -2494,13 +2508,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("target", help="the repository to install into")
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument(
-        "--detect", action="store_true", help="print the install command; write nothing"
+        "--detect",
+        action="store_true",
+        help="print the install command alone on the first line, then every note on a line "
+        "that starts with #; write nothing",
     )
     verb.add_argument(
         "--check",
         action="store_true",
-        help="print current, edited, stale or missing for each record, then the command that "
-        "makes each current; write nothing",
+        help="print current, edited, stale or missing for each record, one note line on the "
+        "measurement of Done (never counted in the exit), then the command that makes each "
+        "current; write nothing",
     )
     verb.add_argument("--remove", action="store_true", help="remove every recorded block and file")
     finish = parser.add_mutually_exclusive_group()
