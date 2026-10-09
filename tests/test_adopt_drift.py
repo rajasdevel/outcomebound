@@ -21,12 +21,12 @@ ONE = "alice@example.org"
 TWO = "bob@example.org"
 
 
-def commit(target: Path, email: str, name: str = "A Person", message: str = "c") -> None:
-    """One commit by `email`, with nothing in it."""
+def commit(target: Path, email: str, name: str | None = None, message: str = "c") -> None:
+    """One commit by `email`, with nothing in it; the name is the email's local part unless given."""
 
     identity = [
         "-c",
-        f"user.name={name}",
+        f"user.name={name or email.split('@')[0]}",
         "-c",
         f"user.email={email}",
         "-c",
@@ -442,3 +442,18 @@ def test_drift_lines_leave_the_check_exit_code_as_the_artifacts_give_it(
     change_kernel(source, "9.9.9")
     code, out, _ = run(capsys, str(target), "--check", source=source)
     assert code == 1 and len(drift_lines(out)) == 3
+
+
+def test_one_name_under_two_emails_is_one_author(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if one person who commits under two emails with one name counts as two authors, so
+    that a project with one maintainer reads as a team, or if two names with two emails count as
+    one."""
+
+    target = repo(tmp_path / "one")
+    commit(target, ONE, "Alice Doe")
+    commit(target, "alice@work.example", "Alice Doe")
+    assert drift.recent_authors(target) == 1
+    commit(target, TWO, "Bob Roe")
+    assert drift.recent_authors(target) == 2

@@ -85,7 +85,9 @@ A change of lifecycle is a change of exposure or of route. It is a transition wh
 - a signal named in a "Leave when —" line appears; the line's right side is the brief to open;
 - a session resumes and finds work that never landed: worktrees with uncommitted work, none ahead
   of the main line, no recent commit;
-- `adopt --check` prints a drift line: a file shows a signal that the record contradicts.
+- `adopt --check` prints a drift line: a file shows a signal that the record contradicts. A line
+  about recent authors can be one person under two identities that share neither name nor email;
+  ask before treating it as a second maintainer (a `.mailmap` joins one person's identities).
 
 Nothing switches without the person. Write one decision brief (the `decision-brief` skill). Its
 main value is the inventory of work in flight and what each item now owes, so it is written even

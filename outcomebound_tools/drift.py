@@ -50,22 +50,35 @@ def _is_bot(name: str, email: str) -> bool:
 
 
 def recent_authors(target: Path) -> int | None:
-    """The distinct author emails, lower-cased and after the project's `.mailmap`, of the last
-    `WINDOW` commits that are not merges on the current branch, bots and automation left out;
-    None where Git cannot read a history (no commit yet, or no Git)."""
+    """The people among the authors of the last `WINDOW` commits that are not merges on the
+    current branch, after the project's `.mailmap`, bots and automation left out. Two identities
+    that share a name or an email, lower-cased, are one person: one person often commits under two
+    emails with one name. None where Git cannot read a history (no commit yet, or no Git)."""
 
     output = discovery.git_read(
         target, "log", f"--max-count={WINDOW}", "--no-merges", "--format=%aE%x1f%aN"
     )
     if output is None or not output.strip():
         return None
-    people: set[str] = set()
+    parent: dict[str, str] = {}
+
+    def root(key: str) -> str:
+        parent.setdefault(key, key)
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    emails: set[str] = set()
     for line in output.decode("utf-8", "replace").splitlines():
         email, _, name = line.partition("\x1f")
-        email = email.strip().lower()
-        if email and not _is_bot(name, email):
-            people.add(email)
-    return len(people)
+        email, name = email.strip().lower(), name.strip().lower()
+        if not email or _is_bot(name, email):
+            continue
+        emails.add(email)
+        if name:
+            parent[root("email:" + email)] = root("name:" + name)
+    return len({root("email:" + email) for email in emails})
 
 
 def release_identity(target: Path) -> list[str]:
