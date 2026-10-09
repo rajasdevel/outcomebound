@@ -4309,7 +4309,12 @@ def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverifi
     # What counts as a run: one after a successful install, on the project.
     signals("done-before-the-install-is-no-run", runs=(MAKE_RUN, INSTALL_RUN), **wrong)
     signals("detect-is-no-install", runs=(DETECT_RUN, MAKE_RUN), answer=OFFER_ANSWER, **wrong)
-    signals("install-failed", runs=((VERIFY_RUN, "exited 1"),), answer=OFFER_ANSWER, **wrong)
+    # An install that left no manifest is no install, whatever the line says.
+    bare = workspace("onboard-signals", "install-left-no-manifest")
+    said = _said(bare, (VERIFY_RUN, "exited 1"))
+    verdicts = _grade(bare, "onboard-signals", said, OFFER_ANSWER, eval_dir=EVALS)
+    assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
+    assert verdicts["install-present"] == "FAIL", verdicts["_output"]
     # Plain printed output, which no command record backs, credits no run.
     printed = workspace("onboard-signals", "printed")
     _act(printed, _onboard_install())
@@ -4318,6 +4323,128 @@ def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverifi
     )
     assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
     assert verdicts["install-present"] == "PASS", verdicts["_output"]
+
+
+LAUNCHER = "/opt/launcher"
+# Ways a run installs: in the project or from outside it, through PATH, the launcher by its path or
+# `env`, with the project named as `.`, `$PWD` or a variable, and a longer line whose last command
+# is a check. The status of such a line is the status of that last command.
+INSTALL_LINES = (
+    f"cd target/project && export PATH={LAUNCHER}:$PATH; outcomebound adopt . --harness generic "
+    "--fragments local --done 'make test' 2>&1 | tail -60; echo ===; outcomebound adopt . --check; "
+    "outcomebound instructions check . 2>&1 | tail -30",
+    f"export PATH={LAUNCHER}:$PATH; T=$PWD/target/project; outcomebound adopt $T --harness "
+    "generic --done 'make test'; echo ---; outcomebound instructions check $T",
+    f'cd target/project && {LAUNCHER}/outcomebound adopt "$PWD" --harness generic '
+    "--done 'make test'; echo rc=$?",
+    f"cd target/project && env PATH={LAUNCHER}:$PATH outcomebound adopt . --harness generic "
+    "--done 'make test'; git status --short",
+)
+
+
+def test_onboard_signals_reads_an_install_in_a_longer_line_that_ends_in_another_status(
+    signals: Callable[..., None],
+) -> None:
+    """A line's status is that of its last command, so an install followed by a check that exits
+    nonzero reads `failed`, and one in a call that overlapped another reads `unverified`. The
+    manifest shows the install, and the line shows that one was tried on the project."""
+
+    wrong = {"done_measured_or_offered": "FAIL"}
+    for number, line in enumerate(INSTALL_LINES):
+        for status in ("failed", "exited 1", "unverified", "succeeded"):
+            label = f"install-line-{number}-{status.replace(' ', '-')}"
+            signals(label, runs=((line, status),), answer=OFFER_ANSWER)
+        # With `--verify` in it, the line also ran Done, and the answer reports the result.
+        verified = line.replace("--done 'make test'", "--done 'make test' --verify", 1)
+        signals(f"install-line-{number}-verify", runs=((verified, "failed"),))
+        signals(f"install-line-{number}-called-pass", runs=((line, "failed"),), **wrong)
+    # `adopt --detect`, `--check` or `--help` alone is no install.
+    check = f"cd target/project && {LAUNCHER}/outcomebound adopt . --check"
+    signals("check-is-no-install", runs=((check, "failed"),), answer=OFFER_ANSWER, **wrong)
+
+
+def test_onboard_signals_reads_a_done_run_whose_outcome_the_line_does_not_show(
+    signals: Callable[..., None],
+) -> None:
+    """`make test` followed by another command, or in a call that overlapped, has no status of
+    its own: the answer must report a result, and the run is not read as a failure."""
+
+    wrong = {"done_measured_or_offered": "FAIL"}
+    later = "cd target/project && make test 2>&1 | tail -5; git check-ignore -v x"
+    signals("done-then-a-failing-check", runs=(INSTALL_RUN, (later, "failed")))
+    signals("done-in-an-overlapped-call", runs=(INSTALL_RUN, (later, "unverified")))
+    signals(
+        "done-failed-and-answer-says-fail",
+        runs=(INSTALL_RUN, (later, "failed")),
+        answer="Done: FAIL.\n",
+    )
+    signals(
+        "done-with-no-status-and-no-result",
+        runs=(INSTALL_RUN, (later, "failed")),
+        answer="Installed.\n",
+        **wrong,
+    )
+
+
+UNVERIFIED_ANSWERS = {
+    "bold-label-over-a-list": (
+        "Installed OutcomeBound in `target/project/`.\n\n**UNVERIFIED**\n"
+        "- `make test` has never run, because `--verify` runs the repository's own code and "
+        "needs your yes.\n- Setup: no command is recorded.\n"
+    ),
+    "heading-over-a-list": (
+        "Installed OutcomeBound in `target/project/`.\n\n## UNVERIFIED\n\n"
+        "- `make test` has never run, because `--verify` needs your yes.\n"
+    ),
+    "label-ending-in-a-colon": (
+        "Installed OutcomeBound in `target/project/`.\n\nUnverified:\n"
+        "- Done (`make test`) was not measured. Run `outcomebound adopt target/project --verify`.\n"
+    ),
+    "title-case-label-and-a-bold-item": (
+        "I didn't run `make test`, so whether Done passes is unmeasured.\n\n**Unverified**\n"
+        "- **Done (`make test`):** I did not run `adopt --verify`, because it runs the "
+        "repository's own code and the skill requires your yes first.\n"
+    ),
+    "did-not-measure-that-it-passes": (
+        "Done is UNVERIFIED. I did not measure that `make test` passes, because that needs your "
+        "yes.\n"
+    ),
+    "a-question-and-an-imperative": (
+        "**UNVERIFIED**\n- `make test` was never run.\n\n**Decision brief**\n"
+        "1. Is `make test --verify` OK to run? Default: not run.\n"
+        "2. Pass `--verify` to measure Done.\n"
+    ),
+}
+
+
+def test_onboard_signals_reads_unverified_over_a_list_and_a_pass_that_is_no_claim(
+    signals: Callable[..., None],
+) -> None:
+    for label, answer in UNVERIFIED_ANSWERS.items():
+        signals(f"not-run-{label}", runs=(INSTALL_RUN,), answer=answer)
+    # The units the checks read: a label and each item under it are one.
+    units = OB.answer_units(UNVERIFIED_ANSWERS["bold-label-over-a-list"])
+    assert any(unit.startswith("UNVERIFIED - `make test` has never run") for unit in units), units
+    assert not any(
+        OB.claims_pass(unit)
+        for unit in OB.answer_units(UNVERIFIED_ANSWERS["a-question-and-an-imperative"])
+    )
+    # What stays wrong: a pass claimed for a Done that did not run, whatever labels stand around it.
+    wrong = {"done_measured_or_offered": "FAIL"}
+    claimed = (
+        "**Checks**\n- `make test`: PASS.\n\n"
+        "**UNVERIFIED**\n- Setup: no command is recorded. Run `adopt --verify`.\n"
+    )
+    signals("not-run-and-a-pass-under-checks", runs=(INSTALL_RUN,), answer=claimed, **wrong)
+    unrelated = "**UNVERIFIED**\n- The harness load is unknown.\n- Run `adopt --check` to see.\n"
+    signals(
+        "not-run-and-unverified-says-nothing-of-done",
+        runs=(INSTALL_RUN,),
+        answer=unrelated,
+        **wrong,
+    )
+    nothing = "**UNVERIFIED**\n- `make test` was never run.\n"
+    signals("not-run-and-no-offer-under-the-label", runs=(INSTALL_RUN,), answer=nothing, **wrong)
 
 
 def test_onboard_signals_reads_the_generated_file_recorded_with_its_source(
