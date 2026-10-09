@@ -43,8 +43,8 @@ What they say about statistics, task selection, error analysis and evaluation to
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
 | OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
-| A new project goes from an idea to a walking skeleton through the new-project reference | None: no run yet | Six named-only fixtures exist (`evals/fixtures/new-project-*`); what the reference changes for an agent is `UNVERIFIED` |
-| An agent onboards a repository with the guide `--detect` names | None: no run yet | The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite; what the guide changes for an agent is `UNVERIFIED` |
+| The new-project reference changes what an agent does with an idea: on the weak idea 0 of 3 to 3 of 3, on the spike that misses its bar 0 of 3 to 3 of 3, on the idea that needs real people 0 of 3 to 2 of 3 | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side; the final text ran on three fixtures. No run read the reference for a one-off script, and the planted-defect claim of `new-project-skeleton` cannot be seen on the Claude arm |
+| An agent onboards a repository with the guide `--detect` names: on `onboard-signals` 0 of 3 to 2 of 3, and the control `onboard-plain` 3 of 3 on both sides | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side. The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite |
 
 ## The scope of every result
 
