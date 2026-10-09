@@ -16,7 +16,7 @@ LISTED = """AGENTS.md OutcomeBound.md docs/tickets.md
 templates/managed-block.agents.md.tmpl templates/spec/design.md
 templates/spec/plan.md templates/fragment-local.md templates/goal/goal.md
 templates/tickets/issue-template.md"""
-TREES = ("fragments", "skills")
+TREES = ("fragments", "skills", "templates/lifecycle")
 
 
 def test_no_surface_carries_economic_vocabulary() -> None:
