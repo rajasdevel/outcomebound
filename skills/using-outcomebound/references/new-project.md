@@ -59,9 +59,10 @@ throwaway, and never becomes the product: the skeleton is built fresh. A result 
 rule ends or changes the idea, and you report it as such.
 
 A probe that needs people, such as a prototype shown to users or a trial with real customers, is the
-person's to run. Write it up with its question and the result that passes, and hand it to them;
-build no skeleton until its result is in or the person says to build without it. A request to start
-the project asks for this route; it does not waive the probes.
+person's to run. Build what the probe itself needs, write its question and the result that passes,
+and hand it to them; build no skeleton until its result is in or the person says to build without
+it. A request to start the project asks for this route and does not waive the probes; a request to
+build now is the person saying so.
 
 Skip when: every assumption that could end the idea already has evidence.
 
@@ -83,8 +84,9 @@ Skip when: the idea is throwaway or personal; a line in the working note per cho
 
 Build the thinnest path from the user's action through each layer the outcome needs and back, and
 to the delivery destination where one is in scope and the person granted it. For a feature that
-calls a model, write its evaluation tasks and their grader first, and commit them before the code
-that calls the model. Report each line of its bar as `PASS`, `FAIL` or `UNVERIFIED`:
+calls a model, write its evaluation tasks and their grader first, before the code that calls the
+model, and commit them first where the project commits. Report each line of its bar as `PASS`,
+`FAIL` or `UNVERIFIED`:
 
 1. One Done command passes on a clean checkout: format, lint, type checks, tests and build, failing
    when any of them fails.
@@ -98,7 +100,7 @@ that calls the model. Report each line of its bar as `PASS`, `FAIL` or `UNVERIFI
    lockfile, and each new dependency's name checked in its registry before it is installed.
 6. One command starts the app or service.
 7. For a feature that calls a model: evaluation tasks drawn from its expected use and a grader,
-   committed before the code that calls the model.
+   written before the code that calls the model.
 8. Where delivery is in scope and the person deployed, or granted the deploy and the account it
    needs, the deployed version observed at its destination; else `UNVERIFIED`, with what would
    settle it.
