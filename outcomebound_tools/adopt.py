@@ -140,7 +140,6 @@ LOCAL_FRAGMENT = f"{facts.FRAGMENT_DIR}/{LOCAL}.md"
 # What --detect names last, and where a new project starts, as paths in the engine.
 GUIDE = "skills/adopt-outcomebound/SKILL.md"
 NEW_PROJECT_REFERENCE = "skills/using-outcomebound/references/new-project.md"
-NEW_PROJECT_README = 'the README section "Start a new project"'
 # What --detect proposes first for Done where a floor is installed: the floor's runner, with
 # `--base` the remote's default branch where Git resolves it (`default_base`).
 FLOOR_RUNNER = "outcomebound floor check ."
@@ -1477,6 +1476,24 @@ def slow_done(target: Path, seconds: float, timeout: int) -> Notes:
     ]
 
 
+def rerun_notes(measured: finish_check.Measured) -> Notes:
+    """One line naming each failing command the measurement ran again, whose runs the measured
+    seconds leave out, so that "ran once" stays true of the seconds."""
+
+    if not measured.reran:
+        return []
+    commands = ", ".join(
+        f"`{finish_check.shorten(textio.plain(line), 80)}`" for line in measured.reran
+    )
+    return [
+        (
+            "note",
+            f"finish-check: {commands} failed and ran again, to tell a flake or a missing PATH "
+            "entry from a stable failure; those runs are not in the seconds above",
+        )
+    ]
+
+
 def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) -> Notes:
     """The install report's lines for the one Done run an install makes."""
 
@@ -1560,6 +1577,7 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
             f"{limit} s of its {timeout} s timeout",
         )
     )
+    notes.extend(rerun_notes(measured))
     notes.extend(slow_done(target, measured.seconds, timeout))
     if not measured.kept:
         notes.append(
@@ -1733,7 +1751,7 @@ def reference_notes(target: Path, found: Sequence[Route]) -> Notes:
     except (instruction_audit.AuditError, OSError):
         return []
     return [
-        ("warning", f"stale reference: {finding.path}:{finding.line}: {finding.fact}")
+        ("warning", f"stale reference: {textio.plain(finding.path)}:{finding.line}: {finding.fact}")
         for finding in stale
     ]
 
@@ -2415,9 +2433,9 @@ def detect(target: Path, source: Path) -> int:
     notes = _trailing_notes(source, done, suggested_by, excluded, bool(found))
     if _only_git(target):
         reference = Path(source).resolve() / NEW_PROJECT_REFERENCE
-        route = reference.as_posix() if reference.is_file() else NEW_PROJECT_README
+        route = f"; read {reference.as_posix()}" if reference.is_file() else ""
         notes.append(
-            _Engine(f"nothing here but .git: a new project starts from this command; read {route}")
+            _Engine(f"nothing here but .git: a new project starts from this command{route}")
         )
     notes += _setup_notes(setups)
     notes += [

@@ -609,6 +609,8 @@ ATTRIBUTE_LINE = re.compile(r'^(?:"((?:[^"\\]|\\.)*)"|(\S+))\s*(.*)$')
 # the project's list of irreversible edges.
 PUBLISHING_COMMANDS = (
     ("npm", "publish"),
+    ("pnpm", "publish"),
+    ("yarn", "npm", "publish"),
     ("twine", "upload"),
     ("uv", "publish"),
     ("cargo", "publish"),
@@ -618,6 +620,8 @@ PUBLISHING_COMMANDS = (
     ("kubectl", "apply"),
     ("helm", "upgrade"),
     ("fly", "deploy"),
+    ("flyctl", "deploy"),
+    ("goreleaser", "release"),
     ("wrangler", "deploy"),
     ("firebase", "deploy"),
 )
@@ -636,6 +640,7 @@ PUBLISHING_ACTIONS = frozenset(
         "google-github-actions/deploy-cloudrun",
         "aws-actions/amazon-ecs-deploy-task-definition",
         "firebaseextended/action-hosting-deploy",
+        "goreleaser/goreleaser-action",
     }
 )
 SECRET = re.compile(

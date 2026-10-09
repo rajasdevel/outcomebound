@@ -1609,6 +1609,26 @@ def test_a_failure_that_repeats_is_known_and_runs_twice_where_no_path_entry_is_l
     assert finish_check.last_checked(root) is not None
 
 
+def test_the_measured_seconds_are_one_run_of_each_command_and_the_rerun_is_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the seconds kept and printed for a failing command count its rerun, which a
+    hook never makes, so that a stable failure reads twice as slow as it runs."""
+
+    environment, _ = finish_check.hook_environment(tmp_path, os.environ)
+    monkeypatch.setenv("PATH", environment["PATH"])
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    done = ["sleep 1; echo 'FAILED tests/a.py::t'; exit 2"]
+    root, digest = target(tmp_path / "t", done)
+
+    measured = finish_check.measure(root, done, 600)
+
+    assert measured.reran == (done[0],)
+    assert 1.0 <= measured.seconds < 1.9, measured.seconds
+    known = finish_check.known_record(root, digest)
+    assert known is not None and known.seconds < 1.9
+
+
 def test_a_dropped_path_entry_adds_one_run_to_a_stable_failure_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

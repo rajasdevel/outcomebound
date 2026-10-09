@@ -1410,6 +1410,27 @@ def test_detect_names_the_publishing_steps_of_a_workflow(tmp_path: Path, capsys:
     ]
 
 
+def test_detect_names_pnpm_flyctl_and_goreleaser_publishing(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a common publishing form a realistic repository uses is missed."""
+
+    workflow = (
+        "on: push\njobs:\n  ship:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: pnpm publish --no-git-checks\n"
+        "      - run: flyctl deploy --remote-only\n"
+        "      - uses: goreleaser/goreleaser-action@v6\n"
+    )
+    target = repo(tmp_path / "t", {".github/workflows/ship.yml": workflow})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    found = [line for line in out.splitlines() if "signal publishing-workflow" in line]
+    assert any("runs pnpm publish" in line for line in found), found
+    assert any("runs flyctl deploy" in line for line in found), found
+    assert any("uses goreleaser/goreleaser-action" in line for line in found), found
+
+
 def test_detect_names_the_runtime_versions_the_project_pins(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -1601,8 +1622,8 @@ def test_detect_on_a_folder_with_only_git_names_the_new_project_route(
     reference = source / "skills/using-outcomebound/references/new-project.md"
 
     _, out, _ = run(capsys, str(empty), "--detect", source=source)
-    assert 'read the README section "Start a new project"' in out
-    assert "new-project.md" not in out
+    assert "# nothing here but .git: a new project starts from this command\n" in out
+    assert "new-project.md" not in out and "README" not in out
 
     write(reference, "# New project\n")
     _, out, _ = run(capsys, str(empty), "--detect", source=source)

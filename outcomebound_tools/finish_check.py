@@ -1358,6 +1358,9 @@ class Measured:
     flaked: tuple[str, ...] = ()
     # Whether the commands ran as a hook runs Done, or with the PATH of the process that asked.
     as_hook: bool = True
+    # Each failing command that ran again, to tell a flake or a missing PATH entry from a stable
+    # failure; `seconds` counts none of those runs.
+    reran: tuple[str, ...] = ()
 
 
 def added_since(previous: Known, failing: Mapping[str, Failure]) -> list[str]:
@@ -1439,9 +1442,14 @@ def measure(target: Path, done: Sequence[str], timeout: int, as_hook: bool = Tru
     before = tree_digest(target, digest)
     environment, dropped = hook_environment(target, os.environ) if as_hook else (None, ())
     results = [run_one(target, line, None, environment) for line in done]
+    # The seconds a hook would see are those of one run of each command: the reruns below tell
+    # a flake or a missing PATH entry from a stable failure, and count in no recorded time.
+    seconds = time.monotonic() - started
+    reran: list[str] = []
     for index, result in enumerate(results):
         if result.verdict != FAIL:
             continue
+        reran.append(result.command)
         again = run_one(target, result.command, None, environment)
         if not _same_failure(result, again):
             results[index] = _flake(result, again)
@@ -1459,7 +1467,6 @@ def measure(target: Path, done: Sequence[str], timeout: int, as_hook: bool = Tru
         why = f"{result.why}: could not run in the hook's environment"
         note = f"it {how} with {', '.join(dropped)} on PATH"
         results[index] = replace(result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note)
-    seconds = time.monotonic() - started
     failing: dict[str, Failure] = {}
     for index, result in enumerate(results):
         if result.verdict == FAIL and result.code is not None:
@@ -1481,7 +1488,9 @@ def measure(target: Path, done: Sequence[str], timeout: int, as_hook: bool = Tru
     if kept and before is not None and not unsettled and tree_digest(target, digest) == before:
         verdict = FAIL if failing else PASS
         remember(target, Checked(before, timeout, verdict, tuple(results) if failing else ()))
-    return Measured(tuple(results), seconds, kept, previous, added, dropped, flaked, as_hook)
+    return Measured(
+        tuple(results), seconds, kept, previous, added, dropped, flaked, as_hook, tuple(reran)
+    )
 
 
 def hook_environment(
