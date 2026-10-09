@@ -4115,6 +4115,8 @@ def test_the_onboarding_fixtures_start_without_an_install_and_seal_the_projects_
         assert sealed == tag != "", name
         assert _porcelain(project) == "", name
         # The project's own Done works offline with the standard library, as its note says.
+        if shutil.which("make") is None:
+            continue
         made = subprocess.run(
             ["make", "test"], cwd=project, capture_output=True, text=True, env=os.environ
         )
