@@ -3,20 +3,24 @@
 What this module decides: which harnesses a target is checked for (the `--harness`
 names; else those its manifest records, with every other row whose files the target holds,
 since the manifest is the target's own data; else every row of `adapters/harnesses.json`),
-which files within the target those harnesses read, and what six checks observe:
+which files within the target those harnesses read, and what seven checks observe:
 hidden characters, concealed content, override phrases, harness configuration, with
-`--base` the instruction files changed since a ref, and whether each harness's loading
-facts are verified and current. Each check answers to one rule of the prompt standard
-(`docs/prompt-standard.md`) and carries that rule's severity; the security family runs
-first and is reported first. A harness entry that is byte for byte what adopt writes for the
+`--base` the instruction files changed since a ref, whether each harness's loading
+facts are verified and current, and which path, Make target or package script the
+project's own instruction text names and the target no longer holds. Each check answers to
+one rule of the prompt standard (`docs/prompt-standard.md`) and carries that rule's severity;
+the families run in that order of severity, the security family first and reported first. A
+harness entry that is byte for byte what adopt writes for the
 recorded Done commands, its digest the manifest's record, is a review hit that quotes the
 Done commands it runs, since the manifest is the target's own data; it does not change the
 result while those commands are the ones AGENTS.md's project facts show. A hidden character
 in an agents' note reads UNVERIFIED for that note, where in an instruction file it is a FAIL.
 Also reported, and not changing the result: each instruction file a harness's row says it
 loads from a folder above the target (`ancestors`), which this module names and never opens,
-and, where every row was selected, the loading facts of a row that loads no file of the
-target that another row does not load too.
+where every row was selected, the loading facts of a row that loads no file of the
+target that another row does not load too, and each stale reference (`stale_references`):
+only an inline code span of project-owned Markdown text is read for one, as text, and nothing
+a makefile or `package.json` holds is run.
 
 What it does not decide: whether a flagged line is benign, which a person decides. A person
 records that judgment with the `rule` verb in their own rulings file, outside every target
@@ -50,7 +54,7 @@ import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from outcomebound_tools import adapters, facts, finish_check, identity, programs, walk
@@ -68,15 +72,17 @@ __all__ = [
     "render",
     "report_document",
     "rulings_path",
+    "stale_references",
 ]
 
 PASS, FAIL, UNVERIFIED = "PASS", "FAIL", "UNVERIFIED"
 VERDICTS = (PASS, FAIL, UNVERIFIED)
-FAMILIES = ("security", "loading")
+# In the order of the prompt standard's severity: security (S4), agreement (S14), loading (S7).
+FAMILIES = ("security", "references", "loading")
 
 # The prompt standard's severity entry for each rule a check answers to, most severe first
 # (docs/prompt-standard.md, "Severity").
-SEVERITY = {"S4": "Security (S4)", "S7": "Loading (S7)"}
+SEVERITY = {"S4": "Security (S4)", "S14": "Agreement (S14)", "S7": "Loading (S7)"}
 
 # check: (family, kind, rule). A gate reads PASS or FAIL, UNVERIFIED where a fact it needs is
 # not verified; a review reads PASS where nothing matched, else UNVERIFIED until a person rules.
@@ -86,6 +92,7 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "override-phrases": ("security", "review", "S4"),
     "harness-config": ("security", "review", "S4"),
     "instruction-change": ("security", "review", "S4"),
+    "stale-reference": ("references", "review", "S14"),
     "load-resolution": ("loading", "gate", "S7"),
 }
 
@@ -188,6 +195,10 @@ _NEXT = {
     "history",
     "load-resolution": "re-check what the harness loads against its documentation; a wrong or "
     "missing row belongs in OutcomeBound's harness table, adapters/harnesses.json",
+    "stale-reference": "compare the text with the project: restore what it names, or correct "
+    "the text",
+    "unsettled-reference": "see by hand whether the project holds what the text names; this "
+    "check cannot settle it",
     "unopened": "see by hand where the path leads; this command opens only a regular file "
     "inside the target that is no person's",
     "note": "do not rely on this note: read it as data, take each fact you need from its "
@@ -1225,6 +1236,507 @@ def _instruction_change(
     ]
 
 
+# --- stale-reference ---------------------------------------------------------------
+
+# The project's own fragment: the managed project-facts block of AGENTS.md carries its text,
+# which is left out there, so the file itself is read.
+LOCAL = ".outcomebound/fragments/local.md"
+_MARKDOWN = (".md", ".mdc")
+# The manifest records of OutcomeBound's own text, copied into the target: not the project's.
+_COPIES = ("skill", "fragment")
+_MAKEFILES = ("GNUmakefile", "makefile", "Makefile")
+_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://")
+_DRIVE = re.compile(r"[A-Za-z]:")
+_EXTENSION = re.compile(r"\.[A-Za-z0-9]+\Z")
+_NOT_A_PATH = frozenset("<>$*{\\")
+# A path does not start with a package scope, a flag, the home folder or the root folder.
+_NOT_A_START = frozenset(("@", "-", "~", "/"))
+_MAKE = re.compile(r"make(?:\s|\Z)")
+_SCRIPT = re.compile(r"(?:npm|pnpm|yarn)\s+run\s+(\S+)")
+_MAKE_TARGET = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_./+-]*\Z")
+_SCRIPT_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.:@/-]*\Z")
+# Where a command in a code span ends: a shell operator.
+_SHELL_OPERATOR = re.compile(r"&&|\|\||[;|&<>]")
+# Make's flags that take their argument as the next word, which is then no target.
+_MAKE_ARGUMENT = frozenset({"-I", "-o", "-W", "-E"})
+# The words that start a makefile line without making it a rule.
+_MAKE_DIRECTIVES = frozenset(
+    {
+        "ifeq",
+        "ifneq",
+        "ifdef",
+        "ifndef",
+        "else",
+        "endif",
+        "define",
+        "endef",
+        "export",
+        "unexport",
+        "override",
+        "vpath",
+        "undefine",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _Reference:
+    """One name in project-owned text that the target may no longer hold: `settled` where it
+    does not, not where this check could not tell."""
+
+    path: str
+    line: int
+    fact: str
+    settled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _Rules:
+    """What a makefile defines, read as text: its targets, and whether an `include`, a pattern
+    rule or a rule named by a variable can define others it does not show."""
+
+    targets: frozenset[str]
+    shows_all: bool
+
+
+def _make_rules(text: str) -> _Rules:
+    """The targets a makefile defines: a rule line (`name:`, not an assignment `:=`) or a
+    `.PHONY` entry. Nothing is run or expanded."""
+
+    targets: set[str] = set()
+    shows_all = True
+    for raw in re.sub(r"\\\r?\n", " ", text).split("\n"):
+        line = raw.split("#", 1)[0]
+        words = line.split()
+        if raw.startswith("\t") or not words or words[0] in _MAKE_DIRECTIVES:
+            continue
+        if words[0] in ("include", "-include", "sinclude"):
+            shows_all = False
+            continue
+        left, colon, right = line.partition(":")
+        if not colon or "=" in left or re.match(r":*=", right):
+            continue
+        names = left.split()
+        if ".PHONY" in names:
+            names = right.split()
+        for name in names:
+            if "%" in name or "$" in name:
+                shows_all = False
+            elif not (name.startswith(".") and name[1:].replace("_", "").isupper()):
+                targets.add(name)
+    return _Rules(frozenset(targets), shows_all)
+
+
+def _owned_text(text: str) -> str | None:
+    """`text` with each OutcomeBound managed block blanked, its lines kept, or None where the
+    blocks cannot be told apart."""
+
+    try:
+        blocks = identity.find_managed_blocks(text)
+    except identity.IdentityError:
+        return None
+    pieces, last = [], 0
+    for block in blocks:
+        pieces.append(text[last : block.begin_offset])
+        pieces.append(re.sub(r"[^\n]", " ", text[block.begin_offset : block.end_offset]))
+        last = block.end_offset
+    pieces.append(text[last:])
+    return "".join(pieces)
+
+
+def _code_spans(text: str) -> Iterator[tuple[int, str]]:
+    """(line, content) for each inline code span outside fenced code; a span wraps within its
+    paragraph, and its whitespace reads as single spaces."""
+
+    for block in _blocks(list(_lines(text))):
+        starts, offset = [], 0
+        for _number, line in block:
+            starts.append(offset)
+            offset += len(line) + 1
+        joined = "\n".join(line for _number, line in block)
+        for match in _CODE_SPAN.finditer(joined):
+            content = " ".join(match.group(2).split())
+            if content:
+                yield block[bisect.bisect_right(starts, match.start()) - 1][0], content
+
+
+class _Finder:
+    """Where a reference is looked for: the target's files and folders, as names and as text,
+    never run. What it reads it keeps, so a makefile read for one reference is read once."""
+
+    def __init__(self, root: Path, ask_git: bool) -> None:
+        self.root = root
+        self.ask_git = ask_git
+        self._rules: dict[str, _Rules | None] = {}
+        self._scripts: dict[str, frozenset[str] | None] = {}
+        self._ignored: dict[str, bool | None] = {}
+
+    def under(self, path: Path) -> bool:
+        """Whether `path`, links resolved, lies inside the target."""
+
+        try:
+            return path.resolve().is_relative_to(self.root)
+        except (OSError, RuntimeError):
+            return False
+
+    def nearest(self, folder: str, names: Sequence[str]) -> str | None:
+        """The path of the first of `names` found in `folder` or the nearest folder above it,
+        up to the target root; the earlier name wins within a folder."""
+
+        parts = folder.split("/") if folder else []
+        for depth in range(len(parts), -1, -1):
+            here = "/".join(parts[:depth])
+            try:
+                entries = set(os.listdir(self.root / here))
+            except OSError:
+                continue
+            for name in names:
+                if name in entries:
+                    return f"{here}/{name}" if here else name
+        return None
+
+    def _text(self, relative: str) -> str | None:
+        return _read(self.root, relative)[0] if _inside(self.root, self.root / relative) else None
+
+    def rules(self, makefile: str) -> _Rules | None:
+        """What `makefile` defines; None where it cannot be read as a regular file inside the
+        target."""
+
+        if makefile not in self._rules:
+            text = self._text(makefile)
+            self._rules[makefile] = None if text is None else _make_rules(text)
+        return self._rules[makefile]
+
+    def scripts(self, package: str) -> frozenset[str] | None:
+        """The script names `package` holds; None where it is no JSON object inside the target."""
+
+        if package not in self._scripts:
+            text = self._text(package)
+            try:
+                document = None if text is None else json.loads(text)
+            except (ValueError, RecursionError):
+                document = None
+            scripts = document.get("scripts") if isinstance(document, dict) else None
+            self._scripts[package] = (
+                frozenset(scripts if isinstance(scripts, dict) else ())
+                if isinstance(document, dict)
+                else None
+            )
+        return self._scripts[package]
+
+    def ignored(self, relative: str) -> bool | None:
+        """Whether Git ignores `relative`; None where Git cannot say. Where Git does not list the
+        target, no ignore rule applies to it."""
+
+        if not self.ask_git:
+            return False
+        if relative not in self._ignored:
+            try:
+                status = _git_status(self.root, "check-ignore", "-q", "--", relative)[0]
+            except AuditError:
+                status = -1
+            self._ignored[relative] = {0: True, 1: False}.get(status)
+        return self._ignored[relative]
+
+
+def _stale(path: str, line: int, fact: str) -> _Reference:
+    return _Reference(path, line, fact, True)
+
+
+def _unsettled(path: str, line: int, fact: str) -> _Reference:
+    return _Reference(path, line, fact, False)
+
+
+def _concrete_path(span: str) -> str | None:
+    """The relative path `span` names, or None where it is no concrete relative path: it holds
+    no whitespace, does not start with `@`, `-`, `~` or `/`, a scheme or a drive letter, holds no
+    `<`, `>`, `$`, `*`, `{` or `\\`, and holds a `/` or ends in a file extension. A location
+    after the path (`:12`, `::name`, `#anchor`) is no part of it."""
+
+    if (
+        span[0] in _NOT_A_START
+        or not span.isprintable()
+        or any(c.isspace() for c in span)
+        or _SCHEME.match(span)
+        or _DRIVE.match(span)
+        or _NOT_A_PATH.intersection(span)
+    ):
+        return None
+    path = re.split(r"[:#]", span, maxsplit=1)[0]
+    return path if "/" in path or _EXTENSION.search(path) else None
+
+
+def _path_references(finder: _Finder, relative: str, line: int, span: str) -> list[_Reference]:
+    """The reference `span` makes, if it is a concrete relative path that neither the file's
+    folder nor the target root holds, Git does not ignore and the target contains. One whose
+    first segment is in neither place, such as a Git ref, a package scope or a repository slug,
+    is none, and so is a path in `.git`, which this command never enters."""
+
+    path = _concrete_path(span)
+    if path is None:
+        return []
+    named = path.rstrip("/")
+    first = named.split("/", 1)[0]
+    folder = relative.rpartition("/")[0]
+    base = finder.root / folder if folder else finder.root
+    if (
+        not named
+        or first == ".git"
+        or not (os.path.lexists(base / first) or os.path.lexists(finder.root / first))
+        or not finder.under(base / named)
+    ):
+        return []
+    places = [base / named, *([finder.root / named] if finder.under(finder.root / named) else [])]
+    if any(os.path.lexists(place) for place in places):
+        return []
+    try:
+        relatives = [
+            Path(os.path.normpath(place)).relative_to(finder.root).as_posix()
+            + ("/" if path.endswith("/") else "")
+            for place in places
+        ]
+    except ValueError:
+        return []
+    answers = [finder.ignored(item) for item in dict.fromkeys(relatives)]
+    quoted = _quote(span)
+    if any(answers):
+        return []
+    if None in answers:
+        fact = f"a path that the target lacks and Git could not say it ignores: {quoted}"
+        return [_unsettled(relative, line, fact)]
+    return [
+        _stale(
+            relative,
+            line,
+            f"a path the target holds neither beside this file nor at its root: {quoted}",
+        )
+    ]
+
+
+def _make_references(finder: _Finder, relative: str, line: int, span: str) -> list[_Reference]:
+    """The Make targets `span` names that the nearest makefile does not define."""
+
+    quoted = _quote(span)
+    targets, skip = [], False
+    for word in _SHELL_OPERATOR.split(span, 1)[0].split()[1:]:
+        if skip:
+            skip = False
+        elif word.startswith(("-C", "-f")) or word.partition("=")[0] in (
+            "--directory",
+            "--file",
+            "--makefile",
+        ):
+            return [
+                _unsettled(
+                    relative, line, f"a Make command that names a makefile or folder: {quoted}"
+                )
+            ]
+        elif word.startswith("-"):
+            skip = word in _MAKE_ARGUMENT
+        elif (
+            "=" not in word and not word.isdigit() and word.strip(".") and _MAKE_TARGET.match(word)
+        ):
+            targets.append(word)
+    if not targets:
+        return []
+    makefile = finder.nearest(relative.rpartition("/")[0], _MAKEFILES)
+    if makefile is None:
+        fact = f"a Make target, and no makefile is at or above this file: {quoted}"
+        return [_stale(relative, line, fact)]
+    rules = finder.rules(makefile)
+    if rules is None:
+        return [
+            _unsettled(
+                relative, line, f"a Make target, and {_plain(makefile)} was not read: {quoted}"
+            )
+        ]
+    missing = [target for target in targets if target not in rules.targets]
+    if missing and not rules.shows_all:
+        fact = (
+            f"a Make target that {_plain(makefile)} does not show: it has an include, a pattern "
+            f"rule or a rule named by a variable: {quoted}"
+        )
+        return [_unsettled(relative, line, fact)]
+    return [
+        _stale(
+            relative,
+            line,
+            f"a Make target that {_plain(makefile)} does not define ({target}): {quoted}",
+        )
+        for target in missing
+    ]
+
+
+def _script_references(
+    finder: _Finder, relative: str, line: int, span: str, name: str
+) -> list[_Reference]:
+    """The reference `span` makes to the script `name`, if the nearest `package.json` lacks it."""
+
+    if not _SCRIPT_NAME.match(name):
+        return []
+    quoted = _quote(span)
+    package = finder.nearest(relative.rpartition("/")[0], ("package.json",))
+    if package is None:
+        fact = f"a package script, and no package.json is at or above this file: {quoted}"
+        return [_stale(relative, line, fact)]
+    scripts = finder.scripts(package)
+    if scripts is None:
+        return [
+            _unsettled(
+                relative,
+                line,
+                f"a package script, and {_plain(package)} was not read as JSON: {quoted}",
+            )
+        ]
+    if name in scripts:
+        return []
+    return [
+        _stale(
+            relative,
+            line,
+            f"a package script that {_plain(package)} does not define ({_plain(name)}): {quoted}",
+        )
+    ]
+
+
+def _span_references(finder: _Finder, relative: str, line: int, span: str) -> list[_Reference]:
+    if _MAKE.match(span):
+        return _make_references(finder, relative, line, span)
+    script = _SCRIPT.match(_SHELL_OPERATOR.split(span, 1)[0])
+    if script:
+        return _script_references(finder, relative, line, span, script.group(1))
+    return _path_references(finder, relative, line, span)
+
+
+def _scan(finder: _Finder, relative: str) -> list[_Reference] | None:
+    """The references in one file's project-owned text; None where it cannot be read, which
+    the hidden-characters check reports."""
+
+    text = _read(finder.root, relative)[0]
+    if text is None:
+        return None
+    owned = _owned_text(text)
+    if owned is None:
+        fact = (
+            "its managed blocks cannot be told apart, so none of its text was read for references"
+        )
+        return [_unsettled(relative, 0, fact)]
+    found: dict[tuple[int, str], _Reference] = {}
+    for line, span in _code_spans(owned):
+        for reference in _span_references(finder, relative, line, span):
+            found.setdefault((line, reference.fact), reference)
+    return list(found.values())
+
+
+def _project_owned(root: Path, files: Sequence[str], scope: _Scope) -> list[str]:
+    """The files whose text is the project's: each Markdown file in `files`, and the project's
+    own local fragment, but not the manifest's copies of OutcomeBound's skills and fragments,
+    the agents' notes, or a file that may not be opened. The manifest is the target's own data,
+    which a finding that decides nothing may trust."""
+
+    copies = {
+        str(PurePosixPath(artifact["path"]))
+        for artifact in _artifacts(root)
+        if isinstance(artifact, dict)
+        and artifact.get("kind") in _COPIES
+        and isinstance(artifact.get("path"), str)
+    }
+    return [
+        path
+        for path in dict.fromkeys([*files, LOCAL])
+        if path.lower().endswith(_MARKDOWN)
+        and path not in copies
+        and not any(path == note or path.startswith(f"{note}/") for note in NOTES)
+        and not scope.personal(path)
+        and _unopened(root, path, scope) is None
+    ]
+
+
+def _references(
+    root: Path, files: Sequence[str], scope: _Scope, ask_git: bool
+) -> tuple[list[str], list[_Reference]]:
+    """The project-owned files read, and every reference found in them."""
+
+    finder = _Finder(root, ask_git)
+    read: list[str] = []
+    found: list[_Reference] = []
+    for relative in _project_owned(root, files, scope):
+        references = _scan(finder, relative)
+        if references is not None:
+            read.append(relative)
+            found.extend(references)
+    return read, found
+
+
+def _reference_finding(reference: _Reference) -> Finding:
+    """A reference as a review hit that does not change the result."""
+
+    step = _NEXT["stale-reference" if reference.settled else "unsettled-reference"]
+    return _finding(
+        "stale-reference",
+        reference.path,
+        reference.line,
+        UNVERIFIED,
+        reference.fact,
+        next=step,
+        decides=False,
+    )
+
+
+def _reference_findings(read: Sequence[str], found: Sequence[_Reference]) -> list[Finding]:
+    """A finding per reference found, and a PASS for each file read that holds none."""
+
+    flagged = {reference.path for reference in found}
+    return [
+        *(_reference_finding(reference) for reference in found),
+        *(
+            _finding("stale-reference", path, 0, PASS, "nothing matched")
+            for path in read
+            if path not in flagged
+        ),
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class _Inputs:
+    """What `check` and `stale_references` both start from: the files of a target and the
+    harnesses whose rows say which of them are instruction files."""
+
+    listed: list[str] | None
+    listing: str
+    present: list[str]
+    names: tuple[str, ...]
+    selected_by: str
+    scope: _Scope
+    # The instruction files the selected harnesses load.
+    files: list[str]
+
+
+def _inputs(root: Path, harnesses: Sequence[str]) -> _Inputs:
+    listed, listing = _listed(root)
+    present = _walk(root, _scope([*adapters.table(), *harnesses]), listed)
+    names, selected_by = _selection(root, harnesses, present)
+    scope = _scope(names)
+    files = [path for path in present if scope.wants(path)]
+    return _Inputs(listed, listing, present, names, selected_by, scope, files)
+
+
+def stale_references(target: Path, harnesses: Sequence[str] = ()) -> list[Finding]:
+    """Each path, Make target or package script that the project-owned instruction text of
+    `target` names and the target no longer holds, as the `stale-reference` check settles it:
+    one `Finding` each (`decides` is False; `path` and `line` place the span, `fact` quotes it,
+    escaped). A reference this check cannot settle (a `-C` form, a makefile with an include) is
+    not one. `harnesses` selects as for `check`. It reads the same files `check` reads, as text;
+    it runs nothing and writes nothing."""
+
+    root = Path(target).resolve()
+    if not root.is_dir():
+        raise AuditError(f"{target} is not a directory")
+    inputs = _inputs(root, harnesses)
+    _read_files, found = _references(root, inputs.files, inputs.scope, inputs.listed is not None)
+    return [_reference_finding(reference) for reference in found if reference.settled]
+
+
 # --- the report --------------------------------------------------------------------
 
 
@@ -1502,20 +2014,20 @@ def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) 
     root = Path(target).resolve()
     if not root.is_dir():
         raise AuditError(f"{target} is not a directory")
-    listed, listing = _listed(root)
-    present = _walk(root, _scope([*adapters.table(), *harnesses]), listed)
-    names, selected_by = _selection(root, harnesses, present)
-    scope = _scope(names)
+    inputs = _inputs(root, harnesses)
+    names, selected_by, listing = inputs.names, inputs.selected_by, inputs.listing
     notes = _notes(root)
-    files = [path for path in present if scope.wants(path)] + notes
+    files = inputs.files + notes
     own = _manifest_entries(root)
     unused = frozenset(
         harness
         for harness in names
-        if selected_by == "table" and not _only(harness, names, present)
+        if selected_by == "table" and not _only(harness, names, inputs.present)
     )
+    audited = _audit(root, files, names, base, own, unused)
+    read, found = _references(root, inputs.files, inputs.scope, inputs.listed is not None)
     ordered = tuple(
-        sorted(_with_rulings(root, _audit(root, files, names, base, own, unused)), key=_order)
+        sorted(_with_rulings(root, [*audited, *_reference_findings(read, found)]), key=_order)
     )
     if notes:
         listing += "; and the agents' notes in .agents/handoffs/ and .agents/shared-memory/"
@@ -1524,7 +2036,7 @@ def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) 
         target=str(target),
         harnesses=names,
         selected_by=selected_by,
-        listed_by="walk" if listed is None else "git",
+        listed_by="walk" if inputs.listed is None else "git",
         listing=listing,
         counts=_counts(ordered),
         findings=ordered,
@@ -1758,12 +2270,17 @@ _DESCRIPTION = (
     "nor anything outside the target but this engine's own data, and reports a path it leaves "
     "unopened as UNVERIFIED. Of a Git work tree it reads only what Git tracks or does not "
     "ignore, each path a harness row names exactly, and the agents' notes in .agents/handoffs/ "
-    "and .agents/shared-memory/, which Git ignores and the next session reads. It starts no "
-    "process but git, to list the files and for --base, opens no connection, "
+    "and .agents/shared-memory/, which Git ignores and the next session reads. It reports, "
+    "without changing its result, each path, Make target or package script that the project's "
+    "own Markdown instruction text names in an inline code span and the target no longer holds "
+    "(stale-reference); for that check only, it also reads .outcomebound/fragments/local.md "
+    "and the makefiles and package.json files it looks targets and scripts up in, as text. It "
+    "starts no process but git, to list the files, to ask which candidate paths it ignores and "
+    "for --base, opens no connection, "
     "runs nothing the files name, and writes nothing. It reads the person's own rulings, "
     "~/.outcomebound/rulings.json, which the rule verb writes. Each finding names the prompt "
-    "standard's rule it answers to (S4 security, S7 loading) and whether it is a gate or asks a "
-    "person to review."
+    "standard's rule it answers to (S4 security, S14 agreement, S7 loading) and whether it is a "
+    "gate or asks a person to review."
 )
 _EXITS = (
     "exits: 0 PASS, 1 FAIL, 2 UNVERIFIED or a usage error. A finding marked (does not change "
