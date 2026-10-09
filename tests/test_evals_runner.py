@@ -555,8 +555,9 @@ def test_specialized_fixtures_run_only_when_named() -> None:
     """New research cases must not increase the default model-call budget."""
 
     named = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
-    assert len(named) == 32
+    assert len(named) == 34
     assert {"patch-validation", "property-oracles", "testing-no-work"} <= set(named)
+    assert {"onboard-plain", "onboard-signals"} <= set(named)
     new_project = {
         "new-project-ai",
         "new-project-idea",
@@ -900,8 +901,9 @@ def test_command_event_boundaries_fail_closed(boundary):
     assert result == (("echo check", expected, ""),) if expected else result is None
 
 
-def test_known_unsupported_json_transport_spends_no_model_call(tmp_path):
-    done, out = _invoke(tmp_path, env={"OB_FAKE_VERSION": "codex-cli 0.160.1"})
+@pytest.mark.parametrize("version", sorted(RUN.NO_OBSERVED_MODEL))
+def test_known_unsupported_json_transport_spends_no_model_call(tmp_path, version):
+    done, out = _invoke(tmp_path, env={"OB_FAKE_VERSION": version})
     assert done.returncode == RUN.PREFLIGHT_EXIT
     assert "No model call started" in done.stderr
     assert "--retain-native" in done.stderr

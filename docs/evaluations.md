@@ -43,8 +43,8 @@ What they say about statistics, task selection, error analysis and evaluation to
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
 | OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
-| A new project goes from an idea to a walking skeleton through the new-project reference | None: no run yet | Six named-only fixtures exist (`evals/fixtures/new-project-*`); what the reference changes for an agent is `UNVERIFIED` |
-| An agent onboards a repository with the guide `--detect` names | None: no run yet | The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite; what the guide changes for an agent is `UNVERIFIED` |
+| The new-project reference changes what an agent does with an idea: on the weak idea 0 of 3 to 3 of 3, on the spike that misses its bar 0 of 3 to 3 of 3, on the idea that needs real people 0 of 3 to 2 of 3 | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side; the final text ran on three fixtures. No run read the reference for a one-off script, and the planted-defect claim of `new-project-skeleton` cannot be seen on the Claude arm |
+| An agent onboards a repository with the guide `--detect` names: on `onboard-signals` 0 of 3 to 2 of 3, and the control `onboard-plain` 3 of 3 on both sides | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side. The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite |
 
 ## The scope of every result
 
@@ -104,11 +104,12 @@ recorded run, because a model call does not repeat exactly.
 | Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
 | Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
 | Testing guidance research trial, baseline | 2026-10-09 | gpt-6.1-sol medium | 1 | E22 | Testing guidance research trial and instrument correction |
+| 1.6.0 pass: new-project route, onboarding, changed skills, 1.5.0 against 1.6.0 | 2026-10-09 | Claude Sonnet 5.5 medium, Claude Haiku 5.5 high; one Codex call on gpt-6.1-sol medium | 123 | E23 | E23 |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -118,7 +119,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E22). Other documents may cite the id.
+Each finding has an id (E1 to E23). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -314,6 +315,15 @@ Each finding has an id (E1 to E22). Other documents may cite the id.
     OutcomeBound text; no other check of that ran.
 
   1 run an arm, 28 runs, 2026-10-06. One run shows only a large difference.
+
+- **E23. On Claude Sonnet 5.5, the 1.6.0 new-project route changed what the agent did with an
+  idea.** With a weak idea, no 1.5.0 run and every 1.6.0 run recommended a probe with real people
+  and called demand `UNVERIFIED`. With a spike that misses its bar, every 1.5.0 run built the
+  product and every 1.6.0 run stopped at the throwaway spike. The first 1.6.0 text regressed on a
+  feature that calls a model (evaluation tasks after the code) and still built an app before a
+  probe with people; two edits fixed both on 3 runs. Onboarding with 1.6.0 recorded a generated
+  file as not to be edited, with its source, in 2 of 3 runs, and 1.5.0 in none. Three runs a
+  side show only large effects; the record is the section E23 below.
 
 ## The question that evals answer
 
@@ -1640,3 +1650,107 @@ The runner recorded 219.6 seconds. Native cumulative usage across nine model res
 1,019 reasoning tokens. These totals are not one context length, a price or a general cost
 estimate. No real filesystem, deployment, exhaustive security or general reliability claim
 follows from this dictionary fixture.
+
+## E23. 1.6.0 pass: the new-project route, onboarding and the changed skills, on Claude subagents
+
+Date: 2026-10-09. Model calls: 122 Claude subagent runs and 1 Codex call (123).
+
+### Question
+
+Does the 1.6.0 text change what an agent does, compared with the 1.5.0 text, on:
+
+- the new-project route (`skills/using-outcomebound/references/new-project.md`);
+- onboarding an existing project (the 1.6.0 `adopt` engine and the `adopt-outcomebound` skill);
+- the working skills whose text changed?
+
+### Method
+
+- Arms: `current` from two checkouts. The base checkout holds the 1.5.0 engine and skill text with the 1.6.0 `evals/` folder. The candidate checkout holds the 1.6.0 engine and skill text. Each comparison is base against candidate within one model. No run compares models.
+- Model: in-session Claude subagents through `evals/claude_arm.py`.
+  - Claude Sonnet 5.5 at medium effort: the six `new-project-*` fixtures and the onboarding pair, 3 runs a side.
+  - Claude Haiku 5.5 at high effort: 12 regression fixtures, 1 run a side; ladder rungs 2 and 3, 3 runs a side; `new-project-idea` and `new-project-weak`, 3 runs a side.
+- Three versions of the 1.6.0 text ran:
+  - "first": the text as the pull request first held it;
+  - "middle": after the first two edits below;
+  - "final": the text that ships.
+  The final text ran on the three fixtures that the edits touch, 3 Sonnet runs each.
+- A run is excluded, and its cell gets one more run, when the grader cannot read its transcript or the subagent's final report is empty. The rule was fixed before the first exclusion. Two runs were excluded, one on each side. The reader now reads the first of them: its threshold claim reads PASS and its other four claims fail. The exclusion stands as declared.
+- Codex: one call on Codex CLI 0.162.0-alpha.17.2 (gpt-6.1-sol, medium). Its events reported no model, so the call does not count, and no Codex leg ran.
+
+### Grader corrections after the first grading
+
+The first grading had misreads, which a reading of the transcripts and the answers showed. Each correction applies to both sides alike. Every run of both sides was graded again with the corrected graders, which ran from a folder outside each run's work folder. The re-grade reused the first check of the protected inputs, because the grader files are themselves protected. The corrections:
+
+- A `Done:` line that is written by hand, without backticks, is a record. For the small fixture, a `Done:` line in a working note is also a record, as the reference allows.
+- A build word under a negation in its own clause, or after a cheap test, is not a recommendation to build. The word lists that read this are words, not meaning, and they credit the base arm's wording too.
+- "Stopped" and "did not build" say that the idea stops or changes. "Result" is a subject word where FAIL and a figure share one unit of the answer.
+- A comment line in a heredoc no longer hides the commands that follow it.
+- A call to a tool that does not exist, which the harness rejected, is no command.
+- A heading or a label line is read together with the list item under it. A note that names the order of its assumptions in a heading ranks the list under it.
+- The question about the appetite bears on the frame.
+- In the AI fixture, the file that defines `classify` is the feature file, also where its model call is a seam that raises a not-configured error. The design leaves the provider to the person, so a correct run writes such a seam.
+
+In the onboarding pair, the first Done claim required a run of the project's tests. The onboarding design runs them only on the person's yes, so `done-measured-or-offered` replaced it. A positive claim, `generated-file-recorded`, was added. Both changes came after the first pass.
+
+### Results (PASS of all required claims)
+
+| Model | Fixture | 1.5.0 | 1.6.0 first | 1.6.0 middle | 1.6.0 final |
+| --- | --- | --- | --- | --- | --- |
+| Sonnet | new-project-weak | 0/3 | 3/3 | not run | not run |
+| Sonnet | new-project-spike | 0/3 | 3/3 | 2/6 | 3/3 |
+| Sonnet | new-project-idea | 0/3 | 0/3 | 2/3 | 2/3 |
+| Sonnet | new-project-ai | 3/3 | 1/3 | 3/3 | 3/3 |
+| Sonnet | new-project-skeleton | 0/3 | 0/3 | not run | not run |
+| Sonnet | new-project-small | 0/3 | 0/3 | not run | not run |
+| Sonnet | onboard-signals | 0/3 | 2/3 | not run | not run |
+| Sonnet | onboard-plain | 3/3 | 3/3 | not run | not run |
+| Haiku | new-project-weak | 0/3 | 2/3 | not run | not run |
+| Haiku | new-project-idea | 0/3 | 0/3 | 1/3 | not run |
+| Haiku | ladder-2-last-units | 0/3 | 0/3 | not run | not run |
+| Haiku | ladder-3-reorder-list | 3/3 | 3/3 | not run | not run |
+| Haiku | 12 regression fixtures, 1 run a side | 10/12 | 9/12 | not run | not run |
+
+Claim level, where the versions differ (PASS of runs):
+
+| Model | Fixture | Claim | 1.5.0 | 1.6.0 first | 1.6.0 middle | 1.6.0 final |
+| --- | --- | --- | --- | --- | --- | --- |
+| Sonnet | new-project-weak | stop-or-probe-recommended | 0/3 | 3/3 | — | — |
+| Sonnet | new-project-weak | no-simulated-user-counted-as-demand | 1/3 | 3/3 | — | — |
+| Sonnet | new-project-weak | strongest-case-against-given | 0/3 | 3/3 | — | — |
+| Sonnet | new-project-spike | spike-kept-out-of-the-product | 0/3 | 3/3 | 6/6 | 3/3 |
+| Sonnet | new-project-spike | question-and-threshold-written-before-the-spike | 0/3 | 3/3 | 2/6 | 3/3 |
+| Sonnet | new-project-idea | nothing-built-beyond-a-probe | 0/3 | 0/3 | 3/3 | 3/3 |
+| Sonnet | new-project-idea | recommendation-named | 0/3 | 3/3 | 3/3 | 3/3 |
+| Sonnet | new-project-idea | appetite-asked-or-flagged | 0/3 | 3/3 | 3/3 | 3/3 |
+| Sonnet | new-project-idea | questions-bear-on-a-decision | 3/3 | 3/3 | 2/3 | 2/3 |
+| Sonnet | new-project-ai | tasks-and-grader-written-before-the-feature | 3/3 | 1/3 | 3/3 | 3/3 |
+| Sonnet | onboard-signals | done-measured-or-offered | 2/3 | 3/3 | — | — |
+| Sonnet | onboard-signals | generated-file-recorded | 0/3 | 2/3 | — | — |
+| Haiku | new-project-idea | nothing-built-beyond-a-probe | 0/3 | 0/3 | 3/3 | — |
+| Haiku | new-project-idea | frame-complete | 0/3 | 3/3 | 2/3 | — |
+
+### What the runs showed, and the edits that followed
+
+- `new-project-weak`: with 1.5.0, every Sonnet run counted invented users as demand or recommended building. With 1.6.0, every Sonnet run recommended a probe with real people and called demand `UNVERIFIED`.
+- `new-project-spike`: with 1.5.0, every run built the product past the failed bar. With 1.6.0, every run kept the spike throwaway, ran it and reported FAIL with the figure.
+- `new-project-ai`: with the first text, the evaluation tasks came after the code that calls the model in 2 of 3 runs. The rule was the seventh line of the skeleton's bar. Edit: the skeleton section now says to write the evaluation tasks and their grader first, before the code that calls the model, and to commit them first where the project commits. After the edit: 3/3 in both later versions.
+- `new-project-idea`: with the first text, every run framed the idea and then built the app, although the riskiest assumption needs real bakeries. Edit: a probe that needs people holds the skeleton until its result is in or the person says to build without it. The person builds what the probe itself needs, and a request to start the project does not waive the probes. After the edit, no run built the app (Sonnet 6 of 6, Haiku 3 of 3). The remaining failure is a question that names no decision its answer changes.
+- `new-project-spike` in the middle version: the note with the question and the pass result came after the probe code in 4 of 6 runs. A third edit says "before the first line of probe code". The final text gave 3 of 3. Three to six runs a side cannot separate these results from chance, and no edit is shown to cause them.
+- `onboard-signals`: on the corrected Done claim alone, 2/3 to 3/3. One 1.5.0 run reported a test pass after the install that its transcript does not hold. With the added claim, 0/3 to 2/3: two 1.6.0 runs recorded the generated file as not to be edited by hand, with the file that shows it, and no 1.5.0 run did. `onboard-plain`: neither side added a project fact to a project with none.
+- `new-project-small`: no run on either side read the reference for a one-off script, so the cells measure nothing about its text.
+- `new-project-skeleton`: the remaining failure on both sides is the planted-defect claim, which this arm cannot see (see the limits).
+
+### Haiku 5.5 at high effort as the model
+
+- On the 12 regression fixtures, base and candidate gave the same verdict on 11. The difference on `diagnose-typo`, a history search, is one run a side and is unresolved. Both sides of `unclear-outcome` failed on a protected input: the run edited `AGENTS.md`.
+- On ladder rung 2, every Haiku run on both sides ran the slow suite that the ladder measures. Haiku does not show the sizing effect that E10 measured.
+- On `new-project-weak` and `new-project-idea`, Haiku moved in the same direction as Sonnet.
+- Haiku can serve as a quick check of direction, claim by claim, on fixtures it passes, with at least two runs a side. It is not the model to measure a sizing or a route effect.
+
+### Limits
+
+- Three runs a side show only large effects.
+- The Claude arm reads commands from the subagent's Bash calls. A check that a run plants and undoes inside one compound command shows only the last status, on either side.
+- The arm's install holds no `adopt` manifest, so `outcomebound adopt . --done` refuses inside a fixture.
+- A subagent can leave a process running. In this pass one subagent stopped a server that another run had left running. The prompt now asks each subagent to stop every process it starts.
+- The ordering claims read file creation times where nothing is committed. A file that is written again with a new inode reads as created later.
