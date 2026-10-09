@@ -67,7 +67,7 @@ a commit is not required. The install adds:
 | File or folder | Purpose |
 | --- | --- |
 | `AGENTS.md` | The contract, project Done commands, CI commands and irreversible edges found in your files |
-| Your harness's skills folder | Guidance for sizing work, requirements, decisions, tests, diagnosis, review, specs, tickets, handoffs and explorable pages |
+| Your harness's skills folder | Guidance for sizing work, requirements, decisions, tests, diagnosis, review, specs, tickets, handoffs, explorable pages, landing a change, acceptance by an outside party and a tracker that is not your ticket store |
 | `.outcomebound/` | Selected fragments and a manifest of installed files |
 | Harness instruction files | An `@AGENTS.md` import where the harness needs one |
 

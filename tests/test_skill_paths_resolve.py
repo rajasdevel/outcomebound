@@ -39,6 +39,9 @@ CHECKOUT_ONLY = {
     "explain-spec": (),
     "hand-off-tickets": (),
     "explorable": (),
+    "land-change": (),
+    "run-acceptance": (),
+    "sync-tracker": (),
 }
 
 # skill name -> further files shipped beside its entrypoint
