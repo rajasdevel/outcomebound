@@ -40,7 +40,9 @@ what its downside is, so the evidence chooses your recommendation.
 - whether it can be undone;
 - what happens if no answer comes, and the state the held work waits in: the side of the held act
   that is easiest to stay in, never half done; give it as a `facts` pair labelled
-  `If unanswered`;
+  `If unanswered`. A brief that holds work says which: it names a default and its expiry, the moment the
+  default applies, so the work that waits on it can go on; or it says plainly that the work waits
+  for the person, with no expiry. Never invent a time limit;
 - a diagram only when order, dependency, flow or before/after is the point.
 
 A question in prose, a table of options, or a list without a recommendation and an undo line is not
