@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "bba9aa5c27d301f5ccdb3a8d0b83e12edd9660c2173ff2463494ea3f8dd43140",
-      "sha256": "3502c3d508c7203d5cc13b9a97a26413a07796446bda12dbd1f3142dd7aa16d4"
+      "frame": "c5ae440138cbc9a9bca1a718bde64d8cf88351d4c77a52fcebcfac7bc9385797",
+      "sha256": "7c6fd0081b35da9e84cd3eeb0c5ed21f3728fe7d3fd3acbc7d8d748eaee6bfe6"
     },
     {
       "kind": "fragment",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "1082081ae12bf083f1577ad35a8fe7f53c4ef71d4e65dc8187d57f3f60f61243"
+      "sha256": "afbe7dfbb145e848df2bf6649becaad59418ea2007104359409c6307e370e181"
     },
     {
       "kind": "skill",
@@ -98,7 +98,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "b2d33f36a5f9b072fafe78239a2c705524560faa06105a871e2c236bc9b1df3f"
+      "sha256": "1c4cf0c67490b2853fbbd164261a1f72549d26eadb8dd931b9cb96c3af0e3bc4"
     },
     {
       "kind": "skill",
@@ -116,7 +116,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "59d40a8df1a3aa14a1fd51b4fe52587dd7e9ae23f7975f21a28280296a58b6dd"
+      "sha256": "3d71a2fe46e2e3f571426d4298f613a36996d2ce14b14c07c3b1bec202dfb4b6"
     },
     {
       "kind": "skill",
@@ -143,7 +143,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e9e92b04349c312673d6bc7eae3654f94ad618eccb15c9caafac380dd33d7836"
+      "sha256": "f769495c78d80179352a83fb0b582159d67dd58c033faaf5bd68267b99f75dfd"
     },
     {
       "kind": "skill",
@@ -188,7 +188,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "6b129dd756ecefdd6e3d741d2649c564b9ac3d2a5881aab14542a60833c1ac19"
+      "sha256": "826f5a48b824163a1b1cb3babb2b1772f0862818a1b3587b49cbd065f6c360cd"
     },
     {
       "kind": "skill",
@@ -206,7 +206,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "a327b9ceaae2351c73ebbef1d28a7c74310dee7dfee1ad2ac1a7cf326064adc0"
+      "sha256": "b51833a3c1f117eafee5bd3a9f237ab159fb343b4fbc4bc6725ea99693e2aaeb"
     }
   ]
 }

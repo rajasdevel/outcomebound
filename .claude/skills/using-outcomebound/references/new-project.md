@@ -6,9 +6,10 @@ needs, with a Done command that can fail. From there the [lifecycle reference](l
 carries the work. Every stage below says when it adds nothing; a small idea skips most of them.
 Stopping the idea, or changing it, is a result: report it as one.
 
-Where the folder has no `AGENTS.md` with the OutcomeBound block, set it up first: `git init`, then
-`outcomebound adopt .` with the harness in use. Done reads `UNVERIFIED` until the skeleton has a
-Done command.
+Where the idea will be kept and the folder has no `AGENTS.md` with the OutcomeBound block, set it
+up first: `git init`, then `outcomebound adopt .` with the harness in use; Done reads `UNVERIFIED`
+until the skeleton has a Done command. A throwaway needs no install: its Done command can live in
+the working note.
 
 ## Size the idea by who depends on it
 
@@ -43,7 +44,8 @@ it reads `UNVERIFIED` until a person reports what users did or said. End the fra
 recommendation: build, probe first, or stop. Spending, accounts and publishing are the person's
 (`decision-brief`).
 
-Skip when: the idea is throwaway, or the person has already settled the outcome and the bar.
+Skip when: the idea is throwaway, or the person has already settled the outcome, the bar and the
+bounds; for a personal tool, the outcome, the appetite and the no-gos are the whole frame.
 
 ## Probe what could end it
 
@@ -65,9 +67,8 @@ rejected, its owner and whether it can be undone. They are usually: where data l
 its schema; authentication and the trust boundary; hosting and what it spends; the language and
 framework, the one the people who keep it can run for its lifespan, new technology only where the
 idea needs it; module boundaries, one deployable first; license and visibility; and, for a feature
-that calls a model, the provider and how its output is evaluated. Decide the reversible ones
-yourself, one line each; a choice that is hard to undo and the person's goes as a decision brief.
-Then ask what the likeliest reason is that this fails in its first months, and turn each answer
+that calls a model, the provider and how its output is evaluated. Settle each as
+`gather-requirements` settles a gap. Then ask what the likeliest reason is that this fails in its first months, and turn each answer
 into a no-go, a bound or a check of the skeleton.
 
 Skip when: the idea is throwaway or personal; a line in the working note per choice is enough.
@@ -75,7 +76,7 @@ Skip when: the idea is throwaway or personal; a line in the working note per cho
 ## Build the walking skeleton
 
 Build the thinnest path from the user's action through each layer the outcome needs and back, and
-to the delivery destination where one is in scope. Report each line of its bar as `PASS`, `FAIL` or
+to the delivery destination where one is in scope and the person granted it. Report each line of its bar as `PASS`, `FAIL` or
 `UNVERIFIED`:
 
 1. One Done command passes on a clean checkout: format, lint, type checks, tests and build, failing
@@ -91,8 +92,9 @@ to the delivery destination where one is in scope. Report each line of its bar a
 6. One command starts the app or service.
 7. For a feature that calls a model: seed evaluation tasks drawn from its expected use, with a
    grader, before the feature.
-8. Where delivery is in scope, the deployed version observed at its destination, or `UNVERIFIED`
-   with what would settle it.
+8. Where delivery is in scope and the person deployed, or granted the deploy and the account it
+   needs, the deployed version observed at its destination; else `UNVERIFIED`, with what would
+   settle it.
 
 Offer the quality floor (`outcomebound floor --help`): from the first commit, it has nothing old to
 grandfather. Then record Done with `outcomebound adopt . --done '<command>'`.
@@ -102,6 +104,8 @@ Skip when: the idea is throwaway (line 1 only), or personal (CI and delivery opt
 ## Hand it to the lifecycle
 
 Build the first features as thin slices that each reach the user, riskiest first. Cut tickets only
-where separate outcomes need tracking (`slice-tickets`); keep a goal envelope, with a feature list
-whose items carry a pass flag, only where the build spans sessions. Trim the design as the code
-grows: delete what the code now shows. Continue with the [lifecycle reference](lifecycle.md).
+where separate outcomes need tracking (`slice-tickets`); where the build spans sessions, the goal
+envelope's feature list gives each item a pass flag. Trim the design as the code grows: delete what
+the code now shows. Continue with the [lifecycle reference](lifecycle.md).
+
+Skip when: the skeleton is the whole outcome.

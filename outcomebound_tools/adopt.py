@@ -86,11 +86,7 @@ AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
-    "using-outcomebound": (
-        "when a project's documents or habits suggest more process than a change needs, when work "
-        "spans lifecycle stages, when a project starts from an idea with no repository, or when "
-        "changing text a model reads"
-    ),
+    "using-outcomebound": "when unsure how much design, testing, review or process a task needs",
     "decision-brief": "when a decision is the user's to make",
     "gather-requirements": (
         "when a request's outcome or completion bar is unclear, "

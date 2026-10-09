@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it. Builds a single-file HTML page the engine checks, beside the decision brief and never in place of it; the decision-brief and gather-requirements skills send a decision or an interview here where text serves it badly.
+description: Use when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it. Builds a single-file HTML page the engine checks, beside the decision brief and never in place of it; the decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
 ---
 
 # Explorable

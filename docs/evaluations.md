@@ -43,6 +43,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
 | OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
+| A new project goes from an idea to a walking skeleton through the new-project reference | None: no run yet | Six named-only fixtures exist (`evals/fixtures/new-project-*`); what the reference changes for an agent is `UNVERIFIED` |
 
 ## The scope of every result
 

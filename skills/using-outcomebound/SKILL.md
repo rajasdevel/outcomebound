@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when a project's documents or habits suggest more process than a change needs, when work spans lifecycle stages, when a project starts from an idea with no repository, or when changing text a model reads. Sizes the work and routes each step to the skill or reference it needs.
+description: Use when unsure how much design, testing, review or process a task needs. That includes a project whose documents or habits suggest more process than a change needs, work that spans lifecycle stages, a project that starts from an idea with no repository, and a change to text a model reads. Sizes the work and routes each step to the skill or reference it needs.
 ---
 
 # Using OutcomeBound
@@ -24,15 +24,16 @@ The ids below are the ones a project's `local` guidance names on its Mechanisms 
 
 ## Required or suggested
 
-A step a project names is required where a check, hook, CI job or ruleset enforces it, or where
-the text says it is required; it is suggested where the text recommends it, such as "should",
-"recommended" or "consider". Do what is required. Size what is only suggested, such as a design
-note, a record, the full suite or a second reader for every change, like any mechanism above:
-apply it where its row holds for this change, and say in the report what you left out and why. A
-change that is only text for people, or mechanical (a format fix, a rename), meets no row by its
-size: it needs no independent review and no full suite unless the project requires them. A policy
-gate that passes shows a match with a rule the project configured: it does not show that the
-product works, and it is no one's approval of this particular action.
+Skip a mechanism whose only justification is habit, diff size, or generic caution. A project
+document that suggests a note, a record, the full suite or a review for every change sets no
+floor: follow what it requires, and apply what it only suggests where the change warrants it,
+saying in the report what you left out and why. A step is required where a check, hook, CI job or
+ruleset enforces it, or where the text says it is required; it is suggested where the text
+recommends it, such as "should", "recommended" or "consider". A change that is only text for
+people, or mechanical (a format fix, a rename), meets no row above by its size: it needs no
+independent review and no full suite unless a row's condition holds or the project requires them.
+A policy gate that passes shows a match with a rule the project configured; it does not show that
+the product works, and it is no one's approval of this particular action.
 
 ## Text a model reads
 
@@ -48,7 +49,7 @@ or a decision, in the most checkable form that fixes it: a check or a refusal be
 | a decision is the person's | `decision-brief` |
 | the outcome or the bar is unclear, or requirements come from a source | `gather-requirements` |
 | a person must act on a spec they did not write | `explain-spec` |
-| a decision, a lesson or many questions that text serves badly | `explorable`, beside the decision brief, never in place of it |
+| the person asks for an interactive page, or to try options or learn a mechanism by trying it | `explorable`, beside the decision brief, never in place of it |
 
 ## Read the full contract
 

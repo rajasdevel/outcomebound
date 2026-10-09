@@ -78,7 +78,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when a project's documents or habits suggest more process than a change needs, when work spans lifecycle stages, when a project starts from an idea with no repository, or when changing text a model reads: read .claude/skills/using-outcomebound/SKILL.md
+- when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
 - when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md
 - when writing, changing or judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md

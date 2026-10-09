@@ -27,8 +27,7 @@ the project, the brief names the act so the user's reply can state it, not only 
 Before you ask, check everything within reach that could change the answer: the history of the
 same decision and what was tried before, the files and settings the answer touches, the project's
 own rules, the read-only commands that settle a fact. Work out what each way forward leads to and
-what its downside is, so the evidence chooses your recommendation, and name what you read on the
-brief's evidence line.
+what its downside is, so the evidence chooses your recommendation.
 
 ## Write each brief
 
