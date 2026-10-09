@@ -63,7 +63,7 @@ part of the row has no evidence here.
 
 | Transition | Existing owner | v1.5.0 completion evidence |
 | --- | --- | --- |
-| Idea to framed outcome | `gather-requirements`, `using-outcomebound`, decision support | A bounded ambiguous request becomes a clear outcome, assumptions and reserved decisions, without unnecessary questions or ceremony. |
+| Idea to framed outcome | `gather-requirements`, `using-outcomebound` and its new-project reference, decision support | A bounded ambiguous request becomes a clear outcome, assumptions and reserved decisions, without unnecessary questions or ceremony; an idea with no repository reaches a walking skeleton whose Done command can fail. |
 | Sources to requirements | sources design, `gather-requirements` | Requirements retain their constraints, provenance and correction history; visual requirements retain unshown states and unresolved comparisons. |
 | Requirements to design | contract's spec mechanism, `explain-spec` | The design settles downstream choices and material quality dimensions; explanation names gaps without claiming a person's understanding. |
 | Design to accepted work | tickets design, `slice-tickets` | The breakdown covers the accepted outcome without inflating ticket count; source mappings and semantic review agree. |
