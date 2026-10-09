@@ -1252,7 +1252,7 @@ _NOT_A_PATH = frozenset("<>$*{\\")
 # A path does not start with a package scope, a flag, the home folder or the root folder.
 _NOT_A_START = frozenset(("@", "-", "~", "/"))
 _MAKE = re.compile(r"make(?:\s|\Z)")
-_SCRIPT = re.compile(r"(?:npm|pnpm|yarn)\s+run\s+(\S+)")
+_SCRIPT = re.compile(r"(npm|pnpm|yarn)\s+run\s+(\S+)")
 _MAKE_TARGET = re.compile(r"[A-Za-z0-9_.][A-Za-z0-9_./+-]*\Z")
 _SCRIPT_NAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.:@/-]*\Z")
 # Where a command in a code span ends: a shell operator.
@@ -1568,9 +1568,11 @@ def _make_references(finder: _Finder, relative: str, line: int, span: str) -> li
 
 
 def _script_references(
-    finder: _Finder, relative: str, line: int, span: str, name: str
+    finder: _Finder, relative: str, line: int, span: str, name: str, runner: str = "npm"
 ) -> list[_Reference]:
-    """The reference `span` makes to the script `name`, if the nearest `package.json` lacks it."""
+    """The reference `span` makes to the script `name`, if the nearest `package.json` lacks it.
+    `yarn run` also runs a binary a dependency installs, which no file here lists, so a name
+    `package.json` does not define reads unsettled under `yarn`."""
 
     if not _SCRIPT_NAME.match(name):
         return []
@@ -1590,6 +1592,15 @@ def _script_references(
         ]
     if name in scripts:
         return []
+    if runner == "yarn":
+        return [
+            _unsettled(
+                relative,
+                line,
+                f"not a script {_plain(package)} defines, and yarn run also runs a dependency's "
+                f"binary ({_plain(name)}): {quoted}",
+            )
+        ]
     return [
         _stale(
             relative,
@@ -1604,7 +1615,7 @@ def _span_references(finder: _Finder, relative: str, line: int, span: str) -> li
         return _make_references(finder, relative, line, span)
     script = _SCRIPT.match(_SHELL_OPERATOR.split(span, 1)[0])
     if script:
-        return _script_references(finder, relative, line, span, script.group(1))
+        return _script_references(finder, relative, line, span, script.group(2), script.group(1))
     return _path_references(finder, relative, line, span)
 
 

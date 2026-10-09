@@ -468,6 +468,22 @@ def test_the_nearest_package_json_upward_is_the_one_looked_in(tmp_path: Path) ->
     ]
 
 
+def test_a_yarn_name_package_json_lacks_is_unsettled_since_yarn_runs_binaries_too(
+    tmp_path: Path,
+) -> None:
+    root = _target(
+        tmp_path / "t",
+        {
+            "AGENTS.md": "Run `yarn run eslint`, `npm run eslint`.\n",
+            "package.json": json.dumps({"scripts": {"build": "x"}}),
+        },
+    )
+    [yarn, npm] = _references(check(root, ["codex"]))
+    assert "yarn run also runs a dependency's binary" in yarn.fact
+    assert "does not define" in npm.fact
+    assert [f.fact for f in stale_references(root, ["codex"])] == [npm.fact]
+
+
 def test_a_script_command_that_names_no_script_is_no_reference(tmp_path: Path) -> None:
     spans = [
         "npm run",
