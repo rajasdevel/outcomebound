@@ -13,7 +13,7 @@ and this repository's checks have different needs.
 | One of uv, pipx, or pip in a virtual environment | Installation | Installs the package and creates the command. They are alternative routes. A Git URL also needs Git and network access; the package index (PyPI), for a version published there, needs network access only. |
 | POSIX `sh` | Checkout launcher and finish-check Done lines | Runs shell command lines. The installed entry point itself runs Python. On Windows, Git for Windows supplies `sh.exe`. |
 | The project's own check tools | Done lines or a selected floor | Runs the checks that the project declared. A missing tool reads UNVERIFIED. |
-| Windows job objects and `taskkill.exe` | Windows process cleanup | A job object, through the standard library's `ctypes`, stops a timed-out command's whole process tree; `taskkill.exe` is the fallback where a job cannot be made. Both are operating-system features. |
+| Windows job objects and `taskkill.exe` | Windows process cleanup | A job object, through the standard library's `ctypes`, stops a timed-out command's whole process tree. The command starts suspended, joins the job, and is then resumed through the thread calls of `kernel32` (`CreateToolhelp32Snapshot`, `OpenThread`, `ResumeThread`). `taskkill.exe` is the fallback where a job cannot be made or joined. All of these are operating-system features. |
 
 Package metadata comes from [the build backend](../scripts/build_backend.py); the empty build
 dependency list is in [pyproject.toml](../pyproject.toml). Python isolation is part of the
@@ -117,7 +117,7 @@ are not required to make that diagnosis.
 The model eval runner uses Python, Bash and Git. A Codex run also needs Codex CLI, a ChatGPT
 login and an explicitly named model. A separate Claude Code native check needs that harness
 and its model access. These are evaluation requirements. `ps` supports timeout cleanup on
-non-Linux POSIX hosts; Linux reads `/proc`, and Windows uses a job object, with taskkill as the fallback. The canary also needs
+non-Linux POSIX hosts; Linux reads `/proc`, and Windows uses a job object that the command joins before it runs, with taskkill as the fallback. The canary also needs
 an installed prior OutcomeBound release, its Python and Python 3.10. It can find the latter
 through uv or an explicit interpreter path.
 

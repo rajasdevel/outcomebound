@@ -59,17 +59,15 @@ def bounded_command(
 ) -> subprocess.CompletedProcess[str]:
     """Keep partial output on timeout and stop the command's process group."""
 
-    from outcomebound_tools.programs import new_group, stop_tree, track_tree
+    from outcomebound_tools.programs import start_tree, stop_tree
 
-    process = subprocess.Popen(
+    process = start_tree(
         command,
         stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        **new_group(),
         **kwargs,
     )
-    track_tree(process)
     try:
         out, error = process.communicate(input.encode() if input is not None else None, timeout)
     except subprocess.TimeoutExpired as timed_out:
