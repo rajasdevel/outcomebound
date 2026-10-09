@@ -48,21 +48,21 @@ Skip when: the idea is throwaway, or the person has already settled the outcome 
 ## Probe what could end it
 
 For each assumption that would end the idea and that nothing shows, write the question and the
-result that passes before you build anything. Then build the cheapest probe that answers it: a
+result that passes before you build anything. Then build the smallest probe that answers it: a
 spike, a throwaway prototype the person shows to users, a measurement, or an explorable where the
-answer turns on cost or values (`explorable`). Record each as question, probe, result (`PASS`,
+answer turns on prices or values (`explorable`). Record each as question, probe, result (`PASS`,
 `FAIL` or `UNVERIFIED`) and the decision it led to. Probe code stays in the working area, marked
 throwaway, and never becomes the product: the skeleton is built fresh. A result that meets the stop
 rule ends or changes the idea, and you report it as such.
 
 Skip when: every assumption that could end the idea already has evidence.
 
-## Decide what is costly to reverse
+## Decide what is hard to undo
 
-Put the choices that later work cannot cheaply undo in one decision table in the area's design
+Put the choices that later work cannot easily undo in one decision table in the area's design
 (`bash "$(outcomebound home)/scripts/new-spec.sh" <slug>`), each with the choice, the alternative
 rejected, its owner and whether it can be undone. They are usually: where data lives and who owns
-its schema; authentication and the trust boundary; hosting and what it costs; the language and
+its schema; authentication and the trust boundary; hosting and what it spends; the language and
 framework, the one the people who keep it can run for its lifespan, new technology only where the
 idea needs it; module boundaries, one deployable first; license and visibility; and, for a feature
 that calls a model, the provider and how its output is evaluated. Decide the reversible ones

@@ -76,7 +76,7 @@ Then ask your agent to start the project. The installed `using-outcomebound` ski
 [new-project reference](skills/using-outcomebound/references/new-project.md). The agent sizes the
 idea by who depends on it. It frames the outcome, the appetite, what is out of scope, the strongest
 case against the idea and a stop rule. It probes what could end the idea with throwaway code. It
-records the choices that are costly to reverse. Then it builds a walking skeleton: the thinnest real
+records the choices that are hard to undo. Then it builds a walking skeleton: the thinnest real
 path through the product, with a Done command that can fail. A small idea skips most of these
 stages. When the skeleton has a Done command, record it with
 `outcomebound adopt . --done '<command>'`.
