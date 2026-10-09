@@ -34,6 +34,7 @@ TEAM, SOLO, DEPLOY, CI_RELEASE = "team", "solo", "deploy", "ci-release"
 # `<id>+<login>@users.noreply.github.com`, is neither: its part before `@` holds the login.
 _NO_REPLY = re.compile(r"^(no-?reply|do-?not-?reply)$")
 _BOT_MAILBOX = re.compile(r"(^|[-_.+])bot$")
+_ACT = re.compile(r" (runs|uses) (.+)$")
 _VERSION_LINE = re.compile(r"""^\s*version\s*=\s*["'][^"']+["']""", re.MULTILINE)
 _EXPOSURE = re.compile(r"Exposure\s+[—-]", re.IGNORECASE)
 _NEXT_PART = re.compile(r"^(\*\*|[A-Z][A-Za-z ]*\s—\s)")
@@ -108,16 +109,91 @@ def signals(target: Path) -> list[facts.Signal]:
     return found
 
 
-def _publishes(files: Sequence[facts.CiFile]) -> bool:
-    """Whether `--detect` recognises a publishing workflow: a step that publishes, or a workflow
-    file whose name starts with `release` or `publish`, as the `ci-release` fragment detects."""
+# What a publishing-workflow signal's act (`job <job> runs <command>` or `job <job> uses
+# <action>`) publishes: a package or a release (`ci-release`), or a service (`deploy`). Any other
+# act, `docker push` among them, is neither: it names no fragment.
+_PACKAGE_COMMANDS = frozenset(
+    {
+        "npm publish",
+        "pnpm publish",
+        "yarn npm publish",
+        "twine upload",
+        "uv publish",
+        "cargo publish",
+        "gh release create",
+        "goreleaser release",
+    }
+)
+_PACKAGE_ACTIONS = frozenset(
+    {
+        "pypa/gh-action-pypi-publish",
+        "js-devtools/npm-publish",
+        "rubygems/release-gem",
+        "softprops/action-gh-release",
+        "ncipollo/release-action",
+        "helm/chart-releaser-action",
+        "goreleaser/goreleaser-action",
+    }
+)
+_DEPLOY_COMMANDS = frozenset(
+    {
+        "terraform apply",
+        "kubectl apply",
+        "helm upgrade",
+        "fly deploy",
+        "flyctl deploy",
+        "wrangler deploy",
+        "firebase deploy",
+    }
+)
+_DEPLOY_ACTIONS = frozenset(
+    {
+        "actions/deploy-pages",
+        "peaceiris/actions-gh-pages",
+        "cloudflare/wrangler-action",
+        "azure/webapps-deploy",
+        "google-github-actions/deploy-cloudrun",
+        "aws-actions/amazon-ecs-deploy-task-definition",
+        "firebaseextended/action-hosting-deploy",
+    }
+)
 
-    if any(item.kind == "publishing-workflow" for item in facts.workflow_signals(files)):
-        return True
+
+def _acts(files: Sequence[facts.CiFile]) -> list[tuple[str, str]]:
+    """Each act of the publishing-workflow signals as (`runs` or `uses`, the command or action)."""
+
+    found = []
+    for item in facts.workflow_signals(files):
+        match = _ACT.search(item.value) if item.kind == "publishing-workflow" else None
+        if match is not None:
+            found.append((match.group(1), match.group(2).strip().lower()))
+    return found
+
+
+def _publishes_package(files: Sequence[facts.CiFile]) -> bool:
+    """Whether `--detect` recognises the publishing of a package or a release: a step that
+    runs a package publish or uses a package publishing action, or a workflow file whose name
+    starts with `release` or `publish`, as the `ci-release` fragment detects. A step that only
+    deploys a service is not."""
+
+    for how, what in _acts(files):
+        if (how == "runs" and what in _PACKAGE_COMMANDS) or (
+            how == "uses" and what in _PACKAGE_ACTIONS
+        ):
+            return True
     return any(
         Path(item.path).name.startswith(("release", "publish"))
         for item in files
         if item.path.startswith(f"{facts.WORKFLOWS}/")
+    )
+
+
+def _deploys_in_workflow(files: Sequence[facts.CiFile]) -> bool:
+    """Whether a workflow step deploys a service, by a command or action of the signal's list."""
+
+    return any(
+        (how == "runs" and what in _DEPLOY_COMMANDS) or (how == "uses" and what in _DEPLOY_ACTIONS)
+        for how, what in _acts(files)
     )
 
 
@@ -166,9 +242,9 @@ def lines(
             found.append(f"{authors} recent authors present, record says {' and '.join(said)}")
         if _has_codeowners(target):
             found.append(f"CODEOWNERS present, record says {' and '.join(said)}")
-    if DEPLOY in detected and DEPLOY not in selected:
+    if DEPLOY not in selected and (DEPLOY in detected or _deploys_in_workflow(files)):
         found.append("deploy configuration present, record says deploy not selected")
-    if _publishes(files) and CI_RELEASE not in selected:
+    if _publishes_package(files) and CI_RELEASE not in selected:
         found.append("publishing workflow present, record says ci-release not selected")
     if authors >= 2 and local_text is not None and maintained_by_one(local_text):
         found.append(

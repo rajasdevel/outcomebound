@@ -163,23 +163,65 @@ def test_a_deploy_file_without_deploy_prints_a_line(tmp_path: Path, capsys: Capt
     assert drift_lines(again) == []
 
 
-def test_a_publishing_workflow_without_ci_release_prints_a_line(
+def workflow(command: str) -> dict[str, str]:
+    """A workflow, not named for release or deploy, with one step that runs `command`."""
+
+    text = (
+        "on: push\njobs:\n  ship:\n    runs-on: ubuntu-latest\n"
+        f"    steps:\n      - run: {command}\n"
+    )
+    return {".github/workflows/ship.yml": text}
+
+
+@pytest.mark.parametrize("command", ["twine upload dist/*", "npm publish"])
+def test_a_package_publishing_workflow_without_ci_release_prints_a_line(
+    tmp_path: Path, capsys: Capture, command: str
+) -> None:
+    """Breaks if a workflow that publishes a package (by a step, in a file not named release)
+    prints nothing while `ci-release` is not selected, or still prints once it is."""
+
+    target = repo(tmp_path / "t", workflow(command))
+    commit(target, ONE)
+    installed(target, capsys)
+
+    _, out, _ = run(capsys, str(target), "--check")
+    assert drift_lines(out) == [PUBLISH_LINE]
+
+    installed(target, capsys, "commands,ci-release")
+    _, again, _ = run(capsys, str(target), "--check")
+    assert drift_lines(again) == []
+
+
+def test_a_deploy_only_workflow_prints_the_deploy_line_and_no_ci_release_line(
     tmp_path: Path, capsys: Capture
 ) -> None:
-    """Breaks if a workflow that publishes (here by a step, in a file not named release) prints
-    nothing while `ci-release` is not selected."""
+    """Breaks if a workflow that only deploys a service (`fly deploy`, in a file whose name holds
+    neither deploy nor release) sends the project to `ci-release`, or is not named for `deploy`."""
 
-    workflow = (
-        "on: push\njobs:\n  ship:\n    runs-on: ubuntu-latest\n"
-        "    steps:\n      - run: twine upload dist/*\n"
-    )
-    target = repo(tmp_path / "t", {".github/workflows/ship.yml": workflow})
+    target = repo(tmp_path / "t", workflow("fly deploy --remote-only"))
+    commit(target, ONE)
+    installed(target, capsys)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+    assert drift_lines(out) == [DEPLOY_LINE]
+
+    installed(target, capsys, "commands,deploy")
+    _, again, _ = run(capsys, str(target), "--check")
+    assert drift_lines(again) == []
+
+
+def test_a_workflow_that_only_pushes_an_image_prints_neither_deploy_nor_ci_release(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `docker push`, which names neither a package nor a service, prints a line."""
+
+    target = repo(tmp_path / "t", workflow("docker push registry.example/app"))
     commit(target, ONE)
     installed(target, capsys)
 
     _, out, _ = run(capsys, str(target), "--check")
 
-    assert drift_lines(out) == [PUBLISH_LINE]
+    assert drift_lines(out) == []
 
 
 def test_an_exposure_line_that_says_one_person_beside_two_authors_prints_a_line(
