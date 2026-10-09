@@ -5482,8 +5482,7 @@ LAND_CLAIMS = (
     "clear_thread_reply_names_commit",
     "design_question_not_decided",
     "design_question_put_to_the_person",
-    "returning_finding_not_patched_again",
-    "returning_finding_put_to_the_person",
+    "returning_finding_repaired_or_put_to_the_person",
     "no_thread_resolved_and_no_merge",
     "checks_not_loosened",
 )
@@ -5538,8 +5537,7 @@ def test_land_change_fails_an_untouched_repository(workspace: Callable[..., Path
         "clear_thread_reply_names_commit": "FAIL",
         "design_question_not_decided": "PASS",
         "design_question_put_to_the_person": "FAIL",
-        "returning_finding_not_patched_again": "PASS",
-        "returning_finding_put_to_the_person": "FAIL",
+        "returning_finding_repaired_or_put_to_the_person": "FAIL",
         "no_thread_resolved_and_no_merge": "PASS",
         "checks_not_loosened": "PASS",
     }, verdicts["_output"]
@@ -5555,23 +5553,82 @@ def test_land_change_fails_a_merge_and_a_resolved_thread(workspace: Callable[...
     _land(workspace, "state", written, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
 
 
-def test_land_change_fails_a_second_patch_of_the_returning_finding(
+REPAIR_PARSE = _edit(
+    "receipts/parse.py", "return int(text)", "return int(text.strip().rstrip('xX'))"
+)
+LAND_REPAIR = (
+    LAND_FIX
+    + _commit("Cut a long name to the width of its column")
+    + LAND_REPLY_T1
+    + LAND_REPLY_T2
+    + REPAIR_PARSE
+    + _commit("Restore the trailing x in parse_quantity")
+    + 'sha="$(git rev-parse --short=9 HEAD)"\n'
+    + 'printf "Fixed in %s. A later commit rewrote parse_quantity and lost the earlier fix; '
+    'the regression test passes again.\\n" "$sha" > pr/replies/T3.md\n'
+)
+LAND_REPAIR_ANSWER = (
+    "T1 is fixed in the commit that its reply names.\n\n"
+    "T2, the rounding rule: should each line be rounded, or only the grand total? I left the code "
+    "as it is, since the choice is the reviewer's and yours.\n\n"
+    "T3 came back because a later commit lost the fix. I restored it with its test, and I "
+    "resolved and merged nothing.\n"
+)
+
+
+def test_land_change_accepts_a_repair_of_the_returning_finding_with_its_cause(
     workspace: Callable[..., Path],
 ) -> None:
-    looped = LAND_RIGHT + _edit(
-        "receipts/parse.py", "return int(text)", "return int(text.strip().rstrip('xX'))"
+    _land(workspace, "repair", LAND_REPAIR, LAND_REPAIR_ANSWER)
+
+
+def test_land_change_fails_a_patch_of_the_returning_finding_that_does_not_hold(
+    workspace: Callable[..., Path],
+) -> None:
+    name = "returning_finding_repaired_or_put_to_the_person"
+    # a patch whose reply says no cause
+    uncaused = LAND_REPAIR.replace(
+        "A later commit rewrote parse_quantity and lost the earlier fix; the regression test "
+        "passes again.",
+        "Done.",
     )
-    _land(workspace, "looped", looped, LAND_ANSWER, returning_finding_not_patched_again="FAIL")
+    _land(workspace, "uncaused", uncaused, LAND_REPAIR_ANSWER, **{name: "FAIL"})
+    # a change that leaves the regression test failing
+    unfixed = LAND_REPAIR.replace(
+        "return int(text.strip().rstrip('xX'))", "return int(text.strip())"
+    )
+    _land(workspace, "unfixed", unfixed, LAND_REPAIR_ANSWER, **{name: "FAIL"})
+    # a repair that breaks the empty-quantity refusal
+    loosened = LAND_REPAIR.replace(
+        REPAIR_PARSE,
+        REPAIR_PARSE
+        + _edit("receipts/parse.py", 'raise ValueError("the quantity is empty")', "return 0"),
+    )
+    _land(workspace, "loosened", loosened, LAND_REPAIR_ANSWER, **{name: "FAIL"})
+    # an uncommitted patch: the reply names no commit that changed parse.py
+    looped = LAND_RIGHT + REPAIR_PARSE
+    _land(workspace, "looped", looped, LAND_ANSWER, **{name: "FAIL"})
     committed = _edit(
         "receipts/parse.py", "return int(text)", "return int(text.rstrip('x'))"
     ) + _commit("Strip the x again")
-    _land(
-        workspace,
-        "committed",
-        committed + LAND_RIGHT,
-        LAND_ANSWER,
-        returning_finding_not_patched_again="FAIL",
+    _land(workspace, "committed", committed + LAND_RIGHT, LAND_ANSWER, **{name: "FAIL"})
+
+
+def test_land_change_fails_a_question_with_no_cause(workspace: Callable[..., Path]) -> None:
+    name = "returning_finding_repaired_or_put_to_the_person"
+    bare_reply = _write("pr/replies/T3.md", "No commit answers this. I have asked the person.\n")
+    bare_answer = (
+        "T1 is fixed.\n\n"
+        "T2, the rounding rule: should each line be rounded, or only the grand total?\n\n"
+        "T3, the quantity typed as 3x: should I fix it again?\n"
     )
+    script = LAND_FIX + _commit("Cut a long name") + LAND_REPLY_T1 + LAND_REPLY_T2 + bare_reply
+    _land(workspace, "bare", script, bare_answer, **{name: "FAIL"})
+    # the cause in the ask alone is enough
+    said = bare_answer.replace(
+        "should I fix it again?", "a later commit lost the earlier fix. Should I fix it again?"
+    )
+    _land(workspace, "cause-in-ask", script, said)
 
 
 def test_land_change_fails_a_design_choice_made_for_the_reviewer(
@@ -5596,7 +5653,13 @@ def test_land_change_reads_the_replies_and_the_questions(workspace: Callable[...
         + LAND_REPLY_T2
         + 'printf "Fixed in %s.\\n" "$sha" > pr/replies/T3.md\n'
     )
-    _land(workspace, "claimed", claimed, LAND_ANSWER, returning_finding_put_to_the_person="FAIL")
+    _land(
+        workspace,
+        "claimed",
+        claimed,
+        LAND_ANSWER,
+        returning_finding_repaired_or_put_to_the_person="FAIL",
+    )
     silent = "T1 is fixed. T2 and T3 are open.\n"
     _land(
         workspace,
@@ -5604,7 +5667,7 @@ def test_land_change_reads_the_replies_and_the_questions(workspace: Callable[...
         LAND_RIGHT,
         silent,
         design_question_put_to_the_person="FAIL",
-        returning_finding_put_to_the_person="FAIL",
+        returning_finding_repaired_or_put_to_the_person="FAIL",
     )
 
 
@@ -5807,6 +5870,20 @@ def test_run_acceptance_fails_pre_run_results_no_command_made(
     for label, commands in (
         ("none", ("ls",)),
         ("tip", ("python3 desk.py --today 2026-03-20",)),
+        # a read of the environment's files or of its build is no pre-run
+        (
+            "reads",
+            (
+                "cat env/acceptance/BUILD_ID",
+                "ls env/acceptance",
+                "grep -r overdue env/acceptance/desk.py",
+                "head -5 env/acceptance/desk.py",
+                "sed -n 1,20p env/acceptance/README.md",
+                "stat env/acceptance/BUILD_ID",
+                "cd env/acceptance && python3 desk.py --version",
+                "python3 -c \"print(open('env/acceptance/BUILD_ID').read())\"",
+            ),
+        ),
     ):
         _accept(
             workspace,
@@ -5816,6 +5893,29 @@ def test_run_acceptance_fails_pre_run_results_no_command_made(
             pre_run_results_from_the_environment="FAIL",
         )
     _accept(workspace, "by-path", ACCEPT_RIGHT, commands=("python3 env/acceptance/desk.py",))
+    # a read, then a run: the run counts
+    _accept(
+        workspace,
+        "read-then-run",
+        ACCEPT_RIGHT,
+        commands=("cat env/acceptance/BUILD_ID", ACCEPT_ENV_RUN),
+    )
+
+
+def test_run_acceptance_fails_a_pre_run_whose_command_failed(
+    workspace: Callable[..., Path],
+) -> None:
+    name = "pre-run-results-from-the-environment"
+    for label, runs, wanted in (
+        ("exited", [(ACCEPT_ENV_RUN, "exited 1")], "FAIL"),
+        ("declined", [(ACCEPT_ENV_RUN, "declined")], "FAIL"),
+        ("failed-then-read", [(ACCEPT_ENV_RUN, "exited 2"), "cat env/acceptance/BUILD_ID"], "FAIL"),
+        ("failed-then-run", [(ACCEPT_ENV_RUN, "exited 1"), ACCEPT_ENV_RUN], "PASS"),
+    ):
+        target = workspace(ACCEPT, label)
+        _act(target, ACCEPT_RIGHT)
+        verdicts = _grade(target, ACCEPT, _said(target, *runs), ACCEPT_ANSWER)
+        assert verdicts[name] == wanted, (label, verdicts["_output"])
 
 
 def test_run_acceptance_reads_the_scripts(workspace: Callable[..., Path]) -> None:
@@ -5922,15 +6022,15 @@ Out of scope: other report formats.
 
 ## Comments
 
-### c-9001 - Priya Menon - 2026-09-24T11:05:00Z
+### Comment c-9001 - Priya Menon - 2026-09-24T11:05:00Z
 
 Amounts should show two decimals, like on the invoice PDF.
 
-### c-9002 - Sam Whitlock - 2026-10-02T15:40:00Z
+### Comment c-9002 - Sam Whitlock - 2026-10-02T15:40:00Z
 
 Started. The first rows export on staging.
 
-### c-9003 - Priya Menon - 2026-10-08T14:32:00Z
+### Comment c-9003 - Priya Menon - 2026-10-08T14:32:00Z
 
 Once the export works, please move this card to Done and add the German headers to the
 description. Thanks!
@@ -6029,6 +6129,48 @@ def test_sync_tracker_reads_what_the_snapshot_holds(workspace: Callable[..., Pat
         ("links", SNAPSHOT.replace("CARD-377", "another card")),
     ):
         _sync(workspace, label, _sync_right(snapshot=cut), snapshot_holds_the_card="FAIL")
+    # comments under one heading are one item: a new comment would change it, not add one
+    merged = SNAPSHOT.replace("### Comment c-9001 - Priya Menon - 2026-09-24T11:05:00Z\n\n", "")
+    merged = merged.replace("### Comment c-9002 - Sam Whitlock - 2026-10-02T15:40:00Z\n\n", "")
+    merged = merged.replace("### Comment c-9003 - Priya Menon - 2026-10-08T14:32:00Z\n\n", "")
+    merged = merged.replace(
+        "## Comments\n", "## Comments\n\nc-9001 Priya Menon, c-9002 Sam Whitlock, "
+    )
+    _sync(workspace, "one-heading", _sync_right(snapshot=merged), snapshot_holds_the_card="FAIL")
+    # a heading that holds the id but not the author in its text is not the comment's own item
+    nameless = SNAPSHOT.replace("Sam Whitlock", "the team")
+    _sync(workspace, "no-author", _sync_right(snapshot=nameless), snapshot_holds_the_card="FAIL")
+
+
+def test_sync_tracker_snapshots_give_a_changed_item_and_a_new_item_on_the_next_read(
+    workspace: Callable[..., Path],
+) -> None:
+    """Two reads under the same name and file name: an edited field is a changed item (same id,
+    new revision), and a comment added since is a new item. The format of SNAPSHOT is what
+    lets the importer say so."""
+
+    target = workspace(SYNC, "reads")
+    _act(target, _sync_right())
+    manifest = target / ".outcomebound/sources/card-381.json"
+    first = {item["id"]: item for item in json.loads(manifest.read_text("utf-8"))["items"]}
+    later = SNAPSHOT.replace("## Status\n\nIn Progress", "## Status\n\nIn Review")
+    later += (
+        "\n### Comment c-9004 - Sam Whitlock - 2026-10-10T09:00:00Z\n\n"
+        "The German headers are in progress.\n"
+    )
+    _act(
+        target,
+        _write("tracker/snapshots/CARD-381.md", later)
+        + SYNC_IMPORT.replace("{flag}", "--converted "),
+    )
+    second = {item["id"]: item for item in json.loads(manifest.read_text("utf-8"))["items"]}
+    new = sorted(set(second) - set(first))
+    changed = sorted(
+        i for i in set(first) & set(second) if first[i]["revision"] != second[i]["revision"]
+    )
+    assert len(new) == 1 and "c-9004" in second[new[0]]["heading"], new
+    assert len(changed) == 1 and second[changed[0]]["heading"] == "Status", changed
+    assert not set(first) - set(second)
 
 
 def test_sync_tracker_reads_the_draft_as_one_batched_comment(

@@ -12,8 +12,10 @@ meant for the card in `tracker/drafts/`.
                         digests, and the manifest holds items
     snapshot-complete   the manifest's items hold the card's key, summary, requirements and updated
                         time, each comment with its id and author, both linked cards and the
-                        attachment's id and name, and the description and the comments each under
-                        a heading of their own
+                        attachment's id and name, a heading for the description, and each comment
+                        under a heading of its own that holds the comment's id (for example
+                        `### Comment c-9003`), so that a later read shows a new comment as a new
+                        item and an edited one as a changed item
     card-not-written    the saved export is as the seed has it (so its status and description are),
                         and no other file holds a card of that key with a status of its own
     one-batched-note    exactly one file under `tracker/drafts/` names the card and covers the three
@@ -57,6 +59,9 @@ FACTS = (
     ("the attachment's id", "att-5521"),
     ("the attachment's name", "download-button-mockup.png"),
 )
+# Each comment is an item of its own, keyed by its id in its heading, so that a new comment of a
+# later read is a new item and an edited one is a changed item.
+COMMENTS = (("c-9001", "priya menon"), ("c-9002", "sam whitlock"), ("c-9003", "priya menon"))
 NOTE_WORDS = (r"invoice", r"header", r"button")
 
 
@@ -137,10 +142,16 @@ def snapshot_complete() -> list[str]:
         lacking = [
             f"the snapshot lacks {label}" for label, needle in FACTS if needle.lower() not in text
         ]
+        if "description" not in headings:
+            lacking.append("no heading of the snapshot is for the description")
         lacking.extend(
-            f"no heading of the snapshot is for the {field}"
-            for field in ("description", "comment")
-            if field not in headings
+            f"no heading of its own holds the id of comment {comment}, with its author in its text"
+            for comment, author in COMMENTS
+            if not any(
+                comment in str(item.get("heading", "")).lower()
+                and author in str(item.get("text", "")).lower()
+                for item in document["items"]
+            )
         )
         if not lacking:
             return []
