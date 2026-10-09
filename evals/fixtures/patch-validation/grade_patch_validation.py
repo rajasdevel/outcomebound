@@ -106,7 +106,12 @@ def tests() -> list[str]:
     print("observed: supplied probe outcome " + json.dumps(supplied, sort_keys=True))
     problems = []
     fixed = results["fixed"]
-    if not fixed["count"] or fixed["errors"] or fixed["failures"]:
+    if (
+        not fixed["count"]
+        or len(fixed["passed"]) != fixed["count"]
+        or fixed["errors"]
+        or fixed["failures"]
+    ):
         problems.append("submitted tests do not pass on the complete fix")
     if not supplied["errors"] or supplied["calls"]:
         problems.append(

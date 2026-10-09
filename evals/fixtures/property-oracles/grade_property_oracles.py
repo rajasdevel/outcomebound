@@ -30,7 +30,12 @@ def tests() -> list[str]:
     print("observed: submitted property outcomes " + json.dumps(results, sort_keys=True))
     problems = []
     fixed = results["fixed"]
-    if not fixed["count"] or fixed["errors"] or fixed["failures"]:
+    if (
+        not fixed["count"]
+        or len(fixed["passed"]) != fixed["count"]
+        or fixed["errors"]
+        or fixed["failures"]
+    ):
         problems.append("submitted tests do not pass on the fixed codec")
     for name in ("sign-loss", "unstable-normalization", "coupled-reversal"):
         result = results[name]

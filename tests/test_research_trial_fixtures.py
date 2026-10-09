@@ -288,3 +288,21 @@ def test_no_work_control_rejects_skipped_existing_regressions(tmp_path):
     )
     result = probe(work, "testing-no-work", "tests")
     assert result.returncode == 1, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("name", ["patch-validation", "property-oracles"])
+def test_fixed_replay_rejects_skip_after_valid_assertions(tmp_path, name):
+    work = build_fixture(name, tmp_path / "workspace")
+    if name == "patch-validation":
+        submitted = PATCH_TESTS.replace(
+            '            read_document("../secret", {"secret": "private"})',
+            '            read_document("../secret", {"secret": "private"})\n'
+            '        self.skipTest("synthetic incomplete security test")',
+        )
+        path = "test_vault.py"
+    else:
+        submitted = PROPERTY_TESTS + '        self.skipTest("synthetic incomplete property test")\n'
+        path = "test_codec.py"
+    (work / path).write_text(submitted)
+    result = probe(work, name, "tests")
+    assert result.returncode == 1, result.stdout + result.stderr
