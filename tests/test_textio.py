@@ -132,6 +132,6 @@ def test_plain_and_quote_escape_what_a_terminal_would_act_on() -> None:
 
 
 def test_visible_keeps_letters_and_escapes_what_hides_or_steers() -> None:
-    assert textio.visible("/Users/jos\u00e9/\u65e5\u672c x") == "/Users/jos\u00e9/\u65e5\u672c x"
+    assert textio.visible("data/jos\u00e9/\u65e5\u672c x") == "data/jos\u00e9/\u65e5\u672c x"
     hidden = "a\x1b[31m\u202eb\tc\u00a0d\u200be"
     assert textio.visible(hidden) == "a\\u001b[31m\\u202eb\\u0009c\\u00a0d\\u200be"
