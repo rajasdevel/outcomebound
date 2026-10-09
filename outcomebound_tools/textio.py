@@ -4,7 +4,8 @@ endings that Windows editors and shells add.
 UTF-8 is the only encoding the engine writes. It reads UTF-8 with or without a byte-order mark,
 and, from standard input and an export, UTF-16 with one, as Windows PowerShell 5.1 writes a
 redirected file. Line endings fold to LF on every read that compares or digests text, so one
-file reads the same in a checkout with `core.autocrlf` and in one without.
+file reads the same in a checkout with `core.autocrlf` and in one without. `plain` and `quote`
+escape text from a target before it is printed.
 
 Standard library only, and no OutcomeBound import.
 """
@@ -93,6 +94,25 @@ def splice(before: bytes, text: str) -> bytes:
                 piece = "\r" + piece
             out.append(piece)
     return "".join(out).encode("utf-8")
+
+
+def plain(text: str) -> str:
+    """Text with every character outside printable ASCII escaped, so nothing hides or steers
+    the terminal it is printed to."""
+
+    return "".join(
+        c if " " <= c <= "~" else (f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}")
+        for c in text
+    )
+
+
+def quote(text: str, limit: int = 160) -> str:
+    """Quoted text, escaped as `plain` escapes it and cut at `limit` characters."""
+
+    shown = plain(text.strip())
+    if len(shown) > limit:
+        shown = shown[: limit - 3] + "..."
+    return f'"{shown}"'
 
 
 def _lines(text: str) -> list[str]:

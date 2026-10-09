@@ -120,3 +120,12 @@ def test_splice_reads_back_as_the_new_text_and_returns_an_unchanged_host_byte_fo
         assert textio.universal(out.decode()) == text, (before, text, out)
         same = textio.splice(before, textio.universal(before.decode()))
         assert same == before, (before, same)
+
+
+def test_plain_and_quote_escape_what_a_terminal_would_act_on() -> None:
+    text = "a\x1b[31m‮\U0001f600\r\n~"
+
+    assert textio.plain(text) == "a\\u001b[31m\\u202e\\U0001f600\\u000d\\u000a~"
+    assert textio.quote("  " + text + "  ") == '"' + textio.plain(text.strip()) + '"'
+    assert textio.quote("x" * 50, 10) == '"' + "x" * 7 + '..."'
+    assert textio.quote("") == '""'

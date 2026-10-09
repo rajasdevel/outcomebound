@@ -60,6 +60,8 @@ from typing import Any
 from outcomebound_tools import adapters, facts, finish_check, identity, programs, walk
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
+from outcomebound_tools.textio import plain as _plain
+from outcomebound_tools.textio import quote as _quote
 
 __all__ = [
     "CHECKS",
@@ -579,25 +581,6 @@ def _read(root: Path, relative: str) -> tuple[str | None, str]:
         return data.decode("utf-8"), ""
     except UnicodeDecodeError:
         return None, "not UTF-8 text; no check read it"
-
-
-def _plain(text: str) -> str:
-    """Text with every character outside printable ASCII escaped, so nothing hides or steers
-    the terminal it is printed to."""
-
-    return "".join(
-        c if " " <= c <= "~" else (f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}")
-        for c in text
-    )
-
-
-def _quote(text: str, limit: int = 160) -> str:
-    """Quoted text, escaped as `_plain` escapes it and cut at `limit` characters."""
-
-    shown = _plain(text.strip())
-    if len(shown) > limit:
-        shown = shown[: limit - 3] + "..."
-    return f'"{shown}"'
 
 
 def _lines(text: str) -> Iterator[tuple[int, str]]:
