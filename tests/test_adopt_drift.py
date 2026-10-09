@@ -5,6 +5,7 @@ temporary Git repository with synthetic authors; no line refuses anything or mov
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -39,15 +40,21 @@ def commit(target: Path, email: str, name: str | None = None, message: str = "c"
     )
 
 
-def local_fragment(exposure: str | None) -> str:
-    """A `local` fragment holding `exposure` as its one `Exposure —` line, or none."""
+def local_fragment(
+    exposure: str | list[str] | None, edges: list[str] | None = None, bounds: str = ""
+) -> str:
+    """A `local` fragment holding `exposure` as its `Exposure —` line (or one for each stream, or
+    none), the declared `edges` and, in its Bounds slot, the extra `bounds` lines."""
 
-    line = "" if exposure is None else f"{exposure}\n"
+    lines = [exposure] if isinstance(exposure, str) else exposure or []
+    text = "".join(f"{line}\n" for line in lines)
+    declared = json.dumps(edges or [])
+    extra = f"{bounds}\n" if bounds else ""
     return (
-        "---\nid: local\nfamily: setup\napplies: a synthetic project\nedges: []\ndetect: []\n"
-        "version: 1\n---\n"
-        f"**Context** — the synthetic project.\n{line}"
-        "**Bounds** — nothing irreversible.\n**Mechanisms** — none.\n"
+        f"---\nid: local\nfamily: setup\napplies: a synthetic project\nedges: {declared}\n"
+        "detect: []\nversion: 1\n---\n"
+        f"**Context** — the synthetic project.\n{text}"
+        f"**Bounds** — nothing irreversible.\n{extra}**Mechanisms** — none.\n"
         "**Completion bar** — the tests.\n**Distinguish** — nothing.\n"
     )
 
@@ -101,11 +108,12 @@ def test_a_project_whose_files_agree_with_its_record_prints_no_drift_line(
     assert detect[0] == 0 and drift_lines(detect[1]) == []
 
 
-def test_two_recent_authors_without_team_print_a_line_and_detect_counts_them(
+def test_two_recent_authors_without_team_print_no_line_and_detect_counts_them(
     tmp_path: Path, capsys: Capture
 ) -> None:
-    """Breaks if two authors with no `team` print nothing, or the line or the signal names an
-    author or an address instead of the count."""
+    """Breaks if two authors alone claim a team (a contributor is not a maintainer, and a project
+    that selected neither `solo` nor `team` has said nothing), or the signal names an author or an
+    address instead of the count."""
 
     target = repo(tmp_path / "t")
     two_authors(target)
@@ -114,8 +122,7 @@ def test_two_recent_authors_without_team_print_a_line_and_detect_counts_them(
     _, check, _ = run(capsys, str(target), "--check")
     _, detect, _ = run(capsys, str(target), "--detect")
 
-    assert drift_lines(check) == ["2 recent authors present, record says team not selected"]
-    assert drift_lines(detect) == drift_lines(check)
+    assert drift_lines(check) == [] and drift_lines(detect) == []
     signal = next(line for line in detect.splitlines() if "signal recent-authors" in line)
     assert signal.endswith("; value: 2; local slot: Context")
     assert "alice" not in check + detect and "example.org" not in check + detect
@@ -276,10 +283,23 @@ def test_an_exposure_line_that_says_one_person_beside_two_authors_prints_a_line(
         pytest.param("Exposure — maintained by: nobody knows", id="not-parsed"),
         pytest.param("Exposure — maintained by: two people", id="two"),
         pytest.param("Exposure - maintained by: three or more", id="more"),
+        pytest.param("Exposure — maintained by: one developer and a lead", id="and"),
+        pytest.param("Exposure — maintained by: One of the two maintainers, by rota", id="of-the"),
+        pytest.param("Exposure — maintained by: a single team of four", id="team"),
+        pytest.param(
+            "Exposure — maintained by: one person (the owner) and a contractor", id="note-then-and"
+        ),
+        pytest.param(
+            [
+                "Exposure — stream api: maintained by: one person",
+                "Exposure — stream web: maintained by: two people",
+            ],
+            id="one-stream-of-two",
+        ),
     ],
 )
 def test_an_exposure_line_that_is_missing_or_does_not_parse_prints_nothing(
-    tmp_path: Path, capsys: Capture, exposure: str | None
+    tmp_path: Path, capsys: Capture, exposure: str | list[str] | None
 ) -> None:
     """Breaks if a missing line, a line without the fact, or a value that is not one person
     prints a line."""
@@ -330,14 +350,84 @@ def test_two_bots_and_one_person_count_as_one_author(tmp_path: Path, capsys: Cap
 
 
 def test_the_window_is_the_last_hundred_commits_without_merges(tmp_path: Path) -> None:
-    """Breaks if an author older than the window counts, or the window is not a count of commits."""
+    """Breaks if the author of the 101st commit back counts, or the 100th does not. The history is
+    fixed here, not built from the constant, so that changing the window fails this test."""
 
+    assert drift.WINDOW == 100
     target = repo(tmp_path / "t")
     commit(target, TWO)
-    for _ in range(drift.WINDOW):
+    for _ in range(99):
         commit(target, ONE)
+    assert drift.recent_authors(target) == 2
+    commit(target, ONE)
 
     assert drift.recent_authors(target) == 1
+
+
+def test_an_author_present_only_on_a_merge_commit_does_not_count(tmp_path: Path) -> None:
+    """Breaks if whoever merged counts as a recent author: a merge commit names the person who
+    pressed the button, not who wrote the change."""
+
+    target = repo(tmp_path / "t")
+    commit(target, ONE)
+    git = [GIT, "-C", str(target)]
+    subprocess.run([*git, "checkout", "-q", "-b", "topic"], check=True)
+    commit(target, ONE, message="on the topic")
+    subprocess.run([*git, "checkout", "-q", "-"], check=True)
+    commit(target, ONE, message="on the trunk")
+    who = ["-c", "user.name=bob", "-c", f"user.email={TWO}", "-c", "commit.gpgsign=false"]
+    subprocess.run([*git, *who, "merge", "-q", "--no-ff", "-m", "merge", "topic"], check=True)
+
+    assert drift.recent_authors(target) == 1
+
+
+def test_a_mailmap_joins_two_emails_into_one_author(tmp_path: Path) -> None:
+    """Breaks if the project's `.mailmap` is not applied, so that one person under two addresses
+    and two names reads as two authors."""
+
+    target = repo(tmp_path / "t")
+    commit(target, ONE, "Alice Doe")
+    commit(target, "alice.doe@work.example", "A. Doe")
+    assert drift.recent_authors(target) == 2
+    (target / ".mailmap").write_text(f"Alice Doe <{ONE}> <alice.doe@work.example>\n")
+
+    assert drift.recent_authors(target) == 1
+
+
+def test_two_people_with_one_display_name_count_as_one_author(tmp_path: Path) -> None:
+    """The chosen trade-off, not a claim that it is right: identities that share a display name
+    are one author. One person under two emails is common, a name collision between two people
+    in the recent history of one repository is rare, and the line is information a person reads;
+    a count one too low costs one missed line, a count one too high prints a false claim."""
+
+    target = repo(tmp_path / "t")
+    commit(target, ONE, "Sam Lee")
+    commit(target, TWO, "Sam Lee")
+
+    assert drift.recent_authors(target) == 1
+
+
+@pytest.mark.parametrize(
+    ("mailbox", "counted"),
+    [
+        pytest.param("talbot", True, id="ends-in-the-letters-bot"),
+        pytest.param("abbot", True, id="abbot"),
+        pytest.param("release-bot", False, id="hyphen"),
+        pytest.param("release_bot", False, id="underscore"),
+        pytest.param("release.bot", False, id="dot"),
+        pytest.param("bot", False, id="equal-to-bot"),
+    ],
+)
+def test_a_mailbox_is_a_bot_only_with_the_separator(
+    tmp_path: Path, mailbox: str, counted: bool
+) -> None:
+    """Breaks if a person whose mailbox ends in the letters `bot` (Talbot) is left out, or a
+    mailbox equal to `bot` or ending in `-bot`, `_bot` or `.bot` is counted."""
+
+    target = repo(tmp_path / "t")
+    commit(target, f"{mailbox}@example.org", f"Name of {mailbox}")
+
+    assert drift.recent_authors(target) == (1 if counted else 0)
 
 
 def test_the_authors_signal_needs_two_authors(tmp_path: Path, capsys: Capture) -> None:
@@ -402,9 +492,16 @@ def test_detect_reports_no_release_identity_without_a_version_file_or_tag(
         pytest.param("1.2.3", True, id="bare"),
         pytest.param("v1.2", True, id="v-two"),
         pytest.param("v2.0.0-rc.1", True, id="pre-release"),
+        pytest.param("pkg@1.2.3", True, id="at-prefix"),
+        pytest.param("@scope/pkg@1.2.3", True, id="scoped-at-prefix"),
+        pytest.param("pkg-v1.2.3", True, id="hyphen-v-prefix"),
+        pytest.param("sub/v1.2.3", True, id="slash-v-prefix"),
+        pytest.param("release/1.2.3", True, id="release-slash"),
         pytest.param("seed", False, id="word"),
         pytest.param("release-2024", False, id="release-word"),
         pytest.param("v1", False, id="one-number"),
+        pytest.param("release/2024", False, id="release-slash-year"),
+        pytest.param("pkg-1.2.3", False, id="hyphen-without-v"),
     ],
 )
 def test_detect_reports_a_version_like_tag_and_not_any_other(
@@ -437,12 +534,12 @@ def test_drift_lines_leave_the_check_exit_code_as_the_artifacts_give_it(
     assert code == 0, err
 
     code, out, _ = run(capsys, str(target), "--check", source=source)
-    assert code == 0 and len(drift_lines(out)) == 3
+    assert code == 0 and len(drift_lines(out)) == 2
     assert set(states(out).values()) == {"current"}
 
     change_kernel(source, "9.9.9")
     code, out, _ = run(capsys, str(target), "--check", source=source)
-    assert code == 1 and len(drift_lines(out)) == 3
+    assert code == 1 and len(drift_lines(out)) == 2
 
 
 def test_one_name_under_two_emails_is_one_author(
@@ -458,3 +555,184 @@ def test_one_name_under_two_emails_is_one_author(
     assert drift.recent_authors(target) == 1
     commit(target, TWO, "Bob Roe")
     assert drift.recent_authors(target) == 2
+
+
+def test_a_tag_that_is_not_utf8_does_not_stop_the_reading(tmp_path: Path) -> None:
+    """Breaks if a tag name with byte 0xff raises, or hides the version tag beside it. The tag is
+    written to `packed-refs`, since some file systems refuse such a name as a file."""
+
+    target = repo(tmp_path / "t")
+    commit(target, ONE)
+    sha = subprocess.run(
+        [GIT, "-C", str(target), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    refs = sha.encode() + b" refs/tags/v0.\xff\n" + sha.encode() + b" refs/tags/v1.0.0\n"
+    (target / ".git" / "packed-refs").write_bytes(b"# pack-refs with: peeled\n" + refs)
+
+    assert drift.release_identity(target) == [drift.RELEASE_TAGS]
+
+
+def release_workflow(command: str) -> dict[str, str]:
+    """A `release.yml` with one step that runs `command`."""
+
+    return {
+        ".github/workflows/release.yml": (
+            "on: push\njobs:\n  go:\n    runs-on: ubuntu-latest\n"
+            f"    steps:\n      - run: {command}\n"
+        )
+    }
+
+
+@pytest.mark.parametrize(
+    "command", ["docker push registry.example/app", "docker buildx build --push -t app ."]
+)
+def test_a_release_named_workflow_that_only_pushes_an_image_prints_no_line(
+    tmp_path: Path, capsys: Capture, command: str
+) -> None:
+    """Breaks if the name `release.yml` alone sends a workflow whose steps only push a container
+    image to `ci-release`: an image is neither a package nor a release."""
+
+    target = repo(tmp_path / "t", release_workflow(command))
+    commit(target, ONE)
+    installed(target, capsys)
+
+    _, out, _ = run(capsys, str(target), "--check")
+
+    assert drift_lines(out) == []
+
+
+def test_a_release_workflow_that_pushes_an_image_and_publishes_a_package_prints_the_line(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an image push in the same workflow hides a package publish."""
+
+    target = repo(tmp_path / "t", release_workflow("docker push app && twine upload dist/*"))
+    commit(target, ONE)
+    installed(target, capsys)
+
+    _, out, _ = run(capsys, str(target), "--check")
+
+    assert drift_lines(out) == [PUBLISH_LINE]
+
+
+@pytest.mark.parametrize(
+    ("edge", "silenced"),
+    [
+        pytest.param("pushing a release tag", "publishing", id="release-tag"),
+        pytest.param("publishing a package", "publishing", id="package"),
+        pytest.param("uploading to the registry", "publishing", id="registry"),
+        pytest.param("deploying to production", "deploy", id="production"),
+        pytest.param("promoting a build", "deploy", id="promotion"),
+        pytest.param("deleting a branch", None, id="neither"),
+    ],
+)
+def test_an_edge_the_local_fragment_declares_answers_the_act_it_names(
+    tmp_path: Path, capsys: Capture, edge: str, silenced: str | None
+) -> None:
+    """Breaks if a project that lists publishing (or deploying) as an irreversible edge by hand,
+    with `ci-release` (or `deploy`) off, still gets the line, or if an edge that names neither
+    silences either."""
+
+    files = {
+        ".outcomebound/fragments/local.md": local_fragment(None, edges=[edge]),
+        "fly.toml": "app = 'x'\n",
+        **release_workflow("twine upload dist/*"),
+    }
+    target = repo(tmp_path / "t", files)
+    commit(target, ONE)
+    installed(target, capsys, "local")
+
+    _, out, _ = run(capsys, str(target), "--check")
+
+    expected = {"deploy": DEPLOY_LINE, "publishing": PUBLISH_LINE}
+    assert drift_lines(out) == [line for name, line in expected.items() if name != silenced]
+
+
+ALL_FIVE = {
+    "recent-authors": "2 recent authors present, record says solo selected",
+    "codeowners": "CODEOWNERS present, record says team not selected and solo selected",
+    "deploy": DEPLOY_LINE,
+    "publishing": PUBLISH_LINE,
+    "exposure": (
+        "2 recent authors present, record says the local Exposure line is maintained by one person"
+    ),
+}
+
+
+def all_five(tmp_path: Path, capsys: Capture, bounds: str) -> list[str]:
+    """The drift lines of a project that shows all five signals against its record."""
+
+    files = {
+        ".outcomebound/fragments/local.md": local_fragment(
+            "Exposure — maintained by: one person", bounds=bounds
+        ),
+        ".github/CODEOWNERS": "* @x\n",
+        "fly.toml": "app = 'x'\n",
+        **release_workflow("twine upload dist/*"),
+    }
+    target = repo(tmp_path / "t", files)
+    two_authors(target)
+    installed(target, capsys, "solo,local")
+    return drift_lines(run(capsys, str(target), "--check")[1])
+
+
+def test_each_of_the_five_signals_prints_a_line_without_an_acknowledgement(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the five-signal project used by the acknowledgement tests does not print all
+    five lines, which would make those tests prove nothing."""
+
+    assert all_five(tmp_path, capsys, "") == list(ALL_FIVE.values())
+
+
+@pytest.mark.parametrize("signal", list(ALL_FIVE))
+def test_a_drift_line_in_the_bounds_slot_settles_its_signal_and_no_other(
+    tmp_path: Path, capsys: Capture, signal: str
+) -> None:
+    """Breaks if `Drift — <signal>: <reason>` does not silence its own signal, or silences
+    another."""
+
+    found = all_five(tmp_path, capsys, f"Drift — {signal}: a reason the person wrote")
+
+    assert found == [line for name, line in ALL_FIVE.items() if name != signal]
+
+
+def test_an_unknown_signal_id_in_a_drift_line_is_ignored(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if an id outside the five, or a line that is not `Drift — <id>: <reason>`, silences
+    a line; the ids are read case-insensitively and a hyphen in place of the dash is read."""
+
+    ignored = "Drift — nonsense: x\nDrift deploy without a colon\nDrifting — deploy; no"
+    assert all_five(tmp_path / "a", capsys, ignored) == list(ALL_FIVE.values())
+
+    found = all_five(tmp_path / "b", capsys, "Drift - Recent-Authors: outside contributions")
+    assert found == [line for name, line in ALL_FIVE.items() if name != "recent-authors"]
+
+
+def test_the_exposure_claim_needs_every_stream_to_say_one_person(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a project with two streams, one maintained by one person and one by two, or one
+    whose second stream line does not parse, prints the claim, or if all streams saying one
+    person do not."""
+
+    for name, streams, line in (
+        (
+            "two",
+            ["Exposure — api: maintained by: one person", "Exposure — web: maintained by: ab"],
+            [],
+        ),
+        (
+            "both",
+            ["Exposure — api: maintained by: one person", "Exposure — web: maintained by: solo"],
+            [ALL_FIVE["exposure"]],
+        ),
+    ):
+        target = repo(
+            tmp_path / name, {".outcomebound/fragments/local.md": local_fragment(streams)}
+        )
+        two_authors(target)
+        installed(target, capsys, "team,local")
+
+        _, out, _ = run(capsys, str(target), "--check")
+
+        assert drift_lines(out) == line, name
