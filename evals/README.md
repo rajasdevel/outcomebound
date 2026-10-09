@@ -210,12 +210,8 @@ Three limits hold for every result, and a report of a run says them:
   Paths compare as the OS resolves them (symlinks, `..`, a trailing slash), for `--seal-out` and
   for the `cd` prefix; a `--seal-out` inside the state folder by any spelling is refused.
 
-Three more limits showed in the 1.6.0 pass and hold for every Claude result:
+Two more limits showed in the 1.6.0 pass:
 
-- A check that a run plants and undoes inside one compound Bash command (a defect, then the Done
-  command, then the restore, with the exit codes printed) is one command whose status is that of
-  its last part. A claim that needs a failing Done run followed by a passing one cannot see it,
-  on either side of a comparison.
 - The arm's install is not `adopt`'s own: it holds no `.outcomebound/manifest.json`, so
   `outcomebound adopt . --done` refuses inside a fixture. Graders read a hand-written `Done:` line
   as the record instead.
