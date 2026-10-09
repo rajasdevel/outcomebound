@@ -10,7 +10,7 @@ and this repository's checks have different needs.
 | --- | --- | --- |
 | Python 3.10 or later | Engine and build backend | Runs the command and its standard-library modules. CI tests Python 3.10 through 3.14. |
 | Git 2.52.0 or later and a Git worktree | Adoption and repository operations | Reads tracked files, history, worktree identity and preservation state. |
-| One of uv, pipx, or pip in a virtual environment | Installation | Installs the package and creates the command. They are alternative routes. A Git URL also needs Git and network access. |
+| One of uv, pipx, or pip in a virtual environment | Installation | Installs the package and creates the command. They are alternative routes. A Git URL also needs Git and network access; the package index (PyPI), for a version published there, needs network access only. |
 | POSIX `sh` | Checkout launcher and finish-check Done lines | Runs shell command lines. The installed entry point itself runs Python. On Windows, Git for Windows supplies `sh.exe`. |
 | The project's own check tools | Done lines or a selected floor | Runs the checks that the project declared. A missing tool reads UNVERIFIED. |
 | Windows job objects and `taskkill.exe` | Windows process cleanup | A job object, through the standard library's `ctypes`, stops a timed-out command's whole process tree; `taskkill.exe` is the fallback where a job cannot be made. Both are operating-system features. |
@@ -128,6 +128,8 @@ through uv or an explicit interpreter path.
 | GitHub Actions and hosted Ubuntu/Windows runners | Run the platform matrix and release jobs. |
 | actions/checkout v7.0.1 and actions/setup-python v7.0.0 | Fetch source and provide Python. Both actions are pinned by commit. |
 | actions/attest-build-provenance v4.2.2 | Attests release files; pinned by commit. |
+| pypa/gh-action-pypi-publish v1.14.2 | Uploads the release files to PyPI by trusted publishing (OpenID Connect, no stored token); pinned by commit. It runs only in the job `pypi`, in the GitHub environment `pypi`. |
+| PyPI (pypi.org) and its trusted-publisher setup | Receives the release files. The publisher is configured once on pypi.org, outside the repository; the first upload creates the project. |
 | python:3.13-slim and python:3.13-alpine | Check Debian and musl containers. These tags are not pinned by digest. |
 | apt-get or apk, with distribution repositories; sudo on the hosted Linux runner | Install Git inside the containers or the minimum-Git build dependencies on the hosted runner. |
 | Git 2.52.0 source, build-essential, libcurl4-openssl-dev, libexpat1-dev, gettext, zlib1g-dev and xz-utils | Build the pinned minimum Git in the existing Linux Python 3.10 leg. The source SHA-256 is pinned; distribution build packages are not. These are CI build dependencies, not engine requirements. |

@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "release-check.py"
+BACKEND = SCRIPT.with_name("build_backend.py")
+WORKFLOW = SCRIPT.parent.parent / ".github/workflows/ci.yml"
 LINK = "[1.1.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.1.0"
 COMPARE = "[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.1.0...HEAD"
 
@@ -35,6 +37,11 @@ CASES = {
     "main-by-hand": None,
     "main-fork": "no passing CI run on main (none)",
     "main-pass-then-fail": "no passing CI run on main (failure, success)",
+    "pypi-unpinned": "the action is not pinned by full commit",
+    "pypi-wide-token": "id-token: write is granted for the whole workflow",
+    "pypi-no-environment": "it is not in the environment pypi",
+    "pypi-before-release": "it does not need release",
+    "metadata-no-license": "the package metadata is what PyPI accepts; no License-Expression",
 }
 
 # GitHub's answer for HEAD's CI runs in each case; every other case has a passing run on main.
@@ -83,6 +90,23 @@ STALE = {
     "stale-pin": ("templates/ci/github-actions.yml", "v1.1.0", "v1.0.0"),
     "stale-readme": ("README.md", "v1.1.0", "v1.0.0"),
     "stale-gitlab": ("templates/ci/gitlab-ci.yml", "v1.1.0", "v1.0.0"),
+    "pypi-unpinned": (
+        ".github/workflows/ci.yml",
+        "gh-action-pypi-publish@",
+        "gh-action-pypi-publish@release/v1 # ",
+    ),
+    "pypi-wide-token": (
+        ".github/workflows/ci.yml",
+        "permissions:\n  contents: read\n",
+        "permissions:\n  id-token: write\n  contents: read\n",
+    ),
+    "pypi-no-environment": (".github/workflows/ci.yml", "    environment: pypi\n", ""),
+    "pypi-before-release": (".github/workflows/ci.yml", "    needs: [release]\n", ""),
+    "metadata-no-license": (
+        "scripts/build_backend.py",
+        'f"License-Expression: {LICENSE_EXPRESSION}",',
+        "",
+    ),
 }
 
 
@@ -94,6 +118,10 @@ def release_files(case: str) -> dict[str, str]:
         ),
         "templates/ci/gitlab-ci.yml": "    - pip install git+https://github.com/example/outcomebound@v1.1.0\n",
         "README.md": "uv tool install git+https://github.com/example/outcomebound@v1.1.0\n",
+        # The release workflow and the build backend are the repository's own: what the two
+        # PyPI checks read.
+        ".github/workflows/ci.yml": WORKFLOW.read_text(encoding="utf-8"),
+        "scripts/build_backend.py": BACKEND.read_text(encoding="utf-8"),
     }
     if case in STALE:
         name, old, new = STALE[case]
