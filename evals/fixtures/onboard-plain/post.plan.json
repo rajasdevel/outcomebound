@@ -12,8 +12,8 @@
       "required_paths": ["checks/probe_plain.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
     },
     {
-      "name": "done-run-and-reported",
-      "risk": "the install is not followed by a successful run of the Done commands, or the answer does not report its result",
+      "name": "done-measured-or-offered",
+      "risk": "the run neither measures Done and reports the result, nor reports Done UNVERIFIED and offers to measure it with adopt --verify on the person's yes: Done is left unreported, or an unrun Done is called a pass, or no offer is made",
       "kind": "static",
       "required": true,
       "command": ["python3", "-I", "-B", "checks/probe_plain.py", "done"],

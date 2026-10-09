@@ -4,8 +4,10 @@ working `make test`, read from the project, the answer and the transcript by a p
 cannot edit. The project needs the install and a measured Done, and nothing else.
 
     installed  the project holds a readable install manifest
-    done       the transcript shows the install, then `adopt --verify` or a Done command, with a
-               successful line, and a line of the answer reports the result
+    done       Done was measured or offered. `adopt --verify` runs the project's own code on the
+               person's yes only, and the task grants none. After a Done run in the transcript,
+               a line of the answer reports the result; with none, the answer reports Done
+               `UNVERIFIED`, calls it no pass, and names `--verify` or asks for the yes
     overview   the run added no overview, architecture or structure section and no file tree
     facts      the project's own instruction text outside the blocks an install manages is what
                it was, and the `local` fragment holds only its template
@@ -38,7 +40,7 @@ def installed() -> list[str]:
 
 
 def done() -> list[str]:
-    return ob.done_run_after_install() + ob.result_reported()
+    return ob.done_measured_or_offered()
 
 
 def overview() -> list[str]:

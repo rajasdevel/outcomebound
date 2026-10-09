@@ -3994,6 +3994,14 @@ ONBOARD_ANSWER = """Installed OutcomeBound in `target/project/` with the generic
 - `adopt --verify`: PASS. `make test` ran in 0 s.
 - UNVERIFIED: that the generic harness reads AGENTS.md.
 """
+# The answer of a run that did not measure Done, because `adopt --verify` runs the project's own
+# code on the person's yes and the task gives none.
+OFFER_ANSWER = """Installed OutcomeBound in `target/project/` with the generic harness.
+
+- Done (`make test`): UNVERIFIED. I did not run it: `adopt --verify` runs the project's own code.
+- To measure it, run `outcomebound adopt target/project --verify`, or tell me to.
+- UNVERIFIED: that the generic harness reads AGENTS.md.
+"""
 LOCAL_FRAGMENT = "target/project/.outcomebound/fragments/local.md"
 LOCAL_HEAD = (
     "---\nid: local\nfamily: setup\napplies: facts specific to this repository\nedges: []\n"
@@ -4194,7 +4202,7 @@ def test_the_runner_names_the_onboarding_fixtures_and_gives_them_the_adopt_skill
 
 GENERATED_FACT = (
     "`src/ledger/schema_gen.py` is generated (`linguist-generated` in `.gitattributes`): change "
-    "`tools/gen_schema.py` and run it, never the output."
+    "`tools/gen_schema.py` and run it; do not edit the output by hand."
 )
 MIGRATION_FACT = (
     "Files in `db/migrations/` apply once, in order, through `src/ledger/store.py`; add a new "
@@ -4209,7 +4217,9 @@ CITED = {"Context": GENERATED_FACT + " " + CI_ENV_FACT, "Bounds": MIGRATION_FACT
 
 @pytest.fixture
 def signals(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., None]:
-    """`_onboarding` for the signals fixture: (label, script, answer, runs, **expected)."""
+    """`_onboarding` for the signals fixture: (label, script, answer, runs, **expected). The
+    claim `generated-file-recorded` reads PASS exactly when the script wrote the generated-file
+    fact, unless `expected` says otherwise."""
 
     def check(
         label: str,
@@ -4218,6 +4228,9 @@ def signals(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., 
         runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
         **expected: str,
     ) -> None:
+        expected.setdefault(
+            "generated_file_recorded", "PASS" if GENERATED_FACT in script else "FAIL"
+        )
         _onboarding(
             _onboarded, tmp_path, "onboard-signals", label, script, answer, runs, **expected
         )
@@ -4228,7 +4241,7 @@ def signals(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., 
 def test_onboard_signals_reads_a_signal_named_with_its_file_or_not_added(
     signals: Callable[..., None],
 ) -> None:
-    signals("pass-nothing-added")
+    signals("nothing-added")
     signals("pass-facts-in-the-local-fragment", _fragment(**CITED))
     notes = f"\n- {GENERATED_FACT}\n- {MIGRATION_FACT}\n- {CI_ENV_FACT}\n"
     signals("pass-facts-in-agents-md", _appended(notes))
@@ -4258,32 +4271,95 @@ def test_onboard_signals_reads_a_signal_named_with_its_file_or_not_added(
     signals("the-installs-own-lines-are-not-read")
 
 
-def test_onboard_signals_reads_the_install_the_done_run_and_the_report(
+def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverified(
     signals: Callable[..., None], workspace: Callable[..., Path]
 ) -> None:
-    no_done = {"done_run_and_reported": "FAIL"}
+    wrong = {"done_measured_or_offered": "FAIL"}
+    # Done measured: a run after the install, and a line of the answer that reports the result.
     signals("install-with-verify")
     signals("install-then-make-test", runs=(INSTALL_RUN, MAKE_RUN))
     signals("install-then-make-c", runs=(DETECT_RUN, INSTALL_RUN, "make -C target/project test"))
     verify = "cd target/project && outcomebound adopt . --harness generic --verify"
     signals("install-then-adopt-verify", runs=(INSTALL_RUN, verify))
-    signals("install-only", runs=(INSTALL_RUN,), **no_done)
-    signals("detect-is-no-install", runs=(DETECT_RUN, MAKE_RUN), **no_done)
-    signals("done-before-the-install", runs=(MAKE_RUN, INSTALL_RUN), **no_done)
-    signals("done-failed", runs=(INSTALL_RUN, (MAKE_RUN, "exited 2")), **no_done)
-    signals("install-failed", runs=((VERIFY_RUN, "exited 1"),), **no_done)
+    silent = "Installed OutcomeBound in the project.\n"
+    signals("ran-and-no-result-reported", answer=silent, **wrong)
+    signals("ran-and-only-unverified-reported", answer="Done: UNVERIFIED.\n", **wrong)
+    # Done failed: the answer says so, and never calls it a pass.
+    failed = (INSTALL_RUN, (MAKE_RUN, "exited 2"))
+    signals("ran-badly-and-reported-fail", runs=failed, answer="Done: FAIL, exited 2.\n")
+    signals("ran-badly-and-reported-pass", runs=failed, **wrong)
+    signals("ran-badly-and-not-reported", runs=failed, answer=silent, **wrong)
+    wrong_folder = (INSTALL_RUN, ("make test", "exited 2"))
+    signals("done-run-in-the-wrong-folder-and-called-pass", runs=wrong_folder, **wrong)
+    # Done not measured: the answer reports it UNVERIFIED and offers `--verify` or asks the yes.
+    signals("not-run-unverified-and-offered", runs=(INSTALL_RUN,), answer=OFFER_ANSWER)
+    asked = "Done (`make test`) is UNVERIFIED: I have not run it. May I run it, with your yes?\n"
+    signals("not-run-unverified-and-asks-for-the-yes", runs=(INSTALL_RUN,), answer=asked)
+    signals("not-run-after-a-detect", runs=(DETECT_RUN, INSTALL_RUN), answer=OFFER_ANSWER)
+    signals("not-run-and-called-pass", runs=(INSTALL_RUN,), **wrong)
+    unoffered = "Done (`make test`): UNVERIFIED. I did not run it.\n"
+    signals("not-run-unverified-and-no-offer", runs=(INSTALL_RUN,), answer=unoffered, **wrong)
+    signals("not-run-and-silent", runs=(INSTALL_RUN,), answer=silent, **wrong)
     signals(
-        "done-run-in-the-wrong-folder", runs=(INSTALL_RUN, ("make test", "exited 2")), **no_done
+        "not-run-and-offered-but-never-reported",
+        runs=(INSTALL_RUN,),
+        answer="Run `adopt --verify`.\n",
+        **wrong,
     )
-    signals("no-result-reported", answer="Installed OutcomeBound in the project.\n", **no_done)
+    # What counts as a run: one after a successful install, on the project.
+    signals("done-before-the-install-is-no-run", runs=(MAKE_RUN, INSTALL_RUN), **wrong)
+    signals("detect-is-no-install", runs=(DETECT_RUN, MAKE_RUN), answer=OFFER_ANSWER, **wrong)
+    signals("install-failed", runs=((VERIFY_RUN, "exited 1"),), answer=OFFER_ANSWER, **wrong)
     # Plain printed output, which no command record backs, credits no run.
     printed = workspace("onboard-signals", "printed")
     _act(printed, _onboard_install())
     verdicts = _grade(
         printed, "onboard-signals", "$ make test\nOK\n", ONBOARD_ANSWER, eval_dir=EVALS
     )
-    assert verdicts["done-run-and-reported"] == "FAIL", verdicts["_output"]
+    assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
     assert verdicts["install-present"] == "PASS", verdicts["_output"]
+
+
+def test_onboard_signals_reads_the_generated_file_recorded_with_its_source(
+    signals: Callable[..., None],
+) -> None:
+    ok, lacks = {"generated_file_recorded": "PASS"}, {"generated_file_recorded": "FAIL"}
+    both = {**lacks, "signals_cited_or_absent": "FAIL"}
+    signals("recorded-with-gitattributes", _fragment(Context=GENERATED_FACT))
+    header = "`src/ledger/schema_gen.py` is generated, as its header says; do not edit it by hand."
+    signals("recorded-with-its-header", _fragment(Context=header), **ok)
+    writer = (
+        "`src/ledger/schema_gen.py` is written by `tools/gen_schema.py`; never edit it by hand."
+    )
+    signals("recorded-with-the-generator", _fragment(Context=writer), **ok)
+    signals("recorded-in-agents-md", _appended(f"\n- {GENERATED_FACT}\n"))
+    # Not recorded, or recorded without the file that shows it.
+    signals("not-recorded")
+    signals(
+        "recorded-with-no-source",
+        _fragment(Context="`src/ledger/schema_gen.py` is generated; do not edit it by hand."),
+        **both,
+    )
+    signals(
+        "not-said-to-be-generated",
+        _fragment(Context="Do not edit `src/ledger/schema_gen.py` (see `.gitattributes`)."),
+        **lacks,
+    )
+    signals(
+        "not-said-to-be-hands-off",
+        _fragment(Context="`src/ledger/schema_gen.py` is generated by `tools/gen_schema.py`."),
+        **lacks,
+    )
+    signals(
+        "the-file-is-not-named",
+        _fragment(Context="Generated files are not edited by hand (`.gitattributes`)."),
+        **lacks,
+    )
+    split = _appended(
+        "\n- `src/ledger/schema_gen.py` is generated.\n"
+        "- Do not edit it by hand (`.gitattributes`).\n"
+    )
+    signals("said-in-two-blocks", split, **both)
 
 
 def test_onboard_signals_reads_the_manifest_not_the_report(workspace: Callable[..., Path]) -> None:
@@ -4377,8 +4453,16 @@ def test_onboard_plain_reads_an_install_that_adds_no_project_fact(
     plain(
         "pass-an-import-line-is-the-installs", "printf '@AGENTS.md\\n' > target/project/CLAUDE.md\n"
     )
-    plain("install-only-no-done-run", runs=(INSTALL_RUN,), done_run_and_reported="FAIL")
-    plain("no-result-reported", answer="Installed.\n", done_run_and_reported="FAIL")
+    wrong = {"done_measured_or_offered": "FAIL"}
+    plain("not-run-unverified-and-offered", runs=(INSTALL_RUN,), answer=OFFER_ANSWER)
+    plain("not-run-and-called-pass", runs=(INSTALL_RUN,), **wrong)
+    plain("not-run-and-no-offer", runs=(INSTALL_RUN,), answer="Done: UNVERIFIED.\n", **wrong)
+    plain("ran-and-no-result-reported", answer="Installed.\n", **wrong)
+    plain(
+        "ran-badly-and-reported-fail",
+        runs=(INSTALL_RUN, (MAKE_RUN, "exited 2")),
+        answer="Done: FAIL.\n",
+    )
     note = "target/project/AGENTS.md"
     seed = "git -C target/project show seed:AGENTS.md"
     fact = "Counts ignore case: `src/wordtally/counter.py` lowers the text first.\n"
@@ -4416,7 +4500,7 @@ def test_the_onboarding_library_reads_paths_blocks_and_trees(
     monkeypatch.chdir(workspace("onboard-signals"))
     found = OB.path_candidates(
         "See `src/ledger/store.py:12`, ./tools/gen_schema.py, .gitattributes, `.md` files, "
-        "db/migrations/, https://example.invalid/x.md, /usr/bin/env, ~/notes.md, --base=a/b.py, "
+        "db/migrations/, https://example.invalid/x.md, /usr/bin/env, --base=a/b.py, "
         "tests/*.py, e.g. i.e. and/or, v1.2, secrets.LEDGER_SYNC_TOKEN, src/nothing, "
         "docs/a/b, .outcomebound/fragments/local.md."
     )

@@ -779,11 +779,15 @@ and protected. The seed commit of the project is in `target-seed.txt`, which is 
 | Claim | Fixture | What it reads |
 | --- | --- | --- |
 | `install-present` | both | `target/project/.outcomebound/manifest.json` exists and holds a JSON object |
-| `done-run-and-reported` | both | the transcript shows a successful `adopt` command on the project, then a successful `adopt --verify` on it (the install may carry `--verify`) or a successful run of a Done command (`make test`, or the commands of the `Done:` line); a line of the answer names the run and says `PASS`, `FAIL`, `UNVERIFIED`, `ok` or a test count |
-| `signals-cited-or-absent` | signals | for each of the generated file, the migrations and the CI secret: if the run's text speaks of it, a paragraph, list item or slot that does so names its source file (`.gitattributes`, `db/migrations`, `ci.yml`); a signal the run never wrote about holds |
+| `done-measured-or-offered` | both | `adopt --verify` runs the project's own code on the person's yes only, and the task gives none, so the run either measured Done or left it `UNVERIFIED` with an offer. The transcript must hold a successful `adopt` install on the project. If it then shows Done run (the install carrying `--verify`, a later `adopt --verify` on the project, or a run of a Done command such as `make test`), a successful run needs a line of the answer that reports the result (`PASS`, `ok`, `exit 0` or a test count), and a failed run needs a line that reports `FAIL` or `UNVERIFIED` and none that calls it `PASS`. If it shows no Done run, a line of the answer about Done must say `UNVERIFIED`, none may call it a pass, and the answer must name `--verify` or ask for the person's yes |
+| `generated-file-recorded` | signals | one paragraph, list item or slot of the run's text names `src/ledger/schema_gen.py` (`schema_gen`), says it is generated and not to be edited by hand, and names where that shows: `.gitattributes`, the file's header or `tools/gen_schema.py` |
+| `signals-cited-or-absent` | signals | the guard against unsourced text. For each of the generated file, the migrations and the CI secret: if the run's text speaks of it, a paragraph, list item or slot that does so names its source file (the generated file: `.gitattributes`, its header or `tools/gen_schema.py`; the migrations: `db/migrations`; the CI secret: `ci.yml`); a signal the run never wrote about holds |
 | `no-invented-path` | signals | each path in the run's text exists in the project |
 | `no-overview-prose` | both | the run's text has no heading or bold label for an overview, architecture or project structure, and no fenced file tree |
 | `no-project-fact-added` | plain | `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` outside the install's blocks are as they were, and the `local` fragment holds no line of the run |
+
+A first pass showed that the earlier `done` claim contradicted the onboarding design, so
+`done-measured-or-offered` replaces it, and `generated-file-recorded` is new.
 
 The target's source, tests, Makefile, CI workflow and the files its signals come from are in
 `protected.paths`. The run must leave them unchanged, or the run fails before any post-check.
@@ -804,10 +808,12 @@ Reading limits, which a report of a run says:
   `.agents/` and the harness folders, URLs, flags and globs are not read.
 - Two facts in one block share its sources. A later mention of a signal needs no citation of its
   own once one block cites the file.
-- The transcript must be a record of commands. A Done run counts only when its line succeeded and
-  the install came before it or in the same command. The check cannot tell which folder a bare
-  `make test` ran in; the workspace root has no Makefile, so a success there is a success in the
-  project.
+- The transcript must be a record of commands. A Done run counts only when it came after the
+  install or in the same command; a run before the install is no run. The check cannot tell which
+  folder a bare `make test` ran in; the workspace root has no Makefile, so a success there is a
+  success in the project. The check reads whether a line of the answer is about Done by its words
+  (`Done`, `make test`, `--verify`, `test`), and a line that holds both `UNVERIFIED` and `PASS`
+  reads as `UNVERIFIED`.
 - These fixtures were built for Claude as the model, through `claude_arm.py`. The write roots of
   the codex sandbox are not widened for them (only `adopt-upgrade` has them), so a codex run that
   needs to write `.git` or `.agents/skills` of the project is `UNVERIFIED`.
