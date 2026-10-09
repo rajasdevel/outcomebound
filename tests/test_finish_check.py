@@ -1624,15 +1624,21 @@ def test_the_measured_seconds_are_one_run_of_each_command_and_the_rerun_is_named
     environment, _ = finish_check.hook_environment(tmp_path, os.environ)
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
-    done = ["sleep 1; echo 'FAILED tests/a.py::t'; exit 2"]
+    # Only the rerun is slow, so the seconds tell one run from two on a runner of any speed: a
+    # slow runner's shell start-up once made one quick run read as two.
+    marker = tmp_path / "ran-once"
+    done = [
+        f"if [ -e {q(marker)} ]; then sleep 3; fi; touch {q(marker)}; "
+        "echo 'FAILED tests/a.py::t'; exit 2"
+    ]
     root, digest = target(tmp_path / "t", done)
 
     measured = finish_check.measure(root, done, 600)
 
     assert measured.reran == (done[0],)
-    assert 1.0 <= measured.seconds < 1.9, measured.seconds
+    assert 0 < measured.seconds < 3, measured.seconds
     known = finish_check.known_record(root, digest)
-    assert known is not None and known.seconds < 1.9
+    assert known is not None and known.seconds < 3
 
 
 def test_a_dropped_path_entry_adds_one_run_to_a_stable_failure_only(
