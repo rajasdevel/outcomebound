@@ -122,6 +122,7 @@ block. Give the implementer the commands it needs: where to work, how to run the
 not to run. Commit as the project's instructions or the goal envelope say work lands here; where
 neither says, commit locally on the current branch in the style the history shows, and put how it
 should land to the person in the handover as a decision brief.
-The implementer's handover says what changed, each check's verdict, what it decided beyond the
+The implementer's handover says what changed, each check's exact command and verdict, for each
+test it added the run that failed before the change, what it decided beyond the
 package, and the follow-ups it found. When the ticket is done, your handover says the same for the
 ticket, and names the tier and the implementer that built it.
