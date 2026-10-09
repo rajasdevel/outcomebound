@@ -115,7 +115,7 @@ are recorded in [E21](../../evaluations.md#current-bounded-retention-support).
 The explain-spec fixture declares its own notes area; the skill gains no universal notes-folder rule.
 
 
-## Research candidates for 1.6.0
+## Research candidates (not installed)
 
 The [testing guidance trials](../../../evals/research-trials.md) define the comparison before
 results are read. Post-patch-validation and useful property selection are candidates for
