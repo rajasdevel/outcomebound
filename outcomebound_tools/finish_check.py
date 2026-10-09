@@ -1252,14 +1252,13 @@ def run_one(
         held: list[int] = []
         previous = _hold(held)
         try:
-            process = subprocess.Popen(
+            process = programs.start_tree(
                 [shell, "-c", line],
                 cwd=target,
                 stdin=subprocess.DEVNULL,
                 stdout=sink,
                 stderr=subprocess.STDOUT,
                 env=environment,
-                **programs.new_group(),
             )
         except OSError as error:
             _release(previous, held)
@@ -1268,7 +1267,6 @@ def run_one(
         except BaseException:
             _release(previous, ())
             raise
-        programs.track_tree(process)
         try:
             _release(previous, held)
             code = process.wait(timeout=None if seconds is None else max(seconds, 0.0))

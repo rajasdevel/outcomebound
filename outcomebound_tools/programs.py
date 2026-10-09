@@ -9,9 +9,11 @@ launcher of the Windows Subsystem for Linux, which reads "no installed distribut
 is installed, and `python` or `python3` in `WindowsApps` is an app execution alias that opens the
 Store. A POSIX shell on Windows is the `sh.exe` of Git for Windows, found on PATH or beside `git`.
 A process group is a new session on POSIX and `CREATE_NEW_PROCESS_GROUP` on Windows; its tree is
-stopped by `killpg` on POSIX. On Windows the command also goes into a job object of its own
-(`track_tree`), and `TerminateJobObject` ends everything in the job at once; `taskkill /T /F` and
-then `Popen.kill` are the fallback where there is no job.
+stopped by `killpg` on POSIX. On Windows the command also goes into a job object of its own, and
+`TerminateJobObject` ends everything in the job at once; `taskkill /T /F` and then `Popen.kill`
+are the fallback where there is no job. `start_tree` is how a command starts: on Windows it
+starts the command suspended, joins it to its job, and only then lets it run, so that nothing the
+command starts can be outside the job.
 
 What it does not decide: whether a program is the right one, or what a caller does where none is
 found. `require` raises `FileNotFoundError`, which every caller of a process already reads.
@@ -43,10 +45,10 @@ __all__ = [
     "require",
     "resolve",
     "shell_environment",
+    "start_tree",
     "stop_tree",
     "stub",
     "stub_found",
-    "track_tree",
 ]
 
 DEFAULT_PATHEXT = (".COM", ".EXE", ".BAT", ".CMD")
@@ -65,6 +67,14 @@ JOB_EXTENDED_LIMIT_INFORMATION = 9
 JOB_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
 # The exit code of a process that `TerminateJobObject` ends, as `Popen.kill` gives on Windows.
 JOB_EXIT_CODE = 1
+# The creation flag that starts a process with its first thread suspended (`CREATE_SUSPENDED`;
+# `subprocess` has no name for it), and what resuming that thread takes: a snapshot of the
+# system's threads (`TH32CS_SNAPTHREAD`), the right to suspend and resume one
+# (`THREAD_SUSPEND_RESUME`), and `ResumeThread`'s failure value, `(DWORD) -1`.
+CREATE_SUSPENDED = 0x4
+TH32CS_SNAPTHREAD = 0x4
+THREAD_SUSPEND_RESUME = 0x2
+RESUME_FAILED = 0xFFFFFFFF
 
 
 def _windows(windows: bool | None) -> bool:
@@ -309,7 +319,7 @@ def _taskkill() -> str:
 
 
 class Jobs(Protocol):
-    """The four calls that make a Windows job object work. `programs` uses the system's
+    """The five calls that make a Windows job object work. `programs` uses the system's
     (`_Kernel32`); a test passes its own."""
 
     def create(self) -> int | None:
@@ -317,7 +327,12 @@ class Jobs(Protocol):
         ...
 
     def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
-        """Put a running process in the job. False where the process cannot join it."""
+        """Put a process in the job. False where the process cannot join it."""
+        ...
+
+    def resume(self, process: subprocess.Popen[bytes]) -> bool:
+        """Let a process that started suspended (`CREATE_SUSPENDED`) run. False where it could
+        not be resumed."""
         ...
 
     def terminate(self, job: int) -> bool:
@@ -376,9 +391,37 @@ def _limit_information() -> Any:
     return limits
 
 
+def _thread_entry() -> Any:
+    """The `THREADENTRY32` class as `ctypes` lays it out: seven four-byte members, 28 bytes, the
+    thread id at offset 8 and the id of the process that owns it at 12. A test checks it on any
+    platform."""
+
+    import ctypes
+
+    class ThreadEntry(ctypes.Structure):
+        _fields_ = (
+            ("dwSize", ctypes.c_uint32),
+            ("cntUsage", ctypes.c_uint32),
+            ("th32ThreadID", ctypes.c_uint32),
+            ("th32OwnerProcessID", ctypes.c_uint32),
+            ("tpBasePri", ctypes.c_int32),
+            ("tpDeltaPri", ctypes.c_int32),
+            ("dwFlags", ctypes.c_uint32),
+        )
+
+    return ThreadEntry
+
+
 class _Kernel32:
     """The job calls of the running Windows, on a private copy of `kernel32.dll` so that no other
-    code's prototypes change. Raises `OSError` where there is no Windows API to call."""
+    code's prototypes change. Raises `OSError` where there is no Windows API to call.
+
+    A process resumes through the documented thread calls: `CreateToolhelp32Snapshot` lists the
+    system's threads, and `ResumeThread` runs each one that the process owns. `Popen` closes the
+    handle of the process's first thread when it returns, and `NtResumeProcess`, which takes the
+    process handle that `Popen` keeps, is a native call of `ntdll.dll` that the Win32 reference
+    does not list: a documented call that needs a list is chosen over a call that needs none and
+    that Microsoft may change."""
 
     def __init__(self) -> None:
         import ctypes
@@ -386,8 +429,23 @@ class _Kernel32:
         loader = getattr(ctypes, "WinDLL", None)
         if loader is None:
             raise OSError("this platform has no Windows API")
+        self._ctypes = ctypes
         kernel = loader("kernel32")
         handle, number = ctypes.c_void_p, ctypes.c_uint32
+        self._entry_type = _thread_entry()
+        self._invalid = ctypes.c_void_p(-1).value
+        self._snapshot = kernel.CreateToolhelp32Snapshot
+        self._snapshot.argtypes, self._snapshot.restype = [number, number], handle
+        entry = ctypes.POINTER(self._entry_type)
+        self._first = kernel.Thread32First
+        self._first.argtypes, self._first.restype = [handle, entry], ctypes.c_int
+        self._next = kernel.Thread32Next
+        self._next.argtypes, self._next.restype = [handle, entry], ctypes.c_int
+        self._open_thread = kernel.OpenThread
+        self._open_thread.argtypes = [number, ctypes.c_int, number]
+        self._open_thread.restype = handle
+        self._resume_thread = kernel.ResumeThread
+        self._resume_thread.argtypes, self._resume_thread.restype = [handle], number
         self._create = kernel.CreateJobObjectW
         self._create.argtypes, self._create.restype = [handle, ctypes.c_wchar_p], handle
         self._set = kernel.SetInformationJobObject
@@ -416,6 +474,39 @@ class _Kernel32:
         # job; the process id would have to be opened again, after the id could have been reused.
         handle = getattr(process, "_handle", None)
         return handle is not None and bool(self._assign(job, int(handle)))
+
+    def resume(self, process: subprocess.Popen[bytes]) -> bool:
+        """Run each thread the process owns: a process that started suspended has one. The
+        process's handle is open, so its id cannot have passed to another process."""
+
+        ctypes = self._ctypes
+        snapshot = self._snapshot(TH32CS_SNAPTHREAD, 0)
+        if snapshot is None or snapshot == self._invalid:
+            return False
+        resumed = False
+        try:
+            entry = self._entry_type()
+            entry.dwSize = ctypes.sizeof(entry)
+            more = self._first(snapshot, ctypes.byref(entry))
+            while more:
+                if entry.th32OwnerProcessID == process.pid:
+                    if not self._run(entry.th32ThreadID):
+                        return False
+                    resumed = True
+                entry.dwSize = ctypes.sizeof(entry)
+                more = self._next(snapshot, ctypes.byref(entry))
+        finally:
+            self._close(snapshot)
+        return resumed
+
+    def _run(self, thread_id: int) -> bool:
+        thread = self._open_thread(THREAD_SUSPEND_RESUME, False, thread_id)
+        if not thread:
+            return False
+        try:
+            return int(self._resume_thread(thread)) != RESUME_FAILED
+        finally:
+            self._close(thread)
 
     def terminate(self, job: int) -> bool:
         return bool(self._terminate(job, JOB_EXIT_CODE))
@@ -460,19 +551,18 @@ _JOBS: weakref.WeakKeyDictionary[subprocess.Popen[bytes], _Job] = weakref.WeakKe
 def track_tree(
     process: subprocess.Popen[bytes], *, windows: bool | None = None, jobs: Jobs | None = None
 ) -> bool:
-    """On Windows, put a process that started with `new_group` into a job object of its own, so
-    that `stop_tree` ends it and everything it starts in one call, however many processes there
-    are and however loaded the machine. Call it as soon as `Popen` returns.
+    """On Windows, put a process into a job object of its own, so that `stop_tree` ends it and
+    everything it starts in one call, however many processes there are and however loaded the
+    machine. This is the join step of `start_tree`, which a caller uses to start a command.
 
     True where a job holds the process. False where there is none to make or join: not Windows,
     no Windows API, a job that refuses nesting, a process that has already ended. `stop_tree`
     then falls back to `taskkill`. Never raises, and changes nothing off Windows.
 
-    A job holds only the processes started after the process joined it, so one that the command
-    starts between `CreateProcess` returning and this call is outside it. That interval is a few
-    Python calls of one thread. The command's first process, a shell or an interpreter, needs
-    tens of milliseconds to load before it can start one. The interval is not closed: that takes
-    a suspended start and a resume, and a resume that fails hangs the command.
+    A job holds only the processes started after the process joined it. A process that is running
+    when it joins has had that time to start others, which stay outside the job. `start_tree`
+    closes that time: it starts the process suspended, so that nothing has run when it joins.
+    Called on a process that is already running, this leaves the time open.
 
     The job ends what is still running in it when the process object is let go. A command that
     ended by itself and left a process behind has that process ended then."""
@@ -490,6 +580,75 @@ def track_tree(
             return True
         job.close()
     return False
+
+
+def _resumed(process: subprocess.Popen[bytes], api: Jobs) -> bool:
+    """Whether a process that started suspended now runs. A resume that raises counts as one that
+    failed."""
+
+    try:
+        return bool(api.resume(process))
+    except Exception:
+        return False
+
+
+def _abandon(process: subprocess.Popen[bytes]) -> None:
+    """End a process that must not be left suspended, holding the pipes its caller waits on: its
+    job where it joined one, else `taskkill`, and the process itself last. Never raises."""
+
+    stop_tree(process, windows=True)
+    with contextlib.suppress(OSError):
+        process.kill()
+    with contextlib.suppress(subprocess.SubprocessError):
+        process.wait(TASKKILL_SECONDS)
+
+
+def start_tree(
+    argv: Sequence[str],
+    *,
+    windows: bool | None = None,
+    jobs: Jobs | None = None,
+    **options: Any,
+) -> subprocess.Popen[bytes]:
+    """Start `argv` with `Popen(argv, **options)` as the leader of a process group that
+    `stop_tree` can end whole: the keywords of `new_group`, and on Windows a job object.
+
+    On Windows where the job API loads, the command starts suspended, joins its job
+    (`track_tree`), and is then resumed, so that every process it starts is in the job from its
+    first instruction. The API loads before the command starts, so that a loaded machine does not
+    spend that time with the command running. A join that fails does not stop the command: it
+    is resumed, runs without a job, and `stop_tree` falls back to `taskkill`. A resume that fails
+    ends the command and raises `OSError`, which every caller already reads as a command that
+    could not start. Where there is no job API the command starts at once, as off Windows,
+    where this is `Popen` with a group of its own.
+
+    `options` are `Popen`'s other keywords, and hold neither `creationflags` nor
+    `start_new_session`: the group is this function's. Raises what `Popen` raises, and
+    `OSError` for a failed resume. A `BaseException` that arrives
+    between the start and the resume, a Ctrl-C or a signal handler's exception, stops the command
+    before it propagates."""
+
+    on_windows = _windows(windows)
+    api: Jobs | None = None
+    if on_windows:
+        with contextlib.suppress(Exception):
+            api = _system_jobs() if jobs is None else jobs
+    group = new_group(windows=on_windows)
+    if api is not None:
+        group["creationflags"] |= CREATE_SUSPENDED
+    process: subprocess.Popen[bytes] = subprocess.Popen(argv, **group, **options)
+    if api is None:
+        return process
+    try:
+        track_tree(process, windows=True, jobs=api)
+        resumed = _resumed(process, api)
+    except BaseException:
+        _abandon(process)
+        raise
+    if not resumed:
+        _abandon(process)
+        raise OSError("the command started but could not be resumed, and was stopped")
+    return process
 
 
 def _end_job(process: subprocess.Popen[bytes]) -> bool:

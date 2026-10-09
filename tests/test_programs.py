@@ -14,6 +14,7 @@ import contextlib
 import ctypes
 import gc
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -350,7 +351,7 @@ SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
 
 
 class FakeJobs:
-    """The four job calls a Windows machine has, as a test has them: each call is recorded; one
+    """The five job calls a Windows machine has, as a test has them: each call is recorded; one
     named in `fail` reports failure, one in `raises` raises, as the real call could."""
 
     def __init__(self, fail: Collection[str] = (), raises: Collection[str] = ()) -> None:
@@ -370,6 +371,9 @@ class FakeJobs:
     def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
         self.joined.append(process.pid)
         return self._call("assign", job)
+
+    def resume(self, process: subprocess.Popen[bytes]) -> bool:
+        return self._call("resume")
 
     def terminate(self, job: int) -> bool:
         return self._call("terminate", job)
@@ -412,6 +416,25 @@ def test_the_job_limit_structure_has_the_layout_windows_reads() -> None:
     expected = bytearray(ctypes.sizeof(limits))
     expected[16:20] = (0x2000).to_bytes(4, "little")
     assert bytes(limits) == bytes(expected)
+
+
+def test_the_thread_entry_structure_has_the_layout_windows_reads() -> None:
+    """Breaks if the structure `Thread32First` fills has another size than `THREADENTRY32`
+    (28 bytes, every member four bytes), or has the thread id and the owner process id at other
+    offsets than 8 and 12: the resume would then read the wrong process's threads, or none, on
+    a machine this suite cannot run on."""
+
+    entry = programs._thread_entry()()
+    assert ctypes.sizeof(entry) == 28
+    assert [(name, getattr(type(entry), name).offset) for name, *_ in type(entry)._fields_] == [
+        ("dwSize", 0),
+        ("cntUsage", 4),
+        ("th32ThreadID", 8),
+        ("th32OwnerProcessID", 12),
+        ("tpBasePri", 16),
+        ("tpDeltaPri", 20),
+        ("dwFlags", 24),
+    ]
 
 
 def test_windows_puts_a_command_in_a_job_of_its_own_when_it_starts(sleeper: Any) -> None:
@@ -541,6 +564,203 @@ def test_a_windows_stop_on_a_machine_with_no_windows_api_still_stops_by_taskkill
     assert sleeper.wait(timeout=30) != 0
 
 
+# --- a command starts suspended, joins its job, and only then runs -------------------
+
+SUSPENDED = 0x4
+NEW_GROUP = 0x200
+
+
+class Starts:
+    """What `Popen` was asked and what it started, in order, since the last test."""
+
+    def __init__(self) -> None:
+        self.options: list[dict[str, Any]] = []
+        self.processes: list[subprocess.Popen[bytes]] = []
+        self.events: list[str] = []
+
+
+@pytest.fixture
+def starts(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Record each `Popen` that `programs` makes. This host is not Windows, so the keyword that
+    only Windows takes (`creationflags`) is recorded and then left out of the real call."""
+
+    record = Starts()
+    real = subprocess.Popen
+
+    def popen(argv: Any, **options: Any) -> subprocess.Popen[bytes]:
+        record.events.append("popen")
+        record.options.append(dict(options))
+        options.pop("creationflags", None)
+        process = real(argv, **options)
+        record.processes.append(process)
+        return process
+
+    monkeypatch.setattr(programs.subprocess, "Popen", popen)
+    yield record
+    for process in record.processes:
+        process.kill()
+        process.wait()
+
+
+def test_windows_starts_a_command_suspended_joins_its_job_and_only_then_resumes_it(
+    starts: Starts,
+) -> None:
+    """Breaks if the command starts running before it is in the job (a process it starts in that
+    time is outside the job and outlives `TerminateJobObject`), if the resume comes before the
+    join, if the command is never resumed, or if the suspended flag replaces the group's."""
+
+    jobs = FakeJobs()
+
+    process = programs.start_tree(SLEEP, windows=True, jobs=jobs)
+
+    assert starts.options == [{"creationflags": NEW_GROUP | SUSPENDED}]
+    assert jobs.calls == [("create", None), ("assign", JOB), ("resume", None)]
+    assert jobs.joined == [process.pid]
+    assert starts.processes == [process]
+    assert process.poll() is None
+
+
+def test_the_options_of_a_start_reach_popen_beside_the_group(
+    starts: Starts, tmp_path: Path
+) -> None:
+    """Breaks if a caller's own `Popen` keywords (folder, pipes, environment) are lost, or if
+    the group's flags are dropped where a caller passes none."""
+
+    programs.start_tree(SLEEP, windows=True, jobs=FakeJobs(), cwd=tmp_path, stdout=subprocess.PIPE)
+
+    assert starts.options == [
+        {"cwd": tmp_path, "stdout": subprocess.PIPE, "creationflags": NEW_GROUP | SUSPENDED}
+    ]
+
+
+@pytest.mark.parametrize(
+    ("call", "failure"),
+    [("create", "fail"), ("create", "raises"), ("assign", "fail"), ("assign", "raises")],
+)
+def test_a_join_that_fails_still_resumes_the_command_and_a_stop_falls_back_to_taskkill(
+    starts: Starts,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    call: str,
+    failure: str,
+) -> None:
+    """Breaks if a command whose job cannot be made or joined stays suspended for ever, or if
+    the failure escapes the start: the command then runs, as it did before the job, and a stop
+    asks `taskkill`."""
+
+    asked = taskkill_asked(monkeypatch, tmp_path)
+    jobs = FakeJobs(**{failure: [call]})
+
+    process = programs.start_tree(SLEEP, windows=True, jobs=jobs)
+
+    assert starts.options[0]["creationflags"] & SUSPENDED
+    assert jobs.calls[-1] == ("resume", None)
+    programs.stop_tree(process, windows=True)
+    assert [argv[1:] for argv in asked] == [["/T", "/F", "/PID", str(process.pid)]]
+    assert process.wait(timeout=30) != 0
+
+
+@pytest.mark.parametrize("failure", ["fail", "raises"])
+def test_a_resume_that_fails_ends_the_command_and_reads_as_a_start_failure(
+    starts: Starts, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str
+) -> None:
+    """Breaks if a command that cannot be resumed is left suspended (it holds its pipes for
+    ever, and the caller waits on it), if the failure is not an `OSError`, which every caller
+    already reads as a command that could not start, or if the job is not ended."""
+
+    taskkill_asked(monkeypatch, tmp_path)
+    jobs = FakeJobs(**{failure: ["resume"]})
+
+    with pytest.raises(OSError, match="resume"):
+        programs.start_tree(SLEEP, windows=True, jobs=jobs)
+
+    (process,) = starts.processes
+    assert process.wait(timeout=30) != 0
+    assert ("terminate", JOB) in jobs.calls
+
+
+def test_a_resume_that_fails_after_a_failed_join_still_ends_the_command(
+    starts: Starts, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Breaks if a command with no job and no resume is left suspended: with no job to end,
+    `taskkill` is asked, and the process is killed where that cannot run."""
+
+    asked = taskkill_asked(monkeypatch, tmp_path)
+    jobs = FakeJobs(fail=["assign", "resume"])
+
+    with pytest.raises(OSError, match="resume"):
+        programs.start_tree(SLEEP, windows=True, jobs=jobs)
+
+    (process,) = starts.processes
+    assert process.wait(timeout=30) != 0
+    assert [argv[1:] for argv in asked] == [["/T", "/F", "/PID", str(process.pid)]]
+
+
+def test_a_command_is_ended_if_the_start_is_interrupted_before_it_runs(
+    starts: Starts, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Breaks if a KeyboardInterrupt or a signal handler's exception that arrives between the
+    start and the resume leaves a suspended command behind."""
+
+    taskkill_asked(monkeypatch, tmp_path)
+
+    class Interrupting(FakeJobs):
+        def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
+            raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        programs.start_tree(SLEEP, windows=True, jobs=Interrupting())
+
+    (process,) = starts.processes
+    assert process.wait(timeout=30) != 0
+
+
+def test_no_suspended_flag_is_given_where_there_is_no_job_api(
+    starts: Starts, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Windows without the job API starts a command suspended: nothing could
+    resume it."""
+
+    monkeypatch.setattr(programs, "_system_jobs", lambda: None)
+
+    process = programs.start_tree(SLEEP, windows=True)
+
+    assert starts.options == [{"creationflags": NEW_GROUP}]
+    assert process.poll() is None
+
+
+def test_the_job_api_is_loaded_before_the_command_starts(
+    starts: Starts, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `ctypes` and `kernel32` load after `Popen` returns, which on a loaded machine
+    widens the time a started command runs outside its job."""
+
+    jobs = FakeJobs()
+
+    def load() -> FakeJobs:
+        starts.events.append("load")
+        return jobs
+
+    monkeypatch.setattr(programs, "_system_jobs", load)
+
+    programs.start_tree(SLEEP, windows=True)
+
+    assert starts.events == ["load", "popen"]
+
+
+def test_off_windows_a_command_starts_in_its_session_with_no_job_call(starts: Starts) -> None:
+    """Breaks if a POSIX run gets the Windows flags, calls the job functions, or loads the
+    Windows API."""
+
+    jobs = FakeJobs()
+
+    process = programs.start_tree(SLEEP, windows=False, jobs=jobs)
+
+    assert starts.options == [{"start_new_session": True}]
+    assert jobs.calls == []
+    assert process.poll() is None
+
+
 def run_one_command(tmp_path: Path) -> None:
     finish_check.run_one(tmp_path, "exit 0", 30)
 
@@ -569,24 +789,25 @@ def run_one_eval_command(tmp_path: Path) -> None:
 def test_every_caller_that_starts_a_command_puts_it_in_a_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, start: Callable[[Path], None]
 ) -> None:
-    """Breaks if a caller drops its `track_tree` call: nothing else fails then, since a command
-    without a job is stopped by `taskkill`, which only a loaded Windows machine shows to miss a
-    process."""
+    """Breaks if a caller starts its command with a bare `Popen`, so that it is never suspended,
+    joined to a job and resumed: nothing else fails then, since a command without a job is
+    stopped by `taskkill`, which only a loaded Windows machine shows to miss a process."""
 
     if start is run_one_command and programs.posix_shell() is None:
         pytest.skip("no POSIX shell to run a Done line")
-    joined: list[subprocess.Popen[bytes]] = []
-    real = programs.track_tree
+    started: list[subprocess.Popen[bytes]] = []
+    real = programs.start_tree
 
-    def record(process: subprocess.Popen[bytes], **options: Any) -> bool:
-        joined.append(process)
-        return real(process, **options)
+    def record(argv: Any, **options: Any) -> subprocess.Popen[bytes]:
+        process = real(argv, **options)
+        started.append(process)
+        return process
 
-    monkeypatch.setattr(programs, "track_tree", record)
+    monkeypatch.setattr(programs, "start_tree", record)
 
     start(tmp_path)
 
-    assert len(joined) == 1
+    assert len(started) == 1
 
 
 @pytest.mark.skipif(not WINDOWS, reason="a job object is a Windows object")
@@ -614,11 +835,9 @@ def test_a_real_job_ends_a_commands_grandchild_without_taskkill(
         encoding="utf-8",
     )
     pid = tmp_path / "leaf.pid"
-    process = subprocess.Popen(
-        [sys.executable, str(top), str(middle), str(leaf), str(pid)], **programs.new_group()
-    )
+    process = programs.start_tree([sys.executable, str(top), str(middle), str(leaf), str(pid)])
     try:
-        assert programs.track_tree(process) is True, "the command was not put in a job"
+        assert programs._JOBS.get(process) is not None, "the command was not put in a job"
         deadline = time.monotonic() + 30
         while not (pid.exists() and pid.read_text(encoding="utf-8").strip()):
             assert time.monotonic() < deadline, "the command never wrote its pid"
@@ -639,3 +858,86 @@ def test_a_real_job_ends_a_commands_grandchild_without_taskkill(
     finally:
         process.kill()
         process.wait()
+
+
+def in_job(pid: int, job: int) -> bool:
+    """Whether the process `pid` runs in the job whose handle is `job`, as Windows says
+    (`IsProcessInJob`), through a private copy of `kernel32`."""
+
+    loader = getattr(ctypes, "WinDLL", None)
+    assert loader is not None, "this is not Windows"
+    kernel = loader("kernel32")
+    handle, number = ctypes.c_void_p, ctypes.c_uint32
+    kernel.OpenProcess.argtypes = [number, ctypes.c_int, number]
+    kernel.OpenProcess.restype = handle
+    kernel.IsProcessInJob.argtypes = [handle, handle, ctypes.POINTER(ctypes.c_int)]
+    kernel.IsProcessInJob.restype = ctypes.c_int
+    kernel.CloseHandle.argtypes = [handle]
+    opened = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    assert opened, f"process {pid} could not be opened"
+    try:
+        answer = ctypes.c_int(0)
+        assert kernel.IsProcessInJob(opened, job, ctypes.byref(answer)), "IsProcessInJob failed"
+        return bool(answer.value)
+    finally:
+        kernel.CloseHandle(opened)
+
+
+@pytest.mark.skipif(not WINDOWS, reason="a job object is a Windows object")
+def test_a_real_start_has_every_process_of_the_command_in_its_job_from_its_first_instruction(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a process that the command starts at once, a Python process under Git's
+    `sh.exe -c` as a Done line starts it, is ever outside the job: the shell and the process it
+    starts are asked of Windows (`IsProcessInJob`) in twenty starts, since the miss was
+    intermittent; and if the stop then leaves the grandchild running."""
+
+    shell = programs.posix_shell()
+    if shell is None:
+        pytest.skip("no POSIX shell to run a Done line")
+    environment = programs.shell_environment(shell)
+    script = tmp_path / "start_a_child.py"
+    script.write_text(
+        "import subprocess, sys\n"
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        "open(sys.argv[1], 'w').write(str(child.pid))\n"
+        "child.wait()\n",
+        encoding="utf-8",
+    )
+    for attempt in range(20):
+        pid = tmp_path / f"child-{attempt}.pid"
+        words = (sys.executable, script, pid)
+        line = " ".join(shlex.quote(Path(each).as_posix()) for each in words)
+        process = programs.start_tree(
+            [shell, "-c", line],
+            cwd=tmp_path,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        grandchild = 0
+        try:
+            job = programs._JOBS.get(process)
+            assert job is not None, f"start {attempt}: the command was not put in a job"
+            deadline = time.monotonic() + 30
+            while not (pid.exists() and pid.read_text(encoding="utf-8").strip()):
+                assert time.monotonic() < deadline, f"start {attempt}: no pid was written"
+                time.sleep(0.02)
+            grandchild = int(pid.read_text(encoding="utf-8"))
+            assert in_job(process.pid, job.handle), f"start {attempt}: the shell is outside"
+            assert in_job(grandchild, job.handle), f"start {attempt}: the grandchild is outside"
+
+            programs.stop_tree(process)
+
+            assert process.wait(timeout=30) != 0
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and running(grandchild):
+                time.sleep(0.1)
+            assert not running(grandchild), f"start {attempt}: the grandchild outlived its job"
+        finally:
+            process.kill()
+            process.wait()
+            if grandchild and running(grandchild):
+                with contextlib.suppress(OSError):
+                    os.kill(grandchild, signal.SIGTERM)

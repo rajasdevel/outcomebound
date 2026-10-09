@@ -171,17 +171,15 @@ def run_page(browser: str, page: Path, timeout: float) -> BrowserRun:
     chunks: list[bytes] = []
     finished = threading.Event()
     try:
-        process = subprocess.Popen(
+        process = programs.start_tree(
             _command(browser, profile, address),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            **programs.new_group(),
         )
     except OSError as error:
         _remove(profile)
         return BrowserRun(None, f"the browser could not start ({error})")
-    programs.track_tree(process)
     reader = threading.Thread(target=_collect, args=(process, chunks, finished), daemon=True)
     reader.start()
     arrived = _wait(process, finished, timeout)
