@@ -22,7 +22,8 @@ TWO = "bob@example.org"
 
 
 def commit(target: Path, email: str, name: str | None = None, message: str = "c") -> None:
-    """One commit by `email`, with nothing in it; the name is the email's local part unless given."""
+    """One commit by `email`, with nothing in it; the name is the email's local part unless
+    given."""
 
     identity = [
         "-c",
