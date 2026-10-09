@@ -2514,8 +2514,8 @@ edges: those the selected fragments declare, and a floor loosening where a floor
 Text for people: with --human-style ste, text an agent writes for a person in the style of
 ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers: the local
 fragment inline, then one line per fragment in --fragments, copied under
-.outcomebound/fragments/, and per skill: the thirteen working skills. The workspace fragment also gets
-.agents/.gitignore, which keeps its four folders out of Git, and every install gets
+.outcomebound/fragments/, and per skill: the thirteen working skills. The workspace fragment also
+gets .agents/.gitignore, which keeps its four folders out of Git, and every install gets
 .outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
 validation logs) out of Git. A fact it cannot observe is left out, and the install report names
 it UNVERIFIED. The report also warns, refusing nothing, for each path it writes that Git
