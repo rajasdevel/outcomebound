@@ -1,0 +1,1 @@
+Assess the proposed codec tests and replace test_codec.py with useful tests that protect the contract in README.md. The implementation meets the contract and must stay unchanged. You may change only test_codec.py and working notes under .agents/work/. Report the breaks the kept tests catch and the checks you completed.

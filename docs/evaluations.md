@@ -97,15 +97,16 @@ recorded run, because a model call does not repeat exactly.
 | Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
 | Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
-| Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
+| Claude Code, 1.4.0 content, current and none | 2026-10-07 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
 | Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
 | Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
 | Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
+| Testing guidance research trial, baseline | 2026-10-09 | gpt-6.1-sol medium | 1 | E22 | Testing guidance research trial and instrument correction |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383. Both are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -115,7 +116,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E21). Other documents may cite the id.
+Each finding has an id (E1 to E22). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -1586,3 +1587,54 @@ This closes the selected full-brief delivery qualification. The automatic failur
 exact-session retention alone supplies no behavioral verdict. The observation establishes no
 causal gain, general reliability, native skill discovery, completed implementation or parity
 with source inspirations.
+
+
+## E22. Testing guidance research trial and instrument correction
+
+On 2026-10-09, one synthetic `patch-validation` baseline trial ran from clean source
+`4e8605f71794f69134f3ba143d621fccc8e2c9ba`, with the current 1.5.0 skill text, gpt-6.1-sol,
+medium effort and Codex CLI 0.160.1 through ChatGPT authentication. The
+[protocol](../evals/research-trials.md) fixed the candidate wording, an 18-trial maximum,
+no retries and stop conditions before the first trial. Each trial is one agent task; it can
+contain several model responses and tool calls.
+
+The campaign stopped after this trial exposed defects in the instrument. No candidate trial
+or retry ran. The other 17 planned cells are UNVERIFIED. The candidate remains uninstalled;
+this record establishes no comparative benefit from either proposed bullet.
+
+| Check | Original or separate result | What it establishes |
+| --- | --- | --- |
+| Automatic runner | FAIL; observed model absent from the CLI JSON stream | The known transport limit remains; native retention does not rewrite the automatic report |
+| Original mechanical claims | Scope and review inputs PASS; regression discrimination and repair assessment FAIL | These are the saved original results, not a valid measure of the model's success on this task |
+| Retained native record | PASS, separate agent review | Receipt digest, exact session, model, effort, working directory, prompt, completed tool results and final answer match |
+| Protected state | PASS, separate artifact and native review | Implementations and task inputs match the seed; HEAD and index are unchanged; edits stay within allowed tests, assessment and notes |
+| Concrete counterexample | PASS, separately reproduced | Proposed fix A rejects a valid relative path whose final normalized location is inside the allowed directory |
+| Required guidance and whole workflow | UNVERIFIED as a complete qualification | Full reads of `tests-worth-keeping`, `gather-requirements` and `diagnose` were observed; the required `using-outcomebound` body read was not observed |
+| Candidate benefit and monetary cost | UNVERIFIED | There is no valid paired comparison or billing evidence |
+
+The model's `A=false` assessment is supported. The original contract preserves valid reads
+after normalization. For `../docs/guide`, the prior implementation returns the stored value
+at `docs/guide`, while proposed A raises `ValueError`. A's normalization of the relative
+input before prefixing the root was inconsistent with that contract. This counterexample
+suffices; the separate interpretation of a dictionary value at the root need not decide
+the original verdict.
+
+The original task also allowed tests that imported both proposed fixes. The model wrote
+such tests. Protected replay copied only the submitted test file and an injected `vault`
+module, so the missing `candidates` import stopped replay before any assertion. This was an
+undeclared replay interface. The model's own completed checks remain separate evidence.
+The original automatic failures, artifacts and native record are preserved without regrading.
+
+The future fixture corrects combined-path normalization and states its root behavior,
+string-valued dictionary inputs and reusable `vault` test interface. Its benign-control
+oracle uses the same declared path resolution. Negative replay still requires the named
+exploit assertion failures; additional behavior errors no longer erase those failures.
+The correct implementation must pass every submitted test. These repairs have deterministic
+counterexamples and independent review. They need a fresh comparison, whose results cannot
+be counted as the original experiment.
+
+The runner recorded 219.6 seconds. Native cumulative usage across nine model responses was
+263,451 tokens: 256,421 input, including 205,952 cached input, and 7,030 output, including
+1,019 reasoning tokens. These totals are not one context length, a price or a general cost
+estimate. No real filesystem, deployment, exhaustive security or general reliability claim
+follows from this dictionary fixture.

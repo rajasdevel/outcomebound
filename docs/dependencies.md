@@ -23,9 +23,10 @@ route because the isolated engine ignores the user site.
 Git 2.52.0 is the compatibility minimum. It was
 [released on 17 November 2025](https://www.kernel.org/pub/software/scm/git/). The Linux CI leg
 with Python 3.10 builds that exact version from source, checks its published SHA-256, and runs
-the normal checks with its own executable and helper directory. Hosted CI qualification for
-this minimum is `UNVERIFIED` until that leg passes. Older Git releases are outside the supported
-range, even where they work.
+the normal checks with its own executable and helper directory. That leg passed in hosted CI
+on the v1.5.0 release commit ([run](https://github.com/rajasdevel/outcomebound/actions/runs/37826685203)).
+A native Git for Windows 2.52.0 check remains `UNVERIFIED`. Older Git releases are outside the
+supported range, even where they work.
 
 Use a current patched Git release, especially
 [Git for Windows](https://git-scm.com/install/windows). The compatibility minimum is not a

@@ -175,9 +175,9 @@ Skill paths can sort in a different order from the original harness selection;
 that difference must not rewrite an otherwise unchanged manifest.
 
 
-## Planned lifecycle support
+## Lifecycle qualification
 
-The v1.5.0 adoption work qualifies persistence and the agent's upgrade workflow in addition to
+The v1.5.0 adoption work qualified persistence and the agent's upgrade workflow in addition to
 the installed bytes. The [lifecycle design](../lifecycle/design.md) owns the release requirement.
 
 | Decision | Rejected alternative | Owner | Status |

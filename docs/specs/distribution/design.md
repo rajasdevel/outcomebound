@@ -48,8 +48,9 @@ compatibility minimum. The Linux Python 3.10 CI leg builds that exact source rel
 published SHA-256, installs it under the runner's temporary directory, and selects both its
 executable and helper directory before the normal checks. It excludes only the Tcl/Tk GUI;
 network helpers and the commands the engine uses remain in the build. The other CI legs keep
-their platform's Git. Hosted CI qualification for the minimum is `UNVERIFIED` until that leg
-passes. This adds no runtime dependency and no CI job.
+their platform's Git. The Linux Python 3.10 leg passed in hosted CI on the v1.5.0 release
+commit, with its Git 2.52.0 setup and selection steps and the full test suite
+([run](https://github.com/rajasdevel/outcomebound/actions/runs/37826685203)). This adds no runtime dependency and no CI job.
 
 The common-directory readers in `finish_check.py` and `scripts/canary.py` use
 `rev-parse --git-common-dir` and resolve a relative result against the command's working
@@ -61,8 +62,9 @@ but are outside the supported range.
 A Git 2.52.0 source build on macOS passed those common-directory checks with the actual binary.
 Both readers resolved the same common directory, with the correct subdirectory prefix for
 finish-check records. The focused checks also passed record sharing between worktrees and the
-CI facts and release prerequisites. This establishes those local behaviours; the complete
-minimum-version suite on Linux and a native Git for Windows 2.52.0 check remain `UNVERIFIED`.
+CI facts and release prerequisites. This establishes those local behaviours. The complete
+minimum-version suite on Linux is covered by the hosted CI leg above. A native Git for Windows
+2.52.0 check remains `UNVERIFIED`.
 
 Use a current patched Git release; on Windows, use current
 [Git for Windows](https://git-scm.com/install/windows). The compatibility minimum does not mean

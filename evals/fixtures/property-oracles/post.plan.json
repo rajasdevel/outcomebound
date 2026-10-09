@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "declared-scope-kept",
+      "risk": "files or Git state changed outside granted paths",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/property-oracles/grade_property_oracles.py\" scope"
+      ]
+    },
+    {
+      "name": "review-inputs-present",
+      "risk": "saved answer or execution trace is missing",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/property-oracles/grade_property_oracles.py\" inputs"
+      ]
+    },
+    {
+      "name": "properties-discriminate",
+      "risk": "tests miss a controlled defect or fail on correct code",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/property-oracles/grade_property_oracles.py\" tests"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+Fix the zero-item label in labels.py. Keep the public interface and the existing tests unchanged. You may change only labels.py and working notes under .agents/work/. Report the result and the check you ran.

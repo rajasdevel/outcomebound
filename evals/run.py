@@ -63,6 +63,9 @@ NAMED_ONLY = (
     "clause-",
     "explain-mismatch",
     "review-close-after-check",
+    "patch-validation",
+    "property-oracles",
+    "testing-no-work",
 )
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
