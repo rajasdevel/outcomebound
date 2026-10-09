@@ -221,6 +221,8 @@ def _repair_problems() -> list[str]:
     try:
         sys.path.insert(0, str(Path.cwd()))
         spec = importlib.util.spec_from_file_location("parse_under_check", "receipts/parse.py")
+        if spec is None or spec.loader is None:
+            raise ImportError("receipts/parse.py cannot be loaded")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         if module.parse_quantity("3x") != 3 or module.parse_quantity("3") != 3:
