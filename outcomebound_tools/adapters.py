@@ -137,32 +137,6 @@ def instruction_file(harness: str) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def agents_md_rule(harness: str) -> tuple[tuple[str, ...], str] | None:
-    """The row's ``reads_agents_md`` as ``(unless, since)``, or None.
-
-    ``unless`` names the target-root files whose presence makes the harness
-    read them in place of AGENTS.md; ``since`` is the first harness version
-    that reads AGENTS.md itself when none of them exists. The fact is the
-    table's, so a second harness gains the same rule by data alone. A row
-    without the key, or with a value of any other shape, records no rule and
-    reads as None, so the import block is written.
-    """
-
-    value = row(harness).get("reads_agents_md")
-    if not isinstance(value, dict):
-        return None
-    unless, since = value.get("unless"), value.get("since")
-    if (
-        not isinstance(unless, list)
-        or not unless
-        or not all(isinstance(name, str) and name for name in unless)
-        or not isinstance(since, str)
-        or not since
-    ):
-        return None
-    return tuple(str(name) for name in unless), str(since)
-
-
 def or_list(names: tuple[str, ...]) -> str:
     """``a``, ``a or b``, ``a, b or c``: names as a sentence lists alternatives."""
 
