@@ -15,7 +15,8 @@ The skills named here are the installed working skills. Project instructions sup
 commands, delivery route and gates. This reference needs no optional fragment or engine command.
 
 Where the project's `local` fragment names its route, work inside it. It holds the streams
-("Streams — <stream>: route in <file>; takes <kind of change>"), the gates ("Gates —"), the
+("Streams — <stream>: route in <file>; takes <kind of change>", with an optional
+"; fragments <id>, <id>" naming the fragments that apply to that stream only), the gates ("Gates —"), the
 exposure ("Exposure —") and the measure of a better outcome ("Better means —"). A route
 document a "Streams —" line names must be one the next person can open: committed, or named as
 private with who holds it; a pointer to an ignored or private file says so instead of dangling.
@@ -82,22 +83,28 @@ A change of lifecycle is a change of exposure or of route. It is a transition wh
 - the person gives a directive that changes the route or the exposure;
 - a stream starts or ends;
 - the authority model changes;
-- a signal named in a "Leave when —" line appears; the line's right side is the brief to open;
-- a session resumes and finds work that never landed: worktrees with uncommitted work, none ahead
-  of the main line, no recent commit;
-- `adopt --check` prints a drift line: a file shows a signal that the record contradicts. A line
-  about recent authors can be one person under two identities that share neither name nor email;
-  ask before treating it as a second maintainer (a `.mailmap` joins one person's identities).
+- a signal named in a "Leave when —" line appears; the line's right side is the brief to open.
+
+A drift line from `adopt --check` (a file shows a signal that the record contradicts) is not a
+transition of its own: check it against the "Leave when —" rows and the person's own words. A line
+about recent authors can be a contributor, not a maintainer, or one person under two identities
+that share neither name nor email (a `.mailmap` joins them); ask before treating it as a second
+maintainer. Where the person settles it, a "Drift — <signal>: <reason>" line in the local
+fragment's Bounds keeps it settled.
 
 Nothing switches without the person. Write one decision brief (the `decision-brief` skill). Its
 main value is the inventory of work in flight and what each item now owes, so it is written even
-when no fragment changes. For a resume, it asks first whether the pause is deliberate, before any
-lane restarts. It holds:
+when no fragment changes. It holds:
 
 - the fragment diff: which fragments turn on and which turn off, which may be none when only the
   route changes, as with the person's directive;
-- the work in flight: open tickets from the ticket export, worktrees with uncommitted work, open
-  briefs, standing grants with their dates, and a deploy or cutover receipt in a partial phase;
+- the work in flight: open tickets from the ticket export, branches with commits the main line
+  does not hold and their open requests, worktrees with uncommitted work, open briefs, standing
+  grants with their dates, a release artifact not yet published, and a deploy or cutover receipt in
+  a partial phase. Look where the project keeps them: the ticket export, `git branch` and
+  `git worktree list`, the goal envelope, `.agents/work/` where the `workspace` fragment applies,
+  and the grants file the project names. What you cannot read, such as a hosted request list, is
+  `UNVERIFIED`;
 - what each item now owes under the new route;
 - what the change invalidates;
 - what to retire.
@@ -110,4 +117,6 @@ a lighter lifecycle is a normal transition, not a failure.
 At each handoff, check the "Leave when —" lines against what you can observe. When the route does
 not fit the work, such as process that outweighs the change, a gate with no owner, or a stalled
 lane, report the misfit as a brief judged against the "Better means —" line. Do not edit the route
-or the fragments yourself.
+or the fragments yourself. A resume that finds worktrees with uncommitted work and nothing landed
+since the last handoff reports that inventory and asks whether the pause is deliberate, with the
+default it takes; the work it can do under its grant goes on.

@@ -26,6 +26,7 @@ CHECKOUT_ONLY = {
         "templates/fragment-local.md",
         "templates/harness/",
         "templates/lifecycle/",
+        "templates/lifecycle/client.md",
     ),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),

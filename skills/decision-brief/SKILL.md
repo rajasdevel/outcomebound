@@ -42,7 +42,9 @@ what its downside is, so the evidence chooses your recommendation.
   that is easiest to stay in, never half done; give it as a `facts` pair labelled
   `If unanswered`. A brief that holds work says which: it names a default and its expiry, the moment the
   default applies, so the work that waits on it can go on; or it says plainly that the work waits
-  for the person, with no expiry. Never invent a time limit;
+  for the person, with no expiry. The expiry is a moment the person or the project already named (a
+  handoff, a release, a date in the ticket or the grant); where none exists, the work waits, and
+  the moment is one more question. Never invent a time limit;
 - a diagram only when order, dependency, flow or before/after is the point.
 
 A question in prose, a table of options, or a list without a recommendation and an undo line is not

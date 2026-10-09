@@ -82,18 +82,21 @@ Name each line form in double quotes, never in backticks, when you write about i
   accepts the work, which acts cannot be undone, the expected life, who maintains it, and how much
   the agents write against the review capacity. Propose it for a stream whose acts cannot easily
   be undone, such as database objects changed with no migration and no way back but a revert.
-- "Streams —" (Context): the route document of each stream and the kind of change it takes. It
-  points only to a document the next person can open: committed, or named as private with who holds
-  it. Where a stream has no written route, propose the lines for the project's own document (branch,
-  review, how a change reaches a server, the way back), each with the file or commit that shows it,
-  and send what no file shows to the brief; never write a route into OutcomeBound's files.
+- "Streams —" (Context): the route document of each stream, the kind of change it takes and,
+  where a fragment applies to that stream only, "; fragments <id>, <id>". It points only to a
+  document the next person can open: committed, or named as private with who holds it. Where a
+  stream has no written route, propose the lines for the project's own document (branch, review,
+  how a change reaches a server, the way back), each with the file or commit that shows it, and
+  send what no file shows to the brief; for a client delivery, `templates/lifecycle/client.md`
+  holds a route example to compare with. Never write a route into OutcomeBound's files.
 - "Better means —" (Context): the project's own measure of a better outcome, in its words, where it
   is not written where an agent reads it.
 - "Gates —" (Bounds): a gate, its owner and its evidence. A gate with no named owner is reported to
   the person as a gap; never fill the owner.
 - "Leave when —" (Bounds): a signal that ends the current lifecycle, where it can be observed, who
   watches it, and the brief it opens. The brief inventories the work in flight: open tickets,
-  worktrees with uncommitted work, open briefs, standing grants, a deploy in a partial phase. Write
+  branches the main line does not hold and their requests, worktrees with uncommitted work, open
+  briefs, standing grants, a deploy in a partial phase. Write
   the moves back too. For a change of route, the inventory is most of the brief, not a fragment diff.
   A row whose signal already reaches the owner is left out.
 - "Changed —" (Context): written only after the person's yes on a transition, with its date, what
@@ -103,8 +106,10 @@ Select fragments from the exposure facts and what the files show: `team` for two
 maintainers or required review, else `solo`; `deploy` and `runtime` where it deploys a service;
 `ci-release` where it publishes a package; `db-migrations` where it changes stored data; `client`
 where a client or a regulator accepts the work; `explore` where the expected life starts with
-learning. A fragment selected for one stream applies to the streams its "Streams —" line names for
-it. Add them to `--fragments`, and name the facts that selected each.
+learning. A fragment applies to every stream unless a "Streams —" line names it in its fragments
+field. Add them to `--fragments`, and name the facts that selected each. On an upgrade, show the
+person each drift line `--check` prints: it is the moment someone reads them. A line the person
+settles gets a "Drift — <signal>: <reason>" line in Bounds.
 
 Name the nearest of `$(outcomebound home)/templates/lifecycle/` (`personal`, `shared`, `client`) and
 the differences between it and what you observed, as a comparison for the person. Never copy it,

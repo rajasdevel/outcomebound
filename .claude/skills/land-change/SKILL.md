@@ -55,8 +55,11 @@ not a second party's review. Where the project requires a second party, it is st
 ## When the rounds do not converge
 
 After each round of fixes, count what closed. Ask the person, naming the findings and what you tried,
-when a round closed no finding, or when a finding you marked fixed came back. More rounds of the same
-kind of fix repeat an assumption that is wrong.
+when a round closed no finding. When a finding you marked fixed comes back, find why first. Where a
+later change undid the fix and the cause is plain, repair it inside the task with its regression
+check, and say the cause in the thread. Where the fix did not hold, or the finding comes back again,
+the assumption behind the fix is wrong: ask the person. More rounds of the same kind of fix repeat
+that assumption.
 
 ## The merge
 
@@ -79,6 +82,9 @@ Where the project's `local` fragment names streams and gates, the request also h
 - the blast radius: who and what the change reaches if it is wrong;
 - what was not checked, as `UNVERIFIED` lines.
 
-A request into the production stream holds only the commit that was accepted for that stream:
-nothing added since, and no fix folded in. A change that was added after acceptance goes back to
-the stream that accepts it.
+A request into the production stream follows the project's promotion model (the `deploy`
+fragment): where the project promotes accepted builds, it holds only the commit that was accepted
+for that stream, with nothing added since and no fix folded in, and a change added after acceptance
+goes back to the stream that accepts it. Behind a feature flag, the flag's state is part of what
+was accepted. An emergency follows the project's emergency route: the production go first, and the
+review and acceptance after the promotion.

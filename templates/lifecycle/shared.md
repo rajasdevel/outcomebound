@@ -29,13 +29,11 @@ Gates — <gate>: owner <role>, evidence <kind>.
 Gates — <gate>: owner UNVERIFIED (no file names one); reported as a gap, never filled in.
 Leave when — a client or a regulator starts to accept the work (observable: <a contract file, a
   tracker field, or the owner's word>; watched by: <who>) → opens a brief to move to `client`:
-  the open tickets, the worktrees with uncommitted work, the open briefs, the standing grants, and
-  what each item now owes.
+  the open tickets, the branches the main line does not hold and their requests, the worktrees with
+  uncommitted work, the open briefs, the standing grants, and what each item now owes.
 Leave when — the last outside user is gone, or the owner says it serves only themselves → opens a
   brief to move back to `personal`: which gates and standing grants end, and what is retired.
-Leave when — a resume finds worktrees with uncommitted work and nothing landed → asks whether the
-  pause is deliberate before any step is planned again.
-Changed — <date>: <what moved> by <who decided>; invalidated: <what no longer holds>.
+Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out

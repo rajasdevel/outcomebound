@@ -26,7 +26,9 @@ remaining consumers and authority limits visible. A local bug fix can go straigh
 regression check.
 
 The [lifecycle reference](skills/using-outcomebound/references/lifecycle.md) describes the
-required evidence and handoffs at each applicable stage.
+required evidence and handoffs at each applicable stage. A project records its own lifecycle in a
+few lines of its local fragment, and adoption compares it with the nearest of three examples in
+[`templates/lifecycle/`](templates/lifecycle/) (personal, shared, client); it installs none of them.
 
 ## Try it
 

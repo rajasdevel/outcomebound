@@ -1768,7 +1768,8 @@ Does the composable-lifecycle text change what an agent does, against the text b
 
 ### Method
 
-- Arms: `current` from two checkouts. The base checkout holds the text before the composable lifecycle with this release's `evals/` folder. The candidate checkout holds the composable-lifecycle text: the lifecycle reference's streams and transitions, the `client` and `explore` fragments, the three stage skills, and the lifecycle lines of the project's `local` fragment. The two sides build the same project and differ only in those lines and that text.
+- Arms: `current` from two checkouts. The base checkout is `main` at 48ce3f0 with this release's `evals/` folder added (6dd718a). The candidate checkout is the integration branch at 5c25b00. The two sides build the same project. They differ in the installed lifecycle reference and the three stage skills, and in the lifecycle lines of the project's `local` fragment, which only the candidate's project carries. Neither fixture selects a fragment, so the `client` and `explore` fragments were not loaded on either side: the pass says nothing about them.
+- The shipped text is not the text that ran. After the pass, two reviews changed the lifecycle reference (the transition triggers, the work-in-flight inventory, the resume rule), the three stage skills, the `client`, `explore` and `deploy` fragments, and `outcomebound_tools/drift.py`.
 - Model: in-session Claude subagents through `evals/claude_arm.py`, Claude Sonnet 5.5 at medium effort, 1 run a side for each fixture.
 - Each arm received the same short instruction: read the prepared prompt file and follow it.
 

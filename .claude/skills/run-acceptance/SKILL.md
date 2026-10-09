@@ -53,8 +53,8 @@ Draft the acceptance record with these fields:
 - when they accepted.
 
 Leave the last two fields empty until the person has given acceptance. Do not fill in a name from an
-account, a login or a guess. The record is kept where the project keeps it: in the tracker, or a
-committed file.
+account, a login or a guess. The record is kept where the project keeps it: in a committed file,
+or in the tracker through the `sync-tracker` skill, where a draft record is a write like any other.
 
 The limit of this skill is stated here so that no reader takes the record for more. The agent drafts
 the record and a person gives the acceptance. The engine cannot tell who gave it, and neither can you.
@@ -62,10 +62,11 @@ A record that names a person is evidence of what the record says, not of who typ
 
 ## Defects
 
-Each defect that a pre-run or the acceptor finds becomes a ticket of its own, with the script, the
-step, what was expected, what happened, and the build. Do not fold it into the change under
-acceptance, and do not drop it because the acceptor accepted anyway: record that they accepted
-with the defect known.
+A defect that keeps the change from meeting its own criterion is corrected inside the change; the
+build it produces voids the acceptance for what it touches, and those scripts run again. A defect
+outside the change becomes a ticket of its own, with the script, the step, what was expected, what
+happened, and the build. Do not drop a defect because the acceptor accepted anyway: record that
+they accepted with the defect known.
 
 ## A screen
 

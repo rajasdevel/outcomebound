@@ -27,7 +27,7 @@ Leave when — a second person starts to depend on it (observable: the owner say
   author appears in the history; watched by: the owner) → opens a brief to move to `shared`:
   the work in flight, the standing grants and their end dates, and what each item now owes.
 Leave when — nobody has used it since <the date the owner names> → opens a brief to retire it.
-Changed — <date>: <what moved> by <who decided>; invalidated: <what no longer holds>.
+Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out

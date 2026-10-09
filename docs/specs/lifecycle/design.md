@@ -64,7 +64,7 @@ checks the behavior kept from each cited inspiration, and E21 claims no parity w
 | Requirements-to-ticket mapping stays optional in the general engine. This release's source-driven breakdown uses `satisfies` and a semantic review; an id proves accounting only | a new refusal or a requirement-id list treated as proof of implementation | agent | decided |
 | Known grader defects are repaired before candidate behavior is judged. An unreadable or denied effect remains UNVERIFIED; an observed wrong effect is FAIL | counting an attempted command as an effect; hiding a behavior failure by broadening a grader | agent | decided |
 | Qualification uses a deterministic floor, direct skill and transition scenarios, independent cases, and real adoption. It makes bounded claims, not a promise about every future task or every model | universal proof; shipping known valid in-scope failures and waiting for field reports | agent | assumed |
-| A new skill must have a distinct trigger and an unserved repeatable decision. A case first runs against current guidance; a missing reference, tool check or narrow clause is preferred when it resolves the failure | an operations, retirement, security or architecture skill selected from its stage name alone | agent | decided |
+| A new skill must have a distinct trigger and an unserved repeatable decision. A case first runs against current guidance; a missing reference, tool check or narrow clause is preferred when it resolves the failure ; for `land-change`, `run-acceptance` and `sync-tracker`, the maintainer's row of 2026-10-10 below supersedes it | an operations, retirement, security or architecture skill selected from its stage name alone | agent | decided |
 | A native harness claim needs a native observation with the installed bytes and environment identified. Tests of the engine or an isolated evaluation runner do not establish hook events or skill discovery | inferring native execution from a configuration file or a successful direct invocation | agent | decided |
 | Research provides dated evidence and alternatives. Product-specific changes and results stay here; a new general finding is prepared for the existing research contribution path | editing the shared research clone or publishing an anecdote as a general rule | agent | decided |
 | The lifecycle is composable: a core that every lifecycle shares (the kernel, the transition table, the skills); exposure facts for each stream of work; obligations that the exposure facts select; and the project's own routes. A template is a starting comparison, never an install | one static route for every project; a route chosen per repository when one repository holds several streams | user | decided |
@@ -98,15 +98,17 @@ signals:
 | Exposure | Fragment, with what 1.6.0 adds to it |
 | --- | --- |
 | two or more maintainers, or required review | `team`, and review capacity matched to the volume agents change |
-| one maintainer | `solo`, and an end date for each standing grant |
-| it deploys a service | `deploy` (the gate chain, several changes on one build, the emergency path, the results Successful, Failed and Inconclusive, the closing note, production data kept apart from test data) and `runtime` |
+| one maintainer | `solo`, and a named end for each standing grant (a date, an event, or the owner's revocation) |
+| it deploys a service | `deploy` (the gate chain, several changes on one build, an emergency deploy that keeps its production go, the results Successful, Failed and Inconclusive, a closing note where the route or the client asks for one, a copy of production data as the person's decision) and `runtime` |
 | it publishes a package | `ci-release`, and consumers moved within a stated window or the hold recorded with an owner |
 | it changes stored data | `db-migrations` |
 | a client or a regulator accepts the work | `client` (new) |
 | its expected life starts with learning | `explore` (new) |
 
 **Routes stay the project's.** Context names each stream's route document and the kind of change
-that takes it (`Streams — <stream>: route in <file>; takes <kind of change>`). Bounds names each
+that takes it (`Streams — <stream>: route in <file>; takes <kind of change>`, with an optional
+`; fragments <id>, <id>`). A fragment applies to every stream unless a `Streams —` line names it in
+that field; then it applies to those streams only. Bounds names each
 gate's owner and evidence (`Gates — <gate>: owner <role>, evidence <kind>`). Distinguish holds the
 project's own ladder of states. Where a stream has no written route, the adopt skill proposes the
 lines for the project's own document, each with the file or commit that shows it. Paths by kind of
@@ -118,17 +120,23 @@ against it.
 
 **Leave when.** Bounds lines name each signal that ends the current lifecycle, where it can be
 observed (a file pattern, a tracker field, or the person's word) and who watches it, with the
-fragment diff it would propose. Moves back are normal rows, and a project may strike a row with its
+brief it opens: its main value is the inventory of work in flight, and a change of route may turn
+no fragment on or off. Moves back are normal rows, and a project may strike a row with its
 reason. The agent checks these lines at adoption and at each handoff; the drift lines read the
 signals that files show.
 
 **A transition** is a change of exposure or of route: a fact moves, the person gives a directive, a
-stream starts or ends, the authority model changes, a leave-when signal appears, or a drift line
-prints. The agent writes one decision brief with the fragment diff and the work in flight (open
-tickets from the export, worktrees with uncommitted work, open briefs, standing grants and their
-dates, a deploy or cutover receipt in a partial phase), what each item now owes, what the change
+stream starts or ends, the authority model changes, or a leave-when signal appears. A drift line is
+checked against the leave-when rows and the person's words, not a transition of its own. The agent
+writes one decision brief with the fragment diff and the work in flight (open tickets from the
+export, branches the main line does not hold and their requests, worktrees with uncommitted work,
+open briefs, standing grants and their dates, a release artifact not yet published, a deploy or
+cutover receipt in a partial phase; what it cannot read is `UNVERIFIED`), what each item now owes, what the change
 invalidates and what to retire. On a yes it adds a dated `Changed —` line to Context, and plans only
-the stages not yet reached. Each item in flight keeps the state its own record shows.
+the stages not yet reached. Each item in flight keeps the state its own record shows. A resume
+that finds uncommitted work and nothing landed since the last handoff is a misfit report at the
+handoff, not a transition: it asks whether the pause is deliberate, and the work its grant covers
+goes on.
 
 **Templates.** `templates/lifecycle/personal.md`, `shared.md` and `client.md` take the new-project
 reference's words. A throwaway item needs no template; regulated work is `shared` with the
@@ -140,17 +148,22 @@ prepares, pre-runs and records acceptance by an outside party; `sync-tracker` re
 is not the ticket store into a markdown source (the sources design reads markdown) and writes back
 batched comments under a grant, each other write being a decision brief. The `gather-requirements`
 reference names the source kinds (a transcript, a data trace, a story, a design file). A held
-decision brief names its default and its expiry, so the work that waits on it can go on.
+decision brief names its default and its expiry, a moment the person or the project already named,
+or says the work waits. The `client` template holds a route example for a client delivery, to
+compare with where a project has none.
 
-**Drift.** `adopt --detect` reads two more signals: the authors in the recent history, and tags or
-a version file. `adopt --check` and `--detect` compare the signals with the recorded exposure and
-fragment selection and print `signal present, record says otherwise` lines.
+**Drift.** `adopt --detect` reads two more signals: the authors in the recent history, and version
+tags or a `VERSION` file. `adopt --check` and `--detect` compare the signals with the recorded
+exposure, the fragment selection and the declared edges, and print `signal present, record says
+otherwise` lines. An author is not a maintainer, so the lines claim only what the person recorded
+(`solo` selected, an exposure line that says one person), never the absence of `team`. A person
+settles a line with `Drift — <signal>: <reason>` in Bounds, and it no longer prints.
 
 ## Transition coverage
 
 | Transition | Existing owner | v1.5.0 completion evidence |
 | --- | --- | --- |
-| Idea to framed outcome | `gather-requirements`, `using-outcomebound` and, from 1.6.0, its new-project reference, decision support | A bounded ambiguous request becomes a clear outcome, assumptions and reserved decisions, without unnecessary questions or ceremony. The new-project reference has no run yet: what it does for an idea with no repository is `UNVERIFIED`. |
+| Idea to framed outcome | `gather-requirements`, `using-outcomebound` and, from 1.6.0, its new-project reference, decision support | A bounded ambiguous request becomes a clear outcome, assumptions and reserved decisions, without unnecessary questions or ceremony. E23 ran the new-project fixtures: its table holds the verdicts and their limits. |
 | Sources to requirements | sources design, `gather-requirements`; from 1.6.0, `sync-tracker` for a tracker that is not the ticket store | Requirements retain their constraints, provenance and correction history; visual requirements retain unshown states and unresolved comparisons. |
 | Requirements to design | contract's spec mechanism, `explain-spec` | The design settles downstream choices and material quality dimensions; explanation names gaps without claiming a person's understanding. |
 | Design to accepted work | tickets design, `slice-tickets` | The breakdown covers the accepted outcome without inflating ticket count; source mappings and semantic review agree. |
@@ -161,7 +174,7 @@ fragment selection and print `signal present, record says otherwise` lines.
 | Landing to release and deploy | distribution design, CI release and deploy guidance | Built, published, deployed and observed identities remain distinct; indirect effects and recovery stay inside authority. |
 | Delivery to operation | deploy, runtime and commands guidance | A finite observation requirement, operator, response route, recovery limits and unavailable telemetry are handled without starting an ungranted ongoing job. |
 | Incident and feedback to maintenance | `diagnose`, requirements and research guidance | Evidence separates cause, symptom, correction and recurrence; a defect or changed outcome returns to the appropriate stage. |
-| A change of lifecycle | from 1.6.0, the lifecycle reference's transitions section, `decision-brief`, and the drift lines of `adopt --check` | The brief names the fragment diff, the work in flight and what each item owes; nothing switches without the person. One fixture pair tests it (Validation). |
+| A change of lifecycle | from 1.6.0, the lifecycle reference's transitions section, `decision-brief`, and the drift lines of `adopt --check` as signals to check | The brief names the fragment diff, the work in flight and what each item owes; nothing switches without the person. E24 ran one fixture pair: no verdict changed at one run a side. |
 | Maintenance to retirement | contract, deploy and database migration guidance | Consumer and retention conditions are checked, authorized preparation continues, and removal waits for its actual gate and grant. |
 
 ## Area updates
