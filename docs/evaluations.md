@@ -97,15 +97,16 @@ recorded run, because a model call does not repeat exactly.
 | Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
 | Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
 | Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
-| Claude Code, 1.4.0 content, current and none | Date not recorded in E20 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
+| Claude Code, 1.4.0 content, current and none | 2026-10-07 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
 | Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
 | Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
 | Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
+| Testing guidance research trial, baseline | 2026-10-09 | gpt-6.1-sol medium | 1 | E22 | Testing guidance research trial and instrument correction |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383. Both are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -115,7 +116,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E21). Other documents may cite the id.
+Each finding has an id (E1 to E22). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
