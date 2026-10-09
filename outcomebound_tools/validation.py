@@ -469,6 +469,7 @@ def _execute(
         env=env,
         **programs.new_group(),
     )
+    programs.track_tree(process)
     try:
         output, _ = process.communicate(timeout=timeout)
         return process.returncode, output or b"", False
