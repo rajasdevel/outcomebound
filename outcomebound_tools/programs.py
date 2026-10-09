@@ -9,26 +9,30 @@ launcher of the Windows Subsystem for Linux, which reads "no installed distribut
 is installed, and `python` or `python3` in `WindowsApps` is an app execution alias that opens the
 Store. A POSIX shell on Windows is the `sh.exe` of Git for Windows, found on PATH or beside `git`.
 A process group is a new session on POSIX and `CREATE_NEW_PROCESS_GROUP` on Windows; its tree is
-stopped by `killpg` on POSIX and `taskkill /T /F` on Windows.
+stopped by `killpg` on POSIX. On Windows the command also goes into a job object of its own
+(`track_tree`), and `TerminateJobObject` ends everything in the job at once; `taskkill /T /F` and
+then `Popen.kill` are the fallback where there is no job.
 
 What it does not decide: whether a program is the right one, or what a caller does where none is
 found. `require` raises `FileNotFoundError`, which every caller of a process already reads.
 
-`windows=` and `environment=` exist so that a test can run the Windows branch beside a scratch
-folder on any platform.
+`windows=`, `environment=` and `jobs=` exist so that a test can run the Windows branch beside a
+scratch folder, and with its own job calls, on any platform.
 """
 
 from __future__ import annotations
 
 import contextlib
 import errno
+import functools
 import os
 import shutil
 import signal
 import subprocess
+import weakref
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PureWindowsPath
-from typing import Any
+from typing import Any, Protocol
 
 __all__ = [
     "command",
@@ -42,6 +46,7 @@ __all__ = [
     "stop_tree",
     "stub",
     "stub_found",
+    "track_tree",
 ]
 
 DEFAULT_PATHEXT = (".COM", ".EXE", ".BAT", ".CMD")
@@ -53,6 +58,13 @@ LAUNCHER_PROGRAMS = frozenset({"bash", "sh"})
 ALIAS_PROGRAMS = frozenset({"python", "python3"})
 # How long `taskkill` may take before the process alone is killed.
 TASKKILL_SECONDS = 10
+# What the Windows job calls are told: `JobObjectExtendedLimitInformation` carries the limit flags,
+# and `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` ends every process in the job when its last handle
+# closes. No breakaway flag is set, so no descendant can leave the job.
+JOB_EXTENDED_LIMIT_INFORMATION = 9
+JOB_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+# The exit code of a process that `TerminateJobObject` ends, as `Popen.kill` gives on Windows.
+JOB_EXIT_CODE = 1
 
 
 def _windows(windows: bool | None) -> bool:
@@ -296,13 +308,210 @@ def _taskkill() -> str:
     return os.path.join(root, "System32", "taskkill.exe")
 
 
+class Jobs(Protocol):
+    """The four calls that make a Windows job object work. `programs` uses the system's
+    (`_Kernel32`); a test passes its own."""
+
+    def create(self) -> int | None:
+        """A new job that ends every process in it when its last handle closes, or None."""
+        ...
+
+    def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
+        """Put a running process in the job. False where the process cannot join it."""
+        ...
+
+    def terminate(self, job: int) -> bool:
+        """End every process in the job. False where that did not work."""
+        ...
+
+    def close(self, job: int) -> None:
+        """Let go of the job's handle."""
+        ...
+
+
+def _limit_information() -> Any:
+    """`JOBOBJECT_EXTENDED_LIMIT_INFORMATION` as `ctypes` lays it out, with the one limit a job
+    here has set: `JOB_LIMIT_KILL_ON_JOB_CLOSE`. The layout is 144 bytes where a pointer is 8
+    bytes and 112 where it is 4, with `LimitFlags` at offset 16. A wrong layout would make
+    `SetInformationJobObject` fail or set another limit; it is built from sizes alone, so a test
+    checks it on any platform."""
+
+    import ctypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = (
+            ("PerProcessUserTimeLimit", ctypes.c_int64),
+            ("PerJobUserTimeLimit", ctypes.c_int64),
+            ("LimitFlags", ctypes.c_uint32),
+            ("MinimumWorkingSetSize", ctypes.c_size_t),
+            ("MaximumWorkingSetSize", ctypes.c_size_t),
+            ("ActiveProcessLimit", ctypes.c_uint32),
+            ("Affinity", ctypes.c_size_t),
+            ("PriorityClass", ctypes.c_uint32),
+            ("SchedulingClass", ctypes.c_uint32),
+        )
+
+    class Counters(ctypes.Structure):
+        _fields_ = (
+            ("ReadOperationCount", ctypes.c_uint64),
+            ("WriteOperationCount", ctypes.c_uint64),
+            ("OtherOperationCount", ctypes.c_uint64),
+            ("ReadTransferCount", ctypes.c_uint64),
+            ("WriteTransferCount", ctypes.c_uint64),
+            ("OtherTransferCount", ctypes.c_uint64),
+        )
+
+    class Extended(ctypes.Structure):
+        _fields_ = (
+            ("BasicLimitInformation", Basic),
+            ("IoInfo", Counters),
+            ("ProcessMemoryLimit", ctypes.c_size_t),
+            ("JobMemoryLimit", ctypes.c_size_t),
+            ("PeakProcessMemoryUsed", ctypes.c_size_t),
+            ("PeakJobMemoryUsed", ctypes.c_size_t),
+        )
+
+    limits = Extended()
+    limits.BasicLimitInformation.LimitFlags = JOB_LIMIT_KILL_ON_JOB_CLOSE
+    return limits
+
+
+class _Kernel32:
+    """The job calls of the running Windows, on a private copy of `kernel32.dll` so that no other
+    code's prototypes change. Raises `OSError` where there is no Windows API to call."""
+
+    def __init__(self) -> None:
+        import ctypes
+
+        loader = getattr(ctypes, "WinDLL", None)
+        if loader is None:
+            raise OSError("this platform has no Windows API")
+        kernel = loader("kernel32")
+        handle, number = ctypes.c_void_p, ctypes.c_uint32
+        self._create = kernel.CreateJobObjectW
+        self._create.argtypes, self._create.restype = [handle, ctypes.c_wchar_p], handle
+        self._set = kernel.SetInformationJobObject
+        self._set.argtypes, self._set.restype = [handle, ctypes.c_int, handle, number], ctypes.c_int
+        self._assign = kernel.AssignProcessToJobObject
+        self._assign.argtypes, self._assign.restype = [handle, handle], ctypes.c_int
+        self._terminate = kernel.TerminateJobObject
+        self._terminate.argtypes, self._terminate.restype = [handle, number], ctypes.c_int
+        self._close = kernel.CloseHandle
+        self._close.argtypes, self._close.restype = [handle], ctypes.c_int
+        # Kept for its address to stay valid.
+        self._limits = _limit_information()
+        self._address, self._size = ctypes.addressof(self._limits), ctypes.sizeof(self._limits)
+
+    def create(self) -> int | None:
+        job = self._create(None, None)
+        if not job:
+            return None
+        if self._set(job, JOB_EXTENDED_LIMIT_INFORMATION, self._address, self._size):
+            return int(job)
+        self._close(job)
+        return None
+
+    def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
+        # `Popen` keeps the handle that `CreateProcess` returned, which has the access to join a
+        # job; the process id would have to be opened again, after the id could have been reused.
+        handle = getattr(process, "_handle", None)
+        return handle is not None and bool(self._assign(job, int(handle)))
+
+    def terminate(self, job: int) -> bool:
+        return bool(self._terminate(job, JOB_EXIT_CODE))
+
+    def close(self, job: int) -> None:
+        self._close(job)
+
+
+@functools.lru_cache(maxsize=1)
+def _system_jobs() -> Jobs | None:
+    """The job calls of this machine, or None where it has none (not Windows, or a Windows API
+    that cannot be loaded). Made once."""
+
+    if os.name != "nt":
+        return None
+    try:
+        return _Kernel32()
+    except (OSError, AttributeError, ImportError):
+        return None
+
+
+class _Job:
+    """One command's job. Its handle closes when this object goes, and a job whose last handle
+    closes ends every process still in it."""
+
+    def __init__(self, api: Jobs, handle: int) -> None:
+        self.handle = handle
+        self._api = api
+        self._finalizer = weakref.finalize(self, api.close, handle)
+
+    def terminate(self) -> bool:
+        return self._api.terminate(self.handle)
+
+    def close(self) -> None:
+        self._finalizer()
+
+
+# The job of each tracked process, held for as long as the process object is.
+_JOBS: weakref.WeakKeyDictionary[subprocess.Popen[bytes], _Job] = weakref.WeakKeyDictionary()
+
+
+def track_tree(
+    process: subprocess.Popen[bytes], *, windows: bool | None = None, jobs: Jobs | None = None
+) -> bool:
+    """On Windows, put a process that started with `new_group` into a job object of its own, so
+    that `stop_tree` ends it and everything it starts in one call, however many processes there
+    are and however loaded the machine. Call it as soon as `Popen` returns.
+
+    True where a job holds the process. False where there is none to make or join: not Windows,
+    no Windows API, a job that refuses nesting, a process that has already ended. `stop_tree`
+    then falls back to `taskkill`. Never raises, and changes nothing off Windows.
+
+    A job holds only the processes started after the process joined it, so one that the command
+    starts between `CreateProcess` returning and this call is outside it. That interval is a few
+    Python calls of one thread. The command's first process, a shell or an interpreter, needs
+    tens of milliseconds to load before it can start one. The interval is not closed: that takes
+    a suspended start and a resume, and a resume that fails hangs the command.
+
+    The job ends what is still running in it when the process object is let go. A command that
+    ended by itself and left a process behind has that process ended then."""
+
+    if not _windows(windows):
+        return False
+    with contextlib.suppress(Exception):
+        api = _system_jobs() if jobs is None else jobs
+        handle = None if api is None else api.create()
+        if api is None or handle is None:
+            return False
+        job = _Job(api, handle)
+        if api.assign(handle, process):
+            _JOBS[process] = job
+            return True
+        job.close()
+    return False
+
+
+def _end_job(process: subprocess.Popen[bytes]) -> bool:
+    """Whether the job the process runs in ended everything in it. False for a process that no
+    job holds, and where the job could not end it."""
+
+    with contextlib.suppress(Exception):
+        job = _JOBS.get(process)
+        return job is not None and job.terminate()
+    return False
+
+
 def stop_tree(process: subprocess.Popen[bytes], *, windows: bool | None = None) -> None:
     """Kill the process and everything it started, and never raise. A process that did not start
-    with `new_group` has no group of its own on POSIX; then only it is killed. On Windows
-    `taskkill /T /F` ends the tree, and the process is killed after it where taskkill could not
-    run."""
+    with `new_group` has no group of its own on POSIX; then only it is killed. On Windows the
+    job `track_tree` made ends the whole tree at once; where no job holds the process, or it
+    could not end it, `taskkill /T /F` ends the tree, and the process is killed after it where
+    taskkill could not run."""
 
     if _windows(windows):
+        if _end_job(process):
+            return
         with contextlib.suppress(OSError, subprocess.SubprocessError):
             subprocess.run(
                 [_taskkill(), "/T", "/F", "/PID", str(process.pid)],

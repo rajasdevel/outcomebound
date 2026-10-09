@@ -1,25 +1,30 @@
 """`programs`: finding a program on PATH and stopping the tree it started.
 
 The Windows branch runs here beside scratch folders (`windows=True`, a `PATHEXT` and a folder
-laid out as Git for Windows lays it out); what only a Windows process shows, that `taskkill`
-ends a real tree and that `sh.exe` runs a line, is settled by the Windows CI job, which runs
-`tests/test_finish_check.py` and the floor's tests against the real thing.
+laid out as Git for Windows lays it out), and with job calls a test supplies (`FakeJobs`); what
+only a Windows process shows, that a job object ends a real tree, that `taskkill` does where
+there is no job, and that `sh.exe` runs a line, is settled by the Windows CI job, which runs the
+tests below that need Windows, `tests/test_finish_check.py` and the floor's tests against the
+real thing.
 """
 
 from __future__ import annotations
 
 import contextlib
+import ctypes
+import gc
 import os
 import signal
 import subprocess
 import sys
 import time
+from collections.abc import Callable, Collection
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from outcomebound_tools import programs
+from outcomebound_tools import explorable_browser, finish_check, programs, validation
 from tests.portable import WINDOWS
 from tests.processes import running
 
@@ -336,3 +341,301 @@ def test_a_process_with_no_group_of_its_own_is_killed_alone_and_never_raises() -
     programs.stop_tree(process)
     assert process.wait(timeout=30) != 0
     programs.stop_tree(process)
+
+
+# --- a Windows job object holds a command's tree ----------------------------------
+
+JOB = 7001
+SLEEP = [sys.executable, "-c", "import time; time.sleep(60)"]
+
+
+class FakeJobs:
+    """The four job calls a Windows machine has, as a test has them: each call is recorded; one
+    named in `fail` reports failure, one in `raises` raises, as the real call could."""
+
+    def __init__(self, fail: Collection[str] = (), raises: Collection[str] = ()) -> None:
+        self.calls: list[tuple[str, int | None]] = []
+        self.joined: list[int] = []
+        self.fail, self.raises = set(fail), set(raises)
+
+    def _call(self, name: str, job: int | None = None) -> bool:
+        self.calls.append((name, job))
+        if name in self.raises:
+            raise OSError(name)
+        return name not in self.fail
+
+    def create(self) -> int | None:
+        return JOB if self._call("create") else None
+
+    def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
+        self.joined.append(process.pid)
+        return self._call("assign", job)
+
+    def terminate(self, job: int) -> bool:
+        return self._call("terminate", job)
+
+    def close(self, job: int) -> None:
+        self.calls.append(("close", job))
+
+
+@pytest.fixture
+def sleeper() -> Any:
+    process = subprocess.Popen(SLEEP)
+    yield process
+    process.kill()
+    process.wait()
+
+
+def taskkill_asked(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[list[str]]:
+    """Replace the `taskkill` run by one that cannot start, and return the argvs it was asked."""
+
+    asked: list[list[str]] = []
+
+    def cannot(argv: list[str], **options: Any) -> None:
+        asked.append(argv)
+        raise FileNotFoundError(argv[0])
+
+    monkeypatch.setattr(programs.subprocess, "run", cannot)
+    monkeypatch.setenv("SYSTEMROOT", str(tmp_path / "Windows"))
+    return asked
+
+
+def test_the_job_limit_structure_has_the_layout_windows_reads() -> None:
+    """Breaks if the structure `SetInformationJobObject` is given has another size than the
+    Windows SDK's (144 bytes where a pointer is 8 bytes, 112 where it is 4), or holds anything
+    but the kill-on-close flag (0x2000, at offset 16, in a little-endian DWORD): the call would
+    fail, or set another limit, on a machine this suite cannot run on, and `stop_tree` would
+    fall back to `taskkill` with nothing to show it."""
+
+    limits = programs._limit_information()
+    assert ctypes.sizeof(limits) == (144 if ctypes.sizeof(ctypes.c_void_p) == 8 else 112)
+    expected = bytearray(ctypes.sizeof(limits))
+    expected[16:20] = (0x2000).to_bytes(4, "little")
+    assert bytes(limits) == bytes(expected)
+
+
+def test_windows_puts_a_command_in_a_job_of_its_own_when_it_starts(sleeper: Any) -> None:
+    """Breaks if the command is never given to a job, or is given to one before the job can end
+    what is in it, so that `stop_tree` has no job to end: a grandchild of a loaded machine then
+    outlives `taskkill`."""
+
+    jobs = FakeJobs()
+    assert programs.track_tree(sleeper, windows=True, jobs=jobs) is True
+    assert jobs.calls == [("create", None), ("assign", JOB)]
+    assert jobs.joined == [sleeper.pid]
+
+
+def test_windows_ends_a_tracked_tree_through_its_job_and_asks_taskkill_nothing(
+    sleeper: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Breaks if a tree that a job holds is still stopped by `taskkill`, whose walk over parent
+    ids misses a process under load, or if the job is never ended."""
+
+    asked = taskkill_asked(monkeypatch, tmp_path)
+    jobs = FakeJobs()
+    programs.track_tree(sleeper, windows=True, jobs=jobs)
+
+    programs.stop_tree(sleeper, windows=True)
+
+    assert jobs.calls[-1] == ("terminate", JOB)
+    assert asked == []
+
+
+@pytest.mark.parametrize("failure", ["returns", "raises"])
+def test_windows_falls_back_to_taskkill_then_kill_where_the_job_cannot_end_the_tree(
+    sleeper: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, failure: str
+) -> None:
+    """Breaks if a job that cannot be ended (it reports failure, or the call raises) leaves the
+    tree running, if `taskkill` is not asked first, if the process is not killed after a
+    `taskkill` that cannot run (here it cannot), or if the failure escapes `stop_tree`."""
+
+    asked = taskkill_asked(monkeypatch, tmp_path)
+    jobs = FakeJobs(**{"fail" if failure == "returns" else "raises": ["terminate"]})
+    assert programs.track_tree(sleeper, windows=True, jobs=jobs) is True
+
+    programs.stop_tree(sleeper, windows=True)
+
+    assert jobs.calls[-1] == ("terminate", JOB)
+    assert [argv[1:] for argv in asked] == [["/T", "/F", "/PID", str(sleeper.pid)]]
+    assert sleeper.wait(timeout=30) != 0
+
+
+@pytest.mark.parametrize(
+    ("call", "failure", "made"),
+    [
+        ("create", "fail", False),
+        ("create", "raises", False),
+        ("assign", "fail", True),
+        ("assign", "raises", True),
+    ],
+)
+def test_windows_makes_no_job_where_one_cannot_be_made_or_joined_and_stops_by_taskkill(
+    sleeper: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    call: str,
+    failure: str,
+    made: bool,
+) -> None:
+    """Breaks if a job that cannot be made, or that the process cannot join (an older Windows,
+    a job that forbids nesting), raises out of `track_tree`, leaves `stop_tree` to end an empty
+    job and skip `taskkill`, or leaves a job handle open; and if the process is not killed."""
+
+    asked = taskkill_asked(monkeypatch, tmp_path)
+    jobs = FakeJobs(**{failure: [call]})
+
+    assert programs.track_tree(sleeper, windows=True, jobs=jobs) is False
+    gc.collect()
+    assert (("close", JOB) in jobs.calls) is made
+
+    programs.stop_tree(sleeper, windows=True)
+
+    assert ("terminate", JOB) not in jobs.calls
+    assert [argv[1:] for argv in asked] == [["/T", "/F", "/PID", str(sleeper.pid)]]
+    assert sleeper.wait(timeout=30) != 0
+
+
+def test_a_job_is_held_while_its_command_is_and_let_go_with_it() -> None:
+    """Breaks if the job's handle closes while the command is still held, which ends the whole
+    command at once (a job ends what is in it when its last handle closes), or if the handle is
+    never closed."""
+
+    jobs = FakeJobs()
+    process = subprocess.Popen(SLEEP)
+    try:
+        programs.track_tree(process, windows=True, jobs=jobs)
+        gc.collect()
+        assert ("close", JOB) not in jobs.calls
+    finally:
+        process.kill()
+        process.wait()
+    del process
+    gc.collect()
+    assert jobs.calls[-1] == ("close", JOB)
+
+
+def test_off_windows_a_command_gets_no_job(sleeper: Any) -> None:
+    """Breaks if a POSIX run calls the job functions, which do not exist there, or loads the
+    Windows API."""
+
+    jobs = FakeJobs()
+    assert programs.track_tree(sleeper, windows=False, jobs=jobs) is False
+    assert jobs.calls == []
+    if not WINDOWS:
+        assert programs.track_tree(sleeper) is False
+
+
+def test_a_windows_stop_on_a_machine_with_no_windows_api_still_stops_by_taskkill(
+    sleeper: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Breaks if `windows=True` without a job API (this host, or a Windows whose API cannot be
+    loaded) raises or skips the fallback."""
+
+    asked = taskkill_asked(monkeypatch, tmp_path)
+    monkeypatch.setattr(programs, "_system_jobs", lambda: None)
+
+    assert programs.track_tree(sleeper, windows=True) is False
+    programs.stop_tree(sleeper, windows=True)
+
+    assert len(asked) == 1
+    assert sleeper.wait(timeout=30) != 0
+
+
+def run_one_command(tmp_path: Path) -> None:
+    finish_check.run_one(tmp_path, "exit 0", 30)
+
+
+def run_one_claim(tmp_path: Path) -> None:
+    validation._execute([sys.executable, "-c", "pass"], tmp_path, 30)
+
+
+def run_one_page(tmp_path: Path) -> None:
+    page = tmp_path / "page.html"
+    page.write_text("x", encoding="utf-8")
+    explorable_browser.run_page(sys.executable, page, 30)
+
+
+def run_one_eval_command(tmp_path: Path) -> None:
+    from evals.processes import bounded_command
+
+    bounded_command([sys.executable, "-c", "pass"], timeout=30)
+
+
+@pytest.mark.parametrize(
+    "start",
+    [run_one_command, run_one_claim, run_one_page, run_one_eval_command],
+    ids=["finish-check", "validation", "explorable-browser", "eval-command"],
+)
+def test_every_caller_that_starts_a_command_puts_it_in_a_job(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, start: Callable[[Path], None]
+) -> None:
+    """Breaks if a caller drops its `track_tree` call: nothing else fails then, since a command
+    without a job is stopped by `taskkill`, which only a loaded Windows machine shows to miss a
+    process."""
+
+    if start is run_one_command and programs.posix_shell() is None:
+        pytest.skip("no POSIX shell to run a Done line")
+    joined: list[subprocess.Popen[bytes]] = []
+    real = programs.track_tree
+
+    def record(process: subprocess.Popen[bytes], **options: Any) -> bool:
+        joined.append(process)
+        return real(process, **options)
+
+    monkeypatch.setattr(programs, "track_tree", record)
+
+    start(tmp_path)
+
+    assert len(joined) == 1
+
+
+@pytest.mark.skipif(not WINDOWS, reason="a job object is a Windows object")
+def test_a_real_job_ends_a_commands_grandchild_without_taskkill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the command is not put in a job (a `ctypes` call that fails is swallowed and
+    `stop_tree` falls back to `taskkill`, which every other test passes), if the job does not
+    end a process two levels below the command, or if it needs `taskkill` to."""
+
+    leaf = tmp_path / "leaf.py"
+    leaf.write_text("import time; time.sleep(60)\n", encoding="utf-8")
+    middle = tmp_path / "middle.py"
+    middle.write_text(
+        "import subprocess, sys\n"
+        "leaf = subprocess.Popen([sys.executable, sys.argv[1]])\n"
+        "with open(sys.argv[2], 'w') as handle:\n"
+        "    handle.write(str(leaf.pid))\n"
+        "leaf.wait()\n",
+        encoding="utf-8",
+    )
+    top = tmp_path / "top.py"
+    top.write_text(
+        "import subprocess, sys\nsubprocess.Popen([sys.executable, *sys.argv[1:]]).wait()\n",
+        encoding="utf-8",
+    )
+    pid = tmp_path / "leaf.pid"
+    process = subprocess.Popen(
+        [sys.executable, str(top), str(middle), str(leaf), str(pid)], **programs.new_group()
+    )
+    try:
+        assert programs.track_tree(process) is True, "the command was not put in a job"
+        deadline = time.monotonic() + 30
+        while not (pid.exists() and pid.read_text(encoding="utf-8").strip()):
+            assert time.monotonic() < deadline, "the command never wrote its pid"
+            time.sleep(0.05)
+        grandchild = int(pid.read_text(encoding="utf-8"))
+
+        def never(*arguments: Any) -> str:
+            raise AssertionError("the job did not end the tree and taskkill was asked")
+
+        monkeypatch.setattr(programs, "_taskkill", never)
+        programs.stop_tree(process)
+
+        assert process.wait(timeout=30) != 0
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and running(grandchild):
+            time.sleep(0.1)
+        assert not running(grandchild), "the grandchild outlived its job"
+    finally:
+        process.kill()
+        process.wait()
