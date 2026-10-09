@@ -154,32 +154,21 @@ def _brief() -> str:
 
 
 def _executes(command: str, name: str) -> bool:
-    """Whether a segment of the command runs a file called `name` rather than reading it."""
+    """Whether a segment of the command runs a file called `name`, as its command word or as the
+    file a shell runs. A heredoc's body is text the command reads, never a command."""
 
-    readers = {
-        "cat",
-        "less",
-        "more",
-        "head",
-        "tail",
-        "sed",
-        "grep",
-        "rg",
-        "ls",
-        "wc",
-        "file",
-        "nl",
-        "bat",
-        "diff",
-        "stat",
-        "echo",
-        "printf",
-    }
+    body = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2[ \t]*(?:\n|$)", re.DOTALL)
+    command = body.sub("\n", command)
+    shells = {"sh", "bash", "zsh", "source", ".", "command"}
     for segment in re.split(r"&&|\|\||[;|\n]", command):
         words = segment.split()
-        while words and (words[0] in {"cd", "env", "exec", "time"} or "=" in words[0]):
+        while words and (words[0] in {"cd", "env", "exec", "time", "nohup"} or "=" in words[0]):
             words = words[2:] if words[0] == "cd" else words[1:]
-        if words and words[0] not in readers and name in segment:
+        if not words:
+            continue
+        if words[0].endswith(name):
+            return True
+        if words[0] in shells and len(words) > 1 and words[1].endswith(name):
             return True
     return False
 
