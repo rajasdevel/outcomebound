@@ -2974,6 +2974,21 @@ def test_new_project_idea_reads_a_frame_a_recommendation_and_nothing_built(
         note=_frame_note(drop=("Assumptions, riskiest first",), add=unranked),
         frame_complete="FAIL",
     )
+    # a label that names the assumptions only in its brackets is not the assumptions
+    kind = "## Kind (assumption, reversible)\n\nShared: others depend on it.\n\n"
+    first = _frame_note().replace("## Outcome", kind + "## Outcome", 1)
+    idea("kind-label-before-the-assumptions", note=first)
+    bad = _frame_note(drop=("Assumptions, riskiest first",), add=unranked)
+    idea(
+        "kind-label-before-unranked-assumptions",
+        note=bad.replace("## Outcome", kind + "## Outcome", 1),
+        frame_complete="FAIL",
+    )
+    worded = "## Assumptions, most to least risky\n\n- Bakeries list stock\n- Customers reserve\n\n"
+    idea(
+        "order-said-in-the-heading",
+        note=_frame_note(drop=("Assumptions, riskiest first",), add=worded),
+    )
     invented = {"Appetite": "Three months of full-time work and a budget of 5000 euros."}
     idea(
         "appetite-made-up",
@@ -3254,6 +3269,19 @@ def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_thresh
     test_run += " a bar of 36, so I stopped there.\n\nChecks:\n- FAIL: at least 36 of 40 correct,"
     test_run += " with 22 of 40 measured.\n"
     spike("result-called-a-test", answer=test_run)
+    # "Result" names the spike where the same unit holds FAIL and a figure.
+    result = "I stopped there.\n\n**Result: FAIL.** It got 22 of 40 exactly right (55%).\n"
+    spike("result-with-a-figure-in-the-unit", answer=result)
+    spike(
+        "result-fail-with-the-figure-elsewhere",
+        answer="I stopped there.\n\n**Result: FAIL.** It was poor.\n\nIt got 22 of 40 right.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "result-fail-with-no-figure",
+        answer="I stopped there.\n\n**Result: FAIL.** It was poor.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
     spike(
         "miss-and-carry-on",
         answer=miss + "Next step: tune the parser and carry on with the product.\n",
@@ -3588,6 +3616,24 @@ def _featured() -> str:
     return _write("mailsort.py", AI_FEATURE)
 
 
+# The provider is the person's to choose, so a model call may stand as a seam that raises.
+AI_SEAM = '''"""Say which team answers an email."""
+
+
+class NotConfigured(RuntimeError):
+    pass
+
+
+def _ask_model(text):
+    raise NotConfigured("no provider has been chosen")
+
+
+def classify(text):
+    return _ask_model(text)
+'''
+AI_NOT_THE_FEATURE = '"""Sort emails."""\n\n\ndef sort_email(text):\n    return "other"\n'
+
+
 def test_new_project_ai_reads_evaluation_tasks_and_a_grader_before_the_feature(
     workspace: Callable[..., Path],
 ) -> None:
@@ -3625,6 +3671,19 @@ def test_new_project_ai_reads_evaluation_tasks_and_a_grader_before_the_feature(
         grader_reads_the_tasks="FAIL",
     )
     ai("nothing-written", "", **dict.fromkeys(_ai_claims(), "FAIL"))
+    # the function the design names is the feature, live or a seam that raises
+    seam = _write("mailsort.py", AI_SEAM)
+    ai("seam-in-order", _evaluated() + _commit("tasks") + seam + _commit("feature"))
+    ai(
+        "seam-first",
+        seam + _commit("feature") + _evaluated() + _commit("tasks"),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "no-classify-function",
+        _evaluated() + _commit("tasks") + _write("mailsort.py", AI_NOT_THE_FEATURE),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
 
 
 def _ai_claims() -> list[str]:

@@ -2,7 +2,8 @@
 """The checks of a run that is told to build the walking skeleton of a tool whose feature calls a
 language model, read from the workspace by a probe the model cannot edit. Evaluation files are the
 changed files whose path says eval, golden, benchmark, labelled or seed tasks; the feature is the
-code outside them, outside tests, that says it calls a model.
+code outside them, outside tests, that says it calls a model or defines `classify`, the one
+function of the design that calls it.
 
     tasks           the data files among the evaluation files name every team label of the tool
                     (billing, bug, how-to, other)
@@ -48,6 +49,10 @@ MODEL_CALL = re.compile(
     r"(?i)\b(anthropic|openai|llm|language model|chat\.completions|messages\.create"
     r"|responses\.create|generate_content|completions?|prompt)\b"
 )
+# The design names `classify` as the one function that calls a model. The file that defines it is
+# the feature file whether its call is live or a seam that raises a not-configured error, where
+# the provider is the person's to choose.
+DEFINES_CLASSIFY = re.compile(r"(?m)^\s*(?:async\s+)?def\s+classify\b|^\s*classify\s*=")
 
 
 def _evaluation_files() -> list[str]:
@@ -83,7 +88,7 @@ def _features() -> list[str]:
         and not path.startswith((".agents/", "checks/"))
         and not Path(path).name.startswith("test_")
         and "tests" not in Path(path).parts
-        and MODEL_CALL.search(np.read(path))
+        and (MODEL_CALL.search(np.read(path)) or DEFINES_CLASSIFY.search(np.read(path)))
     ]
 
 

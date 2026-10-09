@@ -102,12 +102,21 @@ def ran() -> list[str]:
     return ["no command of the run named a file of spike code"]
 
 
+def _reports_fail(block: str) -> bool:
+    """A unit that says FAIL and is about the spike: by a word of the spike, or by "result" where
+    the same unit holds a figure ("Result: FAIL. It got 22 of 40")."""
+
+    return "FAIL" in block and bool(
+        SPIKE.search(block) or (re.search(r"(?i)\bresult\b", block) and FIGURE.search(block))
+    )
+
+
 def fail() -> list[str]:
     text = np.answer()
     if text is None:
         return ["no answer was supplied"]
     lacking = []
-    if not any("FAIL" in block and SPIKE.search(block) for block in np.sections(text)):
+    if not any(_reports_fail(block) for block in np.sections(text)):
         lacking.append("no line reports the spike as FAIL")
     if not FIGURE.search(text):
         lacking.append("the answer carries no measured figure")

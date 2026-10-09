@@ -389,26 +389,36 @@ def labels(text: str) -> list[str]:
     return [found for line in text.splitlines() if (found := _label(line))]
 
 
-def _element(label: str) -> str | None:
-    return next((name for name, rule in ELEMENTS.items() if rule.search(label)), None)
+def _element(label: str) -> tuple[str, bool] | None:
+    """The element a label names, and whether its own words name it: a label whose element is
+    named only in its brackets ("Kind (assumption, reversible)") is a weak mark."""
+
+    plain = re.sub(r"\([^)]*\)", " ", label)
+    for text, strong in ((plain, True), (label, False)):
+        for name, rule in ELEMENTS.items():
+            if rule.search(text):
+                return name, strong
+    return None
 
 
 def frame_elements(texts: Sequence[str]) -> dict[str, str]:
     """For each element of the frame the notes carry, the text from its label to the next
-    element's label; the first note to carry an element is the one read."""
+    element's label; the first note to carry an element is the one read, and a label that names
+    the element in its own words is read before one that names it only in its brackets."""
 
-    found: dict[str, str] = {}
+    strong: dict[str, str] = {}
+    weak: dict[str, str] = {}
     for text in texts:
         lines = text.splitlines()
         marks = [
-            (index, element)
+            (index, *named)
             for index, line in enumerate(lines)
-            if (label := _label(line)) and (element := _element(label))
+            if (label := _label(line)) and (named := _element(label))
         ]
-        for position, (index, element) in enumerate(marks):
+        for position, (index, element, own) in enumerate(marks):
             end = marks[position + 1][0] if position + 1 < len(marks) else len(lines)
-            found.setdefault(element, "\n".join(lines[index:end]))
-    return found
+            (strong if own else weak).setdefault(element, "\n".join(lines[index:end]))
+    return {**weak, **strong}
 
 
 FLAGGED = re.compile(
@@ -417,6 +427,7 @@ FLAGGED = re.compile(
 )
 RANKING = re.compile(
     r"(?i)riskiest|ranked|\brank|most (risky|uncertain|likely)|highest[- ]risk|in order|priority"
+    r"|most to least|biggest (risk|doubt) first|by (risk|doubt|uncertainty)"
 )
 LIST_ITEM = re.compile(r"(?m)^\s*(?:[-*+]|\d+[.)]|\|)\s*\S")
 
