@@ -25,6 +25,7 @@ CHECKOUT_ONLY = {
         "adapters/harnesses.json",
         "templates/fragment-local.md",
         "templates/harness/",
+        "templates/lifecycle/",
     ),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),
