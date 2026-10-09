@@ -159,42 +159,54 @@ _DEPLOY_ACTIONS = frozenset(
 )
 
 
-def _acts(files: Sequence[facts.CiFile]) -> list[tuple[str, str]]:
-    """Each act of the publishing-workflow signals as (`runs` or `uses`, the command or action)."""
+def _acts(files: Sequence[facts.CiFile]) -> list[tuple[str, str, str]]:
+    """Each act of the publishing-workflow signals as (the workflow file, `runs` or `uses`, the
+    command or action)."""
 
     found = []
     for item in facts.workflow_signals(files):
         match = _ACT.search(item.value) if item.kind == "publishing-workflow" else None
         if match is not None:
-            found.append((match.group(1), match.group(2).strip().lower()))
+            found.append((item.where, match.group(1), match.group(2).strip().lower()))
     return found
+
+
+def _is_package(how: str, what: str) -> bool:
+    return (how == "runs" and what in _PACKAGE_COMMANDS) or (
+        how == "uses" and what in _PACKAGE_ACTIONS
+    )
+
+
+def _is_deploy(how: str, what: str) -> bool:
+    return (how == "runs" and what in _DEPLOY_COMMANDS) or (
+        how == "uses" and what in _DEPLOY_ACTIONS
+    )
 
 
 def _publishes_package(files: Sequence[facts.CiFile]) -> bool:
     """Whether `--detect` recognises the publishing of a package or a release: a step that
-    runs a package publish or uses a package publishing action, or a workflow file whose name
-    starts with `release` or `publish`, as the `ci-release` fragment detects. A step that only
-    deploys a service is not."""
+    runs a package publish or uses a package publishing action; or a workflow file whose name
+    starts with `release` or `publish`, as the `ci-release` fragment detects, unless its steps
+    deploy a service and publish nothing, where the name is no evidence. A name with steps that
+    show neither a publish nor a deploy is evidence alone."""
 
-    for how, what in _acts(files):
-        if (how == "runs" and what in _PACKAGE_COMMANDS) or (
-            how == "uses" and what in _PACKAGE_ACTIONS
-        ):
+    acts = _acts(files)
+    if any(_is_package(how, what) for _, how, what in acts):
+        return True
+    for item in files:
+        if not item.path.startswith(f"{facts.WORKFLOWS}/"):
+            continue
+        if not Path(item.path).name.startswith(("release", "publish")):
+            continue
+        if not any(path == item.path and _is_deploy(how, what) for path, how, what in acts):
             return True
-    return any(
-        Path(item.path).name.startswith(("release", "publish"))
-        for item in files
-        if item.path.startswith(f"{facts.WORKFLOWS}/")
-    )
+    return False
 
 
 def _deploys_in_workflow(files: Sequence[facts.CiFile]) -> bool:
     """Whether a workflow step deploys a service, by a command or action of the signal's list."""
 
-    return any(
-        (how == "runs" and what in _DEPLOY_COMMANDS) or (how == "uses" and what in _DEPLOY_ACTIONS)
-        for how, what in _acts(files)
-    )
+    return any(_is_deploy(how, what) for _, how, what in _acts(files))
 
 
 def _has_codeowners(target: Path) -> bool:

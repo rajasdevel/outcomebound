@@ -210,6 +210,28 @@ def test_a_deploy_only_workflow_prints_the_deploy_line_and_no_ci_release_line(
     assert drift_lines(again) == []
 
 
+def test_a_release_named_workflow_that_only_deploys_prints_the_deploy_line_alone(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the name `release.yml` alone sends a workflow whose steps deploy a service and
+    publish nothing to `ci-release`, or a release-named workflow with no publish and no deploy
+    step stops printing the ci-release line."""
+
+    text = workflow("fly deploy --remote-only")[".github/workflows/ship.yml"]
+    target = repo(tmp_path / "t", {".github/workflows/release.yml": text})
+    commit(target, ONE)
+    installed(target, capsys)
+
+    _, out, _ = run(capsys, str(target), "--check")
+    assert drift_lines(out) == [DEPLOY_LINE]
+
+    named = repo(tmp_path / "n", RELEASE_WORKFLOW)
+    commit(named, ONE)
+    installed(named, capsys)
+    _, again, _ = run(capsys, str(named), "--check")
+    assert drift_lines(again) == [PUBLISH_LINE]
+
+
 def test_a_workflow_that_only_pushes_an_image_prints_neither_deploy_nor_ci_release(
     tmp_path: Path, capsys: Capture
 ) -> None:
