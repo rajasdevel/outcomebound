@@ -555,9 +555,10 @@ def test_specialized_fixtures_run_only_when_named() -> None:
     """New research cases must not increase the default model-call budget."""
 
     named = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
-    assert len(named) == 34
+    assert len(named) == 36
     assert {"patch-validation", "property-oracles", "testing-no-work"} <= set(named)
     assert {"onboard-plain", "onboard-signals"} <= set(named)
+    assert {"lifecycle-stream", "lifecycle-switch"} <= set(named)
     new_project = {
         "new-project-ai",
         "new-project-idea",
