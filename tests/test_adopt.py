@@ -125,6 +125,11 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("skill", ".claude/skills/explorable/SKILL.md", "explorable"),
         ("skill", ".claude/skills/explorable/references/runtime.md", "explorable"),
         ("skill", ".claude/skills/gather-requirements/SKILL.md", "gather-requirements"),
+        (
+            "skill",
+            ".claude/skills/gather-requirements/references/source-kinds.md",
+            "gather-requirements",
+        ),
         ("skill", ".claude/skills/hand-off-tickets/SKILL.md", "hand-off-tickets"),
         ("skill", ".claude/skills/review-findings/SKILL.md", "review-findings"),
         ("skill", ".claude/skills/slice-tickets/SKILL.md", "slice-tickets"),
@@ -249,6 +254,7 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
     after.pop("AGENTS.md")
     after.pop(".claude/skills/slice-tickets/references/github.md")
     after.pop(".claude/skills/explorable/references/runtime.md")
+    after.pop(".claude/skills/gather-requirements/references/source-kinds.md")
     assert after == before
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and all(states(out)[path] == "current" for path in gained.values())
@@ -960,6 +966,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         ".claude/skills/explorable/SKILL.md": "current",
         ".claude/skills/explorable/references/runtime.md": "current",
         ".claude/skills/gather-requirements/SKILL.md": "current",
+        ".claude/skills/gather-requirements/references/source-kinds.md": "current",
         ".claude/skills/hand-off-tickets/SKILL.md": "current",
         ".claude/skills/review-findings/SKILL.md": "current",
         ".claude/skills/slice-tickets/SKILL.md": "current",
