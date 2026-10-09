@@ -1,13 +1,15 @@
 ---
 name: lifecycle
-status: draft
+status: ratified
 ---
 
 # Lifecycle support — design
 
-This draft targets v1.5.0. It records the cross-area decisions needed to build the release.
-Before it lands, the ticket breakdown and required independent review must settle its scope.
-The requirements below are proposed product contracts, not claims that the release has passed.
+This design recorded the cross-area decisions for v1.5.0, which shipped on 2026-10-08. It is
+the current design for lifecycle support. The requirements below are the product contracts the
+release was built to; they are not claims that the release passed them. The qualification
+record, [E21](../../evaluations.md#e21-direct-skill-and-lifecycle-qualification), and the
+v1.5.0 changelog section say what was observed and what stayed `UNVERIFIED`.
 
 ## Outcome
 
@@ -20,35 +22,42 @@ decision or catch a material failure. It does not impose every stage on every ch
 ## Requirements
 
 R1. Support the full applicable lifecycle: idea and discovery, requirements, design, accepted work, implementation, validation, review and landing, release, deployment, operation, incident and feedback, maintenance and retirement.
-R2. [assumed] At each applicable transition, identify the input, output, owner of the next action, authority, completion evidence and when the transition can be skipped.
-R3. [assumed] Preserve source requirements through design and tickets; distinguish source accounting, requirement mapping and evidence that the result meets the requirement.
-R4. [assumed] Make evaluation evidence reliable before it is used to justify instruction changes; correct the confirmed defects in [issue #95](https://github.com/rajasdevel/outcomebound/issues/95).
+R2. At each applicable transition, identify the input, output, owner of the next action, authority, completion evidence and when the transition can be skipped.
+R3. Preserve source requirements through design and tickets; distinguish source accounting, requirement mapping and evidence that the result meets the requirement.
+R4. Make evaluation evidence reliable before it is used to justify instruction changes; correct the confirmed defects in [issue #95](https://github.com/rajasdevel/outcomebound/issues/95).
 R5. [assumed] Identify direct behavior coverage for every shipped skill; add or rerun missing and affected cases, reuse valid unchanged evidence, and check useful behavior retained from inspirations.
-R6. [assumed] Preserve project-owned work through adoption and make native skill persistence, loading and hook execution separate observable claims.
+R6. Preserve project-owned work through adoption and make native skill persistence, loading and hook execution separate observable claims.
 R7. Target v1.5.0 for all known in-scope defects and justified improvements; resolve valid failures before release rather than rename them as missing evidence.
-R8. [assumed] Keep supported install and command contracts compatible, preserve project gates, and qualify the exact release tree before publication and downstream adoption.
-R9. [assumed] Include security, privacy, accessibility, reliability, performance, compatibility and recovery where the project's outcome or changed risk requires them.
-R10. [assumed] When this work establishes a new general lesson, return it to research through the existing contribution route. Otherwise retain the existing research. Keep product evaluation results in this repository.
+R8. Keep supported install and command contracts compatible, preserve project gates, and qualify the exact release tree before publication and downstream adoption.
+R9. Include security, privacy, accessibility, reliability, performance, compatibility and recovery where the project's outcome or changed risk requires them.
+R10. When this work establishes a new general lesson, return it to research through the existing contribution route. Otherwise retain the existing research. Keep product evaluation results in this repository.
 R11. Keep hook installation and execution portable with no unnecessary external tooling; distinguish the engine runtime from a project's genuine check dependencies and make missing setup explicit without weakening checks.
 
-The release goal supplies R1, R7 and R11. R2–R6 and R8–R10 are the design's interpretation of complete
-lifecycle support and the existing contract. They are reviewable assumptions, not new grants.
+The release goal supplied R1, R7 and R11. R2–R6 and R8–R10 are the design's interpretation of
+complete lifecycle support and the existing contract; none is a new grant. The shipped
+lifecycle reference, skills, install and release checks, and E21 hold R2–R4, R6 and R8–R10.
+R5 stays `[assumed]`: E21 identifies a direct case for every shipped skill, but no record
+checks the behavior kept from each cited inspiration, and E21 claims no parity with any.
 
 ## Decisions
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
 | v1.5.0 is the target for the complete known scope; a validated defect or justified improvement found while carrying it out joins that scope | scheduling known work across further releases merely to make this release smaller | user | decided |
-| Full support means a usable, checked route across every applicable transition; stage names do not by themselves justify skills, tools, records or approvals | a mandatory sequence or a separate skill for every stage | agent | assumed |
-| The lifecycle route belongs in an on-demand reference of `using-outcomebound`, installed with that skill; the human guide links to it. The core entrypoint routes there only when a task needs coordination across stages or delivery has stopped before its outcome | a repository-only guide that installed agents cannot find; expanding the always-loaded kernel | agent | assumed |
+| Full support means a usable, checked route across every applicable transition; stage names do not by themselves justify skills, tools, records or approvals | a mandatory sequence or a separate skill for every stage | agent | decided |
+| The lifecycle route belongs in an on-demand reference of `using-outcomebound`, installed with that skill; the human guide links to it. The core entrypoint routes there only when a task needs coordination across stages or delivery has stopped before its outcome | a repository-only guide that installed agents cannot find; expanding the always-loaded kernel | agent | decided |
 | Existing area designs keep ownership of their contracts. This design owns transition coverage and release evidence, not copies of wire formats or engine behavior | a second master specification that repeats each area's decisions | agent | decided |
-| Risk dimensions are selected from the outcome and changed surface. A small local change needs no service owner or operational exercise; a service change cannot omit applicable security, privacy, accessibility, capacity or recovery questions merely because unit tests pass | a universal audit checklist; a claim that the quality floor proves product quality | agent | assumed |
+| Risk dimensions are selected from the outcome and changed surface. A small local change needs no service owner or operational exercise; a service change cannot omit applicable security, privacy, accessibility, capacity or recovery questions merely because unit tests pass | a universal audit checklist; a claim that the quality floor proves product quality | agent | decided |
 | Requirements-to-ticket mapping stays optional in the general engine. This release's source-driven breakdown uses `satisfies` and a semantic review; an id proves accounting only | a new refusal or a requirement-id list treated as proof of implementation | agent | decided |
 | Known grader defects are repaired before candidate behavior is judged. An unreadable or denied effect remains UNVERIFIED; an observed wrong effect is FAIL | counting an attempted command as an effect; hiding a behavior failure by broadening a grader | agent | decided |
 | Qualification uses a deterministic floor, direct skill and transition scenarios, independent cases, and real adoption. It makes bounded claims, not a promise about every future task or every model | universal proof; shipping known valid in-scope failures and waiting for field reports | agent | assumed |
 | A new skill must have a distinct trigger and an unserved repeatable decision. A case first runs against current guidance; a missing reference, tool check or narrow clause is preferred when it resolves the failure | an operations, retirement, security or architecture skill selected from its stage name alone | agent | decided |
 | A native harness claim needs a native observation with the installed bytes and environment identified. Tests of the engine or an isolated evaluation runner do not establish hook events or skill discovery | inferring native execution from a configuration file or a successful direct invocation | agent | decided |
 | Research provides dated evidence and alternatives. Product-specific changes and results stay here; a new general finding is prepared for the existing research contribution path | editing the shared research clone or publishing an anecdote as a general rule | agent | decided |
+
+The qualification row stays `assumed`. E21 uses synthetic adoption fixtures and the engine's
+own checks. No record in this repository shows the release adopted by a real project, so that
+part of the row has no evidence here.
 
 ## Transition coverage
 
@@ -83,7 +92,7 @@ defect. A local release work record tracks those repairs without publishing adop
 
 ## Validation
 
-Use the current tools and evidence records. This work adds no new qualification framework,
+Use the current tools and evidence records. This work added no new qualification framework,
 evidence schema, runtime ledger or model-judge service.
 
 1. Repair the graders with deterministic valid and adverse examples in the existing scenario,
@@ -111,7 +120,7 @@ evidence schema, runtime ledger or model-judge service.
 One qualification table in the existing evaluation record links the cases, candidate identity,
 verdicts and limitations to the runner's files and native observations. Review the actual
 outcomes before closing the work. A model-call or summary exit code is not a behavior verdict.
-These obligations remain required even though no new aggregate gate is built.
+These obligations remain required even though no new aggregate gate was built.
 
 All known valid in-scope failures must be fixed and checked before release. Missing required
 evidence cannot pass through documentation or a waiver. General skill superiority, every model

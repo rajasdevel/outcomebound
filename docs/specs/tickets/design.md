@@ -80,7 +80,7 @@ project's own gate decides done, as above.
 
 ## Validation
 
-The proposed v1.5.0 [lifecycle qualification](../lifecycle/design.md#validation) adds direct
+The v1.5.0 [lifecycle qualification](../lifecycle/design.md#validation) added direct
 checks of handoff authoring. The earlier "runs nothing" rule above governs rerunning the
 prepared-package comparison when only skill text changes; it does not supply evidence about
 the skill's behavior. A package-content or rendering change still triggers that comparison.
