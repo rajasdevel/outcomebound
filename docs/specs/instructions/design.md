@@ -12,8 +12,9 @@ harness settings beside them, could steer an agent unseen, and whether the loadi
 that reading are current. The invariant the command holds: each file or setting in scope that
 could steer an agent unseen is reported on every run, as a FAIL, a review hit or `UNVERIFIED`,
 and data in the target can decide only whether a review hit changes the result, as the rows below
-say, never whether it is reported. The command reads and reports; what a hit means is the
-person's call.
+say, never whether it is reported. It also reports, without changing its result, each path, Make target or
+package script that project-owned instruction text names and the target no longer holds. The
+command reads and reports; what a hit means is the person's call.
 How: `outcomebound instructions check --help` and `outcomebound_tools/instruction_audit.py`.
 
 ## Decisions
@@ -34,6 +35,7 @@ How: `outcomebound instructions check --help` and `outcomebound_tools/instructio
 | A hidden character in an agents' note reads UNVERIFIED for that note, with "do not rely on this note"; in a file a harness loads as instructions it stays a FAIL (maintainer, 2026-10-04) | one character in one session's note failing the whole repository | user | decided |
 | A review hit's next step asks for a person at handoff and lets the work go on; a row past its re-check date names the day it was verified and that only the re-check is due, still UNVERIFIED (maintainer, 2026-10-04) | "confirm with a person" as a step before the work | user | decided |
 | Six checks in two families, security and loading. No agreement, structure or wording check: none answers a failure seen in a project's instruction files (S13), and OutcomeBound's own text is held by its suite | a catalog of 23 checks, agreement, structure and wording among them, with a worksheet a model answers and an audit skill | agent | decided |
+| A third family, `references`, with one check, `stale-reference`: a path, a Make target or a package script that project-owned instruction text names and the target no longer holds. Measured studies of context files found stale code references in many repositories, and an agent follows a command or path a file names: this answers a failure seen in projects' files, which the agreement and wording checks above did not. It never changes the result (`decides: false`), so a healthy project's exit does not move, and it rules nothing safe; it is reported for the person and the agent, as the ancestors hit is. Its reads widen the command's outcome from what could steer an agent unseen to what in that text has gone stale too | the reference check in `adopt --check`, which reads only the install's own records; a hit that changes the result, which would make exit 2 constant on projects whose text names a path a build creates; a model that judges whether a reference still holds | agent | decided |
 | A target that Git refuses as owned by another user (`dubious ownership`, as in a container whose root runs over a checkout another user made) is walked whole, as a target Git cannot list is, and the report's listing line says that Git refused it and names the command that trusts it (`git config --global --add safe.directory <the target>`). The engine's Git reads never pass `-c safe.directory`: `safe.directory` exists so that a repository another user owns cannot run its own code under yours, and the read-only configuration (`GIT_READ_CONFIGURATION`) closes `core.fsmonitor`, the pager and the external diff only, not every command Git runs for a repository, such as a clean or smudge filter a `.gitattributes` file names. Trusting a target for Git is the person's act, in their own Git configuration, as the floor design decides for the floor | passing `-c safe.directory=<the target>` on each read, which would let a hostile target run a filter under the auditor's own user; reading UNVERIFIED with no reason, which hides what to fix | agent | decided |
 
 ## Checks
@@ -50,6 +52,7 @@ S4 and report first; `load-resolution` answers to S7.
 | `harness-config` | in each configuration file a row names, keys holding commands, tool servers, all tool servers at once, endpoints or permission bypasses; TOML is read lexically, an unsettled value reading UNVERIFIED; an entry adopt wrote is one hit that quotes the Done commands it runs | review; a secret-shaped value is a gate |
 | `instruction-change` | with `--base <ref>`, each file in scope, and `.outcomebound/manifest.json`, changed between the ref and HEAD; a ref that does not resolve reads UNVERIFIED | review |
 | `load-resolution` | per harness, whether its row is verified and inside its re-check date (past it, the fact names the day the row was verified and that only the re-check is due); where its configuration was read, one line naming the key categories the row leaves unsettled; and each file the row's `ancestors` loads from a folder above the target, a review that does not change the result | gate |
+| `stale-reference` | in project-owned instruction text (each file in scope, leaving out OutcomeBound's managed blocks, its installed skill and fragment copies, and the agents' notes), each inline code span that is a concrete relative path, `make <target>`, or `npm run`, `pnpm run` or `yarn run` with a script name: a path neither the file's folder nor the target root holds, and that Git does not ignore, a target no Makefile at the root defines as a rule, a script `package.json` at the root does not name. A span holding `<`, `>`, `$`, `*`, `{` or a space before its first `/` is a pattern, not a reference, and is skipped; a Makefile that includes another file or defines pattern rules reads a target it does not show `UNVERIFIED` | review that does not change the result |
 
 The files read are those each selected row says its harness loads: root and nested instruction
 files, imports, project override files, rules and skill directories, and configuration. In a Git
@@ -68,7 +71,7 @@ anything outside the target but the engine's own data (above the target it only 
 malformed or missing file leaves empty; a path it leaves unopened, a link out
 included, reads UNVERIFIED. It never walks what Git ignores but those two note folders, never
 runs, follows or obeys what it reads, and escapes quoted text so no file can steer the terminal.
-Its one process is Git, to list the files and for `--base`: from PATH's absolute entries, with
+Beyond the files in scope it reads, for `stale-reference` only, the root `Makefile` and the root `package.json` of the target, as text; it runs neither. Its one process is Git, to list the files, to ask which candidate paths it ignores, and for `--base`: from PATH's absolute entries, with
 no pager, fsmonitor, external diff or textconv, and no time limit. It opens no connection, rules no
 hit benign itself, applies no edit and gives no score; `check` writes nothing, and `rule` writes
 only the person's rulings file.
