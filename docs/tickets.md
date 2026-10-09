@@ -172,8 +172,10 @@ the same two warnings at each install and upgrade, for the plan that `.outcomebo
 declares. It does not change the plan.
 
 In text, the warnings for claims that the plan does not define yet (`CLAIM_PLANNED`) are one
-row after the other findings. The row gives their number and their tickets. `--json` lists each
-claim on its ticket.
+row after the other findings. The row gives their number and their tickets. In text, the
+`CLAIM_READS_OUTSIDE_BOUNDS` warnings are one row for each claim, before that row. The row names
+the paths and the tickets whose `bounds` do not cover them. `--json` lists each claim on its
+ticket.
 
 `check` exits with `0` for PASS. It exits with `1` for FAIL or a refusal. It exits with `2` for
 UNVERIFIED, a planning error or a usage error.

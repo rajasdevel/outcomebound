@@ -36,10 +36,6 @@ LABELS = {
 }
 
 
-def is_mechanism(name: str) -> bool:
-    return name in LABELS
-
-
 def unknown(names: Iterable[str]) -> list[str]:
     """Return the supplied names that are not registry ids, in order."""
 

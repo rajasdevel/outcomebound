@@ -33,6 +33,10 @@ From 1.1.0, each release is also a GitHub release with the wheel and the source 
 builds them from the tagged commit and attests them with signed build provenance. To verify a
 file that you downloaded, run `gh attestation verify <file> -R rajasdevel/outcomebound`.
 
+The same two files are also published to PyPI, as the project `outcomebound`, by the release
+workflow (see below). The first version on PyPI is 1.6.0; no earlier version is there. The tagged
+Git URL stays a supported route for every version.
+
 ## How a release is made
 
 This section is for the person who prepares a release of OutcomeBound.
@@ -56,6 +60,20 @@ release tree. A pull request that changes `adopt`, `tickets`, `floor`, `instruct
 it before it lands; one run on a commit that holds every change of several such pull requests
 covers all of them, before the first of them lands.
 
+PyPI needs three account steps that no agent does and no check here can see. A maintainer does
+them once, before the first tag that publishes (1.6.0), and they stay in place for later releases:
+
+- a PyPI account, with two-factor authentication;
+- a pending publisher on pypi.org for the project `outcomebound`, with owner `rajasdevel`,
+  repository `outcomebound`, workflow file `ci.yml` and environment `pypi`;
+- a GitHub environment `pypi` in the repository, with the maintainer as required reviewer if
+  the maintainer wants to approve each upload.
+
+The upload uses trusted publishing (OpenID Connect): the repository holds no PyPI token or
+password. The pending publisher creates the project at the first upload, and the name is not
+reserved until then. A version on PyPI can never be replaced: if one is wrong, the fix is a new
+version. A pre-release tag (`v<VERSION>` with `-rc.N`) also uploads, as a pre-release.
+
 A maintainer or an agent can prepare the release. Do these steps in this sequence:
 
 1. On a branch from `main`, prepare the complete release tree: `VERSION`, the dated changelog
@@ -72,8 +90,12 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    and run `make canary` again.
 3. Run `make scrub`.
 4. Run `make release-check`. It first reads the record of `make canary`. It then checks that the
-   places above agree and that this repository's own install is current. It also runs the gate,
-   the quality floor and the test suite, and they must pass.
+   places above agree and that this repository's own install is current. It checks, from the
+   files and with no network, that the package metadata is what PyPI accepts (core metadata 2.4,
+   an SPDX license expression, the license files, a Markdown long description with no relative
+   link) and that the `pypi` job of the release workflow is as stated below. It also runs the
+   gate, the quality floor and the test suite, and they must pass. It cannot see the three
+   account steps above; the maintainer confirms them before step 9.
 5. Land the release commit through its pull request, as one squash commit. A squash merge keeps
    the tree of the branch, so the record from the branch applies to the commit on `main`.
 6. Make sure that the tree of the new commit on `main` is the tree of the release branch, for
@@ -86,8 +108,20 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    `make release-check TAG=v<VERSION>`. With a tag, it also checks that the commit has a passing CI
    run on `main`, so no release is cut from a `main` that failed.
 9. A maintainer pushes the tag, or an agent where a grant covers it (below).
-10. CI on the tag runs the same check, and publishes the release (below).
-11. Move all projects that use OutcomeBound to the release.
+10. CI on the tag runs the same check, and publishes the release and then the PyPI upload (below).
+11. A person checks PyPI, because no CI step reads it back:
+    - the page `https://pypi.org/project/outcomebound/<VERSION>/` exists, shows the README
+      with working links, and lists the wheel and the source archive;
+    - an install of that version in a fresh tool environment runs and reports `<VERSION>`:
+
+      ```sh
+      tmp="$(mktemp -d)"
+      UV_TOOL_DIR="$tmp/tools" UV_TOOL_BIN_DIR="$tmp/bin" uv tool install --no-cache "outcomebound==<VERSION>"
+      cat "$("$tmp/bin/outcomebound" home)/VERSION"
+      ```
+
+    Until step 11 passes, the README keeps the tagged Git URL as its install route.
+12. Move all projects that use OutcomeBound to the release.
 
 You cannot undo the push of a tag. A maintainer pushes it. An agent can push it only where a
 grant of a maintainer in `.outcomebound/tag-grants.json` covers that version on that day. The last
@@ -103,3 +137,10 @@ draft release whose notes are the changelog section of the version, and publishe
 a leg fails, the job does not run and nothing is published. Where the repository has immutable
 releases on, nobody can change a published release, its tag or its files, so a mistake needs a
 new version.
+
+After the `release` job succeeds, the `pypi` job downloads the two files of that published
+release, so that PyPI holds the bytes that carry the provenance, and uploads them with the
+`pypa/gh-action-pypi-publish` action. It runs in the GitHub environment `pypi`, has no checkout,
+and is the only job besides `release` that holds `id-token: write`, on the job and not on the
+workflow. If the upload fails after the release is published, the GitHub release stays; re-run
+the failed job from the Actions page, or, if PyPI refused the files, make a new version.

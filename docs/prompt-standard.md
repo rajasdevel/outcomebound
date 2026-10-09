@@ -10,8 +10,8 @@
 
 The rules OutcomeBound's model-facing text follows, S1 to S23, each with the evidence behind it, the
 evidence's class, the reader tiers that evidence covers, its confidence and direction, and the
-instruction-audit checks that hold it: `outcomebound instructions check` runs six, S4's five and
-S7's `load-resolution`, and a rule reading `Checks: none` is held by review or by a test of
+instruction-audit checks that hold it: `outcomebound instructions check` runs seven, S4's five,
+S14's `stale-reference` and S7's `load-resolution`, and a rule reading `Checks: none` is held by review or by a test of
 OutcomeBound's own text. It is dated evidence, checked 2026-09-27, and revised as "Revising the
 standard" says; it names no model, vendor or harness. Classes: M measured, L lab or vendor guidance,
 S standards body, P practitioner consensus, A anecdote, F forecast, O OutcomeBound's own recorded
@@ -77,7 +77,7 @@ agreement first; hold it with a test\
 Evidence: `repo-readiness-audits-25` (M), `repo-readiness-audits-19` (A), `practice §8 step 1` (O)\
 Tiers: frontier\
 Confidence: high; direction: rising\
-Checks: none
+Checks: `stale-reference`
 
 **S16** Size verification to risk, in checks outside the model; no generic double-checking or
 thinking depth in prose\

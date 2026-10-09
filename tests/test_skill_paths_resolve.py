@@ -19,7 +19,13 @@ CORE = "using-outcomebound"
 # skill name -> paths that exist only in the OutcomeBound checkout
 CHECKOUT_ONLY = {
     CORE: ("OutcomeBound.md", "scripts/new-spec.sh"),
-    "adopt-outcomebound": ("scripts/outcomebound", "templates/ci/", "adapters/harnesses.json"),
+    "adopt-outcomebound": (
+        "scripts/outcomebound",
+        "templates/ci/",
+        "adapters/harnesses.json",
+        "templates/fragment-local.md",
+        "templates/harness/",
+    ),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),
     "slice-tickets": (

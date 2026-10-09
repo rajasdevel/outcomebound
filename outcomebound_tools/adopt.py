@@ -9,12 +9,13 @@ installs `.agents/.gitignore`, which keeps its four folders out of Git; every in
 `.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
 report warns where Git ignores a path the install owns, where AGENTS.md holds changes not
 committed, and where a harness also loads instructions from a folder above the target.
-`--finish-check` adds one
+`--detect` prints the install command on its first line and every note after it on a line that
+starts with `#`. `--finish-check` adds one
 entry to the settings document of each selected harness whose table row has a `finish_hook`
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
 kept; once its writes are made, it runs Done once to measure it (`finish_check.measure`) where
-`--finish-check` is named, and only then. It installs each
+`--finish-check` or `--verify` is named, and only then; `--verify` adds no entry. It installs each
 skill for
 every harness, and an `@AGENTS.md` import into each harness file that would not load
 AGENTS.md otherwise: none where the harness table says the harness reads AGENTS.md
@@ -24,7 +25,7 @@ which the pointers name. Re-running it is the upgrade, and each install prints t
 words an agent always loads, skill descriptions included; no size refuses one. What it
 wrote is recorded in `.outcomebound/manifest.json` (format 2), one
 `{kind, path, id, sha256}` record per block or file, the facts record holding the recorded
-selection, the Done commands and each source a fact was read from with its digest, and the
+selection, the Done and Setup commands and each source a fact was read from with its digest, and the
 pointers record the optional `frame` digest that shows an edit of the local fragment alone; a
 record of any other kind or id belongs to another route and is kept as it is. Nothing whose
 bytes differ from its record is replaced or removed without `--force`, save bytes this
@@ -48,7 +49,7 @@ import sys
 from collections.abc import Callable, Sequence, Set
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 from outcomebound_tools import (
     adapters,
@@ -138,6 +139,9 @@ GENERIC_SKILLS = ".outcomebound/skills"
 KERNEL_TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LOCAL = facts.LOCAL
 LOCAL_FRAGMENT = f"{facts.FRAGMENT_DIR}/{LOCAL}.md"
+# What --detect names last, and where a new project starts, as paths in the engine.
+GUIDE = "skills/adopt-outcomebound/SKILL.md"
+NEW_PROJECT_REFERENCE = "skills/using-outcomebound/references/new-project.md"
 # What --detect proposes first for Done where a floor is installed: the floor's runner, with
 # `--base` the remote's default branch where Git resolves it (`default_base`).
 FLOOR_RUNNER = "outcomebound floor check ."
@@ -260,12 +264,7 @@ class Guidance:
     skills: tuple[str, ...]
 
 
-class Chosen(NamedTuple):
-    """What the adopter chose for the facts block: the Done commands, in run order, and the
-    style for text a person reads, a key of `facts.STYLES`, or none."""
-
-    done: Sequence[str]
-    style: Sequence[str] = ()
+Chosen = facts.Chosen
 
 
 def guidance(
@@ -301,7 +300,7 @@ def guidance(
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
     skills = skills if root else []
-    rendered = facts.render(target, selected, chosen.done, hosts, skills, chosen.style)
+    rendered = facts.render_chosen(target, selected, chosen, hosts, skills)
     return Guidance(rendered, files, names)
 
 
@@ -690,7 +689,7 @@ def _check_record(record: Record) -> None:
         isinstance(digest, str) and len(digest) == 64 and set(digest) <= set("0123456789abcdef")
     ):
         raise AdoptError(f"{MANIFEST} records no sha256 for {path}")
-    for name in ("harnesses", "fragments", "done", "style"):
+    for name in ("harnesses", "fragments", "done", "setup", "style"):
         value = record.get(name, [])
         if not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
             raise AdoptError(f"{MANIFEST}: the {name} recorded for {path} are not a list of names")
@@ -799,6 +798,13 @@ def recorded_fragments(own: Sequence[Record]) -> list[str]:
 
 def recorded_done(own: Sequence[Record]) -> list[str]:
     return _recorded(own, "done")
+
+
+def recorded_setup(own: Sequence[Record]) -> list[str]:
+    """The Setup commands the facts record holds, in run order; a record written before Setup
+    existed holds none."""
+
+    return _recorded(own, "setup")
 
 
 def recorded_timeout(own: Sequence[Record]) -> int:
@@ -972,8 +978,9 @@ class Run:
         self.records: list[Record] = []
         self.edited: list[str] = []
         self.notes: Notes = []
-        # The Done commands and the timeout the install measures once its writes are made.
-        self.measure: tuple[list[str], int] | None = None
+        # The Done commands and the timeout the install measures once its writes are made, and
+        # whether it measures as a hook runs Done (False: with this process's own PATH).
+        self.measure: tuple[list[str], int, bool] | None = None
 
     def present(self, relative: str) -> bool:
         """Whether `relative` is in the target; a symlink counts whatever it points at, and so
@@ -1186,8 +1193,7 @@ def desired(
     source: Path,
     found: Sequence[Route],
     ids: Sequence[str],
-    done: Sequence[str],
-    style: Sequence[str] = (),
+    chosen: Chosen,
 ) -> list[Want]:
     """What this engine installs for these harnesses, fragments and Done commands, in record
     order: the kernel, the facts, the pointers, the fragment files, the workspace's
@@ -1202,10 +1208,12 @@ def desired(
     imports = _imports_needed(run, found)
     written = [want.path for want in imports]
     found_fragments = catalog(source, run.target, ids)
-    made = guidance(run.target, found, found_fragments, ids, Chosen(done, style), written)
-    extra = {"fragments": list(ids), "done": list(done), "inputs": made.rendered.inputs}
-    if style:
-        extra["style"] = list(style)
+    made = guidance(run.target, found, found_fragments, ids, chosen, written)
+    extra = {"fragments": list(ids), "done": list(chosen.done), "inputs": made.rendered.inputs}
+    if chosen.style:
+        extra["style"] = list(chosen.style)
+    if chosen.setup:
+        extra["setup"] = list(chosen.setup)
     wants.append(Want("block", AGENTS, FACTS, made.rendered.facts.encode("utf-8"), extra))
     if made.rendered.pointers is not None:
         block = made.rendered.pointers
@@ -1339,7 +1347,7 @@ def finish_hooks(
             )
         )
     if wants:
-        plan_measure(run, done, timeout, bool(asked))
+        plan_measure(run, done, timeout, bool(asked) or selection.verify)
     return wants
 
 
@@ -1373,13 +1381,13 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
 
 
 def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
-    """Measure Done once after the writes where --finish-check is named, so that no install runs
-    the project's Done unasked (docs/specs/finish-check/design.md); otherwise name the
-    record that applies here and whether Done outlasts the timeout by its measured time, or that
-    none does."""
+    """Measure Done once after the writes where --finish-check or --verify is named (`asked`), so
+    that no install runs the project's Done unasked (docs/specs/finish-check/design.md);
+    otherwise name the record that applies here and whether Done outlasts the timeout by its
+    measured time, or that none does."""
 
     if asked:
-        run.measure = (list(done), timeout)
+        run.measure = (list(done), timeout, True)
         return
     known = finish_check.known_record(run.target, finish_check.done_digest(done))
     if known is None:
@@ -1392,13 +1400,10 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
             )
         )
         return
-    failing = ", ".join(f"`{line}` (exit {item.code})" for line, item in known.failing.items())
     run.notes.append(
         (
             "skip",
-            f"finish-check: Done was measured on {known.measured}"
-            f"{f' on commit {known.head[:12]}' if known.head else ''} in {known.seconds:.0f} s, "
-            f"known failures: {failing or 'none'}; --finish-check measures it again",
+            f"finish-check: {measured_line(run.target, known)}; --finish-check measures it again",
         )
     )
     if not known.as_hook:
@@ -1412,6 +1417,47 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
             )
         )
     run.notes.extend(slow_done(run.target, known.seconds, timeout))
+
+
+def plan_verify(run: Run, done: Sequence[str], timeout: int, hooked: bool) -> None:
+    """`--verify`: measure Done once after the writes without adding the hook. Where an entry is
+    installed after this run's writes (`hooked`), `plan_measure` has planned the measurement as
+    the hook would run it; otherwise it runs with this process's own PATH. With no Done
+    recorded there is nothing to measure, and the report says so, naming `--done`."""
+
+    if not done:
+        run.notes.append(
+            (
+                "UNVERIFIED",
+                "verify: Done is not recorded, so no command was measured; record one with --done",
+            )
+        )
+    elif not hooked:
+        run.measure = (list(done), timeout, False)
+
+
+def commits_since(target: Path, head: str) -> str:
+    """How many commits the checkout is past the commit a measurement ran on, in words;
+    UNVERIFIED where Git cannot count them."""
+
+    count = finish_check.commits_since(target, head)
+    if count is None:
+        return "UNVERIFIED how many commits since"
+    return f"{count} commit{'' if count == 1 else 's'} since"
+
+
+def measured_line(target: Path, known: finish_check.Known) -> str:
+    """The record of known failures that applies here, in one sentence: the day, the commit, the
+    seconds, how many commits since, and each failing command with its exit code."""
+
+    failing = ", ".join(
+        f"`{textio.plain(line)}` (exit {item.code})" for line, item in known.failing.items()
+    )
+    on = f" on commit {known.head[:12]}" if known.head else ""
+    return (
+        f"Done was measured on {known.measured}{on} in {known.seconds:.0f} s, "
+        f"{commits_since(target, known.head)}, known failures: {failing or 'none'}"
+    )
 
 
 def slow_done(target: Path, seconds: float, timeout: int) -> Notes:
@@ -1432,10 +1478,37 @@ def slow_done(target: Path, seconds: float, timeout: int) -> Notes:
     ]
 
 
+def rerun_notes(measured: finish_check.Measured) -> Notes:
+    """One line naming each failing command the measurement ran again, whose runs the measured
+    seconds leave out, so that "ran once" stays true of the seconds."""
+
+    if not measured.reran:
+        return []
+    commands = ", ".join(
+        f"`{finish_check.shorten(textio.plain(line), 80)}`" for line in measured.reran
+    )
+    return [
+        (
+            "note",
+            f"finish-check: {commands} failed and ran again, to tell a flake or a missing PATH "
+            "entry from a stable failure; those runs are not in the seconds above",
+        )
+    ]
+
+
 def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) -> Notes:
     """The install report's lines for the one Done run an install makes."""
 
     notes: Notes = []
+    if not measured.as_hook:
+        notes.append(
+            (
+                "note",
+                "finish-check: Done was measured with the PATH of the process that ran adopt, "
+                "since no finish-check entry is installed here; a hook runs Done with the "
+                "harness's PATH, and --finish-check measures it that way",
+            )
+        )
     if measured.dropped:
         entries = ", ".join(measured.dropped)
         notes.append(
@@ -1457,6 +1530,14 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
             if result.note:
                 why = f"{why}; {result.note}"
             notes.append(("UNVERIFIED", f"finish-check: `{shown}` could not run here, {why}"))
+        elif result.cause == finish_check.FLAKE:
+            notes.append(
+                (
+                    "UNVERIFIED",
+                    f"finish-check: `{shown}` is a possible flake: it failed with exit "
+                    f"{result.code}, {result.note}",
+                )
+            )
         else:
             known_by = (
                 "A turn end where it fails with the same exit code and none but these failure "
@@ -1473,24 +1554,32 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
                     f"{known_by}; once it passes, it leaves the record",
                 )
             )
-    if measured.previous is not None and measured.added:
+    if measured.previous is not None and (measured.added or measured.flaked):
         earlier = measured.previous
         on = f"commit {earlier.head[:12]}" if earlier.head else "a branch with no commit"
+        gone = [
+            f"`{finish_check.shorten(textio.plain(line), 80)}` is no longer known: "
+            "it reads as a possible flake"
+            for line in measured.flaked
+        ]
         notes.append(
             (
                 "known",
                 f"finish-check: new since the record measured on {earlier.measured} on {on}, "
-                f"which this one replaces here: {'; '.join(measured.added)}",
+                f"{commits_since(target, earlier.head)}, which this one replaces here: "
+                f"{'; '.join([*measured.added, *gone])}",
             )
         )
     limit = timeout - finish_check.MARGIN_SECONDS
+    gives = "the hook gives it" if measured.as_hook else "a hook would give it"
     notes.append(
         (
             "measured",
-            f"finish-check: Done ran once in {measured.seconds:.0f} s; the hook gives it "
+            f"finish-check: Done ran once in {measured.seconds:.0f} s; {gives} "
             f"{limit} s of its {timeout} s timeout",
         )
     )
+    notes.extend(rerun_notes(measured))
     notes.extend(slow_done(target, measured.seconds, timeout))
     if not measured.kept:
         notes.append(
@@ -1507,8 +1596,14 @@ def require_work_tree(target: Path) -> None:
     """Refuse a target Git cannot undo: no `.git` at or above it, or inside `.git` itself."""
 
     inside = any((directory / ".git").exists() for directory in (target, *target.parents))
-    if not inside or any(paths.names_git(part) for part in target.parts):
-        raise AdoptError(f"{target} is not inside a Git work tree, and Git is adopt's undo")
+    shown = textio.plain(str(target))
+    if not inside:
+        raise AdoptError(
+            f"{shown} is not inside a Git work tree, and Git is adopt's undo",
+            "to start a project here: `git init` there, then `outcomebound adopt . --detect`",
+        )
+    if any(paths.names_git(part) for part in target.parts):
+        raise AdoptError(f"{shown} is not inside a Git work tree, and Git is adopt's undo")
 
 
 def description(skill: bytes) -> str:
@@ -1644,6 +1739,23 @@ def ancestor_notes(target: Path, found: Sequence[Route]) -> Notes:
                 )
             )
     return notes
+
+
+def reference_notes(target: Path, found: Sequence[Route]) -> Notes:
+    """A warning for each path, Make target or package script that the project's own
+    instruction text names and the target no longer holds, as `outcomebound instructions
+    check` reports it (docs/specs/instructions/design.md, `stale-reference`); it refuses
+    nothing. A selection the audit cannot read is passed over, since the check reports it."""
+
+    harnesses = [route.harness for route in found if route.harness != GENERIC]
+    try:
+        stale = instruction_audit.stale_references(target, harnesses)
+    except (instruction_audit.AuditError, OSError):
+        return []
+    return [
+        ("warning", f"stale reference: {textio.plain(finding.path)}:{finding.line}: {finding.fact}")
+        for finding in stale
+    ]
 
 
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
@@ -1786,13 +1898,15 @@ class Selection:
     finish_check: bool | None = None
     style: list[str] | None = None
     finish_timeout: int | None = None
+    setup: list[str] | None = None
+    verify: bool = False
 
 
 def install(
     target: Path, source: Path, selection: Selection, force: bool
-) -> tuple[Planned, list[str], Notes, tuple[list[str], int] | None]:
-    """Plan an install or upgrade; with it, the Done commands and timeout to measure once the
-    writes are made, or None."""
+) -> tuple[Planned, list[str], Notes, tuple[list[str], int, bool] | None]:
+    """Plan an install or upgrade; with it, the Done commands, the timeout and whether to
+    measure as a hook runs Done, to measure once the writes are made, or None."""
 
     require_work_tree(target)
     manifest = load_manifest(target)
@@ -1802,10 +1916,14 @@ def install(
     ids = recorded_fragments(own) if selection.fragments is None else selection.fragments
     done = recorded_done(own) if selection.done is None else selection.done
     style = recorded_style(own) if selection.style is None else selection.style
+    setup = recorded_setup(own) if selection.setup is None else selection.setup
     run = Run(target, force)
     table = harness_table(source)
-    wants = desired(run, source, found, ids, done, style)
-    wants += finish_hooks(run, table, found, done, selection, own)
+    wants = desired(run, source, found, ids, Chosen(done, style, setup))
+    hooks = finish_hooks(run, table, found, done, selection, own)
+    wants += hooks
+    if selection.verify:
+        plan_verify(run, done, selection.finish_timeout or recorded_timeout(own), bool(hooks))
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
         run.keep(want, recorded.pop(want.key(), None))
@@ -1814,6 +1932,7 @@ def install(
     run.notes.append(footprint(wants))
     run.notes.extend(nested_bytes(run, table, found))
     run.notes.extend(ancestor_notes(target, found))
+    run.notes.extend(reference_notes(target, found))
     run.notes.extend(codex_sandbox_notes(target, found))
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
@@ -1856,7 +1975,7 @@ def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
 
     ids = recorded_fragments(own)
     found = routes(source, recorded_harnesses(own) or [GENERIC])
-    chosen = Chosen(recorded_done(own), recorded_style(own))
+    chosen = Chosen(recorded_done(own), recorded_style(own), recorded_setup(own))
     return guidance(target, found, catalog(source, target, ids), ids, chosen)
 
 
@@ -2014,10 +2133,30 @@ def check(target: Path, source: Path) -> int:
         elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
             detail = moved(target, source, record, manifest.own)
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
+    note = measurement_note(target, manifest.own)
+    if note is not None:
+        print(f"{'note':<8} {note}")
     step = next_step(target, found)
     if step is not None:
         print(step)
     return min(sum(state != "current" for state in found), CHECK_CAP)
+
+
+def measurement_note(target: Path, own: Sequence[Record]) -> str | None:
+    """The record of known failures that applies in this checkout to the recorded Done list, in
+    one line, or that Done was not measured; None where no Done is recorded. It reads this
+    machine's record apart from the install's own, and no count of records depends on it."""
+
+    done = recorded_done(own)
+    if not done:
+        return None
+    known = finish_check.known_record(target, finish_check.done_digest(done))
+    if known is None:
+        return (
+            "finish-check: Done was not measured here, so no record of known failures applies "
+            "to this Done list and checkout"
+        )
+    return f"finish-check: {measured_line(target, known)}"
 
 
 def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
@@ -2103,9 +2242,178 @@ def proposed_done(target: Path) -> list[str]:
     return _proposal(target)[0]
 
 
+class _Engine(str):
+    """A note made of the engine's own text and paths, which the target did not give and which a
+    person or an agent opens as written, so it is printed as it is."""
+
+
+def _only_git(target: Path) -> bool:
+    """Whether the target holds no entry but `.git`, or none at all: discovery's `empty`, with
+    the repository's own folder not counted."""
+
+    try:
+        return {entry.name for entry in target.iterdir()} <= {".git"}
+    except OSError:
+        return False
+
+
+def _trailing_notes(
+    source: Path, done: Sequence[str], suggested_by: str | None, excluded: bool, found: bool
+) -> list[str]:
+    """What `--detect` once printed after the command on its one line: why Done holds what it
+    holds, and what the person gives in its place."""
+
+    notes = []
+    if excluded:
+        notes.append(
+            "CI commands with a non-POSIX or unresolved shell were not copied into Done; give a "
+            "project POSIX equivalent to --done. Done runs through sh"
+        )
+    if suggested_by is not None:
+        notes.append(
+            f"{done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on the "
+            "host, so where the project runs its tests only in a container, give that command "
+            "to --done in its place"
+        )
+        if done[-1].split()[0] in ("python", "python3"):
+            notes.append(
+                "the python it names is the interpreter of the machine that ran --detect: "
+                "commit the form your hooks run"
+            )
+    if FLOOR_RUNNER in done:
+        notes.append(
+            "no default branch resolves: the floor runs without --base, so its loosening "
+            "check does not run"
+        )
+    if not found:
+        listed = ", ".join(loadable(harness_table(source)))
+        notes.append(f"no harness file found; or one of: {listed}")
+    return notes
+
+
+def _setup_notes(candidates: Sequence[facts.SetupCandidate]) -> list[str]:
+    """Each entry point the project has for setup; the first is on the command, the rest are
+    named only. None found is named too, since a fresh clone may need steps no file shows."""
+
+    if not candidates:
+        return [
+            "no Setup entry point found (a Make target or package.json script named setup or "
+            "bootstrap, or an executable bin/setup, script/setup, script/bootstrap or "
+            "scripts/setup.sh); record the steps a fresh clone needs with --setup"
+        ]
+    return [
+        f"setup candidate: {item.command} ({item.evidence}); "
+        + ("proposed with --setup" if index == 0 else "not proposed")
+        for index, item in enumerate(candidates)
+    ]
+
+
+def _signal_notes(target: Path, files: Sequence[facts.CiFile]) -> list[str]:
+    """The onboarding signals of the design's table, one line each: its kind, the file or the
+    folders that show it, any value read, and the slot of the `local` fragment a proposed line
+    goes to; and each file the reading could not settle."""
+
+    signals: list[facts.Signal] = []
+    unread: list[tuple[str, str]] = []
+    text, why = facts.read_small(target, ".gitattributes")
+    patterns = facts.generated_patterns(text or "")
+    if patterns:
+        signals.append(facts.Signal("generated", ".gitattributes", ", ".join(patterns), "Bounds"))
+    unread.extend([(".gitattributes", why)] if why else [])
+    tracked = discovery.git_read(target, "ls-files", "-z") or b""
+    folders = facts.migration_folders(os.fsdecode(name) for name in tracked.split(b"\0") if name)
+    if folders:
+        signals.append(facts.Signal("migrations", ", ".join(folders), "", "Bounds"))
+    runtime, left = facts.runtime_signals(target)
+    signals += runtime
+    unread += left
+    for name in facts.ENVIRONMENT_FILES:
+        text, why = facts.read_small(target, name)
+        names = facts.environment_names(text or "")
+        if names:
+            signals.append(facts.Signal("environment-names", name, ", ".join(names), "Context"))
+        unread.extend([(name, why)] if why else [])
+    signals += facts.workflow_signals(files)
+    notes = [
+        f"signal {item.kind}: {item.where}"
+        + (f"; value: {item.value}" if item.value else "")
+        + f"; local slot: {item.slot}"
+        for item in signals
+    ]
+    return notes + [f"not read: {name}: {why}" for name, why in unread]
+
+
+def _recorded_done(target: Path) -> tuple[list[str], int]:
+    """The Done commands and the finish check's timeout an install here recorded; none, and the
+    default timeout, where there is no readable manifest."""
+
+    try:
+        own = load_manifest(target).own
+    except AdoptError:
+        return [], finish_check.DEFAULT_TIMEOUT
+    return recorded_done(own), recorded_timeout(own)
+
+
+def _measured_readiness(known: finish_check.Known, timeout: int) -> list[str]:
+    """The readiness lines a measurement shows: Done failing, or longer than the finish check's
+    timeout less the margin gives it."""
+
+    notes = []
+    if known.failing:
+        failing = ", ".join(f"`{line}` (exit {item.code})" for line, item in known.failing.items())
+        notes.append(
+            f"readiness FAIL: Done measured failing on {known.measured}: {failing}; next: fix "
+            "it, or keep it as a known failure the record names"
+        )
+    limit = timeout - finish_check.MARGIN_SECONDS
+    if known.seconds > limit:
+        least = int(known.seconds) + 1 + finish_check.MARGIN_SECONDS
+        notes.append(
+            f"readiness UNVERIFIED: Done took {known.seconds:.0f} s when it was measured on "
+            f"{known.measured}, longer than the {limit} s the {timeout} s finish-check timeout "
+            f"gives it; next: --finish-timeout with more than {least}, for example {2 * least}"
+        )
+    return notes
+
+
+def _readiness_notes(target: Path, done: Sequence[str], files: Sequence[facts.CiFile]) -> list[str]:
+    """What the files and a measurement show about whether Done can be trusted, one line each
+    with its verdict and next step. No score, no level and no stored history."""
+
+    recorded, timeout = _recorded_done(target)
+    notes = []
+    if not done and not recorded:
+        notes.append("readiness UNVERIFIED: no Done candidate; next: record one with --done")
+    for commands in dict.fromkeys(tuple(item) for item in (done, recorded) if item):
+        known = finish_check.known_record(target, finish_check.done_digest(commands))
+        notes += _measured_readiness(known, timeout) if known is not None else []
+    notes += [
+        f"readiness UNVERIFIED: {name} has no lockfile beside it; next: a library may commit "
+        "none; an application pins its dependencies"
+        for name in facts.manifests_without_lock(target)
+    ]
+    secrets = facts.secrets_reaching(files)
+    for item in files:
+        for command, job, step in item.places:
+            names = secrets.get((item.path, job, step), [])
+            if command in done and names:
+                where = f"job {job} of {item.path}" if job else item.path
+                notes.append(
+                    f"readiness UNVERIFIED: the CI test command `{command}` runs in {where}, "
+                    f"which names {', '.join(f'secrets.{name}' for name in names)}; next: that "
+                    "command cannot run on the host without the secret"
+                )
+    return list(dict.fromkeys(notes))
+
+
 def detect(target: Path, source: Path) -> int:
-    """Print the one install command this target's files suggest; write nothing. A target the
-    install would refuse, outside a Git work tree, is refused here first."""
+    """Print the install command this target's files suggest alone on the first line, then
+    every note on a line of its own that starts with `#`, so that pasting the output into a
+    shell runs only the command: the notes the command once carried, the Setup candidates, the
+    lockfiles' install commands, the onboarding signals, the readiness lines and, last, the
+    guide for an agent. Write nothing and run nothing from the target; a target the install
+    would refuse, outside a Git work tree, is refused here first. Every string the target gave,
+    a path included, is escaped as the instruction audit escapes quoted text."""
 
     require_work_tree(target)
     try:
@@ -2121,46 +2429,44 @@ def detect(target: Path, source: Path) -> int:
     done, suggested_by, excluded = _proposal(target)
     for command in done:
         words += ["--done", command]
-    line = " ".join(map(paths.shell_word, words))
-    if excluded:
-        line += (
-            "  # CI commands with a non-POSIX or unresolved shell were not copied into Done; "
-            "give a project POSIX equivalent to --done. Done runs through sh"
+    setups = facts.setup_candidates(target)
+    if setups:
+        words += ["--setup", setups[0].command]
+    notes = _trailing_notes(source, done, suggested_by, excluded, bool(found))
+    if _only_git(target):
+        reference = Path(source).resolve() / NEW_PROJECT_REFERENCE
+        route = f"; read {reference.as_posix()}" if reference.is_file() else ""
+        notes.append(
+            _Engine(f"nothing here but .git: a new project starts from this command{route}")
         )
-    if suggested_by is not None:
-        line += (
-            f"  # {done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on "
-            "the host, so where the project runs its tests only in a container, give that "
-            "command to --done in its place"
-        )
-        if done[-1].split()[0] in ("python", "python3"):
-            line += (
-                "  # the python it names is the interpreter of the machine that ran --detect: "
-                "commit the form your hooks run"
-            )
-    if FLOOR_RUNNER in done:
-        line += (
-            "  # no default branch resolves: the floor runs without --base, so its loosening "
-            "check does not run"
-        )
-    if not found:
-        line += (
-            f"  # no harness file found; or one of: {', '.join(loadable(harness_table(source)))}"
-        )
-    print(line)
+    notes += _setup_notes(setups)
+    notes += [
+        f"lockfile {name}: {command} installs from it; a candidate for --setup, not proposed"
+        for name, command in facts.lockfile_candidates(target)
+    ]
+    files = facts.read_ci(target)
+    notes += _signal_notes(target, files)
+    notes += _readiness_notes(target, done, files)
+    guide = (Path(source).resolve() / GUIDE).as_posix()
+    notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
+    print(textio.visible(" ".join(map(paths.shell_word, words))))
+    for note in notes:
+        print(f"# {note}" if isinstance(note, _Engine) else textio.plain(f"# {note}"))
     return 0
 
 
 # --- Command line ---------------------------------------------------------------
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
-                            [--human-style ste] [--finish-check | --no-finish-check]
+                            [--setup CMD]... [--human-style ste]
+                            [--finish-check | --no-finish-check] [--verify]
                             [--finish-timeout SECONDS] [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
 Install or upgrade OutcomeBound in <target>, inside a Git work tree. AGENTS.md gets three
-blocks: the operating contract; the project facts (Done: the --done commands; CI test: the test
+blocks: the operating contract; the project facts (Done: the --done commands; Setup: the --setup
+commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
 edges: those the selected fragments declare, and a floor loosening where a floor is installed;
 Text for people: with --human-style ste, text an agent writes for a person in the style of
@@ -2185,6 +2491,19 @@ which it records and names on a kept line, and a pointers block that is the reco
 only the local fragment's own edit in it, which it writes again and names on a render line. A
 refusal writes nothing.
 
+--detect prints the install command this target's files suggest alone on its first line, with
+--setup for the project's own entry point (a Make target or package.json script named setup or
+bootstrap, or an executable bin/setup, script/setup, script/bootstrap or scripts/setup.sh), and
+then every note on a line that starts with #, so that pasting the output into a shell runs the
+command only: why Done holds what it holds, the Setup candidates, the install commands of the
+lockfiles (comments only), the onboarding signals (generated paths, applied migration folders,
+publishing workflows, runtime versions, environment variable names and CI secret names, each
+with the file that shows it and the slot of the local fragment it goes to), the readiness lines
+(each with its verdict and next step), and a last line naming the onboarding guide in the
+engine, an absolute path. In a folder with nothing but .git it names the new-project reference.
+It writes nothing and runs nothing from the target, and escapes every string the target gave.
+Outside a Git work tree, the refusal names the route: git init there, then adopt . --detect.
+
 --finish-check adds one entry to the settings of each selected harness that has a finish hook,
 claude-code (.claude/settings.json) and codex (.codex/hooks.json): when that harness's agent
 ends a turn on a working tree the Done commands have not been checked on, `outcomebound
@@ -2194,14 +2513,19 @@ the hook until a person sees its PASS message end a run, and names each other se
 as not available yet. The entry's timeout is --finish-timeout, default 600 seconds, the documented
 default of both harnesses; finish-check stops the Done commands 30 seconds before it, so a Done
 that takes longer needs a larger value, and re-running adopt with a new value rewrites the entry.
-After its writes, an install with --finish-check named runs every Done command once, to its end
-and past each failure: it prints each command's verdict and seconds and the total against the
-timeout less 30 seconds, proposes a larger --finish-timeout where Done took longer, and keeps
-each failing command, with its exit code and the failure ids its output names, as a known
-failure in the Git common directory; it holds no turn while it fails with the same exit code and
-names no new failure id. An install
-without --finish-check runs no Done command: it names the record of known failures that applies
-here, or says that none does; a dry run does not run Done. adopt writes the document back with
+After its writes, an install with --finish-check or --verify named runs every Done command once,
+to its end and past each failure: it prints each command's verdict and seconds and the total
+against the timeout less 30 seconds, proposes a larger --finish-timeout where Done took longer,
+and keeps each failing command, with its exit code and the failure ids its output names, as a
+known failure in the Git common directory; it holds no turn while it fails with the same exit
+code and names no new failure id. A command that fails runs once more in the same environment;
+the same exit code and failure ids make a stable failure, and anything else reads UNVERIFIED as
+a possible flake, kept as no known failure. --verify adds no entry: where none is installed
+after the run's writes, the commands run with the PATH of the process that ran adopt, and
+the record says so; with no Done recorded it reads UNVERIFIED and names --done. An install
+without either flag runs no Done command: it names the record of known failures that applies
+here, with the commits since, or says that none does; --check prints that line too, apart from
+its exit; a dry run does not run Done. adopt writes the document back with
 its keys, their order and its indentation kept, rewriting only its whitespace, and refuses one
 with comments. A Done change rewrites the entry, and Codex skips a changed entry until each
 person trusts it again in /hooks, which the install report says; --no-finish-check or --remove
@@ -2222,13 +2546,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("target", help="the repository to install into")
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument(
-        "--detect", action="store_true", help="print the install command; write nothing"
+        "--detect",
+        action="store_true",
+        help="print the install command alone on the first line, then every note on a line "
+        "that starts with #; write nothing",
     )
     verb.add_argument(
         "--check",
         action="store_true",
-        help="print current, edited, stale or missing for each record, then the command that "
-        "makes each current; write nothing",
+        help="print current, edited, stale or missing for each record, one note line on the "
+        "measurement of Done (never counted in the exit), then the command that makes each "
+        "current; write nothing",
     )
     verb.add_argument("--remove", action="store_true", help="remove every recorded block and file")
     finish = parser.add_mutually_exclusive_group()
@@ -2246,6 +2574,12 @@ def _parser() -> argparse.ArgumentParser:
         action="store_const",
         const=False,
         help="take the finish check's entries out",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="run the Done commands once after the writes to measure them, without adding the "
+        "finish check's entries",
     )
     parser.add_argument(
         "--finish-timeout",
@@ -2273,6 +2607,14 @@ def _parser() -> argparse.ArgumentParser:
         metavar="CMD",
         help="a command that settles done, in run order; repeats add up; '' for none; "
         "omitted keeps the recorded ones",
+    )
+    parser.add_argument(
+        "--setup",
+        action="append",
+        metavar="CMD",
+        help="a command that makes a fresh clone ready to run Done, in run order; repeats add "
+        "up; '' for none; omitted keeps the recorded ones; recorded as the person's fact, "
+        "never run by adopt",
     )
     parser.add_argument(
         "--human-style",
@@ -2313,13 +2655,14 @@ def _names(values: Sequence[str] | None) -> list[str] | None:
     )
 
 
-def _commands(values: Sequence[str]) -> list[str]:
-    """The --done commands, each one line; an empty one records none."""
+def _commands(values: Sequence[str], flag: str = "--done") -> list[str]:
+    """The commands a flag (`--done` or `--setup`) names, each one line; an empty one records
+    none."""
 
     commands = [value.strip() for value in values if value.strip()]
     for command in commands:
         if "\n" in command or "\r" in command or "<!--" in command:
-            raise AdoptError(f"a --done command is one line with no comment opener: {command!r}")
+            raise AdoptError(f"a {flag} command is one line with no comment opener: {command!r}")
     return commands
 
 
@@ -2351,6 +2694,8 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             args.finish_check,
             None if args.human_style is None else [args.human_style] if args.human_style else [],
             args.finish_timeout,
+            None if args.setup is None else _commands(args.setup, "--setup"),
+            args.verify,
         )
         planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
@@ -2374,15 +2719,16 @@ class _Stopped(Exception):
     """A signal that stops the install's Done run: SIGTERM, as SIGINT stops it."""
 
 
-def _measure(target: Path, done: list[str], timeout: int) -> int:
-    """Run Done once and print what it found; stopped by SIGINT or SIGTERM, the running command's
-    group is stopped too, nothing is kept, and the exit is 128 plus the signal's number."""
+def _measure(target: Path, done: list[str], timeout: int, as_hook: bool = True) -> int:
+    """Run Done once and print what it found, as a hook runs it or, with `as_hook` false, with
+    this process's own PATH; stopped by SIGINT or SIGTERM, the running command's group is stopped
+    too, nothing is kept, and the exit is 128 plus the signal's number."""
 
     def stopped(number: int, frame: object) -> None:
         raise _Stopped(number)
 
     environment, _ = finish_check.hook_environment(target, os.environ)
-    if programs.find("outcomebound", environment, extensionless=True) is None:
+    if as_hook and programs.find("outcomebound", environment, extensionless=True) is None:
         print(
             f"{'UNVERIFIED':<8} finish-check: `outcomebound` was not found on the PATH used to "
             "measure Done. Put the installed launcher on the harness process's PATH; its "
@@ -2396,7 +2742,7 @@ def _measure(target: Path, done: list[str], timeout: int) -> int:
     )
     previous = signal.signal(signal.SIGTERM, stopped)
     try:
-        measured = finish_check.measure(target, done, timeout)
+        measured = finish_check.measure(target, done, timeout, as_hook)
     except (KeyboardInterrupt, _Stopped) as error:
         number = error.args[0] if isinstance(error, _Stopped) else signal.SIGINT
         print(
@@ -2422,10 +2768,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.finish_timeout is not None
+    chosen = chosen or args.setup is not None or args.verify
     if (args.detect or args.check or args.remove) and (chosen or args.finish_check is not None):
         parser.error(
-            "--harness, --fragments, --done, --human-style, --finish-check and --finish-timeout "
-            "apply to an install"
+            "--harness, --fragments, --done, --setup, --human-style, --finish-check, --verify "
+            "and --finish-timeout apply to an install"
         )
     target = Path(args.target).resolve()
     try:

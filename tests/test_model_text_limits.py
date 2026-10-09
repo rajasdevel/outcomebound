@@ -42,10 +42,6 @@ LIMITS = (
 )
 # (path, matched text): the evidence that allows it.
 ALLOWED = {
-    ("skills/adopt-outcomebound/SKILL.md", "30 seconds"): (
-        "the finish check's margin under the harness's own hook timeout: "
-        "docs/specs/finish-check/design.md, the time-limit row (maintainer, 2026-10-04)"
-    ),
     ("templates/goal/goal.md", "End the run"): (
         "the end condition names the completion bar and the items left, not a stop"
     ),

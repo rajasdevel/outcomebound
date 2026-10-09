@@ -3,9 +3,12 @@
 
 `VERSION`, the dated `CHANGELOG.md` section, its link and the `[Unreleased]` compare link that
 starts at it, and the release the README and the
-shipped CI template install name one version, on a tree that matches HEAD. With `--tag`, the
-tag is `v<VERSION>`, annotated, and on HEAD, and HEAD has a passing CI run on main, so
-no release is cut from a main that failed. One line per check; exit 1 when any fails.
+shipped CI template install name one version, on a tree that matches HEAD. The package metadata
+meets what PyPI accepts, and the release workflow's `pypi` job publishes by trusted publishing,
+both read from the files and with no network. Whether PyPI has the name, the pending publisher
+and the `pypi` environment are account steps no check here can see (docs/VERSIONING.md).
+With `--tag`, the tag is `v<VERSION>`, annotated, and on HEAD, and HEAD has a passing CI run on
+main, so no release is cut from a main that failed. One line per check; exit 1 when any fails.
 `make release-check TAG=v<VERSION>` runs this on the tag made locally, before it is pushed, and CI
 runs it again on the tag.
 
@@ -16,7 +19,9 @@ today; it is no check, since a maintainer's own tag needs none.
 from __future__ import annotations
 
 import argparse
+import email.parser
 import http.client
+import importlib.util
 import json
 import os
 import re
@@ -44,6 +49,83 @@ def _pins(root: Path) -> dict[str, list[str]]:
 
     files = ["README.md", *sorted(f"{CI}/{p.name}" for p in (root / CI).iterdir() if p.is_file())]
     return {name: PIN.findall((root / name).read_text(encoding="utf-8")) for name in files}
+
+
+def _pypi_metadata(root: Path) -> tuple[bool, str]:
+    """Whether the metadata the build writes is what PyPI accepts and renders: core metadata 2.4
+    or later with an SPDX license expression and no free-text License, the license files named,
+    a Markdown long description with no relative link left, and the other fields PyPI shows. It
+    reads the metadata from the backend; nothing is built or uploaded."""
+
+    what = "the package metadata is what PyPI accepts"
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "build_backend", root / "scripts" / "build_backend.py"
+        )
+        if spec is None or spec.loader is None:
+            return False, f"{what}: scripts/build_backend.py cannot be loaded"
+        backend = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(backend)
+        message = email.parser.Parser().parsestr(backend._metadata(root))
+    except (OSError, ValueError, SyntaxError, AttributeError) as error:
+        return False, f"{what}: the metadata cannot be built ({error})"
+    missing = [
+        field
+        for field in (
+            "Name",
+            "Version",
+            "Summary",
+            "License-Expression",
+            "License-File",
+            "Requires-Python",
+            "Project-URL",
+            "Classifier",
+        )
+        if message.get(field) is None
+    ]
+    problems = [f"no {field}" for field in missing]
+    if message.get("Metadata-Version") not in ("2.4", "2.5"):
+        problems.append(f"Metadata-Version {message.get('Metadata-Version')}")
+    if message.get("License") is not None:
+        problems.append("License is set beside License-Expression")
+    if message.get("Description-Content-Type") != "text/markdown":
+        problems.append("the long description is not text/markdown")
+    if backend.RELATIVE_LINK.search(message.get_payload()) is not None:
+        problems.append("the long description holds a relative link")
+    return not problems, what + "".join(f"; {problem}" for problem in problems)
+
+
+def _pypi_job(root: Path) -> tuple[bool, str]:
+    """Whether the release workflow publishes to PyPI as the design says: a job `pypi` that runs
+    only for a release tag, after the job `release`, in the environment `pypi`, with the
+    publishing action pinned by full commit and `id-token: write` granted to that job alone."""
+
+    what = f"the workflow's job pypi publishes by trusted publishing, as {WORKFLOW} states it"
+    try:
+        text = (root / WORKFLOW).read_text(encoding="utf-8")
+    except OSError as error:
+        return False, f"{what}: {error}"
+    job = re.search(r"^  pypi:\n(.*?)(?=^  \S|\Z)", text, re.MULTILINE | re.DOTALL)
+    if job is None:
+        return False, f"{what}; the job is missing"
+    body = job.group(1)
+    rules = {
+        "it does not run only for a release tag": (
+            r"^    if: startsWith\(github\.ref, 'refs/tags/v'\)$"
+        ),
+        "it does not need release": r"^    needs: \[release\]$",
+        "it is not in the environment pypi": r"^    environment: pypi$",
+        "id-token: write is not on the job": r"^      id-token: write$",
+        "the action is not pinned by full commit": (
+            r"^        uses: pypa/gh-action-pypi-publish@[0-9a-f]{40} # v\d+\.\d+\.\d+$"
+        ),
+    }
+    problems = [why for why, rule in rules.items() if not re.search(rule, body, re.MULTILINE)]
+    # The permission stays on the jobs that need it: no workflow-level grant of it.
+    head = text.split("\njobs:\n", 1)[0]
+    if re.search(r"id-token:\s*write", head):
+        problems.append("id-token: write is granted for the whole workflow")
+    return not problems, what + "".join(f"; {problem}" for problem in problems)
 
 
 API_HOST = "api.github.com"
@@ -205,6 +287,8 @@ def checks(root: Path, tag: str | None, runs: Path | None = None) -> list[tuple[
             f"README.md installs v{version}",
         ),
         (not stale, "every other install line pins it" + "".join(f"; {line}" for line in stale)),
+        _pypi_metadata(root),
+        _pypi_job(root),
     ]
     unnamed = unnamed_pulls(root, version, changelog)
     what = f"CHANGELOG.md's {version} section names each pull request since the previous release"

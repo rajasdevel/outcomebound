@@ -11,6 +11,7 @@ backend refuses a tree without the engine.
 from __future__ import annotations
 
 import base64
+import email.parser
 import hashlib
 import importlib.util
 import json
@@ -142,6 +143,44 @@ def test_the_wheel_holds_the_engine_its_files_and_the_entry_point_and_nothing_el
     tops = {name.split("/")[0] for name in names}
     assert tops == {"outcomebound_tools", "_outcomebound_launch.py", f"{DIST}.dist-info"}
     assert not [name for name in names if "__pycache__" in name or name.endswith(".pyc")]
+
+
+def test_the_metadata_is_what_pypi_accepts_and_renders(built: tuple[Path, Path]) -> None:
+    """Breaks if the wheel or the source archive would be refused by PyPI or show a README with
+    dead links: a license expression beside no free-text License, the license files where core
+    metadata 2.4 puts them, and every README link absolute at the release's tag."""
+
+    with zipfile.ZipFile(built[0]) as wheel:
+        text = wheel.read(f"{DIST}.dist-info/METADATA").decode("utf-8")
+        shipped = {n for n in wheel.namelist() if n.startswith(f"{DIST}.dist-info/licenses/")}
+    with tarfile.open(built[1]) as archive:
+        member = archive.extractfile(f"{DIST}/PKG-INFO")
+        assert member is not None
+        sdist_info = member.read().decode("utf-8")
+        sdist_names = set(archive.getnames())
+    message = email.parser.Parser().parsestr(text)
+    tag = f"v{VERSION}"
+
+    assert sdist_info == text
+    assert message["Metadata-Version"] == "2.4"
+    assert message["Name"] == "outcomebound" and message["Version"] == VERSION
+    assert message["License-Expression"] == "Apache-2.0" and "License" not in message
+    assert message.get_all("License-File") == ["LICENSE", "NOTICE"]
+    assert shipped == {f"{DIST}.dist-info/licenses/{n}" for n in ("LICENSE", "NOTICE")}
+    assert {f"{DIST}/LICENSE", f"{DIST}/NOTICE"} <= sdist_names
+    assert message["Description-Content-Type"] == "text/markdown"
+    assert message["Requires-Python"] == ">=3.10" and message["Summary"]
+    assert not [c for c in message.get_all("Classifier", []) if c.startswith("License ::")]
+    assert all(
+        len(entry.partition(",")[0]) <= 32 and entry.partition(", ")[2].startswith("https://")
+        for entry in message.get_all("Project-URL", [])
+    )
+    body = message.get_payload()
+    assert isinstance(body, str)
+    assert backend(ROOT).RELATIVE_LINK.search(body) is None
+    assert f"(https://github.com/rajasdevel/outcomebound/blob/{tag}/CONTRIBUTING.md)" in body
+    image = f"(https://raw.githubusercontent.com/rajasdevel/outcomebound/{tag}/docs/assets/"
+    assert image in body
 
 
 def test_the_installed_command_adopts_exactly_as_the_checkout_does(

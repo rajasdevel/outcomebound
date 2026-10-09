@@ -38,7 +38,32 @@ SUMMARY = (
     "An operating contract for coding agents, and the engine that installs it into a repository."
 )
 URL = "https://github.com/rajasdevel/outcomebound"
+RAW_URL = "https://raw.githubusercontent.com/rajasdevel/outcomebound"
 REQUIRES_PYTHON = ">=3.10"
+# The license as PEP 639 writes it. LICENSE and NOTICE ship beside it, and LICENSE holds the
+# exception for the text that `adopt` writes into a project. The expression does not name that
+# exception: a custom exception has no SPDX identifier that PyPI accepts, and the shipped file is
+# the full terms.
+LICENSE_EXPRESSION = "Apache-2.0"
+LICENSE_FILES = ("LICENSE", "NOTICE")
+KEYWORDS = "coding agents, AGENTS.md, operating contract, skills, Claude Code, Codex"
+PROJECT_URLS = (
+    ("Homepage", URL),
+    ("Source", URL),
+    ("Issues", f"{URL}/issues"),
+    ("Changelog", f"{URL}/blob/main/CHANGELOG.md"),
+    ("Security", f"{URL}/blob/main/SECURITY.md"),
+)
+CLASSIFIERS = (
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    *(f"Programming Language :: Python :: 3.{minor}" for minor in range(10, 15)),
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Quality Assurance",
+)
 PACKAGE = "outcomebound_tools"
 # The console entry point's module: its source in the package, and the top-level name it ships
 # under, so a folder on PYTHONPATH with an `outcomebound_tools` of its own cannot take the hop.
@@ -152,22 +177,50 @@ def _under(names: list[str], prefixes: tuple[str, ...]) -> list[str]:
     return [n for n in names if any(n == p or n.startswith(p + "/") for p in prefixes)]
 
 
+# A Markdown link or image whose target is a relative path or an in-page anchor: PyPI shows the
+# README as the long description, away from the repository, where such a target resolves to nothing.
+RELATIVE_LINK = re.compile(
+    r"(?P<head>(?P<image>!?)\[[^\]]*\])\((?P<target>(?![A-Za-z][A-Za-z0-9+.-]*:)[^)\s]+)\)"
+)
+
+
+def _long_description(root: Path) -> str:
+    """README.md with each relative link made absolute at the release's tag, so that it resolves
+    on PyPI: a page of the repository for a link, the raw file for an image. The README in the
+    repository stays plain relative Markdown."""
+
+    tag = "v" + (root / "VERSION").read_text(encoding="utf-8").strip()
+
+    def absolute(found: re.Match[str]) -> str:
+        target = found["target"]
+        if found["image"]:
+            return f"{found['head']}({RAW_URL}/{tag}/{target})"
+        # An in-page anchor (`#try-it`) is the README's own, so it points at the README.
+        page = "README.md" + target if target.startswith("#") else target
+        return f"{found['head']}({URL}/blob/{tag}/{page})"
+
+    return RELATIVE_LINK.sub(absolute, (root / "README.md").read_text(encoding="utf-8"))
+
+
 def _metadata(root: Path) -> str:
-    readme = (root / "README.md").read_text(encoding="utf-8")
-    return (
-        "Metadata-Version: 2.2\n"
-        f"Name: {NAME}\n"
-        f"Version: {_version(root)}\n"
-        f"Summary: {SUMMARY}\n"
-        "Author: Rajas Abhyankar\n"
-        "License: Apache-2.0, with an exception (see LICENSE)\n"
-        f"Project-URL: Repository, {URL}\n"
-        f"Requires-Python: {REQUIRES_PYTHON}\n"
-        "Classifier: License :: OSI Approved :: Apache Software License\n"
-        "Classifier: Programming Language :: Python :: 3\n"
-        "Description-Content-Type: text/markdown\n"
-        f"\n{readme}"
-    )
+    """Core metadata 2.4 (PEP 639), which PyPI accepts: the licence is an SPDX expression and its
+    files are named, not a free-text License field or a license classifier."""
+
+    lines = [
+        "Metadata-Version: 2.4",
+        f"Name: {NAME}",
+        f"Version: {_version(root)}",
+        f"Summary: {SUMMARY}",
+        f"Keywords: {KEYWORDS}",
+        "Author: Rajas Abhyankar",
+        f"License-Expression: {LICENSE_EXPRESSION}",
+        *(f"License-File: {name}" for name in LICENSE_FILES),
+        *(f"Project-URL: {label}, {url}" for label, url in PROJECT_URLS),
+        f"Requires-Python: {REQUIRES_PYTHON}",
+        *(f"Classifier: {classifier}" for classifier in CLASSIFIERS),
+        "Description-Content-Type: text/markdown",
+    ]
+    return "\n".join(lines) + f"\n\n{_long_description(root)}"
 
 
 WHEEL = "Wheel-Version: 1.0\nGenerator: outcomebound build_backend\nRoot-Is-Purelib: true\n"
@@ -195,8 +248,7 @@ def _entries(root: Path) -> list[tuple[str, bytes, bool]]:
         (f"{info}/entry_points.txt", ENTRY_POINTS.encode("utf-8"), False),
         (f"{info}/METADATA", _metadata(root).encode("utf-8"), False),
         (f"{info}/WHEEL", WHEEL.encode("utf-8"), False),
-        (f"{info}/LICENSE", (root / "LICENSE").read_bytes(), False),
-        (f"{info}/NOTICE", (root / "NOTICE").read_bytes(), False),
+        *((f"{info}/licenses/{name}", (root / name).read_bytes(), False) for name in LICENSE_FILES),
     ]
     return entries
 

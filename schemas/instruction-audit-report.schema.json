@@ -67,11 +67,32 @@
       "additionalProperties": false,
       "required": [
         "security",
+        "references",
         "loading"
       ],
       "description": "Per check family, how many results read each verdict.",
       "properties": {
         "security": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "PASS",
+            "FAIL",
+            "UNVERIFIED"
+          ],
+          "properties": {
+            "PASS": {
+              "type": "integer"
+            },
+            "FAIL": {
+              "type": "integer"
+            },
+            "UNVERIFIED": {
+              "type": "integer"
+            }
+          }
+        },
+        "references": {
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -140,6 +161,7 @@
               "override-phrases",
               "harness-config",
               "instruction-change",
+              "stale-reference",
               "load-resolution"
             ]
           },
@@ -147,6 +169,7 @@
             "type": "string",
             "enum": [
               "security",
+              "references",
               "loading"
             ]
           },
@@ -195,7 +218,7 @@
           },
           "decides": {
             "type": "boolean",
-            "description": "false for a finding that is reported and does not change the result: OutcomeBound's own finish-check entry where AGENTS.md shows the Done commands it runs, a file loaded from a folder above the target, an unverified row the target does not use, or a review hit a person ruled safe."
+            "description": "false for a finding that is reported and does not change the result: OutcomeBound's own finish-check entry where AGENTS.md shows the Done commands it runs, a file loaded from a folder above the target, an unverified row the target does not use, a review hit a person ruled safe, or a stale reference."
           },
           "id": {
             "type": "string",

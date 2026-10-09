@@ -771,6 +771,42 @@ def test_planned_claims_fold_into_one_text_row(
     assert codes(report(root, capsys=capsys, expect=1), "#1") == ["CLAIM_PLANNED"] * 2
 
 
+def test_claims_that_read_outside_the_bounds_fold_into_one_text_row_each(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Text prints one row for each claim that reaches past the bounds of tickets,
+    naming those tickets; `--json` keeps a warning for each ticket and claim, and
+    the verdict does not change."""
+
+    root = checkout(
+        tmp_path,
+        document("#1", bounds=["src/one"], done_when=["whole-tree", "tool-only"]),
+        document("#2", bounds=["src/two"], done_when=["whole-tree", "tool-only"]),
+        document("#3", bounds=["src/three"], done_when=["whole-tree"]),
+    )
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"] += [
+        {"name": "whole-tree", "command": ["true"], "required_paths": ["."]},
+        {"name": "tool-only", "command": ["true"], "required_paths": ["tools/run.py"]},
+    ]
+    write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+
+    code, out, _ = run(root, capsys=capsys)
+
+    assert code == 0
+    folded = [line for line in out.splitlines() if "CLAIM_READS_OUTSIDE_BOUNDS" in line]
+    assert len(folded) == 2, out
+    [whole] = [line for line in folded if "`whole-tree`" in line]
+    [tool] = [line for line in folded if "`tool-only`" in line]
+    assert whole.startswith("WARNING\t-\tCLAIM_READS_OUTSIDE_BOUNDS: ")
+    assert "reads ., which" in whole and "#1, #2, #3" in whole
+    assert "reads tools/run.py, which" in tool and "#1, #2" in tool and "#3" not in tool
+    found = report(root, capsys=capsys, expect=0)
+    assert codes(found, "#1") == ["CLAIM_READS_OUTSIDE_BOUNDS"] * 2
+    assert codes(found, "#3") == ["CLAIM_READS_OUTSIDE_BOUNDS"]
+    assert len(said(found, "CLAIM_READS_OUTSIDE_BOUNDS")) == 5
+
+
 def test_a_ticket_a_person_does_names_a_persons_check(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
