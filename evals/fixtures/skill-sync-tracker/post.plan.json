@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "card-snapshot-imported-as-converted-text",
+      "risk": "the card was never imported as converted markdown, so a later read cannot show what changed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_sync.py",
+        "snapshot-imported"
+      ],
+      "required_paths": [
+        "checks/probe_sync.py"
+      ]
+    },
+    {
+      "name": "snapshot-holds-the-card",
+      "risk": "the snapshot leaves out a field, a comment, a link or the attachment of the card, or the updated time",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_sync.py",
+        "snapshot-complete"
+      ],
+      "required_paths": [
+        "checks/probe_sync.py"
+      ]
+    },
+    {
+      "name": "card-not-written",
+      "risk": "the saved card was edited: its description or status was changed, or a changed copy of it was kept",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_sync.py",
+        "card-not-written"
+      ],
+      "required_paths": [
+        "checks/probe_sync.py"
+      ]
+    },
+    {
+      "name": "progress-drafted-as-one-comment",
+      "risk": "the progress is not in one draft comment for the person to post, or is split into a comment for each requirement",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "python3",
+        "-B",
+        "checks/probe_sync.py",
+        "one-batched-note"
+      ],
+      "required_paths": [
+        "checks/probe_sync.py"
+      ]
+    }
+  ]
+}
