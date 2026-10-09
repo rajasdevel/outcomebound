@@ -24,7 +24,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "b9209bad2d8f48c5b7d24d496ed783e7849331a4b790a092ea5df651d18bf1a8",
+        ".github/workflows/ci.yml": "2c267aa21d2cd3238303620c7e0aa80d80b70818565eda3433dcbfdd3e375362",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
@@ -206,7 +206,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "ec8e586aa9593734a96248ad58592abeb9ccc995c19e192650c5385c8aecc19a"
+      "sha256": "c37f9b3275b23c2646087bda6d1d90e58df3d0781b50945187eb8d045b6de186"
     }
   ]
 }
