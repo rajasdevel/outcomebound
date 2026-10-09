@@ -86,13 +86,20 @@ AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
-    "using-outcomebound": "when unsure how much design, testing, review or process a task needs",
+    "using-outcomebound": (
+        "when a project's documents or habits suggest more process than a change needs, when work "
+        "spans lifecycle stages, when a project starts from an idea with no repository, or when "
+        "changing text a model reads"
+    ),
     "decision-brief": "when a decision is the user's to make",
     "gather-requirements": (
         "when a request's outcome or completion bar is unclear, "
         "or requirements arrive from an existing source"
     ),
-    "tests-worth-keeping": "when writing, changing or judging a test",
+    "tests-worth-keeping": (
+        "when writing, changing or judging a test, or when the project's tests already fail before "
+        "you begin"
+    ),
     "diagnose": "when a failure's cause is unknown, or a fix did not hold",
     "review-findings": "when acting on review findings, or writing a review the project requires",
     "explain-spec": (
@@ -101,9 +108,8 @@ CONDITIONS = {
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": "when handing an accepted ticket to the agent or model that will build it",
     "explorable": (
-        "when a decision turns on values a person may judge differently or on how options work "
-        "in ways text compares poorly, a person must learn a mechanism by trying it, or many "
-        "questions are easier to answer on a page"
+        "when the person asks for an interactive page, wants to try options with their own "
+        "numbers, or must learn a mechanism by trying it"
     ),
 }
 # Skills an earlier install carried and this engine no longer ships. A record of one is still

@@ -78,16 +78,16 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
+- when a project's documents or habits suggest more process than a change needs, when work spans lifecycle stages, when a project starts from an idea with no repository, or when changing text a model reads: read .claude/skills/using-outcomebound/SKILL.md
 - when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md
-- when writing, changing or judging a test: read .claude/skills/tests-worth-keeping/SKILL.md
+- when writing, changing or judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
 - when a failure's cause is unknown, or a fix did not hold: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
-- when a decision turns on values a person may judge differently or on how options work in ways text compares poorly, a person must learn a mechanism by trying it, or many questions are easier to answer on a page: read .claude/skills/explorable/SKILL.md
+- when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it: read .claude/skills/explorable/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use when a decision turns on values a person may judge differently or on how options work in ways text compares poorly, when a person must learn a mechanism by trying it, when many questions are easier to answer on a page, or when the person asks for an interactive page. Builds and checks an HTML page beside the brief.
+description: Use when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it. Builds a single-file HTML page the engine checks, beside the decision brief and never in place of it; the decision-brief and gather-requirements skills send a decision or an interview here where text serves it badly.
 ---
 
 # Explorable

@@ -79,3 +79,17 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
     assert _plain_scalar_problem("description: Use when a fix is made #1 priority") == "holds ' #'"
     assert _plain_scalar_problem("description: 'Use when: quoted'") == ""
     assert _plain_scalar_problem("description: Use when plain, with a dash - and a `path`.") == ""
+
+
+def test_each_pointer_condition_is_its_skill_descriptions_first_sentence():
+    # The pointer line in AGENTS.md and the skill's description are the two triggers a harness
+    # shows; one text for both keeps them from drifting apart.
+    from outcomebound_tools import adopt
+
+    for name, condition in adopt.CONDITIONS.items():
+        fm, _ = _frontmatter(Path("skills") / name / "SKILL.md")
+        described = re.search(r"^description:\s*(.+)$", fm, re.M)
+        assert described is not None, name
+        assert described.group(1).startswith(f"Use {condition}. "), (
+            f"{name}: the description must open with 'Use {condition}.'"
+        )

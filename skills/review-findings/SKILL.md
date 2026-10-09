@@ -1,6 +1,6 @@
 ---
 name: review-findings
-description: Use when acting on review findings, from a reviewer, a delegate or a person's review of a change, or when writing a review that the project or the review mechanism requires. A finding is a claim to check, and each one ends with a disposition.
+description: Use when acting on review findings, or writing a review the project requires. Findings come from a reviewer, a delegate or a person's review of a change; each is a claim to check, and each ends with a disposition.
 ---
 
 # Review findings

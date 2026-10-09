@@ -1,6 +1,6 @@
 ---
 name: explain-spec
-description: Use when a person must act on a spec they did not write, asks to be walked through a design, or says they do not follow it. Explains the spec, asks questions drawn from its decisions, and fixes or records what the answers show is missing.
+description: Use when a person must act on a spec they did not write, or says they do not follow it. That includes a request to be walked through a design. Explains the spec, asks questions drawn from its decisions, and fixes or records what the answers show is missing.
 ---
 
 # Explain a spec

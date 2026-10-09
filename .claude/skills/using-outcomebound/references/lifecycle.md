@@ -16,7 +16,7 @@ commands, delivery route and gates. This reference needs no optional fragment or
 
 | From and to | Carry forward and check | When the extra stage adds no work |
 | --- | --- | --- |
-| Idea to requirements | Use `gather-requirements` where the outcome is unclear or comes from sources. Keep user constraints, corrections, assumptions and unresolved choices attached to the requirements. | The request and its completion bar are already clear; no source constraints need reconciliation. |
+| Idea to requirements | Use `gather-requirements` where the outcome is unclear or comes from sources. Keep user constraints, corrections, assumptions and unresolved choices attached to the requirements. For an idea with no repository yet, follow [the new-project reference](new-project.md) to a walking skeleton first. | The request and its completion bar are already clear; no source constraints need reconciliation. |
 | Requirements to design | Settle choices that later work cannot recover from the code. Use `explain-spec` when a person must act on a design they did not write. | A routine change leaves no decision that later work depends on; explanation is not needed merely because a spec exists. |
 | Design to accepted work | Use `slice-tickets` if separate outcomes need tracking or delegation. Preserve requirement coverage and acceptance; an id mapping alone does not show that a requirement is met. | One bounded task can be completed directly under the current grant. |
 | Accepted work to implementation | Use `hand-off-tickets` for a receiving implementer. Give current inputs, owned scope, checks and authority, sized to that implementer. | The current worker can proceed from the accepted task without a new package. |

@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when a project's documents, templates or habits suggest more process than a change needs, when work crosses components or lifecycle stages, when a project starts from an idea with no repository yet, or when changing text a model reads. Sizes the work and routes each step to the skill or reference it needs.
+description: Use when a project's documents or habits suggest more process than a change needs, when work spans lifecycle stages, when a project starts from an idea with no repository, or when changing text a model reads. Sizes the work and routes each step to the skill or reference it needs.
 ---
 
 # Using OutcomeBound

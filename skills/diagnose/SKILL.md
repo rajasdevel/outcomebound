@@ -1,6 +1,6 @@
 ---
 name: diagnose
-description: Use when you are to fix a test, build, command or behaviour that fails and its cause is not yet known, including a failure that comes and goes, or when a fix did not hold.
+description: Use when a failure's cause is unknown, or a fix did not hold. The failure is a test, build, command or behaviour you are to fix, including one that comes and goes.
 ---
 
 # Diagnose a failure
