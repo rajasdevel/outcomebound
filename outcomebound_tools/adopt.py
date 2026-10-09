@@ -14,7 +14,7 @@ entry to the settings document of each selected harness whose table row has a `f
 (`outcomebound_tools.finish_check`), a `hook` record carrying the entry's timeout, which
 `--finish-timeout` sets, written back with its keys, their order and its indentation
 kept; once its writes are made, it runs Done once to measure it (`finish_check.measure`) where
-`--finish-check` is named, and only then. It installs each
+`--finish-check` or `--verify` is named, and only then; `--verify` adds no entry. It installs each
 skill for
 every harness, and an `@AGENTS.md` import into each harness file that would not load
 AGENTS.md otherwise: none where the harness table says the harness reads AGENTS.md
@@ -972,8 +972,9 @@ class Run:
         self.records: list[Record] = []
         self.edited: list[str] = []
         self.notes: Notes = []
-        # The Done commands and the timeout the install measures once its writes are made.
-        self.measure: tuple[list[str], int] | None = None
+        # The Done commands and the timeout the install measures once its writes are made, and
+        # whether it measures as a hook runs Done (False: with this process's own PATH).
+        self.measure: tuple[list[str], int, bool] | None = None
 
     def present(self, relative: str) -> bool:
         """Whether `relative` is in the target; a symlink counts whatever it points at, and so
@@ -1340,7 +1341,7 @@ def finish_hooks(
             )
         )
     if wants:
-        plan_measure(run, done, timeout, bool(asked))
+        plan_measure(run, done, timeout, bool(asked) or selection.verify)
     return wants
 
 
@@ -1374,13 +1375,13 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
 
 
 def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
-    """Measure Done once after the writes where --finish-check is named, so that no install runs
-    the project's Done unasked (docs/specs/finish-check/design.md); otherwise name the
-    record that applies here and whether Done outlasts the timeout by its measured time, or that
-    none does."""
+    """Measure Done once after the writes where --finish-check or --verify is named (`asked`), so
+    that no install runs the project's Done unasked (docs/specs/finish-check/design.md);
+    otherwise name the record that applies here and whether Done outlasts the timeout by its
+    measured time, or that none does."""
 
     if asked:
-        run.measure = (list(done), timeout)
+        run.measure = (list(done), timeout, True)
         return
     known = finish_check.known_record(run.target, finish_check.done_digest(done))
     if known is None:
@@ -1393,13 +1394,10 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
             )
         )
         return
-    failing = ", ".join(f"`{line}` (exit {item.code})" for line, item in known.failing.items())
     run.notes.append(
         (
             "skip",
-            f"finish-check: Done was measured on {known.measured}"
-            f"{f' on commit {known.head[:12]}' if known.head else ''} in {known.seconds:.0f} s, "
-            f"known failures: {failing or 'none'}; --finish-check measures it again",
+            f"finish-check: {measured_line(run.target, known)}; --finish-check measures it again",
         )
     )
     if not known.as_hook:
@@ -1413,6 +1411,47 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
             )
         )
     run.notes.extend(slow_done(run.target, known.seconds, timeout))
+
+
+def plan_verify(run: Run, done: Sequence[str], timeout: int, hooked: bool) -> None:
+    """`--verify`: measure Done once after the writes without adding the hook. Where an entry is
+    installed after this run's writes (`hooked`), `plan_measure` has planned the measurement as
+    the hook would run it; otherwise it runs with this process's own PATH. With no Done
+    recorded there is nothing to measure, and the report says so, naming `--done`."""
+
+    if not done:
+        run.notes.append(
+            (
+                "UNVERIFIED",
+                "verify: Done is not recorded, so no command was measured; record one with --done",
+            )
+        )
+    elif not hooked:
+        run.measure = (list(done), timeout, False)
+
+
+def commits_since(target: Path, head: str) -> str:
+    """How many commits the checkout is past the commit a measurement ran on, in words;
+    UNVERIFIED where Git cannot count them."""
+
+    count = finish_check.commits_since(target, head)
+    if count is None:
+        return "UNVERIFIED how many commits since"
+    return f"{count} commit{'' if count == 1 else 's'} since"
+
+
+def measured_line(target: Path, known: finish_check.Known) -> str:
+    """The record of known failures that applies here, in one sentence: the day, the commit, the
+    seconds, how many commits since, and each failing command with its exit code."""
+
+    failing = ", ".join(
+        f"`{textio.plain(line)}` (exit {item.code})" for line, item in known.failing.items()
+    )
+    on = f" on commit {known.head[:12]}" if known.head else ""
+    return (
+        f"Done was measured on {known.measured}{on} in {known.seconds:.0f} s, "
+        f"{commits_since(target, known.head)}, known failures: {failing or 'none'}"
+    )
 
 
 def slow_done(target: Path, seconds: float, timeout: int) -> Notes:
@@ -1437,6 +1476,15 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
     """The install report's lines for the one Done run an install makes."""
 
     notes: Notes = []
+    if not measured.as_hook:
+        notes.append(
+            (
+                "note",
+                "finish-check: Done was measured with the PATH of the process that ran adopt, "
+                "since no finish-check entry is installed here; a hook runs Done with the "
+                "harness's PATH, and --finish-check measures it that way",
+            )
+        )
     if measured.dropped:
         entries = ", ".join(measured.dropped)
         notes.append(
@@ -1458,6 +1506,14 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
             if result.note:
                 why = f"{why}; {result.note}"
             notes.append(("UNVERIFIED", f"finish-check: `{shown}` could not run here, {why}"))
+        elif result.cause == finish_check.FLAKE:
+            notes.append(
+                (
+                    "UNVERIFIED",
+                    f"finish-check: `{shown}` is a possible flake: it failed with exit "
+                    f"{result.code}, {result.note}",
+                )
+            )
         else:
             known_by = (
                 "A turn end where it fails with the same exit code and none but these failure "
@@ -1474,21 +1530,28 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
                     f"{known_by}; once it passes, it leaves the record",
                 )
             )
-    if measured.previous is not None and measured.added:
+    if measured.previous is not None and (measured.added or measured.flaked):
         earlier = measured.previous
         on = f"commit {earlier.head[:12]}" if earlier.head else "a branch with no commit"
+        gone = [
+            f"`{finish_check.shorten(textio.plain(line), 80)}` is no longer known: "
+            "it reads as a possible flake"
+            for line in measured.flaked
+        ]
         notes.append(
             (
                 "known",
                 f"finish-check: new since the record measured on {earlier.measured} on {on}, "
-                f"which this one replaces here: {'; '.join(measured.added)}",
+                f"{commits_since(target, earlier.head)}, which this one replaces here: "
+                f"{'; '.join([*measured.added, *gone])}",
             )
         )
     limit = timeout - finish_check.MARGIN_SECONDS
+    gives = "the hook gives it" if measured.as_hook else "a hook would give it"
     notes.append(
         (
             "measured",
-            f"finish-check: Done ran once in {measured.seconds:.0f} s; the hook gives it "
+            f"finish-check: Done ran once in {measured.seconds:.0f} s; {gives} "
             f"{limit} s of its {timeout} s timeout",
         )
     )
@@ -1788,13 +1851,14 @@ class Selection:
     style: list[str] | None = None
     finish_timeout: int | None = None
     setup: list[str] | None = None
+    verify: bool = False
 
 
 def install(
     target: Path, source: Path, selection: Selection, force: bool
-) -> tuple[Planned, list[str], Notes, tuple[list[str], int] | None]:
-    """Plan an install or upgrade; with it, the Done commands and timeout to measure once the
-    writes are made, or None."""
+) -> tuple[Planned, list[str], Notes, tuple[list[str], int, bool] | None]:
+    """Plan an install or upgrade; with it, the Done commands, the timeout and whether to
+    measure as a hook runs Done, to measure once the writes are made, or None."""
 
     require_work_tree(target)
     manifest = load_manifest(target)
@@ -1808,7 +1872,10 @@ def install(
     run = Run(target, force)
     table = harness_table(source)
     wants = desired(run, source, found, ids, Chosen(done, style, setup))
-    wants += finish_hooks(run, table, found, done, selection, own)
+    hooks = finish_hooks(run, table, found, done, selection, own)
+    wants += hooks
+    if selection.verify:
+        plan_verify(run, done, selection.finish_timeout or recorded_timeout(own), bool(hooks))
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
         run.keep(want, recorded.pop(want.key(), None))
@@ -2017,10 +2084,30 @@ def check(target: Path, source: Path) -> int:
         elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
             detail = moved(target, source, record, manifest.own)
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
+    note = measurement_note(target, manifest.own)
+    if note is not None:
+        print(f"{'note':<8} {note}")
     step = next_step(target, found)
     if step is not None:
         print(step)
     return min(sum(state != "current" for state in found), CHECK_CAP)
+
+
+def measurement_note(target: Path, own: Sequence[Record]) -> str | None:
+    """The record of known failures that applies in this checkout to the recorded Done list, in
+    one line, or that Done was not measured; None where no Done is recorded. It reads this
+    machine's record apart from the install's own, and no count of records depends on it."""
+
+    done = recorded_done(own)
+    if not done:
+        return None
+    known = finish_check.known_record(target, finish_check.done_digest(done))
+    if known is None:
+        return (
+            "finish-check: Done was not measured here, so no record of known failures applies "
+            "to this Done list and checkout"
+        )
+    return f"finish-check: {measured_line(target, known)}"
 
 
 def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
@@ -2158,7 +2245,7 @@ def detect(target: Path, source: Path) -> int:
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
                             [--setup CMD]... [--human-style ste]
-                            [--finish-check | --no-finish-check]
+                            [--finish-check | --no-finish-check] [--verify]
                             [--finish-timeout SECONDS] [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
@@ -2199,14 +2286,19 @@ the hook until a person sees its PASS message end a run, and names each other se
 as not available yet. The entry's timeout is --finish-timeout, default 600 seconds, the documented
 default of both harnesses; finish-check stops the Done commands 30 seconds before it, so a Done
 that takes longer needs a larger value, and re-running adopt with a new value rewrites the entry.
-After its writes, an install with --finish-check named runs every Done command once, to its end
-and past each failure: it prints each command's verdict and seconds and the total against the
-timeout less 30 seconds, proposes a larger --finish-timeout where Done took longer, and keeps
-each failing command, with its exit code and the failure ids its output names, as a known
-failure in the Git common directory; it holds no turn while it fails with the same exit code and
-names no new failure id. An install
-without --finish-check runs no Done command: it names the record of known failures that applies
-here, or says that none does; a dry run does not run Done. adopt writes the document back with
+After its writes, an install with --finish-check or --verify named runs every Done command once,
+to its end and past each failure: it prints each command's verdict and seconds and the total
+against the timeout less 30 seconds, proposes a larger --finish-timeout where Done took longer,
+and keeps each failing command, with its exit code and the failure ids its output names, as a
+known failure in the Git common directory; it holds no turn while it fails with the same exit
+code and names no new failure id. A command that fails runs once more in the same environment;
+the same exit code and failure ids make a stable failure, and anything else reads UNVERIFIED as
+a possible flake, kept as no known failure. --verify adds no entry: where none is installed
+after the run's writes, the commands run with the PATH of the process that ran adopt, and
+the record says so; with no Done recorded it reads UNVERIFIED and names --done. An install
+without either flag runs no Done command: it names the record of known failures that applies
+here, with the commits since, or says that none does; --check prints that line too, apart from
+its exit; a dry run does not run Done. adopt writes the document back with
 its keys, their order and its indentation kept, rewriting only its whitespace, and refuses one
 with comments. A Done change rewrites the entry, and Codex skips a changed entry until each
 person trusts it again in /hooks, which the install report says; --no-finish-check or --remove
@@ -2251,6 +2343,12 @@ def _parser() -> argparse.ArgumentParser:
         action="store_const",
         const=False,
         help="take the finish check's entries out",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="run the Done commands once after the writes to measure them, without adding the "
+        "finish check's entries",
     )
     parser.add_argument(
         "--finish-timeout",
@@ -2366,6 +2464,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             None if args.human_style is None else [args.human_style] if args.human_style else [],
             args.finish_timeout,
             None if args.setup is None else _commands(args.setup, "--setup"),
+            args.verify,
         )
         planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
@@ -2389,15 +2488,16 @@ class _Stopped(Exception):
     """A signal that stops the install's Done run: SIGTERM, as SIGINT stops it."""
 
 
-def _measure(target: Path, done: list[str], timeout: int) -> int:
-    """Run Done once and print what it found; stopped by SIGINT or SIGTERM, the running command's
-    group is stopped too, nothing is kept, and the exit is 128 plus the signal's number."""
+def _measure(target: Path, done: list[str], timeout: int, as_hook: bool = True) -> int:
+    """Run Done once and print what it found, as a hook runs it or, with `as_hook` false, with
+    this process's own PATH; stopped by SIGINT or SIGTERM, the running command's group is stopped
+    too, nothing is kept, and the exit is 128 plus the signal's number."""
 
     def stopped(number: int, frame: object) -> None:
         raise _Stopped(number)
 
     environment, _ = finish_check.hook_environment(target, os.environ)
-    if programs.find("outcomebound", environment, extensionless=True) is None:
+    if as_hook and programs.find("outcomebound", environment, extensionless=True) is None:
         print(
             f"{'UNVERIFIED':<8} finish-check: `outcomebound` was not found on the PATH used to "
             "measure Done. Put the installed launcher on the harness process's PATH; its "
@@ -2411,7 +2511,7 @@ def _measure(target: Path, done: list[str], timeout: int) -> int:
     )
     previous = signal.signal(signal.SIGTERM, stopped)
     try:
-        measured = finish_check.measure(target, done, timeout)
+        measured = finish_check.measure(target, done, timeout, as_hook)
     except (KeyboardInterrupt, _Stopped) as error:
         number = error.args[0] if isinstance(error, _Stopped) else signal.SIGINT
         print(
@@ -2437,11 +2537,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.finish_timeout is not None
-    chosen = chosen or args.setup is not None
+    chosen = chosen or args.setup is not None or args.verify
     if (args.detect or args.check or args.remove) and (chosen or args.finish_check is not None):
         parser.error(
-            "--harness, --fragments, --done, --setup, --human-style, --finish-check and "
-            "--finish-timeout apply to an install"
+            "--harness, --fragments, --done, --setup, --human-style, --finish-check, --verify "
+            "and --finish-timeout apply to an install"
         )
     target = Path(args.target).resolve()
     try:

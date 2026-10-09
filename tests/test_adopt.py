@@ -1960,7 +1960,8 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     each failure, if it does not keep the failures as known, if a dry run or an install that
     does not name --finish-check runs Done, or if --finish-check does not measure it again."""
 
-    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs once.
+    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs twice:
+    # once, and once more in the same environment to tell a stable failure from a flake.
     environment, _ = finish_check.hook_environment(tmp_path, os.environ)
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
@@ -1981,27 +1982,28 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     digest = finish_check.done_digest([failing, "true"])
     known = finish_check.known_record(target, digest)
     assert known is not None and {k: v.code for k, v in known.failing.items()} == {failing: 3}
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
 
     code, out, _ = run(capsys, str(target), "--fragments", "")
     assert code == 0 and "running " not in out
     assert re.search(r"finish-check: Done was measured on \S+ on commit [0-9a-f]{12} in ", out)
+    assert re.search(r" in \d+ s, 0 commits since, known failures: ", out)
     assert f"`{failing}` (exit 3)" in out
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
     assert "was measured with the PATH of the agent" not in out
 
     # A record an engine before the hook-like measurement wrote: the upgrade says so.
     assert finish_check.keep_known(target, dataclasses.replace(known, as_hook=False))
     code, out, _ = run(capsys, str(target), "--fragments", "")
     assert code == 0 and "finish-check: that record was measured with the PATH of the agent" in out
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
-    assert run(capsys, str(target), "--finish-check")[0] == 0
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+    assert run(capsys, str(target), "--finish-check")[0] == 0
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 4
 
     code, out, _ = run(capsys, str(target), "--done", failing)
     assert code == 0 and "running " not in out
     assert "finish-check: Done was not measured, so no record of known failures applies" in out
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 4
 
 
 @pytest.mark.parametrize("place", ["missing", "project", "virtual-environment", "tool-bin"])
@@ -2023,7 +2025,9 @@ def test_an_explicit_measurement_names_a_launcher_missing_from_its_hook_environm
         launcher.chmod(0o755)
     monkeypatch.setenv("PATH", str(folder))
 
-    def measure(root: Path, done: list[str], timeout: int) -> finish_check.Measured:
+    def measure(
+        root: Path, done: list[str], timeout: int, as_hook: bool = True
+    ) -> finish_check.Measured:
         # Only the Done runner is a double: launcher lookup and PATH filtering are real.
         _, dropped = finish_check.hook_environment(root, os.environ)
         return finish_check.Measured(
@@ -2080,7 +2084,170 @@ def test_a_new_measurement_names_the_failures_new_since_the_record_it_replaces(
         handle.write("FAILED tests/test_a.py::test_new - assert 1\n")
     out = run(capsys, str(target), "--finish-check")[1]
     assert re.search(r"known    finish-check: new since the record measured on \S+ on commit ", out)
+    assert ", 0 commits since, which this one replaces here: " in out
     assert "pytest tests/test_a.py::test_new" in out and "test_old" not in out.split("new since")[1]
+
+
+def hook_free_path(monkeypatch: pytest.MonkeyPatch, root: Path) -> Path:
+    """A PATH with no entry a hook's measurement leaves out, then `bin` inside `root` first: a
+    tool kept there is found with the caller's PATH and not with a hook's. Returns that folder."""
+
+    environment, _ = finish_check.hook_environment(root, os.environ)
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    folder = root / "bin"
+    folder.mkdir(parents=True)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(folder), environment["PATH"]]))
+    return folder
+
+
+@pytest.mark.skipif(WINDOWS, reason="the tool is a POSIX script found on PATH by its name")
+def test_verify_measures_with_the_callers_path_and_a_hook_measures_without_the_projects(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `--verify` adds the hook, measures a command that only the caller's PATH finds
+    as a hook would, measures as the caller where an entry stays installed, or runs Done under
+    `--dry-run`."""
+
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    tool = hook_free_path(monkeypatch, target) / "faketool"
+    write(tool, "#!/bin/sh\necho run >> " + shlex.quote((tmp_path / "count").as_posix()) + "\n")
+    tool.chmod(0o755)
+    count = tmp_path / "count"
+    arguments = ("--harness", "claude-code", "--done", "faketool")
+    digest = finish_check.done_digest(["faketool"])
+
+    code, out, _ = run(capsys, str(target), *arguments, "--verify", "--dry-run")
+    assert code == 0 and "a dry run does not run Done" in out and not count.exists()
+
+    code, out, err = run(capsys, str(target), *arguments, "--verify")
+    assert code == 0, err
+    assert re.search(r"PASS     finish-check: `faketool` in \d+ s", out)
+    assert "Done was measured with the PATH of the process that ran adopt" in out
+    assert re.search(r"measured finish-check: Done ran once in \d+ s; a hook would give it ", out)
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert hook_records(target) == [] and not (target / ".claude/settings.json").exists()
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.as_hook is False
+
+    code, out, _ = run(capsys, str(target), "--finish-check")
+    assert code == 0 and "UNVERIFIED finish-check: `faketool` could not run here" in out
+    assert "with the PATH of the process" not in out and "the hook gives it" in out
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.as_hook is True and hook_records(target)
+
+    code, out, _ = run(capsys, str(target), "--verify")
+    assert code == 0 and "UNVERIFIED finish-check: `faketool` could not run here" in out
+    assert "with the PATH of the process" not in out and hook_records(target)
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+
+    code, out, _ = run(capsys, str(target), "--verify", "--no-finish-check")
+    assert code == 0 and re.search(r"PASS     finish-check: `faketool` in \d+ s", out)
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.as_hook is False and hook_records(target) == []
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_verify_reports_a_flaky_done_command_as_unverified_and_keeps_no_failure(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a failure that the second run does not repeat is kept as a known failure, or
+    printed other than as a possible flake, or if the command that passed is not reported."""
+
+    hook_free_path(monkeypatch, tmp_path)
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    flag = paths.shell_path(tmp_path / "flag")
+    flaky = f"if [ -e {flag} ]; then exit 0; fi; touch {flag}; echo 'FAILED tests/a.py::t'; exit 1"
+
+    code, out, err = run(capsys, str(target), "--done", "true", "--done", flaky, "--verify")
+
+    assert code == 0, err
+    assert re.search(r"PASS     finish-check: `true` in \d+ s", out)
+    [line] = [text for text in out.splitlines() if "possible flake" in text]
+    assert line.startswith("UNVERIFIED finish-check: `if [ -e ")
+    assert "failed with exit 1, a second run in the same environment passed" in line
+    assert "known    " not in out
+    known = finish_check.known_record(target, finish_check.done_digest(["true", flaky]))
+    assert known is not None and known.failing == {}
+
+
+def test_verify_without_a_done_command_is_unverified_naming_done_and_the_rest_prints(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--verify` stops the install, runs anything, or fails to name `--done`."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    code, out, err = run(capsys, str(target), "--verify", "--dry-run")
+    assert code == 0, err
+    assert "UNVERIFIED verify: Done is not recorded, so no command was measured" in out
+    assert "record one with --done" in out and "a dry run does not run Done" not in out
+
+    code, out, err = run(capsys, str(target), "--verify")
+
+    assert code == 0, err
+    assert "record one with --done" in out and "running " not in out
+    assert re.search(r"^create   AGENTS.md$", out, re.MULTILINE)
+    assert (target / "AGENTS.md").is_file()
+
+
+def test_verify_applies_to_an_install_and_the_message_lists_it(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t")
+    for mode in ("--detect", "--check", "--remove"):
+        with pytest.raises(SystemExit) as refused:
+            adopt.main([str(target), mode, "--verify"])
+        assert refused.value.code == 2
+        err = capsys.readouterr().err
+        assert "--verify" in err and "apply to an install" in err
+
+
+def test_check_prints_the_measurement_note_on_one_line_and_never_counts_it(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `--check` prints no note, prints it other than as one line, changes its exit
+    code for it, or counts the commits since the measurement wrongly."""
+
+    hook_free_path(monkeypatch, tmp_path)
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    assert run(capsys, str(target), "--harness", "codex", "--done", "exit 3")[0] == 0
+
+    def notes() -> tuple[int, list[str]]:
+        code, out, _ = run(capsys, str(target), "--check")
+        return code, [line for line in out.splitlines() if line.startswith("note ")]
+
+    code, found = notes()
+    assert code == 0 and len(found) == 1
+    assert found[0].startswith("note     finish-check: Done was not measured here, so no record")
+
+    assert run(capsys, str(target), "--verify")[0] == 0
+    measured = r"note     finish-check: Done was measured on \S+ on commit [0-9a-f]{12} in \d+ s, "
+    known = r"known failures: `exit 3` \(exit 3\)"
+    # (commits to add before this reading, the count the note then gives)
+    for added, since in [(0, "0 commits"), (1, "1 commit"), (1, "2 commits")]:
+        for _ in range(added):
+            commit_all(target)
+        code, found = notes()
+        assert code == 0 and len(found) == 1
+        assert re.fullmatch(f"{measured}{since} since, {known}", found[0]), found
+
+    assert run(capsys, str(target), "--done", "")[0] == 0
+    assert notes() == (0, [])
+
+
+def test_commits_since_is_unverified_where_git_cannot_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = repo(tmp_path / "t")
+    commit_all(target)
+
+    assert finish_check.commits_since(target, "0" * 40) is None
+    assert adopt.commits_since(target, "0" * 40) == "UNVERIFIED how many commits since"
+    monkeypatch.setattr(finish_check, "commits_since", lambda *_: 1)
+    assert adopt.commits_since(target, "x") == "1 commit since"
 
 
 def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(
