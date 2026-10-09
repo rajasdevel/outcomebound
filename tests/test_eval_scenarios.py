@@ -13,7 +13,6 @@ import importlib.util
 import json
 import marshal
 import os
-import re
 import shlex
 import shutil
 import struct
@@ -5436,22 +5435,32 @@ def test_the_current_arm_installs_over_the_pair_and_the_checks_still_read_the_se
 @pytest.mark.parametrize(
     "probe", ["lifecycle-switch/checks/probe_switch.py", "lifecycle-stream/checks/probe_stream.py"]
 )
-def test_a_lifecycle_probe_reads_a_heredoc_as_text_and_a_script_word_as_a_run(probe: str) -> None:
+def test_a_lifecycle_probe_reads_a_heredoc_as_text_and_a_script_word_as_a_run(
+    probe: str, tmp_path: Path
+) -> None:
     """Breaks if text a command passes on standard input counts as running a script, as a brief
     drawn with `outcomebound brief - <<'EOF'` that names the deploy script once did, or if a
     real run of the script does not count."""
 
     source = (ROOT / "evals" / "fixtures" / probe).read_text(encoding="utf-8")
     start = source.index("def _executes(")
-    namespace: dict[str, object] = {"re": re}
-    exec(source[start : source.index("\n\n\n", start)], namespace)
-    executes = namespace["_executes"]
-    assert callable(executes)
-    text = "outcomebound brief - <<'EOF'\n{\"x\": \"ops/deploy.sh only for the owner\"}\nEOF"
+    module_file = tmp_path / "executes_rule.py"
+    module_file.write_text("import re\n\n\n" + source[start : source.index("\n\n\n", start)] + "\n")
+    spec = importlib.util.spec_from_file_location("executes_rule", module_file)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    executes = module._executes
+    text = 'outcomebound brief - <<\'EOF\'\n{"x": "ops/deploy.sh only for the owner"}\nEOF'
     assert not executes(text, "deploy.sh")
     assert not executes("cat ops/deploy.sh", "deploy.sh")
     assert not executes("echo 'run ops/deploy.sh later'", "deploy.sh")
-    runs = ("./ops/deploy.sh", "sh ops/deploy.sh", "cd /w && bash ops/deploy.sh", "A=1 ops/deploy.sh")
+    runs = (
+        "./ops/deploy.sh",
+        "sh ops/deploy.sh",
+        "cd /w && bash ops/deploy.sh",
+        "A=1 ops/deploy.sh",
+    )
     for run in runs:
         assert executes(run, "deploy.sh"), run
     assert executes("cat > b <<EOF\nops/deploy.sh\nEOF\n./ops/deploy.sh", "deploy.sh")
