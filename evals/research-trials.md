@@ -91,3 +91,12 @@ Instruction changes that qualify still need the repository's required review and
 checks. The two skill ideas are evaluated separately; a gain from one is not evidence for
 the other. Version-matched external tool instructions remain a research-only candidate until
 a concrete version-drift case shows a gap in the existing loading design.
+
+## Recorded outcome
+
+The initial campaign stopped after one baseline trial exposed an invalid complete-fix oracle
+and an undeclared test replay interface. No candidate or retry ran. The
+[E22 record](../docs/evaluations.md#e22-testing-guidance-research-trial-and-instrument-correction)
+preserves the original result, separate native review and instrument corrections. The current
+fixtures are for a fresh comparison; they do not retroactively qualify that trial. Candidate
+benefit remains UNVERIFIED and installed skill text stays unchanged.

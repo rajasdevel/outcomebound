@@ -70,6 +70,7 @@ def security_cases(results) -> list[str]:
         call
         for call in results["partial"]["calls"]
         if "result" in call
+        and posixpath.normpath("docs/" + read_path(call)) != "docs"
         and not posixpath.normpath("docs/" + read_path(call)).startswith("docs/")
         and read_path(call) != REPORTED
     ]
@@ -84,7 +85,7 @@ def security_cases(results) -> list[str]:
         "result" in call
         and call["arguments"]
         .get("documents", {})
-        .get("docs/" + posixpath.normpath(read_path(call)))
+        .get(posixpath.normpath("docs/" + read_path(call)))
         == call["result"]
         and call["test"] in fixed["passed"]
         for call in fixed["calls"]
@@ -119,7 +120,7 @@ def tests() -> list[str]:
         )
     for name in ("baseline", "partial"):
         result = results[name]
-        if result["errors"] or not result["failures"]:
+        if not result["failures"]:
             problems.append(name + " does not fail a submitted assertion")
     problems.extend(security_cases(results))
     return problems

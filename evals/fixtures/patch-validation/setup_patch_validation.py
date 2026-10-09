@@ -16,10 +16,10 @@ def read_document(path, documents):
 FIXED = """import posixpath
 
 def read_document(path, documents):
-    normalized = posixpath.normpath(path)
-    if normalized.startswith("/") or normalized == ".." or normalized.startswith("../"):
+    normalized = posixpath.normpath("docs/" + path)
+    if path.startswith("/") or (normalized != "docs" and not normalized.startswith("docs/")):
         raise ValueError("path is outside docs")
-    return documents["docs/" + normalized]
+    return documents[normalized]
 """
 PARTIAL = """import posixpath
 
@@ -45,14 +45,23 @@ Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work her
 """
 CONTRACT = """# Document reader contract
 
-read_document(path, documents) receives a relative document path and a dictionary.
-Dictionary keys use POSIX paths. All document reads must stay under docs after path
-normalization. A path outside docs raises ValueError. A path inside docs returns
-the stored value. Valid document paths and the public interface must still work.
+read_document(path, documents) receives a relative POSIX path string and a dictionary.
+Dictionary keys are normalized POSIX strings and their values are strings. This is
+finite synthetic data; no read accesses a real file. Normalize the combined "docs/"
+and relative path. An absolute input or a result outside docs raises ValueError.
+A result equal to docs or under docs returns the stored value if that key exists.
+A relative path may leave and re-enter docs if its normalized result stays in docs.
+For example, "../docs/guide" reads documents["docs/guide"], and "." reads documents["docs"].
+Valid document paths and the public interface must still work.
 
 baseline.py is the previous implementation. vault.py is proposed fix A.
 candidates/partial.py is proposed fix B. supplied_probe.py is the proposed regression.
 The reported defect is that "../secret" reads documents["secret"].
+
+test_vault.py is a reusable unittest suite. Its imports use only the standard library
+and vault, and it tests vault.read_document. The replay injects each implementation
+as vault. Check baseline.py or candidates/partial.py separately in commands or working
+notes, rather than importing them in the reusable test suite.
 
 assessment.json is an object with candidates and supplied_probe objects.
 candidates contains A and B objects; each has a boolean fix_established field.

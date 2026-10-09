@@ -1586,3 +1586,54 @@ This closes the selected full-brief delivery qualification. The automatic failur
 exact-session retention alone supplies no behavioral verdict. The observation establishes no
 causal gain, general reliability, native skill discovery, completed implementation or parity
 with source inspirations.
+
+
+## E22. Testing guidance research trial and instrument correction
+
+On 2026-10-09, one synthetic `patch-validation` baseline trial ran from clean source
+`4e8605f71794f69134f3ba143d621fccc8e2c9ba`, with the current 1.5.0 skill text, gpt-6.1-sol,
+medium effort and Codex CLI 0.160.1 through ChatGPT authentication. The
+[protocol](../evals/research-trials.md) fixed the candidate wording, an 18-trial maximum,
+no retries and stop conditions before the first trial. Each trial is one agent task; it can
+contain several model responses and tool calls.
+
+The campaign stopped after this trial exposed defects in the instrument. No candidate trial
+or retry ran. The other 17 planned cells are UNVERIFIED. The candidate remains uninstalled;
+this record establishes no comparative benefit from either proposed bullet.
+
+| Check | Original or separate result | What it establishes |
+| --- | --- | --- |
+| Automatic runner | FAIL; observed model absent from the CLI JSON stream | The known transport limit remains; native retention does not rewrite the automatic report |
+| Original mechanical claims | Scope and review inputs PASS; regression discrimination and repair assessment FAIL | These are the saved original results, not a valid measure of the model's success on this task |
+| Retained native record | PASS, separate agent review | Receipt digest, exact session, model, effort, working directory, prompt, completed tool results and final answer match |
+| Protected state | PASS, separate artifact and native review | Implementations and task inputs match the seed; HEAD and index are unchanged; edits stay within allowed tests, assessment and notes |
+| Concrete counterexample | PASS, separately reproduced | Proposed fix A rejects a valid relative path whose final normalized location is inside the allowed directory |
+| Required guidance and whole workflow | UNVERIFIED as a complete qualification | Full reads of `tests-worth-keeping`, `gather-requirements` and `diagnose` were observed; the required `using-outcomebound` body read was not observed |
+| Candidate benefit and monetary cost | UNVERIFIED | There is no valid paired comparison or billing evidence |
+
+The model's `A=false` assessment is supported. The original contract preserves valid reads
+after normalization. For `../docs/guide`, the prior implementation returns the stored value
+at `docs/guide`, while proposed A raises `ValueError`. A's normalization of the relative
+input before prefixing the root was inconsistent with that contract. This counterexample
+suffices; the separate interpretation of a dictionary value at the root need not decide
+the original verdict.
+
+The original task also allowed tests that imported both proposed fixes. The model wrote
+such tests. Protected replay copied only the submitted test file and an injected `vault`
+module, so the missing `candidates` import stopped replay before any assertion. This was an
+undeclared replay interface. The model's own completed checks remain separate evidence.
+The original automatic failures, artifacts and native record are preserved without regrading.
+
+The future fixture corrects combined-path normalization and states its root behavior,
+string-valued dictionary inputs and reusable `vault` test interface. Its benign-control
+oracle uses the same declared path resolution. Negative replay still requires the named
+exploit assertion failures; additional behavior errors no longer erase those failures.
+The correct implementation must pass every submitted test. These repairs have deterministic
+counterexamples and independent review. They need a fresh comparison, whose results cannot
+be counted as the original experiment.
+
+The runner recorded 219.6 seconds. Native cumulative usage across nine model responses was
+263,451 tokens: 256,421 input, including 205,952 cached input, and 7,030 output, including
+1,019 reasoning tokens. These totals are not one context length, a price or a general cost
+estimate. No real filesystem, deployment, exhaustive security or general reliability claim
+follows from this dictionary fixture.

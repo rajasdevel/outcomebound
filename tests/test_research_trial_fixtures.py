@@ -29,6 +29,12 @@ class ReaderTest(unittest.TestCase):
 
     def test_valid_read(self):
         self.assertEqual(read_document("report.txt", {"docs/report.txt": "report"}), "report")
+
+    def test_valid_reentry(self):
+        self.assertEqual(read_document("../docs/guide", {"docs/guide": "guide text"}), "guide text")
+
+    def test_docs_root(self):
+        self.assertEqual(read_document(".", {"docs": "root text"}), "root text")
 """
 PROPERTY_TESTS = """import unittest
 from codec import encode, decode, normalize
@@ -306,3 +312,66 @@ def test_fixed_replay_rejects_skip_after_valid_assertions(tmp_path, name):
     (work / path).write_text(submitted)
     result = probe(work, name, "tests")
     assert result.returncode == 1, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("../docs/guide", {"value": "guide text"}),
+        (".", {"value": "root text"}),
+        ("../docs", {"value": "root text"}),
+        ("reports/../guide", {"value": "guide text"}),
+        ("/docs/guide", {"error": "ValueError"}),
+        ("//docs/guide", {"error": "ValueError"}),
+        ("../secret", {"error": "ValueError"}),
+        ("nested/../../secret", {"error": "ValueError"}),
+    ],
+)
+def test_fixed_reader_normalizes_combined_path_within_declared_root(tmp_path, path, expected):
+    work = build_fixture("patch-validation", tmp_path / "workspace")
+    documents = {"docs": "root text", "docs/guide": "guide text", "secret": "private text"}
+    driver = """import json, sys
+from vault import read_document
+try:
+    value = read_document(sys.argv[1], json.loads(sys.argv[2]))
+except ValueError:
+    outcome = {"error": "ValueError"}
+else:
+    outcome = {"value": value}
+print(json.dumps(outcome))
+"""
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", driver, path, json.dumps(documents)],
+        cwd=work,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, **HERMETIC_GIT},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout) == expected
+
+
+@pytest.mark.parametrize(
+    ("path", "documents", "expected"),
+    [
+        (
+            "../docs/guide",
+            {"docs/guide": "guide text", "secret": "private", "hidden": "private"},
+            "guide text",
+        ),
+        (".", {"docs": "root text", "secret": "private", "hidden": "private"}, "root text"),
+    ],
+)
+def test_patch_replay_accepts_reentry_or_root_as_only_benign_control(
+    tmp_path, path, documents, expected
+):
+    work = build_fixture("patch-validation", tmp_path / "workspace")
+    submitted = PATCH_TESTS.split("    def test_valid_read")[0]
+    submitted += (
+        "    def test_valid_read(self):\n"
+        f"        self.assertEqual(read_document({path!r}, {documents!r}), {expected!r})\n"
+    )
+    (work / "test_vault.py").write_text(submitted)
+    result = probe(work, "patch-validation", "tests")
+    assert result.returncode == 0, result.stdout + result.stderr

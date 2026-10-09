@@ -126,3 +126,8 @@ Version-matched tool instructions remain a research-only mechanism until a concr
 case shows a gap. The new model and practice records belong in the neutral research library.
 They do not by themselves change the kernel, provider defaults, authority rules or model tiers.
 The existing instruction review, own-word attribution and evaluation requirements still apply.
+
+The initial trial stopped on instrument defects, as
+[E22](../../evaluations.md#e22-testing-guidance-research-trial-and-instrument-correction) records.
+The corrected fixtures are kept for a fresh comparison. Neither candidate bullet is installed;
+there is no supported paired effect on which to base that instruction change.
