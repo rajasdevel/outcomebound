@@ -136,12 +136,17 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
             ".claude/skills/using-outcomebound/references/lifecycle.md",
             "using-outcomebound",
         ),
+        (
+            "skill",
+            ".claude/skills/using-outcomebound/references/new-project.md",
+            "using-outcomebound",
+        ),
     ]
     assert records[1]["fragments"] == ["python"]
     assert records[6]["harnesses"] == records[7]["harnesses"] == ["claude-code"]
     for record in records:
         assert adopt.state(target, ROOT, record, records) == "current"
-    assert (records[6]["sha256"], records[-2]["sha256"]) == (sha(brief), sha(skill))
+    assert (records[6]["sha256"], records[-3]["sha256"]) == (sha(brief), sha(skill))
     assert records[3]["sha256"] == sha(shipped)
 
 
@@ -961,6 +966,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         ".claude/skills/slice-tickets/references/github.md": "current",
         ".claude/skills/tests-worth-keeping/SKILL.md": "current",
         ".claude/skills/using-outcomebound/references/lifecycle.md": "current",
+        ".claude/skills/using-outcomebound/references/new-project.md": "current",
     }
     assert out.splitlines()[-1] == (
         "next: move each edit out of OutcomeBound's blocks and files, then "

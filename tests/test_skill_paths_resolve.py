@@ -18,7 +18,7 @@ CORE = "using-outcomebound"
 
 # skill name -> paths that exist only in the OutcomeBound checkout
 CHECKOUT_ONLY = {
-    CORE: ("OutcomeBound.md",),
+    CORE: ("OutcomeBound.md", "scripts/new-spec.sh"),
     "adopt-outcomebound": ("scripts/outcomebound", "templates/ci/", "adapters/harnesses.json"),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),
@@ -36,7 +36,7 @@ CHECKOUT_ONLY = {
 
 # skill name -> further files shipped beside its entrypoint
 SHIPPED_BESIDE = {
-    CORE: ("references/lifecycle.md",),
+    CORE: ("references/lifecycle.md", "references/new-project.md"),
     "explorable": ("references/runtime.md",),
     "slice-tickets": ("references/github.md",),
 }
