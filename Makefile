@@ -56,7 +56,8 @@ canary:
 
 # Before a release is tagged: a PASS record of `make canary` exists for this tree, the release
 # commit's version agrees everywhere (and with TAG, e.g. TAG=v1.0.0, once it is tagged), this
-# repository's install is current, and gate, floor and suite pass on it. CI runs
+# repository's install is current, the package metadata and the workflow's PyPI job read right
+# (from the files; PyPI itself is not called), and gate, floor and suite pass on it. CI runs
 # scripts/release-check.py on the tag, with no list, so the canary is checked only here.
 release-check:
 	$(PYTHON) scripts/canary.py --verify
