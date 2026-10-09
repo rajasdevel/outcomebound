@@ -114,7 +114,7 @@ Skip when: the idea is throwaway (line 1 only), or personal (CI and delivery opt
 
 Build the first features as thin slices that each reach the user, riskiest first. Cut tickets only
 where separate outcomes need tracking (`slice-tickets`); where the build spans sessions, the goal
-envelope's feature list gives each item a pass flag. Trim the design as the code grows: delete what
-the code now shows. Continue with the [lifecycle reference](lifecycle.md).
+envelope's Progress section records each slice as it lands. Trim the design as the code grows:
+delete what the code now shows. Continue with the [lifecycle reference](lifecycle.md).
 
 Skip when: the skeleton is the whole outcome.
