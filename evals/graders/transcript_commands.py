@@ -135,12 +135,18 @@ def successful_sequence(command: str) -> tuple[tuple[str, ...], ...] | None:
 def _simple_commands(command: str) -> list[list[str]]:
     """The command split into simple commands on shell separators, each as its words."""
 
-    lexer = shlex.shlex(command.replace("\n", " ; "), posix=True, punctuation_chars=True)
+    # A newline ends a command. The `;` stands on a line of its own, so that a `#` comment, which
+    # the lexer ends at the line's end, never takes the lines after it (a heredoc body with a
+    # heading, a script with a comment).
+    lexer = shlex.shlex(command.replace("\n", "\n;\n"), posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
         tokens = list(lexer)
     except ValueError:
-        tokens = command.replace("\n", " ; ").split()
+        # An unclosed quote (an apostrophe in a heredoc's prose): split on blanks, with the
+        # separators apart from the words they follow.
+        spaced = re.sub(r"([;&|()])", r" \1 ", command.replace("\n", " ; "))
+        tokens = spaced.split()
     simple: list[list[str]] = [[]]
     for token in tokens:
         if token in _SEPARATORS or set(token) <= set(";&|()"):

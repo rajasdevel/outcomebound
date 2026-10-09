@@ -37,11 +37,16 @@ np = _beside("new_project")
 
 QUESTION = re.compile(r"(?i)\?|\bquestion\b")
 THRESHOLD = re.compile(r"(?i)threshold|\bpass(es)?\b|\bbar\b|at least|minimum|target|≥|>=|nine|90")
-SPIKE = re.compile(r"(?i)date|spike|threshold|extract|pars|read|receipt")
+SPIKE = re.compile(
+    r"(?i)date|spike|threshold|extract|pars|read|receipt|\bmeasured\b|\bsample\b|\btest(ed|s)?\b"
+    r"|\baccuracy\b|\bcorrect\b"
+)
 FIGURE = re.compile(r"\d+(\.\d+)?\s*%|\b\d+\s*(?:/|of|out of)\s*\d+\b")
 ENDS = re.compile(
-    r"(?i)stop rule|ends? the idea|\bended\b|\bstop\b|chang\w* the idea|pivot|rethink|rework"
-    r"|do(es)? not build|not worth|cannot reach|won'?t reach"
+    r"(?i)stop rule|ends? the idea|\bended\b|\bstop(s|ped|ping)?\b|chang\w* the idea|pivot"
+    r"|rethink|rework|(do(es)?|did) not build|not building"
+    r"|(don|didn)['\N{RIGHT SINGLE QUOTATION MARK}]?t build"
+    r"|drop (the|this) idea|not worth|cannot reach|won'?t reach"
 )
 
 

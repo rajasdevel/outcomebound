@@ -40,6 +40,7 @@ import sys
 import tempfile
 from collections import Counter
 from collections.abc import Callable, Sequence
+from itertools import pairwise
 from pathlib import Path
 from types import ModuleType
 
@@ -432,17 +433,30 @@ def is_ranked(body: str) -> bool:
 # --- the answer -------------------------------------------------------------------------------
 
 _LABEL_WORDS = r"recommend\w*|verdict|my call|bottom line|conclusion"
-_STOP = re.compile(r"(?i)\bstop\b|do(es)? not build|don'?t build|not build|abandon|\bkill\b")
-_PROBE = re.compile(r"(?i)probe|spike|prototype|validate first|test first")
+_APOSTROPHE = r"['\N{RIGHT SINGLE QUOTATION MARK}]"
+_STOP = re.compile(
+    r"(?i)\bstop(?:s|ped|ping)?\b|(?:do(?:es)?|did|will|would) not build"
+    rf"|(?:don|didn|won){_APOSTROPHE}?t build|not build|abandon|\bkill\b"
+)
+_PROBE = re.compile(r"(?i)prob(?:e|ing)|spik(?:e|ing)|prototyp(?:e|ing)|validate first|test first")
 _BUILD = re.compile(r"(?i)\bbuild(ing)?\b|\bproceed\b|go ahead")
 
 
-# A build word is no choice where one of these stands within three words before it, in its own
-# sentence ("not to build", "no build yet"), or where it says nothing is built ("build nothing").
-_NO_BUILD_BEFORE = re.compile(
-    r"(?i)\b(?:no|not|nothing|never|pause|without)\b(?:[^\w.!?;\n]+\w+){0,2}[^\w.!?;\n]*$"
-)
+# A build word is no choice where one of these stands before it in its own clause ("not to
+# build", "no build yet", "not spending weekends on a build"), or where it says nothing is built
+# ("build nothing"). A clause ends at a sentence end, a comma, a semicolon, a colon, a dash, a
+# bracket, a line end, or "but" or "however".
+_NEGATOR = re.compile(rf"(?i)\b(?:no|not|nothing|never|pause|without)\b|n{_APOSTROPHE}t\b")
+_CLAUSE_END = re.compile(r"(?i)[.!?;:,()\n\N{EN DASH}\N{EM DASH}]|\s-\s|\b(?:but|however)\b")
 _NO_BUILD_AFTER = re.compile(r"(?i)^[^\w.!?;\n]*(?:nothing|none)\b")
+
+
+def _negated(before: str) -> bool:
+    """Whether a negator stands in the clause that the text `before` a build word ends."""
+
+    return _NEGATOR.search(_CLAUSE_END.split(before)[-1]) is not None
+
+
 _SENTENCE_END = re.compile(r"[.!?](?:\s|$)|\n")
 
 
@@ -458,9 +472,7 @@ def _choices(tail: str) -> list[tuple[int, str]]:
     ]
     refused = False
     for hit in _BUILD.finditer(tail):
-        if _NO_BUILD_BEFORE.search(tail[: hit.start()]) or _NO_BUILD_AFTER.search(
-            tail[hit.end() :]
-        ):
+        if _negated(tail[: hit.start()]) or _NO_BUILD_AFTER.search(tail[hit.end() :]):
             refused = True
         else:
             named.append((hit.start(), "build"))
@@ -472,7 +484,8 @@ def _choices(tail: str) -> list[tuple[int, str]]:
 
 def recommendation(text: str) -> str | None:
     """`stop`, `probe` or `build`: the first choice named after a word that gives a verdict. A
-    build that is refused ("not to build", "build nothing") reads as stop, and a build beside a
+    build that is refused ("not to build", "build nothing", "not spending weekends on a build")
+    reads as stop, and a build beside a
     stop or a probe in its own sentence ("build, probe first, or stop") reads as that stop or
     probe."""
 
@@ -562,6 +575,46 @@ CHECK_WORDS = re.compile(r"(?i)test|check|assert|verify|lint|unittest|pytest")
 DONE_TIMEOUT = 90
 
 
+CODE_SPAN = re.compile(r"`([^`]+)`")
+# What may stand between two code spans that are both Done commands ("`make check` and `make
+# test`"); a gap with other words ("(set up: ...", ". Start: ...") ends the Done commands.
+JOINING = re.compile(r"[\s,;+&]*(?:\b(?:and|then)\b[\s,;+&]*)?")
+# Where the words of a hand-written Done command end and prose follows: a sentence end, a
+# bracket or a dash. A "." that follows a space is part of the command ("... -t .").
+PROSE = re.compile(r"(?<=\w)\.(?:\s|$)|\s\(|\s[-\N{EN DASH}\N{EM DASH}]\s")
+RUNNERS = frozenset(
+    {
+        "python", "python3", "py", "pytest", "tox", "nox", "uv", "pip", "poetry", "hatch",
+        "sh", "bash", "zsh", "make", "just", "rake", "npm", "npx", "yarn", "pnpm", "node",
+        "deno", "bun", "go", "cargo", "mvn", "gradle", "dotnet", "swift", "ruby", "bundle",
+        "php", "composer", "mix", "sbt", "ctest",
+    }
+)  # fmt: skip
+SCRIPT = re.compile(r"(?i)/|\.(sh|py|js|rb|bat|ps1)$")
+
+
+def _recorded_on(rest: str) -> list[str]:
+    """The Done commands that the text after `Done:` records. Where it has code spans, the first
+    is the command, with the spans that a plain "and" or "," joins to it (not a set-up or start
+    command that follows in other words). Where it has none, the text up to where prose follows
+    is the one command, if its first word, past any `NAME=value`, is a runner (`python3`, `make`,
+    `sh`) or a path to a script: a sentence ("the suite passes") records none."""
+
+    spans = list(CODE_SPAN.finditer(rest))
+    if spans:
+        found = [spans[0].group(1)]
+        for before, span in pairwise(spans):
+            if not JOINING.fullmatch(rest[before.end() : span.start()]):
+                break
+            found.append(span.group(1))
+        return found
+    text = PROSE.split(rest, maxsplit=1)[0].strip().strip("* ")
+    words = [word for word in text.split() if not re.fullmatch(r"[A-Za-z_]\w*=\S*", word)]
+    if words and (words[0] in RUNNERS or SCRIPT.search(words[0])):
+        return [text]
+    return []
+
+
 def done_commands() -> list[str]:
     """The commands that AGENTS.md or README.md records on a `Done:` line, in order."""
 
@@ -572,7 +625,7 @@ def done_commands() -> list[str]:
         except OSError:
             continue
         for line in DONE.findall(text):
-            found.extend(re.findall(r"`([^`]+)`", line))
+            found.extend(_recorded_on(line))
     return list(dict.fromkeys(found))
 
 

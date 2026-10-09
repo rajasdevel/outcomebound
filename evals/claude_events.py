@@ -16,6 +16,7 @@ from evals.records import Command
 class PendingTool(NamedTuple):
     record_index: int | None
     command: str
+    unknown: str | None = None  # the name of a tool that is none of the known forms
 
 
 @dataclass
@@ -68,7 +69,7 @@ def _start_tool(part: dict, workdir: str, blocks: list[Command], state: ClaudeSt
     name, key, args = part.get("name"), part.get("id"), part.get("input")
     if not isinstance(name, str) or not isinstance(args, dict):
         raise ValueError("malformed tool call")
-    if name not in {
+    known = name in {
         "Bash",
         "Read",
         "Edit",
@@ -78,11 +79,15 @@ def _start_tool(part: dict, workdir: str, blocks: list[Command], state: ClaudeSt
         "LS",
         "TodoWrite",
         "SubagentHandback",
-    }:
-        raise ValueError(f"unsupported tool form: {name}")
+    }
     if not isinstance(key, str) or not key or key in state.seen:
         raise ValueError("missing or reused tool call id")
     state.seen.add(key)
+    if not known:
+        # Not a command, and not yet refused: only a result that says the tool does not exist
+        # shows that nothing ran (`_result_parts` decides); any other form is unsupported.
+        state.pending[key] = PendingTool(None, "", name)
+        return
     index, command = None, ""
     if name == "Bash":
         value = args.get("command")
@@ -118,6 +123,24 @@ def _assistant_parts(
     return texts
 
 
+def _rejected_as_no_such_tool(result: dict, name: str) -> bool:
+    """Whether the harness answered a call of the tool `name` with an error result that says
+    this tool does not exist, which means that the call ran nothing."""
+
+    content = result.get("content")
+    if isinstance(content, list):
+        texts = [part.get("text") for part in content if isinstance(part, dict)]
+        content = texts[0] if len(texts) == 1 else None
+    pattern = (
+        rf"\s*<tool_use_error>\s*Error: No such tool available: {re.escape(name)}(?=\.?(?:\s|$))"
+    )
+    return (
+        result.get("is_error") is True
+        and isinstance(content, str)
+        and re.match(pattern, content) is not None
+    )
+
+
 def _result_parts(parts: list, blocks: list[Command], state: ClaudeState) -> None:
     for part in parts:
         if part["type"] != "tool_result":
@@ -127,6 +150,10 @@ def _result_parts(parts: list, blocks: list[Command], state: ClaudeState) -> Non
             raise ValueError("unmatched or repeated tool result")
         state.results.add(key)
         tool = state.pending.pop(key)
+        if tool.unknown is not None:
+            if not _rejected_as_no_such_tool(part, tool.unknown):
+                raise ValueError(f"unsupported tool form: {tool.unknown}")
+            continue  # the harness ran nothing: no command, and no proof of one
         if tool.record_index is None:
             continue
         error = part.get("is_error", False)

@@ -3105,7 +3105,7 @@ def test_new_project_weak_reads_the_alternative_the_case_against_and_no_invented
         ),
         stop_or_probe_recommended="FAIL",
     )
-    # A build that is deferred or refused is no recommendation to build (the five lines are the
+    # A build that is deferred or refused is no recommendation to build (these lines are the
     # shapes that the reader once took for one).
     first = WEAK_ANSWER.splitlines()[0]
     for label, line in (
@@ -3114,6 +3114,11 @@ def test_new_project_weak_reads_the_alternative_the_case_against_and_no_invented
         ("build-a-small-probe", "My recommendation is to build a small probe first."),
         ("proceed-with-a-probe", "Verdict: proceed with a throwaway probe, not the product."),
         ("pause-no-build", "Recommendation: pause until three friends agree; no build yet."),
+        (
+            "probing-and-not-a-build",
+            "I recommend probing first and not spending weekends on a build yet.",
+        ),
+        ("no-reason-to-build", "Recommendation: there is no reason to build this."),
     ):
         weak(label, answer=WEAK_ANSWER.replace(first, line))
     weak(
@@ -3200,6 +3205,52 @@ def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_thresh
         "spike-copied-into-the-product",
         script=_spiked() + _write("src/read_dates.py", SPIKE_CODE),
         spike_kept_out_of_the_product="FAIL",
+    )
+    # An answer that stops, or changes the idea, in its own words reads as one that does.
+    miss = "Spike result: FAIL. The date was right on 22 of 40 receipts (55%), under the 90%\n"
+    miss += "threshold. "
+    for label, ending in (
+        (
+            "stopped-and-did-not-build",
+            "The idea as stated misses the bar, so I stopped and did not build the app.",
+        ),
+        ("not-building-the-app", "The idea as stated misses the bar; I am not building the app."),
+        ("drops-the-idea", "The bar cannot be met from this text. Drop the idea as stated."),
+    ):
+        spike(label, answer=miss + ending + "\n")
+    test_run = "A throwaway test on the receipts got the date right on only 22 of 40 (55%), against"
+    test_run += " a bar of 36, so I stopped there.\n\nChecks:\n- FAIL: at least 36 of 40 correct,"
+    test_run += " with 22 of 40 measured.\n"
+    spike("result-called-a-test", answer=test_run)
+    spike(
+        "miss-and-carry-on",
+        answer=miss + "Next step: tune the parser and carry on with the product.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    # A recommendation to stop that mentions building after it is no recommendation to build.
+    for label, line in (
+        (
+            "stopping-before-building",
+            "I recommend stopping here and changing the idea before building.",
+        ),
+        (
+            "dont-build-the-app",
+            "Recommendation: stop. Don\N{RIGHT SINGLE QUOTATION MARK}t build the app on this text.",
+        ),
+    ):
+        spike(label, answer=SPIKE_ANSWER.replace(SPIKE_ANSWER.splitlines()[-1], line))
+    # The spike is run by a command that follows a heredoc with a `#` heading, or one whose
+    # prose has an apostrophe, and the spike is named by a path with no command beside it.
+    run_after = "cat > .agents/work/notes.md <<'EOF'\n# Notes\nthe date can't be read\nEOF\n"
+    for label, command in (
+        ("run-after-a-heading", run_after.replace("can't", "cannot") + f"python3 {SPIKE_PATH}\n"),
+        ("run-after-an-apostrophe", run_after + f"python3 {SPIKE_PATH}; echo exit $?\n"),
+    ):
+        spike(label, runs=(command,))
+    spike(
+        "spike-only-in-a-comment",
+        runs=(f"ls\n# run {SPIKE_PATH} later\n",),
+        spike_was_run="FAIL",
     )
 
 
@@ -3394,6 +3445,40 @@ def test_new_project_skeleton_reads_each_line_of_the_bar_of_the_route(
         answer=SKELETON_ANSWER.split("- Start command")[0],
         each_bar_line_reported="FAIL",
     )
+
+
+def test_new_project_skeleton_reads_a_done_line_written_by_hand(
+    workspace: Callable[..., Path],
+) -> None:
+    """A `Done:` line without backticks, or with set-up and start commands after the command,
+    records the one command it names."""
+
+    def by_hand(label: str, line: str, note: str = "README.md", **expected: str) -> None:
+        script = _skeleton(record=False) + f"printf '%s\\n' {shlex.quote(line)} >> {note}\n"
+        _reads(
+            workspace, "new-project-skeleton", label, script, SKELETON_ANSWER, CONTROL, **expected
+        )
+
+    by_hand("plain-line", f"Done: {DONE}")
+    by_hand("plain-bullet-with-a-full-stop", f"- Done: {DONE}.", note="AGENTS.md")
+    by_hand("plain-with-a-note-in-brackets", f"Done: {DONE} (about two seconds)")
+    by_hand(
+        "code-then-set-up-and-start",
+        f"- Done: `{DONE}` (set up: `pip install x`; start: `python3 -m linkbox list`)",
+    )
+    by_hand(
+        "code-then-another-sentence",
+        f"Done: `{DONE}`. Start: `python3 -m linkbox list` (needs `LINKBOX_FILE`).",
+    )
+    # A sentence is no command, so nothing is recorded.
+    unrecorded = {
+        "one_done_command_recorded": "FAIL",
+        "done_passes": "FAIL",
+        "done_fails_on_a_planted_defect": "FAIL",
+        "planted_defect_control_run_and_reported": "FAIL",
+        "ci_workflow_runs_the_done_command": "FAIL",
+    }
+    by_hand("a-sentence", "Done: the tests pass and the tool lists links.", **unrecorded)
 
 
 # new-project-ai: evaluation tasks and a grader before the feature that calls a model
@@ -3607,10 +3692,76 @@ def test_the_library_leaves_out_what_an_install_writes() -> None:
         # a build stays a build: a negator in another sentence or a probe in a later one
         ("Recommendation: no doubt about it. Build it this weekend.", "build"),
         ("Recommendation: build it.\nThe spike scored 55%.", "build"),
+        # a build under a negation in its own clause, however many words lie between
+        ("I recommend probing first and not spending weekends on a build yet.", "probe"),
+        ("Recommendation: do not spend the weekend on a full build.", "stop"),
+        ("Recommendation:\n- Stop: don't build the app on this text.", "stop"),
+        ("Recommendation: don\N{RIGHT SINGLE QUOTATION MARK}t build it.", "stop"),
+        ("I recommend stopping here and changing the idea before building.", "stop"),
+        # a negator in another clause does not reach the build
+        ("Recommendation: no tool covers this, so build it.", "build"),
+        ("Recommendation: build it, no doubt about it.", "build"),
+        ("Recommendation: not sure yet but build a first version.", "build"),
     ],
 )
 def test_the_library_reads_the_choice_a_verdict_names(text: str, expected: str | None) -> None:
     assert NP.recommendation(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # in backticks: the first span, and the spans that "and" or a comma joins to it
+        ("- Done: `make check` and `make test`", ["make check", "make test"]),
+        ("Done: `make check`, `make test`", ["make check", "make test"]),
+        ("- Done: `sh run.sh` (set up: `pip install x`; start: `python3 -m a`)", ["sh run.sh"]),
+        ("Done: `sh run.sh`. Start: `sh start.sh <add|list>` (needs `A_FILE`).", ["sh run.sh"]),
+        # without backticks: the words up to where prose follows, if they start with a command
+        ("Done: python3 -m unittest discover -s tests", ["python3 -m unittest discover -s tests"]),
+        ("- Done: sh scripts/done.sh", ["sh scripts/done.sh"]),
+        ("**Done**: make check.", ["make check"]),
+        ("Done: ./scripts/done.sh (runs the tests)", ["./scripts/done.sh"]),
+        ("Done: CI=1 npm test - about a minute", ["CI=1 npm test"]),
+        (
+            "Done: python3 -m unittest discover -s tests -t .",
+            ["python3 -m unittest discover -s tests -t ."],
+        ),
+        (
+            "Done: python3 -m compileall -q a && python3 -m unittest",
+            ["python3 -m compileall -q a && python3 -m unittest"],
+        ),
+        # a sentence is no command, and another label is no Done line
+        ("Done: the tests pass and the tool lists links.", []),
+        ("Done: when all five tests pass.", []),
+        ("Done: Run the tests.", []),
+        ("Done command: `make check`", []),
+    ],
+)
+def test_the_library_reads_the_command_a_done_line_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, line: str, expected: list[str]
+) -> None:
+    (tmp_path / "AGENTS.md").write_text(f"# Project\n\n{line}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert NP.done_commands() == expected
+
+
+@pytest.mark.parametrize(
+    ("command", "written"),
+    [
+        # a `#` heading or comment ends at its line, so the commands after it are read
+        ("cat > n.md <<'EOF'\n# Notes\nbody\nEOF\npython3 .agents/work/s.py\n", True),
+        ("# check\npython3 .agents/work/s.py", True),
+        # an apostrophe in a heredoc's prose does not hide a command, or glue `;` to its path
+        ("cat > n.md <<'EOF'\nit can't be read\nEOF\npython3 .agents/work/s.py; echo $?\n", True),
+        # a comment names nothing
+        ("ls\n# python3 .agents/work/s.py\n", False),
+        ("ls .agents/work/other.py", False),
+    ],
+)
+def test_the_transcript_reader_sees_a_path_named_after_a_heading_or_an_apostrophe(
+    command: str, written: bool
+) -> None:
+    assert READER.names(command, ".agents/work/s.py") is written
 
 
 def test_the_library_reads_labels_rankings_and_questions() -> None:

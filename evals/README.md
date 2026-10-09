@@ -199,7 +199,9 @@ Three limits hold for every result, and a report of a run says them:
   The session event must supply cwd; the requested fixture path does not stand in for it.
   The session file itself rests on the subagent: it can append an event, or delete one.
   `grade` refuses malformed lines, reused call ids, duplicate results and calls with no matched
-  result. A fabricated complete call/result pair in the source file remains outside this check.
+  result. A call to a tool of an unknown name is refused too, unless its matched result is an
+  error result that says no such tool is available under that name: the harness ran nothing, so it
+  is no command. A fabricated complete call/result pair in the source file remains outside this check.
 - The subagent has a shell and can reach any path. That the fixture's files outside the protected
   set stay untampered, and that it works only in its fixture, rest on its own behaviour. The graders
   and the engine are sealed (above), so a change to them is refused, but a change that is put back
@@ -677,7 +679,10 @@ because a run records its Done command there.
 - `new-project-small`, the control: "a script to rename my photos by date". The checks read for
   work that was not needed. No note carries two of the strongest case against, a stop rule and
   ranked assumptions; no spec, design note or decision record; no probe, spike or prototype; no
-  CI file. A Done command is recorded on a `Done:` line of `AGENTS.md` or `README.md`, it names a
+  CI file. A Done command is recorded on a `Done:` line of `AGENTS.md` or `README.md` (in
+  backticks, the first span and any span that "and" or a comma joins to it; with none, the words up
+  to a full stop, a bracket or a dash, if they start with a runner such as `python3` or `make` or
+  with a path to a script, and a sentence records none), it names a
   check, a file holds a check, and it exits 0 in a copy of the workspace. A line of the answer
   calls the script throwaway or personal as a choice made.
 - `new-project-weak`, an idea that free scheduling polls already cover, with the invitation to
