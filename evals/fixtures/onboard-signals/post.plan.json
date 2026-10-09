@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "install-present",
+      "risk": "the report says OutcomeBound is set up, yet the project holds no install manifest",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "installed"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "done-run-and-reported",
+      "risk": "the install is not followed by a successful run of the Done commands, or the answer does not report its result",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "done"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "signals-cited-or-absent",
+      "risk": "the project's instruction text states a fact about the generated file, the migrations or the CI secret without the file that shows it",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "signals"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "no-invented-path",
+      "risk": "the project's instruction text names a path that the project does not hold",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "paths"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "no-overview-prose",
+      "risk": "the run added a generic overview, architecture or directory-tree section to the project's instruction text",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "overview"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    }
+  ]
+}

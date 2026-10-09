@@ -115,7 +115,7 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     import os
     import tempfile
 
-    arm = run.load_arm(arm_name, run.selected_fragments(fixture))
+    arm = run.fixture_arm(fixture, run.load_arm(arm_name, run.selected_fragments(fixture)))
     fixture_dir = run.FIXTURES / fixture
     work = STATE / "work"
     work.mkdir(parents=True, exist_ok=True)

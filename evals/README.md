@@ -746,3 +746,72 @@ Reading limits, which a report of a run says:
 - No test here runs a model. `tests/test_eval_scenarios.py` plants a right run and a wrong run
   for each fixture, and shows that each check separates them. A run of any of the six is
   `UNVERIFIED` until the maintainer grants it.
+
+## Onboarding fixtures
+
+Two fixtures measure the onboarding route: `adopt --detect`, `--setup` and `--verify`, and the
+`adopt-outcomebound` skill. They show whether the route makes an agent onboard an existing
+project better than an earlier route did. They run only when `--fixtures` names them (the prefix
+`onboard-`), so the default batch stays at thirty-one. A run of either is `UNVERIFIED` until the
+maintainer grants it.
+
+Each fixture follows the nested-target pattern of `adopt-inspect`. The arm's own install is at the
+root of the workspace, with the adopt skill (`fixture_arm` adds it for these fixtures, and
+`claude_arm.py prepare` uses it as `run.py` does). The project the task acts on is a separate Git
+repository, `target/project/`, which starts with no OutcomeBound install. The fixture brings no
+engine: the `outcomebound` command on PATH is the engine of the checkout that runs the arm, so a comparison
+of two releases runs the same fixture from two checkouts. Both fixtures give the same task: set
+OutcomeBound up in `target/project/` offline, do not commit, leave the source, tests, Makefile and
+CI files as they are, and report.
+
+- `onboard-signals`, an expense ledger with real onboarding signals: a generated file that
+  `.gitattributes` marks `linguist-generated`, applied database migrations in `db/migrations/`, a
+  CI workflow whose test step receives a secret, a `.python-version` file, and a Makefile `test`
+  target that works offline with the Python standard library. `--detect` reports each of these as
+  a signal. The project has a short note of its own that names none of them.
+- `onboard-plain`, the control: a word counter with no such signal, a CI workflow that runs
+  `make test` with no secret, and a working `make test`. The install and a measured Done are all
+  that it needs.
+
+The checks share `evals/graders/onboard.py`, copied into the workspace with `new_project.py`
+and protected. The seed commit of the project is in `target-seed.txt`, which is protected.
+
+| Claim | Fixture | What it reads |
+| --- | --- | --- |
+| `install-present` | both | `target/project/.outcomebound/manifest.json` exists and holds a JSON object |
+| `done-run-and-reported` | both | the transcript shows a successful `adopt` command on the project, then a successful `adopt --verify` on it (the install may carry `--verify`) or a successful run of a Done command (`make test`, or the commands of the `Done:` line); a line of the answer names the run and says `PASS`, `FAIL`, `UNVERIFIED`, `ok` or a test count |
+| `signals-cited-or-absent` | signals | for each of the generated file, the migrations and the CI secret: if the run's text speaks of it, a paragraph, list item or slot that does so names its source file (`.gitattributes`, `db/migrations`, `ci.yml`); a signal the run never wrote about holds |
+| `no-invented-path` | signals | each path in the run's text exists in the project |
+| `no-overview-prose` | both | the run's text has no heading or bold label for an overview, architecture or project structure, and no fenced file tree |
+| `no-project-fact-added` | plain | `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` outside the install's blocks are as they were, and the `local` fragment holds no line of the run |
+
+The target's source, tests, Makefile, CI workflow and the files its signals come from are in
+`protected.paths`. The run must leave them unchanged, or the run fails before any post-check.
+
+Reading limits, which a report of a run says:
+
+- "The run's text" is the lines the run added to `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` outside
+  the blocks that adopt manages (from an `outcomebound:begin` marker to its end marker), and the
+  lines of `.outcomebound/fragments/local.md` that are neither front matter nor lines of
+  `templates/fragment-local.md`. The adopt skill names that fragment as the place for the
+  project's own facts. The checks need `OUTCOMEBOUND_EVAL_DIR`, which the runner sets, to find the
+  template; without it a check that reads the fragment fails and says so. A fragment that exists
+  but that no install selected still counts as the run's text.
+- The checks read words and paths, not meaning. A line that names a file reads as citing it,
+  whether or not the file shows the fact. A path is a word with a known file extension, a
+  dotfile, a trailing slash, two slashes, or a first folder that the project holds; a bare file
+  name counts as held when any file of the project has that name. Paths under `.outcomebound/`,
+  `.agents/` and the harness folders, URLs, flags and globs are not read.
+- Two facts in one block share its sources. A later mention of a signal needs no citation of its
+  own once one block cites the file.
+- The transcript must be a record of commands. A Done run counts only when its line succeeded and
+  the install came before it or in the same command. The check cannot tell which folder a bare
+  `make test` ran in; the workspace root has no Makefile, so a success there is a success in the
+  project.
+- These fixtures were built for Claude as the model, through `claude_arm.py`. The write roots of
+  the codex sandbox are not widened for them (only `adopt-upgrade` has them), so a codex run that
+  needs to write `.git` or `.agents/skills` of the project is `UNVERIFIED`.
+- No test here runs a model. `tests/test_eval_scenarios.py` plants a right run and a wrong run
+  for each claim, and shows that the claim separates them, and that `--detect` still reports the
+  signals of the signals fixture and none in the plain one.
+

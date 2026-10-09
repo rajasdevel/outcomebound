@@ -67,6 +67,7 @@ NAMED_ONLY = (
     "property-oracles",
     "testing-no-work",
     "new-project-",
+    "onboard-",
 )
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
@@ -295,9 +296,10 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
 
 
 def fixture_arm(name: str, arm: Arm) -> Arm:
-    """The adoption controller carries its subject skill; ordinary installs do not."""
+    """The adoption controller and the onboarding fixtures carry their subject skill; ordinary
+    installs do not."""
 
-    if not name.startswith("adopt-") or arm.name == NONE:
+    if not name.startswith(("adopt-", "onboard-")) or arm.name == NONE:
         return arm
     from outcomebound_tools import adopt
 

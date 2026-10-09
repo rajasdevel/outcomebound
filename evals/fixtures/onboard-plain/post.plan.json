@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "install-present",
+      "risk": "the report says OutcomeBound is set up, yet the project holds no install manifest",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_plain.py", "installed"],
+      "required_paths": ["checks/probe_plain.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "done-run-and-reported",
+      "risk": "the install is not followed by a successful run of the Done commands, or the answer does not report its result",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_plain.py", "done"],
+      "required_paths": ["checks/probe_plain.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "no-overview-prose",
+      "risk": "the run added a generic overview, architecture or directory-tree section to the project's instruction text",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_plain.py", "overview"],
+      "required_paths": ["checks/probe_plain.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "no-project-fact-added",
+      "risk": "a project with no onboarding signal was given project facts: the instruction text outside the install's blocks changed, or the local fragment holds a line the run wrote",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_plain.py", "facts"],
+      "required_paths": ["checks/probe_plain.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    }
+  ]
+}
