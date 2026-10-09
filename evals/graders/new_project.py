@@ -7,11 +7,15 @@ which it loads from beside itself. A fixture's own probe names the checks and ca
 It reads three things and never runs a model:
 
 - the tree. `changed_files` is the fail-closed content walk of `scope_walk.py`: every file that
-  differs from the seed, whatever Git is told to ignore. A file is a note, code, a dependency
-  manifest or a CI file by its name; the working area is `.agents/work/`.
+  differs from the seed, whatever Git is told to ignore, and neither a run byproduct nor a file
+  that an OutcomeBound install writes. A file is a note, code, a dependency manifest or a CI file
+  by its name; the working area is `.agents/work/`.
 - the notes. A frame is read from labels: a heading, a bold lead, a `label:` or the first cell of
   a table row, matched against the words each element of the frame carries. This reads words, not
-  meaning: it cannot tell a sound outcome from a thin one under the same label.
+  meaning: it cannot tell a sound outcome from a thin one under the same label. A note is read
+  for the lines the run added: the lines of an install's managed blocks are the install's, so the
+  run gets no credit for the kernel, the pointers or the skills. The `Done:` line that an install
+  records is read from the whole file by `done_commands`, as a line the run wrote by hand is.
 - the order of two writes. `written_before` reads the commit that first held each file, and where
   the two share a commit or are not committed, the time each file was created (the creation time
   where the file system gives it, else the last write). Equal times, or none, leave the order
@@ -108,6 +112,15 @@ BYPRODUCTS = frozenset(
         "node_modules",
     }
 )
+# What an OutcomeBound install writes outside the host files: its records, and the skills and
+# settings of each harness (adapters/harnesses.json). The run's own working area, `.agents/work/`,
+# is not among them.
+INSTALLED = (
+    ".outcomebound/", ".claude/", ".codex/", ".cursor/", ".gemini/", ".amp/", ".pi/",
+    ".agents/skills/",
+)  # fmt: skip
+MANAGED_BEGIN = re.compile(r"<!--\s*outcomebound:begin\b")
+MANAGED_END = re.compile(r"<!--\s*outcomebound:end\b")
 NOTE_SUFFIXES = (".md", ".txt", ".rst", ".adoc")
 CODE_SUFFIXES = frozenset(
     {
@@ -128,8 +141,31 @@ CI = re.compile(
 DESIGN_WORDS = frozenset({"spec", "specs", "design", "adr", "adrs"})
 
 
+def installed(path: str) -> bool:
+    """Whether an OutcomeBound install writes the file: not the run's work, whoever ran it."""
+
+    return path.startswith(INSTALLED)
+
+
+def outside_managed_blocks(lines: Sequence[str]) -> list[str]:
+    """The lines that stand outside the blocks an install manages in AGENTS.md or a host file,
+    from a begin marker to the end marker. A block that never closes runs to the end."""
+
+    kept = []
+    inside = False
+    for line in lines:
+        if MANAGED_BEGIN.search(line):
+            inside = True
+        if not inside:
+            kept.append(line)
+        if inside and MANAGED_END.search(line):
+            inside = False
+    return kept
+
+
 def changed_files() -> list[str]:
-    """Every file that differs from the seed and exists now, run byproducts left out."""
+    """Every file that differs from the seed and exists now, run byproducts and what an install
+    writes left out."""
 
     arguments = argparse.Namespace(
         root=".",
@@ -147,6 +183,7 @@ def changed_files() -> list[str]:
         name
         for name in names
         if not name.startswith(".git/")
+        and not installed(name)
         and not BYPRODUCTS.intersection(Path(name).parts)
         and Path(name).is_file()
     ]
@@ -186,10 +223,11 @@ def is_probe_named(path: str) -> bool:
 
 
 def added_text(path: str) -> str:
-    """The lines of a changed file that the seed's version does not hold; all of a new file. The
-    kernel and the pointers that an install writes into AGENTS.md are the seed's, not the run's."""
+    """The lines of a changed file that the seed's version does not hold; all of a new file. What
+    an install manages in AGENTS.md or a host file, from a begin marker to its end marker, is the
+    install's, whether or not the seed holds it, and the seed's own lines are not the run's."""
 
-    now = read(path).splitlines()
+    now = outside_managed_blocks(read(path).splitlines())
     try:
         before = git("show", f"{seed()}:{path}").splitlines()
     except RuntimeError:
@@ -394,15 +432,49 @@ def is_ranked(body: str) -> bool:
 # --- the answer -------------------------------------------------------------------------------
 
 _LABEL_WORDS = r"recommend\w*|verdict|my call|bottom line|conclusion"
-_CHOICES = (
-    ("stop", re.compile(r"(?i)\bstop\b|do(es)? not build|don'?t build|not build|abandon|\bkill\b")),
-    ("probe", re.compile(r"(?i)probe|spike|prototype|validate first|test first")),
-    ("build", re.compile(r"(?i)\bbuild(ing)?\b|\bproceed\b|go ahead")),
+_STOP = re.compile(r"(?i)\bstop\b|do(es)? not build|don'?t build|not build|abandon|\bkill\b")
+_PROBE = re.compile(r"(?i)probe|spike|prototype|validate first|test first")
+_BUILD = re.compile(r"(?i)\bbuild(ing)?\b|\bproceed\b|go ahead")
+
+
+# A build word is no choice where one of these stands within three words before it, in its own
+# sentence ("not to build", "no build yet"), or where it says nothing is built ("build nothing").
+_NO_BUILD_BEFORE = re.compile(
+    r"(?i)\b(?:no|not|nothing|never|pause|without)\b(?:[^\w.!?;\n]+\w+){0,2}[^\w.!?;\n]*$"
 )
+_NO_BUILD_AFTER = re.compile(r"(?i)^[^\w.!?;\n]*(?:nothing|none)\b")
+_SENTENCE_END = re.compile(r"[.!?](?:\s|$)|\n")
+
+
+def _choices(tail: str) -> list[tuple[int, str]]:
+    """Each choice the tail names, with where: the first stop and the first probe, and the builds
+    that are no refusal to build. A build that is refused counts as `stop` only where the tail
+    names nothing else."""
+
+    named = [
+        (hit.start(), name)
+        for name, rule in (("stop", _STOP), ("probe", _PROBE))
+        if (hit := rule.search(tail))
+    ]
+    refused = False
+    for hit in _BUILD.finditer(tail):
+        if _NO_BUILD_BEFORE.search(tail[: hit.start()]) or _NO_BUILD_AFTER.search(
+            tail[hit.end() :]
+        ):
+            refused = True
+        else:
+            named.append((hit.start(), "build"))
+            break
+    if not named and refused:
+        named.append((0, "stop"))
+    return sorted(named)
 
 
 def recommendation(text: str) -> str | None:
-    """`stop`, `probe` or `build`: the first choice named after a word that gives a verdict."""
+    """`stop`, `probe` or `build`: the first choice named after a word that gives a verdict. A
+    build that is refused ("not to build", "build nothing") reads as stop, and a build beside a
+    stop or a probe in its own sentence ("build, probe first, or stop") reads as that stop or
+    probe."""
 
     lines = text.splitlines()
     for index, line in enumerate(lines):
@@ -411,11 +483,16 @@ def recommendation(text: str) -> str | None:
             r"(?i)(?:\bnot|n't|\bnever)\s+(?:\w+\s+)?$", line[: marked.start()]
         ):
             continue  # no verdict, or one that says what it does not recommend
-        tail = " ".join([line[marked.end() :], *lines[index + 1 : index + 3]])
-        hits = [(rule.search(tail), name) for name, rule in _CHOICES]
-        named = sorted((hit.start(), name) for hit, name in hits if hit)
-        if named:
-            return named[0][1]
+        tail = "\n".join([line[marked.end() :], *lines[index + 1 : index + 3]])
+        named = _choices(tail)
+        if not named:
+            continue
+        where, choice = named[0]
+        if choice == "build":
+            end = _SENTENCE_END.search(tail, where)
+            beside = [name for at, name in named[1:] if at < (end.end() if end else len(tail))]
+            choice = beside[0] if beside else choice
+        return choice
     return None
 
 
@@ -441,11 +518,25 @@ TIES_TO_A_DECISION = re.compile(
     r"|if (you|yes|no|it|the|so)|then (i|we)|whether (i|we)|stop rule|appetite|no-?go"
     r"|recommend\w*|assum\w*)\b"
 )
+# What a sentence beside a question may say that its answer does. Only a sentence that is no
+# question counts: the words of the question ("which colour do you pick?") tie it to nothing.
+ANSWER_SETS = re.compile(
+    r"(?i)\b(sets?|fix(es)?|settl(es?|ed)|tells? me|would (let|make)|decides?|chooses?|picks?)\b"
+)
+
+
+def _statements(block: str) -> str:
+    """The sentences of a block that are no question."""
+
+    sentences = re.split(r"(?<=[.!?])\s+", " ".join(block.split()))
+    return " ".join(sentence for sentence in sentences if "?" not in sentence)
 
 
 def bare_questions(text: str) -> list[str]:
     """The questions put to the person that name no decision their answer changes: a numbered
-    item with a question mark, or a block that ends a line with one."""
+    item with a question mark, or a block that ends a line with one. A decision is named by the
+    block's words (`changes`, `depends`, `if you`) or by a second sentence that says what the
+    answer sets."""
 
     bare = []
     for block in blocks(text):
@@ -454,7 +545,8 @@ def bare_questions(text: str) -> list[str]:
             re.sub(r"[\s*_`)\]\"'\u201d\u2019]+$", "", line).endswith("?")
             for line in block.splitlines()
         )
-        if "?" in block and (numbered or ends) and not TIES_TO_A_DECISION.search(block):
+        tied = TIES_TO_A_DECISION.search(block) or ANSWER_SETS.search(_statements(block))
+        if "?" in block and (numbered or ends) and not tied:
             bare.append(" ".join(block.split())[:120])
     return bare
 

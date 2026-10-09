@@ -717,6 +717,17 @@ Reading limits, which a report of a run says:
 
 - The answer checks read lines for the words each must carry, not meaning. A frame that has every
   label with a thin text under one passes `frame`; the review of a saved frame is separate.
+- A run is credited with the text it wrote. What an OutcomeBound install writes is left out: the
+  folders `.outcomebound/`, the skill and settings folders of each harness (`.claude/`,
+  `.codex/`, `.cursor/`, `.gemini/`, `.amp/`, `.pi/`, `.agents/skills/`) and, in `AGENTS.md` or a
+  host file, the lines from an `outcomebound:begin` marker to its `outcomebound:end` marker. The
+  `Done:` line that `adopt --done` records in the facts block is still read. Work that a run puts
+  under one of those folders is not seen.
+- A verdict is the first choice that the answer names after a verdict word (recommend, verdict,
+  my call). A build that is refused ("not to build", "no build yet", "build nothing") reads as
+  stop, and a build with a stop or a probe in its own sentence ("build, probe first, or stop")
+  reads as that stop or probe. A question names the decision its reply changes by its words, or by
+  a second sentence that says what the answer sets.
 - The order of two writes is the commit that first held each file; where two files share a commit
   or are not committed, it is their creation time where the file system gives one (macOS does),
   else their last write. Equal times leave the order unestablished and the check fails, reading

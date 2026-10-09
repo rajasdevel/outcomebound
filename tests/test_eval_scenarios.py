@@ -2983,6 +2983,11 @@ def test_new_project_idea_reads_a_frame_a_recommendation_and_nothing_built(
     )
     idea("appetite-asked-in-the-answer", note=_frame_note(replace=invented))
     idea(
+        "question-whose-answer-sets-the-first-user",
+        answer=IDEA_ANSWER
+        + "2. Which bakery would you onboard first? Your answer sets the first user.\n",
+    )
+    idea(
         "question-with-no-decision",
         answer=IDEA_ANSWER + "2. What should the app be called?\n",
         questions_bear_on_a_decision="FAIL",
@@ -3100,6 +3105,17 @@ def test_new_project_weak_reads_the_alternative_the_case_against_and_no_invented
         ),
         stop_or_probe_recommended="FAIL",
     )
+    # A build that is deferred or refused is no recommendation to build (the five lines are the
+    # shapes that the reader once took for one).
+    first = WEAK_ANSWER.splitlines()[0]
+    for label, line in (
+        ("build-nothing-yet", "Recommendation: build nothing yet; probe first with three friends."),
+        ("not-to-build", "Recommendation: not to build; the tool exists."),
+        ("build-a-small-probe", "My recommendation is to build a small probe first."),
+        ("proceed-with-a-probe", "Verdict: proceed with a throwaway probe, not the product."),
+        ("pause-no-build", "Recommendation: pause until three friends agree; no build yet."),
+    ):
+        weak(label, answer=WEAK_ANSWER.replace(first, line))
     weak(
         "desirability-not-unverified",
         answer=WEAK_ANSWER.replace("UNVERIFIED", "unknown"),
@@ -3169,6 +3185,11 @@ def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_thresh
             "22 of 40 receipts (55%), under the 90%\nthreshold", "some receipts"
         ).replace("18 receipts", "other receipts"),
         missed_threshold_reported_as_fail="FAIL",
+    )
+    refused = "Recommendation: not to build; take the date from the person."
+    spike(
+        "refuses-to-build-after-the-miss",
+        answer=SPIKE_ANSWER.replace(SPIKE_ANSWER.splitlines()[-1], refused),
     )
     spike(
         "recommends-building-after-the-miss",
@@ -3275,13 +3296,17 @@ CONTROL = ((DONE, "exited 1"), DONE)
 
 
 def _skeleton(
-    done: str = DONE, test: str = BOUNDARY_TEST, workflow: bool = True, env="LINKBOX_FILE=\n"
+    done: str = DONE,
+    test: str = BOUNDARY_TEST,
+    workflow: bool = True,
+    env="LINKBOX_FILE=\n",
+    record: bool = True,
 ) -> str:
     steps = [
         _write("linkbox/__init__.py", ""),
         _write("linkbox/__main__.py", LINKBOX_MAIN),
         _write("tests/test_cli.py", test),
-        f"printf '\\n- Done: `%s`\\n' {shlex.quote(done)} >> AGENTS.md\n",
+        f"printf '\\n- Done: `%s`\\n' {shlex.quote(done)} >> AGENTS.md\n" if record else "",
         _write(".github/workflows/ci.yml", WORKFLOW % done) if workflow else "",
         _write(".env.example", env) if env is not None else "",
     ]
@@ -3448,7 +3473,117 @@ def _ai_claims() -> list[str]:
     return [claim["name"].replace("-", "_") for claim in _plan("new-project-ai")["claims"]]
 
 
+# what an install writes is OutcomeBound's text, never the run's own work: the route's first step
+# tells a run to install, and the install puts the kernel, the pointers and the skills in the tree
+
+
+def _installed(*flags: str) -> str:
+    """A step that installs this checkout's OutcomeBound for Claude Code in the workspace."""
+
+    engine = shlex.quote(sys.executable) + " -B -m outcomebound_tools"
+    return (
+        f"PYTHONPATH={shlex.quote(str(ROOT))} {engine} adopt . --harness claude-code "
+        f"{' '.join(flags)} >/dev/null || exit 1\n"
+    )
+
+
+TWO_LABELS = (
+    "## Assumptions, riskiest first\n\n1. Bakeries list their stock.\n2. Customers reserve.\n\n"
+    "## Strongest case against\n\nThe phone line is free.\n"
+)
+
+
+@pytest.mark.parametrize("note", ["", TWO_LABELS], ids=["install-only", "install-and-two-labels"])
+def test_an_install_fills_no_element_of_the_idea_frame(
+    workspace: Callable[..., Path], note: str
+) -> None:
+    target = workspace("new-project-idea", "install")
+    _act(target, _installed() + (_write(".agents/work/frame.md", note) if note else ""))
+    verdicts = _grade(target, "new-project-idea", _said(target), "I looked at the idea.\n")
+    assert verdicts["frame-complete"] == "FAIL", verdicts["_output"]
+    assert verdicts["nothing-built-beyond-a-probe"] == "PASS", verdicts["_output"]
+
+
+def test_an_install_gives_no_case_against_and_names_no_tool_for_the_weak_idea(
+    workspace: Callable[..., Path],
+) -> None:
+    target = workspace("new-project-weak", "install")
+    _act(target, _installed())
+    verdicts = _grade(target, "new-project-weak", _said(target), "I looked at the idea.\n")
+    for claim in ("strongest-case-against-given", "existing-tool-named"):
+        assert verdicts[claim] == "FAIL", (claim, verdicts["_output"])
+    assert verdicts["nothing-built-beyond-a-probe"] == "PASS", verdicts["_output"]
+
+
+def test_a_frame_the_run_wrote_after_an_install_is_still_read(
+    workspace: Callable[..., Path],
+) -> None:
+    _reads(
+        workspace,
+        "new-project-idea",
+        "frame-after-install",
+        _installed() + _write(".agents/work/frame.md", _frame_note()),
+        IDEA_ANSWER,
+    )
+
+
+def test_a_small_script_after_an_install_is_not_read_as_framed_or_probed(
+    workspace: Callable[..., Path],
+) -> None:
+    _reads(
+        workspace, "new-project-small", "install-then-script", _installed() + _small(), SMALL_ANSWER
+    )
+
+
+def test_a_spike_and_a_task_set_written_after_an_install_are_still_read(
+    workspace: Callable[..., Path],
+) -> None:
+    script = _installed() + _spiked()
+    _reads(workspace, "new-project-spike", "install-then-spike", script, SPIKE_ANSWER, (SPIKE_RUN,))
+    tasks = _installed() + _evaluated() + _commit("tasks") + _featured() + _commit("feature")
+    _reads(workspace, "new-project-ai", "install-then-tasks", tasks, "Built the skeleton.\n")
+
+
+def test_the_done_command_an_install_records_in_the_facts_block_is_still_read(
+    workspace: Callable[..., Path],
+) -> None:
+    script = _installed("--done", shlex.quote(DONE)) + _skeleton(record=False)
+    _reads(
+        workspace,
+        "new-project-skeleton",
+        "done-in-the-facts-block",
+        script,
+        SKELETON_ANSWER,
+        CONTROL,
+    )
+
+
 # the library the six fixtures share
+
+
+def test_the_library_leaves_out_what_an_install_writes() -> None:
+    for path in (
+        ".outcomebound/manifest.json",
+        ".claude/skills/diagnose/SKILL.md",
+        ".codex/hooks.json",
+        ".cursor/rules/outcomebound.mdc",
+        ".gemini/skills/diagnose/SKILL.md",
+        ".amp/settings.json",
+        ".agents/skills/diagnose/SKILL.md",
+    ):
+        assert NP.installed(path), path
+    for path in (".agents/work/frame.md", "docs/specs/a/design.md", "AGENTS.md", "app.py"):
+        assert not NP.installed(path), path
+    host = [
+        "<!-- outcomebound:begin id=pointer-gemini-md v=1.0.0 -->",
+        "@AGENTS.md",
+        "<!-- outcomebound:end id=pointer-gemini-md -->",
+        "## Strongest case against",
+        "<!-- outcomebound:begin id=project-facts v=1.0.0 -->",
+        "- Done: `make check`",
+    ]
+    # a block that never closes is the install's to the end of the file: the run gets no credit
+    assert NP.outside_managed_blocks(host) == ["## Strongest case against"]
 
 
 @pytest.mark.parametrize(
@@ -3461,6 +3596,17 @@ def _ai_claims() -> list[str]:
         ("I do not recommend building this.", None),
         ("## Recommendation\n\nProbe first.", "probe"),
         ("Nothing is settled, and no choice is named.", None),
+        # a build that is negated, deferred or only the first of three options
+        ("Recommendation: build nothing yet; probe first with three bakeries.", "probe"),
+        ("Recommendation: not to build; the tool exists.", "stop"),
+        ("My recommendation is to build a small probe first.", "probe"),
+        ("Verdict: proceed with a throwaway probe, not the product.", "probe"),
+        ("Recommendation: pause until three bakeries agree; no build yet.", "stop"),
+        ("Recommendation: build nothing. Ask three bakeries first.", "stop"),
+        ("Recommendation: build, probe first, or stop.", "probe"),
+        # a build stays a build: a negator in another sentence or a probe in a later one
+        ("Recommendation: no doubt about it. Build it this weekend.", "build"),
+        ("Recommendation: build it.\nThe spike scored 55%.", "build"),
     ],
 )
 def test_the_library_reads_the_choice_a_verdict_names(text: str, expected: str | None) -> None:
@@ -3476,6 +3622,13 @@ def test_the_library_reads_labels_rankings_and_questions() -> None:
     assert NP.is_ranked("## Assumptions\n\n1. one\n2. two\n")
     asked = "1. Which colour? It changes nothing.\n2. Name?\n\nWhy build it? Because.\n"
     assert NP.bare_questions(asked) == ["2. Name?"]
+    # a second sentence that names what the answer sets ties a question to a decision
+    sets = "1. Which bakery would you onboard first? Your answer sets the first user.\n"
+    decides = "What should the app be called? This decides the domain name.\n"
+    assert NP.bare_questions(sets + "\n" + decides) == []
+    assert NP.bare_questions("1. Which test would let me stop? Its answer tells me when.\n") == []
+    # the words of the question itself tie it to nothing
+    assert NP.bare_questions("2. Which colour do you pick?\n") == ["2. Which colour do you pick?"]
 
 
 def test_the_order_of_two_writes_is_unestablished_where_the_evidence_does_not_say(monkeypatch):
