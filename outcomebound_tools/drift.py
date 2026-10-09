@@ -13,7 +13,6 @@ line refuses nothing. It reads files and runs read-only Git commands; it writes 
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Collection, Sequence
 from pathlib import Path
@@ -24,8 +23,8 @@ from outcomebound_tools import discovery, facts
 # date: a project that was quiet for a year still shows who maintains it, and a busy one shows
 # who works on it now. Merges are left out because a merge commit names whoever pressed the button.
 WINDOW = 100
-RELEASE_TAGS = "git tags"
-VERSION_FILES = ("VERSION", "pyproject.toml", "package.json", "Cargo.toml")
+RELEASE_TAGS = "version-like git tags"
+VERSION_FILE = "VERSION"
 CODEOWNERS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
 TEAM, SOLO, DEPLOY, CI_RELEASE = "team", "solo", "deploy", "ci-release"
 
@@ -35,7 +34,8 @@ TEAM, SOLO, DEPLOY, CI_RELEASE = "team", "solo", "deploy", "ci-release"
 _NO_REPLY = re.compile(r"^(no-?reply|do-?not-?reply)$")
 _BOT_MAILBOX = re.compile(r"(^|[-_.+])bot$")
 _ACT = re.compile(r" (runs|uses) (.+)$")
-_VERSION_LINE = re.compile(r"""^\s*version\s*=\s*["'][^"']+["']""", re.MULTILINE)
+# A version: `1.2`, `1.2.3`, `v1.2.3`, with a pre-release or build suffix (`1.2.3-rc.1`).
+_VERSION = re.compile(r"^v?\d+\.\d+(\.\d+)*([-+][0-9A-Za-z.+-]+)?$")
 _EXPOSURE = re.compile(r"Exposure\s+[—-]", re.IGNORECASE)
 _NEXT_PART = re.compile(r"^(\*\*|[A-Z][A-Za-z ]*\s—\s)")
 _MAINTAINED = re.compile(r"maintained\s+by\s*:\s*([^;(\n]*)", re.IGNORECASE)
@@ -69,38 +69,30 @@ def recent_authors(target: Path) -> int | None:
 
 
 def release_identity(target: Path) -> list[str]:
-    """The evidence of a release identity, in a fixed order: the repository has tags, and each
-    version file that holds a version. Empty where there is none."""
+    """The evidence of a release practice, in a fixed order: a tag that is a version (`v1.2.3`,
+    `1.2.3`, `v1.2`), and a `VERSION` file whose first line is a version. A version in
+    `pyproject.toml`, `package.json` or `Cargo.toml` is no evidence, since nearly every package
+    carries one. Empty where there is none."""
 
     found: list[str] = []
     tags = discovery.git_read(target, "tag", "--list")
-    if tags is not None and tags.strip():
+    if tags is not None and any(_VERSION.match(tag.strip()) for tag in tags.decode().splitlines()):
         found.append(RELEASE_TAGS)
-    for name in VERSION_FILES:
-        text, _ = facts.read_small(target, name)
-        if text is not None and _has_version(name, text):
-            found.append(name)
+    text, _ = facts.read_small(target, VERSION_FILE)
+    first = (text or "").strip().splitlines()[:1]
+    if first and _VERSION.match(first[0].strip()):
+        found.append(VERSION_FILE)
     return found
 
 
-def _has_version(name: str, text: str) -> bool:
-    if name == "VERSION":
-        return bool(text.strip())
-    if name == "package.json":
-        try:
-            document = json.loads(text)
-        except ValueError:
-            return False
-        return isinstance(document, dict) and isinstance(document.get("version"), str)
-    return _VERSION_LINE.search(text) is not None
-
-
 def signals(target: Path) -> list[facts.Signal]:
-    """The recent-authors and release-identity signals, for `--detect`'s signal lines."""
+    """The recent-authors and release-identity signals, for `--detect`'s signal lines. A signal
+    says something that can change a proposal: recent authors only from two (one author is the
+    ordinary case), release identity only from a version tag or a `VERSION` file."""
 
     found: list[facts.Signal] = []
     authors = recent_authors(target)
-    if authors is not None:
+    if authors is not None and authors >= 2:
         where = f"git log, the last {WINDOW} commits without merges, bots left out"
         found.append(facts.Signal("recent-authors", where, str(authors), "Context"))
     evidence = release_identity(target)
