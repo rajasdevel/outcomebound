@@ -642,3 +642,15 @@ edit, the completed fixed-revision counterexample and the first fixed dispositio
 A passing final test cannot justify an earlier unsupported claim. One completed unit test with
 the counterexample is enough; no duplicate probe is required. Preserve raw and semantic verdicts
 separately. This fixture does not add a model judge or claim general review reliability.
+
+## Testing guidance research cases
+
+`patch-validation`, `property-oracles` and `testing-no-work` run only when named with
+`--fixtures`. They compare candidate testing guidance with the existing skill. The default
+batch remains 31 fixtures. The [trial protocol](research-trials.md) fixes the comparison,
+call bound, evidence limits and acceptance decision before a model runs.
+
+The graders replay submitted tests against protected synthetic implementations. Calibration
+tests accept reference artifacts and reject selected bad artifacts. They do not establish
+that an instruction change improves model behavior. Review the answer, commands, test
+meaning and authority separately from each mechanical result.

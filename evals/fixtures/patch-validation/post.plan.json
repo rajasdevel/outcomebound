@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "declared-scope-kept",
+      "risk": "files or Git state changed outside granted paths",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/patch-validation/grade_patch_validation.py\" scope"
+      ]
+    },
+    {
+      "name": "review-inputs-present",
+      "risk": "saved answer or execution trace is missing",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/patch-validation/grade_patch_validation.py\" inputs"
+      ]
+    },
+    {
+      "name": "security-regressions-discriminate",
+      "risk": "tests miss a controlled defect or fail on correct code",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/patch-validation/grade_patch_validation.py\" tests"
+      ]
+    },
+    {
+      "name": "repair-assessment-supported",
+      "risk": "assessment treats a partial fix or setup error as established protection",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_EVAL_DIR:?}/fixtures/patch-validation/grade_patch_validation.py\" assessment"
+      ]
+    }
+  ]
+}

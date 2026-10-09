@@ -113,3 +113,16 @@ in `docs/evaluations.md`. The runner's bounded native-retention option keeps one
 for separate review, not an automatic identity, sequence or behavior verdict. Its current limits
 are recorded in [E21](../../evaluations.md#current-bounded-retention-support).
 The explain-spec fixture declares its own notes area; the skill gains no universal notes-folder rule.
+
+
+## Research candidates for 1.6.0
+
+The [testing guidance trials](../../../evals/research-trials.md) define the comparison before
+results are read. Post-patch-validation and useful property selection are candidates for
+small additions to `tests-worth-keeping`, not new installed skills. Existing refusal-path
+and tautology guidance remains the baseline. A source inspection is not behavioral evidence.
+
+Version-matched tool instructions remain a research-only mechanism until a concrete drift
+case shows a gap. The new model and practice records belong in the neutral research library.
+They do not by themselves change the kernel, provider defaults, authority rules or model tiers.
+The existing instruction review, own-word attribution and evaluation requirements still apply.

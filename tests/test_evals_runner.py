@@ -551,13 +551,13 @@ def test_NEGATIVE_CONTROL_a_forged_grader_or_moved_seed_cannot_pass_the_fixture(
 # --- the hand-off fixtures -----------------------------------------------------------------
 
 
-def test_the_hand_off_fixtures_run_only_when_named() -> None:
-    """A run naming no fixture takes the kernel's and the skills' fixtures, never the hand-off
-    ones, which measure a package on a named implementer."""
+def test_specialized_fixtures_run_only_when_named() -> None:
+    """New research cases must not increase the default model-call budget."""
 
-    handoff = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
-    assert len(handoff) == 23
-    assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in handoff]
+    named = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
+    assert len(named) == 26
+    assert {"patch-validation", "property-oracles", "testing-no-work"} <= set(named)
+    assert RUN.default_fixtures() == [n for n in RUN.fixture_names() if n not in named]
     assert len(RUN.default_fixtures()) == 31
     assert RUN._parser().parse_args([]).fixtures.split(",") == RUN.default_fixtures()
 
