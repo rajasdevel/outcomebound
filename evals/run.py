@@ -67,6 +67,7 @@ NAMED_ONLY = (
     "property-oracles",
     "testing-no-work",
     "new-project-",
+    "onboard-",
 )
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
@@ -109,6 +110,9 @@ STRIPPED_PREFIXES = ("ANTHROPIC_BEDROCK_", "ANTHROPIC_VERTEX_", "CLAUDE_CODE_USE
 STRIP_POLICY = tuple(sorted(STRIPPED_KEYS + tuple(f"{p}*" for p in STRIPPED_PREFIXES)))
 
 PREFLIGHT_EXIT = 3
+# Codex CLI versions whose `--json` events were observed to report no model and no working
+# directory, so no call on them can count: 0.160.1, and 0.162.0-alpha.17.2 (one call, 2026-10-09).
+NO_OBSERVED_MODEL = frozenset({"codex-cli 0.160.1", "codex-cli 0.162.0-alpha.17.2"})
 CALL_TIMEOUT = 900
 SETUP_TIMEOUT = 300
 POST_CHECK_TIMEOUT = 600
@@ -295,9 +299,10 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
 
 
 def fixture_arm(name: str, arm: Arm) -> Arm:
-    """The adoption controller carries its subject skill; ordinary installs do not."""
+    """The adoption controller and the onboarding fixtures carry their subject skill; ordinary
+    installs do not."""
 
-    if not name.startswith("adopt-") or arm.name == NONE:
+    if not name.startswith(("adopt-", "onboard-")) or arm.name == NONE:
         return arm
     from outcomebound_tools import adopt
 
@@ -1020,10 +1025,11 @@ def _main(argv: list[str] | None = None) -> int:
     }
     if args.retain_native:
         status["native_sessions"] = str(Path(args.retain_native).resolve())
-    elif status["cli_version"] == "codex-cli 0.160.1":
+    elif status["cli_version"] in NO_OBSERVED_MODEL:
         _write(out / "STATUS.json", {**status, "status": "UNVERIFIED", "fixtures": names})
         sys.stderr.write(
-            "run: UNVERIFIED - Codex CLI 0.160.1 JSON events do not report observed model/cwd. "
+            f"run: UNVERIFIED - {status['cli_version']} JSON events do not report observed "
+            "model/cwd. "
             "No model call started. Use one named fixture with --retain-native SESSIONS_DIR "
             "for separate native-event review; its automatic report stays unchanged.\n"
         )

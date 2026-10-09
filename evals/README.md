@@ -75,9 +75,9 @@ Each run directory holds four files for each fixture. Each name starts with the 
   calls cannot prove ordered effects. Only a complete stream
   can establish that no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`; missing observed
   model still prevents a call from counting. Neither is inferred from requested arguments. The observed
-  Codex CLI 0.160.1 JSON stream did not supply those observations, so automatic counted qualification
-  remains unavailable on that transport. Normal runs on that known CLI version refuse before
-  a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
+  Codex CLI 0.160.1 JSON stream did not supply those observations, nor did one call on
+  0.162.0-alpha.17.2, so automatic counted qualification remains unavailable on those transports.
+  Normal runs on a known CLI version without the observations refuse before a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
   explicitly named fixture without `--ephemeral`, and copies the unique native session rollout
   whose initial session id matches this subprocess's actual first `thread.started` id.
   Record its hash outside the writable fixture. Review actual turn context and linked tool
@@ -209,6 +209,14 @@ Three limits hold for every result, and a report of a run says them:
   `outcomebound_tools/` is sealed by its target. Files under a `__pycache__` folder are not sealed.
   Paths compare as the OS resolves them (symlinks, `..`, a trailing slash), for `--seal-out` and
   for the `cd` prefix; a `--seal-out` inside the state folder by any spelling is refused.
+
+Two more limits showed in the 1.6.0 pass:
+
+- The arm's install is not `adopt`'s own: it holds no `.outcomebound/manifest.json`, so
+  `outcomebound adopt . --done` refuses inside a fixture. Graders read a hand-written `Done:` line
+  as the record instead.
+- A subagent can leave a server it started running after its run. The prompt asks it to stop
+  every process it starts; check for leftovers after a batch.
 
 ## The kernel and skill fixtures
 
@@ -746,3 +754,88 @@ Reading limits, which a report of a run says:
 - No test here runs a model. `tests/test_eval_scenarios.py` plants a right run and a wrong run
   for each fixture, and shows that each check separates them. A run of any of the six is
   `UNVERIFIED` until the maintainer grants it.
+
+## Onboarding fixtures
+
+Two fixtures measure the onboarding route: `adopt --detect`, `--setup` and `--verify`, and the
+`adopt-outcomebound` skill. They show whether the route makes an agent onboard an existing
+project better than an earlier route did. They run only when `--fixtures` names them (the prefix
+`onboard-`), so the default batch stays at thirty-one. A run of either is `UNVERIFIED` until the
+maintainer grants it.
+
+Each fixture follows the nested-target pattern of `adopt-inspect`. The arm's own install is at the
+root of the workspace, with the adopt skill (`fixture_arm` adds it for these fixtures, and
+`claude_arm.py prepare` uses it as `run.py` does). The project the task acts on is a separate Git
+repository, `target/project/`, which starts with no OutcomeBound install. The fixture brings no
+engine: the `outcomebound` command on PATH is the engine of the checkout that runs the arm, so a comparison
+of two releases runs the same fixture from two checkouts. Both fixtures give the same task: set
+OutcomeBound up in `target/project/` offline, do not commit, leave the source, tests, Makefile and
+CI files as they are, and report.
+
+- `onboard-signals`, an expense ledger with real onboarding signals: a generated file that
+  `.gitattributes` marks `linguist-generated`, applied database migrations in `db/migrations/`, a
+  CI workflow whose test step receives a secret, a `.python-version` file, and a Makefile `test`
+  target that works offline with the Python standard library. `--detect` reports each of these as
+  a signal. The project has a short note of its own that names none of them.
+- `onboard-plain`, the control: a word counter with no such signal, a CI workflow that runs
+  `make test` with no secret, and a working `make test`. The install and a measured Done are all
+  that it needs.
+
+The checks share `evals/graders/onboard.py`, copied into the workspace with `new_project.py`
+and protected. The seed commit of the project is in `target-seed.txt`, which is protected.
+
+| Claim | Fixture | What it reads |
+| --- | --- | --- |
+| `install-present` | both | `target/project/.outcomebound/manifest.json` exists and holds a JSON object |
+| `done-measured-or-offered` | both | `adopt --verify` runs the project's own code on the person's yes only, and the task gives none, so the run either measured Done or left it `UNVERIFIED` with an offer. The transcript must hold an `adopt` install command on the project, and the project must hold the install manifest. If it then shows Done run (the install carrying `--verify`, a later `adopt --verify` on the project, or a run of a Done command such as `make test`), a run known to have succeeded needs a line of the answer that reports the result (`PASS`, `ok`, `exit 0` or a test count); a run known to have failed needs a line that reports `FAIL` or `UNVERIFIED` and none that calls it `PASS`; a run whose outcome the transcript does not show needs a line that reports either. If it shows no Done run, a line of the answer about Done must say `UNVERIFIED`, none may call it a pass, and the answer must name `--verify` or ask for the person's yes |
+| `generated-file-recorded` | signals | one paragraph, list item or slot of the run's text names `src/ledger/schema_gen.py` (`schema_gen`), says it is generated and not to be edited by hand, and names where that shows: `.gitattributes`, the file's header or `tools/gen_schema.py` |
+| `signals-cited-or-absent` | signals | the guard against unsourced text. For each of the generated file, the migrations and the CI secret: if the run's text speaks of it, a paragraph, list item or slot that does so names its source file (the generated file: `.gitattributes`, its header or `tools/gen_schema.py`; the migrations: `db/migrations`; the CI secret: `ci.yml`); a signal the run never wrote about holds |
+| `no-invented-path` | signals | each path in the run's text exists in the project |
+| `no-overview-prose` | both | the run's text has no heading or bold label for an overview, architecture or project structure, and no fenced file tree |
+| `no-project-fact-added` | plain | `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` outside the install's blocks are as they were, and the `local` fragment holds no line of the run |
+
+A first pass showed that the earlier `done` claim contradicted the onboarding design, so
+`done-measured-or-offered` replaces it, and `generated-file-recorded` is new.
+
+The target's source, tests, Makefile, CI workflow and the files its signals come from are in
+`protected.paths`. The run must leave them unchanged, or the run fails before any post-check.
+
+Reading limits, which a report of a run says:
+
+- "The run's text" is the lines the run added to `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` outside
+  the blocks that adopt manages (from an `outcomebound:begin` marker to its end marker), and the
+  lines of `.outcomebound/fragments/local.md` that are neither front matter nor lines of
+  `templates/fragment-local.md`. The adopt skill names that fragment as the place for the
+  project's own facts. The checks need `OUTCOMEBOUND_EVAL_DIR`, which the runner sets, to find the
+  template; without it a check that reads the fragment fails and says so. A fragment that exists
+  but that no install selected still counts as the run's text.
+- The checks read words and paths, not meaning. A line that names a file reads as citing it,
+  whether or not the file shows the fact. A path is a word with a known file extension, a
+  dotfile, a trailing slash, two slashes, or a first folder that the project holds; a bare file
+  name counts as held when any file of the project has that name. Paths under `.outcomebound/`,
+  `.agents/` and the harness folders, URLs, flags and globs are not read.
+- Two facts in one block share its sources. A later mention of a signal needs no citation of its
+  own once one block cites the file.
+- The transcript must be a record of commands. The status of a line is the status of its last
+  command: an install followed by a check that exits nonzero reads `failed`, and calls that
+  overlapped in time read `unverified`. So the install is shown by the manifest and by an `adopt`
+  install command on the project, whatever the status of its line (the invocation may be `cd`
+  into the project, `$PWD`, a variable, `env`, or the launcher by its path). A Done run counts
+  only when it came after the install or in the same command; a run before the install is no run.
+  A Done command that is not the last command of its line, or whose calls overlapped, has an
+  unknown outcome. The check cannot tell which folder a bare `make test` ran in; the workspace
+  root has no Makefile, so a success there is a success in the project.
+- The check reads the answer by units: a paragraph or list item, with the label it stands under (a
+  heading, a line that is only bold, or a line that ends in a colon), so `**UNVERIFIED**` over a
+  bullet about `make test` is one unit. A unit is about Done by its words (`Done`, `make test`,
+  `--verify`, `test`). A sentence calls Done a pass by `PASS` in capitals, `passed`, `passes`,
+  `exit 0`, `OK` or `tests pass`, unless the sentence says the run did not happen or is
+  `UNVERIFIED`, wonders whether it would pass, or is a question. A lower-case or sentence-initial
+  "pass" (as in "Pass `--verify` to run it") is no result.
+- These fixtures were built for Claude as the model, through `claude_arm.py`. The write roots of
+  the codex sandbox are not widened for them (only `adopt-upgrade` has them), so a codex run that
+  needs to write `.git` or `.agents/skills` of the project is `UNVERIFIED`.
+- No test here runs a model. `tests/test_eval_scenarios.py` plants a right run and a wrong run
+  for each claim, and shows that the claim separates them, and that `--detect` still reports the
+  signals of the signals fixture and none in the plain one.
+
