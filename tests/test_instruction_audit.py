@@ -1,4 +1,4 @@
-"""`outcomebound instructions check`: the six checks, the report, and the limits it keeps.
+"""`outcomebound instructions check`: the seven checks, the report, and the limits it keeps.
 
 Every planted defect below is inert data written into a throwaway target under
 `tmp_path`: the audit reads it and must never act on it. Each check has a planted
@@ -773,7 +773,7 @@ def test_scope_is_what_the_selected_harnesses_load(tmp_path: Path) -> None:
 
 FIRST_LINE = re.compile(
     r"^(PASS|FAIL|UNVERIFIED) \d+ files; security \d+ PASS \d+ FAIL \d+ UNVERIFIED; "
-    r"loading \d+ PASS \d+ FAIL \d+ UNVERIFIED$"
+    r"references \d+ PASS \d+ FAIL \d+ UNVERIFIED; loading \d+ PASS \d+ FAIL \d+ UNVERIFIED$"
 )
 
 
@@ -785,7 +785,8 @@ def test_first_line_is_the_verdict_and_counts_per_family(
     lines = capsys.readouterr().out.splitlines()
     assert FIRST_LINE.match(lines[0]), lines[0]
     assert lines[0] == (
-        "FAIL 1 files; security 1 PASS 1 FAIL 1 UNVERIFIED; loading 1 PASS 0 FAIL 1 UNVERIFIED"
+        "FAIL 1 files; security 1 PASS 1 FAIL 1 UNVERIFIED; references 1 PASS 0 FAIL 0 UNVERIFIED; "
+        "loading 1 PASS 0 FAIL 1 UNVERIFIED"
     )
     checks = [
         line.split()[0] for line in lines[2:] if " AGENTS.md:" in line or "harnesses.json" in line
@@ -818,7 +819,7 @@ def test_json_validates_against_the_report_schema(
     assert validate(document, REPORT_SCHEMA) == []
     assert document["result"] == "FAIL" and document["selected_by"] == "table"
     families = [f["family"] for f in document["findings"]]
-    assert families == sorted(families, key=("security", "loading").index)
+    assert families == sorted(families, key=("security", "references", "loading").index)
 
 
 def test_exit_codes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

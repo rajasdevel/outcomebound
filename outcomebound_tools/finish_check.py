@@ -842,8 +842,9 @@ def keep_known(target: Path, record: Known, deadline: float | None = None) -> bo
 # --- Running the Done commands ---------------------------------------------------
 
 
-# Why a command reads UNVERIFIED: it met the time limit, or it could not run where the hook runs.
-TIME, ENVIRONMENT = "time", "environment"
+# Why a command reads UNVERIFIED: it met the time limit, it could not run where the hook runs, or
+# it failed once and ended another way on a second run in the same environment (a possible flake).
+TIME, ENVIRONMENT, FLAKE = "time", "environment", "flake"
 # A tool the command names that this PATH does not hold, as the last line of output says it when a
 # runner between the hook and the tool turns the shell's 127 into its own exit code: make's
 # `make: pytest: No such file or directory`, a script's `run.sh: line 3: pytest: command not
@@ -1364,6 +1365,14 @@ class Measured:
     added: tuple[str, ...] = ()
     # The PATH entries the measurement ran without, as a hook may: see `hook_environment`.
     dropped: tuple[str, ...] = ()
+    # Each command the replaced record held as a known failure that now reads as a possible
+    # flake, and so is held no longer.
+    flaked: tuple[str, ...] = ()
+    # Whether the commands ran as a hook runs Done, or with the PATH of the process that asked.
+    as_hook: bool = True
+    # Each failing command that ran again, to tell a flake or a missing PATH entry from a stable
+    # failure; `seconds` counts none of those runs.
+    reran: tuple[str, ...] = ()
 
 
 def added_since(previous: Known, failing: Mapping[str, Failure]) -> list[str]:
@@ -1381,45 +1390,95 @@ def added_since(previous: Known, failing: Mapping[str, Failure]) -> list[str]:
     return added
 
 
-def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
+def _same_failure(first: Result, again: Result) -> bool:
+    """Whether `again` is `first`'s failure again: a FAIL with the same exit code and the same
+    failure ids."""
+
+    return (
+        again.verdict == FAIL
+        and again.code == first.code
+        and failure_ids(again.output) == failure_ids(first.output)
+    )
+
+
+def _flake(first: Result, again: Result) -> Result:
+    """`first`, a failure that its second run in the same environment did not repeat, as a
+    possible flake: UNVERIFIED, and kept as no known failure."""
+
+    if again.verdict == PASS:
+        second = "passed"
+    elif again.verdict != FAIL:
+        second = "could not run"
+    elif again.code == first.code:
+        second = "failed with other failure ids"
+    else:
+        second = f"failed with exit {again.code}"
+    why = f"{first.why}: possible flake"
+    note = f"a second run in the same environment {second}, so no failure is kept for it"
+    return replace(first, verdict=UNVERIFIED, why=why, cause=FLAKE, note=note)
+
+
+def commits_since(target: Path, head: str, deadline: float | None = None) -> int | None:
+    """How many commits the target's HEAD is past `head` (`git rev-list --count <head>..HEAD`);
+    None where Git cannot count them: a shallow clone, a commit it lacks. An empty `head` is a
+    branch with no commit, which no commit is past."""
+
+    if not head:
+        return 0 if _head(target, deadline) == "" else None
+    counted = _git(target, "rev-list", "--count", f"{head}..HEAD", deadline=deadline)
+    try:
+        return int((counted or b"").strip())
+    except ValueError:
+        return None
+
+
+def measure(target: Path, done: Sequence[str], timeout: int, as_hook: bool = True) -> Measured:
     """Run every Done command once from the target's root, to its end, with no time limit and
     past every failure, as adopt does at install: each FAIL is kept as a known failure for this
     Done list and the target's HEAD commit, with its exit code and the failure ids its output
     names, the day and the seconds the run took; and where the commands left the tree as they
     found it, that tree is remembered as checked under `timeout`, so a turn end on it runs
-    nothing. A command that could not run here is neither known nor remembered. A
-    KeyboardInterrupt, or any exception that stops the wait, stops the running command's group
-    and is raised again, with nothing kept."""
+    nothing. A command that could not run here is neither known nor remembered.
+
+    The environment is the hook's (`hook_environment`) with `as_hook`, else the caller's own,
+    where no hook is installed. A command that fails runs once more in the same environment: a
+    second run that does not repeat the failure, with its exit code and failure ids, reads
+    UNVERIFIED as a possible flake, is kept as no known failure, and keeps the tree from being
+    remembered. Only a failure that repeats goes on to the run with the PATH entries the hook
+    environment left out. A KeyboardInterrupt, or any exception that stops the wait, stops the
+    running command's group and is raised again, with nothing kept."""
 
     digest = done_digest(done)
     started = time.monotonic()
     head = _head(target)
     before = tree_digest(target, digest)
-    as_hook, dropped = hook_environment(target, os.environ)
-    results = [run_one(target, line, None, as_hook) for line in done]
-    if dropped:
+    environment, dropped = hook_environment(target, os.environ) if as_hook else (None, ())
+    results = [run_one(target, line, None, environment) for line in done]
+    # The seconds a hook would see are those of one run of each command: the reruns below tell
+    # a flake or a missing PATH entry from a stable failure, and count in no recorded time.
+    seconds = time.monotonic() - started
+    reran: list[str] = []
+    for index, result in enumerate(results):
+        if result.verdict != FAIL:
+            continue
+        reran.append(result.command)
+        again = run_one(target, result.command, None, environment)
+        if not _same_failure(result, again):
+            results[index] = _flake(result, again)
+            continue
+        if not dropped:
+            continue
         # A command that fails without the entries a hook may lack, and passes with them, needs
         # those entries: a hook would fail it, and a known failure would hide its real failures.
-        for index, result in enumerate(results):
-            if result.verdict != FAIL:
-                continue
-            again = run_one(target, result.command, None)
-            same = (
-                again.verdict == FAIL
-                and again.code == result.code
-                and failure_ids(again.output) == failure_ids(result.output)
-            )
-            if same:
-                continue
-            # Passing with them, or failing another way, or not running: the command depends on
-            # those entries, so neither run is kept as a known failure.
-            how = "passes" if again.verdict == PASS else "runs differently"
-            why = f"{result.why}: could not run in the hook's environment"
-            note = f"it {how} with {', '.join(dropped)} on PATH"
-            results[index] = replace(
-                result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note
-            )
-    seconds = time.monotonic() - started
+        full = run_one(target, result.command, None)
+        if _same_failure(result, full):
+            continue
+        # Passing with them, or failing another way, or not running: the command depends on
+        # those entries, so neither run is kept as a known failure.
+        how = "passes" if full.verdict == PASS else "runs differently"
+        why = f"{result.why}: could not run in the hook's environment"
+        note = f"it {how} with {', '.join(dropped)} on PATH"
+        results[index] = replace(result, verdict=UNVERIFIED, why=why, cause=ENVIRONMENT, note=note)
     failing: dict[str, Failure] = {}
     for index, result in enumerate(results):
         if result.verdict == FAIL and result.code is not None:
@@ -1428,15 +1487,22 @@ def measure(target: Path, done: Sequence[str], timeout: int) -> Measured:
             note = "known by its failure ids" if ids else "known by its exit code only"
             results[index] = replace(result, known=True, note=note, commit=head or "")
     day = time.strftime("%Y-%m-%d")
-    record = Known(digest, "", head or "", day, round(seconds, 1), failing, as_hook=True)
+    record = Known(digest, "", head or "", day, round(seconds, 1), failing, as_hook=as_hook)
     previous = known_record(target, digest) if head is not None else None
     kept = head is not None and keep_known(target, record)
     added = tuple(added_since(previous, failing)) if previous is not None else ()
-    environment = any(result.cause == ENVIRONMENT for result in results)
-    if kept and before is not None and not environment and tree_digest(target, digest) == before:
+    flaked = tuple(
+        result.command
+        for result in results
+        if previous is not None and result.cause == FLAKE and result.command in previous.failing
+    )
+    unsettled = any(result.cause in (ENVIRONMENT, FLAKE) for result in results)
+    if kept and before is not None and not unsettled and tree_digest(target, digest) == before:
         verdict = FAIL if failing else PASS
         remember(target, Checked(before, timeout, verdict, tuple(results) if failing else ()))
-    return Measured(tuple(results), seconds, kept, previous, added, dropped)
+    return Measured(
+        tuple(results), seconds, kept, previous, added, dropped, flaked, as_hook, tuple(reran)
+    )
 
 
 def hook_environment(

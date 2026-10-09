@@ -12,8 +12,9 @@ harness settings beside them, could steer an agent unseen, and whether the loadi
 that reading are current. The invariant the command holds: each file or setting in scope that
 could steer an agent unseen is reported on every run, as a FAIL, a review hit or `UNVERIFIED`,
 and data in the target can decide only whether a review hit changes the result, as the rows below
-say, never whether it is reported. The command reads and reports; what a hit means is the
-person's call.
+say, never whether it is reported. It also reports, without changing its result, each path, Make target or
+package script that project-owned instruction text names and the target no longer holds. The
+command reads and reports; what a hit means is the person's call.
 How: `outcomebound instructions check --help` and `outcomebound_tools/instruction_audit.py`.
 
 ## Decisions
@@ -33,14 +34,15 @@ How: `outcomebound instructions check --help` and `outcomebound_tools/instructio
 | An instruction file a selected row says its harness loads from a folder above the target (`ancestors`; Claude Code: research `harnesses/claude-code.md` §1) is named, as a path from the target, and never opened: one review hit each, that does not change the result, since it lies outside the target, which is all this command reads | leaving it unreported, though the parent's contract and pointers load in the nested session; opening files outside the target | agent | decided |
 | A hidden character in an agents' note reads UNVERIFIED for that note, with "do not rely on this note"; in a file a harness loads as instructions it stays a FAIL (maintainer, 2026-10-04) | one character in one session's note failing the whole repository | user | decided |
 | A review hit's next step asks for a person at handoff and lets the work go on; a row past its re-check date names the day it was verified and that only the re-check is due, still UNVERIFIED (maintainer, 2026-10-04) | "confirm with a person" as a step before the work | user | decided |
-| Six checks in two families, security and loading. No agreement, structure or wording check: none answers a failure seen in a project's instruction files (S13), and OutcomeBound's own text is held by its suite | a catalog of 23 checks, agreement, structure and wording among them, with a worksheet a model answers and an audit skill | agent | decided |
+| The security and loading checks: no agreement, structure or wording check: none answers a failure seen in a project's instruction files (S13), and OutcomeBound's own text is held by its suite | a catalog of 23 checks, agreement, structure and wording among them, with a worksheet a model answers and an audit skill | agent | decided |
+| A third family, `references`, with one check, `stale-reference`: a path, a Make target or a package script that project-owned instruction text names and the target no longer holds. Measured studies of context files found stale code references in many repositories, and an agent follows a command or path a file names: this answers a failure seen in projects' files, which the agreement and wording checks above did not. It answers to rule S14 (agreement), second in the standard's severity order. It never changes the result (`decides: false`), so a healthy project's exit does not move, and it rules nothing safe; it is reported for the person and the agent, as the ancestors hit is. The report's schema gains `references` in its `family` and `check` values and its `counts`, a wire-format change this row decides. Its reads widen the command's outcome from what could steer an agent unseen to what in that text has gone stale too | the reference check in `adopt --check`, which reads only the install's own records; a hit that changes the result, which would make exit 2 constant on projects whose text names a path a build creates; a model that judges whether a reference still holds | agent | decided |
 | A target that Git refuses as owned by another user (`dubious ownership`, as in a container whose root runs over a checkout another user made) is walked whole, as a target Git cannot list is, and the report's listing line says that Git refused it and names the command that trusts it (`git config --global --add safe.directory <the target>`). The engine's Git reads never pass `-c safe.directory`: `safe.directory` exists so that a repository another user owns cannot run its own code under yours, and the read-only configuration (`GIT_READ_CONFIGURATION`) closes `core.fsmonitor`, the pager and the external diff only, not every command Git runs for a repository, such as a clean or smudge filter a `.gitattributes` file names. Trusting a target for Git is the person's act, in their own Git configuration, as the floor design decides for the floor | passing `-c safe.directory=<the target>` on each read, which would let a hostile target run a filter under the auditor's own user; reading UNVERIFIED with no reason, which hides what to fix | agent | decided |
 
 ## Checks
 
 A gate reads PASS or FAIL, UNVERIFIED where a fact it needs is not verified. A review reads PASS
 where nothing matched, else UNVERIFIED with the line quoted and the hit's ruling id. The security checks answer to rule
-S4 and report first; `load-resolution` answers to S7.
+S4 and report first; `stale-reference` answers to S14 and reports next, `load-resolution` to S7 after it.
 
 | Check | Observes | Kind |
 | --- | --- | --- |
@@ -50,6 +52,7 @@ S4 and report first; `load-resolution` answers to S7.
 | `harness-config` | in each configuration file a row names, keys holding commands, tool servers, all tool servers at once, endpoints or permission bypasses; TOML is read lexically, an unsettled value reading UNVERIFIED; an entry adopt wrote is one hit that quotes the Done commands it runs | review; a secret-shaped value is a gate |
 | `instruction-change` | with `--base <ref>`, each file in scope, and `.outcomebound/manifest.json`, changed between the ref and HEAD; a ref that does not resolve reads UNVERIFIED | review |
 | `load-resolution` | per harness, whether its row is verified and inside its re-check date (past it, the fact names the day the row was verified and that only the re-check is due); where its configuration was read, one line naming the key categories the row leaves unsettled; and each file the row's `ancestors` loads from a folder above the target, a review that does not change the result | gate |
+| `stale-reference` | in project-owned instruction text, each inline code span that is a concrete relative path, `make <target>`, or `npm run`, `pnpm run` or `yarn run` and a script name. Project-owned text is each Markdown file in scope (`.md`, `.mdc`) leaving out OutcomeBound's managed blocks, the skill and fragment copies the manifest records, and the agents' notes, plus the project's own `.outcomebound/fragments/local.md`; the manifest is the target's data, which a non-deciding finding may trust. A concrete relative path holds no whitespace or control character; does not start with `@`, `-`, `~`, `/`, a scheme (`x://`) or a drive letter; holds no `<`, `>`, `$`, `*`, `{` or `\`; ends in a file extension or in `/`, read without a trailing location (`:12`, `::name`, `#anchor`), so that a label such as `read/write` is none; is not in a sentence that names its owner as another project, by a capitalized possessive right before it (`Acme's`) or by a named repository (`the Acme repository at`), a determiner such as `this` naming this repository instead; and its first segment exists at the file's folder or at the root, so a Git ref, a package scope, a repository slug or a path in another repository is no reference, and neither is a path in `.git`, which the command never enters; a removed top-level folder is therefore missed. It is flagged where neither the file's folder nor the root holds it, Git does not ignore it (asked only where Git lists the target; where it cannot say, the path reads `UNVERIFIED`), and it resolves inside the target (one that resolves outside is skipped). A Make target is looked for in the nearest `GNUmakefile`, `makefile` or `Makefile` upward from the file's folder, then at the root, after flags and `VAR=` words are left out: a rule line or a `.PHONY` entry defines it; a `-C` or `-f` form, an `include`, a pattern rule or a rule named by a variable reads a target it does not show `UNVERIFIED`. A script is looked for in the nearest `package.json` upward, then the root; a target or script with no makefile or `package.json` at or above the file is flagged, and one whose file is not a regular file in the target, or no JSON object, reads `UNVERIFIED`; under `yarn run`, a name `package.json` does not define reads `UNVERIFIED`, since `yarn run` also runs a dependency's binary | review that does not change the result |
 
 The files read are those each selected row says its harness loads: root and nested instruction
 files, imports, project override files, rules and skill directories, and configuration. In a Git
@@ -68,7 +71,7 @@ anything outside the target but the engine's own data (above the target it only 
 malformed or missing file leaves empty; a path it leaves unopened, a link out
 included, reads UNVERIFIED. It never walks what Git ignores but those two note folders, never
 runs, follows or obeys what it reads, and escapes quoted text so no file can steer the terminal.
-Its one process is Git, to list the files and for `--base`: from PATH's absolute entries, with
+Beyond the files in scope it reads, for `stale-reference` only, the project's `.outcomebound/fragments/local.md` and the makefiles and `package.json` files it looks targets and scripts up in, as text; it runs none of them. Its one process is Git, to list the files, to ask which candidate paths it ignores, and for `--base`: from PATH's absolute entries, with
 no pager, fsmonitor, external diff or textconv, and no time limit. It opens no connection, rules no
 hit benign itself, applies no edit and gives no score; `check` writes nothing, and `rule` writes
 only the person's rulings file.
@@ -103,7 +106,9 @@ UNVERIFIED as FAIL; `--json` prints one report (`schemas/instruction-audit-repor
 
 ## Validation
 
-`tests/test_instruction_audit.py`: each check's planted defect and clean control, the limits,
+`tests/test_instruction_references.py`: the `stale-reference` check's grammar, its lookups of paths,
+Make targets and package scripts, whose files it reads as text, and the limits it keeps.
+`tests/test_instruction_audit.py`: each other check's planted defect and clean control, the limits,
 the exits and `--base`; a ruled hit, a changed file, a planted or malformed rulings file and
 `rule` without a terminal; a ruling in another repository, in a worktree of the same clone, and
 for a change since `--base`; words run together against encoded text, diluted by pins, `=` or random bytes, in another script and as UTF-16; this repository's instruction files, and every shipped file under

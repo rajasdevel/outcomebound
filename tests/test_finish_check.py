@@ -1528,7 +1528,8 @@ def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
     not run as a known failure, or makes the first turn end on the tree it measured run Done
     again."""
 
-    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs once.
+    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs twice:
+    # once, and once more in the same environment to tell a stable failure from a flake.
     environment, _ = finish_check.hook_environment(tmp_path, os.environ)
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
@@ -1543,7 +1544,7 @@ def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
     message = hook("codex", digest, root)[1]["systemMessage"]
     assert message.startswith("finish-check FAIL, known: ")
     assert "Not run again: the working tree is unchanged" in message
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
 
     other = ["no-such-tool-here", "exit 3"]
     root, digest = target(tmp_path / "u", other)
@@ -1553,6 +1554,181 @@ def test_measure_runs_every_command_to_its_end_and_remembers_the_tree_it_left(
     assert hook("codex", digest, root)[1]["systemMessage"].startswith(
         "finish-check UNVERIFIED: `no-such-tool-here` could not run"
     )
+
+
+def flaky(flag: Path, first: str, second: str) -> str:
+    """A Done line that ends as `first` the first time it runs and as `second` after, a shell
+    snippet each (`exit`, `echo` and `exit` or none), told apart by a flag file."""
+
+    return f"if [ -e {q(flag)} ]; then {second}; fi; touch {q(flag)}; {first}"
+
+
+@pytest.mark.parametrize(
+    ("second", "ends"),
+    [
+        pytest.param("exit 0", "passed", id="passes"),
+        pytest.param("echo 'FAILED tests/a.py::t'; exit 2", "failed with exit 2", id="exit"),
+        pytest.param(
+            "echo 'FAILED tests/a.py::two'; exit 1", "failed with other failure ids", id="ids"
+        ),
+    ],
+)
+def test_a_failure_that_does_not_repeat_is_a_possible_flake_and_kept_as_nothing(
+    tmp_path: Path, second: str, ends: str
+) -> None:
+    """Breaks if a failure that a second run in the same environment does not repeat, with its
+    exit code and failure ids, is kept as a known failure, which hides its next real failure, or
+    if the tree a flake was measured on is remembered as checked."""
+
+    first = "echo 'FAILED tests/a.py::one'; exit 1"
+    done = [flaky(tmp_path / "flag", first, second)]
+    root, digest = target(tmp_path / "t", done)
+
+    measured = finish_check.measure(root, done, 600)
+
+    (result,) = measured.results
+    assert (result.verdict, result.cause) == (finish_check.UNVERIFIED, finish_check.FLAKE), result
+    assert "possible flake" in result.why and ends in result.note
+    assert measured.kept and failing(root, digest) == {}
+    assert finish_check.last_checked(root) is None
+
+
+def test_a_failure_that_repeats_is_known_and_runs_twice_where_no_path_entry_is_left_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a stable failure is not kept as known, or if it runs other than once and once
+    more in the same environment."""
+
+    environment, _ = finish_check.hook_environment(tmp_path, os.environ)
+    monkeypatch.setenv("PATH", environment["PATH"])
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    count = tmp_path / "count"
+    done = [f"echo run >> {q(count)}; echo 'FAILED tests/a.py::t'; exit 2"]
+    root, digest = target(tmp_path / "t", done)
+
+    measured = finish_check.measure(root, done, 600)
+
+    assert measured.dropped == () and len(count.read_text(encoding="utf-8").splitlines()) == 2
+    (result,) = measured.results
+    assert result.verdict == finish_check.FAIL and result.known
+    assert failing(root, digest) == {done[0]: 2}
+    assert finish_check.last_checked(root) is not None
+
+
+def test_the_measured_seconds_are_one_run_of_each_command_and_the_rerun_is_named(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the seconds kept and printed for a failing command count its rerun, which a
+    hook never makes, so that a stable failure reads twice as slow as it runs."""
+
+    environment, _ = finish_check.hook_environment(tmp_path, os.environ)
+    monkeypatch.setenv("PATH", environment["PATH"])
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    done = ["sleep 1; echo 'FAILED tests/a.py::t'; exit 2"]
+    root, digest = target(tmp_path / "t", done)
+
+    measured = finish_check.measure(root, done, 600)
+
+    assert measured.reran == (done[0],)
+    assert 1.0 <= measured.seconds < 1.9, measured.seconds
+    known = finish_check.known_record(root, digest)
+    assert known is not None and known.seconds < 1.9
+
+
+def test_a_dropped_path_entry_adds_one_run_to_a_stable_failure_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the run with the left-out PATH entries follows a flake, or does not follow a
+    failure that repeated."""
+
+    count = tmp_path / "count"
+    root, _ = target(tmp_path / "t", ["true"])
+    (root / "bin").mkdir()
+    monkeypatch.setenv("PATH", os.pathsep.join([str(root / "bin"), *system_path()]))
+    stable = [f"echo run >> {q(count)}; exit 2"]
+
+    measured = finish_check.measure(root, stable, 600)
+
+    assert measured.dropped == (str(root / "bin"),)
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 3
+    count.unlink()
+    done = [f"echo run >> {q(count)}; " + flaky(tmp_path / "flag", "exit 1", "exit 0")]
+    measured = finish_check.measure(root, done, 600)
+    assert [r.cause for r in measured.results] == [finish_check.FLAKE]
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_a_known_failure_that_now_reads_as_a_flake_is_named_as_no_longer_known(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a measurement after which a known failure turns flaky replaces the record
+    without saying that the failure is no longer known."""
+
+    from outcomebound_tools import adopt
+
+    always, flag = tmp_path / "always", tmp_path / "flag"
+    fail = "echo 'FAILED tests/a.py::t'; exit 1"
+    done = [f"if [ -e {q(always)} ]; then {fail}; fi; " + flaky(flag, fail, "exit 0")]
+    write(always, "")
+    root, digest = target(tmp_path / "t", done)
+    first = finish_check.measure(root, done, 600)
+    assert first.flaked == () and failing(root, digest) == {done[0]: 1}
+
+    always.unlink()
+    second = finish_check.measure(root, done, 600)
+
+    assert second.previous is not None and second.flaked == (done[0],)
+    assert failing(root, digest) == {}
+    [known] = [n for n in adopt.measured_notes(root, second, 600) if n[0] == "known"]
+    assert "new since the record measured on" in known[1]
+    assert "is no longer known: it reads as a possible flake" in known[1]
+
+
+def test_a_measurement_without_a_hook_uses_the_callers_path_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `as_hook=False` still leaves out the callers's virtual environment, or the
+    record it keeps does not say that the commands ran with the caller's PATH."""
+
+    done = ["faketool"]
+    root, digest = target(tmp_path / "t", done)
+    venv = root / ".venv/bin"
+    venv.mkdir(parents=True)
+    write(venv / "faketool", "#!/bin/sh\nexit 0\n")
+    other = tmp_path / "other/bin"
+    other.mkdir(parents=True)
+    write(other / "faketool", "#!/bin/sh\necho 'ERROR tests/x.py::t'\nexit 2\n")
+    for tool in (venv / "faketool", other / "faketool"):
+        tool.chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(venv), str(other), *system_path()]))
+
+    measured = finish_check.measure(root, done, 600, as_hook=False)
+
+    (result,) = measured.results
+    assert result.verdict == finish_check.PASS, result
+    assert measured.dropped == () and measured.as_hook is False
+    record = finish_check.known_record(root, digest)
+    assert record is not None and record.as_hook is False and record.failing == {}
+
+
+def test_commits_since_counts_the_commits_past_a_measured_one(tmp_path: Path) -> None:
+    """Breaks if the count is not `rev-list --count`, or a commit Git lacks reads as zero."""
+
+    root, _ = target(tmp_path / "t", ["true"])
+    head = subprocess.run(
+        [GIT, "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert finish_check.commits_since(root, head) == 0
+    for number in (1, 2):
+        write(root / "src.txt", f"{number}\n")
+        subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+        subprocess.run([GIT, "-C", str(root), *IDENTITY, "commit", "-qm", "more"], check=True)
+    assert finish_check.commits_since(root, head) == 2
+    assert finish_check.commits_since(root, "0" * 40) is None
+    empty = tmp_path / "empty"
+    subprocess.run([GIT, "init", "-q", str(empty)], check=True)
+    assert finish_check.commits_since(empty, "") == 0
+    assert finish_check.commits_since(root, "") is None
 
 
 def test_a_known_record_is_read_only_in_its_own_shape() -> None:

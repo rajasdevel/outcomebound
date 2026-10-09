@@ -294,6 +294,8 @@ def _reach_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
             "there is one this ticket's work may not repair",
             "widen `bounds` to cover what the claim reads, or put a ticket that repairs it "
             "first in `blocked-by`",
+            claim=item.claim,
+            reaches=tuple(outside),
         )
 
 

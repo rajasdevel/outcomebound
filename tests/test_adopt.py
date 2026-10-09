@@ -1046,15 +1046,24 @@ def test_remove_refuses_an_edited_file_unless_forced(tmp_path: Path, capsys: Cap
 # --- detect -----------------------------------------------------------------------
 
 
+def command_of(out: str) -> list[str]:
+    """The install command `--detect` printed: its first line alone, every other line a comment
+    that a shell reads as nothing, so that pasting the output runs the command only."""
+
+    first, *rest = out.splitlines()
+    assert all(line.startswith("# ") for line in rest), rest
+    return shlex.split(first)
+
+
 def test_detect_prints_one_command_that_installs(tmp_path: Path, capsys: Capture) -> None:
     target = repo(tmp_path / "t", {"CLAUDE.md": "# Notes\n", "pyproject.toml": "[project]\n"})
     before = snapshot(target)
 
     code, out, _ = run(capsys, str(target), "--detect")
 
-    assert code == 0 and len(out.splitlines()) == 1
+    assert code == 0 and out.splitlines()[0].startswith("outcomebound adopt ")
     assert snapshot(target) == before
-    words = shlex.split(out)
+    words = command_of(out)
     assert words[:3] == ["outcomebound", "adopt", target.resolve().as_posix()]
     assert words[words.index("--harness") + 1] == "claude-code"
     assert words[words.index("--fragments") + 1] == "python,commands"
@@ -1112,6 +1121,10 @@ def test_detect_refuses_a_target_outside_git_as_the_install_would(
     code, out, err = run(capsys, str(target), "--detect")
 
     assert code != 0 and out == "" and "not inside a Git work tree" in err
+    assert "`git init` there, then `outcomebound adopt . --detect`" in err
+    for arguments in (("--harness", "codex"), ("--remove",)):
+        err = run(capsys, str(target), *arguments)[2]
+        assert "`git init` there, then `outcomebound adopt . --detect`" in err
 
 
 def test_detect_without_a_harness_sign_proposes_generic(tmp_path: Path, capsys: Capture) -> None:
@@ -1119,8 +1132,8 @@ def test_detect_without_a_harness_sign_proposes_generic(tmp_path: Path, capsys: 
 
     code, out, _ = run(capsys, str(target), "--detect")
 
-    assert code == 0 and len(out.splitlines()) == 1
-    words = shlex.split(out, comments=True)
+    assert code == 0
+    words = command_of(out)
     assert words[words.index("--harness") + 1] == "generic"
     assert "claude-code" in out and "codex" in out
     assert run(capsys, *words[2:])[0] == 0
@@ -1171,6 +1184,504 @@ def test_detect_proposes_the_commands_fragment_for_an_empty_repository(
     assert code == 0 and words[words.index("--fragments") + 1] == "commands"
     assert run(capsys, *words[2:])[0] == 0
     assert (target / ".outcomebound/fragments/commands.md").is_file()
+
+
+def notes_of(out: str) -> list[str]:
+    """Every line of `--detect` after the command, each a comment."""
+
+    command_of(out)
+    return out.splitlines()[1:]
+
+
+GUIDE_LINE = (
+    f"# onboarding guide for an agent: {(ROOT / 'skills/adopt-outcomebound/SKILL.md').as_posix()}"
+)
+
+
+def test_detect_puts_every_note_on_a_comment_line_and_ends_on_the_guide(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a note trails the command on its line, so that a shell runs more than the
+    command, a note lacks `#`, or the last line does not name the guide as an absolute path from
+    the engine."""
+
+    target = repo(tmp_path / "t", {"pytest.ini": "[pytest]\n"})
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    first, *rest = out.splitlines()
+    assert "#" not in first and first.count("\n") == 0
+    assert f"# {PYTEST} is what pytest.ini suggests, not a command CI runs" in rest[0]
+    assert "# no harness file found; or one of: " in "\n".join(rest)
+    assert rest[-1] == GUIDE_LINE and Path(rest[-1].split(": ", 1)[1]).is_absolute()
+
+
+@pytest.mark.parametrize(
+    ("files", "command"),
+    [
+        pytest.param({"Makefile": "setup:\n\tpip install -e .\n"}, "make setup", id="make-setup"),
+        pytest.param({"GNUmakefile": "bootstrap: deps\n\techo\n"}, "make bootstrap", id="gnu"),
+        pytest.param({"makefile": ".PHONY: setup\nsetup::\n\ttrue\n"}, "make setup", id="double"),
+        pytest.param({"package.json": '{"scripts": {"setup": "x"}}'}, "npm run setup", id="npm"),
+        pytest.param(
+            {"package.json": '{"scripts": {"bootstrap": "x"}}', "pnpm-lock.yaml": ""},
+            "pnpm run bootstrap",
+            id="pnpm",
+        ),
+        pytest.param(
+            {"Makefile": "setup:\n\ttrue\n", "bin/setup": "#!/bin/sh\n"}, "make setup", id="first"
+        ),
+    ],
+)
+def test_detect_proposes_setup_for_the_projects_own_entry_point_and_runs_nothing(
+    tmp_path: Path, capsys: Capture, files: dict[str, str], command: str
+) -> None:
+    """Breaks if a Make target, a package.json script or an executable script named setup or
+    bootstrap is not proposed with `--setup`, if more than the first entry point is proposed,
+    or if detection runs the entry point."""
+
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    words = command_of(out)
+    assert [words[i + 1] for i, word in enumerate(words) if word == "--setup"] == [command]
+    assert f"# setup candidate: {command} (" in out and "proposed with --setup" in out
+    assert run(capsys, *words[2:])[0] == 0
+    assert facts_lines(target)["Setup"] == f"`{command}`"
+
+
+@pytest.mark.skipif(WINDOWS, reason="a script is executable by its mode, which Windows lacks")
+@pytest.mark.parametrize(
+    "relative", ["bin/setup", "script/setup", "script/bootstrap", "scripts/setup.sh"]
+)
+def test_detect_proposes_an_executable_setup_script_only_where_it_is_executable(
+    tmp_path: Path, capsys: Capture, relative: str
+) -> None:
+    target = repo(tmp_path / "t", {relative: "#!/bin/sh\ntouch ran\n"})
+    assert "--setup" not in command_of(run(capsys, str(target), "--detect")[1])
+
+    (target / relative).chmod(0o755)
+    before = snapshot(target)
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert command_of(out)[-2:] == ["--setup", f"./{relative}"] and snapshot(target) == before
+    assert not (target / "ran").exists()
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"Makefile": "setup := yes\ninstall:\n\ttrue\n"},
+        {"Makefile": ".PHONY: setup\n"},
+        {"package.json": '{"scripts": {"test": "x", "setup-db": "x"}}'},
+        {"package.json": "not json"},
+        {"package.json": '{"scripts": ["setup"]}'},
+        {"docs/setup": "#!/bin/sh\n"},
+    ],
+    ids=["variable", "phony", "other-script", "broken", "list", "elsewhere"],
+)
+def test_detect_proposes_no_setup_without_an_entry_point(
+    tmp_path: Path, capsys: Capture, files: dict[str, str]
+) -> None:
+    target = repo(tmp_path / "t", files)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "--setup" not in command_of(out)
+    assert "# no Setup entry point found" in out
+
+
+@pytest.mark.parametrize(
+    ("lockfile", "install"),
+    [
+        ("package-lock.json", "npm ci"),
+        ("pnpm-lock.yaml", "pnpm install --frozen-lockfile"),
+        ("uv.lock", "uv sync --frozen"),
+        ("Cargo.lock", "cargo fetch --locked"),
+        ("go.sum", "go mod download"),
+    ],
+)
+def test_detect_names_a_lockfiles_install_command_as_a_comment_only(
+    tmp_path: Path, capsys: Capture, lockfile: str, install: str
+) -> None:
+    target = repo(tmp_path / "t", {lockfile: ""})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert f"# lockfile {lockfile}: {install} installs from it; a candidate for --setup" in out
+    assert install not in out.splitlines()[0] and "--setup" not in command_of(out)
+
+
+GENERATED = """\
+# comment
+src/gen/** linguist-generated
+*.pb.go linguist-generated=true
+"quoted dir/*"\tlinguist-generated -diff
+docs/** linguist-generated -linguist-generated
+vendor/** -linguist-generated
+other/** linguist-generated=false
+[attr]macro linguist-generated
+*.png binary
+"""
+
+
+def test_detect_names_the_generated_paths_the_project_marks(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {".gitattributes": GENERATED})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert (
+        "# signal generated: .gitattributes; value: src/gen/**, *.pb.go, quoted dir/*; "
+        "local slot: Bounds\n"
+    ) in out
+
+
+def test_detect_names_each_tracked_migration_folder_once(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if a folder of many migrations prints once for each file, if an untracked folder
+    is read as applied migrations, or if the names discovery reads are not all read."""
+
+    tracked = [
+        "db/migrate/001_a.rb",
+        "db/migrate/002_b.rb",
+        "app/migrations/0001.py",
+        "app/migrations/0002.py",
+        "service/alembic/versions/x.py",
+        "migrate/not-under-db.sql",
+    ]
+    target = repo(tmp_path / "t", dict.fromkeys(tracked, "x\n"))
+    commit_all(target)
+    (target / "new/migrations").mkdir(parents=True)
+    write(target / "new/migrations/0001.py", "x\n")
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    [line] = [text for text in out.splitlines() if "signal migrations" in text]
+    assert line == (
+        "# signal migrations: app/migrations, db/migrate, service/alembic; local slot: Bounds"
+    )
+
+
+WORKFLOW_PUBLISH = """\
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo npm publish
+      - run: pytest -q
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/checkout@v4
+      - run: |
+          sudo docker push example/app
+          twine upload dist/*
+      - run: npm publish --access public && gh release create v1
+"""
+
+
+def test_detect_names_the_publishing_steps_of_a_workflow(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if a step that only mentions a publishing command is a signal, or a step that
+    runs one through a wrapper, in a block, or after `&&`, or a publishing action, is missed."""
+
+    target = repo(tmp_path / "t", {".github/workflows/release.yml": WORKFLOW_PUBLISH})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    path = ".github/workflows/release.yml"
+    lines = [line for line in out.splitlines() if "signal publishing-workflow" in line]
+    assert lines == [
+        f"# signal publishing-workflow: {path}; value: job {job}; local slot: Bounds (edges:)"
+        for job in (
+            "release uses pypa/gh-action-pypi-publish",
+            "release runs docker push",
+            "release runs twine upload",
+            "release runs npm publish",
+            "release runs gh release create",
+        )
+    ]
+
+
+def test_detect_names_pnpm_flyctl_and_goreleaser_publishing(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a common publishing form a realistic repository uses is missed."""
+
+    workflow = (
+        "on: push\njobs:\n  ship:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: pnpm publish --no-git-checks\n"
+        "      - run: flyctl deploy --remote-only\n"
+        "      - uses: goreleaser/goreleaser-action@v6\n"
+    )
+    target = repo(tmp_path / "t", {".github/workflows/ship.yml": workflow})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    found = [line for line in out.splitlines() if "signal publishing-workflow" in line]
+    assert any("runs pnpm publish" in line for line in found), found
+    assert any("runs flyctl deploy" in line for line in found), found
+    assert any("uses goreleaser/goreleaser-action" in line for line in found), found
+
+
+def test_detect_names_the_runtime_versions_the_project_pins(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    files = {
+        ".python-version": "3.12\n",
+        ".nvmrc": "v20.11.0\n",
+        ".tool-versions": "python 3.12.1\n# comment\nnodejs 20.11.0\n",
+        "rust-toolchain.toml": '[toolchain]\nchannel = "1.75"\n',
+        "pyproject.toml": (
+            '[tool.x]\nrequires-python = "<2"\n[project]\nrequires-python = ">=3.10"\n'
+        ),
+        "go.mod": "module x\n\ngo 1.22\n",
+    }
+    target = repo(tmp_path / "t", files)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    found = [line for line in out.splitlines() if "signal runtime-version" in line]
+    assert found == [
+        "# signal runtime-version: .python-version; value: 3.12; local slot: Context",
+        "# signal runtime-version: .nvmrc; value: v20.11.0; local slot: Context",
+        "# signal runtime-version: .tool-versions; value: python 3.12.1; nodejs 20.11.0; "
+        "local slot: Context",
+        "# signal runtime-version: rust-toolchain.toml; value: 1.75; local slot: Context",
+        "# signal runtime-version: pyproject.toml; value: requires-python >=3.10; "
+        "local slot: Context",
+        "# signal runtime-version: go.mod; value: go 1.22; local slot: Context",
+    ]
+
+
+def test_detect_names_the_environment_variables_and_never_a_value(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    env = (
+        "# a comment\nAPI_URL=https://s3cr3t.example\nexport TOKEN='s3cr3t-value'\n"
+        "EMPTY=\nbad line\n"
+    )
+    target = repo(tmp_path / "t", {".env.example": env, ".env.sample": "OTHER=1\n"})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    names = "API_URL, TOKEN, EMPTY"
+    assert f"# signal environment-names: .env.example; value: {names}; local slot: Context" in out
+    assert "# signal environment-names: .env.sample; value: OTHER; local slot: Context" in out
+    assert "s3cr3t" not in out
+
+
+WORKFLOW_SECRETS = """\
+on: push
+env:
+  SHARED: ${{ secrets.WORKFLOW_WIDE }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      KEY: ${{ secrets.API_KEY }}
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - run: pytest -q
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ${{ secrets['LINT_KEY'] }}
+"""
+
+
+def test_detect_names_the_secrets_a_workflow_uses_with_their_jobs_and_no_value(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW_SECRETS})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert (
+        "# signal ci-secrets: .github/workflows/ci.yml; value: API_KEY in job test; "
+        "LINT_KEY in job lint; WORKFLOW_WIDE in the workflow; local slot: Distinguish\n"
+    ) in out
+    assert "GITHUB_TOKEN" not in out.split("signal ci-secrets")[1].split("\n")[0]
+    [line] = [text for text in out.splitlines() if "readiness" in text and "secrets." in text]
+    assert line == (
+        "# readiness UNVERIFIED: the CI test command `pytest -q` runs in job test of "
+        ".github/workflows/ci.yml, which names secrets.API_KEY, secrets.WORKFLOW_WIDE; next: that "
+        "command cannot run on the host without the secret"
+    )
+
+
+def test_a_secret_another_step_uses_does_not_reach_the_test_command(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a secret one step of a job uses is read as needed by the job's test command,
+    which another step runs; the job's own `env` reaches every step and still counts."""
+
+    workflow = (
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: pytest -q\n"
+        "      - run: ./scrub\n        env:\n          LIST: ${{ secrets.SCRUB_LIST }}\n"
+    )
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": workflow})
+    _, out, _ = run(capsys, str(target), "--detect")
+    assert "signal ci-secrets" in out and "readiness UNVERIFIED: the CI test command" not in out
+
+    job_wide = workflow.replace(
+        "    runs-on: ubuntu-latest\n",
+        "    runs-on: ubuntu-latest\n    env:\n      K: ${{ secrets.JOB_KEY }}\n",
+    )
+    shared = repo(tmp_path / "s", {".github/workflows/ci.yml": job_wide})
+    _, out, _ = run(capsys, str(shared), "--detect")
+    assert "which names secrets.JOB_KEY;" in out
+
+
+def test_detect_names_no_secret_for_a_test_job_that_names_none(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    workflow = WORKFLOW_SECRETS.replace("  SHARED: ${{ secrets.WORKFLOW_WIDE }}\n", "").replace(
+        "      KEY: ${{ secrets.API_KEY }}\n", ""
+    )
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": workflow})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "signal ci-secrets" in out and "readiness UNVERIFIED: the CI test command" not in out
+
+
+def test_detect_reads_no_done_candidate_and_a_missing_lockfile_as_unverified(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"package.json": "{}"})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "# readiness UNVERIFIED: no Done candidate; next: record one with --done" in out
+    assert (
+        "# readiness UNVERIFIED: package.json has no lockfile beside it; next: a library may "
+        "commit none; an application pins its dependencies"
+    ) in out
+    write(target / "yarn.lock", "")
+    _, out, _ = run(capsys, str(target), "--detect")
+    assert "has no lockfile beside it" not in out
+    assert "no Done candidate" in out
+    assert run(capsys, str(target), "--done", "true")[0] == 0
+    assert "no Done candidate" not in run(capsys, str(target), "--detect")[1]
+
+
+def test_detect_reads_a_measured_failing_done_and_a_slow_one_from_the_record(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Done that was measured failing is not a `FAIL` readiness line with its next
+    step, or one that took longer than the finish check's timeout less 30 seconds is not
+    UNVERIFIED with the `--finish-timeout` that fits."""
+
+    hook_free_path(monkeypatch, tmp_path)
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    assert run(capsys, str(target), "--done", "exit 3", "--verify")[0] == 0
+    known = finish_check.known_record(target, finish_check.done_digest(["exit 3"]))
+    assert known is not None and known.failing
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert re.search(
+        r"# readiness FAIL: Done measured failing on \S+: `exit 3` \(exit 3\); next: fix it, "
+        r"or keep it as a known failure the record names",
+        out,
+    )
+    assert "readiness UNVERIFIED: Done took" not in out
+    slow = dataclasses.replace(known, seconds=700.0, failing={})
+    assert finish_check.keep_known(target, slow)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "readiness FAIL" not in out
+    assert re.search(
+        r"# readiness UNVERIFIED: Done took 700 s when it was measured on \S+, longer than the "
+        r"570 s the 600 s finish-check timeout gives it; next: --finish-timeout with more than "
+        r"731, for example 1462",
+        out,
+    )
+
+
+def test_detect_on_a_folder_with_only_git_names_the_new_project_route(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the reference is named where the engine lacks the file, is not named by its
+    engine path where it has it, or is named for a folder that holds code or any other file."""
+
+    source = engine_copy(tmp_path)
+    empty = repo(tmp_path / "empty")
+    code_only = repo(tmp_path / "code", {"app.py": "x = 1\n"})
+    reference = source / "skills/using-outcomebound/references/new-project.md"
+    reference.unlink(missing_ok=True)
+
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert "# nothing here but .git: a new project starts from this command\n" in out
+    assert "new-project.md" not in out and "README" not in out
+
+    write(reference, "# New project\n")
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert f"a new project starts from this command; read {reference.resolve().as_posix()}" in out
+    assert out.splitlines()[-1].endswith(
+        f"{source.resolve().as_posix()}/skills/adopt-outcomebound/SKILL.md"
+    )
+
+    _, out, _ = run(capsys, str(code_only), "--detect", source=source)
+    assert "a new project starts" not in out and "Start a new project" not in out
+
+
+@pytest.mark.skipif(WINDOWS, reason="a control character cannot be part of a Windows file name")
+def test_detect_escapes_every_string_the_target_gave(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if a path, a CI command, a pattern or a value that the target holds reaches the
+    terminal with a control or bidirectional character in it, on the command line or a note."""
+
+    workflow = (
+        "jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q 'a\u202eb'\n"
+    )
+    files = {
+        ".github/workflows/ci.yml": workflow,
+        ".gitattributes": "gen/\u202e** linguist-generated\n",
+        ".python-version": "3.12\x1b[2J\n",
+    }
+    target = repo(tmp_path / "dir\x1b[31mred", files)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0
+    assert all(" " <= char <= "~" or char == "\n" for char in out), out
+    for escaped in ("\\u001b[31mred", "\\u202e", "\\u001b[2J"):
+        assert escaped in out
+
+
+def test_detect_prints_the_engines_own_paths_as_they_are(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if the guide's path, which an agent opens, is escaped though no target gave it,
+    or if letters beyond ASCII in the target's own path are escaped in the command a person
+    pastes, which would then name a folder that does not exist."""
+
+    source = tmp_path / "engine-\u65e5\u672c"
+    shutil.copytree(engine_copy(tmp_path), source)
+    write(source / "skills/using-outcomebound/references/new-project.md", "# New\n")
+    target = repo(tmp_path / "t-\u65e5\u672c")
+
+    _, out, _ = run(capsys, str(target), "--detect", source=source)
+
+    first, *rest = out.splitlines()
+    assert "t-\u65e5\u672c" in first and "\\u65e5" not in first
+    reference = f"{source.resolve().as_posix()}/skills/using-outcomebound/references/new-project.md"
+    assert (
+        f"# nothing here but .git: a new project starts from this command; read {reference}" in rest
+    )
+    assert rest[-1] == (
+        f"# onboarding guide for an agent: {source.resolve().as_posix()}"
+        "/skills/adopt-outcomebound/SKILL.md"
+    )
 
 
 def test_the_commands_fragment_installs_a_pointer_and_a_copy_and_removes_both(
@@ -1259,6 +1770,85 @@ def test_the_facts_are_read_from_their_sources(tmp_path: Path, capsys: Capture) 
     with pytest.raises(SystemExit) as refused:
         adopt.main([str(target), "--check", "--done", "make test"])
     assert refused.value.code == 2
+
+
+def test_setup_is_recorded_in_run_order_kept_cleared_and_never_run(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--setup` runs a command, loses run order, is lost on a re-run that names none,
+    survives `--setup ''`, or the report stops naming the fact when none is recorded."""
+
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW})
+    ran = tmp_path / "setup-ran"
+    first = ("--harness", "codex", "--done", "make test")
+
+    _, out, _ = run(capsys, str(target), *first)
+
+    assert "UNVERIFIED Setup: no command is recorded; adopt records one with --setup" in out
+    assert "Setup" not in facts_lines(target)
+
+    code, out, err = run(
+        capsys, str(target), "--setup", f"touch {ran.as_posix()}", "--setup", "make deps"
+    )
+
+    assert code == 0, err
+    assert not ran.exists() and "UNVERIFIED Setup" not in out
+    lines = facts_lines(target)
+    assert list(lines) == ["Done", "Setup", "CI test", "Precedence"]
+    assert lines["Setup"] == f"`touch {ran.as_posix()}` and `make deps`"
+    assert manifest(target)["artifacts"][1]["setup"] == [f"touch {ran.as_posix()}", "make deps"]
+    assert run(capsys, str(target), "--check")[0] == 0
+
+    before = snapshot(target)
+    assert run(capsys, str(target))[0] == 0
+    assert run(capsys, str(target), "--done", "make check")[0] == 0
+    assert snapshot(target)["AGENTS.md"] != before["AGENTS.md"]
+    assert facts_lines(target)["Setup"] == lines["Setup"]
+
+    code, out, _ = run(capsys, str(target), "--setup", "")
+    assert code == 0 and "UNVERIFIED Setup: no command is recorded" in out
+    assert "Setup" not in facts_lines(target)
+    assert "setup" not in manifest(target)["artifacts"][1]
+    assert run(capsys, str(target), "--check")[0] == 0
+
+
+def test_a_setup_command_is_one_line_and_check_takes_none(tmp_path: Path, capsys: Capture) -> None:
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    code, _, err = run(capsys, str(target), "--setup", "make\ndeps")
+
+    assert code == 1 and "a --setup command is one line" in err
+    assert not (target / adopt.MANIFEST).exists()
+    for mode in ("--check", "--detect", "--remove"):
+        with pytest.raises(SystemExit) as refused:
+            adopt.main([str(target), mode, "--setup", "make deps"])
+        assert refused.value.code == 2
+
+
+def test_check_recomputes_the_facts_from_the_recorded_setup(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A Setup list in the record that the block does not show reads the block stale, naming
+    the fact; a record that is not a list of commands is refused."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    assert run(capsys, str(target), "--done", "make test", "--setup", "make deps")[0] == 0
+    path = target / adopt.MANIFEST
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["artifacts"][1]["setup"] = ["make deps", "make more"]
+    write(path, json.dumps(document, indent=2) + "\n")
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1
+    assert "stale    AGENTS.md (project-facts): Setup moved" in out
+
+    document["artifacts"][1]["setup"] = "make deps"
+    write(path, json.dumps(document, indent=2) + "\n")
+
+    code, _, err = run(capsys, str(target), "--check")
+
+    assert code == 1 and "the setup recorded for AGENTS.md are not a list of names" in err
 
 
 def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
@@ -1881,7 +2471,8 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     each failure, if it does not keep the failures as known, if a dry run or an install that
     does not name --finish-check runs Done, or if --finish-check does not measure it again."""
 
-    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs once.
+    # A PATH with no entry the measurement leaves out, as a hook has, so a failure runs twice:
+    # once, and once more in the same environment to tell a stable failure from a flake.
     environment, _ = finish_check.hook_environment(tmp_path, os.environ)
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
@@ -1902,27 +2493,28 @@ def test_an_install_measures_done_once_and_records_the_failures_there_now(
     digest = finish_check.done_digest([failing, "true"])
     known = finish_check.known_record(target, digest)
     assert known is not None and {k: v.code for k, v in known.failing.items()} == {failing: 3}
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
 
     code, out, _ = run(capsys, str(target), "--fragments", "")
     assert code == 0 and "running " not in out
     assert re.search(r"finish-check: Done was measured on \S+ on commit [0-9a-f]{12} in ", out)
+    assert re.search(r" in \d+ s, 0 commits since, known failures: ", out)
     assert f"`{failing}` (exit 3)" in out
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
     assert "was measured with the PATH of the agent" not in out
 
     # A record an engine before the hook-like measurement wrote: the upgrade says so.
     assert finish_check.keep_known(target, dataclasses.replace(known, as_hook=False))
     code, out, _ = run(capsys, str(target), "--fragments", "")
     assert code == 0 and "finish-check: that record was measured with the PATH of the agent" in out
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
-    assert run(capsys, str(target), "--finish-check")[0] == 0
     assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+    assert run(capsys, str(target), "--finish-check")[0] == 0
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 4
 
     code, out, _ = run(capsys, str(target), "--done", failing)
     assert code == 0 and "running " not in out
     assert "finish-check: Done was not measured, so no record of known failures applies" in out
-    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 4
 
 
 @pytest.mark.parametrize("place", ["missing", "project", "virtual-environment", "tool-bin"])
@@ -1944,7 +2536,9 @@ def test_an_explicit_measurement_names_a_launcher_missing_from_its_hook_environm
         launcher.chmod(0o755)
     monkeypatch.setenv("PATH", str(folder))
 
-    def measure(root: Path, done: list[str], timeout: int) -> finish_check.Measured:
+    def measure(
+        root: Path, done: list[str], timeout: int, as_hook: bool = True
+    ) -> finish_check.Measured:
         # Only the Done runner is a double: launcher lookup and PATH filtering are real.
         _, dropped = finish_check.hook_environment(root, os.environ)
         return finish_check.Measured(
@@ -2001,7 +2595,170 @@ def test_a_new_measurement_names_the_failures_new_since_the_record_it_replaces(
         handle.write("FAILED tests/test_a.py::test_new - assert 1\n")
     out = run(capsys, str(target), "--finish-check")[1]
     assert re.search(r"known    finish-check: new since the record measured on \S+ on commit ", out)
+    assert ", 0 commits since, which this one replaces here: " in out
     assert "pytest tests/test_a.py::test_new" in out and "test_old" not in out.split("new since")[1]
+
+
+def hook_free_path(monkeypatch: pytest.MonkeyPatch, root: Path) -> Path:
+    """A PATH with no entry a hook's measurement leaves out, then `bin` inside `root` first: a
+    tool kept there is found with the caller's PATH and not with a hook's. Returns that folder."""
+
+    environment, _ = finish_check.hook_environment(root, os.environ)
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+    folder = root / "bin"
+    folder.mkdir(parents=True)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(folder), environment["PATH"]]))
+    return folder
+
+
+@pytest.mark.skipif(WINDOWS, reason="the tool is a POSIX script found on PATH by its name")
+def test_verify_measures_with_the_callers_path_and_a_hook_measures_without_the_projects(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `--verify` adds the hook, measures a command that only the caller's PATH finds
+    as a hook would, measures as the caller where an entry stays installed, or runs Done under
+    `--dry-run`."""
+
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    tool = hook_free_path(monkeypatch, target) / "faketool"
+    write(tool, "#!/bin/sh\necho run >> " + shlex.quote((tmp_path / "count").as_posix()) + "\n")
+    tool.chmod(0o755)
+    count = tmp_path / "count"
+    arguments = ("--harness", "claude-code", "--done", "faketool")
+    digest = finish_check.done_digest(["faketool"])
+
+    code, out, _ = run(capsys, str(target), *arguments, "--verify", "--dry-run")
+    assert code == 0 and "a dry run does not run Done" in out and not count.exists()
+
+    code, out, err = run(capsys, str(target), *arguments, "--verify")
+    assert code == 0, err
+    assert re.search(r"PASS     finish-check: `faketool` in \d+ s", out)
+    assert "Done was measured with the PATH of the process that ran adopt" in out
+    assert re.search(r"measured finish-check: Done ran once in \d+ s; a hook would give it ", out)
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+    assert hook_records(target) == [] and not (target / ".claude/settings.json").exists()
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.as_hook is False
+
+    code, out, _ = run(capsys, str(target), "--finish-check")
+    assert code == 0 and "UNVERIFIED finish-check: `faketool` could not run here" in out
+    assert "with the PATH of the process" not in out and "the hook gives it" in out
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.as_hook is True and hook_records(target)
+
+    code, out, _ = run(capsys, str(target), "--verify")
+    assert code == 0 and "UNVERIFIED finish-check: `faketool` could not run here" in out
+    assert "with the PATH of the process" not in out and hook_records(target)
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 1
+
+    code, out, _ = run(capsys, str(target), "--verify", "--no-finish-check")
+    assert code == 0 and re.search(r"PASS     finish-check: `faketool` in \d+ s", out)
+    known = finish_check.known_record(target, digest)
+    assert known is not None and known.as_hook is False and hook_records(target) == []
+    assert len(count.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_verify_reports_a_flaky_done_command_as_unverified_and_keeps_no_failure(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a failure that the second run does not repeat is kept as a known failure, or
+    printed other than as a possible flake, or if the command that passed is not reported."""
+
+    hook_free_path(monkeypatch, tmp_path)
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    flag = paths.shell_path(tmp_path / "flag")
+    flaky = f"if [ -e {flag} ]; then exit 0; fi; touch {flag}; echo 'FAILED tests/a.py::t'; exit 1"
+
+    code, out, err = run(capsys, str(target), "--done", "true", "--done", flaky, "--verify")
+
+    assert code == 0, err
+    assert re.search(r"PASS     finish-check: `true` in \d+ s", out)
+    [line] = [text for text in out.splitlines() if "possible flake" in text]
+    assert line.startswith("UNVERIFIED finish-check: `if [ -e ")
+    assert "failed with exit 1, a second run in the same environment passed" in line
+    assert "known    " not in out
+    known = finish_check.known_record(target, finish_check.done_digest(["true", flaky]))
+    assert known is not None and known.failing == {}
+
+
+def test_verify_without_a_done_command_is_unverified_naming_done_and_the_rest_prints(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--verify` stops the install, runs anything, or fails to name `--done`."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    code, out, err = run(capsys, str(target), "--verify", "--dry-run")
+    assert code == 0, err
+    assert "UNVERIFIED verify: Done is not recorded, so no command was measured" in out
+    assert "record one with --done" in out and "a dry run does not run Done" not in out
+
+    code, out, err = run(capsys, str(target), "--verify")
+
+    assert code == 0, err
+    assert "record one with --done" in out and "running " not in out
+    assert re.search(r"^create   AGENTS.md$", out, re.MULTILINE)
+    assert (target / "AGENTS.md").is_file()
+
+
+def test_verify_applies_to_an_install_and_the_message_lists_it(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t")
+    for mode in ("--detect", "--check", "--remove"):
+        with pytest.raises(SystemExit) as refused:
+            adopt.main([str(target), mode, "--verify"])
+        assert refused.value.code == 2
+        err = capsys.readouterr().err
+        assert "--verify" in err and "apply to an install" in err
+
+
+def test_check_prints_the_measurement_note_on_one_line_and_never_counts_it(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if `--check` prints no note, prints it other than as one line, changes its exit
+    code for it, or counts the commits since the measurement wrongly."""
+
+    hook_free_path(monkeypatch, tmp_path)
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    assert run(capsys, str(target), "--harness", "codex", "--done", "exit 3")[0] == 0
+
+    def notes() -> tuple[int, list[str]]:
+        code, out, _ = run(capsys, str(target), "--check")
+        return code, [line for line in out.splitlines() if line.startswith("note ")]
+
+    code, found = notes()
+    assert code == 0 and len(found) == 1
+    assert found[0].startswith("note     finish-check: Done was not measured here, so no record")
+
+    assert run(capsys, str(target), "--verify")[0] == 0
+    measured = r"note     finish-check: Done was measured on \S+ on commit [0-9a-f]{12} in \d+ s, "
+    known = r"known failures: `exit 3` \(exit 3\)"
+    # (commits to add before this reading, the count the note then gives)
+    for added, since in [(0, "0 commits"), (1, "1 commit"), (1, "2 commits")]:
+        for _ in range(added):
+            commit_all(target)
+        code, found = notes()
+        assert code == 0 and len(found) == 1
+        assert re.fullmatch(f"{measured}{since} since, {known}", found[0]), found
+
+    assert run(capsys, str(target), "--done", "")[0] == 0
+    assert notes() == (0, [])
+
+
+def test_commits_since_is_unverified_where_git_cannot_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = repo(tmp_path / "t")
+    commit_all(target)
+
+    assert finish_check.commits_since(target, "0" * 40) is None
+    assert adopt.commits_since(target, "0" * 40) == "UNVERIFIED how many commits since"
+    monkeypatch.setattr(finish_check, "commits_since", lambda *_: 1)
+    assert adopt.commits_since(target, "x") == "1 commit since"
 
 
 def test_an_install_whose_done_outlasts_the_timeout_proposes_a_longer_one(
@@ -2569,3 +3326,24 @@ def test_implicit_adoption_preserves_a_multi_harness_install(
     assert run(capsys, str(target))[0] == 0
     assert snapshot(target) == before
     assert run(capsys, str(target), "--check")[0] == 0
+
+
+def test_an_install_warns_of_each_stale_reference_and_refuses_nothing(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install or an upgrade stays silent about a script the project's own
+    instructions name and the target no longer holds, or refuses the install for it."""
+
+    files = {
+        "AGENTS.md": "# Project\n\nRun `npm run gone` and read `docs/kept.md`.\n",
+        "package.json": '{"scripts": {"build": "x"}}\n',
+        "docs/kept.md": "# Kept\n",
+    }
+    target = repo(tmp_path / "t", files)
+
+    code, out, _ = run(capsys, str(target), "--harness", "claude-code")
+
+    assert code == 0
+    stale = [line for line in out.splitlines() if "stale reference" in line]
+    assert len(stale) == 1 and stale[0].startswith("warning") and "AGENTS.md:3" in stale[0]
+    assert "gone" in stale[0] and "kept.md" not in stale[0]
