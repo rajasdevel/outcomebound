@@ -1,0 +1,21 @@
+# The graders, the sealed seed commit of the project and the repository exclusion state copied
+# into the candidate-writable fixture. The adopt skill, an arm file, is protected beside them by
+# the runner.
+checks/probe_plain.py
+checks/onboard.py
+checks/new_project.py
+checks/scope_walk.py
+checks/transcript_commands.py
+target-seed.txt
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude
+# The project's source, tests, Makefile and CI workflow. The run may install OutcomeBound; it may
+# not change these.
+target/project/Makefile
+target/project/.github/workflows/ci.yml
+target/project/src/wordtally/__init__.py
+target/project/src/wordtally/counter.py
+target/project/tests/__init__.py
+target/project/tests/test_counter.py

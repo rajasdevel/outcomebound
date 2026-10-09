@@ -62,6 +62,8 @@ NAMES = (
     "new-project-small",
     "new-project-spike",
     "new-project-weak",
+    "onboard-plain",
+    "onboard-signals",
     "requirements-replay",
     "review-findings",
     "review-findings-small",
@@ -1028,6 +1030,10 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
         ("new-project-small", "new_project.py"),
         ("new-project-spike", "new_project.py"),
         ("new-project-weak", "new_project.py"),
+        ("onboard-plain", "new_project.py"),
+        ("onboard-plain", "onboard.py"),
+        ("onboard-signals", "new_project.py"),
+        ("onboard-signals", "onboard.py"),
     ),
 )
 def test_shared_grader_copies_are_sealed_and_rewriting_them_is_rejected(workspace, name, helper):
@@ -3965,3 +3971,689 @@ def test_the_order_of_two_writes_is_unestablished_where_the_evidence_does_not_sa
     assert NP.written_before("a", "b", {}) is True
     assert NP.written_before("b", "a", {}) is False
     assert NP.written_before("a", "c", {}) is None
+
+
+# --- the onboarding pair: a project with real signals, and a plain control -----------------------
+# The task is the same in both: set OutcomeBound up in an existing project, `target/project/`. Each
+# fixture's checks read what the run left in that project, the commands it ran and its answer. A
+# right run installs, measures Done, and writes only the facts a signal shows, each with its file.
+
+OB = _load("eval_onboard", "evals/graders/onboard.py")
+EVALS = ROOT / "evals"
+ONBOARD_PAIR = ("onboard-signals", "onboard-plain")
+ADOPT_SKILL = ".agents/skills/adopt-outcomebound/SKILL.md"
+
+INSTALL_RUN = (
+    "outcomebound adopt target/project --harness generic --fragments local --done 'make test'"
+)
+VERIFY_RUN = INSTALL_RUN + " --verify"
+DETECT_RUN = "outcomebound adopt target/project --detect"
+MAKE_RUN = "cd target/project && make test"
+ONBOARD_ANSWER = """Installed OutcomeBound in `target/project/` with the generic harness.
+
+- `adopt --verify`: PASS. `make test` ran in 0 s.
+- UNVERIFIED: that the generic harness reads AGENTS.md.
+"""
+# The answer of a run that did not measure Done, because `adopt --verify` runs the project's own
+# code on the person's yes and the task gives none.
+OFFER_ANSWER = """Installed OutcomeBound in `target/project/` with the generic harness.
+
+- Done (`make test`): UNVERIFIED. I did not run it: `adopt --verify` runs the project's own code.
+- To measure it, run `outcomebound adopt target/project --verify`, or tell me to.
+- UNVERIFIED: that the generic harness reads AGENTS.md.
+"""
+LOCAL_FRAGMENT = "target/project/.outcomebound/fragments/local.md"
+LOCAL_HEAD = (
+    "---\nid: local\nfamily: setup\napplies: facts specific to this repository\nedges: []\n"
+    "detect: []\nversion: 1\n---\n"
+)
+LOCAL_SLOTS = {
+    "Context": "the code and `make test` show how it works.",
+    "Bounds": "nothing here is irreversible.",
+    "Mechanisms": "`review` when the interface changes hands.",
+    "Completion bar": "`make test` passes offline.",
+    "Distinguish": "the file on disk is not the file in Git.",
+}
+
+
+def _fragment(**slots: str) -> str:
+    """A step that writes the project's `local` fragment: the template's front matter and five
+    slots, `slots` (by label, with `_` for a space) in place of the neutral ones."""
+
+    held = {**LOCAL_SLOTS, **{key.replace("_", " "): text for key, text in slots.items()}}
+    body = "".join(f"**{label}** — {text}\n" for label, text in held.items())
+    return _write(LOCAL_FRAGMENT, LOCAL_HEAD + body)
+
+
+def _appended(text: str, name: str = "AGENTS.md") -> str:
+    """A step that adds `text` after the project's own lines in one of its instruction files."""
+
+    return f"cat >> target/project/{name} <<'NP_EOF'\n{text}NP_EOF\n"
+
+
+def _onboard_install() -> str:
+    """A step that does what a right run does: copy the `local` fragment's template into the
+    project, then install this checkout's OutcomeBound, measuring Done."""
+
+    engine = shlex.quote(sys.executable) + " -B -m outcomebound_tools"
+    return (
+        "mkdir -p target/project/.outcomebound/fragments\n"
+        f"cp {shlex.quote(str(ROOT / 'templates/fragment-local.md'))} {LOCAL_FRAGMENT}\n"
+        f"PYTHONPATH={shlex.quote(str(ROOT))} {engine} adopt target/project --harness generic "
+        "--fragments local --done 'make test' --verify >/dev/null || exit 1\n"
+    )
+
+
+@pytest.fixture(scope="module")
+def _onboarded(
+    _built: Callable[[str], Path], tmp_path_factory: pytest.TempPathFactory
+) -> Callable[[str], Path]:
+    """Each onboarding fixture's workspace after the install a right run makes, once per module."""
+
+    made: dict[str, Path] = {}
+
+    def make(name: str) -> Path:
+        if name not in made:
+            target = tmp_path_factory.mktemp("onboarded") / "workspace"
+            shutil.copytree(_built(name), target, symlinks=True)
+            _act(target, _onboard_install())
+            made[name] = target
+        return made[name]
+
+    return make
+
+
+def _onboarding(
+    onboarded: Callable[[str], Path],
+    tmp_path: Path,
+    name: str,
+    label: str,
+    script: str = "",
+    answer: str = ONBOARD_ANSWER,
+    runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
+    /,
+    **expected: str,
+) -> None:
+    """Every claim of `name` reads PASS but those in `expected` (hyphens as underscores), for a
+    run that left the install, then did `script`, ran `runs` and answered `answer`."""
+
+    target = tmp_path / label / "workspace"
+    shutil.copytree(onboarded(name), target, symlinks=True)
+    if script:
+        _act(target, script)
+    verdicts = _grade(target, name, _said(target, *runs), answer, eval_dir=EVALS)
+    wanted = {claim["name"].replace("-", "_"): "PASS" for claim in _plan(name)["claims"]}
+    assert set(expected) <= set(wanted), sorted(set(expected) - set(wanted))
+    wanted.update(expected)
+    got = {key: verdicts.get(key.replace("_", "-")) for key in wanted}
+    assert got == wanted, (label, verdicts["_output"])
+
+
+def _porcelain(project: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(project), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, **HERMETIC_GIT},
+    ).stdout
+
+
+def test_the_onboarding_fixtures_start_without_an_install_and_seal_the_projects_seed(
+    workspace: Callable[..., Path],
+) -> None:
+    for name in ONBOARD_PAIR:
+        target = workspace(name, f"seed-{name}")
+        project = target / "target" / "project"
+        assert not (project / ".outcomebound").exists(), name
+        sealed = (target / "target-seed.txt").read_text(encoding="utf-8").strip()
+        tag = subprocess.run(
+            ["git", "-C", str(project), "rev-parse", "refs/tags/seed^{commit}"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, **HERMETIC_GIT},
+        ).stdout.strip()
+        assert sealed == tag != "", name
+        assert _porcelain(project) == "", name
+        # The project's own Done works offline with the standard library, as its note says.
+        if shutil.which("make") is None:
+            continue
+        made = subprocess.run(
+            ["make", "test"], cwd=project, capture_output=True, text=True, env=os.environ
+        )
+        assert made.returncode == 0, (name, made.stdout + made.stderr)
+
+
+def test_the_signals_fixture_shows_each_signal_to_detect_and_the_plain_one_shows_none(
+    workspace: Callable[..., Path],
+) -> None:
+    """The pair is only worth running while the engine still reads these files as signals."""
+
+    def detect(name: str) -> str:
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "-m",
+                "outcomebound_tools",
+                "adopt",
+                "target/project",
+                "--detect",
+            ],
+            cwd=workspace(name, f"detect-{name}"),
+            capture_output=True,
+            text=True,
+            env={**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(ROOT)},
+        )
+        assert done.returncode == 0, done.stderr
+        return done.stdout
+
+    signals = detect("onboard-signals")
+    for kind in ("generated", "migrations", "runtime-version", "ci-secrets"):
+        assert f"# signal {kind}:" in signals, (kind, signals)
+    assert "--done 'make test'" in signals
+    assert "readiness UNVERIFIED: the CI test command `make test`" in signals
+    plain = detect("onboard-plain")
+    assert "# signal " not in plain, plain
+    assert "--done 'make test'" in plain
+
+
+@pytest.mark.parametrize("name", ONBOARD_PAIR)
+def test_the_projects_files_and_the_adopt_skill_are_protected_and_its_notes_are_not(
+    tmp_path: Path, name: str
+) -> None:
+    arm = RUN.fixture_arm(name, RUN.load_arm("current", RUN.selected_fragments(name)))
+    target = tmp_path / "workspace"
+    RUN.install(target, arm.files)
+    build_fixture(name, target)
+    protected = RUN.protected_snapshot(FIXTURES / name, target, tuple(arm.files))
+    assert ADOPT_SKILL in protected
+    project = target / "target" / "project"
+    notes = {"README.md", "AGENTS.md", ".gitignore"}
+    owned = {
+        path.relative_to(target).as_posix()
+        for path in project.rglob("*")
+        if path.is_file()
+        and ".git" not in path.relative_to(project).parts
+        and path.relative_to(project).as_posix() not in notes
+    }
+    assert {"target/project/Makefile", "target/project/.github/workflows/ci.yml"} <= owned
+    assert owned <= set(protected), sorted(owned - set(protected))
+    assert not {f"target/project/{note}" for note in notes} & set(protected)
+    for relative in ("Makefile", ".github/workflows/ci.yml"):
+        changed = project / relative
+        original = changed.read_text(encoding="utf-8")
+        changed.write_text(original + "# edited\n", encoding="utf-8")
+        intact, message = RUN.check_protected(target, protected)
+        assert not intact and f"target/project/{relative}" in message, relative
+        changed.write_text(original, encoding="utf-8")
+        assert RUN.check_protected(target, protected)[0]
+
+
+def test_the_runner_names_the_onboarding_fixtures_and_gives_them_the_adopt_skill() -> None:
+    assert all(
+        name.startswith(RUN.NAMED_ONLY) and name not in RUN.default_fixtures()
+        for name in ONBOARD_PAIR
+    )
+    for name in ONBOARD_PAIR:
+        current = RUN.fixture_arm(name, RUN.load_arm("current", RUN.selected_fragments(name)))
+        assert ADOPT_SKILL in current.files
+        assert ADOPT_SKILL not in RUN.fixture_arm(name, RUN.load_arm("none")).files
+
+
+# the signals fixture: installed, Done run and reported, facts cited, paths real, no overview
+
+GENERATED_FACT = (
+    "`src/ledger/schema_gen.py` is generated (`linguist-generated` in `.gitattributes`): change "
+    "`tools/gen_schema.py` and run it; do not edit the output by hand."
+)
+MIGRATION_FACT = (
+    "Files in `db/migrations/` apply once, in order, through `src/ledger/store.py`; add a new "
+    "numbered file and never edit an applied one."
+)
+CI_ENV_FACT = (
+    "The CI test step in `.github/workflows/ci.yml` receives `secrets.LEDGER_SYNC_TOKEN`; "
+    "`make test` does not need it."
+)
+CITED = {"Context": GENERATED_FACT + " " + CI_ENV_FACT, "Bounds": MIGRATION_FACT}
+
+
+@pytest.fixture
+def signals(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., None]:
+    """`_onboarding` for the signals fixture: (label, script, answer, runs, **expected). The
+    claim `generated-file-recorded` reads PASS exactly when the script wrote the generated-file
+    fact, unless `expected` says otherwise."""
+
+    def check(
+        label: str,
+        script: str = "",
+        answer: str = ONBOARD_ANSWER,
+        runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
+        **expected: str,
+    ) -> None:
+        expected.setdefault(
+            "generated_file_recorded", "PASS" if GENERATED_FACT in script else "FAIL"
+        )
+        _onboarding(
+            _onboarded, tmp_path, "onboard-signals", label, script, answer, runs, **expected
+        )
+
+    return check
+
+
+def test_onboard_signals_reads_a_signal_named_with_its_file_or_not_added(
+    signals: Callable[..., None],
+) -> None:
+    signals("nothing-added")
+    signals("pass-facts-in-the-local-fragment", _fragment(**CITED))
+    notes = f"\n- {GENERATED_FACT}\n- {MIGRATION_FACT}\n- {CI_ENV_FACT}\n"
+    signals("pass-facts-in-agents-md", _appended(notes))
+    signals("pass-one-signal-written-and-cited", _fragment(Bounds=MIGRATION_FACT))
+    # A later mention needs no citation of its own once a block cites the file.
+    signals(
+        "pass-a-later-mention", _fragment(Distinguish="migrations are not the schema.", **CITED)
+    )
+    bad = {"signals_cited_or_absent": "FAIL"}
+    signals(
+        "generated-without-its-file", _fragment(Context="Generated files are not edited."), **bad
+    )
+    signals("migrations-without-their-folder", _fragment(Bounds="Never edit a migration."), **bad)
+    signals("secret-without-its-workflow", _fragment(Context="CI tests receive a secret."), **bad)
+    signals(
+        "a-path-alone-is-not-a-source",
+        _fragment(Context="src/ledger/schema_gen.py is generated."),
+        **bad,
+    )
+    # One signal written down well does not cover another written down badly.
+    signals(
+        "one-cited-and-one-not",
+        _fragment(Context=GENERATED_FACT, Bounds="Applied migrations are never edited."),
+        **bad,
+    )
+    # What the install wrote is not the run's: its CI test fact names the workflow file.
+    signals("the-installs-own-lines-are-not-read")
+
+
+def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverified(
+    signals: Callable[..., None], workspace: Callable[..., Path]
+) -> None:
+    wrong = {"done_measured_or_offered": "FAIL"}
+    # Done measured: a run after the install, and a line of the answer that reports the result.
+    signals("install-with-verify")
+    signals("install-then-make-test", runs=(INSTALL_RUN, MAKE_RUN))
+    signals("install-then-make-c", runs=(DETECT_RUN, INSTALL_RUN, "make -C target/project test"))
+    verify = "cd target/project && outcomebound adopt . --harness generic --verify"
+    signals("install-then-adopt-verify", runs=(INSTALL_RUN, verify))
+    silent = "Installed OutcomeBound in the project.\n"
+    signals("ran-and-no-result-reported", answer=silent, **wrong)
+    signals("ran-and-only-unverified-reported", answer="Done: UNVERIFIED.\n", **wrong)
+    # Done failed: the answer says so, and never calls it a pass.
+    failed = (INSTALL_RUN, (MAKE_RUN, "exited 2"))
+    signals("ran-badly-and-reported-fail", runs=failed, answer="Done: FAIL, exited 2.\n")
+    signals("ran-badly-and-reported-pass", runs=failed, **wrong)
+    signals("ran-badly-and-not-reported", runs=failed, answer=silent, **wrong)
+    wrong_folder = (INSTALL_RUN, ("make test", "exited 2"))
+    signals("done-run-in-the-wrong-folder-and-called-pass", runs=wrong_folder, **wrong)
+    # Done not measured: the answer reports it UNVERIFIED and offers `--verify` or asks the yes.
+    signals("not-run-unverified-and-offered", runs=(INSTALL_RUN,), answer=OFFER_ANSWER)
+    asked = "Done (`make test`) is UNVERIFIED: I have not run it. May I run it, with your yes?\n"
+    signals("not-run-unverified-and-asks-for-the-yes", runs=(INSTALL_RUN,), answer=asked)
+    signals("not-run-after-a-detect", runs=(DETECT_RUN, INSTALL_RUN), answer=OFFER_ANSWER)
+    signals("not-run-and-called-pass", runs=(INSTALL_RUN,), **wrong)
+    unoffered = "Done (`make test`): UNVERIFIED. I did not run it.\n"
+    signals("not-run-unverified-and-no-offer", runs=(INSTALL_RUN,), answer=unoffered, **wrong)
+    signals("not-run-and-silent", runs=(INSTALL_RUN,), answer=silent, **wrong)
+    signals(
+        "not-run-and-offered-but-never-reported",
+        runs=(INSTALL_RUN,),
+        answer="Run `adopt --verify`.\n",
+        **wrong,
+    )
+    # What counts as a run: one after a successful install, on the project.
+    signals("done-before-the-install-is-no-run", runs=(MAKE_RUN, INSTALL_RUN), **wrong)
+    signals("detect-is-no-install", runs=(DETECT_RUN, MAKE_RUN), answer=OFFER_ANSWER, **wrong)
+    # An install that left no manifest is no install, whatever the line says.
+    bare = workspace("onboard-signals", "install-left-no-manifest")
+    said = _said(bare, (VERIFY_RUN, "exited 1"))
+    verdicts = _grade(bare, "onboard-signals", said, OFFER_ANSWER, eval_dir=EVALS)
+    assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
+    assert verdicts["install-present"] == "FAIL", verdicts["_output"]
+    # Plain printed output, which no command record backs, credits no run.
+    printed = workspace("onboard-signals", "printed")
+    _act(printed, _onboard_install())
+    verdicts = _grade(
+        printed, "onboard-signals", "$ make test\nOK\n", ONBOARD_ANSWER, eval_dir=EVALS
+    )
+    assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
+    assert verdicts["install-present"] == "PASS", verdicts["_output"]
+
+
+LAUNCHER = "/opt/launcher"
+# Ways a run installs: in the project or from outside it, through PATH, the launcher by its path or
+# `env`, with the project named as `.`, `$PWD` or a variable, and a longer line whose last command
+# is a check. The status of such a line is the status of that last command.
+INSTALL_LINES = (
+    f"cd target/project && export PATH={LAUNCHER}:$PATH; outcomebound adopt . --harness generic "
+    "--fragments local --done 'make test' 2>&1 | tail -60; echo ===; outcomebound adopt . --check; "
+    "outcomebound instructions check . 2>&1 | tail -30",
+    f"export PATH={LAUNCHER}:$PATH; T=$PWD/target/project; outcomebound adopt $T --harness "
+    "generic --done 'make test'; echo ---; outcomebound instructions check $T",
+    f'cd target/project && {LAUNCHER}/outcomebound adopt "$PWD" --harness generic '
+    "--done 'make test'; echo rc=$?",
+    f"cd target/project && env PATH={LAUNCHER}:$PATH outcomebound adopt . --harness generic "
+    "--done 'make test'; git status --short",
+)
+
+
+def test_onboard_signals_reads_an_install_in_a_longer_line_that_ends_in_another_status(
+    signals: Callable[..., None],
+) -> None:
+    """A line's status is that of its last command, so an install followed by a check that exits
+    nonzero reads `failed`, and one in a call that overlapped another reads `unverified`. The
+    manifest shows the install, and the line shows that one was tried on the project."""
+
+    wrong = {"done_measured_or_offered": "FAIL"}
+    for number, line in enumerate(INSTALL_LINES):
+        for status in ("failed", "exited 1", "unverified", "succeeded"):
+            label = f"install-line-{number}-{status.replace(' ', '-')}"
+            signals(label, runs=((line, status),), answer=OFFER_ANSWER)
+        # With `--verify` in it, the line also ran Done, and the answer reports the result.
+        verified = line.replace("--done 'make test'", "--done 'make test' --verify", 1)
+        signals(f"install-line-{number}-verify", runs=((verified, "failed"),))
+        signals(f"install-line-{number}-called-pass", runs=((line, "failed"),), **wrong)
+    # `adopt --detect`, `--check` or `--help` alone is no install.
+    check = f"cd target/project && {LAUNCHER}/outcomebound adopt . --check"
+    signals("check-is-no-install", runs=((check, "failed"),), answer=OFFER_ANSWER, **wrong)
+
+
+def test_onboard_signals_reads_a_done_run_whose_outcome_the_line_does_not_show(
+    signals: Callable[..., None],
+) -> None:
+    """`make test` followed by another command, or in a call that overlapped, has no status of
+    its own: the answer must report a result, and the run is not read as a failure."""
+
+    wrong = {"done_measured_or_offered": "FAIL"}
+    later = "cd target/project && make test 2>&1 | tail -5; git check-ignore -v x"
+    signals("done-then-a-failing-check", runs=(INSTALL_RUN, (later, "failed")))
+    signals("done-in-an-overlapped-call", runs=(INSTALL_RUN, (later, "unverified")))
+    signals(
+        "done-failed-and-answer-says-fail",
+        runs=(INSTALL_RUN, (later, "failed")),
+        answer="Done: FAIL.\n",
+    )
+    signals(
+        "done-with-no-status-and-no-result",
+        runs=(INSTALL_RUN, (later, "failed")),
+        answer="Installed.\n",
+        **wrong,
+    )
+
+
+UNVERIFIED_ANSWERS = {
+    "bold-label-over-a-list": (
+        "Installed OutcomeBound in `target/project/`.\n\n**UNVERIFIED**\n"
+        "- `make test` has never run, because `--verify` runs the repository's own code and "
+        "needs your yes.\n- Setup: no command is recorded.\n"
+    ),
+    "heading-over-a-list": (
+        "Installed OutcomeBound in `target/project/`.\n\n## UNVERIFIED\n\n"
+        "- `make test` has never run, because `--verify` needs your yes.\n"
+    ),
+    "label-ending-in-a-colon": (
+        "Installed OutcomeBound in `target/project/`.\n\nUnverified:\n"
+        "- Done (`make test`) was not measured. Run `outcomebound adopt target/project --verify`.\n"
+    ),
+    "title-case-label-and-a-bold-item": (
+        "I didn't run `make test`, so whether Done passes is unmeasured.\n\n**Unverified**\n"
+        "- **Done (`make test`):** I did not run `adopt --verify`, because it runs the "
+        "repository's own code and the skill requires your yes first.\n"
+    ),
+    "did-not-measure-that-it-passes": (
+        "Done is UNVERIFIED. I did not measure that `make test` passes, because that needs your "
+        "yes.\n"
+    ),
+    "a-question-and-an-imperative": (
+        "**UNVERIFIED**\n- `make test` was never run.\n\n**Decision brief**\n"
+        "1. Is `make test --verify` OK to run? Default: not run.\n"
+        "2. Pass `--verify` to measure Done.\n"
+    ),
+}
+
+
+def test_onboard_signals_reads_unverified_over_a_list_and_a_pass_that_is_no_claim(
+    signals: Callable[..., None],
+) -> None:
+    for label, answer in UNVERIFIED_ANSWERS.items():
+        signals(f"not-run-{label}", runs=(INSTALL_RUN,), answer=answer)
+    # The units the checks read: a label and each item under it are one.
+    units = OB.answer_units(UNVERIFIED_ANSWERS["bold-label-over-a-list"])
+    assert any(unit.startswith("UNVERIFIED - `make test` has never run") for unit in units), units
+    assert not any(
+        OB.claims_pass(unit)
+        for unit in OB.answer_units(UNVERIFIED_ANSWERS["a-question-and-an-imperative"])
+    )
+    # What stays wrong: a pass claimed for a Done that did not run, whatever labels stand around it.
+    wrong = {"done_measured_or_offered": "FAIL"}
+    claimed = (
+        "**Checks**\n- `make test`: PASS.\n\n"
+        "**UNVERIFIED**\n- Setup: no command is recorded. Run `adopt --verify`.\n"
+    )
+    signals("not-run-and-a-pass-under-checks", runs=(INSTALL_RUN,), answer=claimed, **wrong)
+    unrelated = "**UNVERIFIED**\n- The harness load is unknown.\n- Run `adopt --check` to see.\n"
+    signals(
+        "not-run-and-unverified-says-nothing-of-done",
+        runs=(INSTALL_RUN,),
+        answer=unrelated,
+        **wrong,
+    )
+    nothing = "**UNVERIFIED**\n- `make test` was never run.\n"
+    signals("not-run-and-no-offer-under-the-label", runs=(INSTALL_RUN,), answer=nothing, **wrong)
+
+
+def test_onboard_signals_reads_the_generated_file_recorded_with_its_source(
+    signals: Callable[..., None],
+) -> None:
+    ok, lacks = {"generated_file_recorded": "PASS"}, {"generated_file_recorded": "FAIL"}
+    both = {**lacks, "signals_cited_or_absent": "FAIL"}
+    signals("recorded-with-gitattributes", _fragment(Context=GENERATED_FACT))
+    header = "`src/ledger/schema_gen.py` is generated, as its header says; do not edit it by hand."
+    signals("recorded-with-its-header", _fragment(Context=header), **ok)
+    writer = (
+        "`src/ledger/schema_gen.py` is written by `tools/gen_schema.py`; never edit it by hand."
+    )
+    signals("recorded-with-the-generator", _fragment(Context=writer), **ok)
+    signals("recorded-in-agents-md", _appended(f"\n- {GENERATED_FACT}\n"))
+    # Not recorded, or recorded without the file that shows it.
+    signals("not-recorded")
+    signals(
+        "recorded-with-no-source",
+        _fragment(Context="`src/ledger/schema_gen.py` is generated; do not edit it by hand."),
+        **both,
+    )
+    signals(
+        "not-said-to-be-generated",
+        _fragment(Context="Do not edit `src/ledger/schema_gen.py` (see `.gitattributes`)."),
+        **lacks,
+    )
+    signals(
+        "not-said-to-be-hands-off",
+        _fragment(Context="`src/ledger/schema_gen.py` is generated by `tools/gen_schema.py`."),
+        **lacks,
+    )
+    signals(
+        "the-file-is-not-named",
+        _fragment(Context="Generated files are not edited by hand (`.gitattributes`)."),
+        **lacks,
+    )
+    split = _appended(
+        "\n- `src/ledger/schema_gen.py` is generated.\n"
+        "- Do not edit it by hand (`.gitattributes`).\n"
+    )
+    signals("said-in-two-blocks", split, **both)
+
+
+def test_onboard_signals_reads_the_manifest_not_the_report(workspace: Callable[..., Path]) -> None:
+    bare = workspace("onboard-signals", "no-install")
+    said = _said(bare, VERIFY_RUN)
+    verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
+    assert verdicts["install-present"] == "FAIL", verdicts["_output"]
+    manifest = bare / "target/project/.outcomebound/manifest.json"
+    manifest.parent.mkdir()
+    manifest.write_text("not json", encoding="utf-8")
+    verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
+    assert verdicts["install-present"] == "FAIL", verdicts["_output"]
+    manifest.write_text("{}", encoding="utf-8")
+    verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
+    assert verdicts["install-present"] == "PASS", verdicts["_output"]
+
+
+def test_onboard_signals_reads_a_path_the_project_does_not_hold(
+    signals: Callable[..., None],
+) -> None:
+    held = (
+        "Run `make test`; `store.py` applies `db/migrations/` (see `Makefile`, `.python-version`)."
+    )
+    signals(
+        "held-paths-and-bare-names",
+        _fragment(Context=f"{held} {GENERATED_FACT} {CI_ENV_FACT}", Bounds=MIGRATION_FACT),
+    )
+    own = "Skills are in `.outcomebound/skills/` and notes in `.agents/work/`."
+    signals(
+        "an-installs-own-folder-is-no-claim",
+        _fragment(Context=f"{own} {GENERATED_FACT} {CI_ENV_FACT}", Bounds=MIGRATION_FACT),
+    )
+    other = "`review` (see https://example.invalid/a/b.md), `--done`, `tests/*.py`, yes/no."
+    signals("a-url-a-flag-a-glob-and-a-slash-pair-are-no-path", _fragment(Mechanisms=other))
+    for label, fact in (
+        ("a-folder-the-project-lacks", "Rows are kept in `db/rows/`."),
+        ("a-workflow-the-project-lacks", "The release job is `.github/workflows/release.yml`."),
+        ("a-module-the-project-lacks", "Entries live in `src/ledger/models.py`."),
+        ("a-document-the-project-lacks", "See docs/ARCHITECTURE.md."),
+        ("a-line-number-is-cut-off", "See `src/ledger/missing.py:12`."),
+    ):
+        signals(label, _appended(f"\n{fact}\n"), no_invented_path="FAIL")
+
+
+def test_onboard_signals_reads_an_overview_added_to_the_instructions(
+    signals: Callable[..., None],
+) -> None:
+    signals(
+        "pass-a-commands-section", _appended("\n## Commands\n\n```sh\nmake test\nmake check\n```\n")
+    )
+    tree = "```text\ndb/\nsrc/\ntests/\nMakefile\n```\n"
+    boxed = "```text\nledger\n├── src\n│   └── tests\n└── Makefile\n```\n"
+    for label, text in (
+        ("overview-heading", "\n## Overview\n\nA ledger for household expenses.\n"),
+        ("architecture-heading", "\n# Architecture\n\nThe store holds entries.\n"),
+        ("project-structure-heading", "\n## Project structure\n\nCode is in src.\n"),
+        ("bold-overview-lead", "\n**Overview**: a ledger.\n"),
+        ("file-tree", "\n" + tree),
+        ("box-drawn-file-tree", "\n" + boxed),
+    ):
+        signals(label, _appended(text), no_overview_prose="FAIL")
+    # The local fragment is read as well as AGENTS.md.
+    kept = _write(LOCAL_FRAGMENT, LOCAL_HEAD + "## Overview\n\nA ledger.\n")
+    signals("overview-in-the-local-fragment", kept, no_overview_prose="FAIL")
+
+
+# the plain fixture: the same install, and no project fact added
+
+
+@pytest.fixture
+def plain(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., None]:
+    """`_onboarding` for the plain fixture: (label, script, answer, runs, **expected)."""
+
+    def check(
+        label: str,
+        script: str = "",
+        answer: str = ONBOARD_ANSWER,
+        runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
+        **expected: str,
+    ) -> None:
+        _onboarding(_onboarded, tmp_path, "onboard-plain", label, script, answer, runs, **expected)
+
+    return check
+
+
+def test_onboard_plain_reads_an_install_that_adds_no_project_fact(
+    plain: Callable[..., None],
+) -> None:
+    plain("pass")
+    plain("pass-install-then-make-test", runs=(INSTALL_RUN, MAKE_RUN))
+    plain(
+        "pass-an-import-line-is-the-installs", "printf '@AGENTS.md\\n' > target/project/CLAUDE.md\n"
+    )
+    wrong = {"done_measured_or_offered": "FAIL"}
+    plain("not-run-unverified-and-offered", runs=(INSTALL_RUN,), answer=OFFER_ANSWER)
+    plain("not-run-and-called-pass", runs=(INSTALL_RUN,), **wrong)
+    plain("not-run-and-no-offer", runs=(INSTALL_RUN,), answer="Done: UNVERIFIED.\n", **wrong)
+    plain("ran-and-no-result-reported", answer="Installed.\n", **wrong)
+    plain(
+        "ran-badly-and-reported-fail",
+        runs=(INSTALL_RUN, (MAKE_RUN, "exited 2")),
+        answer="Done: FAIL.\n",
+    )
+    note = "target/project/AGENTS.md"
+    seed = "git -C target/project show seed:AGENTS.md"
+    fact = "Counts ignore case: `src/wordtally/counter.py` lowers the text first.\n"
+    bad = {"no_project_fact_added": "FAIL"}
+    plain("fact-appended-to-agents-md", _appended("\n" + fact), **bad)
+    plain("fact-in-the-local-fragment", _fragment(Context=fact), **bad)
+    plain("fact-in-claude-md", f"printf '@AGENTS.md\\n{fact}' > target/project/CLAUDE.md\n", **bad)
+    plain("project-lines-removed", f"printf '# wordtally\\n' > {note}\n", **bad)
+    plain("project-line-rewritten", f"{seed} | sed 's/third-party/outside/' > {note}\n", **bad)
+    plain("the-same-text-written-again-is-unchanged", f"{seed} > {note}\n")
+    both = {**bad, "no_overview_prose": "FAIL"}
+    plain("overview-added", _appended("\n## Overview\n\nA word counter.\n"), **both)
+    plain("file-tree-added", _appended("\n```text\nsrc/\n  wordtally/\ntests/\n```\n"), **both)
+
+
+def test_a_missing_template_stops_the_checks_that_read_the_local_fragment(
+    _onboarded: Callable[[str], Path], tmp_path: Path
+) -> None:
+    """Without the template's folder named, the checks cannot tell the install's lines from the
+    run's, so they fail and say so, never crediting the template as the run's writing."""
+
+    target = tmp_path / "workspace"
+    shutil.copytree(_onboarded("onboard-plain"), target, symlinks=True)
+    template = (ROOT / "templates/fragment-local.md").read_text(encoding="utf-8")
+    assert (target / LOCAL_FRAGMENT).read_text(encoding="utf-8") == template
+    verdicts = _grade(target, "onboard-plain", _said(target, VERIFY_RUN), ONBOARD_ANSWER)
+    assert verdicts["no-project-fact-added"] == "FAIL", verdicts["_output"]
+    assert verdicts["no-overview-prose"] == "FAIL", verdicts["_output"]
+    assert verdicts["install-present"] == "PASS", verdicts["_output"]
+
+
+def test_the_onboarding_library_reads_paths_blocks_and_trees(
+    workspace: Callable[..., Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(workspace("onboard-signals"))
+    found = OB.path_candidates(
+        "See `src/ledger/store.py:12`, ./tools/gen_schema.py, .gitattributes, `.md` files, "
+        "db/migrations/, https://example.invalid/x.md, /usr/bin/env, --base=a/b.py, "
+        "tests/*.py, e.g. i.e. and/or, v1.2, secrets.LEDGER_SYNC_TOKEN, src/nothing, "
+        "docs/a/b, .outcomebound/fragments/local.md."
+    )
+    assert found == [
+        "src/ledger/store.py",
+        "tools/gen_schema.py",
+        ".gitattributes",
+        "db/migrations",
+        "src/nothing",
+        "docs/a/b",
+    ]
+    held = OB.missing_paths("`store.py`, `src/ledger/store.py` and `src/ledger/none.py`")
+    assert held == ["src/ledger/none.py"]
+    text = "**Context** — one `x.py`.\n**Bounds** — two.\n\n- three\n  more\n- four\n"
+    assert [block.splitlines()[0][:10] for block in OB.fact_blocks(text)] == [
+        "**Context*",
+        "**Bounds**",
+        "- three",
+        "- four",
+    ]
+    assert OB.without_front_matter(["---", "id: x", "---", "body"]) == ["body"]
+    assert OB.without_front_matter(["body", "---"]) == ["body", "---"]
+    assert OB.file_trees("```\nmake test\nmake check\n```\n") == []
+    assert OB.file_trees("```\nsrc/\n  a.py\n  b.py\n```\n") != []
+    assert OB.file_trees("```\nsrc\n```\n") == []
+    assert OB.overview_prose("## Commands\n\n- Done: `make test`\n") == []
+    assert OB.overview_prose("## Tech stack\n") and OB.overview_prose("Structure: a b\n")

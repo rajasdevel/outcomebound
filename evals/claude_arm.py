@@ -115,7 +115,7 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     import os
     import tempfile
 
-    arm = run.load_arm(arm_name, run.selected_fragments(fixture))
+    arm = run.fixture_arm(fixture, run.load_arm(arm_name, run.selected_fragments(fixture)))
     fixture_dir = run.FIXTURES / fixture
     work = STATE / "work"
     work.mkdir(parents=True, exist_ok=True)
@@ -152,7 +152,10 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
             f"The `outcomebound` command is at {launcher}/outcomebound; prefix PATH with "
             f"`{launcher}` to run it."
         )
-    lines.append("When you are done, end with your final message to the person who gave the task.")
+    lines.append(
+        "Stop every process you start before you finish. When you are done, end with your final "
+        "message to the person who gave the task."
+    )
     full = "\n".join(lines) + "\n\n" + prompt
     STATE.mkdir(parents=True, exist_ok=True)
     key = f"{fixture}--{arm_name}"

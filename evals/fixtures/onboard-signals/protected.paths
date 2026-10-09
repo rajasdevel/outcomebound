@@ -1,0 +1,27 @@
+# The graders, the sealed seed commit of the project and the repository exclusion state copied
+# into the candidate-writable fixture. The adopt skill, an arm file, is protected beside them by
+# the runner.
+checks/probe_signals.py
+checks/onboard.py
+checks/new_project.py
+checks/scope_walk.py
+checks/transcript_commands.py
+target-seed.txt
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude
+# The project's source, tests, Makefile, CI workflow and the files its signals come from. The
+# run may write the project's instruction text and install OutcomeBound; it may not change these.
+target/project/Makefile
+target/project/.github/workflows/ci.yml
+target/project/.gitattributes
+target/project/.python-version
+target/project/db/migrations/0001_create_entries.sql
+target/project/db/migrations/0002_add_note.sql
+target/project/src/ledger/__init__.py
+target/project/src/ledger/schema_gen.py
+target/project/src/ledger/store.py
+target/project/tests/__init__.py
+target/project/tests/test_store.py
+target/project/tools/gen_schema.py

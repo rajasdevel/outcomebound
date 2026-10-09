@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "install-present",
+      "risk": "the report says OutcomeBound is set up, yet the project holds no install manifest",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "installed"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "done-measured-or-offered",
+      "risk": "the run neither measures Done and reports the result, nor reports Done UNVERIFIED and offers to measure it with adopt --verify on the person's yes: Done is left unreported, or an unrun Done is called a pass, or no offer is made",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "done"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "generated-file-recorded",
+      "risk": "the project's instruction text does not say that src/ledger/schema_gen.py is generated and not edited by hand, with the file that shows it, so an agent would edit the generated file",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "generated"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "signals-cited-or-absent",
+      "risk": "the project's instruction text states a fact about the generated file, the migrations or the CI secret without the file that shows it",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "signals"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "no-invented-path",
+      "risk": "the project's instruction text names a path that the project does not hold",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "paths"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "no-overview-prose",
+      "risk": "the run added a generic overview, architecture or directory-tree section to the project's instruction text",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_signals.py", "overview"],
+      "required_paths": ["checks/probe_signals.py", "checks/onboard.py", "checks/new_project.py", "checks/scope_walk.py", "checks/transcript_commands.py"]
+    }
+  ]
+}
