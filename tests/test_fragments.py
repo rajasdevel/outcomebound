@@ -212,6 +212,8 @@ def test_every_shipped_fragment_parses_and_names_only_registry_mechanisms():
         "commands",
         "runtime",
         "deploy",
+        "client",
+        "explore",
     }
     for fragment in catalog.values():
         assert fragment.family in ("stack", "setup")
