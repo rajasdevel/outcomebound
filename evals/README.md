@@ -75,9 +75,9 @@ Each run directory holds four files for each fixture. Each name starts with the 
   calls cannot prove ordered effects. Only a complete stream
   can establish that no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`; missing observed
   model still prevents a call from counting. Neither is inferred from requested arguments. The observed
-  Codex CLI 0.160.1 JSON stream did not supply those observations, so automatic counted qualification
-  remains unavailable on that transport. Normal runs on that known CLI version refuse before
-  a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
+  Codex CLI 0.160.1 JSON stream did not supply those observations, nor did one call on
+  0.162.0-alpha.17.2, so automatic counted qualification remains unavailable on those transports.
+  Normal runs on a known CLI version without the observations refuse before a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
   explicitly named fixture without `--ephemeral`, and copies the unique native session rollout
   whose initial session id matches this subprocess's actual first `thread.started` id.
   Record its hash outside the writable fixture. Review actual turn context and linked tool
@@ -209,6 +209,18 @@ Three limits hold for every result, and a report of a run says them:
   `outcomebound_tools/` is sealed by its target. Files under a `__pycache__` folder are not sealed.
   Paths compare as the OS resolves them (symlinks, `..`, a trailing slash), for `--seal-out` and
   for the `cd` prefix; a `--seal-out` inside the state folder by any spelling is refused.
+
+Three more limits showed in the 1.6.0 pass and hold for every Claude result:
+
+- A check that a run plants and undoes inside one compound Bash command (a defect, then the Done
+  command, then the restore, with the exit codes printed) is one command whose status is that of
+  its last part. A claim that needs a failing Done run followed by a passing one cannot see it,
+  on either side of a comparison.
+- The arm's install is not `adopt`'s own: it holds no `.outcomebound/manifest.json`, so
+  `outcomebound adopt . --done` refuses inside a fixture. Graders read a hand-written `Done:` line
+  as the record instead.
+- A subagent can leave a server it started running after its run. The prompt asks it to stop
+  every process it starts; check for leftovers after a batch.
 
 ## The kernel and skill fixtures
 
