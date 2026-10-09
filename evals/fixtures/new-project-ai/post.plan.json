@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "seed-tasks-cover-every-label",
+      "risk": "no evaluation tasks exist, or they leave a team label of the tool without a task",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_ai.py", "tasks"],
+      "required_paths": ["checks/probe_ai.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "grader-reads-the-tasks",
+      "risk": "no grader exists that reads the evaluation tasks and compares what the tool answers with the expected label",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_ai.py", "grader"],
+      "required_paths": ["checks/probe_ai.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "tasks-and-grader-written-before-the-feature",
+      "risk": "the code that calls a model was written before the evaluation tasks and the grader, or no such code exists, or the order is not established",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_ai.py", "before-feature"],
+      "required_paths": ["checks/probe_ai.py", "checks/new_project.py", "checks/scope_walk.py"]
+    }
+  ]
+}

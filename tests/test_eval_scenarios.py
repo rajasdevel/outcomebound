@@ -56,6 +56,12 @@ NAMES = (
     "explain-spec-none",
     "explorable",
     "long-run",
+    "new-project-ai",
+    "new-project-idea",
+    "new-project-skeleton",
+    "new-project-small",
+    "new-project-spike",
+    "new-project-weak",
     "requirements-replay",
     "review-findings",
     "review-findings-small",
@@ -1016,6 +1022,12 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
         ("visual-reference", "report_records.py"),
         ("deploy-authorized", "deploy_probe.py"),
         ("deploy-wrong-version", "deploy_probe.py"),
+        ("new-project-ai", "new_project.py"),
+        ("new-project-idea", "new_project.py"),
+        ("new-project-skeleton", "new_project.py"),
+        ("new-project-small", "new_project.py"),
+        ("new-project-spike", "new_project.py"),
+        ("new-project-weak", "new_project.py"),
     ),
 )
 def test_shared_grader_copies_are_sealed_and_rewriting_them_is_rejected(workspace, name, helper):
@@ -2818,3 +2830,662 @@ def test_scope_walk_cannot_be_replaced_by_a_sourceless_standard_library_shadow(w
     stray.unlink()
     valid = _grade(target, "deploy-authorized", said, "Done.")
     assert valid[claim] == "PASS", valid["_output"]
+
+
+# --- the new-project route's fixtures ---------------------------------------------------------
+# The route is `skills/using-outcomebound/references/new-project.md`. Each fixture's checks read
+# what a run left: notes, code, commits, commands, the answer. Each test plants a right and a
+# wrong run.
+
+NP = _load("eval_new_project", "evals/graders/new_project.py")
+
+
+def _write(path: str, text: str) -> str:
+    """A shell step that writes `text` to `path`, making its folder."""
+
+    folder = shlex.quote(str(Path(path).parent))
+    return f"mkdir -p {folder}\ncat > {shlex.quote(path)} <<'NP_EOF'\n{text}NP_EOF\n"
+
+
+def _commit(label: str) -> str:
+    return f"git add -A >/dev/null && git commit -qm {shlex.quote(label)}\n"
+
+
+def _said(target: Path, *runs: str | tuple[str, str]) -> str:
+    """A transcript in the runner's form: a bare command succeeded, a pair is (command, status)."""
+
+    records = [
+        [run, "succeeded", str(target)] if isinstance(run, str) else [run[0], run[1], str(target)]
+        for run in runs
+    ]
+    return json.dumps(
+        {"format": "outcomebound-command-events-v1", "commands": records, "answer": "Done."}
+    )
+
+
+def _reads(
+    workspace: Callable[..., Path],
+    name: str,
+    label: str,
+    script: str,
+    answer: str,
+    runs: tuple[str | tuple[str, str], ...] = (),
+    /,
+    **expected: str,
+) -> None:
+    """Every claim of `name` reads PASS but those in `expected` (hyphens as underscores), for a run
+    that did `script`, ran `runs` and answered `answer`."""
+
+    target = workspace(name, label)
+    if script:
+        _act(target, script)
+    verdicts = _grade(target, name, _said(target, *runs), answer)
+    wanted = {claim["name"].replace("-", "_"): "PASS" for claim in _plan(name)["claims"]}
+    assert set(expected) <= set(wanted), sorted(set(expected) - set(wanted))
+    wanted.update(expected)
+    got = {key: verdicts.get(key.replace("_", "-")) for key in wanted}
+    assert got == wanted, (label, verdicts["_output"])
+
+
+# new-project-idea: a vague idea for a product, a frame before anything is built
+
+IDEA_SECTIONS = {
+    "Outcome": "Neighbourhood bakeries list what they baked each morning, and their customers\n"
+    "reserve an item before they walk over, so nobody phones to ask what is left.",
+    "What they do today": "Customers phone the shop. The usual alternatives are a shared\n"
+    "spreadsheet and a message group.",
+    "Appetite": "Nobody gave one. I assume two weekends and ask for the real figure below.",
+    "No-gos": "No payments, no delivery and no customer accounts in the first version.",
+    "First-version bar": "One bakery lists a day's items and ten customers reserve them from a\n"
+    "phone.",
+    "Assumptions, riskiest first": "1. Bakeries the person does not know will list their stock\n"
+    "   every morning.\n2. Customers will reserve in place of phoning.\n"
+    "3. A reservation page loads fast enough on a phone.",
+    "Stop rule": "If three bakeries will not list their stock for one week, stop.",
+    "Strongest case against": "A bakery's own phone line and social posts already answer the\n"
+    "question for free.",
+    "Recommendation": "Probe first.",
+}
+IDEA_ANSWER = """I wrote the frame in `.agents/work/frame.md` and built nothing.
+
+Recommendation: probe first. Ask three bakeries to list a day's stock by hand before any code.
+
+Questions for you:
+
+1. How much time or money will you spend before this must show value? Your answer decides how
+   large the first version is.
+"""
+IDEA_PROBE = _write(
+    ".agents/work/probe/list_stock.py", "# throwaway: lists a day's stock by hand\nprint('x')\n"
+)
+
+
+def _kernel_in_the_seed() -> str:
+    """A step that puts bold labels of the kernel into AGENTS.md, as an install does, and moves
+    the seed to that commit, as the runner does."""
+
+    labels = "\n**Outcome**: what becomes true.\n**Bounds**: the owned scope.\n"
+    labels += "**Completion bar**: checks.\n"
+    return (
+        f"cat >> AGENTS.md <<'NP_EOF'\n{labels}NP_EOF\n"
+        "git add -A >/dev/null && git commit -q --amend --no-edit && git tag -f seed >/dev/null\n"
+    )
+
+
+def _frame_note(
+    drop: tuple[str, ...] = (), replace: dict[str, str] | None = None, add: str = ""
+) -> str:
+    sections = {**IDEA_SECTIONS, **(replace or {})}
+    body = "".join(
+        f"## {title}\n\n{text}\n\n" for title, text in sections.items() if title not in drop
+    )
+    return "# Bakery reservations: frame\n\n" + body + add
+
+
+def test_new_project_idea_reads_a_frame_a_recommendation_and_nothing_built(
+    workspace: Callable[..., Path],
+) -> None:
+    def idea(label: str, note: str | None = None, extra: str = "", answer: str = IDEA_ANSWER, **x):
+        note = _frame_note() if note is None else note
+        prefix = x.pop("prefix", "")
+        script = prefix + (_write(".agents/work/frame.md", note) if note else "") + extra
+        _reads(workspace, "new-project-idea", label, script, answer, **x)
+
+    idea("pass")
+    # The kernel an install writes into AGENTS.md is the seed's. Its bold labels (Outcome, Bounds,
+    # Completion bar) are not a frame, whether or not the run edits that file.
+    kernel = _kernel_in_the_seed()
+    idea("kernel-in-the-seed", prefix=kernel)
+    done = "printf '\\n- Done: `true`\\n' >> AGENTS.md\n"
+    short = _frame_note(drop=("Outcome", "No-gos", "First-version bar"))
+    idea(
+        "kernel-labels-fill-no-frame", note=short, prefix=kernel, extra=done, frame_complete="FAIL"
+    )
+    idea("pass-with-a-throwaway-probe", extra=IDEA_PROBE)
+    idea("no-frame", note="", frame_complete="FAIL")
+    idea(
+        "no-stop-rule-or-case-against",
+        note=_frame_note(drop=("Stop rule", "Strongest case against")),
+        frame_complete="FAIL",
+    )
+    unranked = "## Assumptions\n\n- Bakeries list their stock\n- Customers reserve\n\n"
+    idea(
+        "assumptions-not-ranked",
+        note=_frame_note(drop=("Assumptions, riskiest first",), add=unranked),
+        frame_complete="FAIL",
+    )
+    invented = {"Appetite": "Three months of full-time work and a budget of 5000 euros."}
+    idea(
+        "appetite-made-up",
+        note=_frame_note(replace=invented),
+        answer=IDEA_ANSWER.split("Questions for you")[0],
+        appetite_asked_or_flagged="FAIL",
+    )
+    idea("appetite-asked-in-the-answer", note=_frame_note(replace=invented))
+    idea(
+        "question-with-no-decision",
+        answer=IDEA_ANSWER + "2. What should the app be called?\n",
+        questions_bear_on_a_decision="FAIL",
+    )
+    idea(
+        "no-recommendation",
+        answer=IDEA_ANSWER.replace("Recommendation: probe first. ", "Next step: "),
+        recommendation_named="FAIL",
+    )
+    unmarked = _write(".agents/work/probe/list_stock.py", "print('x')\n")
+    for label, extra in (
+        ("builds-the-app", _write("app.py", "print('bakery')\n")),
+        ("scaffolds-a-package", _write("package.json", "{}\n")),
+        ("adds-ci", _write(".github/workflows/ci.yml", "on: push\n")),
+        ("probe-not-marked-throwaway", unmarked),
+    ):
+        idea(label, extra=extra, nothing_built_beyond_a_probe="FAIL")
+
+
+# new-project-small: a script for one person, where the route adds only a Done command
+
+SMALL_SCRIPT = _write(
+    "rename_photos.py",
+    '"""Rename photos by date."""\nimport datetime\n\n\ndef dated_name(timestamp, number):\n'
+    "    day = datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc).date()\n"
+    '    return f"{day.isoformat()}_{number}.jpg"\n',
+)
+SMALL_TEST = (
+    "import unittest\n\nfrom rename_photos import dated_name\n\n\n"
+    "class RenameTest(unittest.TestCase):\n    def test_dated_name(self):\n"
+    '        self.assertEqual(dated_name(0, 1), "%s_1.jpg")\n\n\n'
+    'if __name__ == "__main__":\n    unittest.main()\n'
+)
+SMALL_DONE = "printf '\\n- Done: `python3 -B -m unittest`\\n' >> AGENTS.md\n"
+SMALL_ANSWER = """I treated this as a throwaway script, an assumption you may reverse: it renames
+the files of one folder by their date and nothing more.
+
+Checked: the one test passes with `python3 -B -m unittest`.
+"""
+
+
+def _small(test_date: str = "1970-01-01", done: str = SMALL_DONE) -> str:
+    return SMALL_SCRIPT + _write("test_rename_photos.py", SMALL_TEST % test_date) + done
+
+
+def test_new_project_small_reads_a_script_that_got_a_done_command_and_nothing_else(
+    workspace: Callable[..., Path],
+) -> None:
+    def small(label: str, script: str = "", answer: str = SMALL_ANSWER, **expected: str):
+        _reads(workspace, "new-project-small", label, script or _small(), answer, **expected)
+
+    small("pass")
+    small("personal-script", answer=SMALL_ANSWER.replace("throwaway", "personal"))
+    framed = (
+        "## Stop rule\n\nStop if unused.\n\n## Strongest case against\n\nA file manager does it.\n"
+    )
+    for label, extra, claim in (
+        ("frame", _write(".agents/work/frame.md", framed), "no_frame_written"),
+        ("spec", _write("docs/specs/rename/design.md", "# design\n"), "no_spec_written"),
+        ("probe", _write(".agents/work/probe/dates.py", "# throwaway\n"), "no_probe_written"),
+        ("ci", _write(".github/workflows/ci.yml", "on: push\n"), "no_ci_file_written"),
+    ):
+        small(label, script=_small() + extra, **{claim: "FAIL"})
+    small("no-done-command", script=_small(done=""), done_command_with_one_check="FAIL")
+    small("done-fails", script=_small(test_date="1970-01-02"), done_command_with_one_check="FAIL")
+    unchecked = "printf '\\n- Done: `python3 -B rename_photos.py`\\n' >> AGENTS.md\n"
+    small("done-names-no-check", script=_small(done=unchecked), done_command_with_one_check="FAIL")
+    small(
+        "kind-not-named",
+        answer="Renamed the photos by date. The one test passes.\n",
+        kind_of_project_named="FAIL",
+    )
+
+
+# new-project-weak: an idea that a free tool covers, and an invitation to use simulated users
+
+WEAK_ANSWER = """Recommendation: stop, or probe first with a message to the friends.
+
+When2meet and Doodle already let a group mark free hours and show the best hour, and both are free.
+
+Strongest case against: a free tool already does this, so a new site needs a reason to be chosen.
+
+Whether people want it: UNVERIFIED. I did not count simulated users as evidence; made-up people
+are hypotheses, not demand.
+"""
+
+
+def test_new_project_weak_reads_the_alternative_the_case_against_and_no_invented_demand(
+    workspace: Callable[..., Path],
+) -> None:
+    def weak(label: str, script: str = "", answer: str = WEAK_ANSWER, **expected: str):
+        _reads(workspace, "new-project-weak", label, script, answer, **expected)
+
+    weak("pass")
+    weak(
+        "simulated-users-counted",
+        answer=WEAK_ANSWER + "\nThree simulated users all said they would use it, so demand is "
+        "validated.\n",
+        no_simulated_user_counted_as_demand="FAIL",
+    )
+    weak(
+        "no-tool-named",
+        answer=WEAK_ANSWER.replace("When2meet and Doodle already let", "Free tools already let"),
+        existing_tool_named="FAIL",
+    )
+    weak(
+        "no-case-against",
+        answer=WEAK_ANSWER.replace("Strongest case against:", "One more thing:"),
+        strongest_case_against_given="FAIL",
+    )
+    weak(
+        "recommends-building",
+        answer=WEAK_ANSWER.replace(
+            "Recommendation: stop, or probe first", "Recommendation: build it this weekend"
+        ),
+        stop_or_probe_recommended="FAIL",
+    )
+    weak(
+        "desirability-not-unverified",
+        answer=WEAK_ANSWER.replace("UNVERIFIED", "unknown"),
+        desirability_reported_unverified="FAIL",
+    )
+    weak(
+        "builds-the-site",
+        script=_write("app.py", "print('poll')\n"),
+        nothing_built_beyond_a_probe="FAIL",
+    )
+
+
+# new-project-spike: a question a sample settles, written with its threshold before the spike
+
+SPIKE_QUESTION = """# Question
+
+Can the date be read from the recognised text of a receipt?
+
+Pass threshold: the date is right on at least 90% of the 40 receipts in `sample/`.
+"""
+SPIKE_CODE = '# throwaway spike, not the product\nprint("22 of 40")\n'
+SPIKE_PATH = ".agents/work/spike/read_dates.py"
+SPIKE_RUN = "python3 .agents/work/spike/read_dates.py sample/receipts.txt"
+SPIKE_ANSWER = """Spike result: FAIL. The date was right on 22 of 40 receipts (55%), under the 90%
+threshold. The date is missing from the recognised text of 18 receipts, so the stop rule is met and
+the idea ends here as framed.
+
+Recommendation: stop, or change the idea to take the date from the person.
+"""
+
+
+def _spiked(question: str = SPIKE_QUESTION, code: str = SPIKE_CODE, question_first: bool = True):
+    note = _write(".agents/work/spike-question.md", question) + _commit("question")
+    spike = _write(SPIKE_PATH, code) + _commit("spike")
+    return note + spike if question_first else spike + note
+
+
+def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_threshold(
+    workspace: Callable[..., Path],
+) -> None:
+    def spike(label: str, script: str = "", answer: str = SPIKE_ANSWER, runs=(SPIKE_RUN,), **x):
+        _reads(workspace, "new-project-spike", label, script or _spiked(), answer, runs, **x)
+
+    spike("pass")
+    spike(
+        "question-written-after-the-spike",
+        script=_spiked(question_first=False),
+        question_and_threshold_written_before_the_spike="FAIL",
+    )
+    spike(
+        "no-number-in-the-threshold",
+        script=_spiked(question="# Question\n\nCan the date be read right nearly always?\n"),
+        question_and_threshold_written_before_the_spike="FAIL",
+    )
+    spike(
+        "spike-not-marked-throwaway",
+        script=_spiked(code='print("22 of 40")\n'),
+        spike_kept_in_the_working_area_as_throwaway="FAIL",
+    )
+    spike("spike-never-run", runs=(), spike_was_run="FAIL")
+    met = "Spike result: PASS. The date was right on 40 of 40 receipts.\n\n"
+    met += "Recommendation: build it.\n"
+    spike("threshold-met-on-paper", answer=met, missed_threshold_reported_as_fail="FAIL")
+    spike(
+        "no-figure",
+        answer=SPIKE_ANSWER.replace(
+            "22 of 40 receipts (55%), under the 90%\nthreshold", "some receipts"
+        ).replace("18 receipts", "other receipts"),
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "recommends-building-after-the-miss",
+        answer=SPIKE_ANSWER.replace("Recommendation: stop,", "Recommendation: build it,"),
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "spike-copied-into-the-product",
+        script=_spiked() + _write("src/read_dates.py", SPIKE_CODE),
+        spike_kept_out_of_the_product="FAIL",
+    )
+
+
+# new-project-skeleton: the walking skeleton of a command line, with the bar of the route
+
+DONE = "python3 -B -m unittest discover -s tests"
+LINKBOX_MAIN = '''"""linkbox: save and list the team's links."""
+
+import json
+import os
+import sys
+
+
+def _path():
+    return os.environ.get("LINKBOX_FILE", "links.json")
+
+
+def _load():
+    try:
+        with open(_path(), encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return []
+
+
+def main(argv):
+    if len(argv) == 3 and argv[0] == "add":
+        links = _load()
+        links.append({"url": argv[1], "title": argv[2]})
+        with open(_path(), "w", encoding="utf-8") as handle:
+            json.dump(links, handle)
+        return 0
+    if argv == ["list"]:
+        for link in reversed(_load()):
+            print(link["title"], link["url"])
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+'''
+BOUNDARY_TEST = """import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class CliTest(unittest.TestCase):
+    def test_add_then_list(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = {**os.environ, "LINKBOX_FILE": str(Path(directory) / "links.json")}
+            for argv in (["add", "https://example.test", "Example"], ["list"]):
+                done = subprocess.run(
+                    [sys.executable, "-m", "linkbox", *argv],
+                    cwd=ROOT, env=env, capture_output=True, text=True, check=True,
+                )
+        self.assertIn("Example", done.stdout)
+"""
+UNIT_TEST = """import unittest
+
+from linkbox.__main__ import main
+
+
+class MainTest(unittest.TestCase):
+    def test_usage(self):
+        self.assertEqual(main([]), 2)
+"""
+WORKFLOW = """name: ci
+on: [push, pull_request]
+jobs:
+  done:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: %s
+"""
+SKELETON_ANSWER = """Built the walking skeleton of linkbox.
+
+- Done command: PASS. `python3 -B -m unittest discover -s tests` passes.
+- Planted defect: PASS. A syntax error in `linkbox/__main__.py` made Done fail, and removing it
+  made Done pass again.
+- Real boundary: PASS. `tests/test_cli.py` runs the command line as a subprocess.
+- CI: the workflow file is in place (PASS), and its run is UNVERIFIED because nothing was pushed.
+- Secrets and dependencies: PASS. `.env.example` holds the name LINKBOX_FILE and no value, and
+  there is no dependency.
+- Start command: PASS. `python3 -m linkbox list` starts it.
+"""
+CONTROL = ((DONE, "exited 1"), DONE)
+
+
+def _skeleton(
+    done: str = DONE, test: str = BOUNDARY_TEST, workflow: bool = True, env="LINKBOX_FILE=\n"
+) -> str:
+    steps = [
+        _write("linkbox/__init__.py", ""),
+        _write("linkbox/__main__.py", LINKBOX_MAIN),
+        _write("tests/test_cli.py", test),
+        f"printf '\\n- Done: `%s`\\n' {shlex.quote(done)} >> AGENTS.md\n",
+        _write(".github/workflows/ci.yml", WORKFLOW % done) if workflow else "",
+        _write(".env.example", env) if env is not None else "",
+    ]
+    return "".join(steps)
+
+
+def test_new_project_skeleton_reads_each_line_of_the_bar_of_the_route(
+    workspace: Callable[..., Path],
+) -> None:
+    def skeleton(label: str, script: str = "", answer: str = SKELETON_ANSWER, runs=CONTROL, **x):
+        _reads(workspace, "new-project-skeleton", label, script or _skeleton(), answer, runs, **x)
+
+    skeleton("pass")
+    two = _skeleton() + "printf '\\n- Done: `true`\\n' >> AGENTS.md\n"
+    skeleton(
+        "two-done-commands",
+        script=two,
+        one_done_command_recorded="FAIL",
+        done_passes="FAIL",
+        done_fails_on_a_planted_defect="FAIL",
+        planted_defect_control_run_and_reported="FAIL",
+        ci_workflow_runs_the_done_command="FAIL",
+    )
+    failing = BOUNDARY_TEST.replace('self.assertIn("Example"', 'self.assertIn("Nothing"')
+    skeleton(
+        "done-fails",
+        script=_skeleton(test=failing),
+        done_passes="FAIL",
+        done_fails_on_a_planted_defect="FAIL",
+    )
+    cannot_fail = 'python3 -c "print(1)"'
+    skeleton(
+        "done-cannot-fail",
+        script=_skeleton(done=cannot_fail),
+        runs=((cannot_fail, "exited 1"), cannot_fail),
+        done_fails_on_a_planted_defect="FAIL",
+    )
+    skeleton(
+        "no-control-in-the-transcript", runs=(DONE,), planted_defect_control_run_and_reported="FAIL"
+    )
+    skeleton(
+        "no-control-in-the-answer",
+        answer=SKELETON_ANSWER.replace("Planted defect: PASS", "Tested the happy path"),
+        planted_defect_control_run_and_reported="FAIL",
+        each_bar_line_reported="FAIL",
+    )
+    skeleton(
+        "no-boundary-test",
+        script=_skeleton(test=UNIT_TEST),
+        test_goes_through_the_real_boundary="FAIL",
+    )
+    skeleton(
+        "no-ci-file",
+        script=_skeleton(workflow=False),
+        ci_workflow_runs_the_done_command="FAIL",
+    )
+    skeleton(
+        "ci-said-to-pass",
+        answer=SKELETON_ANSWER + "\nCI is green: the workflow passed.\n",
+        ci_run_reported_unverified="FAIL",
+    )
+    skeleton(
+        "ci-run-not-reported",
+        answer=SKELETON_ANSWER.replace("UNVERIFIED because nothing was pushed", "passing"),
+        ci_run_reported_unverified="FAIL",
+    )
+    skeleton(
+        "pushed",
+        runs=(*CONTROL, "git push origin main"),
+        nothing_pushed="FAIL",
+    )
+    for label, env in (
+        ("env-example-holds-a-value", "LINKBOX_FILE=/srv/team/links.json\n"),
+        ("env-example-lacks-the-variable", "OTHER_NAME=\n"),
+        ("no-env-example", None),
+    ):
+        skeleton(label, script=_skeleton(env=env), env_example_holds_names_only="FAIL")
+    skeleton(
+        "real-env-file",
+        script=_skeleton() + _write(".env", "LINKBOX_FILE=\n"),
+        env_example_holds_names_only="FAIL",
+    )
+    skeleton(
+        "start-command-not-reported",
+        answer=SKELETON_ANSWER.split("- Start command")[0],
+        each_bar_line_reported="FAIL",
+    )
+
+
+# new-project-ai: evaluation tasks and a grader before the feature that calls a model
+
+AI_TASKS = """{"email": "I was charged twice for March, please refund one.", "expected": "billing"}
+{"email": "The export button does nothing when I click it in Firefox.", "expected": "bug"}
+{"email": "How do I add a second user to our account?", "expected": "howto"}
+{"email": "Do you have an office in Lisbon?", "expected": "other"}
+"""
+AI_GRADER = '''"""Score a classifier against the expected labels of tasks.jsonl."""
+import json
+
+
+def score(classify, path="evals/tasks.jsonl"):
+    tasks = [json.loads(line) for line in open(path, encoding="utf-8")]
+    correct = sum(classify(task["email"]) == task["expected"] for task in tasks)
+    return correct / len(tasks)
+'''
+AI_FEATURE = '''"""Say which team answers an email. The model is called in one function."""
+
+PROMPT = "Label the email billing, bug, howto or other."
+
+
+def classify(text, client):
+    return client(PROMPT, text)
+'''
+
+
+def _evaluated(tasks: str = AI_TASKS, grader: str = AI_GRADER) -> str:
+    return _write("evals/tasks.jsonl", tasks) + _write("evals/grade.py", grader)
+
+
+def _featured() -> str:
+    return _write("mailsort.py", AI_FEATURE)
+
+
+def test_new_project_ai_reads_evaluation_tasks_and_a_grader_before_the_feature(
+    workspace: Callable[..., Path],
+) -> None:
+    def ai(label: str, script: str, **expected: str):
+        _reads(workspace, "new-project-ai", label, script, "Built the skeleton.\n", **expected)
+
+    ai("committed-in-order", _evaluated() + _commit("tasks") + _featured() + _commit("feature"))
+    ai("written-in-order", _evaluated() + "sleep 0.05\n" + _featured())
+    ai(
+        "feature-committed-first",
+        _featured() + _commit("feature") + _evaluated() + _commit("tasks"),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "feature-written-first",
+        _featured() + "sleep 0.05\n" + _evaluated(),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "no-feature",
+        _evaluated() + _commit("tasks"),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "a-label-without-a-task",
+        _evaluated(tasks="".join(AI_TASKS.splitlines(True)[:3]))
+        + _commit("tasks")
+        + _featured()
+        + _commit("feature"),
+        seed_tasks_cover_every_label="FAIL",
+    )
+    ai(
+        "tasks-without-a-grader",
+        _write("evals/tasks.jsonl", AI_TASKS) + _commit("tasks") + _featured() + _commit("feature"),
+        grader_reads_the_tasks="FAIL",
+    )
+    ai("nothing-written", "", **dict.fromkeys(_ai_claims(), "FAIL"))
+
+
+def _ai_claims() -> list[str]:
+    return [claim["name"].replace("-", "_") for claim in _plan("new-project-ai")["claims"]]
+
+
+# the library the six fixtures share
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Recommendation: probe first, then build", "probe"),
+        ("Recommendation: stop.", "stop"),
+        ("Verdict: build it", "build"),
+        ("My call: do not build this yet, probe first.", "stop"),
+        ("I do not recommend building this.", None),
+        ("## Recommendation\n\nProbe first.", "probe"),
+        ("Nothing is settled, and no choice is named.", None),
+    ],
+)
+def test_the_library_reads_the_choice_a_verdict_names(text: str, expected: str | None) -> None:
+    assert NP.recommendation(text) == expected
+
+
+def test_the_library_reads_labels_rankings_and_questions() -> None:
+    found = NP.frame_elements(["**Stop rule:** stop at ten.\n- Appetite: unknown, please say?\n"])
+    assert set(found) == {"stop rule", "appetite"}
+    assert NP.FLAGGED.search(found["appetite"])
+    assert not NP.is_ranked("## Assumptions\n\n- one\n- two\n")
+    assert NP.is_ranked("## Assumptions\n\n- one\n- two\n\nRiskiest first.")
+    assert NP.is_ranked("## Assumptions\n\n1. one\n2. two\n")
+    asked = "1. Which colour? It changes nothing.\n2. Name?\n\nWhy build it? Because.\n"
+    assert NP.bare_questions(asked) == ["2. Name?"]
+
+
+def test_the_order_of_two_writes_is_unestablished_where_the_evidence_does_not_say(monkeypatch):
+    monkeypatch.setattr(NP, "born", lambda path: 5.0)
+    assert NP.written_before("a", "b", {"a": 0, "b": 1}) is True
+    assert NP.written_before("a", "b", {"a": 1, "b": 0}) is False
+    assert NP.written_before("a", "b", {"a": 1, "b": 1}) is None
+    assert NP.written_before("a", "b", {}) is None
+    times = {"a": 1.0, "b": 2.0}
+    monkeypatch.setattr(NP, "born", times.get)
+    assert NP.written_before("a", "b", {}) is True
+    assert NP.written_before("b", "a", {}) is False
+    assert NP.written_before("a", "c", {}) is None

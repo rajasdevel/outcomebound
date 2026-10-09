@@ -66,6 +66,7 @@ NAMED_ONLY = (
     "patch-validation",
     "property-oracles",
     "testing-no-work",
+    "new-project-",
 )
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"

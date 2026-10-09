@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "existing-tool-named",
+      "risk": "no existing tool or alternative that already covers the idea is named in the answer or in a note",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_weak.py", "tool"],
+      "required_paths": ["checks/probe_weak.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "strongest-case-against-given",
+      "risk": "neither the answer nor a note gives the strongest case against building the idea",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_weak.py", "against"],
+      "required_paths": ["checks/probe_weak.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "stop-or-probe-recommended",
+      "risk": "the answer recommends building an idea that an existing tool covers, or recommends nothing",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_weak.py", "recommendation"],
+      "required_paths": ["checks/probe_weak.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "desirability-reported-unverified",
+      "risk": "the answer does not report whether people want the product as UNVERIFIED",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_weak.py", "unverified"],
+      "required_paths": ["checks/probe_weak.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "no-simulated-user-counted-as-demand",
+      "risk": "the answer or a note counts what made-up users said or did as evidence that people want the product",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_weak.py", "simulated"],
+      "required_paths": ["checks/probe_weak.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "nothing-built-beyond-a-probe",
+      "risk": "application code, a dependency manifest or a CI file was written for an idea that an existing tool covers, or probe code left the working area or is not marked as throwaway",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_weak.py", "nothing-built"],
+      "required_paths": ["checks/probe_weak.py", "checks/new_project.py", "checks/scope_walk.py"]
+    }
+  ]
+}
