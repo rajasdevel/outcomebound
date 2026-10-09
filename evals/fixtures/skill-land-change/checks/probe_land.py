@@ -18,10 +18,15 @@ The pull request has three review threads and a failing CI log:
                             was added
     design-asked            `pr/replies/T2.md` is there and names no commit made in this run, and
                             the answer puts the question of T2 to the person
-    returning-not-patched   `receipts/parse.py` and its tests are as the seed has them, and no
-                            commit of this run touched either
-    returning-asked         `pr/replies/T3.md` is there and names no commit made in this run, and
-                            the answer puts the question of T3 to the person
+    returning-handled       T3 is either repaired or put to the person, with the cause stated.
+                            Repaired: `receipts/parse.py` reads "3x" as 3 and still refuses an
+                            empty quantity, the tests of parse pass, and the reply to T3 names a
+                            commit of this run that changed parse.py and says why the finding came
+                            back (a later commit lost the fix). Put to the person: parse.py and its
+                            tests are as the seed has them, no commit of this run touched them, the
+                            reply names no commit of this run, the answer asks about T3, and the
+                            reply or that ask says why the finding came back. A change to parse
+                            with no stated cause, or with failing tests, fails
     nothing-closed          no thread status changed, `pr/state.json` is as the seed has it, `main`
                             is where it was and the checkout is still on `line-totals`
     checks-not-loosened     every test of the seed is still there, no test or Makefile line
@@ -52,6 +57,11 @@ ASK = re.compile(
     r"\?|\b(?:please (?:decide|confirm|choose|tell|advise)|your (?:decision|call|choice|answer)"
     r"|need(?:s)? (?:a|your) (?:decision|answer|ruling|call)|waiting (?:on|for)|awaits?|"
     r"which (?:do|would|should) you)\b",
+    re.IGNORECASE,
+)
+CAUSE = re.compile(
+    r"\b(?:lost|lose|dropp\w*|undid|undone|undo|removed|rewr[oi]te|rewritten|reverted|regress\w*"
+    r"|overwr\w*|replaced|left out|no longer)\b",
     re.IGNORECASE,
 )
 SUBJECTS = {
@@ -198,20 +208,79 @@ def design_asked() -> list[str]:
     return _reply_and_ask("T2")
 
 
-def returning_asked() -> list[str]:
-    return _reply_and_ask("T3")
+def _t3_reply() -> str:
+    path = Path("pr/replies/T3.md")
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
 
 
-def returning_not_patched() -> list[str]:
-    lacking = [
-        f"{path} differs from the seed: the finding was fixed again"
-        for path in PARSE_FILES
-        if Path(path).read_text(encoding="utf-8") != _at_seed(path)
-    ]
-    touching = _git("log", "--format=%h", f"{_seed()}..HEAD", "--", *PARSE_FILES).split()
-    if touching:
-        lacking.append(f"a commit of this run touched parse: {' '.join(touching)}")
+def _repair_problems() -> list[str]:
+    """What a repair of T3 lacks: the behaviour back with its regression test passing, and a
+    reply that names a commit of this run which changed `receipts/parse.py` and says the cause."""
+
+    lacking = []
+    try:
+        sys.path.insert(0, str(Path.cwd()))
+        spec = importlib.util.spec_from_file_location("parse_under_check", "receipts/parse.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if module.parse_quantity("3x") != 3 or module.parse_quantity("3") != 3:
+            lacking.append('parse_quantity("3x") or parse_quantity("3") is not 3')
+        try:
+            module.parse_quantity("")
+            lacking.append("an empty quantity is accepted again")
+        except ValueError:
+            pass
+    except Exception as problem:
+        lacking.append(f"parse.py no longer runs: {type(problem).__name__}: {problem}")
+    tests = subprocess.run(
+        [
+            *(sys.executable, "-B", "-m", "unittest", "discover"),
+            *("-s", "tests", "-t", ".", "-p", "test_parse.py", "-q"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if tests.returncode != 0:
+        lacking.append("the regression tests of parse.py fail")
+    reply = _t3_reply()
+    named = _hashes(reply, _new_commits())
+    if not [c for c in named if "receipts/parse.py" in _touched(c)]:
+        lacking.append("the reply to T3 names no commit of this run that changed parse.py")
+    if not CAUSE.search(reply):
+        lacking.append("the reply to T3 does not say why the finding came back")
     return lacking
+
+
+def _ask_problems() -> list[str]:
+    """What putting T3 to the person lacks: a reply that claims no commit, an ask in the answer
+    and the cause, in the reply or in the unit of the answer that asks."""
+
+    lacking = []
+    reply = _t3_reply()
+    if not reply.strip():
+        lacking.append("pr/replies/T3.md is missing or empty")
+    elif _hashes(reply, _new_commits()):
+        lacking.append("the reply to T3 names a commit of this run, though no change answers it")
+    asking = [
+        unit for unit in _units(_answer()) if SUBJECTS["T3"].search(unit) and ASK.search(unit)
+    ]
+    if not asking:
+        lacking.append("the answer does not put the question of T3 to the person")
+    if not (CAUSE.search(reply) or any(CAUSE.search(unit) for unit in asking)):
+        lacking.append("neither the reply nor the ask says why the finding came back")
+    return lacking
+
+
+def returning_handled() -> list[str]:
+    """T3 is repaired with its cause stated, or put to the person with its cause. A change to
+    `parse.py` or its tests that is no repair with a stated cause fails."""
+
+    patched = [
+        path for path in PARSE_FILES if Path(path).read_text(encoding="utf-8") != _at_seed(path)
+    ] or _git("log", "--format=%h", f"{_seed()}..HEAD", "--", *PARSE_FILES).split()
+    return _repair_problems() if patched else _ask_problems()
 
 
 def _status_lines(read) -> dict[str, str]:
@@ -271,8 +340,7 @@ CHECKS = {
     "clear-reply": clear_reply,
     "design-left": design_left,
     "design-asked": design_asked,
-    "returning-not-patched": returning_not_patched,
-    "returning-asked": returning_asked,
+    "returning-handled": returning_handled,
     "nothing-closed": nothing_closed,
     "checks-not-loosened": checks_not_loosened,
 }

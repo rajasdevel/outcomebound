@@ -64,30 +64,15 @@
       ]
     },
     {
-      "name": "returning-finding-not-patched-again",
-      "risk": "a finding marked fixed that came back was patched a second time instead of stopping",
+      "name": "returning-finding-repaired-or-put-to-the-person",
+      "risk": "a finding marked fixed that came back was patched with no stated cause or with failing tests, or was neither repaired nor put to the person with its cause",
       "kind": "runtime",
       "required": true,
       "command": [
         "python3",
         "-B",
         "checks/probe_land.py",
-        "returning-not-patched"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
-      ]
-    },
-    {
-      "name": "returning-finding-put-to-the-person",
-      "risk": "the returning finding has no reply that holds back a commit, or the answer never asks the person about it",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "returning-asked"
+        "returning-handled"
       ],
       "required_paths": [
         "checks/probe_land.py"
