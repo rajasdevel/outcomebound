@@ -1,0 +1,1 @@
+Card `cards/CARD-214.md` is built and waits for acceptance by the person it names. Prepare the acceptance. Put the scripts that person will follow in `acceptance/scripts/`, and a draft of the record of the acceptance in `acceptance/CARD-214.record.md`. Do not commit. Report what you prepared, what you ran and what is unverified.

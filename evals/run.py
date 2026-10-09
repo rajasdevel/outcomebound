@@ -68,6 +68,7 @@ NAMED_ONLY = (
     "testing-no-work",
     "new-project-",
     "onboard-",
+    "skill-",
 )
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"

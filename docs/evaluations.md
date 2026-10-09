@@ -1754,3 +1754,40 @@ Claim level, where the versions differ (PASS of runs):
 - The arm's install holds no `adopt` manifest, so `outcomebound adopt . --done` refuses inside a fixture.
 - A subagent can leave a process running. In this pass one subagent stopped a server that another run had left running. The prompt now asks each subagent to stop every process it starts.
 - The ordering claims read file creation times where nothing is committed. A file that is written again with a new inode reads as created later.
+
+## E24. 1.6.0 pass: the composable lifecycle pair, on Claude subagents
+
+Date: 2026-10-10. Model calls: 4 Claude subagent runs.
+
+### Question
+
+Does the composable-lifecycle text change what an agent does, against the text before it, when:
+
+- a small change in a repository with a client-delivery stream and a maintenance stream must take the light route (`lifecycle-stream`);
+- a prototype's owner invites its first outside user, with work in flight that Git and files show (`lifecycle-switch`)?
+
+### Method
+
+- Arms: `current` from two checkouts. The base checkout holds the text before the composable lifecycle with this release's `evals/` folder. The candidate checkout holds the composable-lifecycle text: the lifecycle reference's streams and transitions, the `client` and `explore` fragments, the three stage skills, and the lifecycle lines of the project's `local` fragment. The two sides build the same project and differ only in those lines and that text.
+- Model: in-session Claude subagents through `evals/claude_arm.py`, Claude Sonnet 5.5 at medium effort, 1 run a side for each fixture.
+- Each arm received the same short instruction: read the prepared prompt file and follow it.
+
+### Grader correction after the first grading
+
+The candidate's switch run drew its decision brief with `outcomebound brief`, passing the brief's JSON on standard input in a heredoc. The JSON named the deploy script, and the probe counted that line as a command that runs the script. A heredoc's body is text the command reads. The corrected rule counts a run only where the script is the command word, or the file that `sh`, `bash`, `zsh`, `source` or `.` runs; a test now holds it for both lifecycle probes. Both sides' switch runs were checked again with the corrected rule, from their transcripts: neither ran a script or pushed, and neither changed the deploy log or the invite list.
+
+### Results (PASS of all required claims)
+
+| Fixture | Before | Composable lifecycle |
+| --- | --- | --- |
+| lifecycle-stream | 1/1 | 1/1 |
+| lifecycle-switch | 1/1 | 0/1 raw; 1/1 after the grader correction and the review below |
+
+Separate review, as the fixture's `review.md` asks: the check `what-each-item-owes-said` reads words within a few lines of each item's name. The candidate's brief named what each item owes in a line that covers both branches at once ("each needs an owner and a decision on whether it reaches the preview"), which the word check did not reach. Read as text, the brief says what each of the four items now owes, so the claim holds.
+
+### What the runs show, and what they do not
+
+- Both sides took the maintenance route on the small change and held the change of lifecycle for the person, with the work in flight listed. At one run a side, the composable-lifecycle text changed no verdict: the kernel's rule to hold an act that expands authority already carried the core of both behaviours.
+- The candidate's brief had the parts the new text names and the base's did not: the leave-when signal it saw, the fragment to select, an end for the grant, and the dated `Changed —` line to add on a yes.
+- One run a side shows a direction, not an effect. Whether the new text helps where the kernel alone does not is `UNVERIFIED`.
+- The three stage skills (`land-change`, `run-acceptance`, `sync-tracker`) have direct fixtures (`skill-land-change`, `skill-run-acceptance`, `skill-sync-tracker`) that did not run in this pass: their effect is `UNVERIFIED`.

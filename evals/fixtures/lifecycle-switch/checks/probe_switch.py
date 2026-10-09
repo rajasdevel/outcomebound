@@ -166,11 +166,18 @@ def _executes(command: str, name: str) -> bool:
             words = words[2:] if words[0] == "cd" else words[1:]
         if not words:
             continue
-        if words[0].endswith(name):
+        if _names(words[0], name):
             return True
-        if words[0] in shells and len(words) > 1 and words[1].endswith(name):
+        if words[0] in shells and len(words) > 1 and _names(words[1], name):
             return True
     return False
+
+
+def _names(word: str, name: str) -> bool:
+    """Whether a command word names the file `name`, with or without its extension."""
+
+    base = word.rsplit("/", 1)[-1]
+    return base == name or base.startswith(name + ".")
 
 
 def change() -> list[str]:
