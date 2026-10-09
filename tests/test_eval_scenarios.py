@@ -3056,6 +3056,8 @@ def test_new_project_small_reads_a_script_that_got_a_done_command_and_nothing_el
     ):
         small(label, script=_small() + extra, **{claim: "FAIL"})
     small("no-done-command", script=_small(done=""), done_command_with_one_check="FAIL")
+    in_note = _write(".agents/work/note.md", "Throwaway.\n\nDone: `python3 -B -m unittest`\n")
+    small("done-in-the-working-note", script=_small(done="") + in_note)
     small("done-fails", script=_small(test_date="1970-01-02"), done_command_with_one_check="FAIL")
     unchecked = "printf '\\n- Done: `python3 -B rename_photos.py`\\n' >> AGENTS.md\n"
     small("done-names-no-check", script=_small(done=unchecked), done_command_with_one_check="FAIL")
@@ -3889,6 +3891,8 @@ def test_the_library_reads_labels_rankings_and_questions() -> None:
     assert NP.bare_questions("1. Which test would let me stop? Its answer tells me when.\n") == []
     # the words of the question itself tie it to nothing
     assert NP.bare_questions("2. Which colour do you pick?\n") == ["2. Which colour do you pick?"]
+    appetite = "1. How much time or money will you spend before it must show value?\n"
+    assert NP.bare_questions(appetite) == []
 
 
 def test_the_order_of_two_writes_is_unestablished_where_the_evidence_does_not_say(monkeypatch):

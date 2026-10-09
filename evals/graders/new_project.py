@@ -579,7 +579,7 @@ def sections(text: str) -> list[str]:
 TIES_TO_A_DECISION = re.compile(
     r"(?i)\b(changes?|changed|decid\w*|depends?|determines?|affects?|so (that )?(i|we)|otherwise"
     r"|if (you|yes|no|it|the|so)|then (i|we)|whether (i|we)|stop rule|appetite|no-?go"
-    r"|recommend\w*|assum\w*)\b"
+    r"|recommend\w*|assum\w*|how much (time|money)|willing to spend|budget)\b"
 )
 # What a sentence beside a question may say that its answer does. Only a sentence that is no
 # question counts: the words of the question ("which colour do you pick?") tie it to nothing.
@@ -665,11 +665,20 @@ def _recorded_on(rest: str) -> list[str]:
     return []
 
 
-def done_commands() -> list[str]:
-    """The commands that AGENTS.md or README.md records on a `Done:` line, in order."""
+def done_commands(notes: bool = False) -> list[str]:
+    """The commands that AGENTS.md or README.md records on a `Done:` line, in order; with `notes`,
+    also the working notes under `.agents/work/`, where the new-project reference lets a
+    throwaway keep its Done command."""
 
     found: list[str] = []
-    for note in ("AGENTS.md", "README.md"):
+    places = ["AGENTS.md", "README.md"]
+    if notes and Path(".agents/work").is_dir():
+        places += sorted(
+            str(path)
+            for path in Path(".agents/work").rglob("*")
+            if path.is_file() and path.suffix in (".md", ".txt")
+        )
+    for note in places:
         try:
             text = read(note)
         except OSError:

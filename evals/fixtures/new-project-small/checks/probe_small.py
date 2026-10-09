@@ -75,9 +75,9 @@ def ci() -> list[str]:
 
 def done() -> list[str]:
     paths = np.changed_files()
-    commands = np.done_commands()
+    commands = np.done_commands(notes=True)
     if not commands:
-        return ["no Done command is recorded in AGENTS.md or README.md"]
+        return ["no Done command is recorded in AGENTS.md, README.md or a working note"]
     lacking = []
     if not any(np.CHECK_WORDS.search(command) for command in commands):
         lacking.append("no Done command names a check")
