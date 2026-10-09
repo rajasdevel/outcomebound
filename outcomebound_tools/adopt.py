@@ -136,6 +136,10 @@ GENERIC_SKILLS = ".outcomebound/skills"
 KERNEL_TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LOCAL = facts.LOCAL
 LOCAL_FRAGMENT = f"{facts.FRAGMENT_DIR}/{LOCAL}.md"
+# What --detect names last, and where a new project starts, as paths in the engine.
+GUIDE = "skills/adopt-outcomebound/SKILL.md"
+NEW_PROJECT_REFERENCE = "skills/using-outcomebound/references/new-project.md"
+NEW_PROJECT_README = 'the README section "Start a new project"'
 # What --detect proposes first for Done where a floor is installed: the floor's runner, with
 # `--base` the remote's default branch where Git resolves it (`default_base`).
 FLOOR_RUNNER = "outcomebound floor check ."
@@ -1571,8 +1575,14 @@ def require_work_tree(target: Path) -> None:
     """Refuse a target Git cannot undo: no `.git` at or above it, or inside `.git` itself."""
 
     inside = any((directory / ".git").exists() for directory in (target, *target.parents))
-    if not inside or any(paths.names_git(part) for part in target.parts):
-        raise AdoptError(f"{target} is not inside a Git work tree, and Git is adopt's undo")
+    shown = textio.plain(str(target))
+    if not inside:
+        raise AdoptError(
+            f"{shown} is not inside a Git work tree, and Git is adopt's undo",
+            "to start a project here: `git init` there, then `outcomebound adopt . --detect`",
+        )
+    if any(paths.names_git(part) for part in target.parts):
+        raise AdoptError(f"{shown} is not inside a Git work tree, and Git is adopt's undo")
 
 
 def description(skill: bytes) -> str:
@@ -2193,9 +2203,178 @@ def proposed_done(target: Path) -> list[str]:
     return _proposal(target)[0]
 
 
+class _Engine(str):
+    """A note made of the engine's own text and paths, which the target did not give and which a
+    person or an agent opens as written, so it is printed as it is."""
+
+
+def _only_git(target: Path) -> bool:
+    """Whether the target holds no entry but `.git`, or none at all: discovery's `empty`, with
+    the repository's own folder not counted."""
+
+    try:
+        return {entry.name for entry in target.iterdir()} <= {".git"}
+    except OSError:
+        return False
+
+
+def _trailing_notes(
+    source: Path, done: Sequence[str], suggested_by: str | None, excluded: bool, found: bool
+) -> list[str]:
+    """What `--detect` once printed after the command on its one line: why Done holds what it
+    holds, and what the person gives in its place."""
+
+    notes = []
+    if excluded:
+        notes.append(
+            "CI commands with a non-POSIX or unresolved shell were not copied into Done; give a "
+            "project POSIX equivalent to --done. Done runs through sh"
+        )
+    if suggested_by is not None:
+        notes.append(
+            f"{done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on the "
+            "host, so where the project runs its tests only in a container, give that command "
+            "to --done in its place"
+        )
+        if done[-1].split()[0] in ("python", "python3"):
+            notes.append(
+                "the python it names is the interpreter of the machine that ran --detect: "
+                "commit the form your hooks run"
+            )
+    if FLOOR_RUNNER in done:
+        notes.append(
+            "no default branch resolves: the floor runs without --base, so its loosening "
+            "check does not run"
+        )
+    if not found:
+        listed = ", ".join(loadable(harness_table(source)))
+        notes.append(f"no harness file found; or one of: {listed}")
+    return notes
+
+
+def _setup_notes(candidates: Sequence[facts.SetupCandidate]) -> list[str]:
+    """Each entry point the project has for setup; the first is on the command, the rest are
+    named only. None found is named too, since a fresh clone may need steps no file shows."""
+
+    if not candidates:
+        return [
+            "no Setup entry point found (a Make target or package.json script named setup or "
+            "bootstrap, or an executable bin/setup, script/setup, script/bootstrap or "
+            "scripts/setup.sh); record the steps a fresh clone needs with --setup"
+        ]
+    return [
+        f"setup candidate: {item.command} ({item.evidence}); "
+        + ("proposed with --setup" if index == 0 else "not proposed")
+        for index, item in enumerate(candidates)
+    ]
+
+
+def _signal_notes(target: Path, files: Sequence[facts.CiFile]) -> list[str]:
+    """The onboarding signals of the design's table, one line each: its kind, the file or the
+    folders that show it, any value read, and the slot of the `local` fragment a proposed line
+    goes to; and each file the reading could not settle."""
+
+    signals: list[facts.Signal] = []
+    unread: list[tuple[str, str]] = []
+    text, why = facts.read_small(target, ".gitattributes")
+    patterns = facts.generated_patterns(text or "")
+    if patterns:
+        signals.append(facts.Signal("generated", ".gitattributes", ", ".join(patterns), "Bounds"))
+    unread.extend([(".gitattributes", why)] if why else [])
+    tracked = discovery.git_read(target, "ls-files", "-z") or b""
+    folders = facts.migration_folders(os.fsdecode(name) for name in tracked.split(b"\0") if name)
+    if folders:
+        signals.append(facts.Signal("migrations", ", ".join(folders), "", "Bounds"))
+    runtime, left = facts.runtime_signals(target)
+    signals += runtime
+    unread += left
+    for name in facts.ENVIRONMENT_FILES:
+        text, why = facts.read_small(target, name)
+        names = facts.environment_names(text or "")
+        if names:
+            signals.append(facts.Signal("environment-names", name, ", ".join(names), "Context"))
+        unread.extend([(name, why)] if why else [])
+    signals += facts.workflow_signals(files)
+    notes = [
+        f"signal {item.kind}: {item.where}"
+        + (f"; value: {item.value}" if item.value else "")
+        + f"; local slot: {item.slot}"
+        for item in signals
+    ]
+    return notes + [f"not read: {name}: {why}" for name, why in unread]
+
+
+def _recorded_done(target: Path) -> tuple[list[str], int]:
+    """The Done commands and the finish check's timeout an install here recorded; none, and the
+    default timeout, where there is no readable manifest."""
+
+    try:
+        own = load_manifest(target).own
+    except AdoptError:
+        return [], finish_check.DEFAULT_TIMEOUT
+    return recorded_done(own), recorded_timeout(own)
+
+
+def _measured_readiness(known: finish_check.Known, timeout: int) -> list[str]:
+    """The readiness lines a measurement shows: Done failing, or longer than the finish check's
+    timeout less the margin gives it."""
+
+    notes = []
+    if known.failing:
+        failing = ", ".join(f"`{line}` (exit {item.code})" for line, item in known.failing.items())
+        notes.append(
+            f"readiness FAIL: Done measured failing on {known.measured}: {failing}; next: fix "
+            "it, or keep it as a known failure the record names"
+        )
+    limit = timeout - finish_check.MARGIN_SECONDS
+    if known.seconds > limit:
+        least = int(known.seconds) + 1 + finish_check.MARGIN_SECONDS
+        notes.append(
+            f"readiness UNVERIFIED: Done took {known.seconds:.0f} s when it was measured on "
+            f"{known.measured}, longer than the {limit} s the {timeout} s finish-check timeout "
+            f"gives it; next: --finish-timeout with more than {least}, for example {2 * least}"
+        )
+    return notes
+
+
+def _readiness_notes(target: Path, done: Sequence[str], files: Sequence[facts.CiFile]) -> list[str]:
+    """What the files and a measurement show about whether Done can be trusted, one line each
+    with its verdict and next step. No score, no level and no stored history."""
+
+    recorded, timeout = _recorded_done(target)
+    notes = []
+    if not done and not recorded:
+        notes.append("readiness UNVERIFIED: no Done candidate; next: record one with --done")
+    for commands in dict.fromkeys(tuple(item) for item in (done, recorded) if item):
+        known = finish_check.known_record(target, finish_check.done_digest(commands))
+        notes += _measured_readiness(known, timeout) if known is not None else []
+    notes += [
+        f"readiness UNVERIFIED: {name} has no lockfile beside it; next: a library may commit "
+        "none; an application pins its dependencies"
+        for name in facts.manifests_without_lock(target)
+    ]
+    secrets = facts.secret_jobs(files)
+    for item in files:
+        for command, job in item.jobs:
+            names = sorted({*secrets.get((item.path, job), []), *secrets.get((item.path, ""), [])})
+            if command in done and names:
+                where = f"job {job} of {item.path}" if job else item.path
+                notes.append(
+                    f"readiness UNVERIFIED: the CI test command `{command}` runs in {where}, "
+                    f"which names {', '.join(f'secrets.{name}' for name in names)}; next: that "
+                    "command cannot run on the host without the secret"
+                )
+    return list(dict.fromkeys(notes))
+
+
 def detect(target: Path, source: Path) -> int:
-    """Print the one install command this target's files suggest; write nothing. A target the
-    install would refuse, outside a Git work tree, is refused here first."""
+    """Print the install command this target's files suggest alone on the first line, then
+    every note on a line of its own that starts with `#`, so that pasting the output into a
+    shell runs only the command: the notes the command once carried, the Setup candidates, the
+    lockfiles' install commands, the onboarding signals, the readiness lines and, last, the
+    guide for an agent. Write nothing and run nothing from the target; a target the install
+    would refuse, outside a Git work tree, is refused here first. Every string the target gave,
+    a path included, is escaped as the instruction audit escapes quoted text."""
 
     require_work_tree(target)
     try:
@@ -2211,33 +2390,29 @@ def detect(target: Path, source: Path) -> int:
     done, suggested_by, excluded = _proposal(target)
     for command in done:
         words += ["--done", command]
-    line = " ".join(map(paths.shell_word, words))
-    if excluded:
-        line += (
-            "  # CI commands with a non-POSIX or unresolved shell were not copied into Done; "
-            "give a project POSIX equivalent to --done. Done runs through sh"
+    setups = facts.setup_candidates(target)
+    if setups:
+        words += ["--setup", setups[0].command]
+    notes = _trailing_notes(source, done, suggested_by, excluded, bool(found))
+    if _only_git(target):
+        reference = Path(source).resolve() / NEW_PROJECT_REFERENCE
+        route = reference.as_posix() if reference.is_file() else NEW_PROJECT_README
+        notes.append(
+            _Engine(f"nothing here but .git: a new project starts from this command; read {route}")
         )
-    if suggested_by is not None:
-        line += (
-            f"  # {done[-1]} is what {suggested_by} suggests, not a command CI runs: it runs on "
-            "the host, so where the project runs its tests only in a container, give that "
-            "command to --done in its place"
-        )
-        if done[-1].split()[0] in ("python", "python3"):
-            line += (
-                "  # the python it names is the interpreter of the machine that ran --detect: "
-                "commit the form your hooks run"
-            )
-    if FLOOR_RUNNER in done:
-        line += (
-            "  # no default branch resolves: the floor runs without --base, so its loosening "
-            "check does not run"
-        )
-    if not found:
-        line += (
-            f"  # no harness file found; or one of: {', '.join(loadable(harness_table(source)))}"
-        )
-    print(line)
+    notes += _setup_notes(setups)
+    notes += [
+        f"lockfile {name}: {command} installs from it; a candidate for --setup, not proposed"
+        for name, command in facts.lockfile_candidates(target)
+    ]
+    files = facts.read_ci(target)
+    notes += _signal_notes(target, files)
+    notes += _readiness_notes(target, done, files)
+    guide = (Path(source).resolve() / GUIDE).as_posix()
+    notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
+    print(textio.plain(" ".join(map(paths.shell_word, words))))
+    for note in notes:
+        print(f"# {note}" if isinstance(note, _Engine) else textio.plain(f"# {note}"))
     return 0
 
 

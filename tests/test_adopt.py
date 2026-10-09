@@ -1046,15 +1046,24 @@ def test_remove_refuses_an_edited_file_unless_forced(tmp_path: Path, capsys: Cap
 # --- detect -----------------------------------------------------------------------
 
 
+def command_of(out: str) -> list[str]:
+    """The install command `--detect` printed: its first line alone, every other line a comment
+    that a shell reads as nothing, so that pasting the output runs the command only."""
+
+    first, *rest = out.splitlines()
+    assert all(line.startswith("# ") for line in rest), rest
+    return shlex.split(first)
+
+
 def test_detect_prints_one_command_that_installs(tmp_path: Path, capsys: Capture) -> None:
     target = repo(tmp_path / "t", {"CLAUDE.md": "# Notes\n", "pyproject.toml": "[project]\n"})
     before = snapshot(target)
 
     code, out, _ = run(capsys, str(target), "--detect")
 
-    assert code == 0 and len(out.splitlines()) == 1
+    assert code == 0 and out.splitlines()[0].startswith("outcomebound adopt ")
     assert snapshot(target) == before
-    words = shlex.split(out)
+    words = command_of(out)
     assert words[:3] == ["outcomebound", "adopt", target.resolve().as_posix()]
     assert words[words.index("--harness") + 1] == "claude-code"
     assert words[words.index("--fragments") + 1] == "python,commands"
@@ -1112,6 +1121,10 @@ def test_detect_refuses_a_target_outside_git_as_the_install_would(
     code, out, err = run(capsys, str(target), "--detect")
 
     assert code != 0 and out == "" and "not inside a Git work tree" in err
+    assert "`git init` there, then `outcomebound adopt . --detect`" in err
+    for arguments in (("--harness", "codex"), ("--remove",)):
+        err = run(capsys, str(target), *arguments)[2]
+        assert "`git init` there, then `outcomebound adopt . --detect`" in err
 
 
 def test_detect_without_a_harness_sign_proposes_generic(tmp_path: Path, capsys: Capture) -> None:
@@ -1119,8 +1132,8 @@ def test_detect_without_a_harness_sign_proposes_generic(tmp_path: Path, capsys: 
 
     code, out, _ = run(capsys, str(target), "--detect")
 
-    assert code == 0 and len(out.splitlines()) == 1
-    words = shlex.split(out, comments=True)
+    assert code == 0
+    words = command_of(out)
     assert words[words.index("--harness") + 1] == "generic"
     assert "claude-code" in out and "codex" in out
     assert run(capsys, *words[2:])[0] == 0
@@ -1171,6 +1184,457 @@ def test_detect_proposes_the_commands_fragment_for_an_empty_repository(
     assert code == 0 and words[words.index("--fragments") + 1] == "commands"
     assert run(capsys, *words[2:])[0] == 0
     assert (target / ".outcomebound/fragments/commands.md").is_file()
+
+
+def notes_of(out: str) -> list[str]:
+    """Every line of `--detect` after the command, each a comment."""
+
+    command_of(out)
+    return out.splitlines()[1:]
+
+
+GUIDE_LINE = (
+    f"# onboarding guide for an agent: {(ROOT / 'skills/adopt-outcomebound/SKILL.md').as_posix()}"
+)
+
+
+def test_detect_puts_every_note_on_a_comment_line_and_ends_on_the_guide(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a note trails the command on its line, so that a shell runs more than the
+    command, a note lacks `#`, or the last line does not name the guide as an absolute path from
+    the engine."""
+
+    target = repo(tmp_path / "t", {"pytest.ini": "[pytest]\n"})
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    first, *rest = out.splitlines()
+    assert "#" not in first and first.count("\n") == 0
+    assert f"# {PYTEST} is what pytest.ini suggests, not a command CI runs" in rest[0]
+    assert "# no harness file found; or one of: " in "\n".join(rest)
+    assert rest[-1] == GUIDE_LINE and Path(rest[-1].split(": ", 1)[1]).is_absolute()
+
+
+@pytest.mark.parametrize(
+    ("files", "command"),
+    [
+        pytest.param({"Makefile": "setup:\n\tpip install -e .\n"}, "make setup", id="make-setup"),
+        pytest.param({"GNUmakefile": "bootstrap: deps\n\techo\n"}, "make bootstrap", id="gnu"),
+        pytest.param({"makefile": ".PHONY: setup\nsetup::\n\ttrue\n"}, "make setup", id="double"),
+        pytest.param({"package.json": '{"scripts": {"setup": "x"}}'}, "npm run setup", id="npm"),
+        pytest.param(
+            {"package.json": '{"scripts": {"bootstrap": "x"}}', "pnpm-lock.yaml": ""},
+            "pnpm run bootstrap",
+            id="pnpm",
+        ),
+        pytest.param(
+            {"Makefile": "setup:\n\ttrue\n", "bin/setup": "#!/bin/sh\n"}, "make setup", id="first"
+        ),
+    ],
+)
+def test_detect_proposes_setup_for_the_projects_own_entry_point_and_runs_nothing(
+    tmp_path: Path, capsys: Capture, files: dict[str, str], command: str
+) -> None:
+    """Breaks if a Make target, a package.json script or an executable script named setup or
+    bootstrap is not proposed with `--setup`, if more than the first entry point is proposed,
+    or if detection runs the entry point."""
+
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    words = command_of(out)
+    assert [words[i + 1] for i, word in enumerate(words) if word == "--setup"] == [command]
+    assert f"# setup candidate: {command} (" in out and "proposed with --setup" in out
+    assert run(capsys, *words[2:])[0] == 0
+    assert facts_lines(target)["Setup"] == f"`{command}`"
+
+
+@pytest.mark.skipif(WINDOWS, reason="a script is executable by its mode, which Windows lacks")
+@pytest.mark.parametrize(
+    "relative", ["bin/setup", "script/setup", "script/bootstrap", "scripts/setup.sh"]
+)
+def test_detect_proposes_an_executable_setup_script_only_where_it_is_executable(
+    tmp_path: Path, capsys: Capture, relative: str
+) -> None:
+    target = repo(tmp_path / "t", {relative: "#!/bin/sh\ntouch ran\n"})
+    assert "--setup" not in command_of(run(capsys, str(target), "--detect")[1])
+
+    (target / relative).chmod(0o755)
+    before = snapshot(target)
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert command_of(out)[-2:] == ["--setup", f"./{relative}"] and snapshot(target) == before
+    assert not (target / "ran").exists()
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        {"Makefile": "setup := yes\ninstall:\n\ttrue\n"},
+        {"Makefile": ".PHONY: setup\n"},
+        {"package.json": '{"scripts": {"test": "x", "setup-db": "x"}}'},
+        {"package.json": "not json"},
+        {"package.json": '{"scripts": ["setup"]}'},
+        {"docs/setup": "#!/bin/sh\n"},
+    ],
+    ids=["variable", "phony", "other-script", "broken", "list", "elsewhere"],
+)
+def test_detect_proposes_no_setup_without_an_entry_point(
+    tmp_path: Path, capsys: Capture, files: dict[str, str]
+) -> None:
+    target = repo(tmp_path / "t", files)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "--setup" not in command_of(out)
+    assert "# no Setup entry point found" in out
+
+
+@pytest.mark.parametrize(
+    ("lockfile", "install"),
+    [
+        ("package-lock.json", "npm ci"),
+        ("pnpm-lock.yaml", "pnpm install --frozen-lockfile"),
+        ("uv.lock", "uv sync --frozen"),
+        ("Cargo.lock", "cargo fetch --locked"),
+        ("go.sum", "go mod download"),
+    ],
+)
+def test_detect_names_a_lockfiles_install_command_as_a_comment_only(
+    tmp_path: Path, capsys: Capture, lockfile: str, install: str
+) -> None:
+    target = repo(tmp_path / "t", {lockfile: ""})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert f"# lockfile {lockfile}: {install} installs from it; a candidate for --setup" in out
+    assert install not in out.splitlines()[0] and "--setup" not in command_of(out)
+
+
+GENERATED = """\
+# comment
+src/gen/** linguist-generated
+*.pb.go linguist-generated=true
+"quoted dir/*"\tlinguist-generated -diff
+docs/** linguist-generated -linguist-generated
+vendor/** -linguist-generated
+other/** linguist-generated=false
+[attr]macro linguist-generated
+*.png binary
+"""
+
+
+def test_detect_names_the_generated_paths_the_project_marks(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {".gitattributes": GENERATED})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert (
+        "# signal generated: .gitattributes; value: src/gen/**, *.pb.go, quoted dir/*; "
+        "local slot: Bounds\n"
+    ) in out
+
+
+def test_detect_names_each_tracked_migration_folder_once(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if a folder of many migrations prints once for each file, if an untracked folder
+    is read as applied migrations, or if the names discovery reads are not all read."""
+
+    tracked = [
+        "db/migrate/001_a.rb",
+        "db/migrate/002_b.rb",
+        "app/migrations/0001.py",
+        "app/migrations/0002.py",
+        "service/alembic/versions/x.py",
+        "migrate/not-under-db.sql",
+    ]
+    target = repo(tmp_path / "t", dict.fromkeys(tracked, "x\n"))
+    commit_all(target)
+    (target / "new/migrations").mkdir(parents=True)
+    write(target / "new/migrations/0001.py", "x\n")
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    [line] = [text for text in out.splitlines() if "signal migrations" in text]
+    assert line == (
+        "# signal migrations: app/migrations, db/migrate, service/alembic; local slot: Bounds"
+    )
+
+
+WORKFLOW_PUBLISH = """\
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo npm publish
+      - run: pytest -q
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: actions/checkout@v4
+      - run: |
+          sudo docker push example/app
+          twine upload dist/*
+      - run: npm publish --access public && gh release create v1
+"""
+
+
+def test_detect_names_the_publishing_steps_of_a_workflow(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if a step that only mentions a publishing command is a signal, or a step that
+    runs one through a wrapper, in a block, or after `&&`, or a publishing action, is missed."""
+
+    target = repo(tmp_path / "t", {".github/workflows/release.yml": WORKFLOW_PUBLISH})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    path = ".github/workflows/release.yml"
+    lines = [line for line in out.splitlines() if "signal publishing-workflow" in line]
+    assert lines == [
+        f"# signal publishing-workflow: {path}; value: job {job}; local slot: Bounds (edges:)"
+        for job in (
+            "release uses pypa/gh-action-pypi-publish",
+            "release runs docker push",
+            "release runs twine upload",
+            "release runs npm publish",
+            "release runs gh release create",
+        )
+    ]
+
+
+def test_detect_names_the_runtime_versions_the_project_pins(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    files = {
+        ".python-version": "3.12\n",
+        ".nvmrc": "v20.11.0\n",
+        ".tool-versions": "python 3.12.1\n# comment\nnodejs 20.11.0\n",
+        "rust-toolchain.toml": '[toolchain]\nchannel = "1.75"\n',
+        "pyproject.toml": (
+            '[tool.x]\nrequires-python = "<2"\n[project]\nrequires-python = ">=3.10"\n'
+        ),
+        "go.mod": "module x\n\ngo 1.22\n",
+    }
+    target = repo(tmp_path / "t", files)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    found = [line for line in out.splitlines() if "signal runtime-version" in line]
+    assert found == [
+        "# signal runtime-version: .python-version; value: 3.12; local slot: Context",
+        "# signal runtime-version: .nvmrc; value: v20.11.0; local slot: Context",
+        "# signal runtime-version: .tool-versions; value: python 3.12.1; nodejs 20.11.0; "
+        "local slot: Context",
+        "# signal runtime-version: rust-toolchain.toml; value: 1.75; local slot: Context",
+        "# signal runtime-version: pyproject.toml; value: requires-python >=3.10; "
+        "local slot: Context",
+        "# signal runtime-version: go.mod; value: go 1.22; local slot: Context",
+    ]
+
+
+def test_detect_names_the_environment_variables_and_never_a_value(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    env = (
+        "# a comment\nAPI_URL=https://s3cr3t.example\nexport TOKEN='s3cr3t-value'\n"
+        "EMPTY=\nbad line\n"
+    )
+    target = repo(tmp_path / "t", {".env.example": env, ".env.sample": "OTHER=1\n"})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    names = "API_URL, TOKEN, EMPTY"
+    assert f"# signal environment-names: .env.example; value: {names}; local slot: Context" in out
+    assert "# signal environment-names: .env.sample; value: OTHER; local slot: Context" in out
+    assert "s3cr3t" not in out
+
+
+WORKFLOW_SECRETS = """\
+on: push
+env:
+  SHARED: ${{ secrets.WORKFLOW_WIDE }}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      KEY: ${{ secrets.API_KEY }}
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - run: pytest -q
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ${{ secrets['LINT_KEY'] }}
+"""
+
+
+def test_detect_names_the_secrets_a_workflow_uses_with_their_jobs_and_no_value(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW_SECRETS})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert (
+        "# signal ci-secrets: .github/workflows/ci.yml; value: API_KEY in job test; "
+        "LINT_KEY in job lint; WORKFLOW_WIDE in the workflow; local slot: Distinguish\n"
+    ) in out
+    assert "GITHUB_TOKEN" not in out.split("signal ci-secrets")[1].split("\n")[0]
+    [line] = [text for text in out.splitlines() if "readiness" in text and "secrets." in text]
+    assert line == (
+        "# readiness UNVERIFIED: the CI test command `pytest -q` runs in job test of "
+        ".github/workflows/ci.yml, which names secrets.API_KEY, secrets.WORKFLOW_WIDE; next: that "
+        "command cannot run on the host without the secret"
+    )
+
+
+def test_detect_names_no_secret_for_a_test_job_that_names_none(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    workflow = WORKFLOW_SECRETS.replace("  SHARED: ${{ secrets.WORKFLOW_WIDE }}\n", "").replace(
+        "      KEY: ${{ secrets.API_KEY }}\n", ""
+    )
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": workflow})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "signal ci-secrets" in out and "readiness UNVERIFIED: the CI test command" not in out
+
+
+def test_detect_reads_no_done_candidate_and_a_missing_lockfile_as_unverified(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"package.json": "{}"})
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "# readiness UNVERIFIED: no Done candidate; next: record one with --done" in out
+    assert (
+        "# readiness UNVERIFIED: package.json has no lockfile beside it; next: a library may "
+        "commit none; an application pins its dependencies"
+    ) in out
+    write(target / "yarn.lock", "")
+    _, out, _ = run(capsys, str(target), "--detect")
+    assert "has no lockfile beside it" not in out
+    assert "no Done candidate" in out
+    assert run(capsys, str(target), "--done", "true")[0] == 0
+    assert "no Done candidate" not in run(capsys, str(target), "--detect")[1]
+
+
+def test_detect_reads_a_measured_failing_done_and_a_slow_one_from_the_record(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a Done that was measured failing is not a `FAIL` readiness line with its next
+    step, or one that took longer than the finish check's timeout less 30 seconds is not
+    UNVERIFIED with the `--finish-timeout` that fits."""
+
+    hook_free_path(monkeypatch, tmp_path)
+    target = repo(tmp_path / "t")
+    commit_all(target)
+    assert run(capsys, str(target), "--done", "exit 3", "--verify")[0] == 0
+    known = finish_check.known_record(target, finish_check.done_digest(["exit 3"]))
+    assert known is not None and known.failing
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert re.search(
+        r"# readiness FAIL: Done measured failing on \S+: `exit 3` \(exit 3\); next: fix it, "
+        r"or keep it as a known failure the record names",
+        out,
+    )
+    assert "readiness UNVERIFIED: Done took" not in out
+    slow = dataclasses.replace(known, seconds=700.0, failing={})
+    assert finish_check.keep_known(target, slow)
+
+    _, out, _ = run(capsys, str(target), "--detect")
+
+    assert "readiness FAIL" not in out
+    assert re.search(
+        r"# readiness UNVERIFIED: Done took 700 s when it was measured on \S+, longer than the "
+        r"570 s the 600 s finish-check timeout gives it; next: --finish-timeout with more than "
+        r"731, for example 1462",
+        out,
+    )
+
+
+def test_detect_on_a_folder_with_only_git_names_the_new_project_route(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the reference is named where the engine lacks the file, is not named by its
+    engine path where it has it, or is named for a folder that holds code or any other file."""
+
+    source = engine_copy(tmp_path)
+    empty = repo(tmp_path / "empty")
+    code_only = repo(tmp_path / "code", {"app.py": "x = 1\n"})
+    reference = source / "skills/using-outcomebound/references/new-project.md"
+
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert 'read the README section "Start a new project"' in out
+    assert "new-project.md" not in out
+
+    write(reference, "# New project\n")
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert f"a new project starts from this command; read {reference.resolve().as_posix()}" in out
+    assert out.splitlines()[-1].endswith(
+        f"{source.resolve().as_posix()}/skills/adopt-outcomebound/SKILL.md"
+    )
+
+    _, out, _ = run(capsys, str(code_only), "--detect", source=source)
+    assert "a new project starts" not in out and "Start a new project" not in out
+
+
+@pytest.mark.skipif(WINDOWS, reason="a control character cannot be part of a Windows file name")
+def test_detect_escapes_every_string_the_target_gave(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if a path, a CI command, a pattern or a value that the target holds reaches the
+    terminal with a control or bidirectional character in it, on the command line or a note."""
+
+    workflow = (
+        "jobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pytest -q 'a\u202eb'\n"
+    )
+    files = {
+        ".github/workflows/ci.yml": workflow,
+        ".gitattributes": "gen/\u202e** linguist-generated\n",
+        ".python-version": "3.12\x1b[2J\n",
+    }
+    target = repo(tmp_path / "dir\x1b[31mred", files)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0
+    assert all(" " <= char <= "~" or char == "\n" for char in out), out
+    for escaped in ("\\u001b[31mred", "\\u202e", "\\u001b[2J"):
+        assert escaped in out
+
+
+def test_detect_prints_the_engines_own_paths_as_they_are(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if the guide's path, which an agent opens, is escaped though no target gave it,
+    while a target's own path in the command still is."""
+
+    source = tmp_path / "engine-\u65e5\u672c"
+    shutil.copytree(engine_copy(tmp_path), source)
+    write(source / "skills/using-outcomebound/references/new-project.md", "# New\n")
+    target = repo(tmp_path / "t-\u65e5\u672c")
+
+    _, out, _ = run(capsys, str(target), "--detect", source=source)
+
+    first, *rest = out.splitlines()
+    assert "t-\\u65e5\\u672c" in first and "\u65e5" not in first
+    reference = f"{source.resolve().as_posix()}/skills/using-outcomebound/references/new-project.md"
+    assert (
+        f"# nothing here but .git: a new project starts from this command; read {reference}" in rest
+    )
+    assert rest[-1] == (
+        f"# onboarding guide for an agent: {source.resolve().as_posix()}"
+        "/skills/adopt-outcomebound/SKILL.md"
+    )
 
 
 def test_the_commands_fragment_installs_a_pointer_and_a_copy_and_removes_both(

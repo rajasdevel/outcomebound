@@ -435,6 +435,37 @@ def test_done_names_every_command_in_run_order(tmp_path: Path) -> None:
         assert line in facts.render(tmp_path, [], done, ["AGENTS.md"], []).facts.splitlines()
 
 
+def test_read_ci_names_the_job_that_runs_each_test_command(tmp_path: Path) -> None:
+    """Breaks if a test command is not paired with the job of its workflow or GitLab file that
+    runs it, which a secret in that job or its workflow is read against."""
+
+    target = project(tmp_path, {**workflows(ci=NODE), ".gitlab-ci.yml": GITLAB})
+
+    github, gitlab = facts.read_ci(target)
+
+    assert github.jobs == (("npm test -- --coverage", "build"),)
+    assert gitlab.jobs == (("pytest --junitxml=report.xml", "unit"),)
+
+
+def test_migration_folders_are_the_tracked_names_discovery_reads_each_once() -> None:
+    tracked = ["a/migrations/1.sql", "a/migrations/2.sql", "db/migrate/1.rb", "x/db/migrate/y/1.rb"]
+    tracked += ["alembic/env.py", "migrate/1.sql", "db/other/migrate/1.rb", "README.md"]
+
+    assert facts.migration_folders(tracked) == [
+        "a/migrations",
+        "alembic",
+        "db/migrate",
+        "x/db/migrate",
+    ]
+
+
+def test_a_manifest_with_a_lockfile_beside_it_is_not_reported(tmp_path: Path) -> None:
+    target = project(tmp_path, {"package.json": "{}", "yarn.lock": "", "Cargo.toml": ""})
+
+    assert facts.manifests_without_lock(target) == ["Cargo.toml"]
+    assert facts.lockfile_candidates(target) == [("yarn.lock", facts.LOCKFILE_INSTALLS[2][1])]
+
+
 def test_setup_names_every_command_in_run_order_between_done_and_ci_test(tmp_path: Path) -> None:
     target = project(tmp_path, workflows(ci=NODE))
     chosen = facts.Chosen(["make test"], (), ["./bin/setup", "npm ci", "echo `date`"])
