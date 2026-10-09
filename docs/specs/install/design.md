@@ -26,6 +26,7 @@ cannot observe is left out, and the install report names it `UNVERIFIED`.
 | Fact | Source | Left out when |
 | --- | --- | --- |
 | Done | the commands `--done` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`: every one must pass | none is recorded |
+| Setup | the commands `--setup` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`: the person's record, which adopt never runs | none is recorded |
 | CI test | each test command a `.github/workflows/*.yml` `run:` step or a `.gitlab-ci.yml` `script:` entry runs, as it runs from the root: a step's `working-directory:`, else its job's or the workflow's `defaults.run.working-directory:`, becomes `cd <dir> && `; each file's commands followed by the file | no command is read; a command the reading cannot settle (an expression, a `cd` earlier in its step or job, a folded, multi-line, flow or alias value, a link) is left out and named, and the file's other commands are kept |
 | Irreversible edges | each selected fragment's `edges:`, once each, then `loosening the quality floor` where `.outcomebound/floor.json` exists | none is declared |
 | Text for people | the style `--human-style` recorded: `ste` asks for text a person reads in ASD-STE100 Simplified Technical English style, quoting none of the standard, with no length limit and every fact kept | none is recorded |

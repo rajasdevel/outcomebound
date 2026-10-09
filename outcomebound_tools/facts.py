@@ -1,7 +1,7 @@
 """The project facts and the guidance pointers an install writes into AGENTS.md.
 
 What this module decides: the lines of the `project-facts` block, each a label and the fact
-verbatim (Done, CI test, Irreversible edges, Text for people, Precedence), a fact it cannot
+verbatim (Done, Setup, CI test, Irreversible edges, Text for people, Precedence), a fact it cannot
 observe left out and named UNVERIFIED; the `guidance-pointers` block, the project's own `local`
 fragment inline and then one `- <condition>: read <path>` line per selected fragment and per
 installed skill;
@@ -22,6 +22,7 @@ import shlex
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from outcomebound_tools import identity, paths, textio
 from outcomebound_tools.fragments import EDGE_SEPARATOR, Fragment
@@ -34,7 +35,7 @@ LOCAL = "local"
 FRAGMENT_DIR = ".outcomebound/fragments"
 FLOOR = ".outcomebound/floor.json"
 FLOOR_EDGE = "loosening the quality floor"
-LABELS = ("Done", "CI test", "Irreversible edges", "Text for people", "Precedence")
+LABELS = ("Done", "Setup", "CI test", "Irreversible edges", "Text for people", "Precedence")
 # The styles `adopt --human-style` can record for text an agent writes for a person, and the
 # fact each renders. The standard is named, never quoted.
 STYLES = {
@@ -452,6 +453,16 @@ class Rendered:
     inputs: dict[str, str]
 
 
+class Chosen(NamedTuple):
+    """What the adopter chose for the facts block: the Done commands, in run order, the style
+    for text a person reads, a key of `STYLES`, or none, and the Setup commands, in run order,
+    which adopt records as the person's fact and never runs."""
+
+    done: Sequence[str]
+    style: Sequence[str] = ()
+    setup: Sequence[str] = ()
+
+
 def render(
     target: Path,
     selected: Sequence[Fragment],
@@ -460,14 +471,28 @@ def render(
     skills: Sequence[tuple[str, str]],
     style: Sequence[str] = (),
 ) -> Rendered:
+    """The facts and pointers blocks for `target`, for a project that records no Setup:
+    `render_chosen` with Done and the style for text a person reads."""
+
+    return render_chosen(target, selected, Chosen(done, style), files, skills)
+
+
+def render_chosen(
+    target: Path,
+    selected: Sequence[Fragment],
+    chosen: Chosen,
+    files: Sequence[str],
+    skills: Sequence[tuple[str, str]],
+) -> Rendered:
     """The facts and pointers blocks for `target`.
 
-    `selected` holds the selected fragments in order, `local` among them when chosen; `done`
-    the recorded Done commands in run order; `files` the co-loaded instruction files, AGENTS.md
-    first; `skills` a (condition, path) pair per installed skill; `style` the recorded style
-    for text a person reads, a key of `STYLES`, or none.
+    `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
+    the recorded Done and Setup commands in run order and the style for text a person reads;
+    `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
+    per installed skill.
     """
 
+    done, style, setup = chosen
     lines: list[str] = []
     unverified: list[str] = []
     inputs = {f"{FRAGMENT_DIR}/{item.id}.md": item.digest for item in selected}
@@ -475,6 +500,10 @@ def render(
         lines.append(f"- Done: {both([code(command) for command in done])}")
     else:
         unverified.append("Done: no command is recorded; adopt records one with --done")
+    if setup:
+        lines.append(f"- Setup: {both([code(command) for command in setup])}")
+    else:
+        unverified.append("Setup: no command is recorded; adopt records one with --setup")
     ci = read_ci(target)
     inputs.update(
         (item.path, sha256(textio.fold(item.data))) for item in ci if item.data is not None

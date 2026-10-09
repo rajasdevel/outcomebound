@@ -1261,6 +1261,85 @@ def test_the_facts_are_read_from_their_sources(tmp_path: Path, capsys: Capture) 
     assert refused.value.code == 2
 
 
+def test_setup_is_recorded_in_run_order_kept_cleared_and_never_run(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--setup` runs a command, loses run order, is lost on a re-run that names none,
+    survives `--setup ''`, or the report stops naming the fact when none is recorded."""
+
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW})
+    ran = tmp_path / "setup-ran"
+    first = ("--harness", "codex", "--done", "make test")
+
+    _, out, _ = run(capsys, str(target), *first)
+
+    assert "UNVERIFIED Setup: no command is recorded; adopt records one with --setup" in out
+    assert "Setup" not in facts_lines(target)
+
+    code, out, err = run(
+        capsys, str(target), "--setup", f"touch {ran.as_posix()}", "--setup", "make deps"
+    )
+
+    assert code == 0, err
+    assert not ran.exists() and "UNVERIFIED Setup" not in out
+    lines = facts_lines(target)
+    assert list(lines) == ["Done", "Setup", "CI test", "Precedence"]
+    assert lines["Setup"] == f"`touch {ran.as_posix()}` and `make deps`"
+    assert manifest(target)["artifacts"][1]["setup"] == [f"touch {ran.as_posix()}", "make deps"]
+    assert run(capsys, str(target), "--check")[0] == 0
+
+    before = snapshot(target)
+    assert run(capsys, str(target))[0] == 0
+    assert run(capsys, str(target), "--done", "make check")[0] == 0
+    assert snapshot(target)["AGENTS.md"] != before["AGENTS.md"]
+    assert facts_lines(target)["Setup"] == lines["Setup"]
+
+    code, out, _ = run(capsys, str(target), "--setup", "")
+    assert code == 0 and "UNVERIFIED Setup: no command is recorded" in out
+    assert "Setup" not in facts_lines(target)
+    assert "setup" not in manifest(target)["artifacts"][1]
+    assert run(capsys, str(target), "--check")[0] == 0
+
+
+def test_a_setup_command_is_one_line_and_check_takes_none(tmp_path: Path, capsys: Capture) -> None:
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    code, _, err = run(capsys, str(target), "--setup", "make\ndeps")
+
+    assert code == 1 and "a --setup command is one line" in err
+    assert not (target / adopt.MANIFEST).exists()
+    for mode in ("--check", "--detect", "--remove"):
+        with pytest.raises(SystemExit) as refused:
+            adopt.main([str(target), mode, "--setup", "make deps"])
+        assert refused.value.code == 2
+
+
+def test_check_recomputes_the_facts_from_the_recorded_setup(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A Setup list in the record that the block does not show reads the block stale, naming
+    the fact; a record that is not a list of commands is refused."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    assert run(capsys, str(target), "--done", "make test", "--setup", "make deps")[0] == 0
+    path = target / adopt.MANIFEST
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["artifacts"][1]["setup"] = ["make deps", "make more"]
+    write(path, json.dumps(document, indent=2) + "\n")
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1
+    assert "stale    AGENTS.md (project-facts): Setup moved" in out
+
+    document["artifacts"][1]["setup"] = "make deps"
+    write(path, json.dumps(document, indent=2) + "\n")
+
+    code, _, err = run(capsys, str(target), "--check")
+
+    assert code == 1 and "the setup recorded for AGENTS.md are not a list of names" in err
+
+
 def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
     tmp_path: Path, capsys: Capture
 ) -> None:

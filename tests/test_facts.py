@@ -435,6 +435,22 @@ def test_done_names_every_command_in_run_order(tmp_path: Path) -> None:
         assert line in facts.render(tmp_path, [], done, ["AGENTS.md"], []).facts.splitlines()
 
 
+def test_setup_names_every_command_in_run_order_between_done_and_ci_test(tmp_path: Path) -> None:
+    target = project(tmp_path, workflows(ci=NODE))
+    chosen = facts.Chosen(["make test"], (), ["./bin/setup", "npm ci", "echo `date`"])
+
+    rendered = facts.render_chosen(target, [], chosen, ["AGENTS.md"], [])
+
+    labels = [line[2:].split(":", 1)[0] for line in rendered.facts.splitlines()[1:-1]]
+    assert labels == ["Done", "Setup", "CI test", "Precedence"]
+    assert "- Setup: `./bin/setup`, `npm ci` and `` echo `date` ``" in rendered.facts
+    assert not any(note.startswith("Setup:") for note in rendered.unverified)
+    none = facts.render_chosen(target, [], facts.Chosen(["make test"]), ["AGENTS.md"], [])
+    assert "- Setup:" not in none.facts
+    assert "Setup: no command is recorded; adopt records one with --setup" in none.unverified
+    assert facts.moved(none.facts, rendered.facts) == ["Setup"]
+
+
 def test_a_linked_workflow_is_not_followed(tmp_path: Path) -> None:
     outside = project(tmp_path / "outside", {"ci.yml": NODE})
     target = project(tmp_path / "t", {".github/workflows/.keep": ""})
@@ -448,10 +464,10 @@ def test_a_linked_workflow_is_not_followed(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("files", "left_out"),
     [
-        ({}, {"Done", "CI test", "Irreversible edges"}),
-        (workflows(release=RELEASE), {"Done", "CI test", "Irreversible edges"}),
-        (workflows(ci=MATRIX), {"Done", "CI test", "Irreversible edges"}),
-        ({**workflows(ci=NODE), facts.FLOOR: "{}\n"}, {"Done"}),
+        ({}, {"Done", "Setup", "CI test", "Irreversible edges"}),
+        (workflows(release=RELEASE), {"Done", "Setup", "CI test", "Irreversible edges"}),
+        (workflows(ci=MATRIX), {"Done", "Setup", "CI test", "Irreversible edges"}),
+        ({**workflows(ci=NODE), facts.FLOOR: "{}\n"}, {"Done", "Setup"}),
     ],
     ids=["nothing", "no-test", "unsettled", "floor-and-ci"],
 )

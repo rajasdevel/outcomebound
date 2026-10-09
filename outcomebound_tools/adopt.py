@@ -24,7 +24,7 @@ which the pointers name. Re-running it is the upgrade, and each install prints t
 words an agent always loads, skill descriptions included; no size refuses one. What it
 wrote is recorded in `.outcomebound/manifest.json` (format 2), one
 `{kind, path, id, sha256}` record per block or file, the facts record holding the recorded
-selection, the Done commands and each source a fact was read from with its digest, and the
+selection, the Done and Setup commands and each source a fact was read from with its digest, and the
 pointers record the optional `frame` digest that shows an edit of the local fragment alone; a
 record of any other kind or id belongs to another route and is kept as it is. Nothing whose
 bytes differ from its record is replaced or removed without `--force`, save bytes this
@@ -48,7 +48,7 @@ import sys
 from collections.abc import Callable, Sequence, Set
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 from outcomebound_tools import (
     adapters,
@@ -258,12 +258,7 @@ class Guidance:
     skills: tuple[str, ...]
 
 
-class Chosen(NamedTuple):
-    """What the adopter chose for the facts block: the Done commands, in run order, and the
-    style for text a person reads, a key of `facts.STYLES`, or none."""
-
-    done: Sequence[str]
-    style: Sequence[str] = ()
+Chosen = facts.Chosen
 
 
 def guidance(
@@ -299,7 +294,7 @@ def guidance(
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
     skills = skills if root else []
-    rendered = facts.render(target, selected, chosen.done, hosts, skills, chosen.style)
+    rendered = facts.render_chosen(target, selected, chosen, hosts, skills)
     return Guidance(rendered, files, names)
 
 
@@ -688,7 +683,7 @@ def _check_record(record: Record) -> None:
         isinstance(digest, str) and len(digest) == 64 and set(digest) <= set("0123456789abcdef")
     ):
         raise AdoptError(f"{MANIFEST} records no sha256 for {path}")
-    for name in ("harnesses", "fragments", "done", "style"):
+    for name in ("harnesses", "fragments", "done", "setup", "style"):
         value = record.get(name, [])
         if not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
             raise AdoptError(f"{MANIFEST}: the {name} recorded for {path} are not a list of names")
@@ -797,6 +792,13 @@ def recorded_fragments(own: Sequence[Record]) -> list[str]:
 
 def recorded_done(own: Sequence[Record]) -> list[str]:
     return _recorded(own, "done")
+
+
+def recorded_setup(own: Sequence[Record]) -> list[str]:
+    """The Setup commands the facts record holds, in run order; a record written before Setup
+    existed holds none."""
+
+    return _recorded(own, "setup")
 
 
 def recorded_timeout(own: Sequence[Record]) -> int:
@@ -1184,8 +1186,7 @@ def desired(
     source: Path,
     found: Sequence[Route],
     ids: Sequence[str],
-    done: Sequence[str],
-    style: Sequence[str] = (),
+    chosen: Chosen,
 ) -> list[Want]:
     """What this engine installs for these harnesses, fragments and Done commands, in record
     order: the kernel, the facts, the pointers, the fragment files, the workspace's
@@ -1200,10 +1201,12 @@ def desired(
     imports = _imports_needed(run, found)
     written = [want.path for want in imports]
     found_fragments = catalog(source, run.target, ids)
-    made = guidance(run.target, found, found_fragments, ids, Chosen(done, style), written)
-    extra = {"fragments": list(ids), "done": list(done), "inputs": made.rendered.inputs}
-    if style:
-        extra["style"] = list(style)
+    made = guidance(run.target, found, found_fragments, ids, chosen, written)
+    extra = {"fragments": list(ids), "done": list(chosen.done), "inputs": made.rendered.inputs}
+    if chosen.style:
+        extra["style"] = list(chosen.style)
+    if chosen.setup:
+        extra["setup"] = list(chosen.setup)
     wants.append(Want("block", AGENTS, FACTS, made.rendered.facts.encode("utf-8"), extra))
     if made.rendered.pointers is not None:
         block = made.rendered.pointers
@@ -1784,6 +1787,7 @@ class Selection:
     finish_check: bool | None = None
     style: list[str] | None = None
     finish_timeout: int | None = None
+    setup: list[str] | None = None
 
 
 def install(
@@ -1800,9 +1804,10 @@ def install(
     ids = recorded_fragments(own) if selection.fragments is None else selection.fragments
     done = recorded_done(own) if selection.done is None else selection.done
     style = recorded_style(own) if selection.style is None else selection.style
+    setup = recorded_setup(own) if selection.setup is None else selection.setup
     run = Run(target, force)
     table = harness_table(source)
-    wants = desired(run, source, found, ids, done, style)
+    wants = desired(run, source, found, ids, Chosen(done, style, setup))
     wants += finish_hooks(run, table, found, done, selection, own)
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
@@ -1854,7 +1859,7 @@ def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
 
     ids = recorded_fragments(own)
     found = routes(source, recorded_harnesses(own) or [GENERIC])
-    chosen = Chosen(recorded_done(own), recorded_style(own))
+    chosen = Chosen(recorded_done(own), recorded_style(own), recorded_setup(own))
     return guidance(target, found, catalog(source, target, ids), ids, chosen)
 
 
@@ -2152,13 +2157,15 @@ def detect(target: Path, source: Path) -> int:
 # --- Command line ---------------------------------------------------------------
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
-                            [--human-style ste] [--finish-check | --no-finish-check]
+                            [--setup CMD]... [--human-style ste]
+                            [--finish-check | --no-finish-check]
                             [--finish-timeout SECONDS] [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
 Install or upgrade OutcomeBound in <target>, inside a Git work tree. AGENTS.md gets three
-blocks: the operating contract; the project facts (Done: the --done commands; CI test: the test
+blocks: the operating contract; the project facts (Done: the --done commands; Setup: the --setup
+commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
 edges: those the selected fragments declare, and a floor loosening where a floor is installed;
 Text for people: with --human-style ste, text an agent writes for a person in the style of
@@ -2273,6 +2280,14 @@ def _parser() -> argparse.ArgumentParser:
         "omitted keeps the recorded ones",
     )
     parser.add_argument(
+        "--setup",
+        action="append",
+        metavar="CMD",
+        help="a command that makes a fresh clone ready to run Done, in run order; repeats add "
+        "up; '' for none; omitted keeps the recorded ones; recorded as the person's fact, "
+        "never run by adopt",
+    )
+    parser.add_argument(
         "--human-style",
         choices=(*facts.STYLES, ""),
         metavar="STYLE",
@@ -2311,13 +2326,14 @@ def _names(values: Sequence[str] | None) -> list[str] | None:
     )
 
 
-def _commands(values: Sequence[str]) -> list[str]:
-    """The --done commands, each one line; an empty one records none."""
+def _commands(values: Sequence[str], flag: str = "--done") -> list[str]:
+    """The commands a flag (`--done` or `--setup`) names, each one line; an empty one records
+    none."""
 
     commands = [value.strip() for value in values if value.strip()]
     for command in commands:
         if "\n" in command or "\r" in command or "<!--" in command:
-            raise AdoptError(f"a --done command is one line with no comment opener: {command!r}")
+            raise AdoptError(f"a {flag} command is one line with no comment opener: {command!r}")
     return commands
 
 
@@ -2349,6 +2365,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             args.finish_check,
             None if args.human_style is None else [args.human_style] if args.human_style else [],
             args.finish_timeout,
+            None if args.setup is None else _commands(args.setup, "--setup"),
         )
         planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
@@ -2420,10 +2437,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.finish_timeout is not None
+    chosen = chosen or args.setup is not None
     if (args.detect or args.check or args.remove) and (chosen or args.finish_check is not None):
         parser.error(
-            "--harness, --fragments, --done, --human-style, --finish-check and --finish-timeout "
-            "apply to an install"
+            "--harness, --fragments, --done, --setup, --human-style, --finish-check and "
+            "--finish-timeout apply to an install"
         )
     target = Path(args.target).resolve()
     try:
