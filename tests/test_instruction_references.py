@@ -722,3 +722,18 @@ def test_nothing_the_target_holds_is_run_and_nothing_is_written(
     assert not marker.exists()
     assert before == {p: p.read_bytes() for p in before}
     assert {p for p in root.rglob("*") if p.is_file() and ".git" not in p.parts} == set(before)
+
+
+def test_a_label_and_another_projects_path_are_no_reference(tmp_path: Path) -> None:
+    """Breaks if a slash-separated label, or a path another project owns, is read as a stale
+    reference of this one: both were false hits on real projects' instruction files."""
+
+    text = (
+        "| `proof/test` | tests and proof helpers |\n"
+        "Acme's `docs/specs/product/` decides the contract.\n"
+        "The types are owned in the Acme repository at `docs/specs/instance/contracts.md`.\n"
+        "This repository's `docs/gone.md` was removed.\n"
+        "Read `docs/missing/` first.\n"
+    )
+    root = _target(tmp_path / "t", {"AGENTS.md": text, "proof/keep.txt": "x\n", "docs/a.md": "a\n"})
+    assert _flagged(root) == ["docs/gone.md", "docs/missing/"]

@@ -1327,9 +1327,19 @@ def _owned_text(text: str) -> str | None:
     return "".join(pieces)
 
 
-def _code_spans(text: str) -> Iterator[tuple[int, str]]:
-    """(line, content) for each inline code span outside fenced code; a span wraps within its
-    paragraph, and its whitespace reads as single spaces."""
+# A span another project owns: right after a named owner's possessive ("Acme's `docs/x.md`"),
+# or in a sentence that names a repository by name ("in the Acme repository at `docs/x.md`").
+# A determiner before "repository" names this one, so it is no owner.
+_OWNED_BEFORE = re.compile(
+    r"\b[A-Z][\w.-]*(?:'s|\u2019s)\s*$"
+    r"|\b(?!(?:The|This|That|These|Our|Its|Your|A|An)\b)[A-Z][\w.-]*\s+(?:repository|repo)\b"
+)
+
+
+def _code_spans(text: str) -> Iterator[tuple[int, str, bool]]:
+    """(line, content, owned) for each inline code span outside fenced code; a span wraps within
+    its paragraph, and its whitespace reads as single spaces. `owned` is whether the sentence
+    before the span names another project as its owner (`_OWNED_BEFORE`)."""
 
     for block in _blocks(list(_lines(text))):
         starts, offset = [], 0
@@ -1340,7 +1350,9 @@ def _code_spans(text: str) -> Iterator[tuple[int, str]]:
         for match in _CODE_SPAN.finditer(joined):
             content = " ".join(match.group(2).split())
             if content:
-                yield block[bisect.bisect_right(starts, match.start()) - 1][0], content
+                sentence = re.split(r"[.!?]\s", joined[: match.start()])[-1]
+                owned = bool(_OWNED_BEFORE.search(" ".join(sentence.split())))
+                yield block[bisect.bisect_right(starts, match.start()) - 1][0], content, owned
 
 
 class _Finder:
@@ -1433,7 +1445,8 @@ def _unsettled(path: str, line: int, fact: str) -> _Reference:
 def _concrete_path(span: str) -> str | None:
     """The relative path `span` names, or None where it is no concrete relative path: it holds
     no whitespace, does not start with `@`, `-`, `~` or `/`, a scheme or a drive letter, holds no
-    `<`, `>`, `$`, `*`, `{` or `\\`, and holds a `/` or ends in a file extension. A location
+    `<`, `>`, `$`, `*`, `{` or `\\`, and ends in a file extension or in `/`, so a label such
+    as `read/write` is none. A location
     after the path (`:12`, `::name`, `#anchor`) is no part of it."""
 
     if (
@@ -1446,7 +1459,7 @@ def _concrete_path(span: str) -> str | None:
     ):
         return None
     path = re.split(r"[:#]", span, maxsplit=1)[0]
-    return path if "/" in path or _EXTENSION.search(path) else None
+    return path if path.endswith("/") or _EXTENSION.search(path) else None
 
 
 def _path_references(finder: _Finder, relative: str, line: int, span: str) -> list[_Reference]:
@@ -1616,7 +1629,9 @@ def _scan(finder: _Finder, relative: str) -> list[_Reference] | None:
         )
         return [_unsettled(relative, 0, fact)]
     found: dict[tuple[int, str], _Reference] = {}
-    for line, span in _code_spans(owned):
+    for line, span, elsewhere in _code_spans(owned):
+        if elsewhere:
+            continue
         for reference in _span_references(finder, relative, line, span):
             found.setdefault((line, reference.fact), reference)
     return list(found.values())
