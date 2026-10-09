@@ -1,0 +1,12 @@
+# The graders, the installed core skill and repository exclusion state copied into the
+# candidate-writable fixture. The project note is not protected: a run records its Done command
+# there.
+checks/probe_small.py
+checks/new_project.py
+checks/scope_walk.py
+checks/transcript_commands.py
+checks/allowed_paths.sh
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

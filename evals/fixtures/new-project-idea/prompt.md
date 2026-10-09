@@ -1,0 +1,1 @@
+I have an idea for a small web app where neighbourhood bakeries list what they baked each morning and customers reserve items before they walk over, so nobody phones to ask what is left; bakeries I do not know would use it, not just the one I know. Start the project in this folder, and report what you did.

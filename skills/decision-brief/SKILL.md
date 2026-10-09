@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision must go to the user — an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope — or when a handoff leaves decisions to them. Covers the due diligence before asking and the brief's shape.
+description: Use when a decision is the user's to make. That is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them.
 ---
 
 # Decision brief
@@ -24,9 +24,10 @@ the project, the brief names the act so the user's reply can state it, not only 
 
 ## Do the due diligence first
 
-Before you ask, check everything within reach that could change the answer: read the files and the
-history of what was tried before, run the read-only commands, look the fact up. Work out what each
-way forward leads to and what its downside is, so the evidence chooses your recommendation.
+Before you ask, check everything within reach that could change the answer: the history of the
+same decision and what was tried before, the files and settings the answer touches, the project's
+own rules, the read-only commands that settle a fact. Work out what each way forward leads to and
+what its downside is, so the evidence chooses your recommendation.
 
 ## Write each brief
 
@@ -41,6 +42,9 @@ way forward leads to and what its downside is, so the evidence chooses your reco
   that is easiest to stay in, never half done; give it as a `facts` pair labelled
   `If unanswered`;
 - a diagram only when order, dependency, flow or before/after is the point.
+
+A question in prose, a table of options, or a list without a recommendation and an undo line is not
+a brief: the person cannot act on it in one reading.
 
 Where the answer turns on values the person may judge differently from you, or on how the options
 work in ways text compares poorly, also give them a decision explorable (the `explorable` skill):

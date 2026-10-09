@@ -1,0 +1,484 @@
+---- receipt 01 ----
+GREEN LEAF GROCERS
+12 Mill Road
+2026-03-19  13:47
+
+SANDWICH             4.25
+SOUP                 3.10
+TEA BAGS             3.45
+TEA BAGS             3.45
+TOTAL               14.25
+Card ending 8688
+Ref 848534
+
+---- receipt 02 ----
+PETAL & STEM
+21 Church Row
+
+SANDWICH             4.25
+TULIPS               6.00
+TULIPS               6.00
+TOTAL               16.25
+Card ending 6766
+Ref 293583
+
+---- receipt 03 ----
+OLIVE TREE DELI
+55 Park Street
+
+NOTEBOOK A5          3.20
+MILK 2L              1.89
+SCREWS 50PK          5.10
+PAINT BRUSH          2.95
+TOOTHPASTE           2.75
+TOTAL               15.89
+Card ending 3499
+Ref 873046
+
+---- receipt 04 ----
+BLUE FERRY BOOKS
+7 Quay Walk
+
+TULIPS               6.00
+SCREWS 50PK          5.10
+PAPERBACK            9.99
+NOTEBOOK A5          3.20
+TOTAL               24.29
+Card ending 2535
+Ref 972555
+
+---- receipt 05 ----
+OLIVE TREE DELI
+55 Park Street
+
+PAINT BRUSH          2.95
+MILK 2L              1.89
+SOUP                 3.10
+PAPERBACK            9.99
+TOTAL               17.93
+Card ending 9937
+Ref 787534
+
+---- receipt 06 ----
+PETAL & STEM
+21 Church Row
+Date: 18/O4/2026  17:50
+
+SOUP                 3.10
+MILK 2L              1.89
+PAINT BRUSH          2.95
+PAINT BRUSH          2.95
+TOTAL               10.89
+Card ending 4644
+Ref 428369
+
+---- receipt 07 ----
+GREEN LEAF GROCERS
+12 Mill Road
+
+PAINT BRUSH          2.95
+BREAD                2.40
+SANDWICH             4.25
+SOUP                 3.10
+TOOTHPASTE           2.75
+TOTAL               15.45
+Card ending 7466
+Ref 255638
+
+---- receipt 08 ----
+OLIVE TREE DELI
+55 Park Street
+Sold 23.04.2026  12:16
+
+APPLES 1KG           2.60
+COFFEE BEANS         7.95
+TOTAL               10.55
+Card ending 4420
+Ref 813205
+
+---- receipt 09 ----
+OLIVE TREE DELI
+55 Park Street
+Sold Apr 3, 2026  09:13
+
+BATTERIES AA         4.50
+SCREWS 50PK          5.10
+TULIPS               6.00
+PAINT BRUSH          2.95
+MILK 2L              1.89
+TOTAL               20.44
+Card ending 9767
+Ref 656864
+
+---- receipt 10 ----
+RAIL EXPRESS KIOSK
+Platform 2
+Date: 14/O2/2026  07:43
+
+PAPERBACK            9.99
+PAINT BRUSH          2.95
+TOTAL               12.94
+Card ending 9235
+Ref 377626
+
+---- receipt 11 ----
+OLIVE TREE DELI
+55 Park Street
+Sold 05.04.2026  08:12
+
+PAINT BRUSH          2.95
+SCREWS 50PK          5.10
+TOTAL                8.05
+Card ending 3344
+Ref 796402
+
+---- receipt 12 ----
+OLIVE TREE DELI
+55 Park Street
+Sold 2026-02-10  20:49
+
+NOTEBOOK A5          3.20
+PAPERBACK            9.99
+TOTAL               13.19
+Card ending 2328
+Ref 491981
+
+---- receipt 13 ----
+CORNER PHARMACY
+3 High Street
+
+MILK 2L              1.89
+PLASTERS             2.20
+SANDWICH             4.25
+COFFEE BEANS         7.95
+TOTAL               16.29
+Card ending 1602
+Ref 388015
+
+---- receipt 14 ----
+BLUE FERRY BOOKS
+7 Quay Walk
+
+SANDWICH             4.25
+MILK 2L              1.89
+TOTAL                6.14
+Card ending 4348
+Ref 162055
+
+---- receipt 15 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+13.03.2026  12:06
+
+COFFEE BEANS         7.95
+BREAD                2.40
+PAINT BRUSH          2.95
+CHEESE               5.35
+NOTEBOOK A5          3.20
+TOTAL               21.85
+Card ending 9935
+Ref 953306
+
+---- receipt 16 ----
+GREEN LEAF GROCERS
+12 Mill Road
+DATE 2026-04-18  07:40
+
+COFFEE BEANS         7.95
+BATTERIES AA         4.50
+BATTERIES AA         4.50
+CHEESE               5.35
+PAPERBACK            9.99
+TOTAL               32.29
+Card ending 2143
+Ref 923502
+
+---- receipt 17 ----
+GREEN LEAF GROCERS
+12 Mill Road
+
+PAPERBACK            9.99
+SANDWICH             4.25
+TEA BAGS             3.45
+PLASTERS             2.20
+TOTAL               19.89
+Card ending 7083
+Ref 981162
+
+---- receipt 18 ----
+CORNER PHARMACY
+3 High Street
+
+PAINT BRUSH          2.95
+SOUP                 3.10
+APPLES 1KG           2.60
+TOTAL                8.65
+Card ending 2392
+Ref 264660
+
+---- receipt 19 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+2026-06-07  14:29
+
+PAPERBACK            9.99
+MILK 2L              1.89
+BREAD                2.40
+TOTAL               14.28
+Card ending 4403
+Ref 595825
+
+---- receipt 20 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+Printed 12 May 2026  08:10
+
+PLASTERS             2.20
+BATTERIES AA         4.50
+CHEESE               5.35
+TOTAL               12.05
+Card ending 4082
+Ref 130682
+
+---- receipt 21 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+Printed Apr 12, 2026  19:11
+
+TEA BAGS             3.45
+COFFEE BEANS         7.95
+PAINT BRUSH          2.95
+BREAD                2.40
+PLASTERS             2.20
+TOTAL               18.95
+Card ending 4428
+Ref 265241
+
+---- receipt 22 ----
+GREEN LEAF GROCERS
+12 Mill Road
+Date: 2026-05-07  13:39
+
+TULIPS               6.00
+BREAD                2.40
+MILK 2L              1.89
+TOTAL               10.29
+Card ending 7081
+Ref 813448
+
+---- receipt 23 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+
+MILK 2L              1.89
+BATTERIES AA         4.50
+PAPERBACK            9.99
+COFFEE BEANS         7.95
+TEA BAGS             3.45
+TOTAL               27.78
+Card ending 7312
+Ref 581311
+
+---- receipt 24 ----
+GREEN LEAF GROCERS
+12 Mill Road
+
+COFFEE BEANS         7.95
+PAINT BRUSH          2.95
+TOTAL               10.90
+Card ending 7340
+Ref 837045
+
+---- receipt 25 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+
+TEA BAGS             3.45
+TEA BAGS             3.45
+SCREWS 50PK          5.10
+TOTAL               12.00
+Card ending 4435
+Ref 748658
+
+---- receipt 26 ----
+CORNER PHARMACY
+3 High Street
+Printed 30 May 2026  15:32
+
+BATTERIES AA         4.50
+TEA BAGS             3.45
+SOUP                 3.10
+TOTAL               11.05
+Card ending 3334
+Ref 631762
+
+---- receipt 27 ----
+OLIVE TREE DELI
+55 Park Street
+
+BATTERIES AA         4.50
+CHEESE               5.35
+TOTAL                9.85
+Card ending 2729
+Ref 358694
+
+---- receipt 28 ----
+OLIVE TREE DELI
+55 Park Street
+
+TOOTHPASTE           2.75
+TULIPS               6.00
+NOTEBOOK A5          3.20
+TEA BAGS             3.45
+SOUP                 3.10
+TOTAL               18.50
+Card ending 3689
+Ref 203591
+
+---- receipt 29 ----
+GREEN LEAF GROCERS
+12 Mill Road
+
+TULIPS               6.00
+APPLES 1KG           2.60
+SOUP                 3.10
+TOTAL               11.70
+Card ending 3542
+Ref 767073
+
+---- receipt 30 ----
+CORNER PHARMACY
+3 High Street
+22 May 2O26  07:21
+
+COFFEE BEANS         7.95
+TEA BAGS             3.45
+COFFEE BEANS         7.95
+TOTAL               19.35
+Card ending 4125
+Ref 752705
+
+---- receipt 31 ----
+BLUE FERRY BOOKS
+7 Quay Walk
+Feb 14, 2026  20:03
+
+PAPERBACK            9.99
+BATTERIES AA         4.50
+TOOTHPASTE           2.75
+TULIPS               6.00
+TOTAL               23.24
+Card ending 8229
+Ref 881169
+
+---- receipt 32 ----
+NORTHSIDE HARDWARE
+88 Dock Lane
+2026-05-19  16:09
+
+PAPERBACK            9.99
+TULIPS               6.00
+BATTERIES AA         4.50
+TOTAL               20.49
+Card ending 9650
+Ref 140559
+
+---- receipt 33 ----
+THE DAILY CUP
+Unit 4, Arcade
+Jun 5, 2026  10:47
+
+APPLES 1KG           2.60
+TULIPS               6.00
+PAPERBACK            9.99
+CHEESE               5.35
+APPLES 1KG           2.60
+TOTAL               26.54
+Card ending 8923
+Ref 654355
+
+---- receipt 34 ----
+BLUE FERRY BOOKS
+7 Quay Walk
+
+COFFEE BEANS         7.95
+TULIPS               6.00
+BATTERIES AA         4.50
+COFFEE BEANS         7.95
+TOTAL               26.40
+Card ending 2987
+Ref 189819
+
+---- receipt 35 ----
+RAIL EXPRESS KIOSK
+Platform 2
+Printed 25/06/2026  15:26
+
+CHEESE               5.35
+SOUP                 3.10
+TOOTHPASTE           2.75
+TULIPS               6.00
+CHEESE               5.35
+TOTAL               22.55
+Card ending 8043
+Ref 402754
+
+---- receipt 36 ----
+GREEN LEAF GROCERS
+12 Mill Road
+
+TEA BAGS             3.45
+COFFEE BEANS         7.95
+SCREWS 50PK          5.10
+APPLES 1KG           2.60
+TOTAL               19.10
+Card ending 3740
+Ref 743379
+
+---- receipt 37 ----
+PETAL & STEM
+21 Church Row
+2026-03-19  12:45
+
+BATTERIES AA         4.50
+MILK 2L              1.89
+TOTAL                6.39
+Card ending 8165
+Ref 144593
+
+---- receipt 38 ----
+CORNER PHARMACY
+3 High Street
+Sold 22.02.2026  08:56
+
+PAPERBACK            9.99
+TOOTHPASTE           2.75
+PLASTERS             2.20
+PAINT BRUSH          2.95
+TEA BAGS             3.45
+TOTAL               21.34
+Card ending 5011
+Ref 195293
+
+---- receipt 39 ----
+GREEN LEAF GROCERS
+12 Mill Road
+
+CHEESE               5.35
+BREAD                2.40
+BREAD                2.40
+TOTAL               10.15
+Card ending 8327
+Ref 142092
+
+---- receipt 40 ----
+BLUE FERRY BOOKS
+7 Quay Walk
+DATE May 3, 2O26  16:46
+
+MILK 2L              1.89
+BATTERIES AA         4.50
+SCREWS 50PK          5.10
+TOTAL               11.49
+Card ending 3425
+Ref 820284

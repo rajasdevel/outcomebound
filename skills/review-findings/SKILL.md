@@ -1,6 +1,6 @@
 ---
 name: review-findings
-description: Use when acting on review findings, from a reviewer, a delegate or a person's review of a change, or when writing a review that the project or the review mechanism requires. A finding is a claim to check, and each one ends with a disposition.
+description: Use when acting on review findings, or writing a review the project requires. Findings come from a reviewer, a delegate or a person's review of a change; each is a claim to check, and each ends with a disposition.
 ---
 
 # Review findings
@@ -18,7 +18,9 @@ run, leave its disposition open during the fix. After the last relevant change, 
 check and read its result before writing `fixed` or `PASS`; report an unavailable check
 `UNVERIFIED`. Then give it one disposition:
 
-- `fixed`, and where: the commit, file or test that holds the change.
+- `fixed`, and where: the commit, file or test that holds the change. Where the finding names a
+  kind of defect, such as a missing check or a repeated pattern, look for its other instances first:
+  fix each, or name those left as `deferred`.
 - `rejected`, and why: the evidence that the claim is wrong, such as the case you ran or the line
   that answers it.
 - `deferred`, and where it is recorded: the ticket or design row that holds it.
@@ -32,10 +34,12 @@ it.
 
 ## Writing a review
 
-A review states the revision it read. Each finding names the claim and where it holds, so that a
-reader can check it without you. Where a substantive rewrite risks changing meaning or bounds,
-compare the old and new text against the requirements it carries. Call a finding you did not
-check `UNVERIFIED`. Leave the `Disposition:` line to whoever acts on the finding: a finding
+A review states the revision it read. Each finding names the claim, where it holds and the
+evidence: the command and what it printed, or the lines read, so that a reader can check it without
+you. Try a finding's counterexample before you report it; call a finding you did not check
+`UNVERIFIED`. Findings that share one cause go under that cause. Where the change rewrites text that
+carries a requirement, a bound or a verdict, compare the old and new text against what it carries.
+End the review with what it did not read or run. Leave the `Disposition:` line to whoever acts on the finding: a finding
 is open until then, and `outcomebound review check` reads it as FAIL.
 
 ## The review file

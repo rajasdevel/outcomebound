@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when delegating an accepted ticket to a subagent or another model to build. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing work into tickets.
+description: Use when handing an accepted ticket to the agent or model that will build it. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing work into tickets.
 ---
 
 # Hand a ticket to its implementer
@@ -8,15 +8,16 @@ description: Use when delegating an accepted ticket to a subagent or another mod
 You are handing an accepted ticket to the model that will build it. The ticket stays as the person
 accepted it; what you add is a package shaped by what the implementer can be trusted to decide.
 The package says what the implementer is given, never how it works; the project's own gate decides
-done at every tier.
+done at every tier. The `multi-agent` fragment, where a project selects it, covers dispatching and
+integrating the delegate; this skill covers what its package holds.
 
 **Done when** all four hold:
 
 1. The hand-off names the implementer's tier and where it came from: the person, the project's
    committed instructions by path, the placement table at the commit its first line names, or the
    spec tier taken because neither the table nor those instructions place the model.
-2. The package contains the compiled brief and what its tier's section below lists, in the
-   message or in an existing file that the message names. An instruction to attach the brief later
+2. The package contains the compiled ticket brief and what its tier's section below lists, in the
+   message or in an existing file that the message names. An instruction to attach the ticket brief later
    is not a delivered package. Every existing path, symbol and command it names is in the tree
    as it stands when the package is written, and every one the work adds is marked as added.
 3. At the spec tier, every test a step's package carries ran before the hand-off and failed for
@@ -78,7 +79,7 @@ The implementer writes the code and the tests.
 
 ## Spec tier
 
-Hand the implementer the brief compiled with `outcomebound tickets brief <id> --input <export>
+Hand the implementer the ticket brief compiled with `outcomebound tickets brief <id> --input <export>
 --detail full`, which adds the same facts as numbered steps, followed by the spec package below.
 Cut the ticket into steps. A step is one behaviour whose tests you can write before it and see
 fail, touching only the files the step names. Write one step's package at a time, after the
@@ -122,6 +123,7 @@ block. Give the implementer the commands it needs: where to work, how to run the
 not to run. Commit as the project's instructions or the goal envelope say work lands here; where
 neither says, commit locally on the current branch in the style the history shows, and put how it
 should land to the person in the handover as a decision brief.
-The implementer's handover says what changed, each check's verdict, what it decided beyond the
+The implementer's handover says what changed, each check's exact command and verdict, for each
+test it added the run that failed before the change, what it decided beyond the
 package, and the follow-ups it found. When the ticket is done, your handover says the same for the
 ticket, and names the tier and the implementer that built it.

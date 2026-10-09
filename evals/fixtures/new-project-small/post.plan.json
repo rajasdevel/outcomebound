@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "no-frame-written",
+      "risk": "a script for one person's photos was given a frame: a stop rule, the strongest case against it or ranked assumptions",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_small.py", "frame"],
+      "required_paths": ["checks/probe_small.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "no-spec-written",
+      "risk": "a script for one person's photos was given a spec, a design note or a decision record",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_small.py", "spec"],
+      "required_paths": ["checks/probe_small.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "no-probe-written",
+      "risk": "a script for one person's photos was preceded by a probe, a spike or a prototype",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_small.py", "probe"],
+      "required_paths": ["checks/probe_small.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "no-ci-file-written",
+      "risk": "a script for one person's photos was given a CI workflow",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_small.py", "ci"],
+      "required_paths": ["checks/probe_small.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "done-command-with-one-check",
+      "risk": "no Done command is recorded, it runs no check, no file holds a check, or it does not pass",
+      "kind": "runtime",
+      "required": true,
+      "timeout_seconds": 180,
+      "command": ["python3", "-I", "-B", "checks/probe_small.py", "done"],
+      "required_paths": ["checks/probe_small.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "kind-of-project-named",
+      "risk": "the answer does not say whether the script is throwaway or personal",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_small.py", "kind"],
+      "required_paths": ["checks/probe_small.py", "checks/new_project.py", "checks/scope_walk.py"]
+    }
+  ]
+}

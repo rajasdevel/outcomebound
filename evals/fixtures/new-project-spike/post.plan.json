@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "question-and-threshold-written-before-the-spike",
+      "risk": "no note holds the question and a numeric pass threshold, or no note of that kind was written before the first line of spike code",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_spike.py", "question-first"],
+      "required_paths": ["checks/probe_spike.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "spike-kept-in-the-working-area-as-throwaway",
+      "risk": "there is no spike code in the working area, or some of it is not marked as throwaway",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_spike.py", "throwaway"],
+      "required_paths": ["checks/probe_spike.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "spike-was-run",
+      "risk": "the spike code was written but no command of the run named it",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_spike.py", "ran"],
+      "required_paths": ["checks/probe_spike.py", "checks/new_project.py", "checks/transcript_commands.py"]
+    },
+    {
+      "name": "missed-threshold-reported-as-fail",
+      "risk": "the answer does not report the spike as FAIL with a measured figure, does not say that the idea ends or changes, or recommends building",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_spike.py", "fail"],
+      "required_paths": ["checks/probe_spike.py", "checks/new_project.py", "checks/scope_walk.py"]
+    },
+    {
+      "name": "spike-kept-out-of-the-product",
+      "risk": "code, a dependency manifest or a CI file was written outside the working area after a spike that missed its threshold",
+      "kind": "static",
+      "required": true,
+      "command": ["python3", "-I", "-B", "checks/probe_spike.py", "kept-out"],
+      "required_paths": ["checks/probe_spike.py", "checks/new_project.py", "checks/scope_walk.py"]
+    }
+  ]
+}

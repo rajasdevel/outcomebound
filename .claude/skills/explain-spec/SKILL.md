@@ -1,6 +1,6 @@
 ---
 name: explain-spec
-description: Use when a person must act on a spec they did not write, or says they do not follow it. Explains the spec, asks questions drawn from its decisions, and fixes or records what the answers show is missing.
+description: Use when a person must act on a spec they did not write, or says they do not follow it. That includes a request to be walked through a design. Explains the spec, asks questions drawn from its decisions, and fixes or records what the answers show is missing.
 ---
 
 # Explain a spec
@@ -28,7 +28,8 @@ within the authority the project grants.
 
 Draw the questions from the spec's rows, not from your own idea of what matters: for each
 decision with a rejected alternative, "why not" that alternative; for each assumed row, what is
-assumed and what would reverse it; for each edge, what happens. Ask for a prediction or an
+assumed and what would reverse it; for each edge, what happens. Ask first the questions whose
+answers would change what the person does. Ask for a prediction or an
 answer and wait for it; reading the explanation back is not understanding. Make the options of a
 multiple-choice question equal in length so the format gives no clue. Where trying a mechanism
 teaches more than reading about it, or the questions are many, the explanation and the questions
@@ -43,6 +44,7 @@ same change.
 
 ## With no person present
 
-A run with nobody to answer cannot show understanding, so report `UNVERIFIED` for it. Write the
-map and the questions to the working area, with the rows most likely to be misread, so a later
-session starts there, and go on with the rest of the work; this skill blocks nothing.
+A run with nobody to answer cannot show understanding, so report `UNVERIFIED` for it. Put the
+questions, the rows most likely to be misread first, in your report, and in a file only where the
+task or the project names a place for it; go on with the rest of the work, since this skill blocks
+nothing.

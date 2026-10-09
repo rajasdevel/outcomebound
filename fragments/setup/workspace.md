@@ -4,7 +4,7 @@ family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 6
+version: 7
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -43,7 +43,11 @@ in this session.
 The machine is shared: before a heavy command (a full suite, a build, an image pull) check the
 free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
 hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches); a process, folder or
-file of an owner you cannot name stays as it is, and the handoff names it.
+file of an owner you cannot name stays as it is, and the handoff names it. A cloud or background
+session starts from the pushed branch, without this machine's ignored folders, uncommitted files or
+tools: commit the install; where its verbs are needed, give the environment's setup script the
+`outcomebound` install, else use each verb's by-hand form. A worktree a harness made stays where the
+harness put it.
 **Mechanisms** — `goal-envelope` when work spans sessions.
 **Completion bar** — a handoff names what landed with each check's verdict, what is in flight,
 what is blocked and why, the next step, the choices made, what is still owed, and the user's

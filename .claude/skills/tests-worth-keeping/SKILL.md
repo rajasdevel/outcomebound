@@ -14,7 +14,9 @@ report keeps apart.
 
 Before changing anything, run the tests relevant to the change and note which already fail and
 why. Report new failures apart from those. A pre-existing failure is left as found unless fixing
-it is the task: not skipped, not marked expected, not loosened until it passes.
+it is the task: not skipped, not marked expected, not loosened until it passes. A test that fails
+on one run and passes on the next is flaky: report it as flaky with both results; a rerun that
+passes is not its verdict.
 
 ## What a kept test shows
 
@@ -30,8 +32,7 @@ it is the task: not skipped, not marked expected, not loosened until it passes.
   the code is written, such as the order of calls on collaborators, private state or the exact
   wording of a message that is not the contract, fails on a refactor that changes nothing
   observable. Rewrite it against the behaviour or drop it.
-- **The same verdict every run**, alone and beside other tests. Control time, ordering, shared
-  state, the network and randomness; a retry hides the cause.
+- **The same verdict every run**, alone and beside other tests: a retry hides the cause.
 - **For a bug, the reported case**, as the `diagnose` skill reproduces it.
 
 ## When no new test is warranted

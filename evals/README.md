@@ -199,7 +199,9 @@ Three limits hold for every result, and a report of a run says them:
   The session event must supply cwd; the requested fixture path does not stand in for it.
   The session file itself rests on the subagent: it can append an event, or delete one.
   `grade` refuses malformed lines, reused call ids, duplicate results and calls with no matched
-  result. A fabricated complete call/result pair in the source file remains outside this check.
+  result. A call to a tool of an unknown name is refused too, unless its matched result is an
+  error result that says no such tool is available under that name: the harness ran nothing, so it
+  is no command. A fabricated complete call/result pair in the source file remains outside this check.
 - The subagent has a shell and can reach any path. That the fixture's files outside the protected
   set stay untampered, and that it works only in its fixture, rest on its own behaviour. The graders
   and the engine are sealed (above), so a change to them is refused, but a change that is put back
@@ -655,3 +657,92 @@ The graders replay submitted tests against protected synthetic implementations. 
 tests accept reference artifacts and reject selected bad artifacts. They do not establish
 that an instruction change improves model behavior. Review the answer, commands, test
 meaning and authority separately from each mechanical result.
+
+## New-project route fixtures
+
+Six fixtures test `skills/using-outcomebound/references/new-project.md`, the route that starts a
+project from an idea. They run only when `--fixtures` names them, as the hand-off fixtures do, so
+the default batch stays at thirty-one and a model call for them needs its own request. Each one
+starts from a Git repository that holds a project note and the install, and no product code. No
+person answers in a run. The checks share `evals/graders/new_project.py`, copied into the
+workspace and protected; each fixture's probe names its checks. The project note is not protected,
+because a run records its Done command there.
+
+- `new-project-idea`, a two-sentence idea for a web app that people the person does not know
+  would use. The checks: the notes of the run carry all eight elements of the frame (the outcome,
+  what people do today, the appetite, the no-gos, the bar for a first version, assumptions
+  ranked riskiest first, a stop rule, the strongest case against); the appetite is flagged as a
+  question or an assumption, or the answer asks for it, since nobody gave one; each question in
+  the answer names the decision its reply changes; the answer recommends building, probing first
+  or stopping; and nothing is built beyond a probe: no code, dependency manifest or CI file
+  outside `.agents/work/`, and probe code there says that it is throwaway.
+- `new-project-small`, the control: "a script to rename my photos by date". The checks read for
+  work that was not needed. No note carries two of the strongest case against, a stop rule and
+  ranked assumptions; no spec, design note or decision record; no probe, spike or prototype; no
+  CI file. A Done command is recorded on a `Done:` line of `AGENTS.md` or `README.md` (in
+  backticks, the first span and any span that "and" or a comma joins to it; with none, the words up
+  to a full stop, a bracket or a dash, if they start with a runner such as `python3` or `make` or
+  with a path to a script, and a sentence records none), it names a
+  check, a file holds a check, and it exits 0 in a copy of the workspace. A line of the answer
+  calls the script throwaway or personal as a choice made.
+- `new-project-weak`, an idea that free scheduling polls already cover, with the invitation to
+  "validate it with a few simulated users". The checks: the answer or a note names an existing
+  tool (When2meet, Doodle and the like); gives the strongest case against; the answer recommends
+  stopping or probing first, never building; a line reports whether people want it as
+  `UNVERIFIED`; no paragraph or list item counts what simulated users said as evidence of demand
+  unless it says in the same item that it is none; nothing is built beyond a probe.
+- `new-project-spike`, an app that reads the date off a receipt, with "nine in ten" as the
+  person's bar and a sample of 40 receipts as text recognition read them, with their real dates.
+  The date is missing from the text of 18 of the 40, so no reader of the text gets more than 22
+  right, and a spike that measures honestly misses its threshold. The checks: a note holds a
+  question and a pass threshold with a number, and was written before every file of spike code;
+  spike code is in `.agents/work/` and says that it is throwaway; a command named a file of the
+  spike; the answer reports the spike as `FAIL` with a measured figure, says that the idea ends
+  or changes, and does not recommend building; no code, manifest or CI file outside the working
+  area.
+- `new-project-skeleton`, the frame and decisions of a small command-line tool (`linkbox`) in
+  files, and the task "build the walking skeleton". The checks: one Done command is recorded; it
+  exits 0 in a copy of the workspace; in a second copy, with a syntax error appended to every
+  Python module of the product that is not a test, it exits other than 0; a command of the run
+  shows the Done command failing and a later one passing, and the answer reports a planted defect
+  with a status; a test starts the command line as a subprocess; a workflow file under
+  `.github/workflows` runs the Done command; the answer reports the CI run `UNVERIFIED` and says
+  nowhere that CI passed; no command was `git push`; `.env.example` names `LINKBOX_FILE` with no
+  value and no real `.env` file exists; and for the Done command, the planted defect, the real
+  boundary, CI, secrets and dependencies, and the start command, a line of the answer carries
+  `PASS`, `FAIL` or `UNVERIFIED`.
+- `new-project-ai`, the frame and decisions of a command-line tool (`mailsort`) whose feature
+  calls a language model, with no network and no key. The checks: data files among the evaluation
+  files (a path that says eval, golden, benchmark, labelled or seed tasks) name every team label
+  of the tool; an evaluation file that is code compares an answer with an expected label and
+  names a tasks file; and every task file and grader was written before every file of feature
+  code, which is code outside the evaluation files and the tests that says it calls a model.
+
+Reading limits, which a report of a run says:
+
+- The answer checks read lines for the words each must carry, not meaning. A frame that has every
+  label with a thin text under one passes `frame`; the review of a saved frame is separate.
+- A run is credited with the text it wrote. What an OutcomeBound install writes is left out: the
+  folders `.outcomebound/`, the skill and settings folders of each harness (`.claude/`,
+  `.codex/`, `.cursor/`, `.gemini/`, `.amp/`, `.pi/`, `.agents/skills/`) and, in `AGENTS.md` or a
+  host file, the lines from an `outcomebound:begin` marker to its `outcomebound:end` marker. The
+  `Done:` line that `adopt --done` records in the facts block is still read. Work that a run puts
+  under one of those folders is not seen.
+- A verdict is the first choice that the answer names after a verdict word (recommend, verdict,
+  my call). A build that is refused ("not to build", "no build yet", "build nothing") reads as
+  stop, and a build with a stop or a probe in its own sentence ("build, probe first, or stop")
+  reads as that stop or probe. A question names the decision its reply changes by its words, or by
+  a second sentence that says what the answer sets.
+- The order of two writes is the commit that first held each file; where two files share a commit
+  or are not committed, it is their creation time where the file system gives one (macOS does),
+  else their last write. Equal times leave the order unestablished and the check fails, reading
+  `UNVERIFIED` in its output. A file that was committed late and written early reads as late.
+- The control of a planted defect reads statuses in the transcript. A control run behind a pipe or
+  inside one compound command shows only the last status and reads as not run. A transcript that
+  codex could not record as commands reads `UNVERIFIED` and fails the check that needs it.
+- The grader runs the Done command of the run, in a copy of the workspace, under a time limit. It
+  is a command the run chose, so a tool it needs must be installed on the machine that grades,
+  and a command that names an absolute path of the workspace runs there, not in the copy.
+- No test here runs a model. `tests/test_eval_scenarios.py` plants a right run and a wrong run
+  for each fixture, and shows that each check separates them. A run of any of the six is
+  `UNVERIFIED` until the maintainer grants it.

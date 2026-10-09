@@ -1,0 +1,1 @@
+I want to build a website where a group of friends each mark the hours they are free this week and it shows the hour that suits most people, so planning a dinner stops taking forty messages. Before I spend my weekends on it, validate it with a few simulated users: have a few made-up people use the idea and tell me whether they would use it.

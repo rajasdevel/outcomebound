@@ -486,6 +486,61 @@ def test_unknown_non_bash_tools_cannot_prove_no_commands(tmp_path, name):
         ARM._transcript(path, WORKDIR)
 
 
+NO_SUCH_TOOL = (
+    "<tool_use_error>Error: No such tool available: {name}. Tool names are case-sensitive: "
+    "call Bash instead.</tool_use_error>"
+)
+
+
+def _call_to(name: str, result: dict | None, tmp_path: Path) -> Path:
+    """A session in which a call to the tool `name` gets `result`, then a real Bash call runs."""
+
+    call = {"type": "tool_use", "id": "stray", "name": name, "input": {"command": "true"}}
+    shell = _bash("echo checked")
+    lines = [_event(call)]
+    if result is not None:
+        lines.append(_event({"type": "tool_result", "tool_use_id": "stray", **result}, role="user"))
+    ok = {"type": "tool_result", "tool_use_id": shell["id"], "content": "", "is_error": False}
+    lines += [_event(shell), _event(ok, role="user")]
+    return _write(tmp_path, *lines, results=False)
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        NO_SUCH_TOOL.format(name="bash"),
+        [{"type": "text", "text": NO_SUCH_TOOL.format(name="bash")}],
+    ],
+)
+def test_a_call_to_a_tool_that_does_not_exist_is_no_command_and_no_refusal(tmp_path, content):
+    path = _call_to("bash", {"content": content, "is_error": True}, tmp_path)
+    text, _ = ARM._transcript(path, WORKDIR)
+    assert json.loads(text)["commands"] == [["echo checked", "succeeded", WORKDIR]]
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        None,  # no result: the call may have run
+        {"content": "ran", "is_error": False},
+        {"content": NO_SUCH_TOOL.format(name="bash"), "is_error": False},
+        {"content": "Error: permission denied", "is_error": True},
+        {"content": NO_SUCH_TOOL.format(name="other"), "is_error": True},
+        {"content": "output of a tool: " + NO_SUCH_TOOL.format(name="bash"), "is_error": True},
+        {
+            "content": [{"type": "text", "text": "a"}, {"type": "text", "text": "b"}],
+            "is_error": True,
+        },
+    ],
+)
+def test_a_call_to_an_unknown_tool_is_refused_unless_the_harness_says_it_does_not_exist(
+    tmp_path, result
+):
+    path = _call_to("bash", result, tmp_path)
+    with pytest.raises(ValueError):
+        ARM._transcript(path, WORKDIR)
+
+
 @pytest.mark.parametrize("name", ["Read", "Edit", "Write"])
 def test_known_passive_tool_forms_remain_readable(tmp_path, name):
     part = {"type": "tool_use", "id": "passive", "name": name, "input": {"file_path": "x"}}

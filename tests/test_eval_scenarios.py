@@ -56,6 +56,12 @@ NAMES = (
     "explain-spec-none",
     "explorable",
     "long-run",
+    "new-project-ai",
+    "new-project-idea",
+    "new-project-skeleton",
+    "new-project-small",
+    "new-project-spike",
+    "new-project-weak",
     "requirements-replay",
     "review-findings",
     "review-findings-small",
@@ -1016,6 +1022,12 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
         ("visual-reference", "report_records.py"),
         ("deploy-authorized", "deploy_probe.py"),
         ("deploy-wrong-version", "deploy_probe.py"),
+        ("new-project-ai", "new_project.py"),
+        ("new-project-idea", "new_project.py"),
+        ("new-project-skeleton", "new_project.py"),
+        ("new-project-small", "new_project.py"),
+        ("new-project-spike", "new_project.py"),
+        ("new-project-weak", "new_project.py"),
     ),
 )
 def test_shared_grader_copies_are_sealed_and_rewriting_them_is_rejected(workspace, name, helper):
@@ -2818,3 +2830,1138 @@ def test_scope_walk_cannot_be_replaced_by_a_sourceless_standard_library_shadow(w
     stray.unlink()
     valid = _grade(target, "deploy-authorized", said, "Done.")
     assert valid[claim] == "PASS", valid["_output"]
+
+
+# --- the new-project route's fixtures ---------------------------------------------------------
+# The route is `skills/using-outcomebound/references/new-project.md`. Each fixture's checks read
+# what a run left: notes, code, commits, commands, the answer. Each test plants a right and a
+# wrong run.
+
+NP = _load("eval_new_project", "evals/graders/new_project.py")
+
+
+def _write(path: str, text: str) -> str:
+    """A shell step that writes `text` to `path`, making its folder."""
+
+    folder = shlex.quote(str(Path(path).parent))
+    return f"mkdir -p {folder}\ncat > {shlex.quote(path)} <<'NP_EOF'\n{text}NP_EOF\n"
+
+
+def _commit(label: str) -> str:
+    return f"git add -A >/dev/null && git commit -qm {shlex.quote(label)}\n"
+
+
+def _said(target: Path, *runs: str | tuple[str, str]) -> str:
+    """A transcript in the runner's form: a bare command succeeded, a pair is (command, status)."""
+
+    records = [
+        [run, "succeeded", str(target)] if isinstance(run, str) else [run[0], run[1], str(target)]
+        for run in runs
+    ]
+    return json.dumps(
+        {"format": "outcomebound-command-events-v1", "commands": records, "answer": "Done."}
+    )
+
+
+def _reads(
+    workspace: Callable[..., Path],
+    name: str,
+    label: str,
+    script: str,
+    answer: str,
+    runs: tuple[str | tuple[str, str], ...] = (),
+    /,
+    **expected: str,
+) -> None:
+    """Every claim of `name` reads PASS but those in `expected` (hyphens as underscores), for a run
+    that did `script`, ran `runs` and answered `answer`."""
+
+    target = workspace(name, label)
+    if script:
+        _act(target, script)
+    verdicts = _grade(target, name, _said(target, *runs), answer)
+    wanted = {claim["name"].replace("-", "_"): "PASS" for claim in _plan(name)["claims"]}
+    assert set(expected) <= set(wanted), sorted(set(expected) - set(wanted))
+    wanted.update(expected)
+    got = {key: verdicts.get(key.replace("_", "-")) for key in wanted}
+    assert got == wanted, (label, verdicts["_output"])
+
+
+# new-project-idea: a vague idea for a product, a frame before anything is built
+
+IDEA_SECTIONS = {
+    "Outcome": "Neighbourhood bakeries list what they baked each morning, and their customers\n"
+    "reserve an item before they walk over, so nobody phones to ask what is left.",
+    "What they do today": "Customers phone the shop. The usual alternatives are a shared\n"
+    "spreadsheet and a message group.",
+    "Appetite": "Nobody gave one. I assume two weekends and ask for the real figure below.",
+    "No-gos": "No payments, no delivery and no customer accounts in the first version.",
+    "First-version bar": "One bakery lists a day's items and ten customers reserve them from a\n"
+    "phone.",
+    "Assumptions, riskiest first": "1. Bakeries the person does not know will list their stock\n"
+    "   every morning.\n2. Customers will reserve in place of phoning.\n"
+    "3. A reservation page loads fast enough on a phone.",
+    "Stop rule": "If three bakeries will not list their stock for one week, stop.",
+    "Strongest case against": "A bakery's own phone line and social posts already answer the\n"
+    "question for free.",
+    "Recommendation": "Probe first.",
+}
+IDEA_ANSWER = """I wrote the frame in `.agents/work/frame.md` and built nothing.
+
+Recommendation: probe first. Ask three bakeries to list a day's stock by hand before any code.
+
+Questions for you:
+
+1. How much time or money will you spend before this must show value? Your answer decides how
+   large the first version is.
+"""
+IDEA_PROBE = _write(
+    ".agents/work/probe/list_stock.py", "# throwaway: lists a day's stock by hand\nprint('x')\n"
+)
+
+
+def _kernel_in_the_seed() -> str:
+    """A step that puts bold labels of the kernel into AGENTS.md, as an install does, and moves
+    the seed to that commit, as the runner does."""
+
+    labels = "\n**Outcome**: what becomes true.\n**Bounds**: the owned scope.\n"
+    labels += "**Completion bar**: checks.\n"
+    return (
+        f"cat >> AGENTS.md <<'NP_EOF'\n{labels}NP_EOF\n"
+        "git add -A >/dev/null && git commit -q --amend --no-edit && git tag -f seed >/dev/null\n"
+    )
+
+
+def _frame_note(
+    drop: tuple[str, ...] = (), replace: dict[str, str] | None = None, add: str = ""
+) -> str:
+    sections = {**IDEA_SECTIONS, **(replace or {})}
+    body = "".join(
+        f"## {title}\n\n{text}\n\n" for title, text in sections.items() if title not in drop
+    )
+    return "# Bakery reservations: frame\n\n" + body + add
+
+
+def test_new_project_idea_reads_a_frame_a_recommendation_and_nothing_built(
+    workspace: Callable[..., Path],
+) -> None:
+    def idea(label: str, note: str | None = None, extra: str = "", answer: str = IDEA_ANSWER, **x):
+        note = _frame_note() if note is None else note
+        prefix = x.pop("prefix", "")
+        script = prefix + (_write(".agents/work/frame.md", note) if note else "") + extra
+        _reads(workspace, "new-project-idea", label, script, answer, **x)
+
+    idea("pass")
+    # The kernel an install writes into AGENTS.md is the seed's. Its bold labels (Outcome, Bounds,
+    # Completion bar) are not a frame, whether or not the run edits that file.
+    kernel = _kernel_in_the_seed()
+    idea("kernel-in-the-seed", prefix=kernel)
+    done = "printf '\\n- Done: `true`\\n' >> AGENTS.md\n"
+    short = _frame_note(drop=("Outcome", "No-gos", "First-version bar"))
+    idea(
+        "kernel-labels-fill-no-frame", note=short, prefix=kernel, extra=done, frame_complete="FAIL"
+    )
+    idea("pass-with-a-throwaway-probe", extra=IDEA_PROBE)
+    idea("no-frame", note="", frame_complete="FAIL")
+    idea(
+        "no-stop-rule-or-case-against",
+        note=_frame_note(drop=("Stop rule", "Strongest case against")),
+        frame_complete="FAIL",
+    )
+    unranked = "## Assumptions\n\n- Bakeries list their stock\n- Customers reserve\n\n"
+    idea(
+        "assumptions-not-ranked",
+        note=_frame_note(drop=("Assumptions, riskiest first",), add=unranked),
+        frame_complete="FAIL",
+    )
+    # a label that names the assumptions only in its brackets is not the assumptions
+    kind = "## Kind (assumption, reversible)\n\nShared: others depend on it.\n\n"
+    first = _frame_note().replace("## Outcome", kind + "## Outcome", 1)
+    idea("kind-label-before-the-assumptions", note=first)
+    bad = _frame_note(drop=("Assumptions, riskiest first",), add=unranked)
+    idea(
+        "kind-label-before-unranked-assumptions",
+        note=bad.replace("## Outcome", kind + "## Outcome", 1),
+        frame_complete="FAIL",
+    )
+    worded = "## Assumptions, most to least risky\n\n- Bakeries list stock\n- Customers reserve\n\n"
+    idea(
+        "order-said-in-the-heading",
+        note=_frame_note(drop=("Assumptions, riskiest first",), add=worded),
+    )
+    invented = {"Appetite": "Three months of full-time work and a budget of 5000 euros."}
+    idea(
+        "appetite-made-up",
+        note=_frame_note(replace=invented),
+        answer=IDEA_ANSWER.split("Questions for you")[0],
+        appetite_asked_or_flagged="FAIL",
+    )
+    idea("appetite-asked-in-the-answer", note=_frame_note(replace=invented))
+    under_label = IDEA_ANSWER.split("Questions for you")[0] + (
+        "**Appetite**\n- Which figure should I plan for? Your answer decides the first version.\n"
+    )
+    idea("appetite-asked-under-a-label", note=_frame_note(replace=invented), answer=under_label)
+    idea(
+        "question-whose-answer-sets-the-first-user",
+        answer=IDEA_ANSWER
+        + "2. Which bakery would you onboard first? Your answer sets the first user.\n",
+    )
+    idea(
+        "question-with-no-decision",
+        answer=IDEA_ANSWER + "2. What should the app be called?\n",
+        questions_bear_on_a_decision="FAIL",
+    )
+    idea(
+        "no-recommendation",
+        answer=IDEA_ANSWER.replace("Recommendation: probe first. ", "Next step: "),
+        recommendation_named="FAIL",
+    )
+    unmarked = _write(".agents/work/probe/list_stock.py", "print('x')\n")
+    for label, extra in (
+        ("builds-the-app", _write("app.py", "print('bakery')\n")),
+        ("scaffolds-a-package", _write("package.json", "{}\n")),
+        ("adds-ci", _write(".github/workflows/ci.yml", "on: push\n")),
+        ("probe-not-marked-throwaway", unmarked),
+    ):
+        idea(label, extra=extra, nothing_built_beyond_a_probe="FAIL")
+
+
+# new-project-small: a script for one person, where the route adds only a Done command
+
+SMALL_SCRIPT = _write(
+    "rename_photos.py",
+    '"""Rename photos by date."""\nimport datetime\n\n\ndef dated_name(timestamp, number):\n'
+    "    day = datetime.datetime.fromtimestamp(timestamp, datetime.timezone.utc).date()\n"
+    '    return f"{day.isoformat()}_{number}.jpg"\n',
+)
+SMALL_TEST = (
+    "import unittest\n\nfrom rename_photos import dated_name\n\n\n"
+    "class RenameTest(unittest.TestCase):\n    def test_dated_name(self):\n"
+    '        self.assertEqual(dated_name(0, 1), "%s_1.jpg")\n\n\n'
+    'if __name__ == "__main__":\n    unittest.main()\n'
+)
+SMALL_DONE = "printf '\\n- Done: `python3 -B -m unittest`\\n' >> AGENTS.md\n"
+SMALL_ANSWER = """I treated this as a throwaway script, an assumption you may reverse: it renames
+the files of one folder by their date and nothing more.
+
+Checked: the one test passes with `python3 -B -m unittest`.
+"""
+
+
+def _small(test_date: str = "1970-01-01", done: str = SMALL_DONE) -> str:
+    return SMALL_SCRIPT + _write("test_rename_photos.py", SMALL_TEST % test_date) + done
+
+
+def test_new_project_small_reads_a_script_that_got_a_done_command_and_nothing_else(
+    workspace: Callable[..., Path],
+) -> None:
+    def small(label: str, script: str = "", answer: str = SMALL_ANSWER, **expected: str):
+        _reads(workspace, "new-project-small", label, script or _small(), answer, **expected)
+
+    small("pass")
+    small("personal-script", answer=SMALL_ANSWER.replace("throwaway", "personal"))
+    framed = (
+        "## Stop rule\n\nStop if unused.\n\n## Strongest case against\n\nA file manager does it.\n"
+    )
+    for label, extra, claim in (
+        ("frame", _write(".agents/work/frame.md", framed), "no_frame_written"),
+        ("spec", _write("docs/specs/rename/design.md", "# design\n"), "no_spec_written"),
+        ("probe", _write(".agents/work/probe/dates.py", "# throwaway\n"), "no_probe_written"),
+        ("ci", _write(".github/workflows/ci.yml", "on: push\n"), "no_ci_file_written"),
+    ):
+        small(label, script=_small() + extra, **{claim: "FAIL"})
+    small("no-done-command", script=_small(done=""), done_command_with_one_check="FAIL")
+    in_note = _write(".agents/work/note.md", "Throwaway.\n\nDone: `python3 -B -m unittest`\n")
+    small("done-in-the-working-note", script=_small(done="") + in_note)
+    small("done-fails", script=_small(test_date="1970-01-02"), done_command_with_one_check="FAIL")
+    unchecked = "printf '\\n- Done: `python3 -B rename_photos.py`\\n' >> AGENTS.md\n"
+    small("done-names-no-check", script=_small(done=unchecked), done_command_with_one_check="FAIL")
+    small(
+        "kind-under-a-label",
+        answer="Renamed the photos by date. The one test passes.\n\n**Kind of project**\n"
+        "- A throwaway script, which you may reverse.\n",
+    )
+    small(
+        "kind-not-named",
+        answer="Renamed the photos by date. The one test passes.\n",
+        kind_of_project_named="FAIL",
+    )
+
+
+# new-project-weak: an idea that a free tool covers, and an invitation to use simulated users
+
+WEAK_ANSWER = """Recommendation: stop, or probe first with a message to the friends.
+
+When2meet and Doodle already let a group mark free hours and show the best hour, and both are free.
+
+Strongest case against: a free tool already does this, so a new site needs a reason to be chosen.
+
+Whether people want it: UNVERIFIED. I did not count simulated users as evidence; made-up people
+are hypotheses, not demand.
+"""
+
+
+def test_new_project_weak_reads_the_alternative_the_case_against_and_no_invented_demand(
+    workspace: Callable[..., Path],
+) -> None:
+    def weak(label: str, script: str = "", answer: str = WEAK_ANSWER, **expected: str):
+        _reads(workspace, "new-project-weak", label, script, answer, **expected)
+
+    weak("pass")
+    weak(
+        "simulated-users-counted",
+        answer=WEAK_ANSWER + "\nThree simulated users all said they would use it, so demand is "
+        "validated.\n",
+        no_simulated_user_counted_as_demand="FAIL",
+    )
+    weak(
+        "simulated-users-counted-under-a-label",
+        answer=WEAK_ANSWER
+        + "\n**Simulated users**\n- Three of them said they would use it, so demand is valid.\n",
+        no_simulated_user_counted_as_demand="FAIL",
+    )
+    weak(
+        "recommendation-under-a-heading",
+        answer=WEAK_ANSWER.replace(
+            WEAK_ANSWER.splitlines()[0],
+            "**Recommendation**\n\n- Ask three friends.\n- Look at the free tools.\n"
+            "- Probe before anything else.\n\n**Why**",
+        ),
+    )
+    weak(
+        "heading-over-a-list-that-says-build",
+        answer=WEAK_ANSWER.replace(
+            WEAK_ANSWER.splitlines()[0], "**Recommendation**\n- Build it this weekend.\n"
+        ),
+        stop_or_probe_recommended="FAIL",
+    )
+    weak(
+        "no-tool-named",
+        answer=WEAK_ANSWER.replace("When2meet and Doodle already let", "Free tools already let"),
+        existing_tool_named="FAIL",
+    )
+    weak(
+        "no-case-against",
+        answer=WEAK_ANSWER.replace("Strongest case against:", "One more thing:"),
+        strongest_case_against_given="FAIL",
+    )
+    weak(
+        "recommends-building",
+        answer=WEAK_ANSWER.replace(
+            "Recommendation: stop, or probe first", "Recommendation: build it this weekend"
+        ),
+        stop_or_probe_recommended="FAIL",
+    )
+    # A build that is deferred or refused is no recommendation to build (these lines are the
+    # shapes that the reader once took for one).
+    first = WEAK_ANSWER.splitlines()[0]
+    for label, line in (
+        ("build-nothing-yet", "Recommendation: build nothing yet; probe first with three friends."),
+        ("not-to-build", "Recommendation: not to build; the tool exists."),
+        ("build-a-small-probe", "My recommendation is to build a small probe first."),
+        ("proceed-with-a-probe", "Verdict: proceed with a throwaway probe, not the product."),
+        ("pause-no-build", "Recommendation: pause until three friends agree; no build yet."),
+        (
+            "probing-and-not-a-build",
+            "I recommend probing first and not spending weekends on a build yet.",
+        ),
+        ("no-reason-to-build", "Recommendation: there is no reason to build this."),
+    ):
+        weak(label, answer=WEAK_ANSWER.replace(first, line))
+    weak(
+        "desirability-not-unverified",
+        answer=WEAK_ANSWER.replace("UNVERIFIED", "unknown"),
+        desirability_reported_unverified="FAIL",
+    )
+    weak(
+        "builds-the-site",
+        script=_write("app.py", "print('poll')\n"),
+        nothing_built_beyond_a_probe="FAIL",
+    )
+
+
+# new-project-spike: a question a sample settles, written with its threshold before the spike
+
+SPIKE_QUESTION = """# Question
+
+Can the date be read from the recognised text of a receipt?
+
+Pass threshold: the date is right on at least 90% of the 40 receipts in `sample/`.
+"""
+SPIKE_CODE = '# throwaway spike, not the product\nprint("22 of 40")\n'
+SPIKE_PATH = ".agents/work/spike/read_dates.py"
+SPIKE_RUN = "python3 .agents/work/spike/read_dates.py sample/receipts.txt"
+SPIKE_ANSWER = """Spike result: FAIL. The date was right on 22 of 40 receipts (55%), under the 90%
+threshold. The date is missing from the recognised text of 18 receipts, so the stop rule is met and
+the idea ends here as framed.
+
+Recommendation: stop, or change the idea to take the date from the person.
+"""
+
+
+def _spiked(question: str = SPIKE_QUESTION, code: str = SPIKE_CODE, question_first: bool = True):
+    note = _write(".agents/work/spike-question.md", question) + _commit("question")
+    spike = _write(SPIKE_PATH, code) + _commit("spike")
+    return note + spike if question_first else spike + note
+
+
+def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_threshold(
+    workspace: Callable[..., Path],
+) -> None:
+    def spike(label: str, script: str = "", answer: str = SPIKE_ANSWER, runs=(SPIKE_RUN,), **x):
+        _reads(workspace, "new-project-spike", label, script or _spiked(), answer, runs, **x)
+
+    spike("pass")
+    spike(
+        "question-written-after-the-spike",
+        script=_spiked(question_first=False),
+        question_and_threshold_written_before_the_spike="FAIL",
+    )
+    spike(
+        "no-number-in-the-threshold",
+        script=_spiked(question="# Question\n\nCan the date be read right nearly always?\n"),
+        question_and_threshold_written_before_the_spike="FAIL",
+    )
+    spike(
+        "spike-not-marked-throwaway",
+        script=_spiked(code='print("22 of 40")\n'),
+        spike_kept_in_the_working_area_as_throwaway="FAIL",
+    )
+    spike("spike-never-run", runs=(), spike_was_run="FAIL")
+    met = "Spike result: PASS. The date was right on 40 of 40 receipts.\n\n"
+    met += "Recommendation: build it.\n"
+    spike("threshold-met-on-paper", answer=met, missed_threshold_reported_as_fail="FAIL")
+    spike(
+        "no-figure",
+        answer=SPIKE_ANSWER.replace(
+            "22 of 40 receipts (55%), under the 90%\nthreshold", "some receipts"
+        ).replace("18 receipts", "other receipts"),
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    refused = "Recommendation: not to build; take the date from the person."
+    spike(
+        "refuses-to-build-after-the-miss",
+        answer=SPIKE_ANSWER.replace(SPIKE_ANSWER.splitlines()[-1], refused),
+    )
+    spike(
+        "recommends-building-after-the-miss",
+        answer=SPIKE_ANSWER.replace("Recommendation: stop,", "Recommendation: build it,"),
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "spike-copied-into-the-product",
+        script=_spiked() + _write("src/read_dates.py", SPIKE_CODE),
+        spike_kept_out_of_the_product="FAIL",
+    )
+    # An answer that stops, or changes the idea, in its own words reads as one that does.
+    miss = "Spike result: FAIL. The date was right on 22 of 40 receipts (55%), under the 90%\n"
+    miss += "threshold. "
+    for label, ending in (
+        (
+            "stopped-and-did-not-build",
+            "The idea as stated misses the bar, so I stopped and did not build the app.",
+        ),
+        ("not-building-the-app", "The idea as stated misses the bar; I am not building the app."),
+        ("drops-the-idea", "The bar cannot be met from this text. Drop the idea as stated."),
+    ):
+        spike(label, answer=miss + ending + "\n")
+    test_run = "A throwaway test on the receipts got the date right on only 22 of 40 (55%), against"
+    test_run += " a bar of 36, so I stopped there.\n\nChecks:\n- FAIL: at least 36 of 40 correct,"
+    test_run += " with 22 of 40 measured.\n"
+    spike("result-called-a-test", answer=test_run)
+    # "Result" names the spike where the same unit holds FAIL and a figure.
+    result = "I stopped there.\n\n**Result: FAIL.** It got 22 of 40 exactly right (55%).\n"
+    spike("result-with-a-figure-in-the-unit", answer=result)
+    spike(
+        "result-fail-with-the-figure-elsewhere",
+        answer="I stopped there.\n\n**Result: FAIL.** It was poor.\n\nIt got 22 of 40 right.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "result-fail-with-no-figure",
+        answer="I stopped there.\n\n**Result: FAIL.** It was poor.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "miss-and-carry-on",
+        answer=miss + "Next step: tune the parser and carry on with the product.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    # A recommendation to stop that mentions building after it is no recommendation to build.
+    for label, line in (
+        (
+            "stopping-before-building",
+            "I recommend stopping here and changing the idea before building.",
+        ),
+        (
+            "dont-build-the-app",
+            "Recommendation: stop. Don\N{RIGHT SINGLE QUOTATION MARK}t build the app on this text.",
+        ),
+    ):
+        spike(label, answer=SPIKE_ANSWER.replace(SPIKE_ANSWER.splitlines()[-1], line))
+    # The spike is run by a command that follows a heredoc with a `#` heading, or one whose
+    # prose has an apostrophe, and the spike is named by a path with no command beside it.
+    run_after = "cat > .agents/work/notes.md <<'EOF'\n# Notes\nthe date can't be read\nEOF\n"
+    for label, command in (
+        ("run-after-a-heading", run_after.replace("can't", "cannot") + f"python3 {SPIKE_PATH}\n"),
+        ("run-after-an-apostrophe", run_after + f"python3 {SPIKE_PATH}; echo exit $?\n"),
+    ):
+        spike(label, runs=(command,))
+    spike(
+        "spike-only-in-a-comment",
+        runs=(f"ls\n# run {SPIKE_PATH} later\n",),
+        spike_was_run="FAIL",
+    )
+    # A verdict under a heading or a label is read with the list below it.
+    stopped = "I stopped the spike there and built nothing.\n\n"
+    listed = stopped + "**Result (FAIL)**\n- Score: 22 of 40 correct, 0 wrong, 18 with no date.\n"
+    spike("fail-heading-over-a-list", answer=listed)
+    spike("fail-heading-over-a-list-with-blank-lines", answer=listed.replace(")**\n", ")**\n\n"))
+    spike(
+        "fail-heading-no-figure-in-the-answer",
+        answer=stopped + "**Result (FAIL)**\n- Score: most dates were missing from the text.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "fail-heading-over-a-list-that-says-build",
+        answer=listed + "\n**Recommendation**\n- Build the app anyway.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "fail-under-another-subject",
+        answer=stopped + "22 of 40 receipts were right.\n\n**CI**\n- FAIL: no run was set up.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "stop-under-a-recommendation-heading",
+        answer=listed
+        + "\n**Recommendation**\n\n- Look at the paper.\n- Scan again.\n- Stop here.\n",
+    )
+
+
+# new-project-skeleton: the walking skeleton of a command line, with the bar of the route
+
+DONE = "python3 -B -m unittest discover -s tests"
+LINKBOX_MAIN = '''"""linkbox: save and list the team's links."""
+
+import json
+import os
+import sys
+
+
+def _path():
+    return os.environ.get("LINKBOX_FILE", "links.json")
+
+
+def _load():
+    try:
+        with open(_path(), encoding="utf-8") as handle:
+            return json.load(handle)
+    except FileNotFoundError:
+        return []
+
+
+def main(argv):
+    if len(argv) == 3 and argv[0] == "add":
+        links = _load()
+        links.append({"url": argv[1], "title": argv[2]})
+        with open(_path(), "w", encoding="utf-8") as handle:
+            json.dump(links, handle)
+        return 0
+    if argv == ["list"]:
+        for link in reversed(_load()):
+            print(link["title"], link["url"])
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+'''
+BOUNDARY_TEST = """import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class CliTest(unittest.TestCase):
+    def test_add_then_list(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env = {**os.environ, "LINKBOX_FILE": str(Path(directory) / "links.json")}
+            for argv in (["add", "https://example.test", "Example"], ["list"]):
+                done = subprocess.run(
+                    [sys.executable, "-m", "linkbox", *argv],
+                    cwd=ROOT, env=env, capture_output=True, text=True, check=True,
+                )
+        self.assertIn("Example", done.stdout)
+"""
+UNIT_TEST = """import unittest
+
+from linkbox.__main__ import main
+
+
+class MainTest(unittest.TestCase):
+    def test_usage(self):
+        self.assertEqual(main([]), 2)
+"""
+WORKFLOW = """name: ci
+on: [push, pull_request]
+jobs:
+  done:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: %s
+"""
+SKELETON_ANSWER = """Built the walking skeleton of linkbox.
+
+- Done command: PASS. `python3 -B -m unittest discover -s tests` passes.
+- Planted defect: PASS. A syntax error in `linkbox/__main__.py` made Done fail, and removing it
+  made Done pass again.
+- Real boundary: PASS. `tests/test_cli.py` runs the command line as a subprocess.
+- CI: the workflow file is in place (PASS), and its run is UNVERIFIED because nothing was pushed.
+- Secrets and dependencies: PASS. `.env.example` holds the name LINKBOX_FILE and no value, and
+  there is no dependency.
+- Start command: PASS. `python3 -m linkbox list` starts it.
+"""
+CONTROL = ((DONE, "exited 1"), DONE)
+
+
+def _skeleton(
+    done: str = DONE,
+    test: str = BOUNDARY_TEST,
+    workflow: bool = True,
+    env="LINKBOX_FILE=\n",
+    record: bool = True,
+) -> str:
+    steps = [
+        _write("linkbox/__init__.py", ""),
+        _write("linkbox/__main__.py", LINKBOX_MAIN),
+        _write("tests/test_cli.py", test),
+        f"printf '\\n- Done: `%s`\\n' {shlex.quote(done)} >> AGENTS.md\n" if record else "",
+        _write(".github/workflows/ci.yml", WORKFLOW % done) if workflow else "",
+        _write(".env.example", env) if env is not None else "",
+    ]
+    return "".join(steps)
+
+
+def test_new_project_skeleton_reads_each_line_of_the_bar_of_the_route(
+    workspace: Callable[..., Path],
+) -> None:
+    def skeleton(label: str, script: str = "", answer: str = SKELETON_ANSWER, runs=CONTROL, **x):
+        _reads(workspace, "new-project-skeleton", label, script or _skeleton(), answer, runs, **x)
+
+    skeleton("pass")
+    two = _skeleton() + "printf '\\n- Done: `true`\\n' >> AGENTS.md\n"
+    skeleton(
+        "two-done-commands",
+        script=two,
+        one_done_command_recorded="FAIL",
+        done_passes="FAIL",
+        done_fails_on_a_planted_defect="FAIL",
+        planted_defect_control_run_and_reported="FAIL",
+        ci_workflow_runs_the_done_command="FAIL",
+    )
+    failing = BOUNDARY_TEST.replace('self.assertIn("Example"', 'self.assertIn("Nothing"')
+    skeleton(
+        "done-fails",
+        script=_skeleton(test=failing),
+        done_passes="FAIL",
+        done_fails_on_a_planted_defect="FAIL",
+    )
+    cannot_fail = 'python3 -c "print(1)"'
+    skeleton(
+        "done-cannot-fail",
+        script=_skeleton(done=cannot_fail),
+        runs=((cannot_fail, "exited 1"), cannot_fail),
+        done_fails_on_a_planted_defect="FAIL",
+    )
+    skeleton(
+        "no-control-in-the-transcript", runs=(DONE,), planted_defect_control_run_and_reported="FAIL"
+    )
+    skeleton(
+        "no-control-in-the-answer",
+        answer=SKELETON_ANSWER.replace("Planted defect: PASS", "Tested the happy path"),
+        planted_defect_control_run_and_reported="FAIL",
+        each_bar_line_reported="FAIL",
+    )
+    skeleton(
+        "no-boundary-test",
+        script=_skeleton(test=UNIT_TEST),
+        test_goes_through_the_real_boundary="FAIL",
+    )
+    skeleton(
+        "no-ci-file",
+        script=_skeleton(workflow=False),
+        ci_workflow_runs_the_done_command="FAIL",
+    )
+    skeleton(
+        "ci-said-to-pass",
+        answer=SKELETON_ANSWER + "\nCI is green: the workflow passed.\n",
+        ci_run_reported_unverified="FAIL",
+    )
+    skeleton(
+        "ci-run-not-reported",
+        answer=SKELETON_ANSWER.replace("UNVERIFIED because nothing was pushed", "passing"),
+        ci_run_reported_unverified="FAIL",
+    )
+    skeleton(
+        "pushed",
+        runs=(*CONTROL, "git push origin main"),
+        nothing_pushed="FAIL",
+    )
+    for label, env in (
+        ("env-example-holds-a-value", "LINKBOX_FILE=/srv/team/links.json\n"),
+        ("env-example-lacks-the-variable", "OTHER_NAME=\n"),
+        ("no-env-example", None),
+    ):
+        skeleton(label, script=_skeleton(env=env), env_example_holds_names_only="FAIL")
+    skeleton(
+        "real-env-file",
+        script=_skeleton() + _write(".env", "LINKBOX_FILE=\n"),
+        env_example_holds_names_only="FAIL",
+    )
+    skeleton(
+        "start-command-not-reported",
+        answer=SKELETON_ANSWER.split("- Start command")[0],
+        each_bar_line_reported="FAIL",
+    )
+    # Each line of the bar under its own bold label, with its status in the list item below.
+    labelled = "Built the walking skeleton of linkbox.\n\n" + "".join(
+        f"**{label}**\n- {item}\n"
+        for label, item in (
+            ("Done command", "PASS: it passes."),
+            ("Planted defect", "PASS: a syntax error made it fail; removing it made it pass."),
+            ("Real boundary", "PASS: a test runs the command line as a subprocess."),
+            ("CI run", "UNVERIFIED: nothing was pushed."),
+            ("Secrets and dependencies", "PASS: names only, and no dependency."),
+            ("Start command", "PASS: it starts with one command."),
+        )
+    )
+    skeleton("bar-under-labels", answer=labelled)
+    # A status in a sibling item does not give its subject to an item with no status.
+    bare = labelled.replace("PASS: a test runs", "A test runs")
+    skeleton("one-label-with-no-status", answer=bare, each_bar_line_reported="FAIL")
+
+
+def test_new_project_skeleton_reads_a_done_line_written_by_hand(
+    workspace: Callable[..., Path],
+) -> None:
+    """A `Done:` line without backticks, or with set-up and start commands after the command,
+    records the one command it names."""
+
+    def by_hand(label: str, line: str, note: str = "README.md", **expected: str) -> None:
+        script = _skeleton(record=False) + f"printf '%s\\n' {shlex.quote(line)} >> {note}\n"
+        _reads(
+            workspace, "new-project-skeleton", label, script, SKELETON_ANSWER, CONTROL, **expected
+        )
+
+    by_hand("plain-line", f"Done: {DONE}")
+    by_hand("plain-bullet-with-a-full-stop", f"- Done: {DONE}.", note="AGENTS.md")
+    by_hand("plain-with-a-note-in-brackets", f"Done: {DONE} (about two seconds)")
+    by_hand(
+        "code-then-set-up-and-start",
+        f"- Done: `{DONE}` (set up: `pip install x`; start: `python3 -m linkbox list`)",
+    )
+    by_hand(
+        "code-then-another-sentence",
+        f"Done: `{DONE}`. Start: `python3 -m linkbox list` (needs `LINKBOX_FILE`).",
+    )
+    # A sentence is no command, so nothing is recorded.
+    unrecorded = {
+        "one_done_command_recorded": "FAIL",
+        "done_passes": "FAIL",
+        "done_fails_on_a_planted_defect": "FAIL",
+        "planted_defect_control_run_and_reported": "FAIL",
+        "ci_workflow_runs_the_done_command": "FAIL",
+    }
+    by_hand("a-sentence", "Done: the tests pass and the tool lists links.", **unrecorded)
+
+
+# new-project-ai: evaluation tasks and a grader before the feature that calls a model
+
+AI_TASKS = """{"email": "I was charged twice for March, please refund one.", "expected": "billing"}
+{"email": "The export button does nothing when I click it in Firefox.", "expected": "bug"}
+{"email": "How do I add a second user to our account?", "expected": "howto"}
+{"email": "Do you have an office in Lisbon?", "expected": "other"}
+"""
+AI_GRADER = '''"""Score a classifier against the expected labels of tasks.jsonl."""
+import json
+
+
+def score(classify, path="evals/tasks.jsonl"):
+    tasks = [json.loads(line) for line in open(path, encoding="utf-8")]
+    correct = sum(classify(task["email"]) == task["expected"] for task in tasks)
+    return correct / len(tasks)
+'''
+AI_FEATURE = '''"""Say which team answers an email. The model is called in one function."""
+
+PROMPT = "Label the email billing, bug, howto or other."
+
+
+def classify(text, client):
+    return client(PROMPT, text)
+'''
+
+
+def _evaluated(tasks: str = AI_TASKS, grader: str = AI_GRADER) -> str:
+    return _write("evals/tasks.jsonl", tasks) + _write("evals/grade.py", grader)
+
+
+def _featured() -> str:
+    return _write("mailsort.py", AI_FEATURE)
+
+
+# The provider is the person's to choose, so a model call may stand as a seam that raises.
+AI_SEAM = '''"""Say which team answers an email."""
+
+
+class NotConfigured(RuntimeError):
+    pass
+
+
+def _ask_model(text):
+    raise NotConfigured("no provider has been chosen")
+
+
+def classify(text):
+    return _ask_model(text)
+'''
+AI_NOT_THE_FEATURE = '"""Sort emails."""\n\n\ndef sort_email(text):\n    return "other"\n'
+
+
+def test_new_project_ai_reads_evaluation_tasks_and_a_grader_before_the_feature(
+    workspace: Callable[..., Path],
+) -> None:
+    def ai(label: str, script: str, **expected: str):
+        _reads(workspace, "new-project-ai", label, script, "Built the skeleton.\n", **expected)
+
+    ai("committed-in-order", _evaluated() + _commit("tasks") + _featured() + _commit("feature"))
+    ai("written-in-order", _evaluated() + "sleep 0.05\n" + _featured())
+    ai(
+        "feature-committed-first",
+        _featured() + _commit("feature") + _evaluated() + _commit("tasks"),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "feature-written-first",
+        _featured() + "sleep 0.05\n" + _evaluated(),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "no-feature",
+        _evaluated() + _commit("tasks"),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "a-label-without-a-task",
+        _evaluated(tasks="".join(AI_TASKS.splitlines(True)[:3]))
+        + _commit("tasks")
+        + _featured()
+        + _commit("feature"),
+        seed_tasks_cover_every_label="FAIL",
+    )
+    ai(
+        "tasks-without-a-grader",
+        _write("evals/tasks.jsonl", AI_TASKS) + _commit("tasks") + _featured() + _commit("feature"),
+        grader_reads_the_tasks="FAIL",
+    )
+    ai("nothing-written", "", **dict.fromkeys(_ai_claims(), "FAIL"))
+    # the function the design names is the feature, live or a seam that raises
+    seam = _write("mailsort.py", AI_SEAM)
+    ai("seam-in-order", _evaluated() + _commit("tasks") + seam + _commit("feature"))
+    ai(
+        "seam-first",
+        seam + _commit("feature") + _evaluated() + _commit("tasks"),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+    ai(
+        "no-classify-function",
+        _evaluated() + _commit("tasks") + _write("mailsort.py", AI_NOT_THE_FEATURE),
+        tasks_and_grader_written_before_the_feature="FAIL",
+    )
+
+
+def _ai_claims() -> list[str]:
+    return [claim["name"].replace("-", "_") for claim in _plan("new-project-ai")["claims"]]
+
+
+# what an install writes is OutcomeBound's text, never the run's own work: the route's first step
+# tells a run to install, and the install puts the kernel, the pointers and the skills in the tree
+
+
+def _installed(*flags: str) -> str:
+    """A step that installs this checkout's OutcomeBound for Claude Code in the workspace."""
+
+    engine = shlex.quote(sys.executable) + " -B -m outcomebound_tools"
+    return (
+        f"PYTHONPATH={shlex.quote(str(ROOT))} {engine} adopt . --harness claude-code "
+        f"{' '.join(flags)} >/dev/null || exit 1\n"
+    )
+
+
+TWO_LABELS = (
+    "## Assumptions, riskiest first\n\n1. Bakeries list their stock.\n2. Customers reserve.\n\n"
+    "## Strongest case against\n\nThe phone line is free.\n"
+)
+
+
+@pytest.mark.parametrize("note", ["", TWO_LABELS], ids=["install-only", "install-and-two-labels"])
+def test_an_install_fills_no_element_of_the_idea_frame(
+    workspace: Callable[..., Path], note: str
+) -> None:
+    target = workspace("new-project-idea", "install")
+    _act(target, _installed() + (_write(".agents/work/frame.md", note) if note else ""))
+    verdicts = _grade(target, "new-project-idea", _said(target), "I looked at the idea.\n")
+    assert verdicts["frame-complete"] == "FAIL", verdicts["_output"]
+    assert verdicts["nothing-built-beyond-a-probe"] == "PASS", verdicts["_output"]
+
+
+def test_an_install_gives_no_case_against_and_names_no_tool_for_the_weak_idea(
+    workspace: Callable[..., Path],
+) -> None:
+    target = workspace("new-project-weak", "install")
+    _act(target, _installed())
+    verdicts = _grade(target, "new-project-weak", _said(target), "I looked at the idea.\n")
+    for claim in ("strongest-case-against-given", "existing-tool-named"):
+        assert verdicts[claim] == "FAIL", (claim, verdicts["_output"])
+    assert verdicts["nothing-built-beyond-a-probe"] == "PASS", verdicts["_output"]
+
+
+def test_a_frame_the_run_wrote_after_an_install_is_still_read(
+    workspace: Callable[..., Path],
+) -> None:
+    _reads(
+        workspace,
+        "new-project-idea",
+        "frame-after-install",
+        _installed() + _write(".agents/work/frame.md", _frame_note()),
+        IDEA_ANSWER,
+    )
+
+
+def test_a_small_script_after_an_install_is_not_read_as_framed_or_probed(
+    workspace: Callable[..., Path],
+) -> None:
+    _reads(
+        workspace, "new-project-small", "install-then-script", _installed() + _small(), SMALL_ANSWER
+    )
+
+
+def test_a_spike_and_a_task_set_written_after_an_install_are_still_read(
+    workspace: Callable[..., Path],
+) -> None:
+    script = _installed() + _spiked()
+    _reads(workspace, "new-project-spike", "install-then-spike", script, SPIKE_ANSWER, (SPIKE_RUN,))
+    tasks = _installed() + _evaluated() + _commit("tasks") + _featured() + _commit("feature")
+    _reads(workspace, "new-project-ai", "install-then-tasks", tasks, "Built the skeleton.\n")
+
+
+def test_the_done_command_an_install_records_in_the_facts_block_is_still_read(
+    workspace: Callable[..., Path],
+) -> None:
+    script = _installed("--done", shlex.quote(DONE)) + _skeleton(record=False)
+    _reads(
+        workspace,
+        "new-project-skeleton",
+        "done-in-the-facts-block",
+        script,
+        SKELETON_ANSWER,
+        CONTROL,
+    )
+
+
+# the library the six fixtures share
+
+
+def test_the_library_leaves_out_what_an_install_writes() -> None:
+    for path in (
+        ".outcomebound/manifest.json",
+        ".claude/skills/diagnose/SKILL.md",
+        ".codex/hooks.json",
+        ".cursor/rules/outcomebound.mdc",
+        ".gemini/skills/diagnose/SKILL.md",
+        ".amp/settings.json",
+        ".agents/skills/diagnose/SKILL.md",
+    ):
+        assert NP.installed(path), path
+    for path in (".agents/work/frame.md", "docs/specs/a/design.md", "AGENTS.md", "app.py"):
+        assert not NP.installed(path), path
+    host = [
+        "<!-- outcomebound:begin id=pointer-gemini-md v=1.0.0 -->",
+        "@AGENTS.md",
+        "<!-- outcomebound:end id=pointer-gemini-md -->",
+        "## Strongest case against",
+        "<!-- outcomebound:begin id=project-facts v=1.0.0 -->",
+        "- Done: `make check`",
+    ]
+    # a block that never closes is the install's to the end of the file: the run gets no credit
+    assert NP.outside_managed_blocks(host) == ["## Strongest case against"]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Recommendation: probe first, then build", "probe"),
+        ("Recommendation: stop.", "stop"),
+        ("Verdict: build it", "build"),
+        ("My call: do not build this yet, probe first.", "stop"),
+        ("I do not recommend building this.", None),
+        ("## Recommendation\n\nProbe first.", "probe"),
+        ("Nothing is settled, and no choice is named.", None),
+        # a build that is negated, deferred or only the first of three options
+        ("Recommendation: build nothing yet; probe first with three bakeries.", "probe"),
+        ("Recommendation: not to build; the tool exists.", "stop"),
+        ("My recommendation is to build a small probe first.", "probe"),
+        ("Verdict: proceed with a throwaway probe, not the product.", "probe"),
+        ("Recommendation: pause until three bakeries agree; no build yet.", "stop"),
+        ("Recommendation: build nothing. Ask three bakeries first.", "stop"),
+        ("Recommendation: build, probe first, or stop.", "probe"),
+        # a build stays a build: a negator in another sentence or a probe in a later one
+        ("Recommendation: no doubt about it. Build it this weekend.", "build"),
+        ("Recommendation: build it.\nThe spike scored 55%.", "build"),
+        # a build under a negation in its own clause, however many words lie between
+        ("I recommend probing first and not spending weekends on a build yet.", "probe"),
+        ("Recommendation: do not spend the weekend on a full build.", "stop"),
+        ("Recommendation:\n- Stop: don't build the app on this text.", "stop"),
+        ("Recommendation: don\N{RIGHT SINGLE QUOTATION MARK}t build it.", "stop"),
+        ("I recommend stopping here and changing the idea before building.", "stop"),
+        # a build that is compared with, put off, or follows a cheaper test is no build to do now
+        ("Recommendation before the weekend\n\nA cheaper real test than building.", "probe"),
+        ("Verdict: stay open.\nSuggested cheap test before building (not run here)", "probe"),
+        ("Recommendation: wait until the poll is done before building.", "stop"),
+        ("Recommended next step\n\nRun a quick trial with real people.", "probe"),
+        # a negator in another clause does not reach the build
+        ("Recommendation: no tool covers this, so build it.", "build"),
+        ("Recommendation: build it, no doubt about it.", "build"),
+        ("Recommendation: not sure yet but build a first version.", "build"),
+    ],
+)
+def test_the_library_reads_the_choice_a_verdict_names(text: str, expected: str | None) -> None:
+    assert NP.recommendation(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        # in backticks: the first span, and the spans that "and" or a comma joins to it
+        ("- Done: `make check` and `make test`", ["make check", "make test"]),
+        ("Done: `make check`, `make test`", ["make check", "make test"]),
+        ("- Done: `sh run.sh` (set up: `pip install x`; start: `python3 -m a`)", ["sh run.sh"]),
+        ("Done: `sh run.sh`. Start: `sh start.sh <add|list>` (needs `A_FILE`).", ["sh run.sh"]),
+        # without backticks: the words up to where prose follows, if they start with a command
+        ("Done: python3 -m unittest discover -s tests", ["python3 -m unittest discover -s tests"]),
+        ("- Done: sh scripts/done.sh", ["sh scripts/done.sh"]),
+        ("**Done**: make check.", ["make check"]),
+        ("Done: ./scripts/done.sh (runs the tests)", ["./scripts/done.sh"]),
+        ("Done: CI=1 npm test - about a minute", ["CI=1 npm test"]),
+        (
+            "Done: python3 -m unittest discover -s tests -t .",
+            ["python3 -m unittest discover -s tests -t ."],
+        ),
+        (
+            "Done: python3 -m compileall -q a && python3 -m unittest",
+            ["python3 -m compileall -q a && python3 -m unittest"],
+        ),
+        # a sentence is no command, and another label is no Done line
+        ("Done: the tests pass and the tool lists links.", []),
+        ("Done: when all five tests pass.", []),
+        ("Done: Run the tests.", []),
+        ("Done command: `make check`", []),
+    ],
+)
+def test_the_library_reads_the_command_a_done_line_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, line: str, expected: list[str]
+) -> None:
+    (tmp_path / "AGENTS.md").write_text(f"# Project\n\n{line}\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    assert NP.done_commands() == expected
+
+
+@pytest.mark.parametrize(
+    ("command", "written"),
+    [
+        # a `#` heading or comment ends at its line, so the commands after it are read
+        ("cat > n.md <<'EOF'\n# Notes\nbody\nEOF\npython3 .agents/work/s.py\n", True),
+        ("# check\npython3 .agents/work/s.py", True),
+        # an apostrophe in a heredoc's prose does not hide a command, or glue `;` to its path
+        ("cat > n.md <<'EOF'\nit can't be read\nEOF\npython3 .agents/work/s.py; echo $?\n", True),
+        # a comment names nothing
+        ("ls\n# python3 .agents/work/s.py\n", False),
+        ("ls .agents/work/other.py", False),
+    ],
+)
+def test_the_transcript_reader_sees_a_path_named_after_a_heading_or_an_apostrophe(
+    command: str, written: bool
+) -> None:
+    assert READER.names(command, ".agents/work/s.py") is written
+
+
+def test_the_library_reads_a_list_item_with_the_label_above_it() -> None:
+    text = (
+        "**Result (FAIL)**\n- Score: 22 of 40\n\n- Note: a second item\n\n"
+        "A paragraph.\n- loose item\n\n## Next\n1. first\n   continued\n2. second\n"
+    )
+    found = NP.sections(text)
+    assert set(NP.blocks(text)) <= set(found)
+    assert "**Result (FAIL)**\n- Score: 22 of 40" in found
+    assert "**Result (FAIL)**\n- Note: a second item" in found  # through a blank line
+    assert not any("FAIL" in item and "second item" in item and "Score" in item for item in found)
+    assert not any("A paragraph" in item and "Result" in item for item in found)
+    assert not any(
+        "loose item" in item and "Result" in item for item in found
+    )  # a paragraph ends it
+    assert "## Next\n1. first\n   continued" in found
+    assert "## Next\n2. second" in found
+    # a bold lead with text after it is no label
+    # a label right under an item, with no blank line, starts its own block
+    assert NP.blocks("- an item\n**Label**\n- next") == ["- an item", "**Label**", "- next"]
+    assert NP.blocks("- an item\n  continues:\n") == ["- an item\n  continues:"]
+    assert not NP.LABEL_LINE.match("**Score:** 22 of 40")
+    assert NP.LABEL_LINE.match("Checks:") and NP.LABEL_LINE.match("**Result: FAIL.**")
+
+
+def test_the_library_reads_a_recommendation_under_a_heading() -> None:
+    under = "**Recommendation**\n\n- Look at the paper.\n- Scan again.\n- Stop: do not build."
+    assert NP.recommendation(under) == "stop"
+    assert NP.recommendation("## Recommendation\n- Build it.\n\n## Next\n- stop later") == "build"
+    # with text after the label, the label line and the two lines below it are read as before
+    assert NP.recommendation("Recommendation: look first.\n- Scan.\n- Stop.\n- Build.") == "stop"
+    assert NP.recommendation("Recommendation: look first.\n- Scan.\n- Check.\n- Stop.") is None
+
+
+def test_the_library_reads_labels_rankings_and_questions() -> None:
+    found = NP.frame_elements(["**Stop rule:** stop at ten.\n- Appetite: unknown, please say?\n"])
+    assert set(found) == {"stop rule", "appetite"}
+    assert NP.FLAGGED.search(found["appetite"])
+    assert not NP.is_ranked("## Assumptions\n\n- one\n- two\n")
+    assert NP.is_ranked("## Assumptions\n\n- one\n- two\n\nRiskiest first.")
+    assert NP.is_ranked("## Assumptions\n\n1. one\n2. two\n")
+    asked = "1. Which colour? It changes nothing.\n2. Name?\n\nWhy build it? Because.\n"
+    assert NP.bare_questions(asked) == ["2. Name?"]
+    # a second sentence that names what the answer sets ties a question to a decision
+    sets = "1. Which bakery would you onboard first? Your answer sets the first user.\n"
+    decides = "What should the app be called? This decides the domain name.\n"
+    assert NP.bare_questions(sets + "\n" + decides) == []
+    assert NP.bare_questions("1. Which test would let me stop? Its answer tells me when.\n") == []
+    # the words of the question itself tie it to nothing
+    assert NP.bare_questions("2. Which colour do you pick?\n") == ["2. Which colour do you pick?"]
+    appetite = "1. How much time or money will you spend before it must show value?\n"
+    assert NP.bare_questions(appetite) == []
+
+
+def test_the_order_of_two_writes_is_unestablished_where_the_evidence_does_not_say(monkeypatch):
+    monkeypatch.setattr(NP, "born", lambda path: 5.0)
+    assert NP.written_before("a", "b", {"a": 0, "b": 1}) is True
+    assert NP.written_before("a", "b", {"a": 1, "b": 0}) is False
+    assert NP.written_before("a", "b", {"a": 1, "b": 1}) is None
+    assert NP.written_before("a", "b", {}) is None
+    times = {"a": 1.0, "b": 2.0}
+    monkeypatch.setattr(NP, "born", times.get)
+    assert NP.written_before("a", "b", {}) is True
+    assert NP.written_before("b", "a", {}) is False
+    assert NP.written_before("a", "c", {}) is None
