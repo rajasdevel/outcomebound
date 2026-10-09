@@ -70,11 +70,12 @@ JOB_EXIT_CODE = 1
 # The creation flag that starts a process with its first thread suspended (`CREATE_SUSPENDED`;
 # `subprocess` has no name for it), and what resuming that thread takes: a snapshot of the
 # system's threads (`TH32CS_SNAPTHREAD`), the right to suspend and resume one
-# (`THREAD_SUSPEND_RESUME`), and `ResumeThread`'s failure value, `(DWORD) -1`.
+# (`THREAD_SUSPEND_RESUME`), and the suspend count that `ResumeThread` returns for the one
+# thread of a process that started suspended.
 CREATE_SUSPENDED = 0x4
 TH32CS_SNAPTHREAD = 0x4
 THREAD_SUSPEND_RESUME = 0x2
-RESUME_FAILED = 0xFFFFFFFF
+SUSPENDED_ONCE = 1
 
 
 def _windows(windows: bool | None) -> bool:
@@ -504,7 +505,11 @@ class _Kernel32:
         if not thread:
             return False
         try:
-            return int(self._resume_thread(thread)) != RESUME_FAILED
+            # `ResumeThread` returns the suspend count the thread had. A thread that started
+            # suspended has 1: that it ran nothing until now. Any other count (0, a thread
+            # that was not suspended; more than 1, one that is still suspended; -1, a failure)
+            # is a failed resume.
+            return int(self._resume_thread(thread)) == SUSPENDED_ONCE
         finally:
             self._close(thread)
 
@@ -624,9 +629,15 @@ def start_tree(
 
     `options` are `Popen`'s other keywords, and hold neither `creationflags` nor
     `start_new_session`: the group is this function's. Raises what `Popen` raises, and
-    `OSError` for a failed resume. A `BaseException` that arrives
-    between the start and the resume, a Ctrl-C or a signal handler's exception, stops the command
-    before it propagates."""
+    `OSError` for a failed resume. A `BaseException` that arrives between `Popen` returning and
+    the resume, a Ctrl-C or a signal handler's exception, stops the command before it
+    propagates.
+
+    One time is open: a `BaseException` raised inside `Popen` itself, after `CreateProcess` has
+    made the process and before `Popen` returns it, leaves a suspended process that nothing
+    holds, in no job. The finish check closes it by holding its stopping signals across the start
+    (`_hold` in `finish_check.run_one`); the other callers do not, and the window is a few
+    instructions wide."""
 
     on_windows = _windows(windows)
     api: Jobs | None = None
@@ -661,17 +672,22 @@ def _end_job(process: subprocess.Popen[bytes]) -> bool:
     return False
 
 
-def stop_tree(process: subprocess.Popen[bytes], *, windows: bool | None = None) -> None:
+def stop_tree(process: subprocess.Popen[bytes], *, windows: bool | None = None) -> str:
     """Kill the process and everything it started, and never raise. A process that did not start
     with `new_group` has no group of its own on POSIX; then only it is killed. On Windows the
-    job `track_tree` made ends the whole tree at once; where no job holds the process, or it
+    job `start_tree` made ends the whole tree at once; where no job holds the process, or it
     could not end it, `taskkill /T /F` ends the tree, and the process is killed after it where
-    taskkill could not run."""
+    taskkill could not run.
+
+    Returns the path that ended the tree, so that a report can name it: `"job"` (Windows),
+    `"taskkill"` (Windows, `taskkill` ran, and the process is killed after it as well),
+    `"group"` (POSIX, `killpg`), or `"kill"` (the process alone, where nothing above worked).
+    A caller that does not need it ignores it."""
 
     if _windows(windows):
         if _end_job(process):
-            return
-        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            return "job"
+        try:
             subprocess.run(
                 [_taskkill(), "/T", "/F", "/PID", str(process.pid)],
                 stdin=subprocess.DEVNULL,
@@ -680,9 +696,15 @@ def stop_tree(process: subprocess.Popen[bytes], *, windows: bool | None = None) 
                 timeout=TASKKILL_SECONDS,
                 check=False,
             )
+            way = "taskkill"
+        except (OSError, subprocess.SubprocessError):
+            way = "kill"
     else:
-        with contextlib.suppress(OSError):
+        try:
             os.killpg(process.pid, signal.SIGKILL)
-            return
+            return "group"
+        except OSError:
+            way = "kill"
     with contextlib.suppress(OSError):
         process.kill()
+    return way

@@ -291,7 +291,7 @@ def test_windows_stops_a_tree_with_taskkill_by_path_and_kills_the_process_after_
     monkeypatch.setenv("SYSTEMROOT", str(tmp_path / "Windows"))
     process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
     try:
-        programs.stop_tree(process, windows=True)
+        assert programs.stop_tree(process, windows=True) == "kill"
         assert process.wait(timeout=30) != 0
     finally:
         process.kill()
@@ -321,7 +321,7 @@ def test_a_posix_stop_ends_the_command_and_everything_it_started(tmp_path: Path)
         time.sleep(0.01)
     grandchild = int(pid.read_text(encoding="utf-8"))
 
-    programs.stop_tree(process)
+    assert programs.stop_tree(process) == "group"
 
     assert process.wait(timeout=30) == -signal.SIGKILL
     deadline = time.monotonic() + 10
@@ -339,7 +339,8 @@ def test_a_process_with_no_group_of_its_own_is_killed_alone_and_never_raises() -
     `stop_tree` raise, or if the first is left running."""
 
     process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-    programs.stop_tree(process)
+    # With no job, Windows asks `taskkill`; elsewhere only the process is killed.
+    assert programs.stop_tree(process) == ("taskkill" if WINDOWS else "kill")
     assert process.wait(timeout=30) != 0
     programs.stop_tree(process)
 
@@ -458,7 +459,7 @@ def test_windows_ends_a_tracked_tree_through_its_job_and_asks_taskkill_nothing(
     jobs = FakeJobs()
     programs.track_tree(sleeper, windows=True, jobs=jobs)
 
-    programs.stop_tree(sleeper, windows=True)
+    assert programs.stop_tree(sleeper, windows=True) == "job"
 
     assert jobs.calls[-1] == ("terminate", JOB)
     assert asked == []
@@ -476,10 +477,31 @@ def test_windows_falls_back_to_taskkill_then_kill_where_the_job_cannot_end_the_t
     jobs = FakeJobs(**{"fail" if failure == "returns" else "raises": ["terminate"]})
     assert programs.track_tree(sleeper, windows=True, jobs=jobs) is True
 
-    programs.stop_tree(sleeper, windows=True)
+    assert programs.stop_tree(sleeper, windows=True) == "kill"
 
     assert jobs.calls[-1] == ("terminate", JOB)
     assert [argv[1:] for argv in asked] == [["/T", "/F", "/PID", str(sleeper.pid)]]
+    assert sleeper.wait(timeout=30) != 0
+
+
+def test_windows_names_taskkill_as_the_path_where_it_ran(
+    sleeper: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Breaks if a stop that `taskkill` made is reported as the job's or as a plain kill: the
+    report of a command that outlived its stop could not then say which path ended the tree."""
+
+    ran: list[list[str]] = []
+
+    def run(argv: list[str], **options: Any) -> subprocess.CompletedProcess[bytes]:
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(programs.subprocess, "run", run)
+    monkeypatch.setenv("SYSTEMROOT", str(tmp_path / "Windows"))
+
+    assert programs.stop_tree(sleeper, windows=True) == "taskkill"
+
+    assert len(ran) == 1
     assert sleeper.wait(timeout=30) != 0
 
 
@@ -511,7 +533,7 @@ def test_windows_makes_no_job_where_one_cannot_be_made_or_joined_and_stops_by_ta
     gc.collect()
     assert (("close", JOB) in jobs.calls) is made
 
-    programs.stop_tree(sleeper, windows=True)
+    assert programs.stop_tree(sleeper, windows=True) == "kill"
 
     assert ("terminate", JOB) not in jobs.calls
     assert [argv[1:] for argv in asked] == [["/T", "/F", "/PID", str(sleeper.pid)]]
@@ -558,7 +580,7 @@ def test_a_windows_stop_on_a_machine_with_no_windows_api_still_stops_by_taskkill
     monkeypatch.setattr(programs, "_system_jobs", lambda: None)
 
     assert programs.track_tree(sleeper, windows=True) is False
-    programs.stop_tree(sleeper, windows=True)
+    assert programs.stop_tree(sleeper, windows=True) == "kill"
 
     assert len(asked) == 1
     assert sleeper.wait(timeout=30) != 0
@@ -581,8 +603,10 @@ class Starts:
 
 @pytest.fixture
 def starts(monkeypatch: pytest.MonkeyPatch) -> Any:
-    """Record each `Popen` that `programs` makes. This host is not Windows, so the keyword that
-    only Windows takes (`creationflags`) is recorded and then left out of the real call."""
+    """Record each `Popen` that `programs` makes. The keyword that only Windows takes
+    (`creationflags`) is recorded and then left out of the real call on every host, a Windows one
+    too: the tests that use this run a plain, running process beside a `FakeJobs`, whose
+    `resume` has nothing to resume."""
 
     record = Starts()
     real = subprocess.Popen
@@ -941,3 +965,59 @@ def test_a_real_start_has_every_process_of_the_command_in_its_job_from_its_first
             if grandchild and running(grandchild):
                 with contextlib.suppress(OSError):
                     os.kill(grandchild, signal.SIGTERM)
+
+
+@pytest.mark.skipif(not WINDOWS, reason="a job object is a Windows object")
+def test_a_real_command_is_in_its_job_and_has_run_nothing_when_it_is_resumed(
+    tmp_path: Path,
+) -> None:
+    """Breaks, on every run and not in some of twenty, if the command is outside its job when
+    it is resumed, if it has run anything by then (its first statement writes a file, and the
+    resume waits two seconds for it), if the real resume does not find the command's thread,
+    or if the thread's suspend count was not 1 (`ResumeThread` returns it, and the real resume
+    reads any other count as a failed resume, so `start_tree` would raise)."""
+
+    found = programs._system_jobs()
+    assert found is not None, "this Windows has no job API"
+    real: programs.Jobs = found
+    flag = tmp_path / "ran"
+    seen: dict[str, bool] = {}
+
+    class Observing:
+        """The real job calls, with a look at the command just before the resume."""
+
+        job = 0
+
+        def create(self) -> int | None:
+            return real.create()
+
+        def assign(self, job: int, process: subprocess.Popen[bytes]) -> bool:
+            self.job = job
+            return real.assign(job, process)
+
+        def resume(self, process: subprocess.Popen[bytes]) -> bool:
+            seen["in_job"] = in_job(process.pid, self.job)
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline and not flag.exists():
+                time.sleep(0.05)
+            seen["ran"] = flag.exists()
+            return real.resume(process)
+
+        def terminate(self, job: int) -> bool:
+            return real.terminate(job)
+
+        def close(self, job: int) -> None:
+            real.close(job)
+
+    code = f"open({str(flag)!r}, 'w').close(); import time; time.sleep(60)"
+    process = programs.start_tree([sys.executable, "-c", code], jobs=Observing())
+    try:
+        assert seen == {"in_job": True, "ran": False}
+        deadline = time.monotonic() + 30
+        while not flag.exists():
+            assert time.monotonic() < deadline, "the command did not run after the resume"
+            time.sleep(0.05)
+    finally:
+        programs.stop_tree(process)
+        process.kill()
+        process.wait()
