@@ -175,15 +175,15 @@ Skill paths can sort in a different order from the original harness selection;
 that difference must not rewrite an otherwise unchanged manifest.
 
 
-## Planned lifecycle support
+## Lifecycle qualification
 
-The v1.5.0 adoption work qualifies persistence and the agent's upgrade workflow in addition to
+The v1.5.0 adoption work qualified persistence and the agent's upgrade workflow in addition to
 the installed bytes. The [lifecycle design](../lifecycle/design.md) owns the release requirement.
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
-| An adoption report distinguishes installed files, files that survive the project's normal checkout workflow, native discovery, and observed loading | a current manifest treated as evidence of all four | agent | assumed |
-| The adopt skill checks relevant native surfaces and explains a parent-directory ignore that prevents an intended installed file from being tracked; any persistence repair is narrow and respects project policy and existing authority | broad force-add or replacement of project ignore policy; force-adopt over a local edit | agent | assumed |
+| An adoption report distinguishes installed files, files that survive the project's normal checkout workflow, native discovery, and observed loading | a current manifest treated as evidence of all four | agent | decided |
+| The adopt skill checks relevant native surfaces and explains a parent-directory ignore that prevents an intended installed file from being tracked; any persistence repair is narrow and respects project policy and existing authority | broad force-add or replacement of project ignore policy; force-adopt over a local edit | agent | decided |
 | Every confirmed shared adoption class gets a synthetic upgrade case with preserved project instructions, dirty work and local-only data | public fixtures made from a private adopter tree | agent | decided |
 | The engine's supported interpreter and the project's validation toolchain are separate facts; a checker unable to parse the project's supported language is not a reason to weaken its floor or alter its baseline | changing project checks to fit the engine's test environment | agent | decided |
 

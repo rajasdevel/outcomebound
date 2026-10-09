@@ -165,10 +165,12 @@ path is unknown, it cannot excuse a failed command as a missing executable. An
 absolute Python launcher can still prove that its module is absent.
 
 
-## Planned lifecycle support
+## Lifecycle qualification
 
-v1.5.0 qualifies the native prompt/Stop/retry chain for each harness for which that behavior is
-claimed. This is separate from direct verb tests and the isolated model-evaluation runner.
+v1.5.0 qualified the native prompt/Stop/retry chain for each harness for which that behavior is
+claimed. This is separate from direct verb tests and the isolated model-evaluation runner. The
+[native observations in E21](../../evaluations.md#separate-native-hook-observations) hold the
+result and its limits.
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
