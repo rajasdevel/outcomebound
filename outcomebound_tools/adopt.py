@@ -54,6 +54,7 @@ from typing import Any
 from outcomebound_tools import (
     adapters,
     discovery,
+    drift,
     facts,
     fileplan,
     finish_check,
@@ -2145,10 +2146,36 @@ def check(target: Path, source: Path) -> int:
     note = measurement_note(target, manifest.own)
     if note is not None:
         print(f"{'note':<8} {note}")
+    for line in _drift_lines(target, source, manifest.own, facts.read_ci(target)):
+        print(f"{'drift':<8} {line}")
     step = next_step(target, found)
     if step is not None:
         print(step)
     return min(sum(state != "current" for state in found), CHECK_CAP)
+
+
+def _drift_lines(
+    target: Path, source: Path, own: Sequence[Record], files: Sequence[facts.CiFile]
+) -> list[str]:
+    """The lines for each signal the files show that the recorded fragment selection or the
+    `local` fragment's exposure line contradicts; none where nothing is installed here or the
+    engine's fragments cannot be read. Informational: they refuse nothing and change no exit."""
+
+    if not own:
+        return []
+    try:
+        detected = fragments.detect(target, fragments.load_all(source))
+    except fragments.FragmentError:
+        detected = []
+    selected = recorded_fragments(own)
+    local = None
+    if LOCAL in selected:
+        try:
+            data = _read(target, LOCAL_FRAGMENT)
+        except AdoptError:
+            data = None
+        local = None if data is None else data.decode("utf-8", "replace")
+    return drift.lines(target, selected, detected, files, local)
 
 
 def measurement_note(target: Path, own: Sequence[Record]) -> str | None:
@@ -2343,6 +2370,7 @@ def _signal_notes(target: Path, files: Sequence[facts.CiFile]) -> list[str]:
             signals.append(facts.Signal("environment-names", name, ", ".join(names), "Context"))
         unread.extend([(name, why)] if why else [])
     signals += facts.workflow_signals(files)
+    signals += drift.signals(target)
     notes = [
         f"signal {item.kind}: {item.where}"
         + (f"; value: {item.value}" if item.value else "")
@@ -2426,6 +2454,10 @@ def detect(target: Path, source: Path) -> int:
 
     require_work_tree(target)
     try:
+        own = load_manifest(target).own
+    except AdoptError:
+        own = []
+    try:
         ids = fragments.detect(target, fragments.load_all(source))
     except fragments.FragmentError as error:
         raise AdoptError(str(error)) from error
@@ -2456,6 +2488,7 @@ def detect(target: Path, source: Path) -> int:
     files = facts.read_ci(target)
     notes += _signal_notes(target, files)
     notes += _readiness_notes(target, done, files)
+    notes += [f"drift: {line}" for line in _drift_lines(target, source, own, files)]
     guide = (Path(source).resolve() / GUIDE).as_posix()
     notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
     print(textio.visible(" ".join(map(paths.shell_word, words))))
@@ -2506,9 +2539,11 @@ bootstrap, or an executable bin/setup, script/setup, script/bootstrap or scripts
 then every note on a line that starts with #, so that pasting the output into a shell runs the
 command only: why Done holds what it holds, the Setup candidates, the install commands of the
 lockfiles (comments only), the onboarding signals (generated paths, applied migration folders,
-publishing workflows, runtime versions, environment variable names and CI secret names, each
-with the file that shows it and the slot of the local fragment it goes to), the readiness lines
-(each with its verdict and next step), and a last line naming the onboarding guide in the
+publishing workflows, runtime versions, environment variable names, CI secret names, the count
+of recent authors and the release identity, each with the file that shows it and the slot of the
+local fragment it goes to), the readiness lines (each with its verdict and next step), one drift
+line for each signal that the install's recorded fragments or exposure line contradict (--check
+prints the same lines, and refuses nothing), and a last line naming the onboarding guide in the
 engine, an absolute path. In a folder with nothing but .git it names the new-project reference.
 It writes nothing and runs nothing from the target, and escapes every string the target gave.
 Outside a Git work tree, the refusal names the route: git init there, then adopt . --detect.
