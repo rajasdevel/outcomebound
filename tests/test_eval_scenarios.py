@@ -3769,6 +3769,11 @@ def test_the_library_leaves_out_what_an_install_writes() -> None:
         ("Recommendation:\n- Stop: don't build the app on this text.", "stop"),
         ("Recommendation: don\N{RIGHT SINGLE QUOTATION MARK}t build it.", "stop"),
         ("I recommend stopping here and changing the idea before building.", "stop"),
+        # a build that is compared with, put off, or follows a cheaper test is no build to do now
+        ("Recommendation before the weekend\n\nA cheaper real test than building.", "probe"),
+        ("Verdict: stay open.\nSuggested cheap test before building (not run here)", "probe"),
+        ("Recommendation: wait until the poll is done before building.", "stop"),
+        ("Recommended next step\n\nRun a quick trial with real people.", "probe"),
         # a negator in another clause does not reach the build
         ("Recommendation: no tool covers this, so build it.", "build"),
         ("Recommendation: build it, no doubt about it.", "build"),

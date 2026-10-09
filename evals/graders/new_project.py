@@ -438,7 +438,10 @@ _STOP = re.compile(
     r"(?i)\bstop(?:s|ped|ping)?\b|(?:do(?:es)?|did|will|would) not build"
     rf"|(?:don|didn|won){_APOSTROPHE}?t build|not build|abandon|\bkill\b"
 )
-_PROBE = re.compile(r"(?i)prob(?:e|ing)|spik(?:e|ing)|prototyp(?:e|ing)|validate first|test first")
+_PROBE = re.compile(
+    r"(?i)prob(?:e|ing)|spik(?:e|ing)|prototyp(?:e|ing)|validate first|test first"
+    r"|(?:cheap|small|quick|simple|real)\s+(?:test|trial|experiment)"
+)
 _BUILD = re.compile(r"(?i)\bbuild(ing)?\b|\bproceed\b|go ahead")
 
 
@@ -446,7 +449,9 @@ _BUILD = re.compile(r"(?i)\bbuild(ing)?\b|\bproceed\b|go ahead")
 # build", "no build yet", "not spending weekends on a build"), or where it says nothing is built
 # ("build nothing"). A clause ends at a sentence end, a comma, a semicolon, a colon, a dash, a
 # bracket, a line end, or "but" or "however".
-_NEGATOR = re.compile(rf"(?i)\b(?:no|not|nothing|never|pause|without)\b|n{_APOSTROPHE}t\b")
+_NEGATOR = re.compile(
+    rf"(?i)\b(?:no|not|nothing|never|pause|without|than|instead|before|until)\b|n{_APOSTROPHE}t\b"
+)
 _CLAUSE_END = re.compile(r"(?i)[.!?;:,()\n\N{EN DASH}\N{EM DASH}]|\s-\s|\b(?:but|however)\b")
 _NO_BUILD_AFTER = re.compile(r"(?i)^[^\w.!?;\n]*(?:nothing|none)\b")
 
