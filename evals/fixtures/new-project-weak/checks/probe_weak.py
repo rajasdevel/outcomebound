@@ -106,7 +106,7 @@ def simulated() -> list[str]:
     return [
         f"simulated users counted as demand: {' '.join(block.split())[:120]}"
         for text in _texts()
-        for block in np.blocks(text)
+        for block in np.sections(text)
         if SIMULATED.search(block) and COUNTED.search(block) and not HEDGED.search(block)
     ]
 

@@ -2982,6 +2982,10 @@ def test_new_project_idea_reads_a_frame_a_recommendation_and_nothing_built(
         appetite_asked_or_flagged="FAIL",
     )
     idea("appetite-asked-in-the-answer", note=_frame_note(replace=invented))
+    under_label = IDEA_ANSWER.split("Questions for you")[0] + (
+        "**Appetite**\n- Which figure should I plan for? Your answer decides the first version.\n"
+    )
+    idea("appetite-asked-under-a-label", note=_frame_note(replace=invented), answer=under_label)
     idea(
         "question-whose-answer-sets-the-first-user",
         answer=IDEA_ANSWER
@@ -3056,6 +3060,11 @@ def test_new_project_small_reads_a_script_that_got_a_done_command_and_nothing_el
     unchecked = "printf '\\n- Done: `python3 -B rename_photos.py`\\n' >> AGENTS.md\n"
     small("done-names-no-check", script=_small(done=unchecked), done_command_with_one_check="FAIL")
     small(
+        "kind-under-a-label",
+        answer="Renamed the photos by date. The one test passes.\n\n**Kind of project**\n"
+        "- A throwaway script, which you may reverse.\n",
+    )
+    small(
         "kind-not-named",
         answer="Renamed the photos by date. The one test passes.\n",
         kind_of_project_named="FAIL",
@@ -3087,6 +3096,27 @@ def test_new_project_weak_reads_the_alternative_the_case_against_and_no_invented
         answer=WEAK_ANSWER + "\nThree simulated users all said they would use it, so demand is "
         "validated.\n",
         no_simulated_user_counted_as_demand="FAIL",
+    )
+    weak(
+        "simulated-users-counted-under-a-label",
+        answer=WEAK_ANSWER
+        + "\n**Simulated users**\n- Three of them said they would use it, so demand is valid.\n",
+        no_simulated_user_counted_as_demand="FAIL",
+    )
+    weak(
+        "recommendation-under-a-heading",
+        answer=WEAK_ANSWER.replace(
+            WEAK_ANSWER.splitlines()[0],
+            "**Recommendation**\n\n- Ask three friends.\n- Look at the free tools.\n"
+            "- Probe before anything else.\n\n**Why**",
+        ),
+    )
+    weak(
+        "heading-over-a-list-that-says-build",
+        answer=WEAK_ANSWER.replace(
+            WEAK_ANSWER.splitlines()[0], "**Recommendation**\n- Build it this weekend.\n"
+        ),
+        stop_or_probe_recommended="FAIL",
     )
     weak(
         "no-tool-named",
@@ -3251,6 +3281,31 @@ def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_thresh
         "spike-only-in-a-comment",
         runs=(f"ls\n# run {SPIKE_PATH} later\n",),
         spike_was_run="FAIL",
+    )
+    # A verdict under a heading or a label is read with the list below it.
+    stopped = "I stopped the spike there and built nothing.\n\n"
+    listed = stopped + "**Result (FAIL)**\n- Score: 22 of 40 correct, 0 wrong, 18 with no date.\n"
+    spike("fail-heading-over-a-list", answer=listed)
+    spike("fail-heading-over-a-list-with-blank-lines", answer=listed.replace(")**\n", ")**\n\n"))
+    spike(
+        "fail-heading-no-figure-in-the-answer",
+        answer=stopped + "**Result (FAIL)**\n- Score: most dates were missing from the text.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "fail-heading-over-a-list-that-says-build",
+        answer=listed + "\n**Recommendation**\n- Build the app anyway.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "fail-under-another-subject",
+        answer=stopped + "22 of 40 receipts were right.\n\n**CI**\n- FAIL: no run was set up.\n",
+        missed_threshold_reported_as_fail="FAIL",
+    )
+    spike(
+        "stop-under-a-recommendation-heading",
+        answer=listed
+        + "\n**Recommendation**\n\n- Look at the paper.\n- Scan again.\n- Stop here.\n",
     )
 
 
@@ -3445,6 +3500,22 @@ def test_new_project_skeleton_reads_each_line_of_the_bar_of_the_route(
         answer=SKELETON_ANSWER.split("- Start command")[0],
         each_bar_line_reported="FAIL",
     )
+    # Each line of the bar under its own bold label, with its status in the list item below.
+    labelled = "Built the walking skeleton of linkbox.\n\n" + "".join(
+        f"**{label}**\n- {item}\n"
+        for label, item in (
+            ("Done command", "PASS: it passes."),
+            ("Planted defect", "PASS: a syntax error made it fail; removing it made it pass."),
+            ("Real boundary", "PASS: a test runs the command line as a subprocess."),
+            ("CI run", "UNVERIFIED: nothing was pushed."),
+            ("Secrets and dependencies", "PASS: names only, and no dependency."),
+            ("Start command", "PASS: it starts with one command."),
+        )
+    )
+    skeleton("bar-under-labels", answer=labelled)
+    # A status in a sibling item does not give its subject to an item with no status.
+    bare = labelled.replace("PASS: a test runs", "A test runs")
+    skeleton("one-label-with-no-status", answer=bare, each_bar_line_reported="FAIL")
 
 
 def test_new_project_skeleton_reads_a_done_line_written_by_hand(
@@ -3762,6 +3833,39 @@ def test_the_transcript_reader_sees_a_path_named_after_a_heading_or_an_apostroph
     command: str, written: bool
 ) -> None:
     assert READER.names(command, ".agents/work/s.py") is written
+
+
+def test_the_library_reads_a_list_item_with_the_label_above_it() -> None:
+    text = (
+        "**Result (FAIL)**\n- Score: 22 of 40\n\n- Note: a second item\n\n"
+        "A paragraph.\n- loose item\n\n## Next\n1. first\n   continued\n2. second\n"
+    )
+    found = NP.sections(text)
+    assert set(NP.blocks(text)) <= set(found)
+    assert "**Result (FAIL)**\n- Score: 22 of 40" in found
+    assert "**Result (FAIL)**\n- Note: a second item" in found  # through a blank line
+    assert not any("FAIL" in item and "second item" in item and "Score" in item for item in found)
+    assert not any("A paragraph" in item and "Result" in item for item in found)
+    assert not any(
+        "loose item" in item and "Result" in item for item in found
+    )  # a paragraph ends it
+    assert "## Next\n1. first\n   continued" in found
+    assert "## Next\n2. second" in found
+    # a bold lead with text after it is no label
+    # a label right under an item, with no blank line, starts its own block
+    assert NP.blocks("- an item\n**Label**\n- next") == ["- an item", "**Label**", "- next"]
+    assert NP.blocks("- an item\n  continues:\n") == ["- an item\n  continues:"]
+    assert not NP.LABEL_LINE.match("**Score:** 22 of 40")
+    assert NP.LABEL_LINE.match("Checks:") and NP.LABEL_LINE.match("**Result: FAIL.**")
+
+
+def test_the_library_reads_a_recommendation_under_a_heading() -> None:
+    under = "**Recommendation**\n\n- Look at the paper.\n- Scan again.\n- Stop: do not build."
+    assert NP.recommendation(under) == "stop"
+    assert NP.recommendation("## Recommendation\n- Build it.\n\n## Next\n- stop later") == "build"
+    # with text after the label, the label line and the two lines below it are read as before
+    assert NP.recommendation("Recommendation: look first.\n- Scan.\n- Stop.\n- Build.") == "stop"
+    assert NP.recommendation("Recommendation: look first.\n- Scan.\n- Check.\n- Stop.") is None
 
 
 def test_the_library_reads_labels_rankings_and_questions() -> None:

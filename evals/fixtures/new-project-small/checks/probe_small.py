@@ -98,7 +98,7 @@ def kind() -> list[str]:
     text = np.answer()
     if text is None:
         return ["no answer was supplied"]
-    if any(KIND.search(block) and CHOSEN.search(block) for block in np.blocks(text)):
+    if any(KIND.search(block) and CHOSEN.search(block) for block in np.sections(text)):
         return []
     return ["no line of the answer says the script is throwaway or personal"]
 

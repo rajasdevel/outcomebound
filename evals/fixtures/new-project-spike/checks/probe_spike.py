@@ -107,7 +107,7 @@ def fail() -> list[str]:
     if text is None:
         return ["no answer was supplied"]
     lacking = []
-    if not any("FAIL" in block and SPIKE.search(block) for block in np.blocks(text)):
+    if not any("FAIL" in block and SPIKE.search(block) for block in np.sections(text)):
         lacking.append("no line reports the spike as FAIL")
     if not FIGURE.search(text):
         lacking.append("the answer carries no measured figure")

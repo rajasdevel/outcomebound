@@ -496,7 +496,16 @@ def recommendation(text: str) -> str | None:
             r"(?i)(?:\bnot|n't|\bnever)\s+(?:\w+\s+)?$", line[: marked.start()]
         ):
             continue  # no verdict, or one that says what it does not recommend
-        tail = "\n".join([line[marked.end() :], *lines[index + 1 : index + 3]])
+        if LABEL_LINE.match(line):
+            # a heading or a label ("**Recommendation**"): what it names is what stands under it
+            below: list[str] = []
+            for later in lines[index + 1 :]:
+                if LABEL_LINE.match(later):
+                    break
+                below.append(later)
+        else:
+            below = lines[index + 1 : index + 3]
+        tail = "\n".join([line[marked.end() :], *below])
         named = _choices(tail)
         if not named:
             continue
@@ -509,6 +518,15 @@ def recommendation(text: str) -> str | None:
     return None
 
 
+LIST_START = re.compile(r"^\s*(?:[-*+]|\d+[.)]|\|)\s")
+# A line, from the first column, that only names what follows: a heading, a line of one bold lead,
+# or a line that ends in a colon. A line with text after its bold lead or its colon ("**Score:** 22
+# of 40") is no label, and nor is an indented line, which continues a list item.
+LABEL_LINE = re.compile(
+    r"^(?:#{1,6}\s+\S.*|\*\*[^*]+\*\*\s*:?|__[^_]+__\s*:?|[^\s|*_#>+\d-][^.!?|]*:)\s*$"
+)
+
+
 def blocks(text: str) -> list[str]:
     """Paragraphs and list items (a list item with the lines that continue it); a heading is not
     one."""
@@ -518,12 +536,39 @@ def blocks(text: str) -> list[str]:
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
             current = []
-        elif re.match(r"^\s*(?:[-*+]|\d+[.)]|\|)\s", line) or not current:
+        elif LIST_START.match(line) or LABEL_LINE.match(line) or not current:
             current = [line]
             found.append(current)
         else:
             current.append(line)
     return ["\n".join(block) for block in found]
+
+
+def sections(text: str) -> list[str]:
+    """The `blocks`, and each list item that stands under a heading or a label line, read with
+    that line ("**Result (FAIL)**" over "- Score: 22 of 40"). The label holds for the list that
+    follows it, through blank lines, and ends at a paragraph or another label. It joins an item
+    to its own label only, never to the other items: a status in one item does not give its
+    subject to the next."""
+
+    found = blocks(text)
+    label: str | None = None
+    current: list[str] | None = None
+    items: list[tuple[str, list[str]]] = []
+    for line in text.splitlines():
+        if not line.strip():
+            current = None
+        elif LABEL_LINE.match(line):
+            label, current = line.strip(), None
+        elif LIST_START.match(line):
+            current = [line]
+            if label is not None:
+                items.append((label, current))
+        elif current is None:
+            label, current = None, [line]  # a paragraph ends the list under the label
+        else:
+            current.append(line)
+    return found + ["\n".join([head, *item]) for head, item in items]
 
 
 TIES_TO_A_DECISION = re.compile(
@@ -565,7 +610,7 @@ def bare_questions(text: str) -> list[str]:
 
 
 def has_status_line(text: str, subject: re.Pattern[str], status: str = "UNVERIFIED") -> bool:
-    return any(status in block and subject.search(block) for block in blocks(text))
+    return any(status in block and subject.search(block) for block in sections(text))
 
 
 # --- the Done command -------------------------------------------------------------------------

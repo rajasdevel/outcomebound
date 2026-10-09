@@ -59,7 +59,7 @@ def appetite() -> list[str]:
     body = np.frame_elements(np.notes(np.changed_files())).get("appetite")
     if body is not None and np.FLAGGED.search(body):
         return []
-    if any("?" in block and ASKS_APPETITE.search(block) for block in np.blocks(text)):
+    if any("?" in block and ASKS_APPETITE.search(block) for block in np.sections(text)):
         return []
     if body is None:
         return ["the frame has no appetite and the answer does not ask for one"]
