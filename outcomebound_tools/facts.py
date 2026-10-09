@@ -131,6 +131,8 @@ class CiFile:
     done: tuple[str, ...] = ()
     # Each test command with the job that runs it, one pair for each job; "" where none is named.
     jobs: tuple[tuple[str, str], ...] = ()
+    # Each test command with its job and the step item that runs it ("" for a GitLab job).
+    places: tuple[tuple[str, str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,7 @@ class Shell:
     directory: str | None = ""
     name: str | None = None
     job: str = ""
+    step: str = ""
 
 
 def _indent(line: str) -> int:
@@ -291,7 +294,10 @@ def _github(found: Sequence[Entry]) -> list[Shell]:
             _github_default_shell(runners.get(step[:2])),
         )
         job = step[1] if len(step) > 1 and step[0] == "jobs" else ""
-        shells.append(Shell((entry.value,), directories[scopes[0]] if scopes else "", name, job))
+        item = step[3] if len(step) > 3 and step[0] == "jobs" and step[2] == "steps" else ""
+        shells.append(
+            Shell((entry.value,), directories[scopes[0]] if scopes else "", name, job, item)
+        )
     return shells
 
 
@@ -420,11 +426,13 @@ def read_ci(target: Path) -> list[CiFile]:
         unread: list[str] = []
         done: list[str] = []
         jobs: list[tuple[str, str]] = []
+        places: list[tuple[str, str, str]] = []
         for shell in _github(found) if path.startswith(WORKFLOWS) else _gitlab(found):
             settled, left = _settle(shell)
             tests += settled
             unread += left
             jobs += [(command, shell.job) for command in settled]
+            places += [(command, shell.job, shell.step) for command in settled]
             if shell.name in ("sh", "bash"):
                 done += settled
         result.append(
@@ -435,6 +443,7 @@ def read_ci(target: Path) -> list[CiFile]:
                 tuple(unread),
                 tuple(dict.fromkeys(done)),
                 tuple(dict.fromkeys(jobs)),
+                tuple(dict.fromkeys(places)),
             )
         )
     return result
@@ -927,16 +936,37 @@ def _action(uses: str) -> str:
     return "/".join(uses.split("@")[0].lower().split("/")[:2])
 
 
-def secret_jobs(files: Sequence[CiFile]) -> dict[tuple[str, str], list[str]]:
-    """The secret names a GitHub workflow names, by (file, job); a name outside every job is
-    under the job "" and applies to all of them."""
+def secrets_reaching(files: Sequence[CiFile]) -> dict[tuple[str, str, str], list[str]]:
+    """The secret names a GitHub workflow passes to a step's command, by (file, job, step item):
+    those in the workflow's `env`, the job's `env`, or the step itself. A name used elsewhere,
+    such as in another step, reaches no other step's command, so it is not counted for it."""
 
-    found: dict[tuple[str, str], list[str]] = {}
+    found: dict[tuple[str, str, str], list[str]] = {}
     for item, scalars in _workflows(files):
-        for name, jobs in _secrets(scalars).items():
-            for job in jobs:
-                found.setdefault((item.path, job), []).append(name)
-    return {key: sorted(names) for key, names in found.items()}
+        everywhere = [
+            name for entry in scalars if entry.path[:1] == ("env",) for name in _named(entry)
+        ]
+        for _command, job, step in item.places:
+            names = list(everywhere)
+            for entry in scalars:
+                head = entry.path
+                if head[:3] == ("jobs", job, "env") or (
+                    step and head[:4] == ("jobs", job, "steps", step)
+                ):
+                    names += _named(entry)
+            if names:
+                found[(item.path, job, step)] = sorted(set(names))
+    return found
+
+
+def _named(entry: Entry) -> list[str]:
+    """The secret names one scalar holds, `GITHUB_TOKEN` left out."""
+
+    return [
+        name
+        for match in SECRET.finditer(entry.value or "")
+        if (name := match.group(1) or match.group(2)) != "GITHUB_TOKEN"
+    ]
 
 
 def lockfile_candidates(target: Path) -> list[tuple[str, str]]:

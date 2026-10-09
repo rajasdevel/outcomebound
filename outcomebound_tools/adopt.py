@@ -2354,10 +2354,10 @@ def _readiness_notes(target: Path, done: Sequence[str], files: Sequence[facts.Ci
         "none; an application pins its dependencies"
         for name in facts.manifests_without_lock(target)
     ]
-    secrets = facts.secret_jobs(files)
+    secrets = facts.secrets_reaching(files)
     for item in files:
-        for command, job in item.jobs:
-            names = sorted({*secrets.get((item.path, job), []), *secrets.get((item.path, ""), [])})
+        for command, job, step in item.places:
+            names = secrets.get((item.path, job, step), [])
             if command in done and names:
                 where = f"job {job} of {item.path}" if job else item.path
                 notes.append(
@@ -2411,7 +2411,7 @@ def detect(target: Path, source: Path) -> int:
     notes += _readiness_notes(target, done, files)
     guide = (Path(source).resolve() / GUIDE).as_posix()
     notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
-    print(textio.plain(" ".join(map(paths.shell_word, words))))
+    print(textio.visible(" ".join(map(paths.shell_word, words))))
     for note in notes:
         print(f"# {note}" if isinstance(note, _Engine) else textio.plain(f"# {note}"))
     return 0

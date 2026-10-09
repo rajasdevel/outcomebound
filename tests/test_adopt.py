@@ -1496,6 +1496,30 @@ def test_detect_names_the_secrets_a_workflow_uses_with_their_jobs_and_no_value(
     )
 
 
+def test_a_secret_another_step_uses_does_not_reach_the_test_command(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a secret one step of a job uses is read as needed by the job's test command,
+    which another step runs; the job's own `env` reaches every step and still counts."""
+
+    workflow = (
+        "on: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n"
+        "      - run: pytest -q\n"
+        "      - run: ./scrub\n        env:\n          LIST: ${{ secrets.SCRUB_LIST }}\n"
+    )
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": workflow})
+    _, out, _ = run(capsys, str(target), "--detect")
+    assert "signal ci-secrets" in out and "readiness UNVERIFIED: the CI test command" not in out
+
+    job_wide = workflow.replace(
+        "    runs-on: ubuntu-latest\n",
+        "    runs-on: ubuntu-latest\n    env:\n      K: ${{ secrets.JOB_KEY }}\n",
+    )
+    shared = repo(tmp_path / "s", {".github/workflows/ci.yml": job_wide})
+    _, out, _ = run(capsys, str(shared), "--detect")
+    assert "which names secrets.JOB_KEY;" in out
+
+
 def test_detect_names_no_secret_for_a_test_job_that_names_none(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -1616,7 +1640,8 @@ def test_detect_escapes_every_string_the_target_gave(tmp_path: Path, capsys: Cap
 
 def test_detect_prints_the_engines_own_paths_as_they_are(tmp_path: Path, capsys: Capture) -> None:
     """Breaks if the guide's path, which an agent opens, is escaped though no target gave it,
-    while a target's own path in the command still is."""
+    or if letters beyond ASCII in the target's own path are escaped in the command a person
+    pastes, which would then name a folder that does not exist."""
 
     source = tmp_path / "engine-\u65e5\u672c"
     shutil.copytree(engine_copy(tmp_path), source)
@@ -1626,7 +1651,7 @@ def test_detect_prints_the_engines_own_paths_as_they_are(tmp_path: Path, capsys:
     _, out, _ = run(capsys, str(target), "--detect", source=source)
 
     first, *rest = out.splitlines()
-    assert "t-\\u65e5\\u672c" in first and "\u65e5" not in first
+    assert "t-\u65e5\u672c" in first and "\\u65e5" not in first
     reference = f"{source.resolve().as_posix()}/skills/using-outcomebound/references/new-project.md"
     assert (
         f"# nothing here but .git: a new project starts from this command; read {reference}" in rest

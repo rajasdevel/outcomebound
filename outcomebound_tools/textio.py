@@ -15,6 +15,7 @@ from __future__ import annotations
 import difflib
 import re
 import sys
+import unicodedata
 from pathlib import Path
 
 UTF8_BOM = b"\xef\xbb\xbf"
@@ -102,6 +103,19 @@ def plain(text: str) -> str:
 
     return "".join(
         c if " " <= c <= "~" else (f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}")
+        for c in text
+    )
+
+
+def visible(text: str) -> str:
+    """Text with each character escaped as `plain` escapes it where it is a control, format,
+    private-use or unassigned character, or a separator other than the ASCII space; letters
+    beyond ASCII stay as written, so a path or command a person pastes still names the file."""
+
+    return "".join(
+        c
+        if c == " " or unicodedata.category(c)[0] not in "CZ"
+        else (f"\\u{ord(c):04x}" if ord(c) <= 0xFFFF else f"\\U{ord(c):08x}")
         for c in text
     )
 
