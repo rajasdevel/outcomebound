@@ -180,16 +180,31 @@ _TICKET_KEYS: tuple[str, ...] = ("id", "title", "state", "result", "messages")
 
 @dataclass(frozen=True, slots=True)
 class Message:
-    """One thing a verb has to say, always from the table above."""
+    """One thing a verb has to say, always from the table above.
+
+    `claim` and `reaches` are set only by a code that the text report folds for
+    each claim; they are what that fold groups on, and the JSON report carries
+    neither.
+    """
 
     level: Level
     code: str
     ticket: str
     text: str
     next: str = ""
+    claim: str = ""
+    reaches: tuple[str, ...] = ()
 
 
-def message(code: str, ticket: str, text: str, next: str = "") -> Message:
+def message(
+    code: str,
+    ticket: str,
+    text: str,
+    next: str = "",
+    *,
+    claim: str = "",
+    reaches: tuple[str, ...] = (),
+) -> Message:
     """The only way to build a `Message`; a code outside `MESSAGES` is a programming error."""
 
     level = MESSAGES.get(code)
@@ -198,7 +213,9 @@ def message(code: str, ticket: str, text: str, next: str = "") -> Message:
             f"no message code {code!r} in MESSAGES; use a code it lists, or add the code "
             "there in the change that first emits it"
         )
-    return Message(level=level, code=code, ticket=ticket, text=text, next=next)
+    return Message(
+        level=level, code=code, ticket=ticket, text=text, next=next, claim=claim, reaches=reaches
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -394,41 +411,76 @@ def _message_row(item: Message, subject: str) -> str:
     return f"{item.level.name}\t{subject}\t{reason}"
 
 
-# The codes text folds into one row per run: each is a WARNING a breakdown carries
-# once per planned claim, which buries the findings that need action. `--json`
-# keeps every one on its ticket.
-_FOLDED: tuple[str, ...] = ("CLAIM_PLANNED",)
+# The codes text folds: each is a WARNING a breakdown carries once per ticket and
+# claim, which buries the findings that need action. `--json` keeps every one on
+# its ticket. The first is one row for each claim, the second one row for the run.
+_FOLDED: tuple[str, ...] = ("CLAIM_READS_OUTSIDE_BOUNDS", "CLAIM_PLANNED")
 
 
-def _folded_rows(folded: Sequence[Message]) -> list[str]:
-    """One row per folded code: how many messages, on which tickets."""
+def _reach_rows(found: Sequence[Message]) -> list[str]:
+    """One row for each claim and set of paths: the tickets whose `bounds` miss them.
 
+    A claim's paths outside a ticket's `bounds` change with the ticket, so a
+    claim whose tickets miss different paths has one row for each set.
+    """
+
+    groups: dict[tuple[str, tuple[str, ...]], list[Message]] = {}
+    for item in found:
+        groups.setdefault((item.claim, item.reaches), []).append(item)
     rows: list[str] = []
-    for code in _FOLDED:
-        found = [item for item in folded if item.code == code]
-        if not found:
-            continue
-        tickets = list(dict.fromkeys(item.ticket for item in found))
+    for (claim, reaches), items in groups.items():
+        tickets = list(dict.fromkeys(item.ticket for item in items))
         summary = Message(
-            level=found[0].level,
-            code=code,
+            level=items[0].level,
+            code=items[0].code,
             ticket="",
-            text=f"{len(found)} `done-when` claim(s) on {len(tickets)} ticket(s), "
-            f"{', '.join(tickets)}, are not defined in the claims plan yet; each ticket's "
-            "own work may add them",
-            next="`--json` lists each claim on its ticket",
+            text=f"the claim `{claim}` declares that it reads {', '.join(reaches)}, which the "
+            f"`bounds` of {len(tickets)} ticket(s), {', '.join(tickets)}, do not cover, so a "
+            "finding there is one that the work of these tickets may not repair",
+            next="widen the `bounds` of these tickets to cover what the claim reads, or put a "
+            "ticket that repairs it first in `blocked-by`; `--json` lists each ticket",
         )
         rows.append(_message_row(summary, "-"))
     return rows
+
+
+def _planned_rows(found: Sequence[Message]) -> list[str]:
+    """One row for the run: how many planned claims, on which tickets."""
+
+    if not found:
+        return []
+    tickets = list(dict.fromkeys(item.ticket for item in found))
+    summary = Message(
+        level=found[0].level,
+        code=found[0].code,
+        ticket="",
+        text=f"{len(found)} `done-when` claim(s) on {len(tickets)} ticket(s), "
+        f"{', '.join(tickets)}, are not defined in the claims plan yet; each ticket's "
+        "own work may add them",
+        next="`--json` lists each claim on its ticket",
+    )
+    return [_message_row(summary, "-")]
+
+
+def _folded_rows(folded: Sequence[Message]) -> list[str]:
+    """The folded rows, the claims that reach past `bounds` first since they need action."""
+
+    def of(code: str) -> list[Message]:
+        return [item for item in folded if item.code == code]
+
+    return [
+        *_reach_rows(of("CLAIM_READS_OUTSIDE_BOUNDS")),
+        *_planned_rows(of("CLAIM_PLANNED")),
+    ]
 
 
 def render_text(report: Report) -> str:
     """The report as text: the run's own lines, then one row per subject.
 
     A row is the verdict, the subject and the reason, tab-separated, which is
-    what a person greps. The codes in `_FOLDED` are one summary row after the
-    run's own messages instead of one row each; the verdicts do not change, since
-    each is a WARNING.
+    what a person greps. The codes in `_FOLDED` are summary rows after the run's
+    own messages instead of one row each, for each claim or for the run; the
+    verdicts do not change, since each is a WARNING.
     """
 
     header = [
