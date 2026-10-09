@@ -1,0 +1,13 @@
+---
+id: explore
+family: setup
+applies: work whose expected life starts with learning
+condition: when starting or scoping exploratory work, deciding what to keep or throw away, recording what was learned, or when the appetite ends or the signal sought appears
+detect: []
+version: 1
+---
+**Context** — this applies to the streams the project names for it in its `local` fragment's `Streams —` lines; elsewhere it adds nothing. The aim is to learn something, then discard the work or keep what the signal justifies. Four things are written down before the work grows, in the person's own words: the appetite (how much of their time, attention or calendar they will give to learning this); the stop rule (the result that ends or changes the work); the throwaway boundary (which parts are sacrificial and which are kept); and the signal sought (what would show that the idea holds). Where one is missing, it is `UNVERIFIED` and one question; the work that does not depend on it goes on.
+**Bounds** — the appetite is the person's: it does not stretch because the work is unfinished, and the scope varies before the appetite does. A sacrificial part carries only the engineering its short life needs, and a part named as kept is built for the life of what is kept. Moving a part across the boundary is a change to a recorded fact, written in the learning record with its reason. Keep a learning record: what was tried, what it showed and the signal sought, each entry dated and each result stated as observed, not as hoped. Keep the walking skeleton: the thinnest path through the whole thing that runs end to end and stays after the throwaway parts are gone.
+**Mechanisms** — `runtime-check` where a result in the learning record claims something about a running path; `spec` when a decision about a kept part is one later work relies on.
+**Completion bar** — the learning record holds, for each thing tried, what it showed and which signal it bears on; the walking skeleton runs end to end and you read its result. When the appetite ends or the signal appears, write a stop-or-pivot brief (the `decision-brief` skill): the learning record's evidence, the options of stopping, pivoting or continuing with what each keeps and drops, judged against the project's `Better means —` line in its `local` fragment. The decision is the person's.
+**Distinguish** — tried ≠ showed ≠ learned; a sacrificial part ≠ a kept part; the walking skeleton ≠ the product; the appetite ended ≠ the signal appeared ≠ the person decided to stop or continue.

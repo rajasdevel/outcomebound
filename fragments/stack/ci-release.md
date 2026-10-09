@@ -5,12 +5,14 @@ applies: repositories that version, tag, and publish releases
 condition: before a release, a tag push or a publish
 edges: ["pushing a tag", "publishing a package", "moving a shared registry tag", "editing a published release"]
 detect: ["VERSION", ".github/workflows/release*.yml", ".github/workflows/release*.yaml", ".github/workflows/publish*.yml", ".github/workflows/publish*.yaml"]
-version: 6
+version: 7
 ---
 **Context** — a workflow file is a claim; the run log and the published artifact are the
 evidence. Version, changelog entry, and tag must agree with what was actually built.
 **Bounds** — pushing a tag, publishing a package, moving a shared registry tag, and editing a
 published release are irreversible edges; released changelog sections are preserved history.
+Consumers or adopters of a release move within a window the project states, or the hold is recorded
+with its owner; where the project states neither, report the gap and do not set a window yourself.
 **Mechanisms** — `policy-gate` before any publish or tag push; `spec` when the release contract
 or compatibility window changes; `broad-suite` before integrating a release candidate;
 `runtime-check` after a publish, when only the live registry settles whether it served.
