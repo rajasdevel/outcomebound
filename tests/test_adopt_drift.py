@@ -325,10 +325,7 @@ def test_two_bots_and_one_person_count_as_one_author(tmp_path: Path, capsys: Cap
     installed(target, capsys)
     _, out, _ = run(capsys, str(target), "--detect")
     assert drift_lines(out) == []
-    assert any(
-        line.startswith("# signal recent-authors") and "; value: 1;" in line
-        for line in out.splitlines()
-    )
+    assert "signal recent-authors" not in out
 
 
 def test_the_window_is_the_last_hundred_commits_without_merges(tmp_path: Path) -> None:
@@ -342,60 +339,86 @@ def test_the_window_is_the_last_hundred_commits_without_merges(tmp_path: Path) -
     assert drift.recent_authors(target) == 1
 
 
-def test_a_repository_without_a_commit_has_no_authors_signal(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """Breaks if an empty history prints a count of zero authors."""
+def test_the_authors_signal_needs_two_authors(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if an empty history, or a single author, prints the signal, or two authors do
+    not."""
 
     target = repo(tmp_path / "t")
+    assert "signal recent-authors" not in run(capsys, str(target), "--detect")[1]
+    commit(target, ONE)
+    commit(target, ONE, "Same Person")
+    assert "signal recent-authors" not in run(capsys, str(target), "--detect")[1]
 
-    _, out, _ = run(capsys, str(target), "--detect")
+    commit(target, TWO)
 
-    assert "signal recent-authors" not in out
+    out = run(capsys, str(target), "--detect")[1]
+    assert any(
+        line.startswith("# signal recent-authors") and "; value: 2;" in line
+        for line in out.splitlines()
+    )
 
 
 @pytest.mark.parametrize(
-    ("files", "evidence"),
-    [
-        pytest.param({"VERSION": "1.2.3\n"}, "VERSION", id="version-file"),
-        pytest.param(
-            {"pyproject.toml": '[project]\nname = "x"\nversion = "0.3.0"\n'},
-            "pyproject.toml",
-            id="pyproject",
-        ),
-        pytest.param(
-            {"package.json": '{"name": "x", "version": "2.0.0"}'}, "package.json", id="package"
-        ),
-        pytest.param(
-            {"Cargo.toml": '[package]\nname = "x"\nversion = "0.1.0"\n'}, "Cargo.toml", id="cargo"
-        ),
-    ],
+    "version", ["1.2.3\n", "v1.2\n", "2.0.0-rc.1\n"], ids=["plain", "short-v", "pre-release"]
 )
 def test_detect_reports_a_version_file_as_release_identity(
-    tmp_path: Path, capsys: Capture, files: dict[str, str], evidence: str
+    tmp_path: Path, capsys: Capture, version: str
 ) -> None:
-    """Breaks if a version file is not read, or a file without a version is."""
+    """Breaks if a `VERSION` file that holds a version is not read."""
 
-    target = repo(tmp_path / "t", files)
+    target = repo(tmp_path / "t", {"VERSION": version})
 
     _, out, _ = run(capsys, str(target), "--detect")
 
-    assert f"# signal release-identity: {evidence}; local slot: Distinguish" in out.splitlines()
+    assert "# signal release-identity: VERSION; local slot: Distinguish" in out.splitlines()
 
 
-def test_detect_reports_tags_and_not_an_unversioned_project(
-    tmp_path: Path, capsys: Capture
+@pytest.mark.parametrize(
+    "files",
+    [
+        pytest.param({"VERSION": "development build\n"}, id="version-file-without-version"),
+        pytest.param({"VERSION": "\n"}, id="empty-version-file"),
+        pytest.param({"pyproject.toml": '[project]\nversion = "0.3.0"\n'}, id="pyproject"),
+        pytest.param({"package.json": '{"name": "x", "version": "2.0.0"}'}, id="package"),
+        pytest.param({"Cargo.toml": '[package]\nversion = "0.1.0"\n'}, id="cargo"),
+    ],
+)
+def test_detect_reports_no_release_identity_without_a_version_file_or_tag(
+    tmp_path: Path, capsys: Capture, files: dict[str, str]
 ) -> None:
-    """Breaks if a tag is not release identity, or a manifest with no version is."""
+    """Breaks if a version in a package manifest, which nearly every package carries, or a
+    `VERSION` file that holds no version, is release identity."""
 
-    bare = repo(tmp_path / "bare", {"pyproject.toml": '[project]\nname = "x"\n'})
-    tagged = repo(tmp_path / "tagged")
-    commit(tagged, ONE)
-    subprocess.run([GIT, "-C", str(tagged), "tag", "v1.0.0"], check=True)
+    target = repo(tmp_path / "t", files)
 
-    assert "release-identity" not in run(capsys, str(bare), "--detect")[1]
-    out = run(capsys, str(tagged), "--detect")[1]
-    assert "# signal release-identity: git tags; local slot: Distinguish" in out.splitlines()
+    assert "release-identity" not in run(capsys, str(target), "--detect")[1]
+
+
+@pytest.mark.parametrize(
+    ("tag", "shown"),
+    [
+        pytest.param("v1.0.0", True, id="v-three"),
+        pytest.param("1.2.3", True, id="bare"),
+        pytest.param("v1.2", True, id="v-two"),
+        pytest.param("v2.0.0-rc.1", True, id="pre-release"),
+        pytest.param("seed", False, id="word"),
+        pytest.param("release-2024", False, id="release-word"),
+        pytest.param("v1", False, id="one-number"),
+    ],
+)
+def test_detect_reports_a_version_like_tag_and_not_any_other(
+    tmp_path: Path, capsys: Capture, tag: str, shown: bool
+) -> None:
+    """Breaks if a tag that is a version is not release identity, or a tag that is not one is."""
+
+    target = repo(tmp_path / "t")
+    commit(target, ONE)
+    subprocess.run([GIT, "-C", str(target), "tag", tag], check=True)
+
+    out = run(capsys, str(target), "--detect")[1]
+
+    line = "# signal release-identity: version-like git tags; local slot: Distinguish"
+    assert (line in out.splitlines()) is shown
 
 
 def test_drift_lines_leave_the_check_exit_code_as_the_artifacts_give_it(
