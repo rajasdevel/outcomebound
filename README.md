@@ -52,11 +52,13 @@ onboarding guide for your agent.
 ### Onboard with your agent
 
 You can give the onboarding to your agent: ask it to follow the guide that `--detect` names. The
-agent installs and runs `outcomebound instructions check`. With your yes, it runs
+guide has the agent install and run `outcomebound instructions check`. With your yes, it runs
 `outcomebound adopt . --verify`, which measures your Done commands and tells a stable failure from
-a flaky one. It proposes only the project facts that an agent would otherwise get wrong, each with
-the file that shows it. It writes no overview of your code. It asks you once for what the
-repository cannot show, such as the outcome, the users, or an act that cannot be undone.
+a flaky one. The guide asks the agent to propose only the project facts that an agent would
+otherwise get wrong, each with the file that shows it, to write no overview of your code, and to
+ask you once for what the repository cannot show, such as the outcome, the users, or an act that
+cannot be undone. No evaluation has run the guide yet, so what it changes for an agent is not
+measured; the engine's part (`--detect`, `--verify`, the checks) is held by its test suite.
 
 Run the command that detection gives you, read the diff, and commit the intended shared files.
 Start a new agent session and check that your harness loads them. For a machine-local install,
