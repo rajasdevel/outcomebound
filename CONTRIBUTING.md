@@ -308,4 +308,6 @@ A release is its `VERSION`, its changelog section and a release commit. `make re
 on the release commit, and it fails unless `make canary` recorded PASS for the tree of that commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)
 gives the sequence of the release steps, says who may push the tag, and says what
 `make release-check` confirms first. When the CI run on the tag
-passes, CI publishes the GitHub release with the attested wheel and source archive.
+passes, CI publishes the GitHub release with the attested wheel and source archive, and then
+uploads the same two files to PyPI by trusted publishing. A person checks PyPI afterwards
+(VERSIONING.md, step 11).

@@ -285,3 +285,31 @@ jobs:
           test -s "$RUNNER_TEMP/notes.md"
           gh release create "$RELEASE_TAG" dist/* --draft --verify-tag --title "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/notes.md"
           gh release edit "$RELEASE_TAG" --draft=false
+
+  # The two files of the published release go to PyPI, only after the `release` job, so PyPI
+  # holds the bytes that carry the build provenance. A version on PyPI can never be replaced.
+  # The upload uses trusted publishing (OpenID Connect): no token or password is stored. The job
+  # runs in the GitHub environment `pypi`, and PyPI's publisher for this project names this
+  # workflow file and that environment. `id-token: write` is granted to this job only; it reads
+  # the release and writes nothing to the repository. The job runs no repository code: it has no
+  # checkout.
+  pypi:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [release]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir dist --pattern '*.whl' --pattern '*.tar.gz'
+          ls -l dist
+          test "$(ls dist | wc -l)" -eq 2
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
