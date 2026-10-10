@@ -11,4 +11,4 @@ pytest-xdist==3.8.0
 # goes in beside pytest: it resolves the suite's `import pytest` from its own
 # interpreter, and the type check needs pytest importable.
 ruff==0.16.7
-mypy==2.3.1
+mypy==2.4.0
