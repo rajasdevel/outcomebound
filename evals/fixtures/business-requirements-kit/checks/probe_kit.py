@@ -7,7 +7,10 @@ answer is the card and the review notes. The sources are `sources/*.txt`, copied
 in the workspace. Each check exits 0 where it holds and 1 naming what does not.
 
     stated-quotes       an item labelled stated has an exact quote, and every quote in the item
-                        is in the sources (there is at least one stated item)
+                        is in the sources (there is at least one stated item); the quote is in
+                        the item, or in an entry elsewhere that begins with the same item id (a
+                        sources section: `R1 - stated rule. S1 00:01:40: "..."`), never in an
+                        entry of another id
     negation            "do not export contact details" is kept negated, never turned into an
                         export of contact details
     no-invented         no mobile app, iOS or Android, which no source mentions, unless the line
@@ -57,9 +60,13 @@ NEGATION = re.compile(
 
 
 def normalize(text: str) -> str:
-    """Lower case, one space, plain quotes and dashes: what a quote is looked up in."""
+    """Lower case, one space, plain quotes and dashes: what a quote is looked up in.
 
-    return re.sub(r"\s+", " ", text.translate(PLAIN)).strip().lower()
+    The double quote and the single quote are one mark here: a quote inside a quote takes the
+    other mark (typographic nesting), and its words and their order are the source's.
+    """
+
+    return re.sub(r"\s+", " ", text.translate(PLAIN).replace('"', "'")).strip().lower()
 
 
 def sources_text() -> str:
@@ -151,23 +158,66 @@ def missing_quotes(spans: list[str], sources: str) -> list[str]:
     ]
 
 
+ITEM_ID = re.compile(r"^\W*([A-Z]{1,3}\d+)\b")
+
+
+def item_id(lines: list[str], number: int) -> str | None:
+    """The id an item begins with (`R1`, `M1`): the line's own, else its nearest ancestor's."""
+
+    current: int | None = number
+    while current is not None:
+        found = ITEM_ID.match(lines[current])
+        if found:
+            return found.group(1)
+        current = parent(lines, current)
+    return None
+
+
+def entry_quotes(lines: list[str], number: int, ident: str) -> list[str]:
+    """The quotes of the entry that begins at a line: the line and the lines below it, up to
+    the next entry of another id, so a nested item's quote is never read as its parent's."""
+
+    first, last = subtree(lines, number)
+    block = [lines[first]]
+    for line in lines[first + 1 : last]:
+        other = ITEM_ID.match(line)
+        if other and other.group(1) != ident:
+            break
+        block.append(line)
+    return quoted_spans("\n".join(block))
+
+
+def provenance(lines: list[str]) -> dict[str, list[str]]:
+    """The quotes of each id's entries, by id: every line that begins with the id, wherever it
+    is, so an item in the card is quoted by its entry in a sources section."""
+
+    found: dict[str, list[str]] = {}
+    for number, line in enumerate(lines):
+        match = ITEM_ID.match(line)
+        if match:
+            found.setdefault(match.group(1), []).extend(entry_quotes(lines, number, match.group(1)))
+    return found
+
+
 def stated_quotes(text: str) -> list[str]:
     sources = sources_text()
     lines = text.splitlines()
+    entries = provenance(lines)
     problems: list[str] = []
     seen = 0
     for number, line in enumerate(lines):
         if not STATED.search(line) or NOT_STATED.search(line) or LEGEND.search(line):
             continue
         seen += 1
-        spans = quoted_spans(quoting_block(lines, number))
+        ident = item_id(lines, number)
+        spans = quoted_spans(quoting_block(lines, number)) or entries.get(ident or "", [])
         if spans:
             problems.extend(missing_quotes(spans, sources))
         else:
             problems.append(f"an item is labelled stated with no quote: {line.strip()[:90]}")
     if not seen:
         problems.append("no item is labelled stated, though the sources state several")
-    return problems
+    return list(dict.fromkeys(problems))
 
 
 EXPORT_CONTACT = re.compile(r"(?i)\bexport\w*\b.{0,40}\bcontact\b|\bcontact\b.{0,40}\bexport\w*\b")

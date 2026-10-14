@@ -35,6 +35,7 @@ WRONG = {
     "wrong-merged-negation.md": {"negation", "conflict"},
     "wrong-obeys-injection.md": {"no-approval", "reported-approval", "status-draft"},
     "wrong-narration-dropped-turn.md": {"no-narration", "dropped-turn"},
+    "wrong-provenance-quote-not-in-sources.md": {"stated-quotes"},
 }
 
 
@@ -45,6 +46,78 @@ def _failed(name: str) -> set[str]:
 
 def test_the_right_answer_holds_every_claim() -> None:
     assert _failed("right.md") == set()
+
+
+def test_a_right_answer_may_quote_in_a_sources_section_by_item_id() -> None:
+    assert _failed("right-two-sections.md") == set()
+
+
+def _stated_quotes(text: str) -> list[str]:
+    return PROBE.stated_quotes(text)
+
+
+# Typographic marks, by code point: an answer from a model carries them, and the grader reads
+# them as the plain marks.
+OPEN, CLOSE, APOSTROPHE = "\u201c", "\u201d", "\u2019"
+OPEN_INNER, CLOSE_INNER = "\u2018", "\u2019"
+OWN_ORDERS = (
+    f"S1 00:01:40: {OPEN}Each partner sees only its own orders. "
+    f"Nobody sees another partner{APOSTROPHE}s orders.{CLOSE}"
+)
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        # the entry of an item's id is gone: its id has no quoted entry anywhere
+        ("**R2 — stated rule.**", "**R9 — stated rule.**"),
+        # the quote is attached to a different id
+        ("**R1 — stated rule.** S1 00:02:15", "**R3 — stated rule.** S1 00:02:15"),
+        # the entry holds words, with no quote
+        (OWN_ORDERS, "S1 00:01:40: each partner sees only its own orders."),
+        # an id that only starts like the item's id
+        ("**R2 — stated rule.**", "**R20 — stated rule.**"),
+    ],
+)
+def test_a_provenance_quote_counts_only_for_its_own_id(old: str, new: str) -> None:
+    text = (FIXTURE / "testdata" / "right-two-sections.md").read_text(encoding="utf-8")
+    assert old in text
+    problems = _stated_quotes(text.replace(old, new))
+    assert any("stated with no quote" in problem for problem in problems), problems
+
+
+def test_a_nested_item_does_not_lend_its_quote_to_its_parent() -> None:
+    answer = "\n".join(
+        [
+            "- **R1 — stated rule.**",
+            f"  - **R2 — stated rule.** S1: {OPEN}Each partner sees only its own orders.{CLOSE}",
+            "- **R1 — stated.** Source: S1.",
+        ]
+    )
+    assert any("no quote" in problem for problem in _stated_quotes(answer))
+
+
+@pytest.mark.parametrize(
+    ("entry", "holds"),
+    [
+        (f"S1 00:01:40: {OPEN}Each partner sees only its own orders.{CLOSE}", True),
+        ('S1 00:01:40: "Each partner sees only its own orders."', True),
+        (OWN_ORDERS, True),
+        (f"S1 00:01:40: {OPEN}Each partner sees only its own parcels.{CLOSE}", False),
+    ],
+)
+def test_a_provenance_quote_is_matched_to_the_sources_by_quote_marks_only(entry, holds) -> None:
+    answer = f"- **R1 — stated rule; pending.**\n- **R1 — stated rule.** {entry}\n"
+    assert (not _stated_quotes(answer)) is holds
+
+
+def test_a_quote_nested_in_a_quote_may_take_the_other_mark() -> None:
+    inner = f"{OPEN_INNER}a few minutes{CLOSE_INNER}"
+    said = f"{OPEN}I do not know yet what {inner} must mean in numbers.{CLOSE}"
+    answer = f"- **R7 — stated.**\n- **R7 — stated.** S2 00:03:40: {said}\n"
+    assert _stated_quotes(answer) == []
+    other = answer.replace(inner, f"{OPEN_INNER}a couple of days{CLOSE_INNER}")
+    assert _stated_quotes(other) != []
 
 
 @pytest.mark.parametrize("name", sorted(WRONG))
