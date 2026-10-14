@@ -426,12 +426,7 @@ def load_floor(root: Path) -> Floor:
 def _git(root: Path, *arguments: str) -> bytes:
     """What one read-only git command printed in `root`; a failure raises `FloorError`."""
 
-    inherited = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
-    }
-    environment = git_environment({**inherited, "GIT_OPTIONAL_LOCKS": "0"})
+    environment = git_environment({**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
     try:
         status, output, _ = validation._execute(
             ["git", *GIT_READ_CONFIGURATION, *arguments], root, None, environment

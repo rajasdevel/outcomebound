@@ -435,7 +435,13 @@ def _produced(
 
 
 def _log_path(log_dir: Path, name: str) -> Path:
+    """One log name per claim name. A name that sanitizing left as it was keeps its plain name;
+    one it changed gains a short digest of the original, so `lint/typecheck` and `lint typecheck`
+    do not share a log."""
+
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-") or "claim"
+    if safe != name:
+        safe = f"{safe}-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:8]}"
     return log_dir / f"{safe}.log"
 
 
@@ -478,6 +484,10 @@ def _execute(
         except subprocess.TimeoutExpired:
             output = b""
         return None, output or b"", True
+    except BaseException:
+        # An interruption (Ctrl-C) leaves the child's group running and writing otherwise.
+        programs.stop_tree(process)
+        raise
     finally:
         if process.stdout is not None:
             process.stdout.close()

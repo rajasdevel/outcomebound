@@ -147,20 +147,28 @@ def _write_manifest(options: argparse.Namespace) -> tuple[Path, bool]:
     )
     ignored = options.out is None and not options.track
     folder = Path(options.out) if options.out else DEFAULT_OUT
-    folder.mkdir(parents=True, exist_ok=True)
+    # The default folder is written as a path under the project, so the writer checks every
+    # component of it (a symlinked `.outcomebound` is refused); `--out` names a folder the
+    # person chose, which is the writer's root.
+    root = Path(options.out) if options.out else cwd
+    prefix = "" if options.out else DEFAULT_OUT.as_posix() + "/"
     name = f"{options.name}.json"
-    changes: dict[str, bytes | None] = {name: sources_manifest.serialize(document)}
+    key = prefix + name
+    ignore_key = prefix + IGNORE_FILE
+    changes: dict[str, bytes | None] = {key: sources_manifest.serialize(document)}
     try:
-        expected = {name: fileplan.current(folder, name)}
+        if options.out:
+            root.mkdir(parents=True, exist_ok=True)
+        expected = {key: fileplan.current(root, key)}
         if options.out is None:
-            before = fileplan.current(folder, IGNORE_FILE)
-            expected[IGNORE_FILE] = before
+            before = fileplan.current(root, ignore_key)
+            expected[ignore_key] = before
             if ignored and before is None:
-                changes[IGNORE_FILE] = IGNORE_BODY
+                changes[ignore_key] = IGNORE_BODY
             if options.track and before == IGNORE_BODY:
-                changes[IGNORE_FILE] = None
-        fileplan.write(folder, changes, expected)
-    except fileplan.WriteError as error:
+                changes[ignore_key] = None
+        fileplan.write(root, changes, expected)
+    except (fileplan.WriteError, OSError) as error:
         raise SourceRefusal("SOURCE_UNWRITABLE", str(error)) from error
     _import_report(document, folder / name, ignored)
     return folder / name, bool(document["partial"])
