@@ -20,7 +20,9 @@ Take the examples the spec holds, each rule with its concrete cases. Where the s
 for a criterion, write them with the person who owns the criterion before you write a script.
 Then write each script in the acceptor's words: the screens, the names and the steps as they use
 them, with the starting state, what to do, and what they should see. A script names no code, no
-command and no internal id they would not know.
+command and no internal id they would not know. What only the person who sets up the session needs,
+such as commands, paths and the build check, stays out of the scripts and out of the folder that
+holds them; it goes in the draft record.
 
 Make a table from each acceptance criterion to the scripts that cover it. A criterion with no script
 is a gap; say so rather than adding a script that touches it by name.
@@ -39,8 +41,10 @@ run it again.
 
 ## Pre-run
 
-Run each script on that build, in the environment the acceptor will use. Keep the evidence for each
-result: the output, a screenshot, or the response, with the build it ran on. A script that cannot
+Run each script on that build, in the environment the acceptor will use, one step at a time as the
+acceptor will follow it: each step its own plain command or action, and each read of the build its
+own command before and after, never folded with the steps into one program of your own. Keep the
+evidence for each result: the output, a screenshot, or the response, with the build it ran on. A script that cannot
 be followed as written is a defect in the script: correct it, and run it again. A script that
 fails is a defect in the change: it is not handed to the acceptor until the defect is dealt with or
 the acceptor is told of it.
