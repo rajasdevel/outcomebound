@@ -73,9 +73,12 @@ person decides only where the stage says so.
    where the project requires one; merge and deploy to non-production under their grants.
 8. Acceptance (business users): `run-acceptance` on the build the environment serves. Gate: the
    named acceptor accepts each change on that build.
-9. Release (release authority): the accepted build is promoted, never rebuilt from a branch; a
-   release commit that only sets the version, the changelog and the pins is that build; a fix
-   found here goes back to build and through acceptance. Gate: the production go.
+9. Release (release authority): the accepted build is promoted, never rebuilt from a branch.
+   Where a built artifact is promoted, it is promoted unchanged and the release commit only labels
+   it; where the project deploys from source at a tag, the tagged commit may be a child of the
+   accepted commit whose diff touches only the version and changelog files, and the record names
+   both commits. A fix found here goes back to build and through acceptance. Gate: the
+   production go.
 10. Verify and close (tech and business): the result, Successful, Failed or Inconclusive; the
     business acceptance after the observation window; a closing note on the card.
 

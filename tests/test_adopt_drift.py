@@ -626,6 +626,8 @@ def test_a_release_workflow_that_pushes_an_image_and_publishes_a_package_prints_
         pytest.param("deleting a branch", None, id="neither"),
         pytest.param("deleting production data", None, id="production-data"),
         pytest.param("deleting a tag from the cache", None, id="tag-word"),
+        pytest.param("pushing the fix to product pages", None, id="product-word"),
+        pytest.param("tagging a version", "publishing", id="tagging"),
     ],
 )
 def test_an_edge_the_local_fragment_declares_answers_the_act_it_names(
@@ -723,6 +725,8 @@ def test_an_unknown_signal_id_in_a_drift_line_is_ignored(tmp_path: Path, capsys:
         pytest.param("> Drift — deploy: quoted", id="quoted"),
         pytest.param("`Drift — deploy: code span`", id="code-span"),
         pytest.param("```\nDrift — deploy: fenced\n```", id="fenced"),
+        pytest.param("    Drift — deploy: indented code block", id="indented-code"),
+        pytest.param("<!--\nDrift — deploy: commented out\n-->", id="html-comment"),
     ],
 )
 def test_a_drift_line_without_a_reason_or_outside_a_line_of_its_own_settles_nothing(

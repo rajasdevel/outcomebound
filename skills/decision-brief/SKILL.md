@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision is the user's to make. That is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them.
+description: Use when a decision is the user's to make. That is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them. Also when a harness refuses an act the person granted.
 ---
 
 # Decision brief
@@ -23,11 +23,14 @@ the user's own words: for an act a permission check guards, such as a deletion o
 the project, the brief names the act so the user's reply can state it, not only a letter.
 
 A question the person already settled is not asked again: their launch block, their standing
-order and their earlier answer stand, and an order to run unattended is the answer to "may I ask".
-A harness or sandbox that refuses an act the person already granted has raised no new decision.
-Say in the first line of your next message what was refused, by which rule or command, and ask the
-person to run the act or to adjust the harness; draw no brief with options and a default, and
-continue every item the refusal does not block.
+order and their earlier answer stand. An order to run unattended answers "may I ask" only for
+questions within what the kernel allows you to decide; it grants no act that a bound or an edge
+holds. A harness or sandbox that refuses an act has raised no new decision only where the person's
+own words name that act and its target: quote them. Otherwise the refusal is a decision for them.
+After a refusal, never reach the same effect by another route. Say in the first line of your next
+message what was refused, by which rule or command, and ask the person to run the act or to adjust
+the harness; draw no brief with options and a default, and continue every item the refusal does
+not block.
 
 ## Do the due diligence first
 
@@ -85,7 +88,7 @@ A short input for one brief with two options. `recommend_way` is the words of a 
 letter, since the command writes the letters; `facts` carries the `If unanswered` pair:
 
 ```json
-{"briefs": [{"id": "D1", "heading": "Keep the old flag for one release?",
+{"briefs": [{"id": "flag-D1", "heading": "Keep the old flag for one release?",
   "recommend": "two adopters still set it", "recommend_way": "keep it",
   "options": [["keep it", "adopters get a warning first", "one more release carries the old code path"],
               ["drop it now", "the code path goes today", "an adopter who sets it is refused on upgrade"]],

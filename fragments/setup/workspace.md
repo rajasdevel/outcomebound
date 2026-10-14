@@ -15,7 +15,8 @@ folders, such as `gitleaks dir .` or a content gate that does not read `.gitigno
 worktree as a second copy of the repository: run such a scan from the worktree's root; the person,
 not you, makes a project gate skip these four folders at its root; and a finding that only those
 folders hold is not a finding in the work. Codex's default sandbox keeps `.agents/` and `.git`
-read-only. Ask the person once to add both as writable roots, never write by write:
+read-only. Ask the person once for the root an item needs (both, if both are needed), never write
+by write:
 `<repository>/.agents`, and the Git common directory that every worktree commits into,
 `<repository>/.git` in a plain clone (`git rev-parse --path-format=absolute --git-common-dir` prints
 it). On the command line that is `--add-dir` for each. Where no flag can be given, as the desktop
@@ -26,7 +27,7 @@ checks both against their Codex release. A project's `.codex/config.toml` ignore
 Where a root is not writable, hold only the item whose own write needs it, and only that item (a
 worktree or a commit needs `.git`; a handoff or a report under `.agents/work` needs `.agents`, not
 `.git`), never moving the write to the main checkout or a temporary directory: go on with every
-other item, such as reads, checks and writes elsewhere, and name the exact path the person sets in
+other item, such as reads, checks and writes to paths the item may write, and name the exact path the person sets in
 your report. Ask for a root only when an item needs it now, never for a sibling repository's. A
 handoff or a memory is a claim; the source it cites is the evidence.
 **Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
@@ -46,10 +47,11 @@ The machine is shared: before a heavy command (a full suite, a build, an image p
 free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
 hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches);
 a process, folder or file of an owner you cannot name stays as it is, and the handoff names it.
-Where free disk is short for the task, reclaiming a reversible local cache, such as a container
-image or build cache or a package cache, is within the task's authority when nothing unrelated is
-lost (no running container, no volume, no unsaved state): name what you reclaimed in your report. A
-volume, or data of another owner, still needs a decision brief. A cloud or background
+The one exception to that sentence: where the task needs disk it lacks, you may remove what a tool
+rebuilds or fetches again on its next use (a build cache, a package cache, a dangling image of this
+project), with a command that names what it removes, unless the project's instructions forbid it.
+Never a volume, a container, named data, or anything another project or owner uses. Name what you
+reclaimed in your report. A cloud or background
 session starts from the pushed branch, without this machine's ignored folders, uncommitted files or
 tools: commit the install; where its verbs are needed, give the environment's setup script the
 `outcomebound` install, else use each verb's by-hand form. A worktree a harness made stays where the

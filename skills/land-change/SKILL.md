@@ -91,8 +91,11 @@ Where the project's `local` fragment names streams and gates, the request also h
 A request into the production stream follows the project's promotion model (the `deploy`
 fragment): where the project promotes accepted builds, it holds only the commit that was accepted
 for that stream, with nothing added since and no fix folded in, and a change added after acceptance
-goes back to the stream that accepts it. A release commit that sets only the version, the changelog
-and the pins is the accepted build, and adds nothing; any other change goes back. Behind a feature
+goes back to the stream that accepts it. Where the project promotes a built artifact, the
+accepted artifact is promoted unchanged and a release commit only labels it. Where it deploys from
+source at a tag, the tagged commit may be a child of the accepted commit whose diff, read by you,
+touches only the version and changelog files, and the record names both commits; any other change
+goes back. Behind a feature
 flag, the flag's state is part of what was accepted. An emergency follows the project's emergency
 route: the production go first, and, where that route puts them after the promotion, the review
 and acceptance after it.

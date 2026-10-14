@@ -20,8 +20,10 @@ or compatibility window changes; `broad-suite` before integrating a release cand
 check is best a checked-in script that fails unless the tag, the version and the changelog heading
 agree.
 **Completion bar** — version, changelog entry, and tag name agree (static); the tagged commit is on
-the default branch; the candidate is proven before the release commit, and a release commit that
-only sets the version, the changelog and the pins needs the static check, not a second proof; the
+the branch the project releases from (usually the default branch); the candidate is proven before
+the release commit, and a release commit whose diff, read by you, holds only the version and
+changelog files needs the static check and the project's own gates for it, not a second proof of
+the candidate's behavior: the acceptance evidence carries over, no gate is skipped; the
 release workflow, where the project has one, is green on the exact commit (build); the published
 artifact stays unverified until it is resolved from the registry, a read you can make yourself.
 **Distinguish** — committed ≠ pushed ≠ CI green ≠ tagged ≠ released.

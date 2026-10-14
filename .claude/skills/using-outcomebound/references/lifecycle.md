@@ -91,7 +91,8 @@ about recent authors can be a contributor, not a maintainer, or one person under
 that share neither name nor email (a `.mailmap` joins them); ask before treating it as a second
 maintainer. Where the person settles it, a "Drift — <signal>: <reason>" line in the local
 fragment's Bounds slot, on a line of its own with a reason, marks it settled; the line still
-prints beside the current evidence, so a settlement that no longer fits is seen.
+prints beside the current evidence, so a settlement that no longer fits is seen. Do not raise a
+settled line again unless the evidence now differs from the reason given.
 
 Nothing switches on its own. Where the person's directive names the new route or exposure, the
 directive is the decision: write one decision brief (the `decision-brief` skill) that records it

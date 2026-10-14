@@ -86,6 +86,9 @@ not show are marked as not shown.
 
 Acceptance is of a build. A later build voids the acceptance for the changes it touches: name those
 changes and say that they need acceptance again. A later build that touches nothing the accepted
-scripts reach may keep it, but only when you say how you know. A release commit that sets only the
-version, the changelog and the pins touches none of them. Never carry an acceptance forward
-by changing the build identity in the record.
+scripts reach may keep it, but only when you say how you know. Where the project promotes a built
+artifact, the accepted artifact is promoted unchanged and a release commit only labels it. Where it
+deploys from source at a tag, a tagged commit that is a child of the accepted commit keeps the
+acceptance only when its diff, read by you, touches only the version and changelog files; the record
+names both commits and the diff check, and a script that checks the reported version runs again on
+the release build. Never carry an acceptance forward by changing the build identity in the record.

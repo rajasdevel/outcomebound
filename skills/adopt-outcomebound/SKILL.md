@@ -108,8 +108,10 @@ maintainers or required review, else `solo`; `deploy` and `runtime` where it dep
 where a client or a regulator accepts the work; `explore` where the expected life starts with
 learning. A fragment applies to every stream unless a "Streams —" line names it in its fragments
 field. Add them to `--fragments`, and name the facts that selected each. On an upgrade, show the
-person each drift line `--check` prints: it is the moment someone reads them. A line the person
-settles gets a "Drift — <signal>: <reason>" line in Bounds.
+person each drift line `--check` prints that is not settled: it is the moment someone reads them;
+for a settled one (`settled by the person: <reason>`), read its reason against the evidence and
+raise it only if they differ. A line the person settles gets a "Drift — <signal>: <reason>" line,
+on a line of its own with a reason, in the local fragment's Bounds slot.
 
 Name the nearest of `$(outcomebound home)/templates/lifecycle/` (`personal`, `shared`, `client`) and
 the differences between it and what you observed, as a comparison for the person. Never copy it,

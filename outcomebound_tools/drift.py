@@ -54,9 +54,10 @@ _MORE = re.compile(r",|&|\+|\b(and|or|plus|of\s+the|team|maintainers|people|deve
 # An acknowledgment starts its own line (a list marker may come first) and gives a reason; a
 # quote, a code span or a mention inside a sentence does not start the line.
 _ACKNOWLEDGED = re.compile(
-    r"^[ \t]*(?:[-*][ \t]+)?Drift[ \t]*[—-][ \t]*([A-Za-z][A-Za-z-]*)[ \t]*:[ \t]*(\S[^\n]*)$",
+    r"^ {0,3}(?:[-*][ \t]+)?Drift[ \t]*[—-][ \t]*([A-Za-z][A-Za-z-]*)[ \t]*:[ \t]*(\S[^\n]*)$",
     re.MULTILINE,
 )
+_HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
 _FENCE = re.compile(r"^[ \t]*(```|~~~)[^\n]*\n.*?(?:^[ \t]*\1[^\n]*$|\Z)", re.MULTILINE | re.DOTALL)
 SIGNAL_IDS = ("recent-authors", "codeowners", "deploy", "publishing", "exposure")
 # What a declared edge names: the act of publishing (a publish, a release, pushing or cutting a
@@ -64,12 +65,13 @@ SIGNAL_IDS = ("recent-authors", "codeowners", "deploy", "publishing", "exposure"
 # release to production). A word such as `production` or `tag` alone names a place or a thing,
 # not the act, and a database edge that mentions production data is not a deploy.
 _PUBLISH_EDGE = re.compile(
-    r"\b(publish\w*|releas\w*|registr\w*|tag\s+push\w*"
-    r"|(push|upload|ship|cut|creat|mov)\w*\s+(\w+\s+){0,3}(tag|package|release)\w*)",
+    r"\b(publish\w*|releas\w*|registry\b|tagg\w*|tag[ \t]+(a|the)\b|tag[ \t]+push\w*"
+    r"|(push|upload|ship|cut|creat|mov)\w*[ \t]+([\w-]+[ \t]+){0,3}(tag|package|release)\w*)",
     re.I,
 )
 _DEPLOY_EDGE = re.compile(
-    r"\b(deploy\w*|promot\w*|go\s+live|(push|releas|ship|roll)\w*\s+(\w+\s+){0,3}to\s+prod\w*)",
+    r"\b(deploy\w*|promot\w*|go[ \t]+live"
+    r"|(push|releas|ship|roll)\w*[ \t]+([\w-]+[ \t]+){0,3}to[ \t]+prod(uction)?\b)",
     re.I,
 )
 # A workflow that builds or pushes a container image.
@@ -312,7 +314,7 @@ def _bounds_slot(local_text: str | None) -> str:
     for index, mark in enumerate(marks):
         if mark.group("slot").strip() == "Bounds":
             stop = marks[index + 1].start() if index + 1 < len(marks) else len(body)
-            return _FENCE.sub("", body[mark.end() : stop])
+            return _HTML_COMMENT.sub("", _FENCE.sub("", body[mark.end() : stop]))
     return ""
 
 

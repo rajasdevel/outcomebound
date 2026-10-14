@@ -41,7 +41,8 @@ and do not paste it into a public place.
 Check what each kind of write does to the people who use the tracker, in this tracker, with this
 project's automations. A standing grant covers a write only when it names three things: the kind of
 write, the notifications and automations that write is known to start, and the conflict rule (what
-happens to a change someone else made since you read the card). Any other write goes as a decision
+happens to a change someone else made since you read the card). A request for one named write in
+this session covers that write once you have shown the text. Any other write goes as a decision
 brief, with the old text, the new text, what it is known to start and what is `UNVERIFIED`.
 
 - A **comment** commonly notifies the card's watchers. A grant for comments in batches covers them
@@ -57,7 +58,8 @@ Authority to read is not authority to write, and a grant for one kind of write i
 another.
 
 Before each write, read the card's updated time again. If it moved since your snapshot, import a new
-snapshot and look at what changed before you write. Show the person the exact text you will write.
+snapshot and look at what changed before you write. Unless a standing grant covers this kind of
+write, show the person the exact text first; under a batch grant, show the text once for the batch.
 
 After each write, read the card back and compare it with what you wrote: the text, the author, and
 the updated time. A write whose read-back you did not make is `UNVERIFIED`.

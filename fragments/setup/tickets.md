@@ -22,8 +22,8 @@ protections reserve for a person, is the person's: put it as a decision brief an
 does not wait on it. An accepted ticket's title, body and decision keys are the user's, and a body
 changes only on the person's word, so an edit outside `bounds` is named in the handover, never
 written into the body; assigning it, commenting on it and closing it are the agent's, and when you
-start a ticket you claim it, by assigning it or commenting where the store allows, so that others
-see it is taken; say so there too when you block on it or drop it. Push or merge
+start a ticket you claim it, by assigning it or commenting where the declaration grants tracker writes (otherwise print the
+commands), so that others see it is taken; say so there too when you block on it or drop it. Push or merge
 only where that is granted. A tracker is written to only where the declaration records that grant,
 and otherwise the commands are printed for a person to run.
 **Mechanisms** — `review` when how the work was sliced is a material blind spot; `spec` when a
