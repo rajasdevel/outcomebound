@@ -148,6 +148,8 @@ The entrypoints coordinate fixture setup, source records and grading. `processes
 subprocess lifetimes, `codex_events.py` and `claude_events.py` decode their declared event forms,
 `harnesses/` holds the tool that runs the model behind one contract, and `native_receipts.py`
 finds, reads and copies one matching native session without grading its meaning.
+`native_commands.py` sets command directories from that session, and `evidence.py` digests a
+kept workspace and the files that grade a fixture, for `--regrade`.
 
 ## Adding a harness
 
