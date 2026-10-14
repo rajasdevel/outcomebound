@@ -65,7 +65,7 @@ Tiers: frontier, mid\
 Confidence: high for the method, medium for removal on small readers; direction: rising\
 Checks: none
 
-**S13** Add a line, check or tool only after an observed failure, classed as capability, context or
+**S13** Add a line, check or tool only after an observed failure, or for a capability the maintainer selected with a stated hypothesis and its qualification, classed as capability, context or
 structure, in the most deterministic form that fixes it\
 Evidence: `research-7` (M), `latent-space-1` (A), `forward-26` (A)\
 Tiers: frontier, small\

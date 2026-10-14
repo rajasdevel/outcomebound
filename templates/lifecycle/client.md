@@ -73,12 +73,16 @@ person decides only where the stage says so.
    where the project requires one; merge and deploy to non-production under their grants.
 8. Acceptance (business users): `run-acceptance` on the build the environment serves. Gate: the
    named acceptor accepts each change on that build.
-9. Release (release authority): the accepted build is promoted, never rebuilt from a branch; a fix
+9. Release (release authority): the accepted build is promoted, never rebuilt from a branch; a
+   release commit that only sets the version, the changelog and the pins is that build; a fix
    found here goes back to build and through acceptance. Gate: the production go.
 10. Verify and close (tech and business): the result, Successful, Failed or Inconclusive; the
     business acceptance after the observation window; a closing note on the card.
 
 Paths by kind of change: work with no code takes 1, 2, 8 where users must accept, and 10; a small
-code change an existing check proves takes 1, 6, 7, 9 and 10; a new area, a shared system or
-personal data takes every stage with probes before the timeline; an emergency takes 6, 7, 9 and 10,
-with the production go first and the acceptance examples after the promotion.
+code change an existing check proves may skip design and slicing, and takes 1, 6, 7, 8, 9 and 10;
+it skips 8 only where the contract puts the change in a stream nobody accepts (upkeep) or the
+record shows that an existing acceptance covers the exact change on the exact build; a new area, a
+shared system or personal data takes every stage with probes before the timeline; an emergency
+takes 6, 7, 9 and 10, with the production go first and, where the project's emergency route puts
+them there, the acceptance examples after the promotion.

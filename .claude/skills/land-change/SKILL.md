@@ -15,8 +15,9 @@ gates needs only the handover and the merge grant.
 The request description is the record a reviewer reads without you. It holds:
 
 - what changed, and why, in the words of the outcome and not of the diff;
-- each check you ran and its verdict, `PASS`, `FAIL` or `UNVERIFIED`, with the command for a
-  verdict a reader may want to repeat;
+- each check the completion bar names and its verdict, `PASS`, `FAIL` or `UNVERIFIED`, with the
+  command for a verdict a reader may want to repeat; a check that failed is always listed, and a
+  check nobody asked for is not;
 - what you decided that the ticket did not settle, so that the reviewer can overrule it;
 - the follow-ups: what you saw and left alone, each with where it is recorded.
 
@@ -54,8 +55,12 @@ not a second party's review. Where the project requires a second party, it is st
 
 ## When the rounds do not converge
 
-After each round of fixes, count what closed. Ask the person, naming the findings and what you tried,
-when a round closed no finding. When a finding you marked fixed comes back, find why first. Where a
+After each round of fixes, count the findings that have a verified disposition: a fix pushed and
+replied to, or a reply with evidence that the comment is wrong. Do not count thread closures, since
+a thread another person owns stays open until they close it. A thread that waits on its reviewer
+waits; it is not a failed repair. Ask the person, naming the findings and what you tried, when a
+round gave no finding a verified disposition, or a finding comes back or the reviewer and you
+disagree after the same reply. When a finding you marked fixed comes back, find why first. Where a
 later change undid the fix and the cause is plain, repair it inside the task with its regression
 check, and say the cause in the thread. Where the fix did not hold, or the finding comes back again,
 the assumption behind the fix is wrong: ask the person. More rounds of the same kind of fix repeat
@@ -68,7 +73,8 @@ a request, or to push to the branch, is not a grant to merge. Before the merge, 
 again: the checks on the tip you are merging, the required reviews, and a conflict with the base.
 A merge can start a deploy, a release or a publish. That is inside the grant only where the grant
 names it; otherwise report that the merge will start it and hold the merge, as a decision brief
-(`decision-brief`). After the merge, read the result: the merged commit, and that the checks
+(`decision-brief`). A merge grant is not a tag grant: where the release act is a tag push and not
+the merge, the merge grant does not cover the tag. After the merge, read the result: the merged commit, and that the checks
 of the base branch for that commit are the ones the project depends on. A merge is not a deploy
 and not an adoption downstream.
 
@@ -85,6 +91,8 @@ Where the project's `local` fragment names streams and gates, the request also h
 A request into the production stream follows the project's promotion model (the `deploy`
 fragment): where the project promotes accepted builds, it holds only the commit that was accepted
 for that stream, with nothing added since and no fix folded in, and a change added after acceptance
-goes back to the stream that accepts it. Behind a feature flag, the flag's state is part of what
-was accepted. An emergency follows the project's emergency route: the production go first, and the
-review and acceptance after the promotion.
+goes back to the stream that accepts it. A release commit that sets only the version, the changelog
+and the pins is the accepted build, and adds nothing; any other change goes back. Behind a feature
+flag, the flag's state is part of what was accepted. An emergency follows the project's emergency
+route: the production go first, and, where that route puts them after the promotion, the review
+and acceptance after it.

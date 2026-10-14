@@ -1,6 +1,6 @@
 ---
 name: sync-tracker
-description: Use when reading a card from a tracker that is not the project's ticket store, or writing back to it. An example is a client's Jira. A read is a markdown snapshot; a write is a comment under a grant, and each other write is a decision brief.
+description: Use when reading a card from a tracker that is not the project's ticket store, or writing back to it. An example is a client's Jira. A read is a markdown snapshot; a write goes under a grant that names its kind, its notifications and automations, and its conflict rule, and any other write is a decision brief.
 ---
 
 # Sync a tracker
@@ -38,20 +38,23 @@ and do not paste it into a public place.
 
 ## Write to a card
 
-Check what each kind of write does to the people who use the tracker.
+Check what each kind of write does to the people who use the tracker, in this tracker, with this
+project's automations. A standing grant covers a write only when it names three things: the kind of
+write, the notifications and automations that write is known to start, and the conflict rule (what
+happens to a change someone else made since you read the card). Any other write goes as a decision
+brief, with the old text, the new text, what it is known to start and what is `UNVERIFIED`.
 
-- A **comment** is mailed to the card's watchers. A standing grant can cover comments, in batches,
-  and only a grant that names that each comment notifies the watchers covers them. Without that
-  wording, a comment is a single act that the person approves.
-- A **description write** replaces the whole field, and the tracker holds no lock: a change made
-  by someone else since you read it is lost. It is a decision brief each time, with the old text,
-  the new text and the time you read it.
-- A **status transition** can start the client's workflow automations, which may notify people, assign
-  work, or close related cards. It is a decision brief each time, naming what the transition
-  is known to start and what is `UNVERIFIED`.
+- A **comment** commonly notifies the card's watchers. A grant for comments in batches covers them
+  when it says that they notify and who is told.
+- A **description write** commonly replaces the whole field, and a tracker may hold no lock, so
+  a change made by someone else since you read it can be lost. A grant covers it only when it
+  states the conflict rule, such as writing only if the updated time is unchanged.
+- A **status transition** can start the client's workflow automations, which may notify people,
+  assign work, or close related cards. A grant covers it only when it names what the transition
+  starts.
 
-No standing grant covers any other write. Authority to read is not authority to write, and a
-comment grant is not a grant to change a field.
+Authority to read is not authority to write, and a grant for one kind of write is not a grant for
+another.
 
 Before each write, read the card's updated time again. If it moved since your snapshot, import a new
 snapshot and look at what changed before you write. Show the person the exact text you will write.

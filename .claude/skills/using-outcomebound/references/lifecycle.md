@@ -90,9 +90,12 @@ transition of its own: check it against the "Leave when —" rows and the person
 about recent authors can be a contributor, not a maintainer, or one person under two identities
 that share neither name nor email (a `.mailmap` joins them); ask before treating it as a second
 maintainer. Where the person settles it, a "Drift — <signal>: <reason>" line in the local
-fragment's Bounds keeps it settled.
+fragment's Bounds slot, on a line of its own with a reason, marks it settled; the line still
+prints beside the current evidence, so a settlement that no longer fits is seen.
 
-Nothing switches without the person. Write one decision brief (the `decision-brief` skill). Its
+Nothing switches on its own. Where the person's directive names the new route or exposure, the
+directive is the decision: write one decision brief (the `decision-brief` skill) that records it
+and asks only what the directive left open. Otherwise the brief asks for the decision. Its
 main value is the inventory of work in flight and what each item now owes, so it is written even
 when no fragment changes. It holds:
 
@@ -107,12 +110,18 @@ when no fragment changes. It holds:
   `UNVERIFIED`;
 - what each item now owes under the new route;
 - what the change invalidates;
+- what still holds under a lighter route: data kept, versions supported, consumers served and
+  contract duties, each with its owner or its retirement;
 - what to retire.
 
 On a yes, add a dated line to the local fragment's Context: "Changed — <date>: <what>, decided by
-<who>, invalidated <what>". Plan again only the stages not yet reached. Each item in flight keeps
-the state its own record shows; do not mark it done or undone to suit the new route. A move back to
-a lighter lifecycle is a normal transition, not a failure.
+<who>, invalidated <what>". Where adoption refuses the change, the line reads "approved, not
+applied", and the old selection stays active until the check that refused passes. Plan the stages
+not yet reached again, and plan again each finished stage whose evidence the change invalidates: it
+keeps its dated result as history, reads `UNVERIFIED` for the new exposure, and gets its own
+corrective item. Each item in flight keeps the state its own record shows; do not mark it done or
+undone to suit the new route. A move back to a lighter lifecycle is a normal transition, not a
+failure.
 
 At each handoff, check the "Leave when —" lines against what you can observe. When the route does
 not fit the work, such as process that outweighs the change, a gate with no owner, or a stalled

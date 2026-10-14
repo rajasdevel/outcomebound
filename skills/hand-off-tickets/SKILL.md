@@ -31,9 +31,9 @@ branch the ticket is built on, proceeds without asking. The ticket's outcome, `b
 `bounds` that only carries the ticket's own change, such as an import or an inventory entry for its
 own files, is the implementer's to make, and its handover names it; any other edit outside
 `bounds` is the person's, put as a decision brief. Where a line of the ticket holds
-only on a condition the implementer may be unable to settle, the package names the side to take
-when it cannot be settled, the smaller change inside `bounds`, and the implementer's handover says
-which side it took. Where the ticket
+only on a condition the implementer may be unable to settle, the package states the default the
+implementer takes when the condition is unknown, the smaller change inside `bounds`, and the
+implementer's handover says which side it took. Where the ticket
 cannot be built as written, file the follow-up that makes it buildable where a goal envelope the
 person wrote accepts follow-ups, since that line is their acceptance of it; otherwise put the
 change to the person as a decision brief in a comment on the ticket. Either way, go on with the
@@ -56,6 +56,14 @@ committed instructions give the model, before the table's row, named by its file
 handover. Where neither the table nor those instructions place the model, the handover says that
 the table does not list it, names any project rule that routes work to it, and says that the spec
 tier follows.
+
+Where the implementer's capability is unknown, because the person has not said and nothing above
+places the model, write the package with full detail (the spec tier's `--detail full` brief) and
+ask the person one plain question, batched with the other questions: is the model that will build
+this a frontier model (the provider's most capable tier) or a smaller, faster model? Shape the
+hand-off from the answer: a frontier model takes the outcome tier, a smaller, faster model the spec
+tier, and where the person says it sits between them, the design tier. Until the answer comes, the
+spec tier's package stands, and the handover says that the question is open.
 
 ## Outcome tier
 

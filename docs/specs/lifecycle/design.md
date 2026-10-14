@@ -71,10 +71,13 @@ checks the behavior kept from each cited inspiration, and E21 claims no parity w
 | The exposure facts, each stream's route document, the gate owners, the leave-when signals, the project's measure of a better outcome and the dated changes are lines in the project's `local` fragment, which every task already loads | a separate lifecycle file with stage tables and a form check, which copies routes the project already writes down and checks only a model's own text | agent | decided |
 | Obligations are fragments. The adopt skill proposes them from the exposure facts and the signals, and the person confirms; two setup fragments are new: `client` (acceptance by an outside party) and `explore` (work whose aim is to learn) | a closed list of duty ids beside the fragments, which gives one text two selectors | agent | decided |
 | A person decides only at an irreversible edge, an outside contract or an unsettled intent; a step inside a unit of work is not a gate | a gate at every stage; a gate named by the stage alone | agent | decided |
-| A transition is a change of exposure or of route. Its decision brief carries the fragment diff, the work in flight read from the ticket export, the worktrees, the open briefs, the standing grants and any partial deploy, what each item now owes, and what the change invalidates; on a yes, only the stages not yet reached are planned again | automatic switching; restarting the work in flight under the new route | agent | decided |
+| A transition is a change of exposure or of route. Its decision brief carries the fragment diff, the work in flight read from the ticket export, the worktrees, the open briefs, the standing grants and any partial deploy, what each item now owes, and what the change invalidates; on a yes, the stages not yet reached are planned again, and so is each finished stage whose evidence the change invalidates (it keeps its dated result as history and reads `UNVERIFIED` for the new exposure). A person's directive that names the new route is the decision: the brief records it and asks only what the directive left open (maintainer, 2026-10-14). Where adoption refuses the change, the `Changed —` line reads approved, not applied | automatic switching; restarting the work in flight under the new route; a second yes for a route the person already named | agent | decided |
 | Three templates, `personal`, `shared` and `client`, use the new-project reference's words. Each holds example `local` lines, a fragment list, a fits-when line, and leave-when rows that include the moves back | five templates on two axes; a template per kind of company | agent | decided |
 | `land-change`, `run-acceptance` and `sync-tracker` ship in 1.6.0, before a case has run against the text they replace; the ten-skill default install becomes thirteen (maintainer, 2026-10-10) | stage support as text only, with skills after fixtures show that the text does not resolve the case | user | decided |
 | `adopt --check` and `--detect` print one line for each signal a file shows that the recorded exposure or fragment selection contradicts, refuse nothing and change no exit code | no check until a fixture shows that the exposure lines change an agent's choice; a form check of the record | agent | decided |
+| A standing grant for a tracker write covers it when it names the kind of write, the notifications and automations that write is known to start, and the conflict rule; any other write goes as a decision brief. Comment-only is not a universal rule, since what a write starts depends on the tracker and its automations (maintainer, 2026-10-14) | a grant limited to comments; a grant that names the tracker alone | user | decided |
+| A production read is allowed with a read-only credential the project gave, under a grant that names the target and its end, and a costly read on a loaded system is named in the grant; a credential that bypasses a control stays forbidden. The `runtime` and `deploy` fragments say the same (maintainer, 2026-10-14) | a ban on every production credential; a read under any credential the agent can find | user | decided |
+| A recurring job that outlives the task, and a probe a sandbox denied, get no new kernel sentence: the lifecycle reference already requires a grant that covers a new ongoing job's scope, owner and stop condition, and the `commands` fragment already reads a denied probe as `UNVERIFIED` and a job that outlives the task as needing a grant. The field shows one instance each | a kernel line for each | agent | decided |
 
 The qualification row stays `assumed`. E21 uses synthetic adoption fixtures and the engine's
 own checks. No record in this repository shows the release adopted by a real project, so that
@@ -103,7 +106,7 @@ signals:
 | it publishes a package | `ci-release`, and consumers moved within a stated window or the hold recorded with an owner |
 | it changes stored data | `db-migrations` |
 | a client or a regulator accepts the work | `client` (new) |
-| its expected life starts with learning | `explore` (new) |
+| its expected life starts with learning | `explore` (new): a stopped probe completes with its learning record and the person's stop decision, and a walking skeleton is kept only where the decided outcome is a kept product |
 
 **Routes stay the project's.** Context names each stream's route document and the kind of change
 that takes it (`Streams — <stream>: route in <file>; takes <kind of change>`, with an optional
@@ -132,8 +135,10 @@ writes one decision brief with the fragment diff and the work in flight (open ti
 export, branches the main line does not hold and their requests, worktrees with uncommitted work,
 open briefs, standing grants and their dates, a release artifact not yet published, a deploy or
 cutover receipt in a partial phase; what it cannot read is `UNVERIFIED`), what each item now owes, what the change
-invalidates and what to retire. On a yes it adds a dated `Changed —` line to Context, and plans only
-the stages not yet reached. Each item in flight keeps the state its own record shows. A resume
+invalidates, what still holds under a lighter route (data kept, versions supported, consumers,
+contract duties) and what to retire. On a yes it adds a dated `Changed —` line to Context, plans
+the stages not yet reached and replans each finished stage whose evidence the change invalidates.
+A person's directive that names the route is the decision, which the brief records. Each item in flight keeps the state its own record shows. A resume
 that finds uncommitted work and nothing landed since the last handoff is a misfit report at the
 handoff, not a transition: it asks whether the pause is deliberate, and the work its grant covers
 goes on.
@@ -146,7 +151,8 @@ a comparison and names the differences; adoption never installs one.
 **Stage support.** `land-change` drives a request and its fix loop to landing; `run-acceptance`
 prepares, pre-runs and records acceptance by an outside party; `sync-tracker` reads a tracker that
 is not the ticket store into a markdown source (the sources design reads markdown) and writes back
-batched comments under a grant, each other write being a decision brief. The `gather-requirements`
+under a grant that names the kind of write, its known notifications and automations and the
+conflict rule, any other write being a decision brief. The `gather-requirements`
 reference names the source kinds (a transcript, a data trace, a story, a design file). A held
 decision brief names its default and its expiry, a moment the person or the project already named,
 or says the work waits. The `client` template holds a route example for a client delivery, to
@@ -157,7 +163,11 @@ tags or a `VERSION` file. `adopt --check` and `--detect` compare the signals wit
 exposure, the fragment selection and the declared edges, and print `signal present, record says
 otherwise` lines. An author is not a maintainer, so the lines claim only what the person recorded
 (`solo` selected, an exposure line that says one person), never the absence of `team`. A person
-settles a line with `Drift — <signal>: <reason>` in Bounds, and it no longer prints.
+settles a line with `Drift — <signal>: <reason>` on a line of its own in the Bounds slot, outside
+a fenced block and with a reason; the line changes class and prints beside the current evidence, as
+`…; settled by the person: <reason>`, so a settlement that no longer fits is seen, and no ledger
+keeps it. A declared edge silences a line only where it names the act (a publish, a release, a tag
+push, a deploy, a promotion, a push to production), never by the words `production` or `tag` alone.
 
 ## Transition coverage
 

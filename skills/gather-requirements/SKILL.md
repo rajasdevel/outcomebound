@@ -14,10 +14,12 @@ to them as a decision brief.
 
 Settle a gap yourself where anything readable settles it: the code, the docs, the tickets, the
 history, the person's own words. Where two readings would produce different observable results
-and nothing readable chooses, build the reading a later commit can undo, record it in one line
+and nothing readable chooses, build the reading that is easy to undo in the code and in what it
+does to data, people and commitments, record it in one line
 as assumed, and name it in your report as a choice the person may reverse. The fork is the
-person's only where every reading would be hard to undo, such as data deleted, a message sent or
-an interface others already call: put it to them as a decision brief (the `decision-brief`
+person's only where every reading would be hard to undo, in the code or in what operating it does
+to data, people or commitments, such as data deleted, a message sent or an interface others
+already call: put it to them as a decision brief (the `decision-brief`
 skill) and continue the work that does not depend on it.
 
 "Make the export faster" is settled by reading: the history shows the nightly export timing out,

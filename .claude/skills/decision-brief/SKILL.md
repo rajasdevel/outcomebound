@@ -22,6 +22,13 @@ the work that waits on it, so every other item goes on. Some harnesses honor aut
 the user's own words: for an act a permission check guards, such as a deletion or a write outside
 the project, the brief names the act so the user's reply can state it, not only a letter.
 
+A question the person already settled is not asked again: their launch block, their standing
+order and their earlier answer stand, and an order to run unattended is the answer to "may I ask".
+A harness or sandbox that refuses an act the person already granted has raised no new decision.
+Say in the first line of your next message what was refused, by which rule or command, and ask the
+person to run the act or to adjust the harness; draw no brief with options and a default, and
+continue every item the refusal does not block.
+
 ## Do the due diligence first
 
 Before you ask, check everything within reach that could change the answer: the history of the
@@ -73,6 +80,19 @@ need `--form mermaid`. Paste the complete rendered brief into the user-facing te
 never inside a code block. To revise it, change the input and draw it again; do not shorten or rewrite the rendered
 brief. A refused brief is fixed and drawn again, never hand-written. Without `outcomebound` on PATH,
 write the same shape by hand, options lettered.
+
+A short input for one brief with two options. `recommend_way` is the words of a way, never its
+letter, since the command writes the letters; `facts` carries the `If unanswered` pair:
+
+```json
+{"briefs": [{"id": "D1", "heading": "Keep the old flag for one release?",
+  "recommend": "two adopters still set it", "recommend_way": "keep it",
+  "options": [["keep it", "adopters get a warning first", "one more release carries the old code path"],
+              ["drop it now", "the code path goes today", "an adopter who sets it is refused on upgrade"]],
+  "checked": {"verdicts": ["PASS"], "text": "`grep -r old_flag` finds two adopter configs"},
+  "facts": [["If unanswered", "the flag stays; only this item waits"]],
+  "undo": {"can_be_undone": true, "text": "revert the commit"}}]}
+```
 
 A drawn brief, fenced here only to show its lines; its bare `D1` is right only where the
 project's instructions number briefs:

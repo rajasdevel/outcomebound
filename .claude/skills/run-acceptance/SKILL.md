@@ -27,10 +27,15 @@ is a gap; say so rather than adding a script that touches it by name.
 
 ## Read the build
 
-An environment serves one build at a time, and it may not be the one you expect. Before you run or
-hand over a script, read which build the environment serves: the version, commit or build id it
-reports about itself, from the environment and not from the pipeline's log. Where the environment
-does not report it, say so; the build is then `UNVERIFIED`, and so is every result.
+An environment may serve more than one build or flag state, by route, by user group or by flag, and
+what it serves may not be the one you expect. Before you run or hand over a script, read which build
+the environment serves: the version, commit or build id it reports about itself, from the environment
+and not from the pipeline's log, and the service versions and the flag or configuration state that
+the script exercises. Read them again after the run. Identity is what the artifact is: a digest or
+a version for a delivered file or a library, the environment's own report for a service. Where the
+environment does not report it, say so; the build is then `UNVERIFIED`, and so is every result. A
+run during which the build or the state changed, or that reached a mix of them, is `UNVERIFIED`:
+run it again.
 
 ## Pre-run
 
@@ -48,6 +53,8 @@ is not acceptance.
 Draft the acceptance record with these fields:
 
 - the build identity, and the environment it was served from;
+- the service versions and the flag or configuration state each script exercised, as read around
+  the run;
 - each script, with the result of the pre-run and the evidence;
 - who accepted, in their own words: what they said or wrote, quoted, and not a summary;
 - when they accepted.
@@ -79,5 +86,6 @@ not show are marked as not shown.
 
 Acceptance is of a build. A later build voids the acceptance for the changes it touches: name those
 changes and say that they need acceptance again. A later build that touches nothing the accepted
-scripts reach may keep it, but only when you say how you know. Never carry an acceptance forward
+scripts reach may keep it, but only when you say how you know. A release commit that sets only the
+version, the changelog and the pins touches none of them. Never carry an acceptance forward
 by changing the build identity in the record.
