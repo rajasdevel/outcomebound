@@ -68,6 +68,12 @@ def thread_id(stdout: str) -> str:
     return key
 
 
+def parse_records(raw: bytes) -> list[dict[str, Any]]:
+    """The JSON records of a session file's bytes, one a line."""
+
+    return [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+
+
 def find_session(sessions: Path, key: str) -> tuple[Path, bytes, list[dict[str, Any]]]:
     """The one session file for thread `key` under `sessions`, its exact bytes and its records.
 
@@ -81,7 +87,7 @@ def find_session(sessions: Path, key: str) -> tuple[Path, bytes, list[dict[str, 
     if source.is_symlink() or not source.resolve().is_relative_to(sessions.resolve()):
         raise ValueError("native session is a symlink or outside the selected sessions folder")
     raw = source.read_bytes()
-    records = [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+    records = parse_records(raw)
     first = records[0] if records else None
     if not isinstance(first, dict) or first.get("type") != "session_meta":
         raise ValueError("native session has no initial session_meta")

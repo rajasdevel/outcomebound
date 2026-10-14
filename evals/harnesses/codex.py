@@ -27,6 +27,7 @@ from evals.codex_events import (
     warnings,
 )
 from evals.harnesses import CallResult, Request
+from evals.native_commands import fill_directories
 from evals.native_receipts import NativeCapture, copy_exact, find_session, thread_id
 from evals.processes import bounded_command
 
@@ -161,7 +162,10 @@ class CodexHarness:
             last_message.unlink(missing_ok=True)
         transcript = command_transcript(stdout, stderr)
         events = parse_events(stdout) or []
-        observed, extras, checks = identify(stdout, sessions, keep, request, cwd)
+        observed, extras, checks, session = identify(stdout, sessions, keep, request, cwd)
+        # The stream gives no working directory for a command; the native session does.
+        transcript, filled = fill_directories(transcript, session)
+        extras.update(filled)
         extras.update(
             harness=NAME,
             cli_warnings=warnings(events),
@@ -212,14 +216,17 @@ def _agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]
     return values[0], ""
 
 
+Records = list[dict[str, Any]]
+
+
 def identify(
     stdout: str, sessions: Path, keep: Path, request: Request, cwd: Path
-) -> tuple[dict[str, str | None] | None, dict[str, Any], list[list[str]]]:
+) -> tuple[dict[str, str | None] | None, dict[str, Any], list[list[str]], Records | None]:
     """What the call's native session says it ran, set against what was asked for.
 
     Returns the observed identity (None where no session was read), the meta entries for the
-    session, and one check per item. A check that fails carries, as its detail, the text of the
-    call error."""
+    session, one check per item, and the session's records (None where none were read). A check
+    that fails carries, as its detail, the text of the call error."""
 
     model, effort = request
     events = parse_events(stdout) or []
@@ -231,12 +238,12 @@ def identify(
 
     extras: dict[str, Any] = {"thread_id": None, "native_session": None, "native_sha256": None}
     if not check("stream-readable", bool(events), "events read", "the CLI stream has no events"):
-        return None, extras, checks
+        return None, extras, checks, None
     try:
         key = thread_id(stdout)
     except ValueError as problem:
         check("thread-id", False, "", f"the stream has no usable thread id: {problem}")
-        return None, extras, checks
+        return None, extras, checks, None
     check("thread-id", True, key, "")
     extras["thread_id"] = key
     try:
@@ -244,7 +251,7 @@ def identify(
         extras["native_sha256"] = copy_exact(source, raw, keep)
     except (OSError, ValueError) as problem:
         check("native-session", False, "", f"no native session for {key}: {problem}")
-        return None, extras, checks
+        return None, extras, checks, None
     extras.update(native_session=str(source), native_copy=str(keep))
     check("native-session", True, str(source), "")
 
@@ -295,4 +302,4 @@ def identify(
             f"{model} == requested",
             f"the stream reports model {sorted(named)}, not {model}",
         )
-    return observed, extras, checks
+    return observed, extras, checks, records

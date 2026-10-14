@@ -46,8 +46,11 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from evals.codex_events import command_transcript, observed_model, tokens_used
+from evals.evidence import grading_digest, workspace_digest
 from evals.harnesses import Request
 from evals.harnesses.codex import CodexHarness
+from evals.native_commands import fill_directories
+from evals.native_receipts import parse_records
 from evals.processes import bounded_command, partial_output
 
 # The stream decoders the graders' tests read through this module.
@@ -663,6 +666,40 @@ def run_fixture(
     elapsed = round(time.monotonic() - started, 1)
 
     intact, protected_report = check_protected(workdir, protected)
+    report = grade(name, workdir, Left(seed, transcript, answer), (intact, protected_report), extra)
+    extra.update(
+        protected_snapshot=protected,
+        elapsed_seconds=elapsed,
+        grading_files_sha256=grading_digest(REPO / "evals", name),
+        # Taken last, after the post-checks: it is what a later `--regrade` finds.
+        workspace_sha256=workspace_digest(workdir, {**child_env(), **HERMETIC_GIT}),
+    )
+    return answer, report, returncode, extra
+
+
+class Left(NamedTuple):
+    """What a run left to judge, besides its workspace: the seed commit read before the model
+    ran, the transcript document and the final answer."""
+
+    seed: str | None
+    transcript: str
+    answer: str
+
+
+def grade(
+    name: str,
+    workdir: Path,
+    left: Left,
+    protected: tuple[bool, str],
+    extra: dict[str, Any],
+) -> str:
+    """Judge what a run left: the post-checks, unless a grading input changed (`protected` is
+    whether none did, and the protected check's report). Sets the verdict, the claims and what
+    the checks observed in `extra`, and returns the report: the transcript, then the protected
+    check and the post-checks' own output."""
+
+    seed, transcript, answer = left
+    intact, protected_report = protected
     verdict, output, log_dir = "FAIL", "VERDICT: FAIL\n", None
     if intact:
         try:
@@ -672,18 +709,15 @@ def run_fixture(
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
             verdict, output = "UNVERIFIED", partial_output(problem)
-
     extra.update(
         verdict=verdict,
         claims={claim: result for result, claim in CLAIM_LINE.findall(output)},
         protected_intact=intact,
         observations=observations(log_dir),
         seed_sha=seed,
-        elapsed_seconds=elapsed,
         post_check_log_dir=str(log_dir) if log_dir else None,
     )
-    report = f"{transcript}\n\n--- post-checks ---\n{protected_report}\n{output}"
-    return answer, report, returncode, extra
+    return f"{transcript}\n\n--- post-checks ---\n{protected_report}\n{output}"
 
 
 def call_error(returncode: int | None, answer: str, extra: dict[str, Any], model: str) -> str:
@@ -790,6 +824,142 @@ def run_one(
     if error:
         sys.stderr.write(f"run: {name}: {error}\n")
     return bool(error), index_row(status, name, meta)
+
+
+REGRADED = "regraded_from"
+UNVERIFIED = "UNVERIFIED"
+POST_CHECKS = "\n--- post-checks ---\n"
+
+
+def _regrade_plan(source: Path, path: Path, meta: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """What one kept run needs to be judged again, and why it cannot be: the saved files, the
+    workspace and the two digests, each compared where the source run recorded one.
+
+    The returned dict holds the paths and the two statements for the new meta; the string is
+    the reason to refuse, or empty."""
+
+    name = meta.get("fixture", "")
+    fixture = FIXTURES / str(name)
+    plan: dict[str, Any] = {"meta": meta, "name": name}
+    if not name or not (fixture / "post.plan.json").is_file():
+        return plan, f"this checkout has no fixture {name!r}"
+    for key, suffix in (
+        ("answer", "answer.md"),
+        ("prompt", "prompt.md"),
+        ("saved", "transcript.txt"),
+    ):
+        plan[key] = path.with_name(f"{name}.{suffix}")
+        if not plan[key].is_file():
+            return plan, f"{plan[key].name} is missing"
+    plan["native"] = path.with_name(f"{name}.native.jsonl")
+    if plan["native"].is_file():
+        recorded = meta.get("native_sha256")
+        if recorded and hashlib.sha256(plan["native"].read_bytes()).hexdigest() != recorded:
+            return plan, f"{plan['native'].name} differs from the digest the meta recorded"
+    else:
+        plan["native"] = None
+    workdir = Path(str(meta.get("fixture_repo", "")))
+    if not workdir.is_dir():
+        return plan, f"the kept workspace {workdir} is missing"
+    plan["workdir"] = workdir
+    now = grading_digest(REPO / "evals", str(name))
+    recorded = meta.get("grading_files_sha256")
+    if recorded and recorded != now:
+        return plan, "this checkout's fixture files under evals/ differ from the ones the run used"
+    plan["grading_files"] = "PASS" if recorded else UNVERIFIED
+    before = workspace_digest(workdir, {**child_env(), **HERMETIC_GIT})
+    recorded = meta.get("workspace_sha256")
+    if recorded and recorded != before:
+        return plan, "the kept workspace differs from the state the run left"
+    plan["workspace_unchanged"] = "PASS" if recorded and before else UNVERIFIED
+    return plan, ""
+
+
+def _regrade_protected(workdir: Path, meta: dict[str, Any]) -> tuple[bool, str, str]:
+    """The protected check as the source run recorded it: against its snapshot where it kept
+    one; otherwise (a run from before snapshots were kept) its own result is carried."""
+
+    snapshot = meta.get("protected_snapshot")
+    if isinstance(snapshot, dict) and snapshot:
+        intact, report = check_protected(workdir, snapshot)
+        return intact, report, "PASS" if intact else "FAIL"
+    intact = meta.get("protected_intact") is True
+    report = (
+        f"{UNVERIFIED} protected-grading-inputs - the source record keeps no snapshot; its own "
+        f"result is carried: {'intact' if intact else 'changed'}"
+    )
+    return intact, report, UNVERIFIED
+
+
+def regrade(source: Path, out: Path) -> int:
+    """Judge the runs kept under `source` again, with no model call, into the new `out`.
+
+    Each run's workspace, saved transcript, answer, seed and native session copy are read; the
+    command records are rebuilt from the native session (`fill_directories`); the protected
+    check and the post-checks run as in a normal run, from a new grading folder. The observed
+    identity and the call's own record stay as the source run kept them. Exit 2, with nothing
+    written, where any run cannot be judged again: a digest differs or a file is missing.
+    """
+
+    paths = sorted(source.glob("*.meta.json"))
+    if not paths:
+        print(f"no run records under {source}")
+        return 1
+    plans, refusals = [], []
+    for path in paths:
+        meta = json.loads(path.read_text(encoding="utf-8"))
+        plan, why = _regrade_plan(source, path, meta)
+        plans.append(plan)
+        if why:
+            refusals.append(f"regrade: refused {plan['name'] or path.name}: {why}")
+    if refusals:
+        sys.stderr.write("\n".join(refusals) + "\n")
+        return 2
+    try:
+        out.mkdir(parents=True, exist_ok=False)
+    except FileExistsError:
+        raise SystemExit(f"regrade: {out} already exists; name a new --out") from None
+    rows = []
+    for plan in plans:
+        rows.append(_regrade_one(source, out, plan))
+        _write(out / "INDEX.json", rows)
+    return 0
+
+
+def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any]:
+    meta, name, workdir = plan["meta"], plan["name"], plan["workdir"]
+    saved = plan["saved"].read_text(encoding="utf-8", errors="replace")
+    transcript = saved.split(POST_CHECKS, 1)[0]
+    answer = plan["answer"].read_text(encoding="utf-8")
+    session = None
+    if plan["native"] and meta.get("harness", HARNESS) == HARNESS:
+        session = parse_records(plan["native"].read_bytes())
+    transcript, filled = fill_directories(transcript, session)
+    intact, protected_report, protected_check = _regrade_protected(workdir, meta)
+    extra: dict[str, Any] = {}
+    left = Left(meta.get("seed_sha"), transcript, answer)
+    report = grade(name, workdir, left, (intact, protected_report), extra)
+    problem = extra.pop("error", "")
+    record = {
+        **meta,
+        **extra,
+        **filled,
+        REGRADED: str(source),
+        "error": meta.get("error") or problem,
+        "protected_check": protected_check,
+        "grading_files_unchanged": plan["grading_files"],
+        "workspace_unchanged": plan["workspace_unchanged"],
+        "workspace_sha256": workspace_digest(workdir, {**child_env(), **HERMETIC_GIT}),
+    }
+    (out / f"{name}.prompt.md").write_text(plan["prompt"].read_text(encoding="utf-8"), "utf-8")
+    (out / f"{name}.answer.md").write_text(answer, encoding="utf-8")
+    (out / f"{name}.transcript.txt").write_text(report, encoding="utf-8")
+    if plan["native"]:
+        shutil.copyfile(plan["native"], out / f"{name}.native.jsonl")
+    _write(out / f"{name}.meta.json", record)
+    claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
+    print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else ""))
+    return index_row({"harness": HARNESS, **record}, name, record)
 
 
 def _provenance(metas: list[dict[str, Any]]) -> list[str]:
@@ -969,6 +1139,14 @@ def _parser() -> argparse.ArgumentParser:
         "harness meets the run contract; runs no fixture",
     )
     parser.add_argument(
+        "--regrade",
+        metavar="DIR",
+        help="judge again, with no model call, the runs kept under DIR: rebuild each run's "
+        "command records from its native session copy and run the protected check and the "
+        "post-checks on its kept workspace, into the new --out; refuses where the fixture's "
+        "files under evals/ or the workspace differ from what the run recorded",
+    )
+    parser.add_argument(
         "--summary",
         nargs="+",
         metavar="DIR",
@@ -1070,6 +1248,8 @@ def _main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.summary:
         return summarize([Path(item) for item in args.summary])
+    if args.regrade:
+        return regrade(Path(args.regrade), Path(args.out) if args.out else RAW / uuid.uuid4().hex)
     names = checked_fixtures(parser, args)
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id

@@ -12,6 +12,17 @@ MODEL_LINE = re.compile(r"^model: (\S+)$", re.MULTILINE)
 TOKENS_LINE = re.compile(r"^tokens used\s*\n\s*([\d,]+)\s*$", re.MULTILINE)
 
 
+def command_outcome(item: dict) -> str:
+    """The status a completed command item records: `succeeded`, `exited N`, `failed`,
+    `declined`, or `unverified` where it names no exit code or a status this does not know.
+    The same rule reads a stream item and an item of the native session."""
+
+    code, status = item.get("exit_code"), item.get("status")
+    if status == "completed" and type(code) is int:
+        return "succeeded" if code == 0 else f"exited {code}"
+    return status if status in ("failed", "declined") else "unverified"
+
+
 def _completed_command(item: dict, prior: Command) -> Command | None:
     command, directory = item.get("command"), item.get("cwd", "")
     if command != prior.command or not isinstance(directory, str):
@@ -21,13 +32,7 @@ def _completed_command(item: dict, prior: Command) -> Command | None:
         prior = Command(prior.command, prior.status, "")
     if directory and prior.cwd and directory != prior.cwd:
         return None
-    code, status = item.get("exit_code"), item.get("status")
-    outcome = "unverified"
-    if status == "completed" and type(code) is int:
-        outcome = "succeeded" if code == 0 else f"exited {code}"
-    elif status in ("failed", "declined"):
-        outcome = status
-    return Command(command, outcome, directory or prior.cwd)
+    return Command(command, command_outcome(item), directory or prior.cwd)
 
 
 def _command_records(events: list[dict]) -> list[Command] | None:

@@ -64,6 +64,20 @@ done
   also prints the `memory_mode` of the thread from `$CODEX_HOME/state_5.sqlite`, read-only, as an
   `observed:` line that never fails it. It runs no fixture, makes exactly one model call, and
   exits 1 on any `FAIL`. Run it after a new Codex version and before a pass.
+- `python3 evals/run.py --regrade RESULTS_DIR --out NEW_DIR` judges the kept runs of a pass
+  again, with no model call. For each `<fixture>.meta.json` it reads the kept workspace, the saved
+  transcript, answer and native copy; rebuilds the command records from the native copy (see
+  `<fixture>.transcript.txt` below); runs the protected check and the post-checks as a normal
+  run does, from a new grading folder; and writes the new meta, transcript, answer, prompt and
+  native files and an `INDEX.json` to `NEW_DIR`. Each new meta names `regraded_from` and keeps the
+  identity the source run observed. It refuses, exit 2 and nothing written, where a run's kept
+  workspace differs from the digest (`workspace_sha256`) its meta recorded, where this checkout's
+  files that grade the fixture (`grading_files_sha256`: its fixture folder, the fixture folders its
+  files name, `evals/fixtures/*` files and `evals/graders`) differ from the recorded digest, or
+  where a kept file is missing or the native copy differs from `native_sha256`. A meta from before
+  these digests were kept is not refused: `workspace_unchanged` and `grading_files_unchanged` say
+  `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
+  source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
 
 ## Reading a result
 
@@ -91,7 +105,16 @@ Each run directory holds five files for each fixture. Each name starts with the 
   no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`. An apply-patch edit
   (`file_change`) and a CLI warning (`error`) are known items and are not commands; the warning
   texts go to `cli_warnings` in the meta file. Any other item or event type is unknown, and the
-  meta file names it in `unknown_item_types`.
+  meta file names it in `unknown_item_types`. The stream gives a command no working directory, so
+  each empty directory is set from the native session (next item): a stream command is the argv
+  shell-quoted, so `shlex.split` of it must equal the argv of a `CommandExecution` item of the
+  session, whose `cwd` is a `file://` URI. The directories are set only where the session has as
+  many commands as the stream and each pair matches, in order or, where overlapping calls
+  completed in another order, by text with one directory for each repeated command. Otherwise they
+  stay empty. The session's own cwd and the request are never used. The meta file records
+  `command_cwd_source` (`native`, or `none: <reason>`) and `command_native_disagreements`, the
+  places where the session's status or directory differs from the stream's record, which keeps
+  its own.
 - `<fixture>.native.jsonl`: the exact bytes of the session record that the CLI kept for the call,
   copied so the result outlives the pruning of the Codex home. The `--json` stream of codex-cli
   0.162.1 names a thread id and no model, effort or working directory, so a run takes them from
@@ -107,6 +130,9 @@ Each run directory holds five files for each fixture. Each name starts with the 
   and nothing is inferred from the arguments of the call. A call on any CLI version is judged by
   what its run shows. The meta file records `harness`, `thread_id`, `native_session`,
   `native_sha256`, `native_copy` and `observed` (`model`, `effort`, `cwd`, `cli_version`).
+  It also records, taken at the end of the run, `workspace_sha256` (the Git status, `HEAD`, the
+  diff against `HEAD` and the content of every untracked file; nothing under `.git`),
+  `grading_files_sha256` and `protected_snapshot`, which `--regrade` compares.
   The record does not say what the model did: arbitrary JavaScript in a custom tool call is not
   automatically interpreted, so review of command order and effects stays separate from the
   automatic report, and disclosure of instrumentation stays in the prompt.

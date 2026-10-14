@@ -51,7 +51,11 @@ METERED = (
 # $OB_FAKE_MODEL or $OB_FAKE_EFFORT, and its working directory. $OB_FAKE_SESSION breaks the
 # record in one way (none, twice, symlink, wrong-id, no-turn-context, split-model, no-version);
 # $OB_FAKE_ITEMS names extra item types for the stream; $OB_FAKE_STREAM_MODEL makes the stream
-# name a model, as an older CLI did.
+# name a model, as an older CLI did. $OB_FAKE_NATIVE_COMMANDS makes the stream give each command
+# as the shell-quoted argv of a `zsh -lc` call with no working directory, as 0.162.1 does, and
+# the session record each command's `CommandExecution` item with its `cwd`: `exact`; `workdir`
+# (the first command ran in a subfolder of the session's cwd); `count` (one item missing);
+# `text` (the first item's script differs).
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
@@ -73,7 +77,7 @@ sh "$OB_FAKE_ACTION" >/dev/null 2>&1 || exit 9
   done
 } > "$out"
 python3 - <<'EVENTS'
-import json,os
+import json,os,shlex
 from pathlib import Path
 argv=Path(os.environ["OB_FAKE_ARGV"]).read_text().splitlines()
 model=os.environ.get("OB_FAKE_MODEL") or argv[argv.index("-m")+1]
@@ -91,8 +95,14 @@ if "error" in extras:
     warning={"id":"item_0","type":"error","message":"Ignoring malformed agent role definition"}
     print(json.dumps({"type":"item.completed","item":warning}))
 print(json.dumps({"type":"turn.started"}))
+native=os.environ.get("OB_FAKE_NATIVE_COMMANDS","")
+ran=[]
 for number,command in enumerate(Path(os.environ["OB_FAKE_COMMANDS"]).read_text().splitlines()):
+    argv_=["/bin/zsh","-lc",command]
+    ran.append((argv_,os.getcwd()+"/sub" if native=="workdir" and number==0 else os.getcwd()))
     item={"id":str(number),"type":"command_execution","command":command,"cwd":os.getcwd()}
+    if native:
+        item={"id":str(number),"type":"command_execution","command":shlex.join(argv_)}
     print(json.dumps({"type":"item.started","item":item}))
     print(json.dumps({"type":"item.completed","item":{**item,"status":"completed","exit_code":0}}))
 if "file_change" in extras:
@@ -114,6 +124,13 @@ if mode != "none" and os.environ.get("CODEX_HOME"):
     records=[{"type":"session_meta","payload":meta}]
     if mode!="no-turn-context":
         records.append({"type":"turn_context","payload":context})
+    shown=ran[:-1] if native=="count" else ran
+    if native=="text":
+        shown=[([*shown[0][0][:2],shown[0][0][2]+" --changed"],shown[0][1]),*shown[1:]]
+    for number,(a,where) in enumerate(shown if native else []):
+        item={"type":"CommandExecution","id":f"exec-{number}","command":a,
+              "cwd":"file://"+where,"status":"completed","exit_code":0}
+        records.append({"type":"event_msg","payload":{"type":"item_completed","item":item}})
     if mode=="split-model":
         records.append({"type":"turn_context","payload":{**context,"model":"gpt-6-astra"}})
     text="".join(json.dumps(record)+"\n" for record in records)
@@ -1040,3 +1057,133 @@ def test_unknown_top_level_execution_form_is_not_an_empty_command_record():
     transcript = RUN.command_transcript("\n".join(map(json.dumps, events)), "")
     assert json.loads(transcript)["commands"] is None
     assert RUN.call_error(0, "done", {"model_observed": RUN.observed_model(transcript)}, "named")
+
+
+# --- command directories from the native session, and judging kept runs again --------------
+
+
+def _saved(out: Path, fixture: str = "small-fix") -> dict:
+    """The command-events document at the head of a run's saved transcript."""
+
+    text = (out / f"{fixture}.transcript.txt").read_text(encoding="utf-8")
+    return json.loads(text.split("\n--- post-checks ---\n", 1)[0])
+
+
+def _directories(out: Path) -> list[str]:
+    return [row[2] for row in _saved(out)["commands"]]
+
+
+@pytest.mark.parametrize("mode", ["exact", "workdir"])
+def test_a_command_takes_its_directory_from_the_native_session_even_where_it_is_not_the_cwd(
+    tmp_path: Path, mode: str
+) -> None:
+    """The 0.162.1 stream gives no directory; the native session gives each command's own."""
+
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": mode})
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    workspace = Path(meta["fixture_repo"]).resolve()
+    assert meta["command_cwd_source"] == "native" and meta["command_native_disagreements"] == []
+    assert _directories(out) == [
+        str(workspace / "sub") if mode == "workdir" else str(workspace),
+        str(workspace),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mode", "reason"),
+    [
+        ("count", "none: the stream has 2 commands, the native session 1"),
+        ("text", "none: the native commands do not match the stream's by text"),
+    ],
+)
+def test_NEGATIVE_CONTROL_a_native_session_that_does_not_match_the_stream_fills_nothing(
+    tmp_path: Path, mode: str, reason: str
+) -> None:
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": mode})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _meta(out)["command_cwd_source"] == reason
+    assert _directories(out) == ["", ""], "a directory was filled without an exact match"
+
+
+def _regrade(source: Path, target: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    code = RUN._main(["--regrade", str(source), "--out", str(target)])
+    return code, capsys.readouterr().err
+
+
+def test_a_kept_run_is_judged_again_with_no_model_call_and_keeps_its_observed_identity(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": "exact"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    original = _meta(out)
+    calls = (tmp_path / "calls.txt").read_text(encoding="utf-8")
+    new = out.parent / "regraded"
+    assert _regrade(out, new, capsys)[0] == 0
+    assert (tmp_path / "calls.txt").read_text(encoding="utf-8") == calls, "a call was made"
+    meta = _meta(new)
+    assert meta["regraded_from"] == str(out)
+    assert (meta["verdict"], meta["claims"]) == (original["verdict"], original["claims"])
+    assert meta["observed"] == original["observed"] and meta["thread_id"] == original["thread_id"]
+    assert meta["workspace_unchanged"] == "PASS" == meta["grading_files_unchanged"]
+    assert meta["protected_check"] == "PASS" and meta["command_cwd_source"] == "native"
+    assert meta["post_check_log_dir"] != original["post_check_log_dir"]
+    assert _directories(new) == _directories(out) != ["", ""]
+    assert (new / "small-fix.native.jsonl").read_bytes() == (
+        out / "small-fix.native.jsonl"
+    ).read_bytes()
+    rows = json.loads((new / "INDEX.json").read_text(encoding="utf-8"))
+    assert [(row["fixture"], row["harness"], row["verdict"]) for row in rows] == [
+        ("small-fix", "codex", original["verdict"])
+    ]
+    assert RUN.summarize([new]) == 0
+
+
+def test_a_run_from_before_digests_were_kept_is_judged_again_and_says_what_is_unverified(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The pass this was built for kept no digest, no protected snapshot and no directories."""
+
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": "workdir"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    path = out / "small-fix.meta.json"
+    old = _meta(out)
+    for key in ("workspace_sha256", "grading_files_sha256", "protected_snapshot"):
+        del old[key]
+    path.write_text(json.dumps(old), encoding="utf-8")
+    document = _saved(out)
+    for row in document["commands"]:
+        row[2] = ""
+    saved = out / "small-fix.transcript.txt"
+    after = saved.read_text(encoding="utf-8").split("\n--- post-checks ---\n", 1)[1]
+    saved.write_text(json.dumps(document) + "\n--- post-checks ---\n" + after, encoding="utf-8")
+    new = out.parent / "regraded"
+    assert _regrade(out, new, capsys)[0] == 0
+    meta = _meta(new)
+    assert meta["workspace_unchanged"] == "UNVERIFIED" == meta["grading_files_unchanged"]
+    assert meta["protected_check"] == "UNVERIFIED" and meta["verdict"] == "PASS"
+    assert meta["command_cwd_source"] == "native" and "" not in _directories(new)
+    assert meta["workspace_sha256"], "a digest is kept from here on"
+
+
+@pytest.mark.parametrize("what", ["workspace", "grading-files", "native-copy", "no-workspace"])
+def test_NEGATIVE_CONTROL_a_run_whose_evidence_changed_is_refused_and_nothing_is_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], what: str
+) -> None:
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": "exact"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    workspace = Path(meta["fixture_repo"])
+    if what == "workspace":
+        (workspace / "added-later.txt").write_text("x", encoding="utf-8")
+    elif what == "grading-files":
+        meta["grading_files_sha256"] = "0" * 64
+        (out / "small-fix.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    elif what == "native-copy":
+        (out / "small-fix.native.jsonl").write_bytes(b'{"type":"x"}\n')
+    else:
+        shutil.rmtree(workspace)
+    new = out.parent / "regraded"
+    code, error = _regrade(out, new, capsys)
+    assert code == 2 and "refused small-fix" in error, error
+    assert not new.exists()
