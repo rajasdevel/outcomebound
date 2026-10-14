@@ -34,10 +34,27 @@ VERBS = {
     "explorable": "explorable",
 }
 USAGE = (
-    "usage: outcomebound <verb> [argument ...]\nverbs: home "
+    "usage: outcomebound <verb> [argument ...]\nverbs: home version "
     + " ".join(VERBS)
     + "\nPrinted commands use POSIX shell syntax; on Windows they use PowerShell syntax."
 )
+
+
+# A word an agent tries that is no verb, and the verb that does what it meant.
+HINTS = {
+    "claims": "`outcomebound tickets check` reports a ticket's claims; "
+    "`outcomebound floor check . --claim NAME` runs one floor claim",
+    "check": "`outcomebound tickets check`, `floor check` and `instructions check` are the checks",
+}
+
+
+def version() -> str:
+    """The engine's version, from the VERSION file beside the engine's own files."""
+
+    try:
+        return (home.ROOT / "VERSION").read_text(encoding="utf-8").strip() or "unknown"
+    except OSError:
+        return "unknown"
 
 
 def _utf8_lf_streams() -> None:
@@ -59,11 +76,16 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(home.ROOT)
         return 0
+    if verb in ("--version", "-V", "version"):
+        print(f"outcomebound {version()}\nengine files: {home.ROOT}")
+        return 0
     if verb in ("-h", "--help"):
         print(USAGE)
         return 0
     if verb not in VERBS:
         print(USAGE, file=sys.stderr)
+        if verb in HINTS:
+            print(f"no verb `{verb}`: {HINTS[verb]}", file=sys.stderr)
         return 1
     module = VERBS[verb]
     sys.argv = [module, *arguments[1:]]

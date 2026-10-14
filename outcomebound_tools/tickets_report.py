@@ -474,13 +474,30 @@ def _folded_rows(folded: Sequence[Message]) -> list[str]:
     ]
 
 
-def render_text(report: Report) -> str:
+def _repeat_row(item: Message, tickets: Sequence[str]) -> str:
+    """A CLAIM_* message as a row; where it repeats, the first ticket and the count."""
+
+    if len(tickets) == 1:
+        return _message_row(item, tickets[0])
+    again = Message(
+        level=item.level,
+        code=item.code,
+        ticket="",
+        text=f"{item.text} (the same on {len(tickets)} tickets: {', '.join(tickets)})",
+        next=item.next,
+    )
+    return _message_row(again, "-")
+
+
+def render_text(report: Report, summary: bool = False) -> str:
     """The report as text: the run's own lines, then one row per subject.
 
     A row is the verdict, the subject and the reason, tab-separated, which is
     what a person greps. The codes in `_FOLDED` are summary rows after the run's
     own messages instead of one row each, for each claim or for the run; the
-    verdicts do not change, since each is a WARNING.
+    verdicts do not change, since each is a WARNING. Another CLAIM_* message
+    the same on several tickets prints once, with its tickets. With `summary`, a
+    ticket that reads PASS has no row and its messages print only as folded.
     """
 
     header = [
@@ -491,14 +508,27 @@ def render_text(report: Report) -> str:
     ]
     rows: list[str] = []
     folded: list[Message] = []
+    repeats: dict[tuple[str, str, str], tuple[int, Message, list[str]]] = {}
     for ticket in report.tickets:
         reads = _reads(ticket.messages)
-        rows.append(f"{reads}\t{ticket.id}\t{ticket.title} ({ticket.state})")
+        quiet = summary and reads == "PASS"
+        if not quiet:
+            rows.append(f"{reads}\t{ticket.id}\t{ticket.title} ({ticket.state})")
         for item in ticket.messages:
             if item.code in _FOLDED:
                 folded.append(item)
+            elif quiet:
+                continue
+            elif item.code.startswith("CLAIM_"):
+                key = (item.code, item.text, item.next)
+                if key not in repeats:
+                    repeats[key] = (len(rows), item, [])
+                    rows.append("")
+                repeats[key][2].append(ticket.id)
             else:
                 rows.append(_message_row(item, ticket.id))
+    for index, item, tickets in repeats.values():
+        rows[index] = _repeat_row(item, tickets)
     rows.extend(_message_row(item, item.ticket or "-") for item in report.messages)
     rows.extend(_folded_rows(folded))
     blocks = [block for block in (header, rows) if block]
