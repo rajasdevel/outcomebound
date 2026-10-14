@@ -38,10 +38,12 @@ and underscores. The element is one of: an `input` of type range, number or text
 
 - A number or range input reads as a number. An empty number input reads as `null`, which means
   unknown. A text input reads as text, or `null` when empty. A checkbox reads as true or false. A
-  fieldset of radios reads as the value of the chosen radio, or `null`.
+  fieldset of radios reads as the value of the chosen radio, or `null`; a radio marked `checked`
+  in the source is its starting value.
 - `data-unit` names the unit shown beside the value.
 - `data-source` is `checked` (you checked it), `assumed` (you did not) or `person` (the person
   gave it). The page shows the source as a badge. A value the person moves shows as theirs.
+  Without `data-source`, the badge reads "No source".
 - `data-note` is one line of plain help shown under the input.
 - Give a range input `min`, `max` and `step`; `threshold` reads them.
 - A range of values is two inputs, a low and a high. Never one input that pretends to be exact
@@ -85,6 +87,19 @@ Call `show` for every output in each `onChange`, so that no output keeps an old 
   `<ul data-legend><li data-kind="k1">Handles the request</li></ul>`. One kind, one label.
 - The runtime draws diagrams in the person's light or dark setting and draws them again when it
   changes. A wide diagram scrolls inside its own box.
+- To draw a diagram again with a new source, keep its `pre` element from `ready` and call
+  `explorable.diagram(pre, source)` in `onChange` only when the source differs from the one drawn
+  last: each call renders the diagram again.
+- The page's column is 60rem, about 900 px of content, and a diagram keeps its natural size. In
+  the pinned Mermaid, a flowchart label wraps near 200 px, so a row of three wrapped labels is
+  about as wide as the column. Give a long flow more rows, each a subgraph linked to the next, not
+  wider ones.
+- A flowchart subgraph keeps its own `direction` only while none of its nodes links outside it.
+  Link the subgraphs to each other, not their nodes.
+- A line back to an earlier subgraph can move that subgraph out of its place in the order. Leave
+  the line out, and say the way back in the text under the diagram.
+- A diamond `{...}` grows in height with the width of its label; a hexagon `{{...}}` keeps the
+  height of its text.
 
 ## Charts
 
@@ -156,7 +171,8 @@ An expectation states what a person sees: given these inputs, each named output 
 explorable.expect("120 req/s at a 75 percent hit rate", { rps: 120, hit: 75 }, { dbLoad: 30 });
 ```
 
-With `#explorable-check` in the address, the runtime sets the named inputs, lets your change
+With `#explorable-check` in the address, the runtime sets every input back to the value the page
+started with, then sets the named inputs, lets your change
 handlers run, reads the text each output shows, and compares it with the expected value written
 the way the output writes it: the same digits and unit. A range is `[low, high]`; unknown is
 `null`. It then writes `<script type="application/json" id="explorable-check-result">` before the
@@ -168,6 +184,7 @@ outputs with and without an expectation, the state of each library and the diagr
   working in a file beside the page. An expected value copied from the page's own output proves
   nothing.
 - Give every output an expectation. An output with none reads `UNVERIFIED`.
+- Name only the inputs that differ from the page's starting values; the others start from them.
 - Cover the unknown case with an expectation whose inputs are empty and whose outputs are `null`.
 - A pass says the page shows what you expected for those inputs. It does not say the model is
   right.
@@ -220,6 +237,10 @@ I entered".
   address.
 - Page code registers through `ready` and `onChange`. It never navigates, opens a window or loads
   anything, and it never calls `fetch`: the page cannot reach a host.
+- The runtime finds inputs, questions, tabs, steps and legends when the page starts, so they are
+  in the source; page code may draw a diagram of its own with `explorable.diagram`. Page code may
+  add plain content built from its own data in `ready`, such as the rows of a table; set the text
+  with `textContent`.
 - An `onChange` handler computes and calls `show` before it returns. Expectations read each output
   right after the handlers run, so a value computed later, in a promise or a timer, reads as stale.
 - Page code is a plain `<script>` with no `type`; data is `<script type="application/json">`.

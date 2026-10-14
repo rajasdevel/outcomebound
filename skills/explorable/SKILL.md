@@ -84,6 +84,25 @@ A page can mislead as well as inform. Hold these:
 - A diagram that needs a guide to read becomes an overview and a detail.
 - Give each diagram a title and a one-sentence description for screen readers.
 
+## Write it once
+
+Rework and repeated text take the person's time and add nothing to the page:
+
+- Outline the page's parts and interactions, then write the content straight into the source.
+  Drafting the content in full in your reasoning first writes it twice; working out a number or a
+  choice there is not drafting.
+- Take content from the most condensed document the work already has, with each value's source
+  as that document gives it, and open a longer source only for the part a section needs.
+- Where many tables or cards share one shape, keep their rows as data in the page's script and
+  build them in page code, so that a change edits one row. A citation stays a link in the source:
+  `check` refuses an address in a script.
+- Ask each question once. A what-if input that restates a brief's choice asks it twice; give
+  what-if inputs only to values that no brief chooses.
+- Read the page through `check`. Where layout matters, such as a diagram's width against the
+  column, measure it in a browser you drive; with none, the layout is `UNVERIFIED`. Look at the
+  page yourself at the end.
+- Change the source with targeted edits; never write it out again to change one part.
+
 ## Build and check
 
 1. Work in the project's working area (`.agents/work/<task>/` where the workspace fragment
