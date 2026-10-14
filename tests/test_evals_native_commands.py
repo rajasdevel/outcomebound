@@ -145,6 +145,7 @@ def test_a_directory_is_never_taken_from_the_session_cwd() -> None:
 def test_a_file_uri_becomes_an_absolute_path() -> None:
     assert directory_of("file:///a/b%20c") == "/a/b c"
     assert directory_of("file://localhost/a") == "/a"
+    assert directory_of("file:///C:/work/a%20b") == "C:/work/a b"
     assert directory_of("/a") == "/a"
     assert [directory_of(v) for v in ("", "a/b", "file://host/a", "ftp:///a", None)] == [""] * 5
 

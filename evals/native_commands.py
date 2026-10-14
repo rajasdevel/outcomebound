@@ -15,8 +15,9 @@ the argv exactly, on every command of 29 recorded runs. That is the whole corres
 from __future__ import annotations
 
 import json
+import re
 import shlex
-from pathlib import Path
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, NamedTuple
 from urllib.parse import unquote, urlparse
 
@@ -53,7 +54,13 @@ def directory_of(value: Any) -> str:
         if parsed.scheme != "file" or parsed.netloc not in ("", "localhost"):
             return ""
         value = unquote(parsed.path)
-    return value if Path(value).is_absolute() else ""
+        # A Windows URI path keeps a slash before its drive: `file:///C:/work` names `C:/work`.
+        if re.match(r"^/[A-Za-z]:[/\\]", value):
+            value = value[1:]
+    # The CLI and the runner share one machine, so the path is in that machine's form; either
+    # form's absolute path is accepted, and nothing relative is.
+    absolute = PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
+    return value if absolute else ""
 
 
 def _pairs(streams: list[list[str]], natives: list[list[str]], cwds: list[str]):
