@@ -51,12 +51,27 @@ _NOTE = re.compile(r"\([^)]*\)|\[[^\]]*\]")
 _ONE = re.compile(r"^\W*(one|1|a\s+single|single|sole|just\s+one|solo)\b", re.IGNORECASE)
 # What, after the first words, names another maintainer or a group.
 _MORE = re.compile(r",|&|\+|\b(and|or|plus|of\s+the|team|maintainers|people|developers)\b", re.I)
-_ACKNOWLEDGED = re.compile(r"Drift\s*[—-]\s*([A-Za-z][A-Za-z-]*)\s*:")
+# An acknowledgment starts its own line (a list marker may come first) and gives a reason; a
+# quote, a code span or a mention inside a sentence does not start the line.
+_ACKNOWLEDGED = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?Drift[ \t]*[—-][ \t]*([A-Za-z][A-Za-z-]*)[ \t]*:[ \t]*(\S[^\n]*)$",
+    re.MULTILINE,
+)
+_FENCE = re.compile(r"^[ \t]*(```|~~~)[^\n]*\n.*?(?:^[ \t]*\1[^\n]*$|\Z)", re.MULTILINE | re.DOTALL)
 SIGNAL_IDS = ("recent-authors", "codeowners", "deploy", "publishing", "exposure")
-# What a declared edge names: publishing (a release tag, a package, a registry), or deploying
-# (a deploy, a promotion, production).
-_PUBLISH_EDGE = re.compile(r"\b(publish\w*|releas\w*|tag\w*|package\w*|registr\w*)", re.I)
-_DEPLOY_EDGE = re.compile(r"\b(deploy\w*|promot\w*|production|prod)\b", re.I)
+# What a declared edge names: the act of publishing (a publish, a release, pushing or cutting a
+# tag, a package or a release, a registry), or of deploying (a deploy, a promotion, a push or
+# release to production). A word such as `production` or `tag` alone names a place or a thing,
+# not the act, and a database edge that mentions production data is not a deploy.
+_PUBLISH_EDGE = re.compile(
+    r"\b(publish\w*|releas\w*|registr\w*|tag\s+push\w*"
+    r"|(push|upload|ship|cut|creat|mov)\w*\s+(\w+\s+){0,3}(tag|package|release)\w*)",
+    re.I,
+)
+_DEPLOY_EDGE = re.compile(
+    r"\b(deploy\w*|promot\w*|go\s+live|(push|releas|ship|roll)\w*\s+(\w+\s+){0,3}to\s+prod\w*)",
+    re.I,
+)
 # A workflow that builds or pushes a container image.
 _IMAGE = re.compile(
     r"docker/build-push-action|\bdocker\s+(buildx\s+)?(push|build\w*\s[^\n]*--push)\b"
@@ -283,12 +298,34 @@ def maintained_by_one(local_text: str) -> bool:
     return bool(verdicts) and all(verdicts)
 
 
-def acknowledged(local_text: str | None) -> set[str]:
-    """The signals a person settled with a `Drift — <signal>: <reason>` line in the `local`
-    fragment; an id outside `SIGNAL_IDS` is ignored."""
+def _bounds_slot(local_text: str | None) -> str:
+    """The Bounds slot of the `local` fragment without fenced blocks; empty where the fragment is
+    absent or does not parse."""
 
-    found = _ACKNOWLEDGED.findall(local_text or "")
-    return {name.lower() for name in found} & set(SIGNAL_IDS)
+    if local_text is None:
+        return ""
+    try:
+        body = fragments.parse_fragment(local_text, "local").body
+    except fragments.FragmentError:
+        return ""
+    marks = list(fragments.SLOT_RE.finditer(body))
+    for index, mark in enumerate(marks):
+        if mark.group("slot").strip() == "Bounds":
+            stop = marks[index + 1].start() if index + 1 < len(marks) else len(body)
+            return _FENCE.sub("", body[mark.end() : stop])
+    return ""
+
+
+def acknowledged(local_text: str | None) -> dict[str, str]:
+    """The signals a person settled with a `Drift — <signal>: <reason>` line in the Bounds slot of
+    the `local` fragment, each with its reason. The line starts its own line outside a fenced
+    block and gives a non-empty reason; an id outside `SIGNAL_IDS` is ignored."""
+
+    settled: dict[str, str] = {}
+    for name, reason in _ACKNOWLEDGED.findall(_bounds_slot(local_text)):
+        if name.lower() in SIGNAL_IDS:
+            settled.setdefault(name.lower(), reason.strip())
+    return settled
 
 
 def declared_edges(local_text: str | None) -> str:
@@ -312,43 +349,41 @@ def lines(
     """The drift lines, one for each signal the files show that the record contradicts.
     `selected` is the fragment selection the manifest records, `detected` the fragment ids
     `--detect` proposes from the files, `local_text` the `local` fragment's text where the
-    record selects it. A signal prints nothing where a person settled it with a `Drift —` line,
-    where an edge the `local` fragment declares already names the act (publishing for
-    `ci-release`, deploying for `deploy`), or where the record agrees."""
+    record selects it. A signal a person settled with a `Drift —` line still prints, with the
+    reason beside it. A signal prints nothing where an edge the `local` fragment declares already
+    names the act (publishing for `ci-release`, deploying for `deploy`), or where the record
+    agrees."""
 
     found: list[str] = []
     settled = acknowledged(local_text)
     edges = declared_edges(local_text)
+
+    def add(signal: str, line: str) -> None:
+        # A settled signal still prints, with the person's reason: the current evidence stays
+        # beside the settlement, so a settlement that no longer fits is seen.
+        reason = settled.get(signal)
+        found.append(line if reason is None else f"{line}; settled by the person: {reason}")
+
     authors = recent_authors(target) or 0
-    if SOLO in selected and authors >= 2 and "recent-authors" not in settled:
-        found.append(f"{authors} recent authors present, record says solo selected")
+    if SOLO in selected and authors >= 2:
+        add("recent-authors", f"{authors} recent authors present, record says solo selected")
     claims = ((TEAM not in selected, "team not selected"), (SOLO in selected, "solo selected"))
     said = [phrase for held, phrase in claims if held]
-    if said and _has_codeowners(target) and "codeowners" not in settled:
-        found.append(f"CODEOWNERS present, record says {' and '.join(said)}")
+    if said and _has_codeowners(target):
+        add("codeowners", f"CODEOWNERS present, record says {' and '.join(said)}")
     deploys = DEPLOY in detected or _deploys_in_workflow(files)
-    if (
-        deploys
-        and DEPLOY not in selected
-        and "deploy" not in settled
-        and _DEPLOY_EDGE.search(edges) is None
-    ):
-        found.append("deploy configuration present, record says deploy not selected")
+    if deploys and DEPLOY not in selected and _DEPLOY_EDGE.search(edges) is None:
+        add("deploy", "deploy configuration present, record says deploy not selected")
     if (
         _publishes_package(files)
         and CI_RELEASE not in selected
-        and "publishing" not in settled
         and _PUBLISH_EDGE.search(edges) is None
     ):
-        found.append("publishing workflow present, record says ci-release not selected")
-    if (
-        authors >= 2
-        and "exposure" not in settled
-        and local_text is not None
-        and maintained_by_one(local_text)
-    ):
-        found.append(
+        add("publishing", "publishing workflow present, record says ci-release not selected")
+    if authors >= 2 and local_text is not None and maintained_by_one(local_text):
+        add(
+            "exposure",
             f"{authors} recent authors present, record says the local Exposure line is "
-            "maintained by one person"
+            "maintained by one person",
         )
     return found

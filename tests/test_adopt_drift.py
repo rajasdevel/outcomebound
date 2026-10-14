@@ -624,6 +624,8 @@ def test_a_release_workflow_that_pushes_an_image_and_publishes_a_package_prints_
         pytest.param("deploying to production", "deploy", id="production"),
         pytest.param("promoting a build", "deploy", id="promotion"),
         pytest.param("deleting a branch", None, id="neither"),
+        pytest.param("deleting production data", None, id="production-data"),
+        pytest.param("deleting a tag from the cache", None, id="tag-word"),
     ],
 )
 def test_an_edge_the_local_fragment_declares_answers_the_act_it_names(
@@ -689,23 +691,64 @@ def test_each_of_the_five_signals_prints_a_line_without_an_acknowledgement(
 def test_a_drift_line_in_the_bounds_slot_settles_its_signal_and_no_other(
     tmp_path: Path, capsys: Capture, signal: str
 ) -> None:
-    """Breaks if `Drift — <signal>: <reason>` does not silence its own signal, or silences
-    another."""
+    """Breaks if `Drift — <signal>: <reason>` does not mark its own signal as settled with the
+    reason while the current evidence still prints, or marks another."""
 
     found = all_five(tmp_path, capsys, f"Drift — {signal}: a reason the person wrote")
 
-    assert found == [line for name, line in ALL_FIVE.items() if name != signal]
+    assert found == [
+        f"{line}; settled by the person: a reason the person wrote" if name == signal else line
+        for name, line in ALL_FIVE.items()
+    ]
 
 
 def test_an_unknown_signal_id_in_a_drift_line_is_ignored(tmp_path: Path, capsys: Capture) -> None:
-    """Breaks if an id outside the five, or a line that is not `Drift — <id>: <reason>`, silences
+    """Breaks if an id outside the five, or a line that is not `Drift — <id>: <reason>`, settles
     a line; the ids are read case-insensitively and a hyphen in place of the dash is read."""
 
     ignored = "Drift — nonsense: x\nDrift deploy without a colon\nDrifting — deploy; no"
     assert all_five(tmp_path / "a", capsys, ignored) == list(ALL_FIVE.values())
 
     found = all_five(tmp_path / "b", capsys, "Drift - Recent-Authors: outside contributions")
-    assert found == [line for name, line in ALL_FIVE.items() if name != "recent-authors"]
+    assert found[0] == f"{ALL_FIVE['recent-authors']}; settled by the person: outside contributions"
+    assert found[1:] == list(ALL_FIVE.values())[1:]
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        pytest.param("Drift — deploy:", id="no-reason"),
+        pytest.param("Drift — deploy:   ", id="blank-reason"),
+        pytest.param("e.g. Drift — deploy: because", id="inside-a-sentence"),
+        pytest.param("> Drift — deploy: quoted", id="quoted"),
+        pytest.param("`Drift — deploy: code span`", id="code-span"),
+        pytest.param("```\nDrift — deploy: fenced\n```", id="fenced"),
+    ],
+)
+def test_a_drift_line_without_a_reason_or_outside_a_line_of_its_own_settles_nothing(
+    tmp_path: Path, capsys: Capture, bounds: str
+) -> None:
+    """Breaks if an empty, quoted, fenced or in-sentence `Drift —` mention settles a signal."""
+
+    assert all_five(tmp_path, capsys, bounds) == list(ALL_FIVE.values())
+
+
+def test_a_drift_line_outside_the_bounds_slot_settles_nothing(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a `Drift —` line in the Context slot settles a signal."""
+
+    files = {
+        ".outcomebound/fragments/local.md": local_fragment(
+            ["Exposure — maintained by: one person", "Drift — deploy: a reason"]
+        ),
+        "fly.toml": "app = 'x'\n",
+    }
+    target = repo(tmp_path / "t", files)
+    commit(target, ONE)
+    installed(target, capsys, "local")
+
+    assert drift_lines(run(capsys, str(target), "--check")[1]) == [DEPLOY_LINE]
 
 
 def test_the_exposure_claim_needs_every_stream_to_say_one_person(
