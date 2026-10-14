@@ -4,6 +4,7 @@ only that one."""
 import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
 from datetime import date
@@ -311,7 +312,7 @@ def _assert_release_waits_for_platforms(workflow: str) -> None:
     assert found is not None, "CI has no release job"
     fields = dict(re.findall(r"(?m)^    (needs|if): (.+)$", found[1]))
     needed = {name.strip().strip("'\"") for name in fields.get("needs", "").strip("[]").split(",")}
-    missing = {"test", "windows", "container"} - needed
+    missing = {"verify-tag", "test", "windows", "container"} - needed
     assert not missing, "release omits required jobs: " + ", ".join(sorted(missing))
     assert fields.get("if") == "startsWith(github.ref, 'refs/tags/v')", (
         "release must run only for a version tag after its dependencies succeed"
@@ -323,10 +324,33 @@ def test_release_publication_waits_for_every_platform_job() -> None:
     _assert_release_waits_for_platforms(workflow.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("omitted", ["test", "windows", "container"])
+@pytest.mark.parametrize("omitted", ["verify-tag", "test", "windows", "container"])
 def test_release_contract_rejects_an_omitted_platform_job(omitted: str) -> None:
     workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    needed = ", ".join(name for name in ("test", "windows", "container") if name != omitted)
+    needed = ", ".join(
+        name for name in ("verify-tag", "test", "windows", "container") if name != omitted
+    )
     broken = re.sub(r"(?m)^    needs: .+$", f"    needs: [{needed}]", workflow)
     with pytest.raises(AssertionError, match=f"release omits required jobs: {omitted}"):
         _assert_release_waits_for_platforms(broken)
+
+
+def test_release_tag_is_verified_once_not_in_each_matrix_leg() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert workflow.count("scripts/release-check.py --tag") == 1
+    found = re.search(r"(?ms)^  verify-tag:\n(.*?)(?=^  [\w-]+:\n|\Z)", workflow)
+    assert found is not None and "scripts/release-check.py --tag" in found[1]
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="no make on this machine")
+def test_release_check_with_a_tag_leaves_gate_floor_and_suite_to_ci_and_runs_scrub() -> None:
+    root = SCRIPT.parent.parent
+    base = subprocess.run(["make", "-n", "release-check"], cwd=root, capture_output=True, text=True)
+    tagged = subprocess.run(
+        ["make", "-n", "release-check", "TAG=v1.0.0"], cwd=root, capture_output=True, text=True
+    )
+    assert base.returncode == 0 and tagged.returncode == 0, base.stderr + tagged.stderr
+    for out in (base.stdout, tagged.stdout):
+        assert "check-public-text.py --private" in out
+    assert "pytest" in base.stdout
+    assert "pytest" not in tagged.stdout and "floor check" not in tagged.stdout

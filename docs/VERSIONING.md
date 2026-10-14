@@ -88,28 +88,33 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    change that is not committed.
 2. Run `make canary` on that commit. If you change the tree after this step, commit the change
    and run `make canary` again.
-3. Run `make scrub`.
-4. Run `make release-check`. It first reads the record of `make canary`. It then checks that the
+3. Run `make release-check`. It first reads the record of `make canary`. It then checks that the
    places above agree and that this repository's own install is current. It checks, from the
    files and with no network, that the package metadata is what PyPI accepts (core metadata 2.4,
    an SPDX license expression, the license files, a Markdown long description with no relative
-   link) and that the `pypi` job of the release workflow is as stated below. It also runs the
-   gate, the quality floor and the test suite, and they must pass. It cannot see the three
-   account steps above; the maintainer confirms them before step 9.
-5. Land the release commit through its pull request, as one squash commit. A squash merge keeps
+   link) and that the `pypi` job of the release workflow is as stated below. It runs
+   `make scrub` itself, so there is no separate scrub step; without the list of private names,
+   that line reads `UNVERIFIED` and the check fails. It also runs the gate, the quality floor and
+   the test suite, and they must pass. It cannot see the three account steps above; the
+   maintainer confirms them before step 6.
+4. Land the release commit through its pull request, as one squash commit. A squash merge keeps
    the tree of the branch, so the record from the branch applies to the commit on `main`.
-6. Make sure that the tree of the new commit on `main` is the tree of the release branch, for
-   example with `git diff <branch> origin/main` that shows no difference. If the trees are
-   different (for example, because a conflict was resolved in a different way), the record does
-   not apply: run `make canary` and `make release-check` on the commit on `main`.
-7. Wait for the CI run on `main` for that commit to pass. If GitHub starts no run for the push,
-   start one by hand: `gh workflow run ci.yml --ref main`.
-8. Make the annotated tag `v<VERSION>` on the commit on `main`, locally, and run
-   `make release-check TAG=v<VERSION>`. With a tag, it also checks that the commit has a passing CI
-   run on `main`, so no release is cut from a `main` that failed.
-9. A maintainer pushes the tag, or an agent where a grant covers it (below).
-10. CI on the tag runs the same check, and publishes the release and then the PyPI upload (below).
-11. A person checks PyPI, because no CI step reads it back:
+5. Make the annotated tag `v<VERSION>` on the commit on `main`, locally, and run
+   `make release-check TAG=v<VERSION>`. The canary record is keyed on the tree, so the run fails
+   on its canary line if the tree of the commit on `main` is not the tree of the release branch
+   (for example, because a conflict was resolved in a different way); then run `make canary` on
+   the commit on `main` and run the check again. With a tag, the check also fails until the
+   commit has a passing CI run on `main` (if GitHub started no run for the push, start one by
+   hand: `gh workflow run ci.yml --ref main`), so no release is cut from a `main` that failed.
+   That CI run is the proof of the gate, the floor and the suite for this exact commit (the
+   workflow runs `make gate`, the own-install check, the floor on the newest Python and the
+   suite on each Python, on Windows and in containers), so with a tag the check does not run
+   them a second time here. It still runs `make scrub` here, because CI has the list only where
+   its secret is set.
+6. A maintainer pushes the tag, or an agent where a grant covers it (below).
+7. CI on the tag runs `scripts/release-check.py --tag` once, in the job `verify-tag`, and the
+   suite on each platform. It then publishes the release and then the PyPI upload (below).
+8. A person checks PyPI, because no CI step reads it back:
     - the page `https://pypi.org/project/outcomebound/<VERSION>/` exists, shows the README
       with working links, and lists the wheel and the source archive;
     - an install of that version in a fresh tool environment runs and reports `<VERSION>`:
@@ -120,18 +125,21 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
       cat "$("$tmp/bin/outcomebound" home)/VERSION"
       ```
 
-    Until step 11 passes, the README keeps the tagged Git URL as its install route.
-12. Move all projects that use OutcomeBound to the release.
+    Until step 8 passes, the README keeps the tagged Git URL as its install route.
+
+The release is complete when step 8 passes. Moving the projects that use OutcomeBound to the
+release is a follow-up after the release, not a release step: the canary of step 2 has already
+shown that the release runs on them. Do it per project, as that project's own change.
 
 You cannot undo the push of a tag. A maintainer pushes it. An agent can push it only where a
 grant of a maintainer in `.outcomebound/tag-grants.json` covers that version on that day. The last
 line of `make release-check` names the grant, or says that none applies.
 
-Once the tag exists, `make release-check TAG=v<VERSION>` and the CI run on the tag check that the
+Once the tag exists, `make release-check TAG=v<VERSION>` and the job `verify-tag` of the CI run on the tag check that the
 tag is annotated, that it names `VERSION`, that it points at the release commit, and that the
 release commit has a passing CI run on `main`.
 
-When every leg of the CI run on the tag passes, its `release` job publishes the release. It
+When the tag check and every leg of the CI run on the tag pass, its `release` job publishes the release. It
 builds the wheel and the source archive from the tagged commit, attests them, puts them on a
 draft release whose notes are the changelog section of the version, and publishes the draft. If
 a leg fails, the job does not run and nothing is published. Where the repository has immutable

@@ -307,7 +307,10 @@ counts or anecdotes from private runs.
 A release is its `VERSION`, its changelog section and a release commit. `make release-check` passes
 on the release commit, and it fails unless `make canary` recorded PASS for the tree of that commit. Nobody can undo the push of a release tag. [docs/VERSIONING.md](docs/VERSIONING.md)
 gives the sequence of the release steps, says who may push the tag, and says what
-`make release-check` confirms first. When the CI run on the tag
+`make release-check` confirms first (with a tag, the CI run on `main` for that commit stands in
+for the local gate, floor and suite; `make scrub` runs inside it). The release takes 8 steps:
+prepare the tree, canary it, `make release-check`, land by squash, tag and
+`make release-check TAG=`, push the tag, CI release and PyPI, PyPI read-back. When the CI run on the tag
 passes, CI publishes the GitHub release with the attested wheel and source archive, and then
 uploads the same two files to PyPI by trusted publishing. A person checks PyPI afterwards
-(VERSIONING.md, step 11).
+(VERSIONING.md, step 8). Moving adopter projects to the release is a follow-up, not a release step.
