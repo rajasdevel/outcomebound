@@ -32,6 +32,8 @@ def test_every_call_names_its_model_and_ignores_the_operators_setup(tmp_path: Pa
         assert flag in argv, flag
     assert "--ephemeral" not in argv, "the call keeps its session: its identity is read from it"
     assert argv[argv.index("features.memories=false") - 1] == "-c"
+    assert argv[argv.index("memories.generate_memories=false") - 1] == "-c"
+    assert argv[argv.index("memories.use_memories=false") - 1] == "-c"
 
 
 def test_a_call_in_a_git_workspace_may_write_its_git_directory(tmp_path: Path) -> None:

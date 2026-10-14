@@ -42,6 +42,10 @@ ISOLATION = (
     "--ignore-rules",
     "-c",
     "features.memories=false",
+    "-c",
+    "memories.generate_memories=false",
+    "-c",
+    "memories.use_memories=false",
 )
 # The thread table of codex's state database keeps whether the thread could read memories.
 STATE_DATABASE = "state_5.sqlite"
