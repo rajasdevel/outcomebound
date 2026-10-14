@@ -1,7 +1,9 @@
-"""Retain the exact native session for one explicit evaluation, without grading its meaning.
+"""Find, read and copy the native session a Codex call wrote, outside the model's reach.
 
-A native receipt is separate from the CLI command transcript. Missing model or cwd evidence
-in that transcript stays missing. This module never interprets arbitrary tool code.
+The CLI's own `--json` stream does not name the model, effort or working directory of a call
+(codex-cli 0.162.1), so a run takes them from the session record the CLI keeps under its home.
+The record is found by the stream's thread id, never by recency, and is checked before it is
+trusted. Nothing here interprets a tool call: it reads identity only.
 """
 
 from __future__ import annotations
@@ -51,7 +53,9 @@ def temporary_write_roots() -> tuple[Path, ...]:
     return tuple(roots)
 
 
-def _thread_id(stdout: str) -> str:
+def thread_id(stdout: str) -> str:
+    """The id of the stream's one `thread.started`, which must be its first event."""
+
     events = [json.loads(line) for line in stdout.splitlines() if line.strip()]
     if not events or not all(isinstance(event, dict) for event in events):
         raise ValueError("CLI events are not readable objects")
@@ -64,54 +68,35 @@ def _thread_id(stdout: str) -> str:
     return key
 
 
-def retain(transcript: str, capture: NativeCapture) -> dict[str, Any]:
-    """Copy a unique matching native record, with its digest, outside the model workspace.
+def find_session(sessions: Path, key: str) -> tuple[Path, bytes, list[dict[str, Any]]]:
+    """The one session file for thread `key` under `sessions`, its exact bytes and its records.
 
-    The caller owns destination and must not grant it as a model writable root. Exact bytes
-    and session identity are checked here; identity, tool links and behavior need review.
-    """
+    Exactly one file must match; it must not be a symlink or lie outside `sessions`; its first
+    record must be a `session_meta` whose id is `key`. Otherwise ValueError says which."""
 
-    result: dict[str, Any] = {
-        "exact_session_copy": "UNVERIFIED",
-        "identity_qualification": "UNVERIFIED",
-        "sequence_qualification": "UNVERIFIED",
-        "behavioral_verdict": "UNVERIFIED",
-    }
-    sessions, destination = capture
-    try:
-        document = json.loads(transcript)
-        if (
-            not isinstance(document, dict)
-            or document.get("format") != "outcomebound-command-events-v1"
-            or not isinstance(document.get("stdout"), str)
-        ):
-            raise ValueError("CLI transcript has no original event stream")
-        key = _thread_id(document["stdout"])
-        result["thread_id"] = key
-        matches = list(sessions.rglob(f"*-{key}.jsonl"))
-        if len(matches) != 1:
-            raise ValueError(f"matching native session count is {len(matches)}, expected 1")
-        source = matches[0]
-        if source.is_symlink() or not source.resolve().is_relative_to(sessions.resolve()):
-            raise ValueError("native session is a symlink or outside the selected sessions folder")
-        raw = source.read_bytes()
-        lines = [line for line in raw.decode("utf-8").splitlines() if line.strip()]
-        first = json.loads(lines[0])
-        if not isinstance(first, dict) or first.get("type") != "session_meta":
-            raise ValueError("native session has no initial session_meta")
-        payload = first.get("payload")
-        if not isinstance(payload, dict) or payload.get("id") != key:
-            raise ValueError("native session identity differs from the actual CLI thread id")
-        with destination.open("xb") as handle:
-            handle.write(raw)
-        if source.read_bytes() != raw or destination.read_bytes() != raw:
-            raise ValueError("native session changed during retention")
-        result.update(
-            exact_session_copy="PASS",
-            source=str(source),
-            destination=str(destination),
-            sha256=hashlib.sha256(raw).hexdigest(),
-        )
-    except (OSError, ValueError, IndexError) as error:
-        result["error"] = f"{type(error).__name__}: {error}"
-    return result
+    matches = list(sessions.rglob(f"*-{key}.jsonl"))
+    if len(matches) != 1:
+        raise ValueError(f"matching native session count is {len(matches)}, expected 1")
+    source = matches[0]
+    if source.is_symlink() or not source.resolve().is_relative_to(sessions.resolve()):
+        raise ValueError("native session is a symlink or outside the selected sessions folder")
+    raw = source.read_bytes()
+    records = [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+    first = records[0] if records else None
+    if not isinstance(first, dict) or first.get("type") != "session_meta":
+        raise ValueError("native session has no initial session_meta")
+    payload = first.get("payload")
+    if not isinstance(payload, dict) or payload.get("id") != key:
+        raise ValueError("native session identity differs from the actual CLI thread id")
+    return source, raw, records
+
+
+def copy_exact(source: Path, raw: bytes, destination: Path) -> str:
+    """Write `raw` to a new `destination`, check both still hold the source's bytes, and give
+    their SHA-256."""
+
+    with destination.open("xb") as handle:
+        handle.write(raw)
+    if source.read_bytes() != raw or destination.read_bytes() != raw:
+        raise ValueError("native session changed during retention")
+    return hashlib.sha256(raw).hexdigest()

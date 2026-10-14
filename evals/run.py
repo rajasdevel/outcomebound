@@ -2,9 +2,11 @@
 """Measure whether the OutcomeBound kernel, and the skills an install carries, change what a
 model does.
 
-A run builds each fixture's disposable repository, hands `codex exec` one arm's kernel and
-the fixture's task, and judges what the model left with the fixture's deterministic
-post-checks, run through `outcomebound_tools.validation`. The post-checks are the verdict.
+A run builds each fixture's disposable repository, hands a harness (today `codex exec`) one
+arm's kernel and the fixture's task, and judges what the model left with the fixture's
+deterministic post-checks, run through `outcomebound_tools.validation`. The post-checks are the
+verdict. The model, effort and working directory a call counts for are the ones the harness's
+own session record states, never the ones requested (evals/harnesses/__init__.py).
 
 Four arms: `earlier`, an earlier wording of the operating-contract kernel, kept in
 `evals/arms/earlier-kernel.md`; `current`,
@@ -44,8 +46,12 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from evals.codex_events import command_transcript, observed_model, tokens_used
-from evals.native_receipts import NativeCapture, retain
+from evals.harnesses import Request
+from evals.harnesses.codex import CodexHarness
 from evals.processes import bounded_command, partial_output
+
+# The stream decoders the graders' tests read through this module.
+__all__ = ["command_transcript", "observed_model"]
 
 REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "evals" / "fixtures"
@@ -72,8 +78,9 @@ NAMED_ONLY = (
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
-# The harness whose install the current arm mirrors: codex runs every call.
+# The harness whose install the current arm mirrors, and the one `--harness` takes by default.
 HARNESS = "codex"
+HARNESSES = (HARNESS,)
 # An earlier wording of the kernel, kept as a file so the arm runs in any checkout.
 EARLIER = "earlier"
 EARLIER_KERNEL = REPO / "evals" / "arms" / "earlier-kernel.md"
@@ -110,13 +117,13 @@ STRIPPED_PREFIXES = ("ANTHROPIC_BEDROCK_", "ANTHROPIC_VERTEX_", "CLAUDE_CODE_USE
 STRIP_POLICY = tuple(sorted(STRIPPED_KEYS + tuple(f"{p}*" for p in STRIPPED_PREFIXES)))
 
 PREFLIGHT_EXIT = 3
-# Codex CLI versions whose `--json` events were observed to report no model and no working
-# directory, so no call on them can count: 0.160.1, and 0.162.0-alpha.17.2 (one call, 2026-10-09).
-NO_OBSERVED_MODEL = frozenset({"codex-cli 0.160.1", "codex-cli 0.162.0-alpha.17.2"})
 CALL_TIMEOUT = 900
 SETUP_TIMEOUT = 300
 POST_CHECK_TIMEOUT = 600
 # Fixture repositories are kept after a run, for the operator to inspect what the model did.
+# With a root, each is `<root>/<run directory name>/<fixture>-r<repetition>`; the root is
+# `--workspace-root`, else `$OUTCOMEBOUND_EVAL_ROOT`, else `$OUTCOMEBOUND_FIXTURE_ROOT`.
+EVAL_ROOT_ENV = "OUTCOMEBOUND_EVAL_ROOT"
 FIXTURE_ROOT_ENV = "OUTCOMEBOUND_FIXTURE_ROOT"
 # A fixture is judged by Git comparisons, so an operator's global or system Git config
 # (hooksPath, excludesFile, an alias) must not reach the child that builds or checks it.
@@ -129,18 +136,6 @@ TRANSCRIPT_ENV = "OUTCOMEBOUND_EVAL_TRANSCRIPT"
 # graders and acceptance tests the model never has in its workspace.
 EVAL_DIR_ENV = "OUTCOMEBOUND_EVAL_DIR"
 ANSWER_ENV = "OUTCOMEBOUND_EVAL_ANSWER"
-# These keep most of the operator's own codex setup out of every arm: without them a call loads
-# `$CODEX_HOME/config.toml` (its personality, rules and writable roots), reads and writes the
-# operator's memories, and keeps the session. Auth still comes from `CODEX_HOME`. They do not keep
-# out agent role files under `$CODEX_HOME/agents/`, which codex read in every recorded run
-# (codex-cli 0.158.0 and 0.159.0); docs/evaluations.md states it as a limit.
-CODEX_ISOLATION = (
-    "--ephemeral",
-    "--ignore-user-config",
-    "--ignore-rules",
-    "-c",
-    "features.memories=false",
-)
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
 OBSERVED = "observed: "
 
@@ -433,25 +428,13 @@ def build_prompt(kernel_text: str, task: str) -> str:
     return f"{head}Task:\n{task.strip()}\n"
 
 
-def preflight() -> dict[str, Any]:
-    """Observe a ChatGPT login before any call; a login codex does not name is not observed."""
+def make_harness(name: str = HARNESS) -> CodexHarness:
+    """The named harness, wired to this runner's environment, short-command runner and call
+    timeout. Only `codex` exists; a new one is a module under evals/harnesses and a line here."""
 
-    status, out, error = _run(["codex", "login", "status"])
-    output = (out + error).strip()
-    line = next(
-        (row.strip() for row in output.splitlines() if "Logged in using ChatGPT" in row), ""
-    )
-    return {
-        "ok": status == 0 and bool(line),
-        "auth": "subscription" if status == 0 and line else "not-observed",
-        "auth_evidence": line,
-        "preflight": output[:2000],
-    }
-
-
-def cli_version() -> str:
-    status, text, _error = _run(["codex", "--version"])
-    return text.strip().splitlines()[0] if status == 0 and text.strip() else "unknown"
+    if name != "codex":
+        raise ValueError(f"no harness {name}; there is {', '.join(HARNESSES)}")
+    return CodexHarness(child_env, _run, CALL_TIMEOUT)
 
 
 def source() -> dict[str, Any]:
@@ -463,98 +446,6 @@ def source() -> dict[str, Any]:
         "commit": commit.strip() if status == 0 else "unknown",
         "dirty": bool(changes.strip()) if listed == 0 else None,
     }
-
-
-def codex_command(
-    model: str,
-    effort: str,
-    cwd: Path,
-    last_message: Path,
-    writable_roots: tuple[Path, ...] = (),
-    *,
-    retain_native: bool = False,
-) -> list[str]:
-    """The `codex exec` argv for one call: the model named, the operator's setup left out.
-
-    The call may write the workspace and, where it is a Git repository, its `.git`, which
-    `workspace-write` otherwise keeps read-only: a fixture would measure the sandbox, not
-    the model, if a commit were impossible. Only `.agents/work` is added for task notes;
-    the installed skills and the rest of `.agents` retain their default protection.
-    """
-
-    if not model:
-        raise ValueError("name the model: codex's configured default never runs")
-    command = [
-        "codex",
-        "exec",
-        "--json",
-        *(flag for flag in CODEX_ISOLATION if not (retain_native and flag == "--ephemeral")),
-        "-s",
-        "workspace-write",
-        "-m",
-        model,
-        "-c",
-        f"model_reasoning_effort={effort}",
-        "--skip-git-repo-check",
-        "-C",
-        str(cwd),
-        "--output-last-message",
-        str(last_message),
-    ]
-    if (Path(cwd) / ".git").is_dir():
-        command += ["--add-dir", str(Path(cwd) / ".git")]
-    command += ["--add-dir", str(Path(cwd) / ".agents" / "work")]
-    for root in writable_roots:
-        command += ["--add-dir", str(root)]
-    return command
-
-
-class CallOptions(NamedTuple):
-    """The additional model write grants and optional operator-owned native receipt."""
-
-    writable_roots: tuple[Path, ...] = ()
-    native: NativeCapture | None = None
-
-
-def call_codex(
-    prompt: str,
-    model: str,
-    effort: str,
-    cwd: Path,
-    path: str,
-    options: CallOptions | None = None,
-) -> tuple[str, str, int | None]:
-    """The model's final message, everything codex printed, and codex's exit status; `path`
-    is the call's PATH."""
-
-    options = options or CallOptions()
-    if options.native:
-        options.native.check_roots((cwd, *options.writable_roots))
-    with tempfile.NamedTemporaryFile("r+", suffix=".md", delete=False) as handle:
-        last_message = Path(handle.name)
-    try:
-        try:
-            done = bounded_command(
-                codex_command(
-                    model,
-                    effort,
-                    cwd,
-                    last_message,
-                    options.writable_roots,
-                    retain_native=options.native is not None,
-                ),
-                input=prompt,
-                env={**child_env(), "PATH": path},
-                cwd=str(cwd),
-                timeout=CALL_TIMEOUT,
-            )
-            transcript, code = command_transcript(done.stdout, done.stderr), done.returncode
-        except subprocess.TimeoutExpired as problem:
-            transcript, code = command_transcript(problem.stdout or "", problem.stderr or ""), None
-        answer = last_message.read_text(encoding="utf-8") if last_message.is_file() else ""
-    finally:
-        last_message.unlink(missing_ok=True)
-    return answer, transcript, code
 
 
 def protected_snapshot(
@@ -657,28 +548,35 @@ def observations(log_dir: Path | None) -> list[str]:
     ]
 
 
-def run_fixture(
-    name: str,
-    model: str,
-    effort: str,
-    arm: Arm,
-    path: str,
-    capture: NativeCapture | None = None,
-) -> tuple[str, str, int | None, dict[str, Any]]:
-    """Install the arm's files, build the fixture, write its prompt (the arm's kernel, then
-    the fixture's task), let the model act in it, then judge what it left.
+def new_workspace(workspace: Path | None) -> Path:
+    """The empty directory a fixture is built in: `workspace`, which must not exist yet, or a
+    new temporary one."""
 
-    Returns the answer, the report (codex's output, then the post-checks'), codex's exit
-    status (None where no call finished) and what the run's record keeps, the prompt among
-    it. A post-check FAIL is the measurement; only a fixture that cannot be built, or a call
-    that fails, is an error.
+    if workspace is None:
+        return Path(tempfile.mkdtemp(prefix="ob-fixture-"))
+    workspace.mkdir(parents=True, exist_ok=False)
+    return workspace
+
+
+class Place(NamedTuple):
+    """Where a run keeps its evidence: the new directory its workspace is built in (None for a
+    temporary one) and the file its harness copies the native session to (None for a file
+    beside the workspace)."""
+
+    workspace: Path | None = None
+    keep: Path | None = None
+
+
+def build_workspace(
+    name: str, arm: Arm, workdir: Path, extra: dict[str, Any]
+) -> tuple[str | None, dict[str, str], str | None, str]:
+    """Install the arm's files and build the fixture in `workdir`.
+
+    Returns None, the protected digests, the seed commit and the prompt (the arm's kernel, then
+    the fixture's task); or, where the build fails, the report of why with the error in `extra`.
     """
 
     fixture = FIXTURES / name
-    workdir = Path(
-        tempfile.mkdtemp(prefix="ob-fixture-", dir=os.environ.get(FIXTURE_ROOT_ENV) or None)
-    )
-    extra: dict[str, Any] = {"verdict": "UNVERIFIED", "claims": {}, "fixture_repo": str(workdir)}
     install(workdir, arm.files)
     try:
         built = bounded_command(
@@ -688,43 +586,76 @@ def run_fixture(
         )
     except (OSError, subprocess.SubprocessError) as problem:
         extra["error"] = f"fixture setup {type(problem).__name__}: {problem}"
-        return "", partial_output(problem), None, extra
+        return partial_output(problem), {}, None, ""
+    report = built.stdout + built.stderr
     if built.returncode != 0:
         extra["error"] = f"fixture setup exited {built.returncode}"
-        return "", built.stdout + built.stderr, None, extra
+        return report, {}, None, ""
     unfit = as_installed(workdir, arm) or installed(workdir, arm.files)
     if unfit:
         extra["error"] = unfit
-        return "", built.stdout + built.stderr, None, extra
+        return report, {}, None, ""
     try:
         protected = protected_snapshot(
             fixture, workdir, tuple(arm.files), without_skills=arm.name == NONE
         )
     except (OSError, ValueError) as problem:
         extra["error"] = f"protected fixture setup failed: {problem}"
-        return "", built.stdout + built.stderr, None, extra
+        return report, {}, None, ""
     seed = seed_commit(workdir)
     (workdir / ".agents" / "work").mkdir(parents=True, exist_ok=True)
     try:
         prompt = build_prompt(arm.kernel, task_text(name, workdir))
     except (OSError, ValueError, subprocess.SubprocessError) as problem:
         extra["error"] = f"the fixture's task could not be written: {problem}"
-        return "", built.stdout + built.stderr + partial_output(problem), None, extra
+        return report + partial_output(problem), {}, None, ""
+    return None, protected, seed, prompt
+
+
+def run_fixture(
+    name: str,
+    request: Request,
+    arm: Arm,
+    path: str,
+    harness: CodexHarness | None = None,
+    place: Place | None = None,
+) -> tuple[str, str, int | None, dict[str, Any]]:
+    """Build the fixture, let the model act in it through the harness, then judge what it left.
+
+    Returns the answer, the report (the harness's output, then the post-checks'), its exit
+    status (None where no call finished) and what the run's record keeps, the prompt among
+    it. A post-check FAIL is the measurement; only a fixture that cannot be built, or a call
+    that fails, is an error.
+    """
+
+    harness = harness or make_harness()
+    place = place or Place()
+    workdir = new_workspace(place.workspace)
+    keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
+    extra: dict[str, Any] = {
+        "verdict": "UNVERIFIED",
+        "claims": {},
+        "fixture_repo": str(workdir),
+        "harness": harness.name,
+    }
+    failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra)
+    if failure is not None:
+        return "", failure, None, extra
     extra["prompt"] = prompt
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
     try:
-        answer, transcript, returncode = call_codex(
-            prompt,
-            model,
-            effort,
-            workdir,
-            path,
-            CallOptions(fixture_write_roots(name, workdir), capture),
+        result = harness.call(
+            prompt, request, workdir, fixture_write_roots(name, workdir), path, keep
         )
+        answer, transcript, returncode = result.answer, result.transcript, result.returncode
+        extra.update(result.extras)
+        extra["identity_error"] = result.error
+        extra["observed"] = result.observed
+        extra["model_observed"] = (result.observed or {}).get("model")
         if returncode is None:
-            extra["error"] = f"codex call timed out after {CALL_TIMEOUT} seconds"
+            extra["error"] = f"{harness.name} call timed out after {CALL_TIMEOUT} seconds"
     except (OSError, ValueError, subprocess.SubprocessError) as problem:
         # The post-checks still run: a call that timed out may have changed the repository.
         extra["error"] = f"{type(problem).__name__}: {problem}"
@@ -735,7 +666,9 @@ def run_fixture(
     verdict, output, log_dir = "FAIL", "VERDICT: FAIL\n", None
     if intact:
         try:
-            verdict, output, log_dir = post_check(fixture, workdir, seed, transcript, answer)
+            verdict, output, log_dir = post_check(
+                FIXTURES / name, workdir, seed, transcript, answer
+            )
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
             verdict, output = "UNVERIFIED", partial_output(problem)
@@ -745,10 +678,8 @@ def run_fixture(
         claims={claim: result for result, claim in CLAIM_LINE.findall(output)},
         protected_intact=intact,
         observations=observations(log_dir),
-        model_observed=observed_model(transcript),
         seed_sha=seed,
         elapsed_seconds=elapsed,
-        tokens_used=tokens_used(transcript),
         post_check_log_dir=str(log_dir) if log_dir else None,
     )
     report = f"{transcript}\n\n--- post-checks ---\n{protected_report}\n{output}"
@@ -756,55 +687,109 @@ def run_fixture(
 
 
 def call_error(returncode: int | None, answer: str, extra: dict[str, Any], model: str) -> str:
-    """Why this run's call does not count, or an empty string where it does."""
+    """Why this run's call does not count, or an empty string where it does.
 
+    The identity is the harness's: its `identity_error` names the item of the native session
+    that is missing or differs from what the run asked for. A run with no observed model never
+    counts, whatever it requested."""
+
+    name = extra.get("harness", HARNESS)
     if extra.get("error"):
         return str(extra["error"])
     if returncode != 0:
-        return f"codex exited {returncode}"
+        return f"{name} exited {returncode}"
     if not answer.strip():
-        return "codex produced no final message"
+        return f"{name} produced no final message"
+    if extra.get("identity_error"):
+        return str(extra["identity_error"])
     seen = extra.get("model_observed")
     if not seen:
-        return "codex did not report the model it ran"
+        return f"{name} did not report the model it ran"
     if seen != model:
-        return f"codex reported running {seen}, not {model}"
+        return f"{name} reported running {seen}, not {model}"
     return ""
 
 
-def _write(path: Path, document: dict[str, Any]) -> None:
+def _write(path: Path, document: Any) -> None:
     path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 
 
-def run_one(out: Path, status: dict[str, Any], name: str, arm: Arm, path: str) -> bool:
-    """One fixture under the run's arm, recorded in `out`; True where its call failed."""
+def workspace_root(option: str) -> Path | None:
+    """Where fixture workspaces are kept: `--workspace-root`, else the environment's named
+    root, else None for a temporary directory each."""
 
-    capture = (
-        NativeCapture(Path(status["native_sessions"]), out / f"{name}.native.jsonl")
-        if status.get("native_sessions")
-        else None
-    )
+    named = option or os.environ.get(EVAL_ROOT_ENV) or os.environ.get(FIXTURE_ROOT_ENV)
+    return Path(named).resolve() if named else None
+
+
+def workspace_path(root: Path, out: Path, name: str, repetition: int) -> Path:
+    return root / out.name / f"{name}-r{repetition}"
+
+
+def refuse_workspaces(root: Path, paths: list[Path]) -> str:
+    """Why the workspaces cannot be made, or an empty string: the root, or a parent of one,
+    holds a Git checkout (a fixture must not be read as part of one), or a path exists."""
+
+    for folder in (root, *root.parents):
+        if (folder / ".git").exists():
+            return f"workspace root {root} is inside a Git checkout ({folder}); name another"
+    taken = [str(path) for path in paths if path.exists()]
+    return "workspace already exists: " + ", ".join(taken) if taken else ""
+
+
+def index_row(status: dict[str, Any], name: str, meta: dict[str, Any]) -> dict[str, Any]:
+    """One run's line in INDEX.json: what ran and where its evidence is."""
+
+    return {
+        "fixture": name,
+        "harness": meta.get("harness", status["harness"]),
+        "arm": status["arm"],
+        "model": status["model"],
+        "effort": status["effort"],
+        "verdict": meta["verdict"],
+        "error": meta["error"],
+        "thread_id": meta.get("thread_id"),
+        "native_session": meta.get("native_session"),
+        "workspace": meta.get("fixture_repo"),
+    }
+
+
+def run_one(
+    out: Path,
+    status: dict[str, Any],
+    name: str,
+    arm: Arm,
+    path: str,
+    harness: CodexHarness,
+) -> tuple[bool, dict[str, Any]]:
+    """One fixture under the run's arm, recorded in `out`; whether its call failed, and its
+    INDEX row. The workspace is kept under the status's root, if it names one, and the
+    harness's session record is copied to `<fixture>.native.jsonl`."""
+
+    root = status.get("workspace_root")
+    workspace = workspace_path(Path(root), out, name, status["repetition"]) if root else None
+
     answer, report, returncode, extra = run_fixture(
-        name, status["model"], status["effort"], arm, path, capture
+        name,
+        Request(status["model"], status["effort"]),
+        arm,
+        path,
+        harness,
+        Place(workspace, out / f"{name}.native.jsonl"),
     )
-    if capture:
-        receipt = retain(report.split("\n--- post-checks ---\n", 1)[0], capture)
-        _write(capture.destination.with_suffix(".receipt.json"), receipt)
     (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
     error = call_error(returncode, answer, extra, status["model"])
     extra.pop("error", None)
     (out / f"{name}.answer.md").write_text(answer, encoding="utf-8")
     (out / f"{name}.transcript.txt").write_text(report, encoding="utf-8")
     record = {**status, **arm.record(), "fixture": name}
-    _write(
-        out / f"{name}.meta.json",
-        {**record, "returncode": returncode, "error": error, **extra},
-    )
+    meta = {**record, "returncode": returncode, "error": error, **extra}
+    _write(out / f"{name}.meta.json", meta)
     claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
     print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else ""))
     if error:
         sys.stderr.write(f"run: {name}: {error}\n")
-    return bool(error)
+    return bool(error), index_row(status, name, meta)
 
 
 def _provenance(metas: list[dict[str, Any]]) -> list[str]:
@@ -879,16 +864,19 @@ def summarize(directories: list[Path]) -> int:
     if not metas:
         print("no run records under " + ", ".join(str(item) for item in directories))
         return 1
-    groups: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    # The harness is part of the key: runs of different harnesses are never merged. A record
+    # from before runs named a harness came from codex.
+    groups: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
     for meta in metas:
-        key = (meta["fixture"], meta["arm"], meta["model"], meta["effort"])
-        groups.setdefault(key, []).append(meta)
-    for (fixture, arm, model, effort), group in sorted(groups.items()):
+        key = (meta["fixture"], meta.get("harness", HARNESS), meta["arm"], meta["model"])
+        groups.setdefault((*key, meta["effort"]), []).append(meta)
+    for (fixture, harness_name, arm, model, effort), group in sorted(groups.items()):
         runs = sorted((run for run in group if not run["error"]), key=lambda run: run["repetition"])
         passed = sum(1 for run in runs if run["verdict"] == "PASS")
         failed = len(group) - len(runs)
         tail = f" ({failed} failed call(s) not counted)" if failed else ""
-        print(f"{fixture} | {arm} | {model} {effort}: PASS {passed}/{len(runs)}{tail}")
+        label = f"{fixture} | {harness_name} | {arm} | {model} {effort}"
+        print(f"{label}: PASS {passed}/{len(runs)}{tail}")
         spent = _medians(runs)
         if spent:
             print(f"  median {spent}")
@@ -909,9 +897,9 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="evals/run.py",
         description=(
-            "Hand codex each fixture's task behind one arm's kernel, in a disposable "
-            "repository, and judge what the model left with the fixture's deterministic "
-            "post-checks. See evals/README.md."
+            "Hand a harness (default codex) each fixture's task behind one arm's kernel, in a "
+            "disposable repository, and judge what the model left with the fixture's "
+            "deterministic post-checks. See evals/README.md."
         ),
         epilog=(
             f"arms: {EARLIER} is an earlier wording of the kernel ({EARLIER_KERNEL.name}); "
@@ -937,13 +925,19 @@ def _parser() -> argparse.ArgumentParser:
         f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher",
     )
     parser.add_argument(
+        "--harness",
+        choices=HARNESSES,
+        default=HARNESS,
+        help="the tool that runs the model (default: %(default)s)",
+    )
+    parser.add_argument(
         "--model",
         default="",
         metavar="MODEL",
-        help="the model codex runs, always named",
+        help="the model the harness runs, always named",
     )
     parser.add_argument(
-        "--effort", default="medium", help="codex's model_reasoning_effort (default: medium)"
+        "--effort", default="medium", help="the harness's reasoning effort (default: medium)"
     )
     parser.add_argument(
         "--fixtures",
@@ -961,10 +955,18 @@ def _parser() -> argparse.ArgumentParser:
         "--out", default="", help="a new directory for the run (default: evals/results/raw/<id>)"
     )
     parser.add_argument(
-        "--retain-native",
-        metavar="SESSIONS_DIR",
+        "--workspace-root",
+        metavar="DIR",
         default="",
-        help="retain one exact native session for separate review; requires one named fixture",
+        help="keep each workspace at DIR/<run directory name>/<fixture>-r<repetition>, outside "
+        f"any Git checkout (default: ${EVAL_ROOT_ENV}, else ${FIXTURE_ROOT_ENV}, else a "
+        "temporary directory each)",
+    )
+    parser.add_argument(
+        "--probe",
+        action="store_true",
+        help="make one minimal call, with the requested model and effort, and print whether the "
+        "harness meets the run contract; runs no fixture",
     )
     parser.add_argument(
         "--summary",
@@ -980,18 +982,87 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
 
     if not args.model:
         parser.error("name the model: --model MODEL")
+    if args.probe:
+        return []
     if args.arm is None:
         parser.error("name the arm: " + ", ".join(f"--arm {name}" for name in ARMS))
     names = [name.strip() for name in args.fixtures.split(",") if name.strip()]
     unknown = sorted(set(names) - set(fixture_names()))
     if unknown or not names:
         parser.error(f"no fixture {', '.join(unknown)}; there are {', '.join(fixture_names())}")
-    if args.retain_native:
-        if len(names) != 1:
-            parser.error("--retain-native requires exactly one named fixture")
-        if not Path(args.retain_native).is_dir():
-            parser.error("--retain-native needs the readable sessions directory of this codex home")
     return names
+
+
+PROBE_PROMPT = "Reply with the word ok. Do not run commands.\n"
+
+
+def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
+    """One minimal call through the same code path as a counted one; each item of the run
+    contract printed as PASS or FAIL. Exit 3 without a login, 1 on any FAIL. One model call,
+    no retry."""
+
+    tool = make_harness(args.harness)
+    login = tool.preflight()
+    if not login["ok"]:
+        sys.stderr.write("probe: UNVERIFIED - preflight did not observe a ChatGPT login.\n")
+        return PREFLIGHT_EXIT
+    workspace = workspace_path(root, out, "probe", args.repetition) if root else None
+    message = refuse_workspaces(root, [workspace]) if root and workspace else ""
+    if message:
+        raise SystemExit(f"probe: {message}")
+    out.mkdir(parents=True, exist_ok=False)
+    work = new_workspace(workspace)
+    (work / ".agents" / "work").mkdir(parents=True, exist_ok=True)
+    result = tool.call(
+        PROBE_PROMPT,
+        Request(args.model, args.effort),
+        work,
+        (),
+        child_env().get("PATH", os.defpath),
+        out / "probe.native.jsonl",
+    )
+    rows = [
+        [
+            "call-exit",
+            "PASS" if result.returncode == 0 else "FAIL",
+            f"exit status {result.returncode}",
+        ],
+        [
+            "final-message",
+            "PASS" if result.answer.strip() else "FAIL",
+            "a final message" if result.answer.strip() else "no final message",
+        ],
+        *result.checks,
+    ]
+    unknown = result.extras.get("unknown_item_types", [])
+    rows.append(
+        [
+            "item-types",
+            "FAIL" if unknown else "PASS",
+            f"seen {result.extras.get('item_types', [])}; unknown {unknown}",
+        ]
+    )
+    key = result.extras.get("thread_id")
+    memory = tool.memory_mode(key) if key else None
+    for item, verdict, detail in rows:
+        print(f"{verdict} {item} - {detail}")
+    print(f"observed: memory_mode {memory if memory is not None else 'not readable'}")
+    print(f"observed: cli_warnings {result.extras.get('cli_warnings', [])}")
+    failed = any(row[1] == "FAIL" for row in rows)
+    _write(
+        out / "probe.json",
+        {
+            "harness": tool.name,
+            "model": args.model,
+            "effort": args.effort,
+            "workspace": str(work),
+            "observed": result.observed,
+            "checks": rows,
+            "memory_mode": memory,
+            **result.extras,
+        },
+    )
+    return 1 if failed else 0
 
 
 def _main(argv: list[str] | None = None) -> int:
@@ -1000,12 +1071,22 @@ def _main(argv: list[str] | None = None) -> int:
     if args.summary:
         return summarize([Path(item) for item in args.summary])
     names = checked_fixtures(parser, args)
+    run_id = uuid.uuid4().hex
+    out = Path(args.out) if args.out else RAW / run_id
+    root = workspace_root(args.workspace_root)
+    tool = make_harness(args.harness)
+    if args.probe:
+        return probe(args, out, root)
     arm = load_arm(args.arm)
     # Each fixture's install, read before anything runs: a fragment it names that the engine
     # does not ship stops the run here.
     arms = {name: fixture_arm(name, load_arm(args.arm, selected_fragments(name))) for name in names}
-    run_id = uuid.uuid4().hex
-    out = Path(args.out) if args.out else RAW / run_id
+    if root:
+        wanted = [workspace_path(root, out, name, args.repetition) for name in names]
+        refused = refuse_workspaces(root, wanted)
+        if refused:
+            raise SystemExit(f"run: {refused}")
+        root.mkdir(parents=True, exist_ok=True)
     try:
         out.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
@@ -1013,28 +1094,19 @@ def _main(argv: list[str] | None = None) -> int:
     status: dict[str, Any] = {
         "run_id": run_id,
         "date": datetime.date.today().isoformat(),
+        "harness": tool.name,
         "arm": args.arm,
         "model": args.model,
         "effort": args.effort,
         "repetition": args.repetition,
+        "workspace_root": str(root) if root else None,
         **arm.record(),
         **source(),
-        "cli_version": cli_version(),
+        "cli_version": tool.version(),
         "api_keys_stripped": list(STRIP_POLICY),
         "api_keys_removed_from_environment": stripped_from_environment(),
     }
-    if args.retain_native:
-        status["native_sessions"] = str(Path(args.retain_native).resolve())
-    elif status["cli_version"] in NO_OBSERVED_MODEL:
-        _write(out / "STATUS.json", {**status, "status": "UNVERIFIED", "fixtures": names})
-        sys.stderr.write(
-            f"run: UNVERIFIED - {status['cli_version']} JSON events do not report observed "
-            "model/cwd. "
-            "No model call started. Use one named fixture with --retain-native SESSIONS_DIR "
-            "for separate native-event review; its automatic report stays unchanged.\n"
-        )
-        return PREFLIGHT_EXIT
-    login = preflight()
+    login = tool.preflight()
     status.update({key: login[key] for key in ("auth", "auth_evidence", "preflight")})
     if not login["ok"]:
         _write(out / "STATUS.json", {**status, "status": "UNVERIFIED", "fixtures": names})
@@ -1043,15 +1115,18 @@ def _main(argv: list[str] | None = None) -> int:
             "interactively; this runner never falls back to an API key.\n"
         )
         return PREFLIGHT_EXIT
-    path = call_path(arm, os.environ.get(FIXTURE_ROOT_ENV) or None)
+    path = call_path(arm, str(root) if root else None)
     found = shutil.which("outcomebound", path=path)
     status["outcomebound_on_path"] = os.path.realpath(found) if found else None
     _write(out / "STATUS.json", {**status, "status": "running", "fixtures": names})
-    completed = []
+    completed: list[str] = []
+    rows: list[dict[str, Any]] = []
     failures = 0
     for name in names:
-        failed = run_one(out, status, name, arms[name], path)
+        failed, row = run_one(out, status, name, arms[name], path, tool)
         completed.append(name)
+        rows.append(row)
+        _write(out / "INDEX.json", rows)
         if failed:
             failures = 1
             break  # Inspect unsupported/failed call evidence before spending on another.

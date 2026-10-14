@@ -4,8 +4,9 @@ A run sees its fixture and nothing of the operator's: a call ignores the operato
 config (whose writable roots and defaults are not the run's), rules and memories.
 `workspace-write` keeps `.git` read-only, so a call in a git workspace adds that directory,
 and the run can commit. The operator's configured default model need not be the one a run
-chose, so every call names the model itself. No test here calls a model: it reads the argv
-the runner builds.
+chose, so every call names the model itself. A call keeps its session, since the model, effort
+and working directory it counts for are read from that record. No test here calls a model: it
+reads the argv the harness builds.
 """
 
 import subprocess
@@ -19,7 +20,7 @@ def _argv(tmp_path: Path, model: str = "gpt-6-sol", git: bool = True) -> tuple[l
     workspace.mkdir(parents=True)
     if git:
         subprocess.run(["git", "init", "-q", str(workspace)], check=True)
-    return run.codex_command(model, "medium", workspace, tmp_path / "last.md"), workspace
+    return run.make_harness().command(model, "medium", workspace, tmp_path / "last.md"), workspace
 
 
 def test_every_call_names_its_model_and_ignores_the_operators_setup(tmp_path: Path) -> None:
@@ -27,8 +28,9 @@ def test_every_call_names_its_model_and_ignores_the_operators_setup(tmp_path: Pa
     argv, _ = _argv(tmp_path, model)
     assert argv[:2] == ["codex", "exec"]
     assert argv[argv.index("-m") + 1] == model
-    for flag in ("--ephemeral", "--ignore-user-config", "--ignore-rules"):
+    for flag in ("--ignore-user-config", "--ignore-rules"):
         assert flag in argv, flag
+    assert "--ephemeral" not in argv, "the call keeps its session: its identity is read from it"
     assert argv[argv.index("features.memories=false") - 1] == "-c"
 
 

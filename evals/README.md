@@ -1,8 +1,8 @@
 # Evals
 
 These evals measure whether the operating-contract kernel, and each skill that an install
-carries, change what a model does. codex carries out the task of each fixture in a disposable
-repository, under one of four arms. Deterministic post-checks read what the model left: files,
+carries, change what a model does. A harness (codex by default) carries out the task of each
+fixture in a disposable repository, under one of four arms. Deterministic post-checks read what the model left: files,
 commits, the commands that its transcript records, and its answer. Automatic post-checks
 establish their named mechanical claims. Some fixtures also require separate review of meaning,
 chronology or browser behavior. There is no automatic model judge.
@@ -42,13 +42,28 @@ done
   three repetitions each: 36 runs.
 - `--fixtures` narrows the run. `--effort` sets the reasoning effort of codex (default `medium`).
   `--out` names the run directory (default `evals/results/raw/<id>/`, which Git ignores).
-- Fixture repositories stay in a temporary directory, or under `OUTCOMEBOUND_FIXTURE_ROOT`. That
-  directory belongs outside any Git checkout.
+  `--harness` names the tool that runs the model (default and only value today: `codex`).
+- Each fixture repository is kept after the run, at
+  `<root>/<run directory name>/<fixture>-r<repetition>`. The root is `--workspace-root DIR`, else
+  `OUTCOMEBOUND_EVAL_ROOT`, else `OUTCOMEBOUND_FIXTURE_ROOT`; with none, each is a temporary
+  directory. The runner refuses, before any call, a root inside a Git checkout and a workspace
+  that already exists. The grading folder of a run sits beside its workspace.
+- `<out>/INDEX.json` has one row for each run: fixture, harness, arm, model, effort, verdict,
+  error, thread id, native session path and workspace path.
 - No API key or endpoint override reaches codex or the commands of the model.
 - The runner exits 3 without a ChatGPT login. It exits 2 when it refuses its options. It exits 1
-  when a call failed: codex erred, gave no final message, or reported another model. A failed call
-  is recorded and never retried. The batch stops after its first call error; inspect that record
-  before starting another fixture.
+  when a call failed: codex erred, gave no final message, or its native session did not show the
+  model, effort and working directory that the run asked for. A failed call is recorded and never
+  retried. The batch stops after its first call error; inspect that record before starting
+  another fixture.
+- `python3 evals/run.py --probe --model MODEL [--effort E]` makes one minimal call (it asks for
+  the word "ok", with no command) through the same code path as a counted call, and prints
+  `PASS` or `FAIL` for each item of the contract: exit status, final message, readable stream,
+  thread id, native session found and matched, CLI version, model, effort and working directory
+  observed and equal to the request, and the item types seen with any unknown one (a `FAIL`). It
+  also prints the `memory_mode` of the thread from `$CODEX_HOME/state_5.sqlite`, read-only, as an
+  `observed:` line that never fails it. It runs no fixture, makes exactly one model call, and
+  exits 1 on any `FAIL`. Run it after a new Codex version and before a pass.
 
 ## Reading a result
 
@@ -56,14 +71,14 @@ done
 python3 evals/run.py --summary evals/results/raw
 ```
 
-For each fixture, arm and model, this prints how many runs PASS the verdict and each claim. Then
-it prints the observations of each run. Its last lines flag runs that are not comparable. Compare
+For each fixture, harness, arm and model, this prints how many runs PASS the verdict and each
+claim. Then it prints the observations of each run. Its last lines flag runs that are not comparable. Compare
 the arms within one fixture.
 
 Three runs an arm cannot show a small effect. A claim that moves from 0/3 to 3/3 deserves a closer
 look. Anything smaller is not shown.
 
-Each run directory holds four files for each fixture. Each name starts with the fixture, as in
+Each run directory holds five files for each fixture. Each name starts with the fixture, as in
 `small-fix.meta.json`:
 
 - `<fixture>.prompt.md`: exactly what codex read.
@@ -71,22 +86,30 @@ Each run directory holds four files for each fixture. Each name starts with the 
 - `<fixture>.transcript.txt`: a JSON document of command records from actual CLI events,
   with raw stdout/stderr retained as data, then the post-check output. Codex runs with
   `--json`; plain printed logs are not command evidence. Incomplete calls retain
-  unknown command evidence. Unknown executable event and tool forms cannot prove that no command ran. Overlapping
-  calls cannot prove ordered effects. Only a complete stream
-  can establish that no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`; missing observed
-  model still prevents a call from counting. Neither is inferred from requested arguments. The observed
-  Codex CLI 0.160.1 JSON stream did not supply those observations, nor did one call on
-  0.162.0-alpha.17.2, so automatic counted qualification remains unavailable on those transports.
-  Normal runs on a known CLI version without the observations refuse before a model call. For a bounded manual qualification, `--retain-native SESSIONS_DIR` runs one
-  explicitly named fixture without `--ephemeral`, and copies the unique native session rollout
-  whose initial session id matches this subprocess's actual first `thread.started` id.
-  Record its hash outside the writable fixture. Review actual turn context and linked tool
-  calls/results, terminal completeness and ordering. Arbitrary JavaScript in a custom tool
-  call is not automatically interpreted; dynamic or ambiguous execution stays UNVERIFIED.
-  Keep manual findings separate from the automatic report, and disclose instrumentation in
-  the prompt. Retention does not change the automatic report or infer identity, working directory,
-  tool effects or semantic PASS from requested arguments. A missing receipt or identity is
-  UNVERIFIED; automatic failures stay intact. No extra model preflight or retry occurs.
+  unknown command evidence. Unknown executable event and tool forms cannot prove that no command
+  ran. Overlapping calls cannot prove ordered effects. Only a complete stream can establish that
+  no command ran. Missing or relative cwd leaves effect claims `UNVERIFIED`. An apply-patch edit
+  (`file_change`) and a CLI warning (`error`) are known items and are not commands; the warning
+  texts go to `cli_warnings` in the meta file. Any other item or event type is unknown, and the
+  meta file names it in `unknown_item_types`.
+- `<fixture>.native.jsonl`: the exact bytes of the session record that the CLI kept for the call,
+  copied so the result outlives the pruning of the Codex home. The `--json` stream of codex-cli
+  0.162.1 names a thread id and no model, effort or working directory, so a run takes them from
+  this record. The runner finds the record by the stream's first `thread.started` id under
+  the `sessions` folder of the Codex home in use (`$CODEX_HOME`, else the default home folder of
+  codex), never by recency. It requires exactly one
+  match, not a symlink and inside that folder, whose first record is a `session_meta` with that
+  id, and a folder outside every path the model may write, implicit temporary folders included.
+  It reads `model`, `effort` and `cwd` from the `turn_context` records (every one must agree) and
+  `cli_version` from `session_meta`. The model and effort must equal the request, and the cwd must
+  be the fixture workspace as the OS resolves it; if the stream names a model too, it must agree.
+  A missing file, a missing field or a difference makes the call an error that names the item,
+  and nothing is inferred from the arguments of the call. A call on any CLI version is judged by
+  what its run shows. The meta file records `harness`, `thread_id`, `native_session`,
+  `native_sha256`, `native_copy` and `observed` (`model`, `effort`, `cwd`, `cli_version`).
+  The record does not say what the model did: arbitrary JavaScript in a custom tool call is not
+  automatically interpreted, so review of command order and effects stays separate from the
+  automatic report, and disclosure of instrumentation stays in the prompt.
 - `<fixture>.meta.json`: the verdict, the claims, the observations, the arm, the model, the
   commit, and the contents of the arm. These are the digest of the kernel, the digest of each
   file that the install of that fixture wrote, the launcher, and the `outcomebound` that the
@@ -95,26 +118,37 @@ Each run directory holds four files for each fixture. Each name starts with the 
 Runs of one fixture that installed different files are flagged as not comparable. A PASS
 establishes only what its check reads, for that model on that day.
 
-For a single retained case, use the sessions directory of the same Codex home that supplies
-hosted authentication. Keep the new output directory outside the fixture and all of its writable
-roots, including implicit system temporary write grants. Keep the sessions directory outside
-those grants too. The runner checks both boundaries before starting the model:
-
-```sh
-python3 evals/run.py --arm current --model <model> --effort high \
-  --fixtures <one-case> --retain-native <codex-home>/sessions --out <new-run-directory>
-```
-
-`<fixture>.native.jsonl` is the exact copied record. `<fixture>.native.receipt.json` keeps its thread
-id, byte digest and retention verdict; identity, sequence and behavior remain UNVERIFIED until
-separate review. A completed native record can support that review even when the automatic CLI
-transport report fails. Never treat copying the record as semantic qualification. For an unknown
-CLI transport, the first call error stops the remaining batch; later versions are not assumed
-to be compatible from their version number alone.
-
 The entrypoints coordinate fixture setup, source records and grading. `processes.py` bounds
 subprocess lifetimes, `codex_events.py` and `claude_events.py` decode their declared event forms,
-and `native_receipts.py` retains one matching native session without grading its meaning.
+`harnesses/` holds the tool that runs the model behind one contract, and `native_receipts.py`
+finds, reads and copies one matching native session without grading its meaning.
+
+## Adding a harness
+
+`evals/harnesses/__init__.py` states the contract (`preflight()`, `version()` and `call(...)`,
+which returns a `CallResult`), `evals/harnesses/codex.py` is the one implementation, and
+`make_harness` in `evals/run.py` names it. A new harness is one module there, one entry in
+`make_harness` and one in `HARNESSES`; the runner, the fixtures and the graders name no CLI. A
+harness must meet these items, and `--probe` shows which one it does not:
+
+- **Identity is observed, never inferred.** The model, effort and working directory of a call
+  come from a record that the tool wrote itself, and each is compared with the request. A missing
+  record or field, two candidate records, a record of another thread and a value that differs are
+  call errors. No field is filled in from the arguments of the call.
+- **The transcript is the tool's own events.** It is a document in the
+  `outcomebound-command-events-v1` form. Printed text and model output cannot add a command;
+  an unknown executable form leaves "no command ran" unprovable and is named in the meta file.
+- **The operator's setup stays out.** The call ignores the operator's configuration, rules and
+  memories as far as the tool allows, runs in the environment `child_env()` builds (no credential
+  for a metered endpoint), and `preflight()` observes the sign-in without a model call.
+  `docs/evaluations.md` states what the isolation does not reach.
+- **Sessions are kept and copied.** The call keeps the tool's session record, finds it by the
+  thread id of its stream, requires it outside every path the model may write, and copies its exact
+  bytes to `<fixture>.native.jsonl` with their SHA-256.
+- **No call from a fixture.** A fixture, a post plan and a grader never start the tool. The model
+  is called once in `call`, and a failed call is never retried.
+- **Results are keyed by harness.** The meta file and the `INDEX.json` row carry `harness`, and
+  `--summary` groups by it, so runs of different harnesses never merge.
 
 ## The arms
 
@@ -167,7 +201,9 @@ provenance that each run records.
 
 `evals/claude_arm.py` runs a fixture with an in-session Claude subagent in place of codex. It
 reuses the build, the protected-input check and the post-checks of `evals/run.py` unchanged, and
-replaces only the call to the model. Use it only when a person has granted a run of Claude.
+replaces only the call to the model. It records `harness: "claude-subagent"` in its state and its
+result, and is not a harness of the kind above. Use it only when a person has granted a run of
+Claude.
 
 ```bash
 python3 evals/claude_arm.py [--state DIR] [--seal-out FILE] prepare FIXTURE ARM
