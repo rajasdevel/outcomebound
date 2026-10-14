@@ -295,24 +295,81 @@ def test_a_set_guard_or_unreadable_input_tells_the_person_and_holds_nothing(
     assert "```output\nboom\n```" in verdict["systemMessage"]
 
 
-@pytest.mark.parametrize(
-    "waiting",
-    [{"background_tasks": [{"task_id": "b1"}]}, {"session_crons": [{"id": "c1"}]}],
-    ids=["background-tasks", "session-crons"],
-)
-def test_claude_code_runs_nothing_while_background_work_or_a_wake_up_waits(
+WAITING = [{"background_tasks": [{"task_id": "b1"}]}, {"session_crons": [{"id": "c1"}]}]
+
+
+def paused(root: Path, waiting: dict[str, Any]) -> dict[str, Any]:
+    return {**INPUT["claude-code"], "cwd": str(root), **waiting}
+
+
+@pytest.mark.parametrize("waiting", WAITING, ids=["background-tasks", "session-crons"])
+def test_claude_code_skips_done_once_while_background_work_waits_and_says_so(
     tmp_path: Path, waiting: dict[str, Any]
 ) -> None:
-    """Breaks if the Done commands run when the session is paused, not finished: background
-    work in flight, or a scheduled wake-up that brings the session back."""
+    """Breaks if the Done commands run at the first stop of a paused session, or if the skip is
+    silent: the person must read that Done was not run, why, and when it runs."""
 
     root, digest = target(tmp_path / "t", ["touch ran"])
-    paused = {**INPUT["claude-code"], "cwd": str(root), **waiting}
 
-    _, verdict = hook("claude-code", digest, root, stdin=paused)
+    _, verdict = hook("claude-code", digest, root, stdin=paused(root, waiting))
 
-    assert verdict == {}
+    assert list(verdict) == ["systemMessage"]
+    message = verdict["systemMessage"]
+    assert message.startswith("finish-check: Done was not run: 1 ")
+    assert "still open" in message and "next stop" in message
     assert not (root / "ran").exists()
+
+
+def test_done_runs_at_the_second_stop_in_a_row_that_background_work_would_skip(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a session that always has background work open is never checked (one skipped
+    344 stops in a row); the stop after the notice runs Done, the next one on the same tree
+    stays silent, and a changed tree is told again."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
+    stdin = paused(root, WAITING[0])
+
+    assert "Done was not run" in hook("claude-code", digest, root, stdin=stdin)[1]["systemMessage"]
+    second = hook("claude-code", digest, root, stdin=stdin)[1]
+    assert second["systemMessage"].startswith("finish-check PASS: echo run >> ")
+    assert count.read_text(encoding="utf-8") == "run\n"
+    assert hook("claude-code", digest, root, stdin=stdin)[1] == {}
+    write(root / "src.txt", "two\n")
+    assert "Done was not run" in hook("claude-code", digest, root, stdin=stdin)[1]["systemMessage"]
+    write(root / "src.txt", "three\n")
+    assert "finish-check PASS" in hook("claude-code", digest, root, stdin=stdin)[1]["systemMessage"]
+
+
+def test_a_stop_that_is_not_paused_clears_the_note_of_an_earlier_skip(tmp_path: Path) -> None:
+    """Breaks if a skip noted before background work ended makes the next paused stop run Done
+    without the notice."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
+    stdin = paused(root, WAITING[0])
+    assert "Done was not run" in hook("claude-code", digest, root, stdin=stdin)[1]["systemMessage"]
+    assert "finish-check PASS" in hook("claude-code", digest, root)[1]["systemMessage"]
+    write(root / "src.txt", "two\n")
+
+    assert "Done was not run" in hook("claude-code", digest, root, stdin=stdin)[1]["systemMessage"]
+    assert count.read_text(encoding="utf-8") == "run\n"
+
+
+@pytest.mark.parametrize("waiting", WAITING, ids=["background-tasks", "session-crons"])
+def test_background_work_leaves_a_tree_that_passed_silent(
+    tmp_path: Path, waiting: dict[str, Any]
+) -> None:
+    """Breaks if a long wait on a tree Done already passed on prints anything or runs Done."""
+
+    count = tmp_path / "count"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}"])
+    assert "finish-check PASS" in hook("claude-code", digest, root)[1]["systemMessage"]
+
+    for _ in range(3):
+        assert hook("claude-code", digest, root, stdin=paused(root, waiting))[1] == {}
+    assert count.read_text(encoding="utf-8") == "run\n"
 
 
 def test_an_unchanged_tree_reruns_nothing_and_a_changed_one_runs_again(tmp_path: Path) -> None:
@@ -355,14 +412,16 @@ def test_an_unchanged_failing_tree_repeats_its_verdict_unheld_and_runs_nothing(
 
     assert hook("codex", digest, root)[1]["decision"] == "block" and runs() == 1
     after_hold = {**INPUT["codex"], "cwd": str(root / "deeper"), "stop_hook_active": True}
+    verdict = hook("codex", digest, root, stdin=after_hold)[1]
+    assert list(verdict) == ["systemMessage"] and runs() == 1
+    message = verdict["systemMessage"]
+    assert message.startswith("finish-check FAIL: ")
+    assert "unchanged since this failure, so it was not run again" in message
+    assert "```output\nboom\n```" in message
+    assert len(message) < finish_check.REPORT_CHARACTERS
+    # Told once for the session and tree: later stops on it say nothing.
     for stdin in (after_hold, None):
-        verdict = hook("codex", digest, root, stdin=stdin)[1]
-        assert list(verdict) == ["systemMessage"] and runs() == 1
-        message = verdict["systemMessage"]
-        assert message.startswith("finish-check FAIL: ")
-        assert "unchanged since this failure, so it was not run again" in message
-        assert "```output\nboom\n```" in message
-        assert len(message) < finish_check.REPORT_CHARACTERS
+        assert hook("codex", digest, root, stdin=stdin)[1] == {} and runs() == 1
     write(root / "src.txt", "two\n")
     assert hook("codex", digest, root)[1]["decision"] == "block" and runs() == 2
 
@@ -2340,8 +2399,8 @@ def test_the_stop_ends_the_mark_unless_it_holds_or_the_session_is_paused(
 
     turn(row, digest, root)
     assert mark_file.is_file()
-    unchanged = hook(row, digest, root)[1]["systemMessage"]
-    assert "(marked " in unchanged and "not run again" in unchanged
+    # The retry stop told this failure on this tree: the unchanged turn after it says nothing.
+    assert hook(row, digest, root)[1] == {}
     assert not mark_file.exists()
 
 
@@ -2353,7 +2412,8 @@ def test_a_paused_claude_code_session_keeps_the_mark(tmp_path: Path) -> None:
     turn("claude-code", digest, root)
     paused = stop_input("claude-code", root, background_tasks=[{"id": "b"}])
 
-    assert hook("claude-code", digest, root, stdin=paused)[1] == {}
+    verdict = hook("claude-code", digest, root, stdin=paused)[1]
+    assert verdict["systemMessage"].startswith("finish-check: Done was not run")
     assert (root / ".git" / finish_check.MARK).is_file()
 
 
@@ -2502,3 +2562,89 @@ def test_known_records_resolve_git_common_dir_without_path_format(
     saved = root / ".git" / finish_check.KNOWN
     assert saved.is_file()
     assert finish_check.parse_known(saved.read_text(encoding="utf-8")) == [record]
+
+
+def pytest_output(skipped: int, padding: int) -> str:
+    """Output shaped as pytest with `-rs` prints it: a traceback, long output after it, the
+    short summary with failures, then the skips last."""
+
+    lines = ["E   OSError: [Errno 28] No space left on device"]
+    lines += [f"{'x' * 60} {n}" for n in range(padding)]
+    lines += ["=== short test summary info ===", "FAILED tests/test_a.py::test_one - OSError"]
+    lines += ["ERROR tests/test_b.py::test_two - OSError"]
+    lines += [f"SKIPPED [1] tests/test_s.py:{n}: not here" for n in range(skipped)]
+    lines += ["1 failed, 1 error, 60 skipped"]
+    return "\n".join(lines) + "\n"
+
+
+def test_the_hold_shows_the_failures_and_the_cause_not_the_skips(tmp_path: Path) -> None:
+    """Breaks if `SKIPPED` lines from `-rs` fill the shown tail while pytest names failures, or
+    if the failure ids and the first traceback line that the tail cut off are not shown."""
+
+    write(tmp_path / "out.txt", pytest_output(skipped=60, padding=200))
+    root, digest = target(tmp_path / "t", [f"cat {q(tmp_path / 'out.txt')}; exit 1"])
+
+    reason = hook("codex", digest, root)[1]["reason"]
+
+    assert "SKIPPED" not in reason
+    assert "FAILED tests/test_a.py::test_one - OSError" in reason
+    assert "ERROR tests/test_b.py::test_two" in reason
+    assert "E   OSError: [Errno 28] No space left on device" in reason
+    assert len(reason) < finish_check.REPORT_CHARACTERS
+
+
+def test_skips_stay_where_no_runner_names_a_failure(tmp_path: Path) -> None:
+    """Breaks if lines starting with SKIPPED are dropped from output that names no failure."""
+
+    write(tmp_path / "out.txt", "SKIPPED [1] a: b\nboom\n")
+    root, digest = target(tmp_path / "t", [f"cat {q(tmp_path / 'out.txt')}; exit 1"])
+
+    assert "SKIPPED [1] a: b" in hook("codex", digest, root)[1]["reason"]
+
+
+def test_failure_ids_above_the_kept_tail_are_still_read(tmp_path: Path) -> None:
+    """Breaks if only the last 64 KiB of output is searched for failure ids: ids printed before
+    the tail would be lost, and a new failure among them would look known."""
+
+    names = ["tests/test_a.py::test_one", "tests/test_a.py::test_two"]
+    body = "".join(f"FAILED {name} - boom\n" for name in names)
+    body += "y" * 100 + "\n"
+    body += ("z" * 99 + "\n") * 2000
+    assert len(body) > finish_check.TAIL_BYTES + 100_000
+    write(tmp_path / "out.txt", body)
+    root, _ = target(tmp_path / "t", ["true"])
+
+    result = finish_check.run_one(root, f"cat {q(tmp_path / 'out.txt')}; exit 1", 60)
+
+    assert not finish_check.failure_ids(result.output)
+    assert result.ids == {f"pytest {name}" for name in names}
+    again = finish_check.Result.of(result.document())
+    assert again is not None and again.ids == result.ids
+
+
+def test_a_hold_says_where_a_command_was_compared_by_its_exit_code_alone(tmp_path: Path) -> None:
+    """Breaks if a hold hides that a known command was compared by exit code only, which is
+    weaker than comparing failure ids."""
+
+    broken = tmp_path / "broken"
+    done = ["echo old; exit 1", f"test ! -e {q(broken)} || {{ echo new; exit 4; }}"]
+    root, digest = target(tmp_path / "t", done)
+    assert finish_check.measure(root, done, 600).kept
+    write(broken, "")
+    write(root / "src.txt", "two\n")
+
+    reason = hook("codex", digest, root)[1]["reason"]
+
+    assert reason.startswith("finish-check FAIL: ")
+    assert "compared by that code alone" in reason
+
+
+def test_a_hold_names_the_environment_done_ran_with(tmp_path: Path) -> None:
+    """Breaks if a hold leaves the agent unable to tell a failure of the hook's environment
+    from a real one: where Done ran and the PATH in front."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+
+    reason = hook("codex", digest, root)[1]["reason"]
+
+    assert "Done ran from " in reason and " with PATH starting " in reason
