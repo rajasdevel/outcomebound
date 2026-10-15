@@ -41,7 +41,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | The under-engineering side is not separated | E8 | No fixture separates the arms |
 | A test-first hand-off took a smaller model from 6 to 9 of 9 | E17, the hand-off comparison, and E18, its rerun | gpt-6-luna at xhigh, three small tasks, 9 runs a cell. The whole gain is one row of one ticket, in both passes |
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
-| OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm |
+| OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, E23, E24, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm; E23 has three runs a side |
 | The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
 | The new-project reference changes what an agent does with an idea: on the weak idea 0 of 3 to 3 of 3, on the spike that misses its bar 0 of 3 to 3 of 3, on the idea that needs real people 0 of 3 to 2 of 3 | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side; the final text ran on three fixtures. No run read the reference for a one-off script, and the planted-defect claim of `new-project-skeleton` cannot be seen on the Claude arm |
 | An agent onboards a repository with the guide `--detect` names: on `onboard-signals` 0 of 3 to 2 of 3, and the control `onboard-plain` 3 of 3 on both sides | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side. The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite |
@@ -55,7 +55,8 @@ model judge scored them.
 
 - **Models.** Every candidate model under Results is an OpenAI model that ran through codex,
   except E19 and E20, which ran Claude Sonnet 5.5 through Claude Code subagents, once per
-  case and arm. Claude models also
+  case and arm, and E23 and E24, which ran Claude Sonnet 5.5 (and, in E23, Claude Haiku 5.5)
+  through Claude Code subagents, as their sections say. Claude models also
   appear under "Results not kept here": as the judge of one proposal-only sample, and as
   candidates in the slicing arms. Behavior on other model families and other harnesses is not
   measured.

@@ -48,6 +48,9 @@ At a release, these places name the same version:
 - the `v=` of the operating-contract block that `adopt` installs
 - every install line in the README and in `templates/ci/` (`…/outcomebound@v<VERSION>`)
 
+Between two releases, the README on `main` can describe a change that the version its install
+lines name does not have, because those lines change only with `VERSION` in the release commit.
+
 `make canary` runs the engine of the release beside the installed release, on the local list of
 projects, subject to the custom-command boundary in CONTRIBUTING.md. Inspect custom floor
 commands first and use owned isolated checkouts where they may write; retain their identities
