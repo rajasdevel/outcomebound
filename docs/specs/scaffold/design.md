@@ -488,7 +488,9 @@ twin is written that a clone on a case-insensitive file system cannot check out.
 So no project gets a second route (lifecycle requirement R14), a second design log or a second CI
 system. A present part is never written. Where the plan has parts for a present file, the plan and
 `--accept` print them as a block for the agent to add after the person's yes; the scaffold edits no
-present file.
+present file. A part the file already holds, line for line, with each marker as written or filled,
+and an edge the file already lists, are left out of the block, so a run after `--accept` asks the
+agent to add nothing twice; a part a person reworded is printed again, for the agent to compare.
 
 `--accept` writes through `fileplan.write`, with every planned file expected absent: atomic, never
 through a link or a junction, never into `.git`, refused where a file appeared after the plan read

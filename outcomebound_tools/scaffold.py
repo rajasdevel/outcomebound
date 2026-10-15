@@ -362,10 +362,12 @@ def block(
     chosen: Selection,
     replaced: Sequence[dict[str, Any]] = (),
     before: Selection | None = None,
+    present: str | None = None,
 ) -> str | None:
     """What a present file gets from these parts, for the agent to add on the person's yes: the
     lines by slot for the local fragment, with the lines a move replaces and its edges; the parts'
-    text for a Markdown document. None where there is nothing to add."""
+    text for a Markdown document. None where there is nothing to add. `present`, the file's
+    text, drops the edges it already lists."""
 
     if item["join"] == "whole":
         return None
@@ -384,9 +386,10 @@ def block(
     for slot in SLOTS:
         if added.get(slot):
             lines += [f"add to {slot}:", *added[slot]]
-    lines += _edge_lines(
-        edges(templates, chosen), None if before is None else edges(templates, before)
-    )
+    wanted = edges(templates, chosen)
+    if present is not None and before is None:
+        wanted = [edge for edge in wanted if json.dumps(edge, ensure_ascii=False) not in present]
+    lines += _edge_lines(wanted, None if before is None else edges(templates, before))
     return "\n".join(lines) or None
 
 
@@ -703,8 +706,37 @@ def _present(
         kept = {part["source"] for part in now.content}
         replaced = [part for part in then.content if part["source"] not in kept]
     before = scope.before if slots else None
-    item.block = block(scope.templates, entry, new_parts, scope.chosen, replaced, before)
+    text = _present_text(scope.root, found)
+    if text is not None and not replaced:
+        new_parts = [part for part in new_parts if not _holds(scope.templates, entry, part, text)]
+    item.block = block(scope.templates, entry, new_parts, scope.chosen, replaced, before, text)
     item.block_origin = _origin(scope.templates, new_parts, scope.chosen)
+
+
+def _present_text(root: Path, relative: str) -> str | None:
+    try:
+        return textio.universal(textio.decode(paths.read_bounded(root, relative)))
+    except (paths.PathError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _holds(templates: Templates, entry: dict[str, Any], part: dict[str, Any], text: str) -> bool:
+    """Whether a present file already holds every line of `part`, as the scaffold writes it or
+    with each marker filled: a re-run must not ask the agent to add what is there."""
+
+    source = templates.text(part["source"])
+    if entry["join"] == "slots":
+        lines = [line for found in _slot_lines(source, part["source"]).values() for line in found]
+    else:
+        lines = [line for line in source.split("\n") if line.strip()]
+    held = {line.strip() for line in text.split("\n") if line.strip()}
+    for line in lines:
+        pieces = MARKER.split(line.strip())
+        # MARKER has two groups, so the literal text is every third piece.
+        pattern = ".+?".join(re.escape(piece) for piece in pieces[::3])
+        if not any(re.fullmatch(pattern, row) for row in held):
+            return False
+    return bool(lines)
 
 
 # --- --accept -------------------------------------------------------------------------------

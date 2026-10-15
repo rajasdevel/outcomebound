@@ -640,6 +640,29 @@ def test_presence_and_accept_fold_case(tmp_path: Path, capsys: Capture) -> None:
     assert sorted(os.listdir(twin)) == [".GitHub", ".git"]
 
 
+def test_a_rerun_asks_to_add_nothing_the_files_already_hold_filled_or_not(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a re-run after --accept prints a block of parts the files already hold, which an
+    agent would add a second time; a file that lacks a part still gets its block."""
+
+    flags = ("--lifecycle", "solo+client", "--visibility", "private", "--acts", "deploy")
+    root = target(tmp_path)
+    accept(capsys, root, *flags[1:])
+    local = root / LOCAL
+    write(local, re.sub(r"<<fill: [^<>]+>>", "filled by the person", local.read_text()))
+
+    code, out, _ = run(capsys, root, *flags, "--accept")
+
+    assert code == 0 and "--- block for" not in out and "add it on the person's yes" not in out
+
+    write(root / "CONTRIBUTING.md", "# Contributing\n")
+    out = run(capsys, root, *flags)[1]
+
+    assert "--- block for CONTRIBUTING.md (client) ---" in out and "## The client route" in out
+    assert f"--- block for {LOCAL}" not in out
+
+
 # 18, 19. Moves.
 
 
