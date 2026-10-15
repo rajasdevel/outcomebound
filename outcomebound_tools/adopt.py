@@ -2244,13 +2244,19 @@ def remove(target: Path, source: Path, force: bool) -> tuple[Planned, list[str],
 # --- Read-only verbs ------------------------------------------------------------
 
 
-def _observed(target: Path, record: Record) -> bytes | None:
+def _observed(target: Path, record: Record, event: str | None = None) -> bytes | None:
+    """The bytes `record` names as they are on disk; for a hook record, its group, which reads
+    as edited where it stands under another event than `event`, the one its row names."""
+
     data = _read(target, record["path"])
     if record["kind"] == HOOK:
         if data is None or finish_check.MARKER not in data:
             return None
         settings = Settings.parse(record["path"], data)
-        return settings.at(settings.find(record["sha256"], record["id"] == FINISH_MARK))
+        spot = settings.find(record["sha256"], record["id"] == FINISH_MARK)
+        if spot is not None and event is not None and spot[0] != event:
+            raise AdoptError(f"{record['path']}: the entry is under {spot[0]}, not {event}")
+        return settings.at(spot)
     if data is None:
         return None
     if record["kind"] in FILE_KINDS:
@@ -2295,6 +2301,23 @@ def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record])
     return block.encode("utf-8")
 
 
+def _hook_event(source: Path, record: Record) -> str | None:
+    """The event a hook record's row names for its entry, None for any other record or where the
+    table names none."""
+
+    harness = record.get("harness")
+    if record["kind"] != HOOK or not isinstance(harness, str):
+        return None
+    try:
+        hook = finish_check.hook_of(harness_table(source).get(harness))
+    except AdoptError:
+        return None
+    event = (
+        None if hook is None else hook.get("mark_event" if record["id"] == FINISH_MARK else "event")
+    )
+    return event if isinstance(event, str) else None
+
+
 def _hook_rendered(source: Path, record: Record, own: Sequence[Record]) -> bytes:
     """The entry this engine writes for the record's harness and the recorded Done."""
 
@@ -2319,7 +2342,7 @@ def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> 
     which the facts and pointers are recomputed from."""
 
     try:
-        observed = _observed(target, record)
+        observed = _observed(target, record, _hook_event(source, record))
     except AdoptError:
         return "edited"
     if observed is None:

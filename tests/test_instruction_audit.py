@@ -504,6 +504,32 @@ def test_a_done_list_the_hooks_digest_was_not_written_for_decides(
     capsys.readouterr()
 
 
+@pytest.mark.parametrize(
+    ("event", "moved_to"), [("Stop", "PreToolUse"), ("UserPromptSubmit", "Stop")]
+)
+def test_adopts_entry_moved_to_another_event_is_an_ordinary_hit_and_no_current_install(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], event: str, moved_to: str
+) -> None:
+    """Breaks if adopt's group, its bytes kept, still reads as adopt's own entry and the install
+    as current after it moved to an event its row does not name: the stop or the turn start no
+    longer holds the finish check, and no person ruled on that."""
+
+    root = _installed(tmp_path / "r")
+    capsys.readouterr()
+    settings = json.loads((root / SETTINGS).read_text(encoding="utf-8"))
+    settings["hooks"].setdefault(moved_to, []).append(settings["hooks"].pop(event)[0])
+    (root / SETTINGS).write_text(json.dumps(settings, indent=2), encoding="utf-8")
+
+    report = check(root)
+    own = [f for f in report.findings if f.fact.startswith("adopt's finish-check")]
+    unmoved = "turn-start entry" if event == "Stop" else "finish-check entry hooks.Stop[0]"
+    assert len(own) == 1 and unmoved in own[0].fact, own
+    assert any(f.decides for f in _hits(report, "harness-config"))
+    assert report.result != "PASS"
+    assert adopt.main([str(root), "--check"], source=ROOT) != 0
+    capsys.readouterr()
+
+
 def test_an_install_with_the_finish_check_quotes_its_done_commands(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
