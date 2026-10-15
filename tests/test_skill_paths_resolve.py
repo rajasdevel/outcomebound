@@ -25,6 +25,8 @@ CHECKOUT_ONLY = {
         "adapters/harnesses.json",
         "templates/fragment-local.md",
         "templates/harness/",
+        "templates/lifecycle/",
+        "templates/lifecycle/client.md",
     ),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),
@@ -38,6 +40,9 @@ CHECKOUT_ONLY = {
     "explain-spec": (),
     "hand-off-tickets": (),
     "explorable": (),
+    "land-change": (),
+    "run-acceptance": (),
+    "sync-tracker": (),
 }
 
 # skill name -> further files shipped beside its entrypoint

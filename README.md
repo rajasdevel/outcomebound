@@ -26,7 +26,9 @@ remaining consumers and authority limits visible. A local bug fix can go straigh
 regression check.
 
 The [lifecycle reference](skills/using-outcomebound/references/lifecycle.md) describes the
-required evidence and handoffs at each applicable stage.
+required evidence and handoffs at each applicable stage. A project records its own lifecycle in a
+few lines of its local fragment, and adoption compares it with the nearest of three examples in
+[`templates/lifecycle/`](templates/lifecycle/) (personal, shared, client); it installs none of them.
 
 ## Try it
 
@@ -67,7 +69,7 @@ a commit is not required. The install adds:
 | File or folder | Purpose |
 | --- | --- |
 | `AGENTS.md` | The contract, project Done commands, CI commands and irreversible edges found in your files |
-| Your harness's skills folder | Guidance for sizing work, requirements, decisions, tests, diagnosis, review, specs, tickets, handoffs and explorable pages |
+| Your harness's skills folder | Guidance for sizing work, requirements, decisions, tests, diagnosis, review, specs, tickets, handoffs, explorable pages, landing a change, acceptance by an outside party and a tracker that is not your ticket store |
 | `.outcomebound/` | Selected fragments and a manifest of installed files |
 | Harness instruction files | An `@AGENTS.md` import where the harness needs one |
 
@@ -271,6 +273,11 @@ See the [floor design](docs/specs/floor/design.md).
   prepares a local clone; `outcomebound research <path>` returns a file with its commit and digest.
   Cite the file by its path, that commit and that digest.
   `outcomebound research ingest` prepares an issue link and local record; it sends nothing.
+
+The repository includes a business requirements kit at `kits/business-requirements/SKILL.md`.
+A Business Owner or Scrum Master pastes it into their own AI assistant to produce the business part
+of a requirements card, with each item's source and approval recorded. `adopt` does not install
+it, and no named assistant is claimed to work with it yet.
 
 ## Contributing and license
 

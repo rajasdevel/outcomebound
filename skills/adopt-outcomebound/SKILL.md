@@ -28,7 +28,7 @@ agent reads the code, and a summary of it adds text without adding a fact.
    (Done, Setup, the CI test command, irreversible edges, precedence); and the pointers, the `local`
    fragment in full and a `- <condition>: read <path>` line per fragment and skill. It copies the
    selected fragments under `.outcomebound/fragments/`, the skills per harness, each folder whole:
-   the ten every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
+   the thirteen every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
    import a harness needs to load it, and `.outcomebound/manifest.json` last. It refuses a harness
    that would not load the contract. It also refuses to overwrite an owned file someone edited,
    unless `--force` is given. Running it again from a newer release or checkout is the upgrade.
@@ -67,6 +67,55 @@ what a reader finds by opening the code or the README. Where a check can hold th
 check instead of the sentence: an edge in `edges:` with an ask rule from
 `$(outcomebound home)/templates/harness/`, a floor claim, a CI line. Show the person the lines; the
 file is theirs.
+
+## The project's lifecycle
+
+The project keeps its own route; you record where it is and what the route rests on, never a copy
+of it. Observe first: what the project does now, from its instructions, contributing and workflow
+documents, CI and deploy files, and the history `--detect` reports. Then propose the optional
+lines below under the same keep-a-line rule: a line only where the project's committed text does not
+already lead an agent to the decision, and most lines are left out. Each line cites the file that
+shows it, or reads "the person says so"; a fact no file shows is `assumed` and goes in the brief.
+Name each line form in double quotes, never in backticks, when you write about it.
+
+- "Exposure —" (Context), one line for each stream where the streams differ: who can be hurt, who
+  accepts the work, which acts cannot be undone, the expected life, who maintains it, and how much
+  the agents write against the review capacity. Propose it for a stream whose acts cannot easily
+  be undone, such as database objects changed with no migration and no way back but a revert.
+- "Streams —" (Context): the route document of each stream, the kind of change it takes and,
+  where a fragment applies to that stream only, "; fragments <id>, <id>". It points only to a
+  document the next person can open: committed, or named as private with who holds it. Where a
+  stream has no written route, propose the lines for the project's own document (branch, review,
+  how a change reaches a server, the way back), each with the file or commit that shows it, and
+  send what no file shows to the brief; for a client delivery, `templates/lifecycle/client.md`
+  holds a route example to compare with. Never write a route into OutcomeBound's files.
+- "Better means —" (Context): the project's own measure of a better outcome, in its words, where it
+  is not written where an agent reads it.
+- "Gates —" (Bounds): a gate, its owner and its evidence. A gate with no named owner is reported to
+  the person as a gap; never fill the owner.
+- "Leave when —" (Bounds): a signal that ends the current lifecycle, where it can be observed, who
+  watches it, and the brief it opens. The brief inventories the work in flight: open tickets,
+  branches the main line does not hold and their requests, worktrees with uncommitted work, open
+  briefs, standing grants, a deploy in a partial phase. Write
+  the moves back too. For a change of route, the inventory is most of the brief, not a fragment diff.
+  A row whose signal already reaches the owner is left out.
+- "Changed —" (Context): written only after the person's yes on a transition, with its date, what
+  moved, who decided and what it invalidates; never at adoption.
+
+Select fragments from the exposure facts and what the files show: `team` for two or more
+maintainers or required review, else `solo`; `deploy` and `runtime` where it deploys a service;
+`ci-release` where it publishes a package; `db-migrations` where it changes stored data; `client`
+where a client or a regulator accepts the work; `explore` where the expected life starts with
+learning. A fragment applies to every stream unless a "Streams —" line names it in its fragments
+field. Add them to `--fragments`, and name the facts that selected each. On an upgrade, show the
+person each drift line `--check` prints that is not settled: it is the moment someone reads them;
+for a settled one (`settled by the person: <reason>`), read its reason against the evidence and
+raise it only if they differ. A line the person settles gets a "Drift — <signal>: <reason>" line,
+on a line of its own with a reason, in the local fragment's Bounds slot.
+
+Name the nearest of `$(outcomebound home)/templates/lifecycle/` (`personal`, `shared`, `client`) and
+the differences between it and what you observed, as a comparison for the person. Never copy it,
+and adoption installs none of them.
 
 ## Ask once
 
@@ -110,5 +159,6 @@ manifest last.
 ## Report
 
 The files written, the final `AGENTS.md` blocks, each readiness line and each fact the install
-reported `UNVERIFIED`, the lines you proposed and the file behind each, the decision brief, and for
+reported `UNVERIFIED`, the lines you proposed and the file behind each (lifecycle lines too), each gate without an owner,
+the fragments the exposure selected, the nearest lifecycle template and its differences, the decision brief, and for
 each harness whether it was observed loading the install or that is `UNVERIFIED`.

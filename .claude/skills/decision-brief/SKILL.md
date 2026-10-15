@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision is the user's to make. That is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them.
+description: Use when a decision is the user's to make. That is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them. Also when a harness refuses an act the person granted.
 ---
 
 # Decision brief
@@ -22,6 +22,16 @@ the work that waits on it, so every other item goes on. Some harnesses honor aut
 the user's own words: for an act a permission check guards, such as a deletion or a write outside
 the project, the brief names the act so the user's reply can state it, not only a letter.
 
+A question the person already settled is not asked again: their launch block, their standing
+order and their earlier answer stand. An order to run unattended answers "may I ask" only for
+questions within what the kernel allows you to decide; it grants no act that a bound or an edge
+holds. A harness or sandbox that refuses an act has raised no new decision only where the person's
+own words name that act and its target: quote them. Then say in the first line of your next
+message what was refused, by which rule or command, and ask the person to run the act or to adjust
+the harness; draw no brief with options and a default for it. Where their words do not name it,
+the refusal is a decision for them: draw its brief. After a refusal, never reach the same effect
+by another route, and continue every item the refusal does not block.
+
 ## Do the due diligence first
 
 Before you ask, check everything within reach that could change the answer: the history of the
@@ -40,7 +50,11 @@ what its downside is, so the evidence chooses your recommendation.
 - whether it can be undone;
 - what happens if no answer comes, and the state the held work waits in: the side of the held act
   that is easiest to stay in, never half done; give it as a `facts` pair labelled
-  `If unanswered`;
+  `If unanswered`. A brief that holds work says which: it names a default and its expiry, the moment the
+  default applies, so the work that waits on it can go on; or it says plainly that the work waits
+  for the person, with no expiry. The expiry is a moment the person or the project already named (a
+  handoff, a release, a date in the ticket or the grant); where none exists, the work waits, and
+  the moment is one more question. Never invent a time limit;
 - a diagram only when order, dependency, flow or before/after is the point.
 
 A question in prose, a table of options, or a list without a recommendation and an undo line is not
@@ -69,6 +83,19 @@ need `--form mermaid`. Paste the complete rendered brief into the user-facing te
 never inside a code block. To revise it, change the input and draw it again; do not shorten or rewrite the rendered
 brief. A refused brief is fixed and drawn again, never hand-written. Without `outcomebound` on PATH,
 write the same shape by hand, options lettered.
+
+A short input for one brief with two options. `recommend_way` is the words of a way, never its
+letter, since the command writes the letters; `facts` carries the `If unanswered` pair:
+
+```json
+{"briefs": [{"id": "flag-D1", "heading": "Keep the old flag for one release?",
+  "recommend": "two adopters still set it", "recommend_way": "keep it",
+  "options": [["keep it", "adopters get a warning first", "one more release carries the old code path"],
+              ["drop it now", "the code path goes today", "an adopter who sets it is refused on upgrade"]],
+  "checked": {"verdicts": ["PASS"], "text": "`grep -r old_flag` finds two adopter configs"},
+  "facts": [["If unanswered", "the flag stays; only this item waits"]],
+  "undo": {"can_be_undone": true, "text": "revert the commit"}}]}
+```
 
 A drawn brief, fenced here only to show its lines; its bare `D1` is right only where the
 project's instructions number briefs:

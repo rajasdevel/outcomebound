@@ -22,12 +22,11 @@ you author; broad or runtime checks when the changed risk reaches that layer.
 
 Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
 Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
-crosses an ungranted irreversible edge: write its decision brief (the `decision-brief` skill); all
-other work continues.
+crosses an ungranted irreversible edge: write its decision brief; all other work continues.
 Delegates receive the same four inputs and bounds.
 
-Report each named check as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
-`UNVERIFIED`, never success. Say only what a check establishes; a change, test, commit, push,
+Report the completion bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing
+evidence is `UNVERIFIED`. Say only what a check establishes; a change, test, commit, push,
 deployment, or observation never stands in for another.
 
 Project guidance, when present, follows below.
@@ -88,6 +87,9 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
 - when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it: read .claude/skills/explorable/SKILL.md
+- when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
+- when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
+- when reading a card from a tracker that is not the project's ticket store, or writing back to it: read .claude/skills/sync-tracker/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual
@@ -128,7 +130,7 @@ OutcomeBound.md       the contract
 outcomebound_tools/   the engine
 scripts/              the `outcomebound` launcher, the package's build backend and this repository's scripts
 pyproject.toml        names the build backend; the package's metadata is in the backend
-skills/               the ten working skills, and the adopt skill, which stays in this checkout
+skills/               the thirteen working skills, and the adopt skill, which stays in this checkout
 fragments/            stack and setup guidance, copied under .outcomebound/fragments/ and pointed at from AGENTS.md
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       outcomebound.mk, Make targets a project may include for the floor and a validation plan

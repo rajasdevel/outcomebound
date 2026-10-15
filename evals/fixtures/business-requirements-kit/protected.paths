@@ -1,0 +1,13 @@
+# The project note, the graders, the sources the grader looks quotes up in, the installed core
+# skill and repository exclusion state copied into the candidate-writable fixture.
+AGENTS.md
+checks/probe_kit.py
+checks/sources/s1-kickoff-call.txt
+checks/sources/s2-support-followup.txt
+checks/scope_walk.py
+checks/transcript_commands.py
+checks/allowed_paths.sh
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

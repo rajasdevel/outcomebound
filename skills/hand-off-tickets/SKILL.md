@@ -31,9 +31,9 @@ branch the ticket is built on, proceeds without asking. The ticket's outcome, `b
 `bounds` that only carries the ticket's own change, such as an import or an inventory entry for its
 own files, is the implementer's to make, and its handover names it; any other edit outside
 `bounds` is the person's, put as a decision brief. Where a line of the ticket holds
-only on a condition the implementer may be unable to settle, the package names the side to take
-when it cannot be settled, the smaller change inside `bounds`, and the implementer's handover says
-which side it took. Where the ticket
+only on a condition the implementer may be unable to settle, the package states the default the
+implementer takes when the condition is unknown, the smaller change inside `bounds`, and the
+implementer's handover says which side it took. Where the ticket
 cannot be built as written, file the follow-up that makes it buildable where a goal envelope the
 person wrote accepts follow-ups, since that line is their acceptance of it; otherwise put the
 change to the person as a decision brief in a comment on the ticket. Either way, go on with the
@@ -54,8 +54,13 @@ where neither can be read, take the spec tier, the tier of a model the table doe
 say so in the handover. A tier the person names directly stands; so does a tier the project's
 committed instructions give the model, before the table's row, named by its file in the
 handover. Where neither the table nor those instructions place the model, the handover says that
-the table does not list it, names any project rule that routes work to it, and says that the spec
-tier follows.
+the table does not list it, names any project rule that routes work to it, and starts with the
+spec tier's package, in full detail (the `--detail full` brief), while the question below is open.
+
+Ask the person one plain question, batched with the other questions: is the model that will build this a frontier model (the
+provider's most capable tier) or a smaller, faster model? Shape the hand-off from the answer: a
+frontier model takes the outcome tier, a smaller, faster model the spec tier, and where the person
+says it sits between them, the design tier. The handover says that the question is open until then.
 
 ## Outcome tier
 
@@ -120,7 +125,8 @@ names; it never goes into the ticket's body. Where a person starts the implement
 goal envelope, the text they paste is the envelope itself, one block holding its grants in the
 person's words; what is for the person, such as which harness to start, stays outside that
 block. Give the implementer the commands it needs: where to work, how to run the tests, and what
-not to run. Commit as the project's instructions or the goal envelope say work lands here; where
+not to run. Tell the implementer to claim the ticket when it starts, where the `tickets` fragment
+and the declaration allow it. Commit as the project's instructions or the goal envelope say work lands here; where
 neither says, commit locally on the current branch in the style the history shows, and put how it
 should land to the person in the handover as a decision brief.
 The implementer's handover says what changed, each check's exact command and verdict, for each

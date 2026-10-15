@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LISTED = """OutcomeBound.md templates/managed-block.agents.md.tmpl templates/goal/goal.md
 templates/tickets/issue-template.md templates/fragment-local.md"""
-GLOBS = ("templates/spec/*.md", "fragments/**/*.md", "skills/**/*.md")
+GLOBS = ("templates/spec/*.md", "templates/lifecycle/*.md", "fragments/**/*.md", "skills/**/*.md")
 UNIT = (
     r"words?|lines?|steps?|pages?|files?|commits?|attempts?|retries|runs?|seconds?|minutes?"
     r"|hours?|days?|bytes?|KiB|MiB|characters?|tokens?"

@@ -61,9 +61,11 @@ ends only when its completion bar holds or nothing left can proceed.
 
 ## Validate and report
 
-Name the checks that settle the changed risk, and report each as `PASS`, `FAIL`, or
-`UNVERIFIED`. `PASS` means only that the declared check succeeded. A completion-bar check or a material claim
-reported `UNVERIFIED` says what evidence is missing and what would settle it. A trusted project
+Name the checks that settle the changed risk, and report the checks the completion bar names, each
+as `PASS`, `FAIL`, or `UNVERIFIED`; a named check that was not run is `UNVERIFIED`. Do not list
+checks nobody asked for. A `FAIL` is always reported. `PASS` means only that the declared check
+succeeded. A completion-bar check or a material claim reported `UNVERIFIED` says what evidence is
+missing and what would settle it. A trusted project
 policy check can establish its declared boundary rule; it cannot prove product behavior. A local
 change, a passing test, a commit, a push, a deployment, a runtime observation, and an operator
 judgment are each their own state; report none of them as another.
@@ -120,7 +122,7 @@ coordination than the task is worth. Each delegate receives the same four inputs
 ## Adoption and compatibility
 
 Default adoption installs a compact managed instruction block, the project facts and guidance
-pointers the engine generates beside it, and the ten working skills.
+pointers the engine generates beside it, and the thirteen working skills.
 Guidance fragments, specs, goals, harness adapters, and project-authoritative policy
 integration are optional components, each selected and wired explicitly: the fragments from
 `fragments/`, the harness adapters from `adapters/harnesses.json`, and the rest from `templates/`,

@@ -46,9 +46,13 @@ or a decision, in the most checkable form that fixes it: a check or a refusal be
 | --- | --- |
 | the work starts from an idea, in an empty folder or none | [the new-project reference](references/new-project.md) |
 | work spans stages, or delivery stopped before the outcome | [the lifecycle reference](references/lifecycle.md) |
+| the project's exposure or route changes, a "Leave when —" signal appears, or `adopt --check` prints a drift line | the transitions section of [the lifecycle reference](references/lifecycle.md) |
 | a decision is the person's | `decision-brief` |
 | the outcome or the bar is unclear, or requirements come from a source | `gather-requirements` |
 | a person must act on a spec they did not write | `explain-spec` |
+| a pull or merge request is to be driven through CI and review to landing | `land-change` |
+| a person outside the build is to accept a delivered change | `run-acceptance` |
+| a card is read from, or written to, a tracker that is not the ticket store | `sync-tracker` |
 | the person asks for an interactive page, or to try options or learn a mechanism by trying it | `explorable`, beside the decision brief, never in place of it |
 
 ## Read the full contract

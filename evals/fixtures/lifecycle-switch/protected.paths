@@ -1,0 +1,9 @@
+# The graders, the record of the work in flight as built, the installed core skill and the
+# repository exclusion state copied into the candidate-writable fixture.
+checks/probe_switch.py
+checks/transcript_commands.py
+checks/inflight.json
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

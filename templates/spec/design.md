@@ -23,6 +23,12 @@ status: draft
 states, and `[deferred]` or `[excluded]` to one that this work leaves out, so `tickets check` does
 not ask a ticket to satisfy it. Delete this section otherwise. -->
 
+## Examples
+
+<!-- Optional. Where someone outside the build accepts the work: each rule with a wanted and an
+unwanted case, in the acceptor's words; acceptance scripts are written from these. Delete this
+section otherwise. -->
+
 ## Decisions
 
 | Decision | Rejected alternative | Owner | Status |
