@@ -23,7 +23,7 @@ import json
 import os
 import re
 import shlex
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
@@ -106,6 +106,20 @@ def both(items: Sequence[str]) -> str:
     """`a`, `a and b`, `a, b and c`: every one of them, in order."""
 
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def done_line(done: Sequence[str], skip: Mapping[str, Sequence[str]] | None = None) -> str:
+    """The Done fact: every command, and for each the skip names, the changes it is not run for,
+    in the finish check's own rule, so the model's reading and the hook's agree."""
+
+    line = f"- Done: {both([code(command) for command in done])}"
+    for command in done:
+        globs = (skip or {}).get(command)
+        if globs:
+            line += f"; {code(command)} is not run when every changed path matches " + " or ".join(
+                code(glob) for glob in globs
+            )
+    return line
 
 
 def code(text: str) -> str:
@@ -485,6 +499,7 @@ class Chosen(NamedTuple):
     done: Sequence[str]
     style: Sequence[str] = ()
     setup: Sequence[str] = ()
+    skip: Mapping[str, Sequence[str]] = {}
 
 
 def render(
@@ -516,12 +531,12 @@ def render_chosen(
     per installed skill.
     """
 
-    done, style, setup = chosen
+    done, style, setup, skip = chosen
     lines: list[str] = []
     unverified: list[str] = []
     inputs = {f"{FRAGMENT_DIR}/{item.id}.md": item.digest for item in selected}
     if done:
-        lines.append(f"- Done: {both([code(command) for command in done])}")
+        lines.append(done_line(done, skip))
     else:
         unverified.append("Done: no command is recorded; adopt records one with --done")
     if setup:

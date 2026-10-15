@@ -1005,12 +1005,22 @@ def _toml_hits(text: str, specs: Sequence[tuple[str, str]]) -> list[tuple[int, s
     return hits
 
 
+@dataclass(frozen=True)
+class _Done:
+    """The recorded Done commands, the changes each is not run for (`--done-skip`), and whether
+    AGENTS.md's project facts show them as adopt renders them."""
+
+    commands: tuple[str, ...]
+    skip: Mapping[str, Sequence[str]]
+    shown: bool = False
+
+
 def _own_entry(
     value: object,
     own: frozenset[str],
     harness: str,
     path: str,
-    done: Sequence[str] | None,
+    done: _Done | None,
     event: str,
 ) -> bool:
     """Whether a group under the hook event `event` is the one adopt writes for `harness` at
@@ -1025,7 +1035,7 @@ def _own_entry(
     hooks = value.get("hooks") if isinstance(value, dict) else None
     if done is None or hook is None or hook.get("file") != path or not isinstance(hooks, list):
         return False
-    digest = finish_check.done_digest(done)
+    digest = finish_check.done_digest(done.commands, done.skip)
     written = canonical(value)
     if written == canonical(finish_check.mark_entry(harness, digest)):
         return event == hook.get("mark_event") and hashlib.sha256(written).hexdigest() in own
@@ -1044,7 +1054,7 @@ def _without_own(
     own: frozenset[str],
     harness: str,
     path: str,
-    done: Sequence[str] | None,
+    done: _Done | None,
 ) -> tuple[dict[str, Any], list[tuple[str, int, str]]]:
     """A hooks object without adopt's own groups, and (event, index, command) for each one."""
 
@@ -1070,13 +1080,12 @@ def _config_hits(
     text: str,
     harness: str,
     own: frozenset[str] = frozenset(),
-    done: Sequence[str] | None = None,
-    done_shown: bool = False,
+    done: _Done | None = None,
 ) -> list[tuple[int, str, str, bool]]:
     """(line, verdict, fact, decides) for each key `harness`'s row lists present, or each value left
     unsettled; each entry adopt wrote, its digest in `own`, is one review hit quoting the Done
     commands it runs, and it decides the result only where AGENTS.md does not show those
-    commands (`done_shown`)."""
+    commands (`done.shown`)."""
 
     keys = ((_row(harness) or {}).get("config") or {}).get("keys") or {}
     specs = [(category, spec) for category in _CATEGORIES for spec in keys.get(category) or []]
@@ -1089,7 +1098,7 @@ def _config_hits(
     hits: list[tuple[int, str, str, bool]] = []
     settled = (
         "; they are the Done commands AGENTS.md's project facts show"
-        if done_shown
+        if done is not None and done.shown
         else "; AGENTS.md's project facts do not show these Done commands"
     )
     for category, spec in specs:
@@ -1098,7 +1107,7 @@ def _config_hits(
                 value, recognised = _without_own(value, own, harness, path, done)
                 key = ".".join(path_keys)
                 commands = (
-                    _quote(json.dumps(list(done)), 240)
+                    _quote(json.dumps(list(done.commands)), 240)
                     if done is not None
                     else "unreadable from the manifest"
                 )
@@ -1117,7 +1126,7 @@ def _config_hits(
                             f"({_quote(command, 120)}) runs the Done commands the manifest "
                             f"records: {commands}{settled}"
                         ),
-                        not done_shown,
+                        not (done is not None and done.shown),
                     )
                     for event, index, command in recognised
                 )
@@ -1134,8 +1143,7 @@ def _harness_config(
     text: str,
     harnesses: Sequence[str],
     own: frozenset[str] = frozenset(),
-    done: Sequence[str] | None = None,
-    done_shown: bool = False,
+    done: _Done | None = None,
 ) -> list[Finding]:
     """Secret-shaped values (a gate) and each listed key present (a review), per harness; an
     entry adopt wrote, its digest in `own`, is a review hit that quotes its Done commands."""
@@ -1162,7 +1170,7 @@ def _harness_config(
             f"it, and can record that with `outcomebound instructions rule`; go on with the "
             f"work; its permissions and hooks documentation: {docs}"
         )
-        hits = _config_hits(path, text, harness, own, done, done_shown)
+        hits = _config_hits(path, text, harness, own, done)
         findings.extend(
             _finding(
                 "harness-config",
@@ -2351,7 +2359,13 @@ def _file_findings(
         found = [_note_finding(finding) for finding in found]
     owners = [h for h in scope.config.get(relative, ()) if h in harnesses]
     if owners:
-        done = recorded_done(root) if (own or {}).get(relative) else None
+        commands = recorded_done(root) if (own or {}).get(relative) else None
+        skip = finish_check.recorded_skip(root) if commands else {}
+        done = (
+            None
+            if commands is None
+            else _Done(tuple(commands), skip, _done_shown(root, commands, skip))
+        )
         found.extend(
             _harness_config(
                 relative,
@@ -2359,7 +2373,6 @@ def _file_findings(
                 owners,
                 (own or {}).get(relative, frozenset()),
                 done,
-                _done_shown(root, done),
             )
             or [
                 _finding(
@@ -2370,7 +2383,9 @@ def _file_findings(
     return found
 
 
-def _done_shown(root: Path, done: Sequence[str] | None) -> bool:
+def _done_shown(
+    root: Path, done: Sequence[str] | None, skip: Mapping[str, Sequence[str]] | None = None
+) -> bool:
     """Whether the project-facts block of the target's AGENTS.md shows exactly these Done
     commands, as adopt renders them: then the finish check runs only what the instructions an
     agent loads already name. An AGENTS.md that resolves outside the target shows none."""
@@ -2380,7 +2395,7 @@ def _done_shown(root: Path, done: Sequence[str] | None) -> bool:
     text, _ = _read(root, "AGENTS.md")
     if text is None:
         return False
-    line = f"- Done: {facts.both([facts.code(command) for command in done])}"
+    line = facts.done_line(done, skip)
     return any(
         line in text[block.begin_offset : block.end_offset].splitlines()
         for block in identity.find_managed_blocks(text)

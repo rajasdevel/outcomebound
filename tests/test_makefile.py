@@ -86,18 +86,16 @@ def _targets() -> dict[str, tuple[str, str]]:
 
 def test_every_make_target_that_runs_python_checks_the_interpreter_first() -> None:
     targets = _targets()
-    runs_python = [n for n, (_, recipe) in targets.items() if "$(PYTHON)" in recipe and n != "python"]
+    runs_python = [
+        n for n, (_, recipe) in targets.items() if "$(PYTHON)" in recipe and n != "python"
+    ]
     assert runs_python, "the Makefile parse found no target"
     missing = [n for n in runs_python if "python" not in targets[n][0].split()]
     assert not missing, f"targets that run $(PYTHON) without the interpreter check: {missing}"
 
 
 def test_the_python_minimum_agrees_in_the_makefile_the_launcher_and_the_package() -> None:
-    sys.path.insert(0, str(ROOT / "scripts"))
-    try:
-        import build_backend
-    finally:
-        sys.path.pop(0)
-    assert build_backend.REQUIRES_PYTHON == ">=3.10"
+    backend = (ROOT / "scripts/build_backend.py").read_text()
+    assert 'REQUIRES_PYTHON = ">=3.10"' in backend
     for path in ("Makefile", "scripts/outcomebound"):
         assert "sys.version_info < (3, 10)" in (ROOT / path).read_text(), path
