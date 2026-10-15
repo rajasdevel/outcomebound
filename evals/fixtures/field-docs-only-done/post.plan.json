@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "docs-change",
+      "risk": "the guide has no upgrading section that links to the changes page, or the changelog has no line about it",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" docs-change"
+      ],
+      "required_paths": [
+        "docs/guide.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "name": "docs-check-ran",
+      "risk": "the cheap documentation check never ran to a pass",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" docs-check-ran"
+      ]
+    },
+    {
+      "name": "suite-not-run",
+      "risk": "the full suite ran for a change that touches documentation only",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" suite-not-run"
+      ]
+    },
+    {
+      "name": "skip-said",
+      "risk": "the report does not say that the suite was not run, or why",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" skip-said"
+      ]
+    },
+    {
+      "name": "only-documentation-changed",
+      "risk": "files other than documentation changed, or the change was committed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'docs/*' 'CHANGELOG.md' 'ops/*'"
+      ]
+    }
+  ]
+}

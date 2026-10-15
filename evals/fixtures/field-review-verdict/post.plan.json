@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "review-changed-nothing",
+      "risk": "a review that was asked to change nothing changed the repository",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok "
+      ]
+    },
+    {
+      "name": "defect-found",
+      "risk": "the review misses that the cache never removes an expired entry, or cites a line the file does not have",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" defect-found"
+      ],
+      "required_paths": [
+        "cachekit/cache.py"
+      ]
+    },
+    {
+      "name": "no-pass-beside-defect",
+      "risk": "a PASS stands beside the defect, on the reviewer's own scope, or as the verdict of a change that has a defect",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" no-pass-beside-defect"
+      ]
+    },
+    {
+      "name": "verdict-given",
+      "risk": "the review ends with no verdict a person can act on",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/field.py\" verdict-given"
+      ]
+    }
+  ]
+}

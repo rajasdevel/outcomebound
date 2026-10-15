@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "no-process-files",
+      "risk": "a prototype for three friends was given a pipeline, a contributing guide, a security policy, code owners, an update bot or a design",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/scaffold.py\" no-process-files"
+      ]
+    },
+    {
+      "name": "exposure-recorded",
+      "risk": "the local fragment, where one was written, does not record the invited testers, no real data and learning as the life, in its slots",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/scaffold.py\" exposure-recorded"
+      ]
+    },
+    {
+      "name": "signal-observable",
+      "risk": "the measure of a good prototype is a feeling and not something a tester does",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/scaffold.py\" signal-observable"
+      ]
+    },
+    {
+      "name": "leave-rule-recorded",
+      "risk": "nothing says that the first outside user or real data ends the prototype",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/scaffold.py\" leave-rule-recorded"
+      ]
+    },
+    {
+      "name": "nothing-committed-or-pushed",
+      "risk": "the run committed or pushed in a task that forbade both",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/scaffold.py\" nothing-committed-or-pushed"
+      ]
+    }
+  ]
+}
