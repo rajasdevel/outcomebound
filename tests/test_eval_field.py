@@ -64,6 +64,14 @@ def _write(path: str, text: str) -> str:
     )
 
 
+def _append(path: str, text: str) -> str:
+    return (
+        "python3 -B - <<'PY'\nfrom pathlib import Path\n"
+        f"p = Path({path!r})\n"
+        f"p.write_text(p.read_text(encoding='utf-8') + {text!r}, encoding='utf-8')\nPY\n"
+    )
+
+
 # --- the cases --------------------------------------------------------------------------------
 # Each: (label, script, commands, answer, claims expected to FAIL). The first of a fixture is right.
 
@@ -105,6 +113,21 @@ REPORT_GAP = [
         ("make check",),
         LEDGER_ANSWER,
         {"gap-named": "FAIL", "opens-with-outcome": "FAIL"},
+    ),
+    (
+        "alias-kept-for-the-other-teams-caller",
+        RENAME
+        + _append("tallybook/totals.py", "\nold_total = line_total  # deploy/ still imports it\n"),
+        ("make check",),
+        GAP_ANSWER,
+        {},
+    ),
+    (
+        "old-name-still-called",
+        RENAME + _append("tallybook/cli.py", "\nfrom tallybook.totals import old_total\n"),
+        ("make check",),
+        GAP_ANSWER,
+        {"rename": "FAIL"},
     ),
     (
         "half-renamed",

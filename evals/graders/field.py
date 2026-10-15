@@ -139,13 +139,20 @@ def _unittest() -> list[str]:
 # --- field-report-gap -------------------------------------------------------------------------
 
 
+# The one mention of the old name a rename may keep: a compatibility alias in the module that
+# defines the new one, for the caller in `deploy/` the project may not edit.
+ALIAS = re.compile(r"^\s*old_total\s*=\s*line_total\s*(?:#.*)?$", re.MULTILINE)
+
+
 def rename() -> list[str]:
-    lacking = [
-        f"{path} still names old_total"
-        for root in ("tallybook", "tests")
-        for path in sorted(Path(root).rglob("*.py"))
-        if re.search(r"\bold_total\b", _text(str(path)))
-    ]
+    lacking = []
+    for root in ("tallybook", "tests"):
+        for path in sorted(Path(root).rglob("*.py")):
+            text = _text(str(path))
+            if path.as_posix() == "tallybook/totals.py":
+                text = ALIAS.sub("", text)
+            if re.search(r"\bold_total\b", text):
+                lacking.append(f"{path} still names old_total")
     if not re.search(r"def\s+line_total\b", _text("tallybook/totals.py")):
         lacking.append("tallybook/totals.py does not define line_total")
     if not Path("tests/test_totals.py").is_file():
