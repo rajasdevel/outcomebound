@@ -490,7 +490,8 @@ def test_unittest_is_offered_only_where_a_tests_directory_exists(tmp_path: Path)
 
 
 def test_a_make_or_just_test_target_is_offered_after_the_stack_runners(tmp_path: Path) -> None:
-    """A declared `make test` or `just test` follows the stack's own runners, never a variable."""
+    """A declared `make test` or `just test` follows the stack's own declared runners, never a
+    variable, and comes before the unittest fallback, which a folder name alone suggests."""
 
     def options(name: str, files: dict[str, str], *, tests: bool = True) -> list[str]:
         target = tmp_path / name
@@ -501,17 +502,17 @@ def test_a_make_or_just_test_target_is_offered_after_the_stack_runners(tmp_path:
 
     python = {"pyproject.toml": PYPROJECT}
     assert options("plain", {**python, "Makefile": "test:\n\tpython3 -m unittest\n"}) == [
-        UNITTEST,
         "make test",
+        UNITTEST,
     ]
     assert options("listed", {**python, "Makefile": "lint test:\n\ttrue\n"}) == [
-        UNITTEST,
         "make test",
+        UNITTEST,
     ]
     assert options("variable", {**python, "Makefile": "test := 1\n.PHONY: test\n"}) == [UNITTEST]
     assert options("just", {**python, "justfile": "test *args:\n    pytest {{args}}\n"}) == [
-        UNITTEST,
         "just test",
+        UNITTEST,
     ]
     go = {"go.mod": "module example.com/x\n\ngo 1.22\n", "Makefile": "test:\n\tgo test ./...\n"}
     assert options("go", go, tests=False) == ["go test ./...", "make test"]
