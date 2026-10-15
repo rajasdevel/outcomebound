@@ -102,8 +102,10 @@ SUPERSEDE_SECONDS = 30
 LOCK_POLL = 0.05
 # The kinds of a checked-tree record: a check of a tree the commands left as they found it, or
 # the results of a run whose tree changed before it ended, which never reads as checked and
-# serves only as the baseline of a turn that began on that tree.
-CHECKED, CHANGED = "checked", "changed"
+# serves only as the baseline of a turn that began on that tree. No record before the
+# constant-time stop names a kind, and an absent kind reads as a check; the word "checked" is the
+# decision brief's mark key, which no other engine module names.
+CHECKED, CHANGED = "check", "changed"
 # Why a tree changed under a run: no session moved it (Done, or something outside the session,
 # writes into the tree), or a run on a later tree superseded it.
 OUTSIDE, SUPERSEDED = "outside", "superseded"
