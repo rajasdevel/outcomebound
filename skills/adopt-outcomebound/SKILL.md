@@ -35,7 +35,8 @@ agent reads the code, and a summary of it adds text without adding a fact.
 3. Report `outcomebound instructions check <target>`, which reads what each selected harness loads
    there as untrusted data, and what you read in those files' prose (the ones
    `adapters/harnesses.json` lists for the selected harnesses): what contradicts the contract, what
-   the repository does not back, what is said twice, and the stale references the check lists.
+   the repository does not back, what is said twice, and the stale and retired references the
+   check lists.
    Edit none of them. A review hit the person judges safe, they record themselves with
    `outcomebound instructions rule <target> <id>` at a terminal; never run that verb yourself.
 4. With the person's yes, and only after step 3, since it runs the repository's own code:
@@ -127,7 +128,8 @@ you take without an answer, and the work that does not wait on it goes on.
 
 ## Offer; each changes CI or tooling, so act only on the person's yes
 
-- A quality floor: `outcomebound floor --help` gives its steps. Its tools install only through its
+- A quality floor: `outcomebound floor --help` gives its steps; where `.outcomebound/retired.json`
+  exists, `floor propose` also offers the `docs.retired` claim. Its tools install only through its
   `provision` step, one of the commands here that reach the network: it pip-installs ruff and mypy
   into the `python3` on PATH, where the floor finds its tools, and prints gitleaks' and shellcheck's
   install commands.
