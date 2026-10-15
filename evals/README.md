@@ -261,15 +261,41 @@ runs. So every fixture now works as the hand-off fixtures do, and the runner hol
   `<fixture>.graders/` and `OUTCOMEBOUND_EVAL_DIR` naming the `evals/` folder inside it, so the
   hand-off graders also run from the sealed copy. `--regrade` runs the same way from the source
   run's sealed copy, after it checks `graders_sha256`.
-- **A test holds the rule.** `tests/test_eval_grader_isolation.py` builds every fixture under
-  every arm with a stand-in harness whose `call` runs while the workspace is as the model finds
-  it, and fails where any file in the workspace, or any blob in its Git objects, has the bytes of
-  a file in the stage or among the grading files, or a path under `checks/`; and where a
-  `post.plan.json` names `checks/` other than as `$OUTCOMEBOUND_GRADER_DIR/checks/`. A control
-  fixture that copies one grader into its workspace makes the test fail. The same file has
+- **A test holds the rule.** `tests/test_eval_grader_isolation.py` builds every fixture once,
+  under `current` (or under the one arm a fixture runs in), and one fixture under `none` as well,
+  since where the graders go does not depend on the arm, with a stand-in harness whose `call`
+  runs while the workspace is as the model finds it. It fails where any file in the workspace, or
+  any blob in its Git objects, has the bytes of a file in the stage or among the grading files,
+  or a path under `checks/`; where a `post.plan.json` names `checks/` other than as
+  `$OUTCOMEBOUND_GRADER_DIR/checks/`; and where a grader imports from `evals` (the plan runs with
+  this checkout on `PYTHONPATH`, so such an import would read the checkout, not the sealed copy,
+  and `--regrade` would not be sealed; every grader imports the standard library only today). Its
+  control is built by the test in its own temporary folder, never under `evals/fixtures/`, where
+  it would join the fixture list, the counts of this file and the grading digest: a copy of one
+  fixture whose `setup.sh` also writes one grader into the workspace, which the test must fail.
+  The same file has
   `test_regrade_runs_the_sealed_copy_not_the_checkout` (a grader changed in the checkout after
   the run changes no regraded verdict), `test_regrade_refuses_a_sealed_copy_that_differs_from_its_digest`
   and `test_a_stage_changed_during_the_call_fails_the_run_unexecuted`. These run no model.
+- **The tests this change breaks, and what each asserts after it.** Each site that runs a
+  `setup.sh` with one argument gives it a stage folder of its own as the second:
+  `tests/test_eval_scenarios.py` (its fixture builders, near lines 99, 1062, 2216, 2248, 4937 and
+  5650, which also run each plan with `OUTCOMEBOUND_GRADER_DIR` set, as the runner does),
+  `tests/test_eval_handoff.py` near line 69 and `tests/test_evals_runner.py` near line 839.
+  `test_the_two_texts_build_one_project_that_differs_by_the_lifecycle_lines_only` asserts that the
+  two workspaces differ in `AGENTS.md` and `.outcomebound/fragments/local.md` only, and that the
+  two stages differ in `checks/inflight.json` only, in place of the `checks/inflight.json` it
+  subtracts from the workspace difference. `test_the_switch_fixture_holds_each_item_of_the_work_in_flight`
+  reads `checks/inflight.json` from the stage. `test_scope_walk_cannot_be_replaced_by_a_sourceless_standard_library_shadow`
+  plants its `argparse.pyc` beside `scope_walk.py` in the stage, where the grader runs, and still
+  asserts that the shadow is not imported; a second case plants it in the workspace and asserts
+  that the grader does not see it. `test_shared_fixture_close_does_not_copy_grader_bytecode`
+  asserts that `skills-close/close.sh` copies `probe.py` into the stage, byte for byte, and
+  nothing into the workspace. The forgery table of `tests/test_evals_runner.py` (near line 585):
+  `REWRITE_THE_GRADER` writes a `checks/scope.sh` the workspace no longer holds, so it becomes an
+  out-of-scope file that the fixture's scope claim must fail, and a new row rewrites the stage
+  during the call, which must read `FAIL protected-grading-inputs` and run no claim. None of these
+  is weakened: each keeps the failure it guarded, read where the grader now is.
 
 What each `post.plan.json` needs. In every fixture whose plan names `checks/`, each such word
 becomes an absolute path from the sealed copy: an argv command runs through `sh -c` with

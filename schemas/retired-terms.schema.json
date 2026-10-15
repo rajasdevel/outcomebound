@@ -2,12 +2,18 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:outcomebound:schema:retired-terms:1",
   "title": "OutcomeBound retired terms v1",
-  "description": "The project's own file `.outcomebound/retired.json`: each term, path or command the project retired, and where it may still appear. `outcomebound instructions check` reads it (check `retired-reference`, docs/specs/instructions/design.md) and reports each occurrence in a tracked Markdown or text file outside the places this file and the built-in history rules allow. adopt never writes it.",
+  "description": "The project's own file `.outcomebound/retired.json`: each term, path or command the project retired, and where it may still appear. `outcomebound instructions check` reads it (check `retired-reference`, docs/specs/instructions/design.md) and reports each occurrence in a Markdown or text file Git lists, inside `scope`, outside the places this file and the built-in history rules allow. adopt never writes it.",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "entries"],
   "properties": {
     "version": {"const": 1},
+    "scope": {
+      "type": "array",
+      "description": "Path patterns, relative to the project root, of the files the check reads, as in `history`. Absent: every Markdown or text file Git lists.",
+      "items": {"type": "string", "minLength": 1, "pattern": "^(?![/~])(?!.*(^|/)\\.\\.(/|$)).+$"},
+      "uniqueItems": true
+    },
     "history": {
       "type": "array",
       "description": "Path patterns, relative to the project root, of files that hold history for every entry: decision logs and ADRs, for example `docs/adr/**`. `*` matches within one path segment and `**` matches any number of segments. Released sections of a `CHANGELOG.md` are history without a pattern.",
@@ -19,20 +25,25 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["term", "kind", "retired", "why", "replaced_by"],
+        "required": ["term", "kind", "retired", "replaced_by"],
         "properties": {
           "term": {
             "type": "string",
             "minLength": 2,
             "pattern": "^\\S(.*\\S)?$",
-            "description": "The retired text, as the project's documents wrote it. A run of spaces in it matches any run of whitespace, a line break included."
+            "description": "The retired text, as the project's documents wrote it. A space in it matches any run of whitespace, a line break included, or one `-`."
           },
           "kind": {
             "enum": ["term", "path", "command"],
-            "description": "term: a process word or phrase, matched without regard to case, in prose only. path: a repository path, matched with its case, in prose, code spans and fenced blocks; a leading `./` on an occurrence is read away. command: a command line or its first words (`make release-notes`), matched with its case, in prose, code spans and fenced blocks."
+            "description": "term: a process word or phrase, read in prose only. path: a repository path, read in prose, code spans and fenced blocks; a leading `./` on an occurrence is read away before the boundaries are checked. command: a command line or its first words (`make release-notes`), read in prose, code spans and fenced blocks."
+          },
+          "match": {
+            "enum": ["exact", "ignore-case"],
+            "default": "exact",
+            "description": "exact: the term as written, save that the first letter of a `term` entry matches in either case (a sentence start). ignore-case: any case."
           },
           "retired": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "description": "The day the project retired it."},
-          "why": {"type": "string", "minLength": 1, "description": "Why it was retired, in the project's words."},
+          "why": {"type": "string", "minLength": 1, "description": "Optional: why it was retired, in the project's words, for the person who reads the list. The check does not read it."},
           "replaced_by": {
             "type": ["string", "null"],
             "description": "What a document names in its place; null where nothing replaces it. The report prints it beside each occurrence."
