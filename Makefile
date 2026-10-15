@@ -9,7 +9,10 @@ XDIST_VERSION ?= 3.8.0
 # The ref the floor's loosening check reads the change against: what it replaces.
 OB_BASE ?= origin/main
 
-.PHONY: test gate check scrub canary release-check
+# Where `make kits` writes one <name>.zip per kit under kits/.
+KITS_OUT ?= dist/kits
+
+.PHONY: test gate check scrub canary release-check kits
 test:
 	@if $(PYTHON) -m pytest --version >/dev/null 2>&1; then \
 		if $(PYTHON) -c "import xdist" >/dev/null 2>&1; then $(PYTHON) -m pytest -n auto; \
@@ -73,3 +76,8 @@ ifdef TAG
 else
 	$(MAKE) check test
 endif
+
+# Each kit under kits/ (a SKILL.md a person pastes into their own assistant) packed as
+# $(KITS_OUT)/<name>.zip, one entry, <name>/SKILL.md. Deterministic; standard library only.
+kits:
+	$(PYTHON) scripts/build-kits.py $(KITS_OUT)

@@ -65,6 +65,7 @@ research](https://github.com/rajasdevel/outcomebound-research/blob/main/practice
 | `using-outcomebound` keeps the mechanism table, since its ids are the registry a project's `local` guidance names and the kernel names the mechanisms by description only. Its trigger and its sizing paragraph are the text E10 measured in the install arm: both stay as they were, and the new sentences go beside them, never in their place: a test of required process (a check, hook, CI job or ruleset enforces it, or the text says it is required) against suggested process, a description that names the new-project, lifecycle and instruction-text cases after the measured trigger, and a router to the skill or reference each kind of step needs | dropping the table as a copy of the kernel, which leaves the ids a fragment's Mechanisms line uses defined nowhere a project loads (`tests/test_mechanisms.py` holds this); a narrower trigger in place of the measured one, which E10's rungs would have to measure again | agent | assumed |
 | `explorable`'s trigger is a page the person asks for or acts on: trying options with their own numbers, or learning a mechanism by trying it. A decision or an interview reaches it through `decision-brief` and `gather-requirements`, which name it where text serves badly | a trigger on every decision whose answer turns on values, which matches nearly every decision brief and loads both skills for one decision | agent | assumed |
 | 1.6.0 changes to skill text are of two kinds. Additions that a review finding, the field or the audit of the set names (a flaky failure counted, the class of a review finding, evidence per finding, a flaky baseline, the question order of `explain-spec`, what is not a decision brief, the ticket brief named as such) ship with their effect `UNVERIFIED` until a fixture shows it. Text whose effect a fixture measured keeps its place and its words: the trigger and sizing paragraph of `using-outcomebound` (E10), the baseline sentence of `tests-worth-keeping` (E5), the tier sections of `hand-off-tickets` (E17) and the block rules of `slice-tickets` (E4); moving or rewording them waits for a run of that fixture. Restatement cuts the audit proposed are held where the text is the only copy a session loads: the item-path rule in `hand-off-tickets` and `slice-tickets` and the policy-gate sentence of `using-outcomebound` restate the full contract, which no session loads; the steps of `explorable` carry rules its `--help` does not state (the working area, expectations worked by hand, a built page never edited) | moving measured text to references or fragments on a reading of the text alone, which the measured cases might not survive; cutting a sentence whose other copy no session loads | agent | decided |
+| Kits are not installed by `adopt`: a kit reaches its reader as its file or its archive, pasted or loaded in the reader's own assistant | installing kits beside the project skills, which would load a text written for a person outside the repository into every project's agent | agent | decided |
 
 ## Edges
 
@@ -77,6 +78,18 @@ Removing a shipped skill removes it from adopters' installs on their next upgrad
 `tests/test_skill_frontmatter.py` holds the frontmatter and length; `tests/test_skill_paths_resolve.py`
 holds every path a skill names; `outcomebound instructions check` reads the installed copies as
 it reads any instruction file; the fixtures are listed in `evals/README.md`.
+
+## Kits
+
+A kit is a self-contained skill for a person outside the repository, used in their own
+assistant: pasted as a first message or loaded as a skill. `adopt` never installs it. Each kit
+is one source file, `kits/<name>/SKILL.md`, whose frontmatter holds `name` (the folder name) and
+a non-empty `description`. The file is published as it is and as `<name>.zip`, which `make kits`
+builds deterministically (`scripts/build-kits.py`). The whole file is at most 7500 characters.
+It uses no OutcomeBound vocabulary and no project or client content, since its reader has
+neither. Its behaviour is proved by a fixture before a release claims it works in a named
+assistant; until then it is `UNVERIFIED`. `tests/test_kits.py` holds the frontmatter, the size,
+the vocabulary and the archive.
 
 
 ## Lifecycle support and qualification

@@ -1,0 +1,18 @@
+Source S1. Call transcript, 2026-09-08, "Partner order tracking, kickoff". Fernwood Supply Co.
+Speakers as the transcript tool gave them: Scrum Master, Wholesale Lead, Support Lead, Finance Lead.
+
+[00:00:12] Scrum Master: Thanks all. Today is about the partner order tracking page. Wholesale Lead, you own the business rules and the deadline, so please start.
+[00:00:31] Wholesale Lead: Today partner stores phone Support to ask where an order is. Partners should see the status of their own orders without calling us.
+[00:01:05] Support Lead: We take about forty calls a week on it. I would like that under ten, but I have not asked my team yet.
+[00:01:40] Wholesale Lead: Each partner sees only its own orders. Nobody sees another partner's orders.
+[00:02:15] Support Lead: One thing is firm. Do not export contact details. The order list can be downloaded, but it carries company name, order number, status and total only.
+[00:03:02] Scrum Master: Good. Finance Lead, the budget?
+[00:03:10] Finance Lead: The budget sits with me. I have not seen an estimate yet, so I will not give a number today.
+[00:04:20] Wholesale Lead: The deadline is the trade fair on 3 November. Partners get their logins at the fair, and I do not want to hand them a page that is half done.
+[00:05:45] Wholesale Lead: Partners should see their order history for 24 months. They plan their year from it.
+[00:05:58] Finance Lead: No. Twelve months and no more. Anything older goes through my team on request, because of how long we keep the invoices behind it.
+[00:06:20] Wholesale Lead: Twenty-four months is what the big partners expect.
+[00:06:31] Scrum Master: Two different answers. Let us park that one and come back to it.
+[00:06:48] Support Lead: Sorry, off topic, my printer is jammed again. Oh, and before I forget, when an order is cancelled the partner must still see the line, marked Cancelled with the date it was cancelled. Otherwise they ring us to ask where it went. Anyway, the printer.
+[00:07:10] Scrum Master: Noted. The printer is not on the agenda. Wholesale Lead, who signs off the rules?
+[00:07:22] Wholesale Lead: I sign off the business rules. Finance Lead signs off anything about invoices and how long we keep them.
