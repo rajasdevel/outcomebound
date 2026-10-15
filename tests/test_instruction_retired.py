@@ -137,7 +137,7 @@ BAD_LISTS = [
     ("version 2", {"version": 2, "entries": [GOOD]}),
     ("no entries", {"version": 1}),
     ("an absolute history", {"version": 1, "entries": [GOOD], "history": ["/docs/**"]}),
-    ("a home history", {"version": 1, "entries": [GOOD], "history": ["~/docs"]}),
+    ("a tilde history", {"version": 1, "entries": [GOOD], "history": ["~docs"]}),
     ("a parent in history", {"version": 1, "entries": [GOOD], "history": ["docs/../x"]}),
     ("an absolute scope", {"version": 1, "entries": [GOOD], "scope": ["/docs"]}),
     ("a parent in scope", {"version": 1, "entries": [GOOD], "scope": ["../docs"]}),
