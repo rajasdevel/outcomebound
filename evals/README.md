@@ -96,8 +96,8 @@ the arms within one fixture.
 Three runs an arm cannot show a small effect. A claim that moves from 0/3 to 3/3 deserves a closer
 look. Anything smaller is not shown.
 
-Each run directory holds five files for each fixture. Each name starts with the fixture, as in
-`small-fix.meta.json`:
+Each run directory holds five files and a folder for each fixture. Each name starts with the
+fixture, as in `small-fix.meta.json`:
 
 - `<fixture>.prompt.md`: exactly what codex read.
 - `<fixture>.answer.md`: the final answer.
@@ -144,6 +144,9 @@ Each run directory holds five files for each fixture. Each name starts with the 
   commit, and the contents of the arm. These are the digest of the kernel, the digest of each
   file that the install of that fixture wrote, the launcher, and the `outcomebound` that the
   calls resolve.
+- `<fixture>.graders/`: the sealed copy of the graders of the run, which its post-checks ran from
+  and its `--regrade` runs from. The meta file records its digest as `graders_sha256`
+  ([Graders stay outside the workspace](#graders-stay-outside-the-workspace)).
 
 Runs of one fixture that installed different files are flagged as not comparable. A PASS
 establishes only what its check reads, for that model on that day.
@@ -330,7 +333,11 @@ python3 evals/claude_arm.py [--state DIR] --seal SEAL grade FIXTURE--ARM SUBAGEN
 
 `prepare` builds the fixture, writes its prompt and its state, and prints the SHA-256 of the state
 as `seal`. The state holds the SHA-256 of each file under `evals/` and `outcomebound_tools/`, and
-the HEAD and porcelain status of this checkout. The person who runs the evals keeps the seal: it
+the HEAD and porcelain status of this checkout, and the path and the SHA-256 of each file of the
+grading stage that `prepare` makes in the system temporary folder, outside the state folder. `grade`
+refuses where the stage differs, copies the stage, the post plan and the grading files into
+`<key>.graders/` of the state folder, and runs the post-checks from that copy, as `evals/run.py`
+does. The stage stays where it is. The person who runs the evals keeps the seal: it
 goes to stdout, and with `--seal-out FILE` to that file, which must be outside the state folder
 (the subagent works inside it, and `prepare` refuses a `--seal-out` there). `prepare` never writes
 the seal into the state folder. `grade` needs the seal as `--seal`. It refuses a state that does
@@ -431,7 +438,7 @@ under `tickets check --draft`, and a check reads the `bounds` and `blocked-by` o
 
 The three share their ticket store and their close, `evals/fixtures/slicing/`. The graders of
 the four ticket fixtures are `evals/graders/drafts.py` and `evals/graders/ticket_cut.py`, copied
-into the workspace and protected.
+into the grading stage, outside the workspace.
 
 Four skills, or paragraphs, have each a pair of fixtures: one case where the text is to help and
 one twin where it must add no work. The fixtures of the second set, below them, add `explain-spec`,
@@ -827,7 +834,7 @@ project from an idea. They run only when `--fixtures` names them, as the hand-of
 the default batch stays at thirty-one and a model call for them needs its own request. Each one
 starts from a Git repository that holds a project note and the install, and no product code. No
 person answers in a run. The checks share `evals/graders/new_project.py`, copied into the
-workspace and protected; each fixture's probe names its checks. The project note is not protected,
+grading stage, outside the workspace; each fixture's probe names its checks. The project note is not protected,
 because a run records its Done command there.
 
 - `new-project-idea`, a two-sentence idea for a web app that people the person does not know
@@ -969,8 +976,8 @@ CI files as they are, and report.
   `make test` with no secret, and a working `make test`. The install and a measured Done are all
   that it needs.
 
-The checks share `evals/graders/onboard.py`, copied into the workspace with `new_project.py`
-and protected. The seed commit of the project is in `target-seed.txt`, which is protected.
+The checks share `evals/graders/onboard.py`, copied into the grading stage with `new_project.py`,
+outside the workspace. The seed commit of the project is in `target-seed.txt`, which is protected.
 
 | Claim | Fixture | What it reads |
 | --- | --- | --- |
@@ -995,7 +1002,9 @@ Reading limits, which a report of a run says:
   lines of `.outcomebound/fragments/local.md` that are neither front matter nor lines of
   `templates/fragment-local.md`. The adopt skill names that fragment as the place for the
   project's own facts. The checks need `OUTCOMEBOUND_EVAL_DIR`, which the runner sets, to find the
-  template; without it a check that reads the fragment fails and says so. A fragment that exists
+  template: the stage holds a copy as `templates/fragment-local.md`, which lands beside the
+  `evals/` folder of the sealed copy. Without it a check that reads the fragment fails and says
+  so. A fragment that exists
   but that no install selected still counts as the run's text.
 - The checks read words and paths, not meaning. A line that names a file reads as citing it,
   whether or not the file shows the fact. A path is a word with a known file extension, a
@@ -1098,8 +1107,8 @@ names them (the prefix `skill-`), so the default batch stays at thirty-one. A ru
 `UNVERIFIED` until the maintainer grants it, and what each skill does for an adopter stays
 `UNVERIFIED` until a pass shows a difference between the `current` and `none` arms. No service and
 no network: the pull request, the acceptance environment and the tracker card are files in a
-local Git repository. Each fixture has a `probe_*.py` grader of its own, copied into `checks/`
-with `scope_walk.py`, `transcript_commands.py` and `allowed_paths.sh`, and protected.
+local Git repository. Each fixture has a `probe_*.py` grader of its own, copied into the grading
+stage's `checks/` with `scope_walk.py`, `transcript_commands.py` and `allowed_paths.sh`.
 
 ```bash
 for arm in current none; do

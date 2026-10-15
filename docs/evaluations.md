@@ -438,23 +438,27 @@ text of OutcomeBound. The subagent's own report of what it was given is the only
 
 A fixture is a small repository and a task.
 
-- `setup.sh` builds and commits the repository, and tags the seed.
+- `setup.sh` builds and commits the repository, and tags the seed. It takes the grading stage, a
+  folder outside the workspace, as its second argument and writes the graders there, never into
+  the workspace.
 - `prompt.md` is the task. A hand-off fixture has a `task.sh` in its place.
-- `protected.paths` lists the files that the model may not change: graders, baselines, the project
-  note, documents whose content a check relies on, and the installed skills.
+- `protected.paths` lists the files in the workspace that the model may not change: the project
+  note, documents whose content a check relies on, and the installed skills. It names no grader.
 - `post.plan.json` lists the required claims. Each claim is a command with the risk that it
-  guards.
+  guards. A command names a grader as `${OUTCOMEBOUND_GRADER_DIR}/checks/<file>`, or as a file
+  under `OUTCOMEBOUND_EVAL_DIR`.
 
-The runner reads the seed commit and hashes the graders before the model runs. It hands that
-commit to every check. It fails a run whose protected files changed, without running the checks.
-Fixture repositories are kept after the run, so a changed check can run again on work already
-done.
+The runner reads the seed commit before the model runs, and hashes the stage and the grading files.
+It hands the seed commit to every check. It fails a run whose protected files, stage or grading
+files changed, without running the checks. After the call it copies the stage, the post plan and
+the grading files into `<fixture>.graders/` of the run directory, and runs the checks from that
+copy. Fixture repositories are kept after the run, so a changed check can run again on work
+already done: `--regrade` uses the sealed copy of the run, not the files of the checkout.
 
-The hand-off fixtures keep their graders outside the workspace, so nothing hashes them. Their
-integrity rests on the `workspace-write` sandbox of codex, and on the `commit` and `dirty`
-provenance that each run records. A model can read files outside its workspace. The claim
-`eval-files-unread` shows a run that did, by the commands it ran. A read that no recorded command
-shows is not seen.
+No fixture keeps a grader in its workspace or its Git history. A model can still read files
+outside its workspace: the stage during the call, the checkout's `evals/` folder, and the sealed
+copies of earlier runs. The claim `eval-files-unread` of the hand-off fixtures shows a run that
+did, by the commands it ran. A read that no recorded command shows is not seen.
 
 ### Checks, probes and observations
 
@@ -1992,7 +1996,7 @@ The kit run passes nine claims. It fails `stated-items-carry-an-exact-quote`. Th
   - The command records and the Git output of the 44 runs show this. Thirteen runs read a grader file or a grader helper, or saw one in Git history. Seven of them are base runs. Six are candidate runs.
   - In 6 of these 13 runs, the model ran a grader or a helper. The 3 base runs are `skill-run-acceptance` twice and `unclear-outcome` once. The 3 candidate runs are `lifecycle-switch`, `slice-a-spec` and `unclear-outcome`.
   - The candidate `decision` run saw `checks/brief.py` through `git show` of a commit that the task needs.
-  - The repair is designed in [`evals/README.md`](../evals/README.md#graders-stay-outside-the-workspace): no grader is in the workspace or its Git history during a call, the post-checks run from a sealed copy outside it after the call, and `--regrade` uses that copy. This pass ran before it. No pass has run under it, so its effect on the reads above is `UNVERIFIED`.
+  - The repair is built in the runner, as [`evals/README.md`](../evals/README.md#graders-stay-outside-the-workspace) designs it, and `tests/test_eval_grader_isolation.py` holds it: no grader is in the workspace or its Git history during a call, the post-checks run from a sealed copy outside it after the call, and `--regrade` uses that copy. This pass ran before it. No pass has run under it, so its effect on the reads above is `UNVERIFIED`.
 - Two candidate runs (`lifecycle-switch` and `skill-sync-tracker`) read files of the engine checkout outside the workspace.
 - The first pass has no recorded digest of the workspace and of the grading files. Its protected-input results come from the first grading.
 - In 5 runs, the stream marks a command `unverified` and the session record marks it `succeeded`. The runner keeps the status of the stream.
