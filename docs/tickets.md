@@ -42,8 +42,10 @@ block, `id=ticket v=1`. The block holds these keys:
 | `waits-on` | Optional. The decision briefs that the ticket waits on, as ids on one line separated by commas, for example `waits-on: D1, D2`. Other tickets do not wait. |
 
 `templates/tickets/issue-template.md` is the skeleton to copy into an issue body. It has three
-headings, `## Outcome`, `## Design` and `## Limits`, and the block. Only `## Outcome` and the
-block are required. Keep `## Design` and `## Limits` only where they carry a decision. A ticket
+headings, `## Outcome`, `## Design` and `## Limits`, and the block. The block is required, and
+`outcomebound tickets check` warns (`BRIEF_THIN`) about a body that has none of the headings
+`## Outcome`, `## Design`, `## Tests` and `## Limits`. Keep `## Design` and `## Limits` only where
+they carry a decision. A ticket
 names no test plan, because which tests to write is the implementer's decision.
 
 ## What the layer does, and what it never does
