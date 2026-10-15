@@ -3650,7 +3650,7 @@ def test_an_install_warns_of_each_hook_that_names_a_project_file_from_the_workin
 # --- hook entries that run the finish check and no record holds ------------------
 
 DIGEST = "0" * 64
-HAND_MADE = f"outcomebound finish-check --harness claude-code --done {DIGEST} --timeout 600"
+HAND_MADE = finish_check.command("claude-code", DIGEST, 600)
 UNMANAGED_FILES = [".claude/settings.json", ".claude/settings.local.json", ".codex/hooks.json"]
 
 
@@ -3721,8 +3721,22 @@ def test_check_reads_each_hook_file_adopt_reads_and_counts_each_entry(
         f"python3 -m outcomebound_tools.finish_check --harness claude-code --done {DIGEST}",
         f"python -m outcomebound_tools finish-check --harness claude-code --done {DIGEST}",
         "C:/tools/outcomebound.exe finish-check --mark",
+        f"'outcomebound' finish-check --done {DIGEST}",
+        f'"outcomebound" "finish-check" --done {DIGEST}',
+        f"outcomebound 'finish-check' --done {DIGEST}",
+        f"python3 -moutcomebound_tools.finish_check --done {DIGEST}",
     ],
-    ids=["sh-c", "bash-c-path", "module-underscore", "module-verb", "windows-exe"],
+    ids=[
+        "sh-c",
+        "bash-c-path",
+        "module-underscore",
+        "module-verb",
+        "windows-exe",
+        "quoted-program",
+        "both-quoted",
+        "quoted-verb",
+        "module-glued",
+    ],
 )
 def test_check_reads_an_entry_inside_sh_c_and_both_module_forms(
     tmp_path: Path, capsys: Capture, command: str
@@ -3849,8 +3863,8 @@ def test_an_install_takes_over_an_entry_in_its_own_command_shape_without_force(
     for the same harness and event, or does not rewrite and record it, or adds a second copy, or
     leaves the old command out of the one line that says it took the entry over."""
 
-    stop = f"outcomebound finish-check --harness claude-code --done {DIGEST} --timeout 900"
-    start = f"outcomebound finish-check --mark --harness claude-code --done {DIGEST}"
+    stop = finish_check.command("claude-code", DIGEST, 900)
+    start = finish_check.mark_command("claude-code", DIGEST)
     target = repo(tmp_path / "t", {".claude/settings.json": stop_and_start(stop, start)})
 
     code, out, err = run(
@@ -3873,12 +3887,13 @@ def test_an_install_takes_over_an_entry_in_its_own_command_shape_without_force(
 @pytest.mark.parametrize(
     "stop, event",
     [
-        (f"outcomebound finish-check --harness codex --done {DIGEST} --timeout 600", "Stop"),
-        (f"outcomebound finish-check --harness claude-code --done {DIGEST}", "SessionEnd"),
-        (f"outcomebound finish-check --harness claude-code --done {DIGEST} --extra", "Stop"),
-        (f"outcomebound finish-check --harness claude-code --done {DIGEST[:-1]}", "Stop"),
+        (finish_check.command("codex", DIGEST, 600), "Stop"),
+        (finish_check.command("claude-code", DIGEST, 600), "SessionEnd"),
+        (finish_check.command("claude-code", DIGEST, 600) + " --extra", "Stop"),
+        (finish_check.command("claude-code", DIGEST[:-1], 600), "Stop"),
+        (f"outcomebound finish-check --harness claude-code --done {DIGEST} --timeout 600", "Stop"),
     ],
-    ids=["other-harness", "other-event", "other-shape", "short-digest"],
+    ids=["other-harness", "other-event", "other-shape", "short-digest", "earlier-shape"],
 )
 def test_an_install_leaves_every_other_unmanaged_entry_as_it_is_and_warns(
     tmp_path: Path, capsys: Capture, stop: str, event: str

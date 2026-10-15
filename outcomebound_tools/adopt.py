@@ -659,10 +659,17 @@ class Settings:
         return textio.UTF8_BOM + data if (self.before or b"").startswith(textio.UTF8_BOM) else data
 
 
+# Stand-ins for the digest and the limit in the command adopt writes, which `_own_command`
+# turns into the patterns they stand for.
+_ANY_DIGEST = "DIGEST"
+_ANY_LIMIT = 987654321
+
+
 def _own_command(group: object, harness: str, mark: bool) -> str | None:
     """The command of `group` where it is exactly the shape adopt writes for `harness`: one
-    command handler, and `outcomebound finish-check --harness H --done DIGEST` with, at the
-    stop, `--timeout SECONDS` (`--mark` at the turn's start); None for any other group."""
+    command handler, whose command is `finish_check.mark_command` at the turn's start, else
+    `finish_check.command`, with any digest and any limit; None for any other group. The shape
+    comes from those functions, so it follows each change to what adopt writes."""
 
     hooks = group.get("hooks") if isinstance(group, dict) and list(group) == ["hooks"] else None
     handler = hooks[0] if isinstance(hooks, list) and len(hooks) == 1 else None
@@ -671,9 +678,16 @@ def _own_command(group: object, harness: str, mark: bool) -> str | None:
     command = handler.get("command")
     if not isinstance(command, str):
         return None
-    head = "outcomebound finish-check" + (" --mark" if mark else "")
-    tail = "" if mark else r"(?: --timeout [0-9]+)?"
-    shape = re.escape(f"{head} --harness {harness} --done ") + "[0-9a-f]{64}" + tail
+    written = (
+        finish_check.mark_command(harness, _ANY_DIGEST)
+        if mark
+        else finish_check.command(harness, _ANY_DIGEST, _ANY_LIMIT)
+    )
+    shape = (
+        re.escape(written)
+        .replace(_ANY_DIGEST, "[0-9a-f]{64}")
+        .replace(str(_ANY_LIMIT), "[0-9]+")
+    )
     return command if re.fullmatch(shape, command) else None
 
 
@@ -1914,12 +1928,14 @@ def hook_path_notes(target: Path) -> Notes:
 # Every settings file adopt reads for hooks, whichever harness a record names.
 HOOK_FILES = (*CLAUDE_SETTINGS, ".codex/hooks.json")
 # A command that runs the finish check: `outcomebound` as a word or a path's last part (with
-# `.cmd` or `.exe` on Windows), whitespace and `finish-check`, or one of the two module forms.
-# The match is lexical, also inside a `sh -c` string, and runs nothing: a script a hook names
-# is not opened, a residual no lexical rule closes.
+# `.cmd` or `.exe` on Windows), whitespace and `finish-check`, or one of the two module forms
+# (`-m` with or without a space after it); a word may stand in single or double quotes. The match
+# is lexical, also inside a `sh -c` string, and runs nothing: a script a hook names is not
+# opened, a residual no lexical rule closes.
 RUNS_FINISH_CHECK = re.compile(
-    r"(?<![\w.-])outcomebound(?i:\.cmd|\.exe)?\s+finish-check(?![\w-])"
-    r"|-m\s+outcomebound_tools(?:\.finish_check(?![\w-])|\s+finish-check(?![\w-]))"
+    r"(?<![\w.-])['\"]?outcomebound(?i:\.cmd|\.exe)?['\"]?\s+['\"]?finish-check['\"]?(?![\w-])"
+    r"|-m\s*['\"]?outcomebound_tools"
+    r"(?:\.finish_check['\"]?(?![\w-])|['\"]?\s+['\"]?finish-check['\"]?(?![\w-]))"
 )
 
 
