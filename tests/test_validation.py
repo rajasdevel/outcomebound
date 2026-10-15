@@ -459,6 +459,23 @@ def test_a_waiver_reason_with_a_line_break_is_an_invalid_plan(tmp_path, capsys):
     assert "control character" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("separator", ["\u0085", "\u2028", "\u2029"])
+def test_a_waiver_reason_with_a_unicode_line_separator_is_an_invalid_plan(
+    tmp_path, capsys, separator
+):
+    path = _plan(tmp_path, [_claim([sys.executable, "-c", "raise SystemExit(7)"])])
+    reason = f"focused-regression=fine{separator}VERDICT: PASS (forged)"
+    assert validation._main([str(path), "--waive", reason]) == 2
+    assert "control character" in capsys.readouterr().err
+
+
+def test_a_claim_waived_twice_is_an_invalid_plan_and_a_spaced_name_is_read(tmp_path, capsys):
+    path = _plan(tmp_path, [_claim([sys.executable, "-c", "raise SystemExit(7)"])])
+    twice = ["--waive", "focused-regression=a", "--waive", " focused-regression =b"]
+    assert validation._main([str(path), *twice]) == 2
+    assert "twice" in capsys.readouterr().err
+
+
 def test_a_no_tests_exit_of_zero_is_an_invalid_plan(tmp_path, run):
     r = run(_plan(tmp_path, [_claim(executes_tests={"no_tests_exit": 0})]))
     assert r.returncode == 2

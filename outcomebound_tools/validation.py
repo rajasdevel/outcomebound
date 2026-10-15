@@ -621,11 +621,14 @@ def _waivers(items: Sequence[str], plan: Plan) -> dict[str, str]:
     waivers: dict[str, str] = {}
     for item in items:
         name, separator, reason = item.partition("=")
+        name = name.strip()
         if not separator or not reason.strip():
             raise PlanError(f"--waive wants NAME=REASON, got: {item}")
         if name not in names:
             raise PlanError(f"--waive names no claim: {name}")
-        if any(ord(char) < 32 or ord(char) == 127 for char in reason):
+        if name in waivers:
+            raise PlanError(f"--waive names {name} twice")
+        if any(not char.isprintable() for char in reason):
             raise PlanError(f"--waive reason for {name} holds a line break or a control character")
         waivers[name] = reason.strip()
     return waivers
