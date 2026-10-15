@@ -455,7 +455,8 @@ def render(
 
 # The longest header a harness's question tool shows: Codex's request_user_input describes its
 # header as 12 or fewer characters (request_user_input_spec.rs, read 2026-10-05), and Claude Code's
-# AskUserQuestion as at most 12; a longer id is left to the question text.
+# AskUserQuestion tool describes its header parameter as "max 12 chars" (the tool's own parameter
+# description, read 2026-10-16); a longer id is left to the question text.
 _HEADER = 12
 
 
