@@ -13,7 +13,9 @@ stopped by `killpg` on POSIX. On Windows the command also goes into a job object
 `TerminateJobObject` ends everything in the job at once; `taskkill /T /F` and then `Popen.kill`
 are the fallback where there is no job. `start_tree` is how a command starts: on Windows it
 starts the command suspended, joins it to its job, and only then lets it run, so that nothing the
-command starts can be outside the job.
+command starts can be outside the job. `start_detached` starts a process that outlives its
+starter and holds none of its streams; `alive` and `terminate` ask about, or end, a process by its
+id, on Windows through `OpenProcess`, since `os.kill` there ends the process it names.
 
 What it does not decide: whether a program is the right one, or what a caller does where none is
 found. `require` raises `FileNotFoundError`, which every caller of a process already reads.

@@ -1021,3 +1021,75 @@ def test_a_real_command_is_in_its_job_and_has_run_nothing_when_it_is_resumed(
         programs.stop_tree(process)
         process.kill()
         process.wait()
+
+
+def test_alive_and_terminate_name_a_process_by_its_id() -> None:
+    """Breaks if a run that a record names reads as alive after it has ended, or as gone while
+    it runs, or if the ask to stop it does not reach it: the finish check's dead-run rule and
+    its superseding run rest on these two calls."""
+
+    process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+    try:
+        assert programs.alive(process.pid)
+        assert programs.terminate(process.pid)
+        process.wait(timeout=30)
+    finally:
+        with contextlib.suppress(OSError):
+            process.kill()
+    assert not programs.alive(process.pid)
+    assert not programs.alive(0) and not programs.alive(-1)
+    assert not programs.terminate(0)
+
+
+@pytest.mark.skipif(WINDOWS, reason="a new session and its id are POSIX")
+def test_a_detached_start_holds_none_of_the_starters_streams_and_leads_its_own_session(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the run a codex stop starts keeps the stop's output open, so that the harness
+    waits for Done, or stays in the stop's session, which the harness may end with the hook."""
+
+    seen = tmp_path / "seen"
+    probe = (
+        "import os, stat, sys\n"
+        "null = os.stat(os.devnull)\n"
+        "streams = [os.fstat(n) for n in range(3)]\n"
+        "nulls = [stat.S_ISCHR(s.st_mode) and s.st_rdev == null.st_rdev for s in streams]\n"
+        "open(sys.argv[1], 'w').write(f'{os.getsid(0)} {os.getpid()} {all(nulls)}')\n"
+    )
+    process = programs.start_detached([sys.executable, "-c", probe, str(seen)])
+    process.wait(timeout=30)
+
+    session, pid, nulls = seen.read_text(encoding="utf-8").split(" ")
+    assert session == pid and int(session) != os.getsid(0)
+    assert nulls == "True"
+
+
+def test_a_detached_start_on_windows_has_no_console_its_own_group_and_leaves_the_job_where_it_may(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Breaks if the Windows start gives the run a console, keeps it in the stop's process
+    group, or fails where the stop's job refuses a breakaway instead of starting it inside the
+    job. Laid out with a `Popen` the test records, on any platform."""
+
+    calls: list[dict[str, Any]] = []
+
+    class Refusing:
+        def __init__(self, argv: list[str], **options: Any) -> None:
+            calls.append(options)
+            if options["creationflags"] & programs.CREATE_BREAKAWAY_FROM_JOB:
+                raise PermissionError("the job allows no breakaway")
+
+    monkeypatch.setattr(programs.subprocess, "Popen", Refusing)
+
+    programs.start_detached(["run"], windows=True, cwd="here")
+
+    group = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+    flags = programs.DETACHED_PROCESS | group
+    assert [call["creationflags"] for call in calls] == [
+        flags | programs.CREATE_BREAKAWAY_FROM_JOB,
+        flags,
+    ]
+    for call in calls:
+        assert call["stdin"] == call["stdout"] == call["stderr"] == subprocess.DEVNULL
+        assert call["close_fds"] is True and call["cwd"] == "here"
+        assert "start_new_session" not in call

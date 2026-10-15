@@ -1,24 +1,28 @@
-"""The finish check: at a harness's stop hook, the project's recorded Done commands run.
+"""The finish check: at a harness's turn end, the project's recorded Done commands are checked, and
+no turn end waits for them.
 
-`outcomebound finish-check --harness <row> --done <digest> --timeout <seconds>` is the command
-adopt writes into a row's settings document (`docs/specs/finish-check/design.md`); the rows are
-those whose harness table entry carries `finish_hook`, `claude-code` and `codex`. It reads the
-hook's input on stdin, finds the target, and runs the manifest's Done commands only while their
-digest is the entry's, and only on a working tree they have not already been checked on: an
-unchanged tree repeats the verdict it was last checked with and runs nothing. A failure holds
-the finish, its report the reason the agent reads, unless it is a known failure: a command that
-fails with the exit code it had when adopt last measured Done (`measure`), and names no failure id
-that measurement did not, which goes on to the next command and holds nothing, and leaves the
-record once it passes. Every other outcome goes to the person as `systemMessage`, or as `{}`
-where there is nothing to say, and holds nothing. It exits 0 whenever it ran, its verdict on
-stdout as both rows read it; a usage error exits 1, never 2, which a row reads as holding the
-finish.
+`outcomebound finish-check --constant-time --harness <row> --done <digest> --timeout <seconds>` is
+the stop entry adopt writes into a row's settings document (`docs/specs/finish-check/design.md`,
+"Constant-time stop"); the rows are those whose harness table entry carries `finish_hook`,
+`claude-code` and `codex`. The Done commands run only while their digest is the entry's, and only
+on a working tree they have not already been checked on, in the run: on a row whose `wake` field
+names a key (claude-code's `asyncRewake`) the entry runs in the background and is the run, which
+exits 2 with the report on stderr only on a failure that holds and otherwise prints nothing; on
+any other row (codex) the stop reads, decides and prints its JSON in constant time and starts the
+run detached, and a later stop delivers what it found. A failure holds unless it is a known
+failure (`measure`), was seen on the tree the turn began with by another session's run or already
+held in this session, or its signature was held once in the session; each other outcome goes to
+the person once for each session, tree and kind: at a codex stop, or through the claude-code
+turn-start entry (`--mark`). `--status` prints the last run and the records and writes nothing.
+The run keeps its record, the checked-tree records, the lock and, in the Git common directory,
+the held list; it writes nothing outside the Git directory. A usage error exits 1, never 2, which
+a row reads as holding the finish.
 
-What it does not decide: whether the harness fires the hook (its install report reads
-`UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are. It
-compares a known command's exit code and the failure ids its output names; where neither the
-record nor the output names any, a new failure inside a command that fails with the same exit code
-is not told apart from the known one.
+What it does not decide: whether the harness fires the hook or runs an async entry (its install
+report reads `UNVERIFIED` until a person sees it), or what the Done commands are. It compares a
+known command's exit code and the failure ids its output names; where neither the record nor the
+output names any, a new failure inside a command that fails with the same exit code is not told
+apart from the known one.
 """
 
 from __future__ import annotations
@@ -766,8 +770,9 @@ def begin_turn(
     """Keep the target's HEAD and tree as the turn's start, in the Git directory, with the
     session and the time, over a mark the last turn's end stamped. Where the HEAD or tree cannot
     be read in time, the mark of the turn before goes, so that no turn is compared with a tree
-    it did not begin with. (the target, the tree it read) where there is a target; errors are the
-    caller's to swallow, and nothing is printed."""
+    it did not begin with. (the target, the tree it read, None where it kept the turn's mark and
+    read none) where there is a target; errors are the caller's to swallow, and nothing is
+    printed."""
 
     deadline = time.monotonic() + MARK_SECONDS
     target, found = find_target(payload, cwd)
@@ -778,7 +783,7 @@ def begin_turn(
     if live is not None and live.session == session and live.ended is None:
         # A prompt inside the turn (a queued message, or the prompt a codex hold creates): the
         # turn's first mark stays, since this tree holds the turn's edits.
-        return target, tree_digest(target, digest, deadline)
+        return target, None
     head, tree = _head(target, deadline), tree_digest(target, digest, deadline)
     if head is None or tree is None:
         path.unlink(missing_ok=True)
@@ -3488,7 +3493,10 @@ def _begin(words: Sequence[str]) -> int:
         hook = hook_of(row)
         if began is None or hook is None or not isinstance(hook.get("wake"), dict):
             return 0
-        texts = turn_notices(began[0], session, began[1], args.done)
+        target, tree = began
+        if tree is None:
+            tree = tree_digest(target, args.done, time.monotonic() + MARK_SECONDS)
+        texts = turn_notices(target, session, tree, args.done)
         if texts:
             sys.stdout.write(json.dumps({"systemMessage": "\n\n".join(texts)}) + "\n")
             sys.stdout.flush()
