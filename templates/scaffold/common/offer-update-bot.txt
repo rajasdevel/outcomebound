@@ -1,0 +1,1 @@
+templates/ci/ in the engine; keep the CI file's pinned versions current with the host's own update tool

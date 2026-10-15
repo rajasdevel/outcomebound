@@ -15,7 +15,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 SCAFFOLD = ROOT / "templates" / "scaffold"
 LIFECYCLE = ROOT / "templates" / "lifecycle"
-# The files that are a vendor's format by nature; their comments name the control they serve.
+# The files that are a vendor's format by nature, exempt by exact path; their comments name the
+# control they serve. The offers are a command or an engine path for the agent, not Markdown.
 VENDOR_FORMAT = frozenset({"common/ci.yml", "common/dependabot.yml", "organization/CODEOWNERS"})
 
 CLAIMS = re.compile(
@@ -71,11 +72,11 @@ def paragraphs(text: str) -> list[str]:
 
 def test_no_template_claims_compliance_conformance_a_level_or_a_certification() -> None:
     found = [
-        f"{name}: {match.group(0)!r}"
-        for name, text in texts()
-        for match in CLAIMS.finditer(text)
+        f"{name}: {match.group(0)!r}" for name, text in texts() for match in CLAIMS.finditer(text)
     ]
-    found += [f"scaffold.json: {m.group(0)!r}" for t in platform_act_texts() for m in CLAIMS.finditer(t)]
+    found += [
+        f"scaffold.json: {m.group(0)!r}" for t in platform_act_texts() for m in CLAIMS.finditer(t)
+    ]
     assert not found, found
 
 
@@ -100,22 +101,30 @@ def test_no_markdown_template_names_a_vendor_product_or_setting() -> None:
     found = [
         f"{name}: {match.group(0)!r}"
         for name, text in texts()
-        if name.removeprefix("scaffold/") not in VENDOR_FORMAT
+        if name.endswith(".md")
         for match in VENDOR.finditer(text)
     ]
-    found += [f"scaffold.json: {m.group(0)!r}" for t in platform_act_texts() for m in VENDOR.finditer(t)]
+    found += [
+        f"scaffold.json: {m.group(0)!r}" for t in platform_act_texts() for m in VENDOR.finditer(t)
+    ]
     assert not found, found
     for name in VENDOR_FORMAT:
         assert (SCAFFOLD / name).is_file(), name
+    others = {
+        path.relative_to(SCAFFOLD).as_posix()
+        for path in SCAFFOLD.rglob("*")
+        if path.is_file() and path.suffix not in (".md", ".txt") and path.name != "scaffold.json"
+    }
+    assert others == VENDOR_FORMAT
 
 
 def test_every_law_date_in_a_template_names_the_day_it_was_read() -> None:
     unread = []
     for name, text in texts():
         for paragraph in paragraphs(text):
-            if DATE.search(paragraph) and LAW.search(paragraph):
-                if not (READ.search(paragraph) and SOURCE.search(paragraph)):
-                    unread.append(f"{name}: {paragraph[:120]!r}")
+            dated = DATE.search(paragraph) and LAW.search(paragraph)
+            if dated and not (READ.search(paragraph) and SOURCE.search(paragraph)):
+                unread.append(f"{name}: {paragraph[:120]!r}")
     assert not unread, unread
     assert any(DATE.search(text) and LAW.search(text) for _, text in texts())
 
@@ -125,9 +134,7 @@ REVIEW_CONTROLS = {
     "the person who directed the agent never approves": re.compile(
         r"neither the author nor the person who directed the agent", re.I
     ),
-    "no one, admins included, bypasses it": re.compile(
-        r"no one, admins included, bypasses", re.I
-    ),
+    "no one, admins included, bypasses it": re.compile(r"no one, admins included, bypasses", re.I),
 }
 REVIEW_TEXTS = (
     "scaffold/team/local.md",

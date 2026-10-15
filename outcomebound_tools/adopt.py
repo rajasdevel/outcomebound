@@ -153,6 +153,8 @@ LOCAL_FRAGMENT = f"{facts.FRAGMENT_DIR}/{LOCAL}.md"
 # What --detect names last, and where a new project starts, as paths in the engine.
 GUIDE = "skills/adopt-outcomebound/SKILL.md"
 NEW_PROJECT_REFERENCE = "skills/using-outcomebound/references/new-project.md"
+# Where the engine holds the scaffold's sets, --detect names its preview on an empty repository.
+SCAFFOLD_MANIFEST = "templates/scaffold/scaffold.json"
 # What --detect proposes first for Done where a floor is installed: the floor's runner, with
 # `--base` the remote's default branch where Git resolves it (`default_base`).
 FLOOR_RUNNER = "outcomebound floor check ."
@@ -2764,6 +2766,13 @@ def detect(target: Path, source: Path) -> int:
         notes.append(
             _Engine(f"nothing here but .git: a new project starts from this command{route}")
         )
+        if (Path(source) / SCAFFOLD_MANIFEST).is_file():
+            notes.append(
+                _Engine(
+                    "a new project: outcomebound scaffold . --lifecycle <preset> previews the "
+                    "files of its lifecycle; the new-project reference says how to choose"
+                )
+            )
     notes += _setup_notes(setups)
     notes += [
         f"lockfile {name}: {command} installs from it; a candidate for --setup, not proposed"

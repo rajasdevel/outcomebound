@@ -21,7 +21,8 @@ import pytest
 from outcomebound_tools import adopt, fileplan, fragments, instruction_audit, paths, scaffold
 from outcomebound_tools.schemacheck import validate
 from tests.adopt_helpers import GIT, Capture, repo
-from tests.portable import needs_symlinks, write
+from tests.portable import needs_symlinks
+from tests.portable import write as write_file
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates" / "scaffold"
@@ -51,6 +52,11 @@ OVERLAY_LINE = {
     "ai-product": "The evaluation tasks and their grader run as part of Done",
 }
 MARKER = re.compile(r"<<(fill|owner): ([^<>\r\n]+)>>")
+
+
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_file(path, text)
 
 
 def run(capsys: Capture, *argv: object, source: Path = ROOT) -> tuple[int, str, str]:
@@ -129,7 +135,7 @@ def fill_every_marker(root: Path) -> None:
 
 
 def json_report(capsys: Capture, *argv: object) -> tuple[int, dict]:
-    code, out, err = run(capsys, *argv, "--json")
+    code, out, _ = run(capsys, *argv, "--json")
     document = json.loads(out)
     assert validate(document, REPORT_SCHEMA) == [], out
     return code, document
@@ -179,7 +185,9 @@ def test_the_first_design_is_offered_and_the_overlay_rows_are_printed_as_a_block
     code, out, _ = run(capsys, root, "--lifecycle", lifecycle, "--visibility", "public")
 
     assert code == 0
-    offer = [line for line in out.splitlines() if line.startswith("offer") and "first design" in line]
+    offer = [
+        line for line in out.splitlines() if line.startswith("offer") and "first design" in line
+    ]
     assert len(offer) == 1 and "new-spec.sh" in offer[0] and "<slug>" in offer[0]
     assert "--- block for docs/specs/<slug>/design.md (eu-market, ai-product) ---" in out
     block = out.split("--- block for docs/specs/<slug>/design.md", 1)[1]
@@ -307,9 +315,15 @@ def test_the_local_fragment_parses_after_adopt_selects_it(
 ) -> None:
     root = target(tmp_path)
     lifecycle = preset + (f"+{overlay}" if overlay else "")
-    out = accept(capsys, root, lifecycle, *facts(preset, None if preset == "prototype" else "private"))
+    out = accept(
+        capsys, root, lifecycle, *facts(preset, None if preset == "prototype" else "private")
+    )
     code, plan, _ = run(
-        capsys, root, "--lifecycle", lifecycle, *facts(preset, None if preset == "prototype" else "private")
+        capsys,
+        root,
+        "--lifecycle",
+        lifecycle,
+        *facts(preset, None if preset == "prototype" else "private"),
     )
     assert code == 0 and "PASS" in out
 
@@ -319,14 +333,20 @@ def test_the_local_fragment_parses_after_adopt_selects_it(
     assert code == 0, out + err
 
 
-@pytest.mark.parametrize(("preset", "overlay"), ADOPTED[:4] + [("team", "client")])
+@pytest.mark.parametrize(("preset", "overlay"), [*ADOPTED[:4], ("team", "client")])
 def test_adopt_check_prints_no_drift_line_for_the_scaffolds_own_selection(
     tmp_path: Path, capsys: Capture, preset: str, overlay: str
 ) -> None:
     root = target(tmp_path)
     lifecycle = preset + (f"+{overlay}" if overlay else "")
     visibility = facts(preset, None if preset == "prototype" else "public")
-    accept(capsys, root, lifecycle, *visibility, *([] if preset == "prototype" else ["--acts", "deploy,tag"]))
+    accept(
+        capsys,
+        root,
+        lifecycle,
+        *visibility,
+        *([] if preset == "prototype" else ["--acts", "deploy,tag"]),
+    )
     _, plan, _ = run(
         capsys,
         root,
@@ -351,7 +371,12 @@ def test_with_each_marker_filled_check_exits_0_and_no_stale_reference(
     tmp_path: Path, capsys: Capture
 ) -> None:
     root = target(tmp_path)
-    lifecycle = ["--lifecycle", "organization+client+eu-market+ai-product", "--visibility", "public"]
+    lifecycle = [
+        "--lifecycle",
+        "organization+client+eu-market+ai-product",
+        "--visibility",
+        "public",
+    ]
     more = ["--acts", "deploy,tag", "--with", "codeowners,pr-template"]
     accept(capsys, root, *lifecycle[1:], *more)
     _, plan, _ = run(capsys, root, *lifecycle, *more)
@@ -653,19 +678,26 @@ def test_a_move_back_lists_the_parts_no_longer_required_and_deletes_nothing(
         capsys, root, "--lifecycle", "solo", "--visibility", "private", "--from", "team+eu-market"
     )
     accepted = run(
-        capsys, root, "--lifecycle", "solo", "--visibility", "private", "--from", "team+eu-market",
+        capsys,
+        root,
+        "--lifecycle",
+        "solo",
+        "--visibility",
+        "private",
+        "--from",
+        "team+eu-market",
         "--accept",
     )
 
     assert code == 0 and accepted[0] == 0 and tree(root) == before
-    lines = {
-        line.split()[2]: line for line in out.splitlines() if line.startswith("not required")
-    }
+    lines = {line.split()[2]: line for line in out.splitlines() if line.startswith("not required")}
     assert "what to retire" in lines[ROUTE]
     assert "what still holds" in lines[SECURITY]
     assert "what still holds" in lines["docs/specs/app/design.md"]
 
-    code, out, _ = run(capsys, root, "--lifecycle", "team", "--visibility", "public", "--from", "team+eu-market")
+    code, out, _ = run(
+        capsys, root, "--lifecycle", "team", "--visibility", "public", "--from", "team+eu-market"
+    )
     parts = [line for line in out.splitlines() if line.startswith("not required")]
     assert any(SECURITY in line and "eu-market" in line for line in parts), out
     assert tree(root) == before
@@ -690,8 +722,14 @@ def test_private_free_marks_each_platform_guard_not_enforced_and_offers_no_codeo
     assert "gitleaks" in status["secret-scan"]
     assert not [item for item in document["files"] if item["path"] == CODEOWNERS]
     code, _, err = run(
-        capsys, root, "--lifecycle", "organization", "--visibility", "private-free",
-        "--with", "codeowners",
+        capsys,
+        root,
+        "--lifecycle",
+        "organization",
+        "--visibility",
+        "private-free",
+        "--with",
+        "codeowners",
     )
     assert code == 2 and "private-free" in err
 
@@ -723,7 +761,11 @@ def test_other_host_writes_nothing_under_github_and_reads_the_acts_unverified(
     ],
 )
 def test_each_act_adds_its_fragments_edges_and_files(
-    tmp_path: Path, capsys: Capture, act: str, fragment: str | None, edge: str | None,
+    tmp_path: Path,
+    capsys: Capture,
+    act: str,
+    fragment: str | None,
+    edge: str | None,
     changelog: bool,
 ) -> None:
     root = target(tmp_path)

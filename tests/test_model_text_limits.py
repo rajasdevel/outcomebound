@@ -57,6 +57,7 @@ ALLOWED = {
     ),
     ("templates/scaffold/eu-market/local.md", "within 2"): CRA,
     ("templates/scaffold/eu-market/local.md", "24 hours"): CRA,
+    ("templates/scaffold/eu-market/local.md", "within 7"): CRA,
     ("templates/scaffold/eu-market/local.md", "72 hours"): CRA,
 }
 FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)

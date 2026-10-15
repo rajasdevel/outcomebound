@@ -1,0 +1,8 @@
+# Keeps the commit pins of the CI workflow's actions current: a pin never updated misses its
+# fixes. Each update arrives as a pull request that CI checks.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

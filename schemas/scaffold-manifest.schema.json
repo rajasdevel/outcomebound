@@ -134,6 +134,14 @@
           "text": {"type": "string", "minLength": 1, "description": "The act and what it changes, naming the control and no vendor setting."},
           "who": {"type": "string", "minLength": 1},
           "for": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[a-z][a-z-]*[a-z]$"}, "uniqueItems": true},
+          "when": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Facts that must hold as well as `for`, each key any one of its values, as for a part.",
+            "properties": {
+              "acts": {"type": "array", "items": {"enum": ["deploy", "publish", "tag", "stored-data"]}, "uniqueItems": true}
+            }
+          },
           "status": {
             "type": "object",
             "additionalProperties": false,

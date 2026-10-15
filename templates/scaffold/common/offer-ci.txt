@@ -1,0 +1,1 @@
+templates/ci/ in the engine: the GitLab, Makefile and shell examples

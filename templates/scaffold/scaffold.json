@@ -1,0 +1,855 @@
+{
+  "version": 1,
+  "lifecycles": [
+    {
+      "id": "prototype",
+      "kind": "preset",
+      "assumes": [
+        "life: to learn, then discard or keep what the signal justifies",
+        "maintainers: one, or the few who build it",
+        "dependants: none, or invited testers with no real data"
+      ],
+      "fragments": [
+        "local",
+        "explore",
+        "solo",
+        "commands"
+      ],
+      "edges": []
+    },
+    {
+      "id": "solo",
+      "kind": "preset",
+      "assumes": [
+        "life: a product",
+        "maintainers: one",
+        "dependants: any number"
+      ],
+      "fragments": [
+        "local",
+        "solo",
+        "commands"
+      ],
+      "edges": []
+    },
+    {
+      "id": "team",
+      "kind": "preset",
+      "assumes": [
+        "life: a product",
+        "maintainers: two or more in one team",
+        "dependants: outside users or adopters"
+      ],
+      "fragments": [
+        "local",
+        "team",
+        "commands"
+      ],
+      "edges": []
+    },
+    {
+      "id": "organization",
+      "kind": "preset",
+      "assumes": [
+        "life: a product",
+        "maintainers: several teams, or owners by area",
+        "dependants: many, or other teams"
+      ],
+      "fragments": [
+        "local",
+        "team",
+        "commands"
+      ],
+      "edges": []
+    },
+    {
+      "id": "client",
+      "kind": "overlay",
+      "assumes": [
+        "who accepts: an outside party on a named build"
+      ],
+      "fragments": [
+        "client"
+      ],
+      "edges": [],
+      "refused_on": [
+        "prototype"
+      ],
+      "refusal": "a prototype ends at its first outside user or real personal data; move it to solo or team first"
+    },
+    {
+      "id": "eu-market",
+      "kind": "overlay",
+      "assumes": [
+        "market: placed on the EU market in a commercial activity"
+      ],
+      "fragments": [],
+      "edges": [
+        "rewriting published history"
+      ],
+      "refused_on": [
+        "prototype"
+      ],
+      "refusal": "a prototype ends at its first outside user or real personal data; move it to solo or team first"
+    },
+    {
+      "id": "safety-critical",
+      "kind": "overlay",
+      "assumes": [
+        "harm: a failure can harm a person, and a safety lifecycle standard applies"
+      ],
+      "fragments": [],
+      "edges": []
+    },
+    {
+      "id": "audit",
+      "kind": "overlay",
+      "assumes": [
+        "audit: an auditor examines the controls"
+      ],
+      "fragments": [],
+      "edges": [],
+      "refused_on": [
+        "prototype"
+      ],
+      "refusal": "a prototype ends at its first outside user or real personal data; move it to solo or team first"
+    },
+    {
+      "id": "unattended-agents",
+      "kind": "overlay",
+      "assumes": [
+        "agents: some run without a person watching"
+      ],
+      "fragments": [],
+      "edges": []
+    },
+    {
+      "id": "ai-product",
+      "kind": "overlay",
+      "assumes": [
+        "product: it calls a model"
+      ],
+      "fragments": [],
+      "edges": []
+    }
+  ],
+  "acts": [
+    {
+      "id": "deploy",
+      "fragments": [
+        "deploy",
+        "runtime"
+      ],
+      "edges": [
+        "a deploy to production"
+      ]
+    },
+    {
+      "id": "publish",
+      "fragments": [
+        "ci-release"
+      ],
+      "edges": []
+    },
+    {
+      "id": "tag",
+      "fragments": [],
+      "edges": [
+        "pushing a tag"
+      ]
+    },
+    {
+      "id": "stored-data",
+      "fragments": [
+        "db-migrations"
+      ],
+      "edges": [
+        "a change to stored production data"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "id": "local-fragment",
+      "path": ".outcomebound/fragments/local.md",
+      "join": "slots",
+      "head": "common/local.md",
+      "present": [
+        ".outcomebound/fragments/local.md"
+      ],
+      "parts": [
+        {
+          "source": "prototype/local.md",
+          "for": [
+            "prototype"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "solo/local.md",
+          "for": [
+            "solo"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "team/local.md",
+          "for": [
+            "team",
+            "organization"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "team/leave.md",
+          "for": [
+            "team"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "organization/local.md",
+          "for": [
+            "organization"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "organization/local-codeowners.md",
+          "for": [
+            "organization"
+          ],
+          "mode": "offer",
+          "offer": "codeowners",
+          "when": {
+            "visibility": [
+              "public",
+              "private"
+            ],
+            "host": [
+              "github"
+            ]
+          }
+        },
+        {
+          "source": "common/deploy-gate.md",
+          "for": [
+            "team",
+            "organization"
+          ],
+          "mode": "write",
+          "when": {
+            "acts": [
+              "deploy"
+            ]
+          }
+        },
+        {
+          "source": "common/deploy.md",
+          "for": [
+            "deploy"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "common/release.md",
+          "for": [
+            "publish",
+            "tag"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "client/local.md",
+          "for": [
+            "client"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "eu-market/local.md",
+          "for": [
+            "eu-market"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "safety-critical/local.md",
+          "for": [
+            "safety-critical"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "audit/local.md",
+          "for": [
+            "audit"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "unattended-agents/local.md",
+          "for": [
+            "unattended-agents"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "ai-product/local.md",
+          "for": [
+            "ai-product"
+          ],
+          "mode": "write"
+        }
+      ]
+    },
+    {
+      "id": "route-document",
+      "path": "CONTRIBUTING.md",
+      "join": "blocks",
+      "head": "common/contributing.md",
+      "present": [
+        "CONTRIBUTING.md",
+        ".github/CONTRIBUTING.md",
+        "docs/CONTRIBUTING.md",
+        "streams-route"
+      ],
+      "parts": [
+        {
+          "source": "team/contributing.md",
+          "for": [
+            "team",
+            "organization"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "organization/contributing.md",
+          "for": [
+            "organization"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "organization/contributing-codeowners.md",
+          "for": [
+            "organization"
+          ],
+          "mode": "offer",
+          "offer": "codeowners",
+          "when": {
+            "visibility": [
+              "public",
+              "private"
+            ],
+            "host": [
+              "github"
+            ]
+          }
+        },
+        {
+          "source": "common/deploy-route.md",
+          "for": [
+            "team",
+            "organization"
+          ],
+          "mode": "write",
+          "when": {
+            "acts": [
+              "deploy"
+            ]
+          }
+        },
+        {
+          "source": "client/contributing.md",
+          "for": [
+            "client"
+          ],
+          "mode": "write",
+          "brings": true
+        }
+      ]
+    },
+    {
+      "id": "first-design",
+      "path": "docs/specs/<slug>/design.md",
+      "join": "blocks",
+      "present": [
+        "docs/specs/*/design.md"
+      ],
+      "parts": [
+        {
+          "source": "common/offer-design.txt",
+          "for": [
+            "team",
+            "organization",
+            "eu-market",
+            "ai-product"
+          ],
+          "mode": "offer",
+          "brings": true
+        },
+        {
+          "source": "eu-market/design.md",
+          "for": [
+            "eu-market"
+          ],
+          "mode": "write",
+          "brings": true
+        },
+        {
+          "source": "ai-product/design.md",
+          "for": [
+            "ai-product"
+          ],
+          "mode": "write",
+          "brings": true
+        }
+      ]
+    },
+    {
+      "id": "ci-workflow",
+      "path": ".github/workflows/ci.yml",
+      "join": "whole",
+      "present": [
+        ".github/workflows/*.yml",
+        ".github/workflows/*.yaml",
+        ".gitlab-ci.yml"
+      ],
+      "parts": [
+        {
+          "source": "common/ci.yml",
+          "for": [
+            "solo",
+            "team",
+            "organization"
+          ],
+          "mode": "write",
+          "when": {
+            "host": [
+              "github"
+            ]
+          }
+        },
+        {
+          "source": "common/offer-ci.txt",
+          "for": [
+            "solo",
+            "team",
+            "organization"
+          ],
+          "mode": "offer",
+          "when": {
+            "host": [
+              "other"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "update-bot",
+      "path": ".github/dependabot.yml",
+      "join": "whole",
+      "present": [
+        ".github/dependabot.yml",
+        ".github/dependabot.yaml",
+        "renovate.json",
+        "renovate.json5",
+        ".github/renovate.json",
+        ".renovaterc",
+        ".renovaterc.json"
+      ],
+      "parts": [
+        {
+          "source": "common/dependabot.yml",
+          "for": [
+            "solo",
+            "team",
+            "organization"
+          ],
+          "mode": "write",
+          "when": {
+            "host": [
+              "github"
+            ]
+          }
+        },
+        {
+          "source": "common/offer-update-bot.txt",
+          "for": [
+            "solo",
+            "team",
+            "organization"
+          ],
+          "mode": "offer",
+          "when": {
+            "host": [
+              "other"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "security-policy",
+      "path": "SECURITY.md",
+      "join": "blocks",
+      "head": "common/security-head.md",
+      "present": [
+        "SECURITY.md",
+        ".github/SECURITY.md",
+        "docs/SECURITY.md"
+      ],
+      "parts": [
+        {
+          "source": "common/security.md",
+          "for": [
+            "solo"
+          ],
+          "mode": "write",
+          "when": {
+            "visibility": [
+              "public"
+            ]
+          }
+        },
+        {
+          "source": "common/security.md",
+          "for": [
+            "team",
+            "organization"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "organization/security.md",
+          "for": [
+            "organization"
+          ],
+          "mode": "write"
+        },
+        {
+          "source": "common/security.md",
+          "for": [
+            "eu-market"
+          ],
+          "mode": "write",
+          "brings": true
+        },
+        {
+          "source": "eu-market/security.md",
+          "for": [
+            "eu-market"
+          ],
+          "mode": "write",
+          "brings": true
+        }
+      ]
+    },
+    {
+      "id": "changelog",
+      "path": "CHANGELOG.md",
+      "join": "whole",
+      "present": [
+        "CHANGELOG.md",
+        "CHANGES.md",
+        "HISTORY.md"
+      ],
+      "parts": [
+        {
+          "source": "common/changelog.md",
+          "for": [
+            "publish",
+            "tag"
+          ],
+          "mode": "write"
+        }
+      ]
+    },
+    {
+      "id": "codeowners",
+      "path": ".github/CODEOWNERS",
+      "join": "whole",
+      "present": [
+        "CODEOWNERS",
+        ".github/CODEOWNERS",
+        "docs/CODEOWNERS"
+      ],
+      "parts": [
+        {
+          "source": "organization/CODEOWNERS",
+          "for": [
+            "organization"
+          ],
+          "mode": "offer",
+          "offer": "codeowners",
+          "when": {
+            "visibility": [
+              "public",
+              "private"
+            ],
+            "host": [
+              "github"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "pull-request-template",
+      "path": ".github/pull_request_template.md",
+      "join": "whole",
+      "present": [
+        "pull_request_template.md",
+        ".github/pull_request_template.md",
+        "docs/pull_request_template.md",
+        "PULL_REQUEST_TEMPLATE/",
+        ".github/PULL_REQUEST_TEMPLATE/",
+        "docs/PULL_REQUEST_TEMPLATE/"
+      ],
+      "parts": [
+        {
+          "source": "organization/pull_request_template.md",
+          "for": [
+            "organization"
+          ],
+          "mode": "offer",
+          "offer": "pr-template",
+          "when": {
+            "host": [
+              "github"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "quality-floor",
+      "path": ".outcomebound/floor.json",
+      "join": "whole",
+      "present": [
+        ".outcomebound/floor.json"
+      ],
+      "parts": [
+        {
+          "source": "common/offer-floor.txt",
+          "for": [
+            "solo",
+            "team",
+            "organization"
+          ],
+          "mode": "offer"
+        }
+      ]
+    },
+    {
+      "id": "ticket-declaration",
+      "path": ".outcomebound/tickets.json",
+      "join": "whole",
+      "present": [
+        ".outcomebound/tickets.json"
+      ],
+      "parts": [
+        {
+          "source": "common/offer-tickets.txt",
+          "for": [
+            "team",
+            "organization"
+          ],
+          "mode": "offer"
+        }
+      ]
+    }
+  ],
+  "platform_acts": [
+    {
+      "id": "create-remote",
+      "text": "create the remote repository; choose its visibility and license",
+      "who": "the owner",
+      "for": [
+        "solo",
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "listed"
+      }
+    },
+    {
+      "id": "first-push",
+      "text": "the first push, which turns CI on, after Done is recorded and outcomebound scaffold . --check passes",
+      "who": "the owner",
+      "for": [
+        "solo",
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "listed"
+      }
+    },
+    {
+      "id": "sandbox",
+      "text": "run the agent in the harness sandbox, with no production credential and no real data (templates/harness/ in the engine holds ask rules)",
+      "who": "the person",
+      "for": [
+        "prototype",
+        "solo",
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "listed"
+      }
+    },
+    {
+      "id": "branch-rule",
+      "text": "a rule on the main branch: changes by pull request only, no force push, no deletion, the CI check required",
+      "who": "a repository admin",
+      "for": [
+        "solo",
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "not enforced: a private repository on this plan holds no branch rule and no required review; CI still runs, after the change has landed",
+        "other-host": "UNVERIFIED: the research read one host's plans only"
+      }
+    },
+    {
+      "id": "required-review",
+      "text": "required review by one human who is neither the author nor the person who directed the agent; an AI approval does not count; no one, admins included, bypasses it",
+      "who": "a repository admin",
+      "for": [
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "not enforced: a private repository on this plan holds no branch rule and no required review; CI still runs, after the change has landed",
+        "other-host": "UNVERIFIED: the research read one host's plans only"
+      }
+    },
+    {
+      "id": "code-owner-review",
+      "text": "code-owner review, where the project takes the CODEOWNERS offer",
+      "who": "a repository admin",
+      "for": [
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "not enforced: a private repository on this plan holds no code owners, so CODEOWNERS is refused",
+        "other-host": "UNVERIFIED: the research read one host's plans only"
+      }
+    },
+    {
+      "id": "secret-scan",
+      "text": "a secret scan, and a scan that refuses a push holding a secret",
+      "who": "a repository admin",
+      "for": [
+        "solo",
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "not enforced without a paid product on a private organization repository; UNVERIFIED on a private personal one",
+        "private-free": "not enforced without a paid product on a private organization repository; UNVERIFIED on a private personal one; the quality floor's gitleaks claim checks on the machine instead",
+        "other-host": "UNVERIFIED: the research read one host's plans only"
+      }
+    },
+    {
+      "id": "mfa",
+      "text": "multi-factor authentication on each maintainer's account",
+      "who": "each maintainer",
+      "for": [
+        "solo",
+        "team",
+        "organization"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "listed"
+      }
+    },
+    {
+      "id": "agent-identity",
+      "text": "an agent identity with a scoped token, never an admin token, and a log of its actions and approvals",
+      "who": "a repository admin",
+      "for": [
+        "organization",
+        "unattended-agents"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "UNVERIFIED: the research read one host's plans only"
+      }
+    },
+    {
+      "id": "signed-releases",
+      "text": "signed or immutable releases, and build provenance",
+      "who": "a repository admin",
+      "for": [
+        "publish"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "UNVERIFIED: the research read one host's plans only"
+      }
+    },
+    {
+      "id": "staging",
+      "text": "a staging environment, which spends, by the person's choice",
+      "who": "the owner",
+      "for": [
+        "organization"
+      ],
+      "when": {
+        "acts": [
+          "deploy"
+        ]
+      },
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "listed"
+      }
+    },
+    {
+      "id": "eu-market-scope",
+      "text": "the scope question: is the product placed on the EU market in a commercial activity?",
+      "who": "the person, with legal advice",
+      "for": [
+        "eu-market"
+      ],
+      "status": {
+        "public": "listed",
+        "private": "listed",
+        "private-free": "listed",
+        "other-host": "listed"
+      }
+    }
+  ]
+}
