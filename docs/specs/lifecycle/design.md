@@ -170,10 +170,15 @@ exposure, the fragment selection and the declared edges, and print `signal prese
 otherwise` lines. An author is not a maintainer, so the lines claim only what the person recorded
 (`solo` selected, an exposure line that says one person), never the absence of `team`. A person
 settles a line with `Drift — <signal>: <reason>` on a line of its own in the Bounds slot, outside
-a fenced block and with a reason; the line changes class and prints beside the current evidence, as
+a fenced block (closed, as CommonMark reads it, only by a fence of the same character and at least
+its length, so a shorter fence inside a longer example does not end it) and with a reason; the line changes class and prints beside the current evidence, as
 `…; settled by the person: <reason>`, so a settlement that no longer fits is seen, and no ledger
-keeps it. A declared edge silences a line only where it names the act (a publish, a release, a tag
-push, a deploy, a promotion, a push to production), never by the words `production` or `tag` alone.
+keeps it. A declared edge silences a line only where it starts with the act, after an article,
+and names the act's object where its verb has other uses (a publish, a tag, a push, upload or cut
+of a tag, package, release or registry, a release of a version, package or build; a deploy or
+redeploy, a promotion, going live, a push, release, ship or roll to production), never by the
+words `production`, `tag`, `deployment`, `promotion`, `release` or `registry` alone, so an edge for
+another act (deleting a deployment cache, releasing a database lock) leaves the line.
 
 ## Transition coverage
 
