@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -23,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from tests.eval_helpers import RUN
+from tests.eval_helpers import RUN, copy_built, run_setup
 from tests.portable import needs_posix_bash
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -65,12 +64,7 @@ def _built(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path]:
     def build(name: str) -> Path:
         if name not in built:
             target = tmp_path_factory.mktemp("fixture") / "workspace"
-            subprocess.run(
-                ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-                check=True,
-                capture_output=True,
-                env={**os.environ, **HERMETIC_GIT},
-            )
+            run_setup(name, target, {**os.environ, **HERMETIC_GIT})
             built[name] = target
         return built[name]
 
@@ -81,7 +75,7 @@ def _built(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str], Path]:
 def workspace(_built: Callable[[str], Path], tmp_path: Path) -> Callable[..., Path]:
     def copy(name: str, label: str = "run") -> Path:
         target = tmp_path / label / "workspace"
-        shutil.copytree(_built(name), target, symlinks=True)
+        copy_built(_built(name), target)
         return target
 
     return copy

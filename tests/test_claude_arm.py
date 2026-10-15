@@ -547,3 +547,34 @@ def test_known_passive_tool_forms_remain_readable(tmp_path, name):
     path = _write(tmp_path, _event(part))
     transcript, _answer = ARM._transcript(path, WORKDIR)
     assert json.loads(transcript)["commands"] == []
+
+
+def test_prepare_keeps_the_graders_in_a_stage_outside_the_state_and_grade_refuses_a_changed_one(
+    tmp_path, monkeypatch, capsys
+):
+    """No grader is in the workspace the subagent works in; the stage the setup wrote them to is
+    in the state's seal, and a stage changed between `prepare` and `grade` fails the run with no
+    check executed and no sealed copy made."""
+
+    import shutil
+
+    state_dir = tmp_path / "state"
+    monkeypatch.setattr(ARM, "STATE", state_dir)
+    ARM.prepare("small-fix", "none")
+    seal = json.loads(capsys.readouterr().out)["seal"]
+    state = json.loads((state_dir / "small-fix--none.json").read_text(encoding="utf-8"))
+    stage = Path(state["stage"])
+    try:
+        assert not (Path(state["workdir"]) / "checks").exists()
+        assert state_dir.resolve() not in stage.resolve().parents
+        assert {"checks/probe_datehelp.py", "checks/scope.sh"} <= set(state["stage_files"])
+        (stage / "checks" / "scope.sh").write_text("exit 0\n", encoding="utf-8")
+        done = _write(tmp_path, _event({"type": "text", "text": "Done."}, cwd=state["workdir"]))
+        ARM.grade("small-fix--none", str(done), seal)
+        result = json.loads(capsys.readouterr().out)
+        assert result["verdict"] == "FAIL" and result["claims"] == {}
+        report = (state_dir / "small-fix--none.report.txt").read_text(encoding="utf-8")
+        assert "FAIL protected-grading-inputs" in report and "stage/checks/scope.sh" in report
+        assert not (state_dir / "small-fix--none.graders").exists()
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
