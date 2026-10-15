@@ -121,7 +121,8 @@ export as `--input <file>`. The value `-` means standard input.
 
 ### `check`
 
-`check [--draft <file>…] [--json]` reports what the open tickets say. It checks that each block
+`check [--draft <file>…] [--summary] [--json]` reports what the open tickets say (`--summary`
+prints the counts and only the tickets that do not read `PASS`). It checks that each block
 is well formed, that each `reads` section resolves, that each claim is defined, and that the
 relations hold no cycle. The links of a closed or dropped ticket are history, and `check` does
 not resolve them. `--draft` lints local draft files together, relations included, and reads no
