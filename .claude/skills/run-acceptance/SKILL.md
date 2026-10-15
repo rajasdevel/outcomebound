@@ -60,6 +60,8 @@ Draft the acceptance record with these fields:
 - the service versions and the flag or configuration state each script exercised, as read around
   the run;
 - each script, with the result of the pre-run and the evidence;
+- the setup the pre-run needed: the commands, the paths and how the build was read, for the person
+  who sets up the session;
 - who accepted, in their own words: what they said or wrote, quoted, and not a summary;
 - when they accepted.
 

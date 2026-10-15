@@ -16,8 +16,8 @@ irreversible act also goes in `edges:` as its own list item, one line with no `;
 Irreversible edges fact; a project that publishes without selecting `ci-release` lists
 `publishing a package` there itself. A harness that reads its own ask rules can ask before each
 edge: examples are under `$(outcomebound home)/templates/harness/`. Optional lines here: "Gates —"
-(a gate, its owner, its evidence) and "Leave when —" (a signal that ends the current lifecycle, and
-the brief it opens).
+(a gate, its owner, its evidence), "Leave when —" (a signal that ends the current lifecycle, and
+the brief it opens) and "Drift —" (a signal settled, with its reason).
 **Mechanisms** — which registry mechanisms typically fire here, each named as a backticked id
 (`spec`, `goal-envelope`, `failing-test-first`, `review`, `policy-gate`, `broad-suite`,
 `runtime-check`) and the condition that fires it. Only mechanism ids take backticks on this line;

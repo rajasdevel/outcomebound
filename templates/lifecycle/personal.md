@@ -18,8 +18,8 @@ accounts: use `shared`. A throwaway item needs no template.
 Exposure — who can be hurt: the owner [confirmed]; who accepts: the owner [confirmed]; acts that
   cannot be undone: <the one act, such as deleting the only copy of the data> [observed <file>];
   expected life: <to learn, then discard | to learn, then keep what the signal justifies, with the
-  sacrificial parts named | the life of a product>; maintained by: the owner [confirmed]; agent-written
-  share and review capacity: <the share, and who reads the diff> [assumed].
+  sacrificial parts named | the life of a product>; maintained by: one person (the owner) [confirmed];
+  agent-written share and review capacity: <the share, and who reads the diff> [assumed].
 Better means — <the owner's own measure, in their words, such as "I use it every week without a
   workaround">.
 Gates — <gate>: owner <the owner>, evidence <what they look at>.

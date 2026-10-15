@@ -23,7 +23,7 @@ private with who holds it; a pointer to an ignored or private file says so inste
 Choose the stream that takes your change, read its route in the project's own document, and
 follow that route; the
 table below fills only what the route is silent on. A person decides only at an irreversible edge,
-an outside contract or an unsettled intent; every other choice on the route is yours.
+an outside contract or an unsettled intent; every other choice on the route is yours. A gate a "Gates —" line names is its owner's to pass.
 
 | From and to | Carry forward and check | When the extra stage adds no work |
 | --- | --- | --- |

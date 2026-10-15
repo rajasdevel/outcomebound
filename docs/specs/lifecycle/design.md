@@ -106,7 +106,7 @@ signals:
 | it publishes a package | `ci-release`, and consumers moved within a stated window or the hold recorded with an owner |
 | it changes stored data | `db-migrations` |
 | a client or a regulator accepts the work | `client` (new) |
-| its expected life starts with learning | `explore` (new): a stopped probe completes with its learning record and the person's stop decision, and a walking skeleton is kept only where the decided outcome is a kept product |
+| its expected life starts with learning | `explore` (new): a stopped probe completes with its learning record and the person's stop decision, and a walking skeleton is kept only where the throwaway boundary names it as kept and the stop decision permits it; a skeleton built as the probe goes with the throwaway parts |
 
 **Routes stay the project's.** Context names each stream's route document and the kind of change
 that takes it (`Streams — <stream>: route in <file>; takes <kind of change>`, with an optional

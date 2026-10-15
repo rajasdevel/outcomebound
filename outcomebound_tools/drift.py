@@ -44,7 +44,9 @@ _VERSION = re.compile(rf"^v?{_NUMBER}$")
 _TAG = re.compile(
     rf"^(v?{_NUMBER}|\S+@v?{_NUMBER}|\S+-v{_NUMBER}|\S+/v{_NUMBER}|release/{_NUMBER})$"
 )
-_EXPOSURE = re.compile(r"Exposure\s+[—-]", re.IGNORECASE)
+# An Exposure line starts its own line (a list marker or bold may come first); a quoted mention
+# of the words in a sentence, even one that wraps to the start of a line, is not one.
+_EXPOSURE = re.compile(r"^[ \t]*(?:[-*][ \t]+)?\**Exposure\s+[—-]", re.IGNORECASE)
 _NEXT_PART = re.compile(r"^(\*\*|[A-Z][A-Za-z ]*\s—\s)")
 _MAINTAINED = re.compile(r"maintained\s+by\s*:\s*([^;\n]*)", re.IGNORECASE)
 _NOTE = re.compile(r"\([^)]*\)|\[[^\]]*\]")
@@ -287,7 +289,7 @@ def maintained_by_one(local_text: str) -> bool:
     lines = local_text.splitlines()
     verdicts: list[bool] = []
     for index, line in enumerate(lines):
-        found = _EXPOSURE.search(line)
+        found = _EXPOSURE.match(line)
         if found is None:
             continue
         parts = [line[found.start() :]]

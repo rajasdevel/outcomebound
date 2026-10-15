@@ -26,11 +26,11 @@ A question the person already settled is not asked again: their launch block, th
 order and their earlier answer stand. An order to run unattended answers "may I ask" only for
 questions within what the kernel allows you to decide; it grants no act that a bound or an edge
 holds. A harness or sandbox that refuses an act has raised no new decision only where the person's
-own words name that act and its target: quote them. Otherwise the refusal is a decision for them.
-After a refusal, never reach the same effect by another route. Say in the first line of your next
+own words name that act and its target: quote them. Then say in the first line of your next
 message what was refused, by which rule or command, and ask the person to run the act or to adjust
-the harness; draw no brief with options and a default, and continue every item the refusal does
-not block.
+the harness; draw no brief with options and a default for it. Where their words do not name it,
+the refusal is a decision for them: draw its brief. After a refusal, never reach the same effect
+by another route, and continue every item the refusal does not block.
 
 ## Do the due diligence first
 

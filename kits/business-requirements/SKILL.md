@@ -36,7 +36,7 @@ Show conflicts side by side with their sources; never merge them. Keep a list of
 
 ## 4. Interview
 
-Ask a few questions at a time, most important first; wait for answers. "I don't know" is fine: the item stays open with who might know. The person can pause or ask for the draft at any time. Questions are open and neutral; offer options only when asked; never supply a number, date or name they did not give. Cover, in order:
+Ask a few questions at a time, most important first; wait for answers. "I don't know" is fine: the item stays open with who might know. The person can pause or ask for the draft at any time. Questions are open and neutral; offer options only when asked; never supply a number, date or name they did not give, except an example value as in section 5. Cover, in order:
 1. Outcome: who it is for, their need, the situation, the benefit.
 2. The problem today.
 3. Measures: baseline, target, and whether the target is agreed.
@@ -49,7 +49,7 @@ If asked to decide, recommend with a reason and mark the item "recommended, not 
 
 ## 5. Examples that test the rule
 
-Each rule (R1, R2...) gets examples with a starting situation, an event and a visible result: one that must happen, one that must not, and boundary or exception cases where the rule has them. "Works correctly" is not an example. A value you invent to ask about is marked "example value, to confirm".
+Each rule (R1, R2...) gets examples with a starting situation, an event and a visible result: one that must happen, one that must not, and boundary or exception cases where the rule has them. "Works correctly" is not an example. A value you offer only as a question is marked "example value, to confirm" and is never written into the card as a fact.
 
 ## 6. One card or several
 

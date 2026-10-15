@@ -24,7 +24,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "2c267aa21d2cd3238303620c7e0aa80d80b70818565eda3433dcbfdd3e375362",
+        ".github/workflows/ci.yml": "3a49e473a9301664e8ffc1acc80d6aac14d28961e56219f16461887d25646605",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "11b8a2937582ea63d4b4c82252bde0ffce3a84fe0ab13df6f8f61a8019b35861"
+      "sha256": "b469d10c33a3cb47179700ddd884191423c8e173b20060c289807fcb379ff00d"
     },
     {
       "kind": "skill",
@@ -152,7 +152,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "beddc1843c9976dffb8991058700786131b6b539f899b3148ebb821eb5ce96f1"
+      "sha256": "29edb9f5c948d8ae82cb76e3107021f70a7df16e3feb503965210344e5d08612"
     },
     {
       "kind": "skill",
@@ -179,7 +179,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "83363c62f73e78829facfe0ba5319d4781ef7acde1148870cbf3561d2dc837b3"
+      "sha256": "c0f257b4ad213d9c3526042630788c0a816c2961f97b1fbf8271ab8f5a8e2271"
     },
     {
       "kind": "skill",
@@ -233,7 +233,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "df16f961fe7489204ab33e3fa1fb404e2faa0e2e6dcf5c3e3672ebc5cdbccd57"
+      "sha256": "afa444769f66059a2e9c956254d08cbbe25d6f493ca706be0d78e29939b2c0c5"
     },
     {
       "kind": "skill",

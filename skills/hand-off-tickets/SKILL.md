@@ -57,8 +57,7 @@ handover. Where neither the table nor those instructions place the model, the ha
 the table does not list it, names any project rule that routes work to it, and starts with the
 spec tier's package, in full detail (the `--detail full` brief), while the question below is open.
 
-That question replaces "the spec tier follows" once answered. Ask the person one plain question,
-batched with the other questions: is the model that will build this a frontier model (the
+Ask the person one plain question, batched with the other questions: is the model that will build this a frontier model (the
 provider's most capable tier) or a smaller, faster model? Shape the hand-off from the answer: a
 frontier model takes the outcome tier, a smaller, faster model the spec tier, and where the person
 says it sits between them, the design tier. The handover says that the question is open until then.

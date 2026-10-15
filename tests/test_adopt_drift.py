@@ -313,6 +313,42 @@ def test_an_exposure_line_that_is_missing_or_does_not_parse_prints_nothing(
     assert drift_lines(out) == []
 
 
+def test_a_template_sentence_that_names_the_exposure_line_is_not_an_exposure_line(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a mention of the words inside the `local` template's own sentence, even where
+    a wrapped line starts with it, reads as a line with no fact and hides the real line."""
+
+    sentence = (
+        "Optional lifecycle lines go here, each only where it changes a decision:\n"
+        '"Exposure —", "Streams —" and "Better means —".'
+    )
+    real = "Exposure — who can be hurt: its users; maintained by: one person [confirmed]."
+    target = repo(
+        tmp_path / "t",
+        {".outcomebound/fragments/local.md": local_fragment([sentence, real])},
+    )
+    two_authors(target)
+    installed(target, capsys, "team,local")
+
+    _, out, _ = run(capsys, str(target), "--check")
+
+    assert drift_lines(out) == [
+        "2 recent authors present, record says the local Exposure line is maintained by one person"
+    ]
+
+
+def test_the_personal_template_example_names_one_person() -> None:
+    """Breaks if the example `maintained by:` value that the personal template teaches does not
+    read as one person to the engine."""
+
+    template = Path(__file__).resolve().parents[1] / "templates" / "lifecycle" / "personal.md"
+    example = template.read_text(encoding="utf-8").split("## Example lines", 1)[1]
+    example = example.split("```text", 1)[1].split("Better means", 1)[0]
+
+    assert drift.maintained_by_one(example)
+
+
 def test_a_project_with_no_install_prints_no_drift_line(tmp_path: Path, capsys: Capture) -> None:
     """Breaks if `--check` or `--detect` prints a drift line where nothing is installed, though
     the files show every signal."""
