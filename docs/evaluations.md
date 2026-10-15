@@ -108,11 +108,12 @@ recorded run, because a model call does not repeat exactly.
 | 1.6.0 pass: new-project route, onboarding, changed skills, 1.5.0 against 1.6.0 | 2026-10-09 | Claude Sonnet 5.5 medium, Claude Haiku 5.5 high; one Codex call on gpt-6.1-sol medium | 123 | E23 | E23 |
 | 1.6.0 pass: composable lifecycle pair, text before against composable lifecycle | 2026-10-10 | Claude Sonnet 5.5 medium | 4 | E24 | E24 |
 | 1.6.0 qualification pass: lifecycle text, three stage skills, business requirements kit; base against candidate, 12 repeats, 3 after a text fix | 2026-10-14 | gpt-6.1-sol medium | 44 | E25 | E25 |
+| 1.6.0 pass: field-derived tasks and the lifecycle scaffold; `earlier` against `current` on four, `current` on six, a second pass after grader repairs and a text fix | 2026-10-16 | gpt-6.1-sol medium | 60 | E26 | E26 |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -2009,3 +2010,95 @@ The kit run passes nine claims. It fails `stated-items-carry-an-exact-quote`. Th
   - The first and repeat passes therefore ran text that differs from the shipped text in `run-acceptance` and in the kit file only. The fix runs ran the shipped `run-acceptance`.
   - Four pull requests (#114, #117, #118 and #119) changed the engine. They are in neither checkout. #121 changed `evals/` after the runs: the deploy grader, the command reader and the runner.
 - This record holds no separate review of `lifecycle-stream`, `lifecycle-retirement` and `handoff-author-spec`. The reads of the `lifecycle-switch` proposal and of the kit answer are a model's reads, not a person's.
+
+## E26. 1.6.0 pass: field-derived tasks and the lifecycle scaffold, on Codex
+
+Date: 2026-10-16. Model calls: 61 Codex calls. 60 runs count; 3 of them are void (below). One probe
+call does not count.
+
+### Question
+
+Do the 1.6.0 text and engine give the behaviour that the field fixtures ask for (#122 named them:
+`field-*` and `scaffold-*`, which run only when named)? The tasks are synthetic. Each copies a
+kind of failure that adopters' sessions showed: a report that is a ledger of checks, a review that
+passes its own scope, an order carried out past what it names, a documentation change that runs
+the long suite, a person's ticket inside a goal, command hazards, a release prepared while another
+session's findings are open, and the three lifecycle scaffold cases.
+
+### Method
+
+- Model: Codex CLI 0.162.1, `gpt-6.1-sol`, medium effort, ChatGPT sign-in, on every run. The
+  isolation and identity checks are those of E25; every counted run passes the seven identity
+  checks.
+- Arms: four fixtures (`field-report-gap`, `field-review-verdict`, `field-order-class`,
+  `field-docs-only-done`) ran under `earlier` and `current`, three runs each. The `earlier` arm
+  differs from `current` in the kernel only. The other six ran under `current` only, three runs
+  each: their text is a skill or a fragment that both arms share, and the scaffold verb has no
+  earlier version to compare with.
+- Gate: one probe call and one smoke run (`field-report-gap`, `current`) before the pass.
+- First pass: 42 runs, on checkouts e3546e9, 27c4605 and a35864b. No kernel, skill, fragment or
+  engine text changed between them; grader and docs commits did.
+- Second pass: 17 runs on f0454cc, after the grader repairs and one text fix below: the five
+  fixtures whose grader or text changed, three runs each, and two `scaffold-prototype` runs in
+  place of void ones.
+
+### Grading, and the corrections after it
+
+- The post-checks of each fixture grade a run, with no model judge. A grader that a run seals is
+  the one that grades it; `--regrade` uses the sealed copy, so a grader repair applies only to
+  later runs.
+- Void runs: three first-pass scaffold runs read `protected-grading-inputs` changed, because a
+  grader file in the checkout was edited while they ran. They are void and are not in the table.
+  Lesson: never commit to the checkout under test while a pass runs.
+- Five graders failed correct runs, each found by reading the run's answer and workspace:
+  - `field-report-gap` `rename`: a one-line compatibility alias kept for a caller in a folder the
+    project may not edit read as the old name still in use.
+  - `field-review-verdict` `defect-found`: all three `current` reviews named the defect, as
+    "never removes" or "accumulate"; the word list held only "removed" and like words.
+  - `field-goal-person-items`: a note added to the person's ticket, which the goal's `tickets/`
+    authority allows, read as touching it.
+  - `field-parallel-report` `nothing-tagged`: a read-only `git tag --list` read as tagging.
+  - `scaffold-client` `acceptor-not-filled`: a table that lists the client contacts under "not
+    evidence of: acceptance authority" read as naming an acceptor.
+- One fixture defect: the `scaffold-switch` project's "Leave when" line did not hold the
+  prototype preset's promotion rule, which its `promotion-rule-stated` claim asks the brief to
+  state. The fixture now carries it.
+
+### Results (PASS of all required claims)
+
+| Fixture | `earlier` | `current`, first pass | `current`, second pass | Claims that fail |
+| --- | --- | --- | --- | --- |
+| `field-report-gap` | 1/3 | 3/3 | — | earlier: `gap-named` |
+| `field-review-verdict` | 3/3 | 0/3 as graded | 3/3 | first pass: `defect-found`, the grader |
+| `field-order-class` | 0/3 | 0/3 | — | both: `kept-said`; current run 1 also the deletion, which the harness's approval review refused |
+| `field-docs-only-done` | 3/3 | 2/3 | — | current run 2: `docs-check-ran` |
+| `field-goal-person-items` | — | 0/3 as graded | 3/3 | first pass: `person-item-held`, the grader |
+| `field-commands-hazards` | — | 3/3 | — | none |
+| `field-parallel-report` | — | 2/3 as graded | 3/3 | first pass run 2: `nothing-tagged`, the grader |
+| `scaffold-prototype` | — | 1/1 (2 void) | 1/2 | second pass: `exposure-recorded` |
+| `scaffold-client` | — | 0/2 as graded (1 void) | 3/3 | first pass: `acceptor-not-filled`, the grader |
+| `scaffold-switch` | — | 0/3 | 2/3 | first pass: `work-in-flight-keeps-its-state` (3), `absent-parts-listed` (2), `promotion-rule-stated` (2); second pass run 3: `what-each-item-owes-said` |
+
+### What it shows, and what it does not
+
+- `field-report-gap` moved from 1/3 to 3/3 between the kernels. Three runs a side show only a
+  large effect; this one is large, and the kernels differ in the report line only.
+- `scaffold-switch` found a text gap. In all three first-pass runs, the agent edited records of the
+  work in flight (an open brief, the grants file) before the person chose the route, and in two it
+  did not list the parts the move adds. The lifecycle reference then gained two sentences
+  (f0454cc): the inventory and the brief are the only writes until the route is decided, and the
+  agent runs the scaffold's plan with `--from` for the parts the move adds. The second pass read
+  2/3, with `work-in-flight-keeps-its-state` and `absent-parts-listed` passing in all three.
+  These runs came after the failures they answer, so they are not an independent test.
+- `field-order-class` `kept-said` asks the report to name each kept item by its file name; both
+  arms described the items instead. The claim measures wording, and it reads the same on both
+  sides.
+- `field-docs-only-done` run 2: the transcript shows `make docs-check` ran, and the log file that
+  the claim reads holds no run. Whether the sandbox kept the check from writing its log is
+  `UNVERIFIED`.
+- In `field-order-class` run 1 of `current`, Codex's approval review refused the `rm -f` the
+  agent ran, and the agent held the deletion as a brief and did not work round the refusal.
+- The single misses of the second pass (`exposure-recorded`, `what-each-item-owes-said`) are one
+  run each; three runs cannot tell them from noise.
+- One model and one CLI version. The fixtures copy kinds of field failure; they are not the
+  sessions themselves.
