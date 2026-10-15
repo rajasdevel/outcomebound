@@ -3594,3 +3594,108 @@ def test_an_install_warns_of_an_entry_it_did_not_write_and_changes_no_byte_of_it
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 1 and len(unmanaged_lines(out)) == 1
     assert states(out)[".claude/settings.json (finish-check)"] == "current"
+
+
+def stop_and_start(stop: str | None, start: str | None, stop_event: str = "Stop") -> str:
+    """A settings document with one hand-made group under the stop event and one under the
+    turn-start event, for each command given."""
+
+    hooks = {}
+    for event, command in ((stop_event, stop), ("UserPromptSubmit", start)):
+        if command is not None:
+            hooks[event] = [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}]
+    return json.dumps({"hooks": hooks}, indent=2) + "\n"
+
+
+def test_an_install_takes_over_an_entry_in_its_own_command_shape_without_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install refuses an unrecorded entry that is exactly adopt's command shape,
+    for the same harness and event, or does not rewrite and record it, or adds a second copy, or
+    leaves the old command out of the one line that says it took the entry over."""
+
+    stop = f"outcomebound finish-check --harness claude-code --done {DIGEST} --timeout 900"
+    start = f"outcomebound finish-check --mark --harness claude-code --done {DIGEST}"
+    target = repo(tmp_path / "t", {".claude/settings.json": stop_and_start(stop, start)})
+
+    code, out, err = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0, err
+    taken = [line for line in out.splitlines() if "took over a hand-made finish-check" in line]
+    assert len(taken) == 2 and all(".claude/settings.json" in line for line in taken)
+    assert stop in taken[0] and start in taken[1]
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    digest = finish_check.done_digest(["true"])
+    assert document["hooks"]["Stop"] == [finish_check.entry("claude-code", digest)]
+    assert document["hooks"]["UserPromptSubmit"] == [finish_check.mark_entry("claude-code", digest)]
+    assert len(hook_records(target)) == 2
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and unmanaged_lines(out) == []
+
+
+@pytest.mark.parametrize(
+    "stop, event",
+    [
+        (f"outcomebound finish-check --harness codex --done {DIGEST} --timeout 600", "Stop"),
+        (f"outcomebound finish-check --harness claude-code --done {DIGEST}", "SessionEnd"),
+        (f"outcomebound finish-check --harness claude-code --done {DIGEST} --extra", "Stop"),
+        (f"outcomebound finish-check --harness claude-code --done {DIGEST[:-1]}", "Stop"),
+    ],
+    ids=["other-harness", "other-event", "other-shape", "short-digest"],
+)
+def test_an_install_leaves_every_other_unmanaged_entry_as_it_is_and_warns(
+    tmp_path: Path, capsys: Capture, stop: str, event: str
+) -> None:
+    """Breaks if an install takes over or refuses an entry that is not exactly adopt's command
+    shape for this harness and event, or does not keep its bytes and warn of it."""
+
+    target = repo(
+        tmp_path / "t", {".claude/settings.json": stop_and_start(stop, None, stop_event=event)}
+    )
+
+    code, out, err = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0, err
+    assert "took over" not in out
+    warned = [line for line in out.splitlines() if "runs the finish check" in line]
+    assert len(warned) == 1 and warned[0].startswith("warning") and stop in warned[0]
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert document["hooks"][event][0]["hooks"][0]["command"] == stop
+    assert (
+        finish_check.entry("claude-code", finish_check.done_digest(["true"]))
+        in (document["hooks"]["Stop"])
+    )
+
+
+@pytest.mark.parametrize(
+    "name, data, reason",
+    [
+        (".claude/settings.json", b'{\n  // comment\n  "hooks": {}\n}\n', "not valid JSON"),
+        (".claude/settings.local.json", b'{"model": "\xff"}', "not UTF-8"),
+        (".codex/hooks.json", b'["hooks"]', "not a JSON object"),
+    ],
+    ids=["comments", "not-utf-8", "not-an-object"],
+)
+def test_check_and_detect_name_a_hook_file_they_cannot_read_and_count_nothing(
+    tmp_path: Path, capsys: Capture, name: str, data: bytes, reason: str
+) -> None:
+    """Breaks if a settings file that is not plain JSON or not UTF-8 is passed over in silence,
+    if its line leaves out the file or why, or if it moves either exit."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    (target / name).parent.mkdir(exist_ok=True)
+    (target / name).write_bytes(data)
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 0 and next_lines(out) == []
+    (line,) = [line for line in out.splitlines() if line.startswith("UNVERIFIED")]
+    assert name in line and reason in line
+    code, out, _ = run(capsys, str(target), "--detect")
+    assert code == 0
+    (note,) = [line for line in notes_of(out) if line.startswith("# UNVERIFIED")]
+    assert name in note and reason in note

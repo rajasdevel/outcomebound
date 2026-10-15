@@ -657,6 +657,24 @@ class Settings:
         return textio.UTF8_BOM + data if (self.before or b"").startswith(textio.UTF8_BOM) else data
 
 
+def _own_command(group: object, harness: str, mark: bool) -> str | None:
+    """The command of `group` where it is exactly the shape adopt writes for `harness`: one
+    command handler, and `outcomebound finish-check --harness H --done DIGEST` with, at the
+    stop, `--timeout SECONDS` (`--mark` at the turn's start); None for any other group."""
+
+    hooks = group.get("hooks") if isinstance(group, dict) and list(group) == ["hooks"] else None
+    handler = hooks[0] if isinstance(hooks, list) and len(hooks) == 1 else None
+    if not isinstance(handler, dict) or handler.get("type") != "command":
+        return None
+    command = handler.get("command")
+    if not isinstance(command, str):
+        return None
+    head = "outcomebound finish-check" + (" --mark" if mark else "")
+    tail = "" if mark else r"(?: --timeout [0-9]+)?"
+    shape = re.escape(f"{head} --harness {harness} --done ") + "[0-9a-f]{64}" + tail
+    return command if re.fullmatch(shape, command) else None
+
+
 # --- The manifest ---------------------------------------------------------------
 
 
@@ -1070,11 +1088,37 @@ class Run:
         created the document."""
 
         settings = self.document(want.path)
-        spot = settings.find(record["sha256"] if record else None, want.id == FINISH_MARK)
-        self._judge(label(want.path, want.id), settings.at(spot), want.data, record)
+        if record is None:
+            spot = self._own_shape(settings, want)
+        else:
+            spot = settings.find(record["sha256"], want.id == FINISH_MARK)
+            self._judge(label(want.path, want.id), settings.at(spot), want.data, record)
         settings.put(want.event, want.entry, spot)
         created = settings.before is None or bool(record and record.get("created"))
         want.extra["created"] = created
+
+    def _own_shape(self, settings: Settings, want: HookWant) -> Spot | None:
+        """Where an entry no record holds is one this install may take over: the first group
+        under the event that is exactly the command shape adopt writes for this harness, which
+        the person's `--finish-check` asks to own. It is rewritten to the shape adopt writes now
+        and recorded, with no `--force`, and one line names the old command. Any other entry
+        that runs the finish check stays as it is, and `unmanaged_lines` warns of it."""
+
+        entries = settings.hooks().get(want.event)
+        for index, group in enumerate(entries if isinstance(entries, list) else []):
+            old = _own_command(group, want.extra["harness"], want.id == FINISH_MARK)
+            if old is None:
+                continue
+            if finish_check.canonical(group) != want.data:
+                self.notes.append(
+                    (
+                        "note",
+                        f"took over a hand-made finish-check entry in {want.path}: it ran "
+                        f"`{_printable(old)}`, which this install now writes as its own entry",
+                    )
+                )
+            return want.event, index
+        return None
 
     def drop(self, record: Record) -> None:
         """Remove what `record` says adopt wrote; a path that is now a symlink is left alone."""
@@ -1883,6 +1927,40 @@ def _unmanaged_in(settings: Settings, own: Sequence[Record]) -> list[tuple[str, 
     return found
 
 
+def _hook_document(target: Path, relative: str) -> tuple[Settings | None, str]:
+    """The hook file as a document, or None and why `--check` and `--detect` cannot read it."""
+
+    try:
+        raw = _read(target, relative)
+        if raw is None:
+            return Settings.parse(relative, None), ""
+        data = json.loads(text := textio.decode(raw))
+    except AdoptError as error:
+        return None, "; ".join(error.reasons)
+    except UnicodeDecodeError:
+        return None, "it is not UTF-8 text"
+    except ValueError as error:
+        return None, f"it is not valid JSON ({error}); adopt reads no comments"
+    if not isinstance(data, dict):
+        return None, "it is not a JSON object"
+    return Settings(relative, raw, data, text), ""
+
+
+def unread_hook_files(target: Path) -> list[str]:
+    """One line for each hook file adopt reads that it cannot read, as it cannot see a finish
+    check entry in it: it reads UNVERIFIED, and moves no exit."""
+
+    lines = []
+    for relative in HOOK_FILES:
+        settings, why = _hook_document(target, relative)
+        if settings is None:
+            lines.append(
+                f"{relative}: not read, so a finish-check entry in it is not seen: "
+                f"{_printable(why)}"
+            )
+    return lines
+
+
 def unmanaged_hooks(
     target: Path, own: Sequence[Record], planned: dict[str, Settings] | None = None
 ) -> list[tuple[str, str, str]]:
@@ -1894,10 +1972,9 @@ def unmanaged_hooks(
     for relative in HOOK_FILES:
         settings = (planned or {}).get(relative)
         if settings is None:
-            try:
-                settings = Settings.parse(relative, _read(target, relative))
-            except AdoptError:
-                continue
+            settings, _ = _hook_document(target, relative)
+        if settings is None:
+            continue
         found += [(relative, event, command) for event, command in _unmanaged_in(settings, own)]
     return found
 
@@ -2295,13 +2372,21 @@ def next_step(
     return f"{step}; for each unmanaged entry, remove it, then {fix}"
 
 
+def _print_hook_lines(target: Path, unmanaged: Sequence[str]) -> None:
+    """The unmanaged hook entries, then each hook file that could not be read."""
+
+    for line in unmanaged:
+        print(f"{'unmanaged':<8} {line}")
+    for line in unread_hook_files(target):
+        print(f"{'UNVERIFIED':<8} {line}")
+
+
 def check(target: Path, source: Path) -> int:
     manifest = load_manifest(target)
     unmanaged = unmanaged_lines(target, manifest.own)
     if manifest.raw is None:
         print(f"missing  {MANIFEST}")
-        for line in unmanaged:
-            print(f"{'unmanaged':<8} {line}")
+        _print_hook_lines(target, unmanaged)
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return min(1 + len(unmanaged), CHECK_CAP)
@@ -2315,8 +2400,7 @@ def check(target: Path, source: Path) -> int:
         elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
             detail = moved(target, source, record, manifest.own)
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
-    for line in unmanaged:
-        print(f"{'unmanaged':<8} {line}")
+    _print_hook_lines(target, unmanaged)
     note = measurement_note(target, manifest.own)
     if note is not None:
         print(f"{'note':<8} {note}")
@@ -2664,6 +2748,7 @@ def detect(target: Path, source: Path) -> int:
     notes += _readiness_notes(target, done, files)
     notes += [f"drift: {line}" for line in _drift_lines(target, source, own, files)]
     notes += [f"unmanaged: {line}" for line in unmanaged_lines(target, own)]
+    notes += [f"UNVERIFIED {line}" for line in unread_hook_files(target)]
     guide = (Path(source).resolve() / GUIDE).as_posix()
     notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
     print(textio.visible(" ".join(map(paths.shell_word, words))))
@@ -2760,7 +2845,12 @@ followed by `finish-check`, also inside sh -c, or a Python module form (-m
 outcomebound_tools.finish_check, or -m outcomebound_tools finish-check). The match is lexical
 and runs nothing, so a hook that calls a script of your own that runs the check is not seen.
 An install prints each as a warning. Nothing is refused, and adopt removes no entry it did not
-write; --check counts each in its exit, --detect prints each as a # line and exits as before."""
+write; --check counts each in its exit, --detect prints each as a # line and exits as before.
+The one exception is an entry no record holds that is exactly the command shape adopt writes,
+for the same harness and event: --finish-check takes it over, rewrites it to the shape adopt
+writes now, records it with no --force, and names its old command on one line. A hook file that
+is not valid JSON or not UTF-8 is named on an UNVERIFIED line by --check and --detect, which
+moves no exit."""
 EPILOG = """\
 exit: 0 done, 1 refused or failed, 2 usage; --check exits with the number of records that are
 not current plus the number of unmanaged hook entries, at most 100."""
