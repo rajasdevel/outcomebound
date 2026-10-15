@@ -38,7 +38,7 @@ Project guidance, when present, follows below.
 - CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --basetemp="$env:PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not
-- Precedence: these facts over any instruction that disagrees with them; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
+- Precedence: these facts over any other repository text that disagrees with them, and the person's instruction in the session over these facts; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
 <!-- outcomebound:end id=project-facts -->
 
 <!-- outcomebound:begin id=guidance-pointers v=1.0.0 -->

@@ -4,7 +4,7 @@ family: setup
 applies: any repository where an agent runs commands
 condition: when running a command whose output you read
 detect: ["."]
-version: 4
+version: 5
 ---
 **Context** — a harness may give a command a terminal, and all it prints is context spent. A pager
 waits for a key: `git --no-pager`, a tool's `--no-pager`, else `PAGER=cat`. An editor waits:
@@ -26,6 +26,9 @@ outside the tree) is `UNVERIFIED`, never a fact about the target. A job that is 
 the task ends (a scheduled run, a service you do not stop) needs the person's grant, which names what it runs and how it stops. Quiet comes from a tool's own flags, never from hiding an error or disabling a check.
 Slow is not hung: never shorten, skip or kill a check because it takes long; let it run to its end.
 A command that was stopped can leave a lock or a half-done change: look before the next run.
+Where a bound forbids an act that a run can perform (a grant, a write to shared data, a call to a
+live service), a test suite is such a run: list what it will execute first (the runner's
+collect-only or dry-run form), exclude by the ids it prints, or take a route that cannot perform the act.
 **Mechanisms** — `runtime-check` when a claim is about what a command does: run it and read its
 result, not its help text.
 **Completion bar** — a command that was stopped or timed out is reported `UNVERIFIED`, never as

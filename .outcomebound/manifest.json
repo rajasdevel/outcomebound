@@ -28,7 +28,7 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
-        ".outcomebound/fragments/commands.md": "7b6079fcd7cb806b2a98ce356829bbb20841913c55bdc00dd991a48ca9a9dda2",
+        ".outcomebound/fragments/commands.md": "e33d05f98754a90248842083ca8d5a1d7a1757b8bbf3a54abd7bda8fd1be35e5",
         ".outcomebound/fragments/local.md": "fe01d769bbabeee6359900aef1bdd06182dfd98e1b9ed6f55d921568b9ad488c",
         ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
@@ -37,7 +37,7 @@
       "style": [
         "ste"
       ],
-      "sha256": "e8727bc077feebf36999c49d409ab752534d866e5b08ede599dd6dd954512d2f"
+      "sha256": "8bcb6af12031c937b6e043840cfe22e4484454e55787ce76be7a47c8cde5239b"
     },
     {
       "kind": "block",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "7b6079fcd7cb806b2a98ce356829bbb20841913c55bdc00dd991a48ca9a9dda2"
+      "sha256": "e33d05f98754a90248842083ca8d5a1d7a1757b8bbf3a54abd7bda8fd1be35e5"
     },
     {
       "kind": "ignore",

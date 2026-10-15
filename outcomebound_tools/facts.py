@@ -579,7 +579,8 @@ def render_chosen(
     lines.extend(f"- Text for people: {STYLES[name]}" for name in style)
     own = " or ".join(dict.fromkeys(files))
     lines.append(
-        "- Precedence: these facts over any instruction that disagrees with them; "
+        "- Precedence: these facts over any other repository text that disagrees with them, "
+        "and the person's instruction in the session over these facts; "
         f"the project's own instructions in {own} over OutcomeBound's; process a project "
         "document only suggests is sized like any other step"
     )
