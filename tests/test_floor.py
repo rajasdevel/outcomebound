@@ -2707,7 +2707,7 @@ def test_the_loosening_pass_says_when_uncommitted_paths_were_not_read(
     root = repository(tmp_path, {"a.sh": "#!/bin/sh\necho ok\n", "b.py": "x = 1\n"})
     install(root, shipped("shell.injection"))
     base = commit(root, "floor", {})
-    write(root / "b.py", "x = 1  # noqa\n")
+    write(root / "b.py", "x = 1  # " + "noqa\n")  # split, so this file adds no suppression
     git(root, "mv", "a.sh", "c.sh")
     write(root / "new.txt", "n\n")
 
