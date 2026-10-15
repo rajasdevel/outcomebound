@@ -2093,7 +2093,7 @@ session's findings are open, and the three lifecycle scaffold cases.
 - `field-order-class` `kept-said` asks the report to name each kept item by its file name; both
   arms described the items instead. The claim measures wording, and it reads the same on both
   sides.
-- `field-docs-only-done` run 2: the transcript shows `make docs-check` ran, and the log file that
+- `field-docs-only-done` run 2: the transcript shows the fixture project's documentation check ran, and the log file that
   the claim reads holds no run. Whether the sandbox kept the check from writing its log is
   `UNVERIFIED`.
 - In `field-order-class` run 1 of `current`, Codex's approval review refused the `rm -f` the
