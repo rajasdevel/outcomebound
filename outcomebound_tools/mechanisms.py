@@ -1,13 +1,15 @@
-"""The mechanism registry: seven ids and the kernel phrase each one names.
+"""The mechanism registry: seven ids and the phrase each one names.
 
 Fragments, the routing skill, the public contract, and the eval scorer all refer
 to mechanisms. Without one registry they drift into seven spellings of the same
 thing — exactly the split a single registry exists to prevent. Ids are stable and
 machine-checkable, and `tests/test_mechanisms.py` holds every id to the contract and
-the core skill; each label paraphrases the kernel's phrase for its mechanism.
+the core skill; each label paraphrases the contract's phrase for its mechanism.
+The kernel names five of them; ``broad-suite`` and ``runtime-check`` are named in
+the contract and the core skill only, to keep the kernel within its budget.
 
-``broad-suite`` and ``runtime-check`` deliberately share the kernel sentence that
-names them together; they are separate ids because a fragment must be able to
+``broad-suite`` and ``runtime-check`` deliberately share the sentence that names
+them together; they are separate ids because a fragment must be able to
 trigger one without the other.
 """
 

@@ -15,19 +15,20 @@ tickets, reviews and records are engineering too, and a plan whose process outwe
 change is overengineered. Smallest complete, not least work.
 
 None of these is default: a spec when later work relies on a decision the code cannot show;
-a goal envelope (pre-authorized bounds) for autonomous or multi-session work; a failing
+a goal envelope for autonomous or multi-session work; a failing
 test first when it adds signal; independent review when a miss would reach users and no
 check you can run would catch it; the project's own gate at a protected boundary, never one
-you author; broad or runtime checks when the changed risk reaches that layer.
+you author.
 
 Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
 Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
 crosses an ungranted irreversible edge: write its decision brief; all other work continues.
 Delegates receive the same four inputs and bounds.
 
-Report the completion bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing
-evidence is `UNVERIFIED`. Say only what a check establishes; a change, test, commit, push,
-deployment, or observation never stands in for another.
+Report against the Outcome: the ask, what is now true, what is not done; then the completion
+bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
+`UNVERIFIED`. Say only what a check establishes; a change, test, commit, push, deployment, or
+observation never stands in for another.
 
 Project guidance, when present, follows below.
 <!-- outcomebound:end id=operating-contract -->
