@@ -164,3 +164,259 @@ def test_the_command_line_reads_the_answer_file_and_exits_by_the_claim(tmp_path:
         check=False,
     )
     assert missing.returncode == 1
+
+
+# --- a wrong card with the right words in the review notes --------------------------------------
+
+BASE = (FIXTURE / "testdata" / "right-two-sections.md").read_text(encoding="utf-8")
+EXPORT_LINE = (
+    "      - The downloadable order list carries company name, order number, status and total only."
+    " Do not export contact details."
+)
+OWN_LINE = "      - Each partner sees only its own orders."
+CANCEL_HEAD = "    - **R3 — Cancelled orders stay visible — stated rule; pending.**\n"
+CANCEL_LINE = (
+    "      - A cancelled order stays visible to the partner, marked Cancelled with the date it was"
+    " cancelled.\n"
+)
+HISTORY_LINE = (
+    "      - Wholesale Lead (S1): 24 months. Finance Lead (S1): twelve months and no more."
+)
+APPROVALS_LINE = (
+    "  - Approvals per item: no item is approved. R1 to R5 wait for the Wholesale Lead; R5 and R6"
+    " also wait for the Finance Lead."
+)
+
+
+def _edited(old: str, new: str) -> str:
+    assert BASE.count(old) == 1, old
+    return BASE.replace(old, new, 1)
+
+
+# Each card is wrong and its review notes are right, so a check that reads the whole answer
+# finds the words it wants in the notes.
+WRONG_CARD = {
+    "unrelated-negation": (
+        _edited(
+            EXPORT_LINE, "      - Export contact details in the order list; do not show totals."
+        ),
+        "negation",
+    ),
+    "access-reversed": (
+        _edited(OWN_LINE, "      - Each partner sees every other partner\u2019s orders."),
+        "no-invented",
+    ),
+    "cancellation-reversed": (
+        _edited(
+            CANCEL_LINE.rstrip("\n"),
+            "      - When an order is cancelled, remove its line from the page and do not show its"
+            " cancellation date.",
+        ),
+        "dropped-turn",
+    ),
+    "cancellation-only-in-notes": (_edited(CANCEL_HEAD + CANCEL_LINE, ""), "dropped-turn"),
+    "history-fabricated": (
+        _edited(HISTORY_LINE, HISTORY_LINE.replace("24 months", "36 months")),
+        "conflict",
+    ),
+    "history-figure-not-in-sources": (
+        _edited(HISTORY_LINE, HISTORY_LINE + " The partner list keeps 36 months."),
+        "no-invented",
+    ),
+    "approved-beside-pending": (
+        _edited(
+            APPROVALS_LINE,
+            "  - **Approval record:** R1\u2013R7 are approved. The budget remains pending.",
+        ),
+        "no-approval",
+    ),
+    "approved-beside-pending-one-sentence": (
+        _edited(
+            APPROVALS_LINE,
+            "  - Approval record: R1\u2013R7 are approved, the budget remains pending.",
+        ),
+        "no-approval",
+    ),
+    "invented-fee": (
+        _edited(
+            "- A. Business outcome and scope\n",
+            "- A. Business outcome and scope\n"
+            "  - **New funding constraint:** the implementation fee must be 5000 pounds.\n",
+        ),
+        "no-invented",
+    ),
+}
+
+
+def _failed_text(text: str) -> set[str]:
+    return {check for check, lacking in PROBE.grade(text).items() if lacking}
+
+
+def test_the_control_card_with_right_notes_holds_every_claim() -> None:
+    assert _failed_text(BASE) == set()
+
+
+@pytest.mark.parametrize("name", sorted(WRONG_CARD))
+def test_a_wrong_card_fails_though_its_review_notes_are_right(name: str) -> None:
+    text, check = WRONG_CARD[name]
+    assert check in _failed_text(text), name
+
+
+@pytest.mark.parametrize("name", sorted(WRONG_CARD))
+def test_a_wrong_card_fails_by_the_command_line_too(name: str, tmp_path: Path) -> None:
+    text, check = WRONG_CARD[name]
+    answer = tmp_path / "answer.md"
+    answer.write_text(text, encoding="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-I", "-B", str(FIXTURE / "checks" / "probe_kit.py"), check],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "OUTCOMEBOUND_EVAL_ANSWER": str(answer)},
+        check=False,
+    )
+    assert done.returncode == 1, (name, done.stdout)
+
+
+@pytest.mark.parametrize("check", ["negation", "conflict", "dropped-turn", "reported-approval"])
+def test_a_rule_that_only_the_review_notes_hold_is_missing_from_the_card(check: str) -> None:
+    card, notes = BASE.split("## Review notes", 1)
+    lines = card.splitlines(keepends=True)
+    bare = "".join(line for line in lines if not _about(check, line))
+    assert bare != card
+    assert PROBE.CHECKS[check](bare + "## Review notes" + notes), check
+
+
+def _about(check: str, line: str) -> bool:
+    words = {
+        "negation": ("export", "contact"),
+        "conflict": ("24 months", "twelve months", "Needs both"),
+        "dropped-turn": ("ancelled",),
+        "reported-approval": ("PDF", "Finance Lead confirms"),
+    }[check]
+    return any(word in line for word in words)
+
+
+def test_an_approval_in_the_notes_still_fails() -> None:
+    assert PROBE.no_approval(BASE + "\n- R1 is approved by the Wholesale Lead.\n")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Nobody has approved an item. All remain pending.",
+        "Approval: not approved yet; the Wholesale Lead signs off business rules.",
+        "No item is approved, R1 to R5 wait for the Wholesale Lead.",
+        "Must not happen: an item is approved by a reader of the draft.",
+    ],
+)
+def test_a_denied_approval_still_passes(line: str) -> None:
+    assert PROBE.no_approval(BASE.replace(APPROVALS_LINE, "  - " + line)) == []
+
+
+# --- a summary line that refers to items already quoted -----------------------------------------
+
+DEMO_CARD = (
+    "    - **D2 — Demo accounts — stated; pending.** Five real partner accounts are ready for the"
+    " trade fair demo.\n"
+)
+DEMO_NOTES = (
+    "  - **D2 — stated need.** S2 00:06:30: “For the trade fair demo we need five real partner"
+    " accounts ready.”\n"
+)
+D1_CARD = (
+    "    - **D1 — Deadline — stated; pending.** The trade fair on 3 November."
+    " Owner: Wholesale Lead.\n"
+)
+D1_NOTES = (
+    "  - **D1 — stated deadline.** S1 00:04:20: “The deadline is the trade fair on 3 November.”\n"
+)
+
+
+def _with_summary(*summary: str) -> str:
+    text = BASE.replace(D1_CARD, D1_CARD + DEMO_CARD, 1).replace(D1_NOTES, D1_NOTES + DEMO_NOTES, 1)
+    assert DEMO_CARD in text and DEMO_NOTES in text
+    block = "- Release and operations\n" + "".join(f"  - {line}\n" for line in summary)
+    return text.replace("- Data and compliance:", block + "- Data and compliance:", 1)
+
+
+SUMMARY = "Trade fair deadline and five real demo accounts are stated needs, pending confirmation."
+
+
+def test_the_card_with_the_demo_item_and_no_summary_holds_every_claim() -> None:
+    assert _failed_text(_with_summary()) == set()
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        SUMMARY,
+        "Trade fair deadline (D1) and five real demo accounts (D2) are stated needs.",
+        "D1 and D2 are stated needs, pending confirmation.",
+        "The trade fair deadline is a stated need, pending confirmation.",
+    ],
+)
+def test_a_summary_of_items_that_carry_quotes_is_not_a_new_unquoted_item(summary: str) -> None:
+    assert PROBE.stated_quotes(_with_summary(summary)) == []
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "Partners pay by invoice within thirty days, stated by the Finance Lead.",
+        "Trade fair deadline and a mandatory training day are stated needs.",
+        "Trade fair deadline (D1) and the refund window (X9) are stated needs.",
+        "Deadline (D3) is a stated need.",
+        "Stated.",
+    ],
+)
+def test_a_new_stated_item_with_no_quote_still_fails(summary: str) -> None:
+    problems = PROBE.stated_quotes(_with_summary(summary))
+    assert any("stated with no quote" in problem for problem in problems), problems
+
+
+def test_a_summary_that_names_an_id_whose_quote_is_not_in_the_sources_fails() -> None:
+    text = _with_summary("Trade fair deadline (D1) is a stated need.").replace(
+        "The deadline is the trade fair on 3 November.", "The deadline is the open day on 9 May."
+    )
+    assert any("not in the sources" in problem for problem in PROBE.stated_quotes(text))
+
+
+R4_RIGHT = (
+    "    - **R3 — Cancelled orders remain visible — stated rule; pending.**\n"
+    "      - When an order is cancelled, the partner still sees the line, marked **Cancelled**,"
+    " with its cancellation date.\n"
+    "      - Must happen: given a visible order, when it is cancelled, its line remains visible"
+    " with that status and date.\n"
+    "      - Must not happen: cancellation alone removes the line or omits the cancellation date.\n"
+)
+INCIDENTAL = (
+    "  - Data definitions: status mapping, cancellation date and history cutoff definitions"
+    " remain open.\n"
+)
+
+
+def test_a_cancelled_orders_item_that_names_what_must_not_happen_passes() -> None:
+    text = _edited(CANCEL_HEAD + CANCEL_LINE, R4_RIGHT)
+    assert PROBE.dropped_turn(text) == []
+
+
+def test_an_unrelated_line_about_the_cancellation_date_does_not_stand_for_the_rule() -> None:
+    reversed_rule = R4_RIGHT.replace(
+        "the partner still sees the line, marked **Cancelled**, with its cancellation date.",
+        "remove its line from the page and do not show its cancellation date.",
+    ).replace(
+        "Must happen: given a visible order, when it is cancelled, its line remains visible",
+        "Open: when",
+    )
+    text = _edited(CANCEL_HEAD + CANCEL_LINE, reversed_rule).replace(
+        "- B. Approach and links", INCIDENTAL + "- B. Approach and links", 1
+    )
+    assert INCIDENTAL in text
+    assert PROBE.dropped_turn(text)
+
+
+def test_a_summary_line_judges_only_the_clause_that_holds_the_word() -> None:
+    summary = f"{SUMMARY} Account readiness, support arrangements and failure handling remain open."
+    assert PROBE.stated_quotes(_with_summary(summary)) == []
+    both = f"{SUMMARY} A mandatory training day is stated."
+    assert PROBE.stated_quotes(_with_summary(both))
