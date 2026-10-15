@@ -1,15 +1,15 @@
 ---
 name: scaffold
-status: draft
+status: ratified
 ---
 
 # Scaffold — design
 
-> Draft until the scaffold lands in 1.6.0. Before it lands: the verb, the templates and their
-> manifest, the shipped text below and the tests below are built; the review the `review`
-> mechanism names reads the templates and the reference text; `make canary` passes. Then the status
-> becomes `ratified`. Every user-owned row below is ruled; the draft status is for the code that
-> does not exist yet, which the repository's structure check reads.
+> Ratified once the verb, the templates and their manifest, the shipped text and the engine tests
+> below were built and `make check` passed on them. Before the scaffold lands in 1.6.0: the review
+> the `review` mechanism names reads the templates and the reference text, and `make canary`
+> passes. The three model fixtures land after the grader-isolation change. Every user-owned row
+> below is ruled.
 
 ## Outcome
 
