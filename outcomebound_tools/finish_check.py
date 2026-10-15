@@ -3139,8 +3139,7 @@ def _check(
     current = checked_for(target, tree, context.until)
     unchanged = mark is not None and mark.tree == tree and mark.head == head
     if unchanged or (
-        current is not None
-        and current.repeats_for(tree, context.timeout, context.session, mark)
+        current is not None and current.repeats_for(tree, context.timeout, context.session, mark)
     ):
         code, text, note = _wake_from(context, current, tree)
         note = DELIVERED_NOTE if code == 2 else note

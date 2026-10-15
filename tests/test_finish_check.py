@@ -3471,7 +3471,9 @@ def test_a_failure_another_session_recorded_is_never_held(tmp_path: Path, row: s
 
 
 @pytest.mark.parametrize("row", ROWS)
-def test_a_turn_that_makes_a_tree_another_session_saw_fail_is_held(tmp_path: Path, row: str) -> None:
+def test_a_turn_that_makes_a_tree_another_session_saw_fail_is_held(
+    tmp_path: Path, row: str
+) -> None:
     """Breaks if another session's failure record on the tree this turn made stands in for
     this turn's own run: the turn changed the tree, so it may have caused the failure."""
 

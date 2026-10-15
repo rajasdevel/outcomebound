@@ -859,7 +859,7 @@ def test_only_the_commands_fixture_selects_a_fragment() -> None:
 def test_no_prompt_or_project_note_names_a_private_id_a_person_or_a_path() -> None:
     # Public text: the fixtures name no adopting project, no local path and no id from a working
     # file. The words below are the shapes such a name takes.
-    shapes = re.compile(r"/Users/|/home/|\b[CW]\d{2}\b|\bP[1-4]\b|\b[\w.-]+@(?!example)[\w-]+\.")
+    shapes = re.compile(r"/(?:Users|home)/|\b[CW]\d{2}\b|\bP[1-4]\b|\b[\w.-]+@(?!example)[\w-]+\.")
     for name in NAMES:
         for path in (FIXTURES / name).rglob("*"):
             if path.is_file():

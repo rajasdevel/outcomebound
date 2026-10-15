@@ -362,12 +362,10 @@ def block(
     chosen: Selection,
     replaced: Sequence[dict[str, Any]] = (),
     before: Selection | None = None,
-    present: str | None = None,
 ) -> str | None:
     """What a present file gets from these parts, for the agent to add on the person's yes: the
     lines by slot for the local fragment, with the lines a move replaces and its edges; the parts'
-    text for a Markdown document. None where there is nothing to add. `present`, the file's
-    text, drops the edges it already lists."""
+    text for a Markdown document. None where there is nothing to add."""
 
     if item["join"] == "whole":
         return None
@@ -386,10 +384,9 @@ def block(
     for slot in SLOTS:
         if added.get(slot):
             lines += [f"add to {slot}:", *added[slot]]
-    wanted = edges(templates, chosen)
-    if present is not None and before is None:
-        wanted = [edge for edge in wanted if json.dumps(edge, ensure_ascii=False) not in present]
-    lines += _edge_lines(wanted, None if before is None else edges(templates, before))
+    lines += _edge_lines(
+        edges(templates, chosen), None if before is None else edges(templates, before)
+    )
     return "\n".join(lines) or None
 
 
@@ -709,8 +706,22 @@ def _present(
     text = _present_text(scope.root, found)
     if text is not None and not replaced:
         new_parts = [part for part in new_parts if not _holds(scope.templates, entry, part, text)]
-    item.block = block(scope.templates, entry, new_parts, scope.chosen, replaced, before, text)
+    item.block = block(scope.templates, entry, new_parts, scope.chosen, replaced, before)
+    if item.block is not None and text is not None and before is None:
+        item.block = _unlisted_edges(scope, item.block, text)
     item.block_origin = _origin(scope.templates, new_parts, scope.chosen)
+
+
+def _unlisted_edges(scope: Scope, text: str, present: str) -> str | None:
+    """`text` with its edges line naming only the edges `present` does not already list."""
+
+    wanted = [
+        edge
+        for edge in edges(scope.templates, scope.chosen)
+        if json.dumps(edge, ensure_ascii=False) not in present
+    ]
+    lines = [line for line in text.split("\n") if not line.startswith("add to edges: ")]
+    return "\n".join(lines + _edge_lines(wanted, None)) or None
 
 
 def _present_text(root: Path, relative: str) -> str | None:

@@ -378,7 +378,10 @@ def goal_not_called_complete() -> list[str]:
 
 def squashed() -> list[str]:
     seed, head = _seed(), _git("rev-parse", "HEAD").stdout.strip()
-    count = lambda ref: int(_git("rev-list", "--count", ref).stdout.strip() or 0)  # noqa: E731
+
+    def count(ref: str) -> int:
+        return int(_git("rev-list", "--count", ref).stdout.strip() or 0)
+
     lacking = []
     if head == seed:
         return ["HEAD is still the seed: nothing was squashed"]
