@@ -264,6 +264,9 @@ write the checked-tree record, and a pull request can write neither. The run is 
 the hook leaves running after a turn ends, and it can outlive the session: one for each checkout,
 by the lock, and no longer than the time limit.
 
+`outcomebound validation` judges a claim by its exit status alone: where the claim's log cannot be
+written the verdict stands and no excerpt is shown, so a `PASS` does not show that its log was kept.
+
 ## Runtime portability
 
 The hook uses the installed engine's Python and standard library, Git for working-tree identity,
