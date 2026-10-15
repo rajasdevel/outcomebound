@@ -1,4 +1,4 @@
-"""`outcomebound instructions check`: the seven checks, the report, and the limits it keeps.
+"""`outcomebound instructions check`: the eight checks, the report, and the limits it keeps.
 
 Every planted defect below is inert data written into a throwaway target under
 `tmp_path`: the audit reads it and must never act on it. Each check has a planted

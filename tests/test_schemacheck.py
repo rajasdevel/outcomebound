@@ -12,7 +12,7 @@ from outcomebound_tools.schemacheck import SUPPORTED, validate
 ROOT = Path(__file__).resolve().parent.parent
 
 # JSON Schema keywords that carry no constraint, so ignoring them is correct.
-ANNOTATIONS = frozenset({"$schema", "$id", "title", "description"})
+ANNOTATIONS = frozenset({"$schema", "$id", "title", "description", "default"})
 
 
 def _schema(name):
