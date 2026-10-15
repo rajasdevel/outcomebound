@@ -455,14 +455,45 @@ def _tracked(root: Path, patterns: Sequence[str]) -> list[str]:
     return sorted(path for path in listed.split("\0") if path)
 
 
-def _scripts(root: Path, patterns: Sequence[str]) -> list[str]:
-    """The tracked regular files matching `patterns`; a symlink is not followed."""
+# A shell shebang: sh, bash, dash or ksh, by path or through env with its options.
+SHELL_SHEBANG = re.compile(
+    rb"#![ \t]*(?:\S*/)?(?:env[ \t]+(?:-\S+[ \t]+)*)?(?:ba|da|k)?sh(?:[ \t]|\r?$)", re.MULTILINE
+)
 
-    return [
-        path
-        for path in _tracked(root, patterns)
-        if (root / path).is_file() and not (root / path).is_symlink()
-    ]
+
+def shell_scripts(root: Path) -> list[str]:
+    """The tracked files Git records as executable whose name has no extension and whose first
+    line is a shell shebang: a git hook or a `bin/` script, which `*.sh` does not select."""
+
+    listed = _git(root, "ls-files", "-s", "-z").decode("utf-8", "surrogateescape")
+    found = []
+    for entry in listed.split("\0"):
+        mode, _, path = entry.partition("\t")
+        if not mode.startswith("100755") or "." in path.rsplit("/", 1)[-1]:
+            continue
+        file = root / path
+        if file.is_symlink() or not file.is_file():
+            continue
+        try:
+            with file.open("rb") as handle:
+                first = handle.read(128).split(b"\n", 1)[0]
+        except OSError:
+            continue
+        if SHELL_SHEBANG.match(first):
+            found.append(path)
+    return found
+
+
+def _scripts(root: Path, patterns: Sequence[str]) -> list[str]:
+    """The tracked regular files matching `patterns`, and with `*.sh` the extensionless shell
+    scripts `shell_scripts` finds; a symlink is not followed."""
+
+    listed = set(_tracked(root, patterns))
+    if "*.sh" in patterns:
+        listed.update(shell_scripts(root))
+    return sorted(
+        path for path in listed if (root / path).is_file() and not (root / path).is_symlink()
+    )
 
 
 def _commit(root: Path, ref: str) -> str:
@@ -705,11 +736,22 @@ def parse_ruff_format(status: int, text: str, root: Path) -> list[Finding]:
         at = f"{found['at'].strip()}: " if found and found["at"] else ""
         raise Unreadable(f"ruff format exited {status}: {at}{reason}")
     paths = sorted({_relative(found["path"], root) for found in REFORMAT.finditer(text)})
-    message = "the formatter would rewrite this file"
     if not paths:
         count = REFORMAT_COUNT.search(text)
         return [Finding(".", "unformatted", f"{count[1] if count else 'some'} unnamed files")]
-    return [Finding(path, "unformatted", message) for path in paths]
+    return [Finding(path, "unformatted", _format_message(path)) for path in paths]
+
+
+def _format_message(path: str) -> str:
+    """Why the formatter flags `path`; for a document, a code block in it, with both ways out."""
+
+    if Path(path).suffix.lower() not in DOCUMENT_SUFFIXES:
+        return "the formatter would rewrite this file"
+    return (
+        "the formatter would rewrite a code block in this document: where the block is code, "
+        f"`ruff format {path}`; where it is an illustration, exclude the document in the project's "
+        "ruff config, which the loosening check reads as a loosening to rule on"
+    )
 
 
 def parse_ruff(status: int, text: str, root: Path) -> list[Finding]:
@@ -876,6 +918,7 @@ class Context:
     base_problem: str | None = None
     adopted: Adoption | None = None
     caches: Mapping[str, str] = field(default_factory=dict)
+    verbose: bool = False
 
 
 @dataclass(frozen=True)
@@ -1658,8 +1701,15 @@ def loosening(context: Context) -> Outcome:
         span = f"{adopted[:12]}..HEAD, the commits since the floor's adoption"
     if not units:
         return Outcome(name, PASS, f"none in {span}")
-    details = (*(text for text, _ in shown), *rulings)
     unruled = sum(not ruled for _, ruled in shown)
+    if context.verbose:
+        details: tuple[str, ...] = (*(text for text, _ in shown), *rulings)
+    elif unruled:
+        listed = tuple(text for text, ruled in shown if not ruled)
+        ruled = len(shown) - unruled
+        details = (*listed, f"{ruled} ruled; --verbose lists them") if ruled else listed
+    else:
+        details = ()
     if not unruled:
         return Outcome(name, PASS, f"{len(shown)} in {span}, ruled", details)
     summary = (
@@ -1751,7 +1801,7 @@ def propose(root: Path) -> int:
     if not _tracked(root, ()):
         print("floor: Git tracks no file here; nothing to propose", file=sys.stderr)
         return 1
-    stacks = [stack for stack, patterns in STACKS if _tracked(root, patterns)]
+    stacks = [stack for stack, patterns in STACKS if _scripts(root, patterns)]
     claims = [dict(claim) for stack in (*stacks, "secrets") for claim in RECIPES[stack]]
     targets = mypy_targets(root) if "python" in stacks else []
     for claim in claims:
@@ -1935,26 +1985,41 @@ def _noted(outcome: Outcome, claim: Claim, context: Context) -> Outcome:
     return replace(outcome, summary=outcome.summary + note)
 
 
-def check(root: Path, base: str | None, only: str | None) -> int:
+def check(root: Path, base: str | None, only: str | None, verbose: bool = False) -> int:
+    """Each claim's outcome as soon as it is known, so a long run shows progress, then the
+    loosening with `--base`, then one verdict line last, where a reader of the output's tail,
+    such as a finish-check hold, finds it."""
+
     floor = load_floor(root)
     claims = [claim for claim in floor.claims if only is None or claim.name == only]
     if not claims and only is not None:
         raise FloorError(f"no claim is named {only}")
-    status = 0
     with _caches(root, claims) as caches:
-        context = replace(_context(root, base, floor.adopted), caches=caches)
-        for claim in claims:
-            status = max(status, _show(_noted(evaluate(claim, context), claim, context)))
+        context = replace(_context(root, base, floor.adopted), caches=caches, verbose=verbose)
+        outcomes = [_show(_noted(evaluate(claim, context), claim, context)) for claim in claims]
     if base is not None:
-        status = max(status, _show(loosening(context)))
-    return status
+        outcomes.append(_show(loosening(context)))
+    print(verdict_line(outcomes), flush=True)
+    return 0 if all(outcome.status == PASS for outcome in outcomes) else 1
 
 
-def _show(outcome: Outcome) -> int:
-    """Print one outcome as soon as it is known; 1 unless it passed."""
+def verdict_line(outcomes: Sequence[Outcome]) -> str:
+    """`floor check: PASS 9 checks`, or the worst verdict, how many of the checks did not pass,
+    and their names; FAIL wins over UNVERIFIED."""
+
+    failed = [outcome.name for outcome in outcomes if outcome.status != PASS]
+    total = _plural(len(outcomes), "check")
+    if not failed:
+        return f"floor check: {PASS} {total}"
+    word = FAIL if any(outcome.status == FAIL for outcome in outcomes) else UNVERIFIED
+    return f"floor check: {word} {len(failed)} of {total}: {', '.join(failed)}"
+
+
+def _show(outcome: Outcome) -> Outcome:
+    """Print one outcome as soon as it is known."""
 
     print("\n".join(outcome.lines()), flush=True)
-    return 0 if outcome.status == PASS else 1
+    return outcome
 
 
 def record(root: Path, accept: bool) -> int:
@@ -2166,9 +2231,14 @@ baseline that gains lines, a claim moved from gate to baseline); a first floor, 
 floor.json adds, is not."""
 
 CHECK_DESCRIPTION = """\
-Run every claim, or --claim NAME alone, and print one line per claim.
+Run every claim, or --claim NAME alone, and print one line per claim as it ends, then the
+loosening with --base, then one verdict line last: `floor check: PASS 9 checks`, or the worst
+verdict and the names of the checks that did not pass. A passing loosening prints its count
+only; --verbose also lists the ruled loosenings and their Floor-Loosening lines.
 
-A claim whose files match no tracked file passes: 0 findings in 0 files.
+A claim whose files match no tracked file passes: 0 findings in 0 files. A `files` entry `*.sh`
+also selects each tracked file Git records as executable whose name has no extension and whose
+first line is a shell shebang (sh, bash, dash or ksh, by path or through env).
 
 With --base REF, gitleaks scans the commits REF..HEAD (without it, the commits since the
 floor's adoption record or, where there is none, the files Git tracks in the working tree,
@@ -2251,6 +2321,9 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "check":
             verb.add_argument("--base", metavar="REF", help="the tip this change replaces")
             verb.add_argument("--claim", metavar="NAME", help="run this claim alone")
+            verb.add_argument(
+                "--verbose", action="store_true", help="also list the ruled loosenings"
+            )
         if name in ("apply", "baseline", "provision", "remove"):
             verb.add_argument("--accept", action="store_true", help="change; without it, preview")
     return parser
@@ -2275,7 +2348,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if arguments.verb == "apply":
             return apply(root, arguments.floor, arguments.accept, arguments.strict)
         if arguments.verb == "check":
-            return check(root, arguments.base, arguments.claim)
+            return check(root, arguments.base, arguments.claim, arguments.verbose)
         if arguments.verb == "baseline":
             return record(root, arguments.accept)
         if arguments.verb == "ratchet":

@@ -544,7 +544,7 @@ def test_a_floor_loosening_line_in_the_range_lets_it_pass_and_is_named(
     root, base = loosen(tmp_path, LOOSENINGS["a noqa is added"], *messages)
     ruling = git(root, "log", "--format=%H", "--grep=^Floor-Loosening:", f"{base}..HEAD")
 
-    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base, "--verbose")
 
     assert (status, verdicts.get("loosening")) == ((0, "PASS") if passes else (1, "FAIL")), output
     assert (f"{ruling[:12]} Floor-Loosening:" in output) == passes
@@ -559,7 +559,7 @@ def test_a_ruling_line_whose_id_holds_a_space_is_named_as_unparsed_and_rules_not
     widened = git(root, "rev-parse", "HEAD")
     passes = " " not in ruling
 
-    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base, "--verbose")
 
     assert (status, verdicts.get("loosening")) == ((0, "PASS") if passes else (1, "FAIL")), output
     unparsed = f"not ruled: {widened[:12]} carries a Floor-Loosening line that does not parse"
@@ -595,7 +595,7 @@ def test_a_ruling_covers_the_loosenings_its_own_commit_makes_and_no_other(
     commit(root, ruled, LOOSENINGS["a baseline gains a line"])
     widened = commit(root, second, LOOSENINGS["a noqa is added"])
 
-    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base, "--verbose")
 
     assert (status, verdicts.get("loosening")) == ((0, "PASS") if passes else (1, "FAIL")), output
     assert f"{LINT_BASELINE} gained 1 line (ruled in " in output
@@ -612,7 +612,7 @@ def test_a_ruled_commit_does_not_cover_a_later_loosening_of_the_same_file(
     commit(root, "one\n\nFloor-Loosening: one long line; ruled D1", {"src/b.py": line})
     later = commit(root, "two", {"src/b.py": line + line})
 
-    status, verdicts, output = run(capsys, "check", str(root), "--base", base)
+    status, verdicts, output = run(capsys, "check", str(root), "--base", base, "--verbose")
 
     assert (status, verdicts.get("loosening")) == (1, "FAIL"), output
     assert f"src/b.py adds {comment('noqa: e501')} (x2) (not ruled: {later[:12]}" in output
@@ -646,7 +646,9 @@ def merged(root: Path, message: str, edit: dict[str, str]) -> str:
 def ranged(capsys: pytest.CaptureFixture[str], root: Path, base: str) -> tuple[str, str]:
     """The loosening verdict against `base`, and what check printed."""
 
-    output = run(capsys, "check", str(root), "--base", base, "--claim", "shell.injection")[2]
+    output = run(
+        capsys, "check", str(root), "--base", base, "--claim", "shell.injection", "--verbose"
+    )[2]
     word = next(line.split(" ", 2)[0] for line in output.splitlines() if " loosening " in line)
     return word, output
 
@@ -2560,3 +2562,137 @@ def test_provision_installs_into_the_python_a_windows_path_holds_in_place_of_pyt
 
     assert status == 0, output
     assert "would run: C:/Windows/py.exe -3 -I -m pip install ruff==" in output
+
+
+# --- Shell scripts with no extension, the verdict line, a document's format finding -----------
+
+HOOK_SCRIPT = '#!/usr/bin/env bash\neval "$x"\n'
+
+
+def executable(root: Path, path: str) -> None:
+    git(root, "update-index", "--chmod=+x", path)
+    git(root, "commit", "-q", "-m", f"make {path} executable")
+
+
+def test_an_executable_extensionless_shell_script_is_read_by_the_shell_claims(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if a git hook or a `bin/` script with a shell shebang is never read because its
+    name does not end in `.sh`."""
+
+    root = repository(tmp_path, {"hooks/pre-commit": HOOK_SCRIPT, "README.md": "x\n"})
+    executable(root, "hooks/pre-commit")
+    install(root, shipped("shell.injection"))
+
+    status, verdicts, output = run(capsys, "check", str(root))
+
+    assert (status, verdicts["shell.injection"]) == (1, "FAIL"), output
+    assert "hooks/pre-commit" in output
+
+
+@pytest.mark.parametrize(
+    ("path", "first", "mode", "read"),
+    [
+        ("bin/run", "#!/bin/sh", "+x", True),
+        ("bin/run", "#!/usr/bin/env -S bash -e", "+x", True),
+        ("bin/run", "#!/bin/dash", "+x", True),
+        ("bin/run", "#!/bin/sh", "-x", False),
+        ("bin/run", "#!/usr/bin/env python3", "+x", False),
+        ("bin/run", "#!/bin/zsh", "+x", False),
+        ("bin/run.py", "#!/bin/sh", "+x", False),
+        ("bin/run", "not a shebang", "+x", False),
+    ],
+)
+def test_a_file_is_a_shell_script_only_when_executable_extensionless_and_naming_a_shell(
+    tmp_path: Path, path: str, first: str, mode: str, read: bool
+) -> None:
+    root = repository(tmp_path, {path: first + "\necho hi\n"})
+    git(root, "update-index", f"--chmod={mode}", path)
+    git(root, "commit", "-q", "--allow-empty", "-m", "mode")
+
+    assert (floor.shell_scripts(root) == [path]) is read
+
+
+def test_a_binary_extensionless_executable_is_passed_over(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    git(root, "init", "-q", "-b", "main")
+    (root / "tool").write_bytes(b"\x7fELF\x00\xff\xfe" * 40)
+    git(root, "add", "-A")
+    git(root, "update-index", "--chmod=+x", "tool")
+    git(root, "commit", "-q", "-m", "binary")
+
+    assert floor.shell_scripts(root) == []
+
+
+def test_propose_offers_the_shell_stack_for_a_project_with_only_an_extensionless_script(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {"hooks/pre-push": "#!/bin/sh\necho ok\n"})
+    executable(root, "hooks/pre-push")
+
+    assert floor.main(["propose", str(root)]) == 0
+
+    assert "shell.syntax" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("statuses", "line"),
+    [
+        (["PASS", "PASS"], "floor check: PASS 2 checks"),
+        (["PASS", "UNVERIFIED"], "floor check: UNVERIFIED 1 of 2 checks: b"),
+        (["FAIL", "UNVERIFIED"], "floor check: FAIL 2 of 2 checks: a, b"),
+    ],
+)
+def test_the_verdict_line_names_the_worst_verdict_and_what_did_not_pass(
+    statuses: list[str], line: str
+) -> None:
+    outcomes = [floor.Outcome(name, word, "") for name, word in zip("ab", statuses, strict=True)]
+    assert floor.verdict_line(outcomes) == line
+
+
+def test_check_ends_with_the_verdict_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if the verdict is not the last line, where a finish-check hold's tail shows it."""
+
+    root = repository(tmp_path, {"a.sh": '#!/bin/sh\neval "$x"\n'})
+    install(root, shipped("shell.injection"))
+
+    output = run(capsys, "check", str(root))[2]
+
+    assert output.splitlines()[-1] == "floor check: FAIL 1 of 1 check: shell.injection"
+
+
+def test_a_passing_loosening_prints_one_line_and_verbose_lists_the_ruled(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if a passing loosening buries the verdict under every ruled group and its
+    Floor-Loosening line, or if --verbose no longer shows them."""
+
+    root = repository(tmp_path, {"a.sh": "#!/bin/sh\necho ok\n"})
+    install(root, shipped("shell.injection"), shipped("shell.syntax"))
+    base = commit(root, "floor", {})
+    install(root, shipped("shell.injection"))
+    commit(root, "drop syntax\n\nFloor-Loosening: shell.syntax claim; ruled D1", {})
+
+    quiet = run(capsys, "check", str(root), "--base", base, "--claim", "shell.injection")[2]
+    loud = run(
+        capsys, "check", str(root), "--base", base, "--claim", "shell.injection", "--verbose"
+    )[2]
+
+    loosening = [line for line in quiet.splitlines() if line.startswith("PASS loosening")]
+    assert len(loosening) == 1
+    assert "ruled D1" not in quiet and "ruled D1" in loud
+    assert quiet.splitlines()[-1] == "floor check: PASS 2 checks"
+
+
+def test_a_format_finding_in_a_document_names_both_ways_out(tmp_path: Path) -> None:
+    """Breaks if a Markdown code block the formatter would change fails with no way forward."""
+
+    document = floor.parse_ruff_format(1, "Would reformat: docs/s.md\n", tmp_path)
+    code = floor.parse_ruff_format(1, "Would reformat: src/a.py\n", tmp_path)
+
+    assert "`ruff format docs/s.md`" in document[0].message
+    assert "exclude the document" in document[0].message and "loosening" in document[0].message
+    assert code[0].message == "the formatter would rewrite this file"
