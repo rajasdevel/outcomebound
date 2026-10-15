@@ -684,9 +684,7 @@ def _own_command(group: object, harness: str, mark: bool) -> str | None:
         else finish_check.command(harness, _ANY_DIGEST, _ANY_LIMIT)
     )
     shape = (
-        re.escape(written)
-        .replace(_ANY_DIGEST, "[0-9a-f]{64}")
-        .replace(str(_ANY_LIMIT), "[0-9]+")
+        re.escape(written).replace(_ANY_DIGEST, "[0-9a-f]{64}").replace(str(_ANY_LIMIT), "[0-9]+")
     )
     return command if re.fullmatch(shape, command) else None
 
