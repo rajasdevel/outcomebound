@@ -1100,6 +1100,22 @@ side that built (`observed: text under test`).
 No test here runs a model. `tests/test_eval_scenarios.py` builds both sides, plants a right run
 and a wrong run for each claim, and shows that each claim separates them.
 
+## Scaffold fixtures
+
+Three fixtures will measure whether `outcomebound scaffold` changes what an agent gives a new
+project: `scaffold-prototype` (an idea to try with invited testers), `scaffold-client` (two
+developers deliver to a client whose contract names no acceptor) and `scaffold-switch` (the
+`lifecycle-switch` project, whose prototype gets its first outside user). The hypothesis: with the
+scaffold, an agent gives a new project its preset's file set and no more, and leaves each gate
+owner open. Their claims, their setup and the comparison of current against earlier from two
+checkouts are in the [scaffold design](../docs/specs/scaffold/design.md), "Model fixtures".
+
+They are not in this tree yet. They land after the grader-isolation change above ("Graders stay
+outside the workspace"), since their graders write their baselines under the grading stage; the
+commit that adds them, before the verb, the templates and the reference text, is the earlier side.
+They will run only when `--fixtures` names them (the prefix `scaffold-`), on the Codex harness at
+medium effort, one run a side, and a run is `UNVERIFIED` until the maintainer grants it.
+
 ## Fixtures of the land-change, run-acceptance and sync-tracker skills
 
 One fixture for each of three skills of the composable lifecycle. They run only when `--fixtures`

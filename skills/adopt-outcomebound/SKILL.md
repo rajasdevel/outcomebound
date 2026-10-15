@@ -88,7 +88,7 @@ Name each line form in double quotes, never in backticks, when you write about i
   document the next person can open: committed, or named as private with who holds it. Where a
   stream has no written route, propose the lines for the project's own document (branch, review,
   how a change reaches a server, the way back), each with the file or commit that shows it, and
-  send what no file shows to the brief; for a client delivery, `templates/lifecycle/client.md`
+  send what no file shows to the brief; for a client delivery, `templates/lifecycle/overlay-client.md`
   holds a route example to compare with. Never write a route into OutcomeBound's files.
 - "Better means —" (Context): the project's own measure of a better outcome, in its words, where it
   is not written where an agent reads it.
@@ -115,9 +115,11 @@ for a settled one (`settled by the person: <reason>`), read its reason against t
 raise it only if they differ. A line the person settles gets a "Drift — <signal>: <reason>" line,
 on a line of its own with a reason, in the local fragment's Bounds slot.
 
-Name the nearest of `$(outcomebound home)/templates/lifecycle/` (`personal`, `shared`, `client`) and
-the differences between it and what you observed, as a comparison for the person. Never copy it,
-and adoption installs none of them.
+Name the nearest preset of `$(outcomebound home)/templates/lifecycle/` (`prototype`, `solo`,
+`team`, `organization`), each overlay whose fact holds (`overlay-*.md`), and the differences
+between them and what you observed, as a comparison for the person. Never copy them, and adoption
+installs none of them. A move the person accepts can take its absent files from the scaffold
+(`outcomebound scaffold --help`).
 
 ## Ask once
 

@@ -128,6 +128,12 @@ even when no fragment changes. It holds:
   them in the commit that adds the "Changed —" line, and quote the old term in that line, so the
   line does not count.
 
+Between the scaffold's lifecycles, the inventory holds the plan of `outcomebound scaffold .
+--lifecycle <new> --from <old>`: its `write` lines and the platform acts the move adds; each `not
+required` line goes to what still holds or to what to retire, as it says; the replaced local lines
+and the fragments no longer selected go in the fragment diff. Once the route is decided, `--accept`
+writes the absent files, and you add the printed blocks.
+
 After a complete directive or the person's answer to the brief, add a dated line to the local
 fragment's Context: "Changed — <date> (stream: <stream>): <the person's words in quotation marks>, decided by
 <who>, invalidated <what>". Keep one line for each stream: it replaces that stream's older line,

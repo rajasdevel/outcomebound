@@ -16,12 +16,35 @@ the working note.
 Take the kind the person names; where they do not, take the one the facts show and name it in your
 report as an assumption they may reverse.
 
-| Kind | Such as | Keep |
-| --- | --- | --- |
-| throwaway | a one-off script, a spike | a Done command with one check; say it is throwaway; no frame, probe, spec or CI |
-| personal | the person's own tool, kept for months | the outcome, the appetite and the no-gos; the skeleton with its Done and start commands; a probe only for a doubt about feasibility |
-| shared | others depend on it, or it holds personal data, money or accounts | every stage, with the quality dimensions of the lifecycle reference |
-| regulated | a failure harms someone or breaks a law: health, finance, safety, infrastructure | every stage, and a decision brief to the person for each compliance choice |
+| Kind | Such as | Keep | Scaffold |
+| --- | --- | --- | --- |
+| throwaway | a one-off script, a spike | a Done command with one check; say it is throwaway; no frame, probe, spec or CI | none, and no install |
+| personal | the person's own tool, kept for months | the outcome, the appetite and the no-gos; the skeleton with its Done and start commands; a probe only for a doubt about feasibility | `prototype` while it learns, else `solo` |
+| shared | others depend on it, or it holds personal data, money or accounts | every stage, with the quality dimensions of the lifecycle reference | `solo`, `team` or `organization` by its maintainers |
+| regulated | a failure harms someone or breaks a law: health, finance, safety, infrastructure | every stage; a decision brief only where a fact puts the project under a law | a preset, with the `eu-market`, `safety-critical` or `audit` overlay its fact names |
+
+## Take the lifecycle's files
+
+For a kind with a scaffold, ask the facts as `gather-requirements` asks, only where the answer
+changes the set: expected life, maintainers, dependants, visibility and plan, host, the acts that
+cannot be undone (deploy, publish, tag, stored data), whether agents run unattended, who accepts
+the work, market and law, and whether the product calls a model. Suggest the preset by its
+maintainers (one: `solo`, or `prototype` while it learns; one team: `team`; several teams or owners
+by area: `organization`) and each overlay whose fact holds (`client`, `eu-market`,
+`safety-critical`, `audit`, `unattended-agents`, `ai-product`); a fact the person does not give is
+an assumption you name. Then:
+
+1. `outcomebound scaffold . --lifecycle <preset>[+<overlay>...] --visibility <visibility>` prints
+   the plan; show it with its platform acts in one decision brief.
+2. On the person's yes, the same command with `--accept`.
+3. Fill each value marked fill from the person's words; a gate owner stays until the person names
+   it. Show the person each file written before any commit: `SECURITY.md` and `CONTRIBUTING.md`
+   make promises in public.
+4. Run the `adopt` command the plan printed, with the harness in use.
+5. Run `outcomebound scaffold . --check`, `outcomebound adopt . --check` and
+   `outcomebound instructions check .`, each reported `PASS`, `FAIL` or `UNVERIFIED`.
+6. The first push, the person's act that turns CI on, comes after Done is recorded and `--check`
+   passes.
 
 ## Frame it
 

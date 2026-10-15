@@ -27,8 +27,11 @@ regression check.
 
 The [lifecycle reference](skills/using-outcomebound/references/lifecycle.md) describes the
 required evidence and handoffs at each applicable stage. A project records its own lifecycle in a
-few lines of its local fragment, and adoption compares it with the nearest of three examples in
-[`templates/lifecycle/`](templates/lifecycle/) (personal, shared, client); it installs none of them.
+few lines of its local fragment, and adoption compares it with the nearest of the examples in
+[`templates/lifecycle/`](templates/lifecycle/): four presets (prototype, solo, team, organization)
+and six overlays (client, eu-market, safety-critical, audit, unattended-agents, ai-product); it
+installs none of them. A new project can take a preset's files with `outcomebound scaffold`, which
+installs nothing and records nothing.
 
 ## Try it
 
