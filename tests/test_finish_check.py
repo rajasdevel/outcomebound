@@ -1354,6 +1354,31 @@ def test_the_tree_is_not_read_once_its_deadline_has_passed(tmp_path: Path) -> No
     assert finish_check.tree_digest(root, digest) is not None
 
 
+def test_an_edit_inside_a_dirty_submodule_changes_the_tree_digest(tmp_path: Path) -> None:
+    """Breaks if two different edits inside a submodule that is already dirty give one tree
+    digest, which lets a cached PASS stand for a failing tree."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run([GIT, "-C", str(where), *identity, *argv], check=True)
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    git(library, "init", "-q")
+    write(library / "value.txt", "ok\n")
+    git(library, "add", "-A")
+    git(library, "commit", "-qm", "lib")
+    root, digest = target(tmp_path / "t", ["true"])
+    git(root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(library), "lib")
+    git(root, "commit", "-qm", "add lib")
+    write(root / "lib" / "value.txt", "pass\n")
+    passing = finish_check.tree_digest(root, digest)
+    write(root / "lib" / "value.txt", "broken\n")
+
+    assert passing is not None and finish_check.tree_digest(root, digest) != passing
+
+
 def test_a_large_untracked_file_stops_its_hash_at_the_deadline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

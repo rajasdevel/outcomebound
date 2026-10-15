@@ -806,9 +806,14 @@ def markers_in(text: str) -> list[tuple[int, str, str]]:
     return found
 
 
-def _git_listed(root: Path) -> list[str] | None:
-    """What Git tracks, or holds untracked and unignored, under `root`; None where Git cannot
-    list it. Git comes from PATH's absolute entries only, so the target cannot supply its own."""
+# Git's warning, in the C locale the engine pins, for a folder it could not list.
+_UNLISTED = re.compile(r"^warning: could not open directory '(.+?)/?': ", re.MULTILINE)
+
+
+def _git_listed(root: Path) -> tuple[list[str], list[str]] | None:
+    """What Git tracks, or holds untracked and unignored, under `root`, and each folder Git
+    could not open to list; None where Git cannot list it. Git comes from PATH's absolute
+    entries only, so the target cannot supply its own."""
 
     inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
@@ -836,7 +841,8 @@ def _git_listed(root: Path) -> list[str] | None:
         return None
     if done.returncode != 0:
         return None
-    return sorted({os.fsdecode(item) for item in done.stdout.split(b"\0") if item})
+    unlisted = _UNLISTED.findall(done.stderr.decode("utf-8", "replace"))
+    return sorted({os.fsdecode(item) for item in done.stdout.split(b"\0") if item}), unlisted
 
 
 def _recorded_copies(root: Path) -> set[str]:
@@ -885,17 +891,23 @@ class Value:
 def values(root: Path) -> list[Value]:
     """Each marker left in a file Git lists under `root`, or in every file where Git cannot list
     them; `.git`, managed blocks and the install's recorded copies left out. A file that is not
-    UTF-8 text, or holds a NUL byte, is not read."""
+    UTF-8 text, or holds a NUL byte, is not read. A file or folder that cannot be read is a value
+    of the kind `unread`."""
 
-    listed = _git_listed(root)
-    if listed is None:
+    from_git = _git_listed(root)
+    if from_git is not None:
+        listed, unlisted = from_git
+    else:
+        closed: list[Path] = []
         listed = [
             (folder.path / name).relative_to(root).as_posix()
-            for folder in walk.folders(root)
+            for folder in walk.folders(root, unreadable=closed)
             for name in folder.files
         ]
+        unlisted = [path.relative_to(root).as_posix() for path in closed]
     skipped = _recorded_copies(root)
-    found: list[Value] = []
+    # A folder that could not be listed may hold a marker: the check cannot read PASS over it.
+    found: list[Value] = [Value(name, 0, "unread", f"cannot list {name}/") for name in unlisted]
     for relative in listed:
         if relative in skipped or any(paths.names_git(part) for part in relative.split("/")):
             continue
@@ -1062,7 +1074,7 @@ def check_text(found: Sequence[Value]) -> str:
         f"{_count(owners, 'gate owner')} not named"
     )
     if unread:
-        head += f", {_count(unread, 'file')} not read"
+        head += f", {_count(unread, 'path')} not read"
     lines = [head]
     for value in found:
         line = f"{_shown(value.path)}:{value.line}: {value.kind}: {_shown(value.label)}"

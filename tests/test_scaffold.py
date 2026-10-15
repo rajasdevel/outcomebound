@@ -453,9 +453,30 @@ def test_check_counts_a_file_it_cannot_read_as_a_value_left(
     assert code == 1
     assert (
         out.splitlines()[0]
-        == "FAIL 1 value left: 0 to fill, 0 gate owners not named, 1 file not read"
+        == "FAIL 1 value left: 0 to fill, 0 gate owners not named, 1 path not read"
     )
     assert "SECURITY.md:0: unread: cannot read SECURITY.md" in out
+
+
+@pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="mode 000 keeps a folder unreadable only for a POSIX user that is not root",
+)
+def test_check_counts_a_folder_git_cannot_list_as_a_value_left(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an untracked folder that Git cannot open, which may hold a marker, reads PASS."""
+
+    root = target(tmp_path)
+    write(root / "docs" / "s.md", "<<fill: unresolved>>\n")
+    (root / "docs").chmod(0)
+    try:
+        code, out, _ = run(capsys, root, "--check")
+    finally:
+        (root / "docs").chmod(0o755)
+
+    assert code == 1
+    assert "docs:0: unread: cannot list docs/" in out
 
 
 def test_check_leaves_out_managed_blocks_and_recorded_copies(

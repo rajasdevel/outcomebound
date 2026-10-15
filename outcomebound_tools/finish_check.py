@@ -563,11 +563,41 @@ def _content(path: Path, deadline: float | None = None) -> bytes | None:
         return b"unreadable"
 
 
+def _submodule_diffs(target: Path, deadline: float | None) -> bytes | None:
+    """The tracked diff inside each checked-out submodule of `target`, against its own HEAD, by
+    path; None where Git cannot say in time. The parent's diff shows a dirty submodule as one
+    "-dirty" line whatever the edit, so without this two different edits give one digest. Each
+    read is this module's own, with its read configuration and `--no-ext-diff`, since Git's
+    `--submodule=diff` runs the submodule's diff with neither."""
+
+    listed = _git(target, "ls-files", "-s", "-z", deadline=deadline)
+    if listed is None:
+        return None
+    found = b""
+    for entry in listed.split(b"\0"):
+        meta, _, name = entry.partition(b"\t")
+        if not meta.startswith(b"160000 "):
+            continue
+        folder = target / os.fsdecode(name)
+        if not os.path.lexists(folder / ".git"):
+            continue
+        inner = _git(
+            folder,
+            *("diff", "--binary", "--no-color", "--no-ext-diff", "--no-textconv", "HEAD"),
+            deadline=deadline,
+        )
+        if inner is None:
+            return None
+        found += name + b"\0" + hashlib.sha256(inner).digest()
+    return found
+
+
 def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str | None:
     """A digest of the working tree for this Done digest and this target: the tracked diff
-    against HEAD and each untracked file Git does not ignore; None where Git cannot say, or
-    where `deadline` passes first. The target is part of it, so two targets in one repository
-    never share a pass."""
+    against HEAD, the tracked diff inside each checked-out submodule, and each untracked file Git
+    does not ignore (an untracked file inside a submodule is not read); None where Git cannot
+    say, or where `deadline` passes first. The target is part of it, so two targets in one
+    repository never share a pass."""
 
     head = _git(target, "rev-parse", "--verify", "-q", "HEAD^{tree}", deadline=deadline)
     base = head.strip().decode() if head else EMPTY_TREE
@@ -579,9 +609,13 @@ def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str
     untracked = _git(target, "ls-files", "-z", "--others", "--exclude-standard", deadline=deadline)
     if diff is None or untracked is None:
         return None
+    inside = _submodule_diffs(target, deadline)
+    if inside is None:
+        return None
     where = os.fsencode(str(target.resolve()))
     total = hashlib.sha256(f"{digest}\0{base}\0".encode() + where + b"\0")
     total.update(hashlib.sha256(diff).digest())
+    total.update(hashlib.sha256(inside).digest())
     for name in sorted(item for item in untracked.split(b"\0") if item):
         if deadline is not None and time.monotonic() > deadline:
             return None
