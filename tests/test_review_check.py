@@ -172,3 +172,101 @@ def test_the_disposition_separator_splits_as_it_did_before_the_linear_form(value
     old = re.compile(r"[ \t]+(?:—|--)(?:[ \t]+|$)").split(value, maxsplit=1)
     new = review_check._SEPARATOR.split(value, maxsplit=1)
     assert [new[0].rstrip(), *new[1:]] == old
+
+
+# --- review sweep: every review file of a work folder -------------------------------------
+
+OPEN = "Reviewed: abc\n\n### R1 · one\n\n### R2 · two\nDisposition: fixed — c1\n"
+CLOSED = "Reviewed: abc\n\n### R1 · one\nDisposition: rejected — the line holds\n"
+
+
+def tree(root: Path, files: dict[str, str]) -> Path:
+    for relative, text in files.items():
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return root
+
+
+def sweep(capsys, folder: Path, *extra: str) -> tuple[int, str]:
+    code = review_check.main(["sweep", str(folder), *extra])
+    return code, capsys.readouterr().out
+
+
+def test_sweep_fails_on_an_open_finding_anywhere_under_the_work_folder(tmp_path, capsys):
+    """Breaks if a review another session left in its own task folder, three levels down, is not
+    read before a release."""
+
+    work = tree(
+        tmp_path / "work",
+        {"a/review.md": CLOSED, "b/reviews/x.md": OPEN, "c/v1/round/y.md": OPEN},
+    )
+
+    code, out = sweep(capsys, work)
+
+    assert code == 1
+    first = out.splitlines()[0]
+    assert first == "FAIL 2 failing line(s) in 2 of 3 review file(s)"
+    assert "b/reviews/x.md" in out and "c/v1/round/y.md" in out and "R1 has no Disposition" in out
+
+
+def test_sweep_passes_when_every_finding_has_a_disposition(tmp_path, capsys):
+    code, out = sweep(capsys, tree(tmp_path / "work", {"a/review.md": CLOSED}))
+    assert code == 0
+    assert out.startswith("PASS 1 review file(s), every finding has a disposition\n")
+
+
+def test_sweep_reads_a_file_that_says_it_is_a_review_however_its_headings_read(tmp_path, capsys):
+    """Breaks if a review whose finding headings are not in the form drops out of the sweep, or
+    if a brief with finding-like headings and no `Reviewed:` line is read as a review."""
+
+    work = tree(
+        tmp_path / "work",
+        {
+            "a/review.md": "# Review\n\nReviewed: abc\n\n## Findings\n\n### Blocker\n\ntext\n",
+            "a/brief.md": "### D1 · a question\n- Recommend: A\n",
+            "a/fenced.md": "```\nReviewed: abc\n```\n### R1 · x\n",
+        },
+    )
+
+    code, out = sweep(capsys, work)
+
+    assert code == 1 and "1 of 1 review file(s)" in out
+    assert "FINDING_MALFORMED" in out and "brief.md" not in out and "fenced.md" not in out
+
+
+def test_sweep_enters_no_linked_folder_and_reads_no_linked_or_deeper_file(tmp_path, capsys):
+    """NEGATIVE CONTROL: a link out of the folder, and a file five levels down, are not read; a
+    linked file is counted as not read."""
+
+    outside = tree(tmp_path / "outside", {"r/x.md": OPEN})
+    work = tree(tmp_path / "work", {"a/b/c/d/deep.md": OPEN, "a/ok.md": CLOSED})
+    (work / "linked").symlink_to(outside / "r", target_is_directory=True)
+    (work / "a" / "link.md").symlink_to(outside / "r" / "x.md")
+
+    code, out = sweep(capsys, work)
+
+    assert code == 0, out
+    assert out.splitlines()[0] == (
+        "PASS 1 review file(s), every finding has a disposition; 1 file(s) not read"
+    )
+    assert "not read:" in sweep(capsys, work, "--verbose")[1]
+
+
+def test_sweep_without_the_folder_is_a_refusal(tmp_path, capsys):
+    assert review_check.main(["sweep", str(tmp_path / "absent")]) == 1
+    assert "REVIEW_FOLDER_MISSING" in capsys.readouterr().err
+
+
+def test_sweep_json_matches_the_review_report_schema(tmp_path, capsys):
+    work = tree(tmp_path / "work", {"a/review.md": OPEN})
+
+    code, out = sweep(capsys, work, "--json")
+
+    document = json.loads(out)
+    assert validate(document, SCHEMA) == []
+    assert (code, document["verdict"], document["files"]) == (
+        1,
+        "FAIL",
+        {"read": 1, "failed": 1, "unread": 0},
+    )

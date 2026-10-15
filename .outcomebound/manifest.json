@@ -29,9 +29,9 @@
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
         ".outcomebound/fragments/commands.md": "7b6079fcd7cb806b2a98ce356829bbb20841913c55bdc00dd991a48ca9a9dda2",
-        ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",
-        ".outcomebound/fragments/multi-agent.md": "8cf2dd5e179a3ab606d791dfcc5e15c21c8c277198a95905dd8af41504e2709d",
-        ".outcomebound/fragments/research.md": "6aba8d35ac030f470b0c0c0b946cd78b8ff77b72ac3386dce759196231571ef5",
+        ".outcomebound/fragments/local.md": "fe01d769bbabeee6359900aef1bdd06182dfd98e1b9ed6f55d921568b9ad488c",
+        ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
+        ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
         ".outcomebound/fragments/workspace.md": "4d1d2b52425225dcd2274056f172fa0bfb44155eb625a37c1e3da7339bc9f5e8"
       },
       "style": [
@@ -44,13 +44,13 @@
       "path": "AGENTS.md",
       "id": "guidance-pointers",
       "frame": "3533efd64dfc142970dfa5841af8d102223e5673466ed1d2da30d689d3d1812c",
-      "sha256": "9a16b56e6535791fc644fd804b44972bd57a3636d66ae002bd412c4f6ad8ed76"
+      "sha256": "8659e6dd6993b70eab5d24978a685849dcd6d96d8134deaaec359a6015c6caf5"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "8cf2dd5e179a3ab606d791dfcc5e15c21c8c277198a95905dd8af41504e2709d"
+      "sha256": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c"
     },
     {
       "kind": "fragment",
@@ -62,7 +62,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/research.md",
       "id": "research",
-      "sha256": "6aba8d35ac030f470b0c0c0b946cd78b8ff77b72ac3386dce759196231571ef5"
+      "sha256": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed"
     },
     {
       "kind": "fragment",

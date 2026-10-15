@@ -23,6 +23,10 @@ unmarked.
 - [ ] This change does not edit `CHANGELOG.md` (the release pull request is the one that does).
 - [ ] If this change reaches what a release ships, this description says what changed for an
       adopter, and a step an adopter must do is under a heading `Adopter steps`.
+- [ ] If this change alters text a model reads (the kernel, the contract, a skill, a fragment or
+      a template): the eval fixtures that read each changed file, with their result at this tip,
+      or `UNVERIFIED`; a fragment no fixture selects is `UNVERIFIED`
+      (`tests/test_eval_fragment_coverage.py` lists them).
 - [ ] Public text: the title, the body, the commit messages and the files name no private
       project, person, local path, internal id or run anecdote.
 

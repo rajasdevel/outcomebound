@@ -99,3 +99,13 @@ def test_the_python_minimum_agrees_in_the_makefile_the_launcher_and_the_package(
     assert 'REQUIRES_PYTHON = ">=3.10"' in backend
     for path in ("Makefile", "scripts/outcomebound"):
         assert "sys.version_info < (3, 10)" in (ROOT / path).read_text(), path
+
+
+def test_release_check_sweeps_the_main_checkouts_work_folder_and_ci_does_not() -> None:
+    """Breaks if the release gate stops reading the reviews other sessions left, or reads a
+    worktree's own empty work folder instead of the main checkout's."""
+
+    recipe = _targets()["release-check"][1]
+    assert "review sweep" in recipe and "--git-common-dir" in recipe
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert "review sweep" not in workflow

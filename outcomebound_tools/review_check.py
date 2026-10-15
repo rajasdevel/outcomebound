@@ -10,12 +10,18 @@ not change the verdict. Exits: 0 PASS; 1 FAIL or a refusal; 2 a usage error.
 What it does not decide: whether a fix is right, whether a rejection is right, whether `where`
 holds what it says, whether the review found what it should have. It reads the one file it is
 given, runs nothing and writes nothing. Standard library only.
+
+`outcomebound review sweep [DIR]` runs the same check on every review file in a work folder:
+each Markdown file one to four levels below DIR (default `.agents/work`) that holds a `Reviewed:`
+line outside a fence, so that a review another session left is not missed before a release. It
+follows no link, reads no file over `SWEEP_BYTES`, and names how many it did not read.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections.abc import Callable, Sequence
@@ -268,6 +274,106 @@ def render_json(reviewed: str | None, findings: Sequence[Finding]) -> str:
     return json.dumps(document, indent=2, sort_keys=True) + "\n"
 
 
+# A review file is text a person writes; a larger file is not read, and the sweep says so.
+SWEEP_BYTES = 1024 * 1024
+SWEEP_DEPTH = 4
+
+
+@dataclass(frozen=True)
+class Swept:
+    """What a sweep read: each review file and its findings, and the paths it did not read."""
+
+    files: tuple[tuple[str, tuple[Finding, ...]], ...]
+    unread: tuple[str, ...]
+
+    @property
+    def findings(self) -> list[Finding]:
+        return [item for _, found in self.files for item in found]
+
+    @property
+    def failed(self) -> list[str]:
+        return [path for path, found in self.files if verdict(found) == FAIL]
+
+
+def _declares(text: str) -> bool:
+    """Whether a file says it is a review: a `Reviewed:` line outside a fence, wherever it is, so
+    that a review whose headings are malformed is read and fails rather than drops out."""
+
+    return any(_REVIEWED.fullmatch(line) for _, line in _lines(text))
+
+
+def _candidates(folder: Path) -> tuple[list[Path], list[str]]:
+    """Each `.md` file one to `SWEEP_DEPTH` levels below `folder`, and each `.md` file not read:
+    a link, or a file over `SWEEP_BYTES`. A linked folder is not entered."""
+
+    found: list[Path] = []
+    unread: list[str] = []
+    for top, folders, files in os.walk(folder, followlinks=False):
+        depth = len(Path(top).relative_to(folder).parts)
+        folders[:] = [] if depth + 1 >= SWEEP_DEPTH else sorted(folders)
+        for name in files:
+            path = Path(top) / name
+            if not name.endswith(".md"):
+                continue
+            if path.is_symlink() or path.stat().st_size > SWEEP_BYTES:
+                unread.append(str(path))
+            else:
+                found.append(path)
+    return sorted(found), sorted(unread)
+
+
+def sweep(folder: Path) -> Swept:
+    """The check of every review file below `folder`; a file that cannot be read as text is
+    named among those not read."""
+
+    candidates, unread = _candidates(folder)
+    files = []
+    for path in candidates:
+        try:
+            text = textio.read_text(path)
+        except (OSError, UnicodeDecodeError):
+            unread.append(str(path))
+            continue
+        if _declares(text):
+            files.append((str(path), tuple(check(text, str(path))[1])))
+    return Swept(tuple(files), tuple(sorted(unread)))
+
+
+def render_sweep(swept: Swept, *, verbose: bool = False) -> str:
+    """One line with the verdict and the counts, then each line that did not pass."""
+
+    failed = swept.failed
+    lines = [item for item in swept.findings if item.verdict == FAIL]
+    unread = f"; {len(swept.unread)} file(s) not read" if swept.unread else ""
+    if failed:
+        head = (
+            f"{FAIL} {len(lines)} failing line(s) in {len(failed)} of {len(swept.files)} review "
+            f"file(s){unread}"
+        )
+    else:
+        head = f"{PASS} {len(swept.files)} review file(s), every finding has a disposition{unread}"
+    body = render_text(swept.findings, verbose=verbose).splitlines()[1:]
+    if not verbose:
+        body = [line for line in body if not line.startswith(f"{INFO} ")]
+    unread_lines = [f"not read: {display(path)}" for path in swept.unread] if verbose else []
+    shown = [*body, *unread_lines]
+    tail = (
+        "Does not establish: that a fix is right, that the place a disposition names holds what "
+        "it says, or that a report with no `Reviewed:` line holds no open finding."
+    )
+    return "\n".join([head, *shown, tail]) + "\n"
+
+
+def render_sweep_json(swept: Swept) -> str:
+    document = json.loads(render_json(None, swept.findings))
+    document["files"] = {
+        "read": len(swept.files),
+        "failed": len(swept.failed),
+        "unread": len(swept.unread),
+    }
+    return json.dumps(document, indent=2, sort_keys=True) + "\n"
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="outcomebound review",
@@ -299,11 +405,45 @@ def _parser() -> argparse.ArgumentParser:
     checked.add_argument("--at", metavar="REF", help="warn where the review read another ref")
     checked.add_argument("--json", action="store_true", help="print one JSON object, not text")
     checked.add_argument("--verbose", action="store_true", help="also print the checks that passed")
+    swept = commands.add_parser(
+        "sweep",
+        prog="outcomebound review sweep",
+        help="check every review file in a work folder",
+        description=(
+            "Run `check` on each review file in DIR (default .agents/work): each Markdown file "
+            "one to four levels below it that holds a `Reviewed:` line outside a fence. It "
+            "enters no linked folder and reads no linked file or file over 1 MB, and counts "
+            "each file it did not read; --verbose names them. "
+            "The first line is the verdict and the counts. It runs nothing, calls no Git and "
+            "writes nothing. A report with no `Reviewed:` line is not a review file and is not "
+            "read: an open issue in it reaches a release only as an issue in the milestone."
+        ),
+        epilog="Exits: 0 PASS; 1 FAIL, a missing folder, or a refusal; 2 a usage error.",
+    )
+    swept.add_argument("folder", nargs="?", default=".agents/work", metavar="DIR")
+    swept.add_argument("--json", action="store_true", help="print one JSON object, not text")
+    swept.add_argument("--verbose", action="store_true", help="also print the checks that passed")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
+    if options.command == "sweep":
+        folder = Path(options.folder)
+        if not folder.is_dir():
+            sys.stderr.write(f"REVIEW_FOLDER_MISSING: {display(options.folder)}\n")
+            return 1
+        swept = sweep(folder)
+        try:
+            if options.json:
+                sys.stdout.write(render_sweep_json(swept))
+            else:
+                sys.stdout.write(render_sweep(swept, verbose=options.verbose))
+            sys.stdout.flush()
+        except BrokenPipeError:
+            # A reader that stopped early, such as `head`, ends the output quietly.
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 1 if swept.failed else 0
     try:
         text = textio.read_text(Path(options.path))
     except (OSError, UnicodeDecodeError) as error:

@@ -55,7 +55,9 @@ What happens next:
 Review goes where no check reaches. When a change alters what the kernel, the contract, a skill,
 a fragment or a template tells a model (its bounds, its holds, or what it asks for), the pull
 request carries the label `needs-maintainer` and an independent review, and a maintainer approves
-and lands it. Every other change lands when its checks pass.
+and lands it. The pull request names the eval fixtures that read each changed file, with their
+result or `UNVERIFIED`; a fragment no fixture selects is `UNVERIFIED`
+(`tests/test_eval_fragment_coverage.py` lists them). Every other change lands when its checks pass.
 
 `main` accepts changes only through a pull request: a ruleset requires the configured CI checks, a linear
 history, and no force push or deletion. This holds for maintainers and agents alike.

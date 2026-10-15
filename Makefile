@@ -76,8 +76,11 @@ canary:
 # CI run on main for this exact commit runs the gate, the own-install check, the floor and the
 # suite (the public-text list only where its secret is set, so scrub stays here). CI runs
 # scripts/release-check.py once on the tag, with no list, so the canary is checked only here.
+# Every review file under the main checkout's .agents/work is swept for an open finding, from a
+# worktree too: a review another session left there is a known issue the release waits for.
 release-check:
 	$(PYTHON) scripts/canary.py --verify
+	scripts/outcomebound review sweep "$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")/.agents/work"
 	$(PYTHON) scripts/release-check.py $(if $(TAG),--tag $(TAG)) $(if $(CI_RUNS),--ci-runs $(CI_RUNS))
 	$(MAKE) scrub
 	scripts/outcomebound adopt . --check
