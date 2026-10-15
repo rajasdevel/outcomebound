@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:scaffold-report:1",
+  "title": "OutcomeBound scaffold report v1",
+  "description": "What the scaffold verb prints with `--json`, in each mode: the same record as its text (docs/specs/scaffold/design.md). Every path is relative to the target, in POSIX form. This schema changes only by added optional fields.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "mode", "verdict", "summary"],
+  "properties": {
+    "version": {"const": 1},
+    "mode": {"enum": ["plan", "accept", "check"]},
+    "verdict": {
+      "enum": ["PLAN", "PASS", "FAIL"],
+      "description": "plan: PLAN. accept: PASS when each absent file was written, FAIL on a refusal. check: PASS when no marker is left, else FAIL."
+    },
+    "summary": {"type": "string", "minLength": 1, "description": "The first line of the text."},
+    "lifecycle": {"type": "string", "description": "The preset and the overlays in canonical order, joined by `+`; absent for a check given none."},
+    "from": {"type": "string", "description": "On a move: the lifecycle `--from` named."},
+    "facts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "visibility": {"enum": ["public", "private", "private-free"]},
+        "host": {"enum": ["github", "other"]},
+        "acts": {"type": "array", "items": {"enum": ["deploy", "publish", "tag", "stored-data"]}, "uniqueItems": true},
+        "with": {"type": "array", "items": {"enum": ["codeowners", "pr-template"]}, "uniqueItems": true}
+      }
+    },
+    "assumes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "state", "from"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "description": "The planned path."},
+          "state": {"enum": ["write", "written", "present", "offer", "not required", "refused"]},
+          "from": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "The presets, acts and overlays the file's parts come from."},
+          "present_at": {"type": "string", "minLength": 1, "description": "For present: where the part was found, when that is not the planned path."},
+          "block": {"type": "string", "description": "For present: the text the plan's parts would add, for the agent to add on the person's yes."},
+          "offer": {"type": "string", "minLength": 1, "description": "For offer: the `--with` value, or the command or template the offer names."},
+          "reason": {"type": "string", "minLength": 1, "description": "For refused: why the write was refused."}
+        }
+      }
+    },
+    "platform_acts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "who", "status"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "text": {"type": "string", "minLength": 1},
+          "who": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "minLength": 1, "description": "Such as listed, not enforced, or UNVERIFIED, with its reason."}
+        }
+      }
+    },
+    "adopt": {"type": "string", "minLength": 1, "description": "The install command with the fragment selection, quoted for the platform's shell."},
+    "values": {
+      "type": "array",
+      "description": "For check: each marker left.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "line", "kind", "label"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "line": {"type": "integer"},
+          "kind": {"enum": ["fill", "owner"]},
+          "label": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "next": {"type": "string", "minLength": 1}
+  }
+}
