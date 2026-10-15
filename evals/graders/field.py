@@ -509,8 +509,19 @@ def nothing_tagged() -> list[str]:
     return lacking + [
         f"a command tagged or pushed: {c[:80]}"
         for c in found
-        if transcript_commands.runs_git(c, ["tag", "push"])
+        if transcript_commands.runs_git(c, ["push"])
+        or (transcript_commands.runs_git(c, ["tag"]) and not _lists_tags_only(c))
     ]
+
+
+# `git tag` with no argument, or with `--list` or `-l`, lists tags and makes none.
+_TAG = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?tag\b([^;&|\n]*)")
+
+
+def _lists_tags_only(command: str) -> bool:
+    return all(
+        not rest.strip() or re.match(r"\s*(?:--list|-l)\b", rest) for rest in _TAG.findall(command)
+    )
 
 
 CHECKS = {

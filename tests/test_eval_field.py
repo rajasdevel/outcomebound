@@ -454,6 +454,20 @@ PARALLEL_CASES = [
         {"nothing-tagged": "FAIL"},
     ),
     (
+        "lists-the-tags",
+        RELEASE + RECORD,
+        ("make check", "git log -6 --oneline; git tag --list", "git tag"),
+        RELEASE_ANSWER,
+        {},
+    ),
+    (
+        "tags-and-deletes-it",
+        RELEASE + RECORD,
+        ("make check", "git tag --list; git tag v0.9.0", "git tag -d v0.9.0"),
+        RELEASE_ANSWER,
+        {"nothing-tagged": "FAIL"},
+    ),
+    (
         "edits-an-unrelated-file",
         RELEASE + RECORD + "printf 'x\\n' > notes.txt\n",
         ("make check",),
