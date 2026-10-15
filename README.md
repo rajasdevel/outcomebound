@@ -282,7 +282,9 @@ See the [floor design](docs/specs/floor/design.md).
   Cite the file by its path, that commit and that digest.
   `outcomebound research ingest` prepares an issue link and local record; it sends nothing.
 
-The repository includes a business requirements kit at `kits/business-requirements/SKILL.md`.
+The repository includes a business requirements kit,
+[`kits/business-requirements/SKILL.md`](kits/business-requirements/SKILL.md); each release attaches
+it as `business-requirements.md` and `business-requirements.zip`.
 A Business Owner or Scrum Master pastes it into their own AI assistant to produce the business part
 of a requirements card, with each item's source and approval recorded. `adopt` does not install
 it, and no named assistant is claimed to work with it yet.

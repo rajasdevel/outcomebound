@@ -277,6 +277,13 @@ jobs:
           SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" python3 scripts/build_backend.py --sdist --out dist
           ls -l dist
 
+      # Each kit as its file and as an archive, attached to the release beside the package. The
+      # `pypi` job downloads only the wheel and the source archive.
+      - name: Build the kits
+        run: |
+          python3 scripts/build-kits.py dist
+          ls -l dist
+
       - name: Attest the build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
