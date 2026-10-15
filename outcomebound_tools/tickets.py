@@ -70,6 +70,11 @@ def _check_options(command: argparse.ArgumentParser) -> None:
         action="extend",
         help="lint these local files as drafts instead of reading the declared store",
     )
+    command.add_argument(
+        "--summary",
+        action="store_true",
+        help="print the counts and only the tickets that do not read PASS; text only",
+    )
 
 
 def _check_usage(options: argparse.Namespace) -> str:
@@ -344,7 +349,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # command, and nothing else.
         sys.stdout.write(outcome)
         return 0
-    sys.stdout.write(render_json(outcome) if options.json else render_text(outcome))
+    sys.stdout.write(
+        render_json(outcome)
+        if options.json
+        else render_text(outcome, summary=getattr(options, "summary", False))
+    )
     return exit_code(outcome)
 
 

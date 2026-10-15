@@ -38,6 +38,7 @@ undo, so the target must be inside a Git work tree, and every write goes through
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -2536,7 +2537,9 @@ USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [-
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
-Install or upgrade OutcomeBound in <target>, inside a Git work tree. AGENTS.md gets three
+Install or upgrade OutcomeBound in <target>, inside a Git work tree. A flag you omit keeps the
+value the manifest records (--harness, --fragments, --done, --setup, --human-style,
+--finish-check); pass only what changes. AGENTS.md gets three
 blocks: the operating contract; the project facts (Done: the --done commands; Setup: the --setup
 commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
@@ -2696,7 +2699,9 @@ def _parser() -> argparse.ArgumentParser:
         "Technical English); '' for none; omitted keeps the recorded one",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="print what would change; write nothing"
+        "--dry-run",
+        action="store_true",
+        help="print what would change, with a unified diff of each text file; write nothing",
     )
     parser.add_argument(
         "--force",
@@ -2750,6 +2755,22 @@ def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
         print(f"{verb:<8} {text}")
 
 
+def _diffs(planned: Planned) -> None:
+    """A unified diff for each planned text change; a file that is not UTF-8 text is named."""
+
+    for path, (before, after) in planned.items():
+        try:
+            old = [] if before is None else before.decode("utf-8").splitlines(keepends=True)
+            new = [] if after is None else after.decode("utf-8").splitlines(keepends=True)
+        except UnicodeDecodeError:
+            print(f"binary   {path}: changed; no diff for a file that is not UTF-8 text")
+            continue
+        old_name = "/dev/null" if before is None else f"a/{path}"
+        new_name = "/dev/null" if after is None else f"b/{path}"
+        text = "".join(difflib.unified_diff(old, new, old_name, new_name))
+        print(text if text.endswith("\n") or not text else text + "\n\\ No newline at end of file")
+
+
 def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
     if args.detect:
         return detect(target, source)
@@ -2772,6 +2793,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
         _report(planned, edited, notes)
+        _diffs(planned)
         if measure is not None:
             print(f"{'skip':<8} finish-check: a dry run does not run Done; an install runs it once")
         print("dry run: nothing written")

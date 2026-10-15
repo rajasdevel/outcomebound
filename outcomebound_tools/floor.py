@@ -2221,7 +2221,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    arguments = build_parser().parse_args(argv)
+    given = list(sys.argv[1:] if argv is None else argv)
+    if "--json" in given:
+        print(
+            "floor: no verb takes --json; `floor check` prints text and exits 0 on PASS, else 1 "
+            "(`tickets check --json` has a JSON report)",
+            file=sys.stderr,
+        )
+        return 2
+    arguments = build_parser().parse_args(given)
     root = arguments.target.resolve()
     try:
         if not root.is_dir():
