@@ -1379,6 +1379,38 @@ def test_an_edit_inside_a_dirty_submodule_changes_the_tree_digest(tmp_path: Path
     assert passing is not None and finish_check.tree_digest(root, digest) != passing
 
 
+def test_an_edit_inside_a_nested_submodule_changes_the_tree_digest(tmp_path: Path) -> None:
+    """Breaks if two different edits inside a submodule of a submodule give one tree digest."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    allow = ["-c", "protocol.file.allow=always"]
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run([GIT, "-C", str(where), *identity, *argv], check=True)
+
+    inner = tmp_path / "inner"
+    inner.mkdir()
+    git(inner, "init", "-q")
+    write(inner / "value.txt", "ok\n")
+    git(inner, "add", "-A")
+    git(inner, "commit", "-qm", "inner")
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    git(outer, "init", "-q")
+    git(outer, *allow, "submodule", "add", "-q", str(inner), "inner")
+    git(outer, "commit", "-qm", "outer")
+    root, digest = target(tmp_path / "t", ["true"])
+    git(root, *allow, "submodule", "add", "-q", str(outer), "outer")
+    git(root, *allow, "submodule", "update", "--init", "--recursive", "-q")
+    git(root, "commit", "-qm", "add outer")
+    nested = root / "outer" / "inner" / "value.txt"
+    write(nested, "pass\n")
+    passing = finish_check.tree_digest(root, digest)
+    write(nested, "broken\n")
+
+    assert passing is not None and finish_check.tree_digest(root, digest) != passing
+
+
 @pytest.mark.skipif(os.name != "posix", reason="the planted diff command is a POSIX script")
 def test_a_repositorys_own_diff_settings_run_no_command_in_a_submodule(tmp_path: Path) -> None:
     """Breaks if a read of the tree runs a command a repository's own config names: with

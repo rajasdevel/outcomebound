@@ -563,13 +563,16 @@ def _content(path: Path, deadline: float | None = None) -> bytes | None:
         return b"unreadable"
 
 
-def _submodule_diffs(target: Path, deadline: float | None) -> bytes | None:
-    """The tracked diff inside each checked-out submodule of `target`, against its own HEAD, by
-    path; None where Git cannot say in time. The parent's diff shows a dirty submodule as one
+def _submodule_diffs(target: Path, deadline: float | None, depth: int = 0) -> bytes | None:
+    """The tracked diff inside each checked-out submodule of `target`, and of each submodule
+    nested in one, against its own HEAD, by path; None where Git cannot say in time, or the
+    nesting runs deeper than `SUBMODULE_DEPTH`. The parent's diff shows a dirty submodule as one
     "-dirty" line whatever the edit, so without this two different edits give one digest. Each
     read is this module's own, with its read configuration and `--no-ext-diff`, since Git's
     `--submodule=diff` runs the submodule's diff with neither."""
 
+    if depth > SUBMODULE_DEPTH:
+        return None
     listed = _git(target, "ls-files", "-s", "-z", deadline=deadline)
     if listed is None:
         return None
@@ -586,10 +589,16 @@ def _submodule_diffs(target: Path, deadline: float | None) -> bytes | None:
             *("diff", "--binary", "--no-color", "--no-ext-diff", "--no-textconv", "HEAD"),
             deadline=deadline,
         )
-        if inner is None:
+        nested = _submodule_diffs(folder, deadline, depth + 1)
+        if inner is None or nested is None:
             return None
-        found += name + b"\0" + hashlib.sha256(inner).digest()
+        found += name + b"\0" + hashlib.sha256(inner + b"\0" + nested).digest()
     return found
+
+
+# How deep the tree digest follows submodules nested in submodules; past it, the tree reads as
+# one Git cannot say, and the stop takes its path for a tree it could not read.
+SUBMODULE_DEPTH = 8
 
 
 def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str | None:
