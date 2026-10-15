@@ -2842,7 +2842,8 @@ takes it out.
 report each as unmanaged: the file, the event, the command and the fix, which is to remove that
 entry, then run adopt with --finish-check. A command counts where it names `outcomebound`
 followed by `finish-check`, also inside sh -c, or a Python -m form that runs the engine's
-package or its finish-check module by name. The match is lexical and runs nothing, so a hook that calls a script of your own that runs the check is not seen.
+package or its finish-check module by name. The match is lexical and runs nothing, so a hook
+that calls a script of your own that runs the check is not seen.
 An install prints each as a warning. Nothing is refused, and adopt removes no entry it did not
 write; --check counts each in its exit, --detect prints each as a # line and exits as before.
 The one exception is an entry no record holds that is exactly the command shape adopt writes,
