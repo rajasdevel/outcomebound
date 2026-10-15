@@ -37,7 +37,7 @@ an outside contract or an unsettled intent; every other choice on the route is y
 | Landing to release and deployment | Identify the artifact, destination, expected observation and recovery action. Verify identity and behavior at the requested destination under its actual grant and gate. | The outcome ends at a checked local artifact or landing; publication and deployment have no role in it. |
 | Delivery to operation | Establish the next owner, finite observation window, success or failure signals, response route and recovery bounds. Check the delivered version and its relevant user path. | No service or ongoing obligation is created or changed; existing operational coverage still fits. |
 | Incident or feedback to maintenance | Stabilize within the grant, retain relevant evidence, then use `diagnose` for an unknown cause. Return a changed need to requirements, or a defect to a bounded repair and its recurrence check. | No incident, defect, changed need or maintenance obligation calls for work. |
-| Maintenance to retirement | Find remaining consumers, data and compatibility obligations, retention requirements, and recovery needs. Complete authorized preparation; verify the removal and remaining consumers after an authorized cutover. Once the removal is authorized, add an entry for each path, command or process step it drops. | Nothing is being removed and no end-of-life obligation is in scope. |
+| Maintenance to retirement | Find remaining consumers, data and compatibility obligations, retention requirements, and recovery needs. Complete authorized preparation; verify the removal and remaining consumers after an authorized cutover. Once the removal is authorized, add an entry to `.outcomebound/retired.json` for each path, command or process step it drops. | Nothing is being removed and no end-of-life obligation is in scope. |
 
 A retired term, path, command or process step gets an entry in the project's
 `.outcomebound/retired.json` in the change that retires it, so that a copy left in a guide fails
@@ -135,9 +135,12 @@ and the fragments no longer selected go in the fragment diff. Once the route is 
 writes the absent files, and you add the printed blocks.
 
 After a complete directive or the person's answer to the brief, add a dated line to the local
-fragment's Context: "Changed — <date> (stream: <stream>): <the person's words in quotation marks>, decided by
-<who>, invalidated <what>". Keep one line for each stream: it replaces that stream's older line,
-which Git keeps. Where adoption refuses the change, the line reads "approved, not applied", and
+fragment's Context, in this form, with the person's words and each old term in double quotes:
+
+Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired
+"<old term>"; invalidated <what no longer holds>.
+
+Keep one line for each stream: it replaces that stream's older line, which Git keeps. Where adoption refuses the change, the line reads "approved, not applied", and
 the old selection stays active until the check that refused passes. Plan the stages
 not yet reached again, and plan again each finished stage whose evidence the change invalidates: it
 keeps its dated result as history, reads `UNVERIFIED` for the new exposure, and gets its own

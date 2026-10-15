@@ -39,7 +39,7 @@ Leave when — several teams, or owners by area (observable: <a second team in t
 Leave when — one maintainer is left, or the owner says it serves only themselves → opens a brief
   to move back to `solo`: which gates and standing grants end, and what is retired.
 Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
-  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
+  invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out

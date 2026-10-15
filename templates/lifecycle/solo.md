@@ -34,7 +34,7 @@ Leave when — a second person starts to maintain it (observable: the owner says
   work in flight, the standing grants and their end dates, and what each item now owes.
 Leave when — nobody has used it since <the date the owner names> → opens a brief to retire it.
 Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
-  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
+  invalidated <what no longer holds>.
 ```
 
 A change reaches the main branch by a pull request with CI green, the owner merges their own, and

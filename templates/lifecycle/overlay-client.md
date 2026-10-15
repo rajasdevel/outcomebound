@@ -39,7 +39,7 @@ Leave when — the contract ends or the client stops accepting builds (observabl
 Leave when — the client's acceptance moves to a regulator or a second party → opens a brief on
   the gates whose owner changes.
 Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
-  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
+  invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out

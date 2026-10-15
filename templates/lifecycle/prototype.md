@@ -30,7 +30,7 @@ Leave when — the first outside user or real personal data (observable: an invi
   from outside, a data import; watched by: the owner) → opens a brief to move to `solo` or `team`
   that names the parts kept; probe code is rebuilt, never promoted.
 Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
-  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
+  invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out

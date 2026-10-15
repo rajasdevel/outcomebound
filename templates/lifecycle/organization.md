@@ -37,7 +37,7 @@ The emergency path is the route's normal path made fast, with its review recorde
 Leave when — one team owns every area (observable: <...>; watched by: <who>) → opens a brief to
   move back to `team`: which gates and standing grants end.
 Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
-  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
+  invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out
