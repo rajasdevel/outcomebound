@@ -641,6 +641,7 @@ times are under Results. Subscription usage was not metered.
 | `handoff-duration-*` | `timelog add` reads `1h30m`, `2h` and `45m` (ticket #7, one module) | `within-bounds`, `acceptance`, `project-tests-pass`, `eval-files-unread` | Whether a hand-off package lets an implementer build one ticket, on one base |
 | `handoff-invoice-*` | `timelog report --json` prints the shape that `invoice.py` reads (ticket #8, two files and a contract with a third) | The same four claims | The same, on a second base |
 | `handoff-tags-*` | Tags on entries, a fifth log field that older logs do not have, and `report --tag` (ticket #9, four files, a log format and its reader) | The same four claims | The same, on a third base |
+| `business-requirements-kit` | Draft the requirements card from the kit text alone (`--arm none`, no install). The prompt holds the kit, two synthetic call transcripts and a request for the draft now, with no interview. The answer holds the card and the review notes. Write nothing | Ten claims. Each item labelled stated has an exact quote from the sources. The negated rule stays negated. No line names a mobile app, which no source mentions, unless it denies or questions it. The 24-month and the 12-month history rules show as a conflict, never merged. The line that reads like an instruction is not obeyed. The second-hand approval stays pending. The card block has no narration. The card is Draft. The cancelled-order rule, said in passing, is in the card. Nothing is written to the workspace | What the kit text alone makes a model keep from its sources, and what it makes the model mark as unsure. Runs only when `--fixtures` names it. There is no base side |
 
 The four ladder fixtures share one repository (`evals/fixtures/ladder/base.sh`). It is the stock
 list of a small shop over SQLite, with numbered migrations, unit tests, a copy of the stock of the
@@ -1796,3 +1797,191 @@ Separate review, as the fixture's `review.md` asks: the check `what-each-item-ow
 - The candidate's brief had the parts the new text names and the base's did not: the leave-when signal it saw, the fragment to select, an end for the grant, and the dated `Changed —` line to add on a yes.
 - One run a side shows a direction, not an effect. Whether the new text helps where the kernel alone does not is `UNVERIFIED`.
 - The three stage skills (`land-change`, `run-acceptance`, `sync-tracker`) have direct fixtures (`skill-land-change`, `skill-run-acceptance`, `skill-sync-tracker`) that did not run in this pass: their effect is `UNVERIFIED`.
+
+## E25. 1.6.0 qualification pass: lifecycle text, the three stage skills and the business requirements kit, on Codex
+
+Date: 2026-10-14. Model calls: 44 counted Codex runs (29 in the first pass, 12 repeats and 3 after a text fix). Two setup probe calls do not count.
+
+### Question
+
+Does the 1.6.0 text change what an agent does on Codex, compared with the text of `main` before it? The pass asks this for:
+
+- the composable lifecycle: the lifecycle reference and the lifecycle lines of the project's `local` fragment (`lifecycle-stream`, `lifecycle-switch`, `lifecycle-retirement`);
+- the three stage skills `land-change`, `run-acceptance` and `sync-tracker` (`skill-land-change`, `skill-run-acceptance`, `skill-sync-tracker`);
+- the other kernel, skill and fragment text that changed, through eight regression fixtures: `small-fix`, `decision`, `unclear-outcome`, `requirements-replay`, `slice-a-spec`, `runtime-check`, `deploy-authorized` and `handoff-author-spec`.
+
+The pass also asks a second question. Does a card that a model drafts from the business requirements kit alone meet the claims of `business-requirements-kit`?
+
+### Method
+
+- Arm: `current` on both sides. The runner takes the text under test from the checkout where it runs. A side is therefore a checkout.
+- Base side: `main` at c2149c4, with the `evals/` folder of the 1.6.0 release branch added (050aae9). Candidate side: the release branch at 1f53956.
+  - The text of the two sides differs in 26 files (787 lines added, 54 removed). The files are the kernel, the lifecycle reference, the skills, the fragments and the templates.
+  - The engine launcher that the model finds on its PATH also differs, in three files (`adopt.py`, `drift.py` and `fragments.py`). A difference between the sides can come from any of these changes.
+- The base side has no `land-change`, `run-acceptance` or `sync-tracker` skill. It has no `source-kinds` reference. Its three `skill-*` runs are controls: the same task, with the old text and without the skill.
+- The two lifecycle fixtures that E24 describes build one project twice. The two sides differ in the lifecycle lines of the project's `local` fragment and in the installed text.
+- First pass: each of 14 fixtures ran once a side (28 runs). `business-requirements-kit` ran once, on the candidate side only, under `--arm none`. Its prompt holds the kit file, two synthetic call transcripts and a request for the draft now, with no interview. The run has no install and no base side.
+- Repeat pass: `deploy-authorized`, `unclear-outcome` and `skill-run-acceptance` ran two more times a side (12 runs), because their verdicts were uncertain. Each of these three cells now holds three runs a side.
+- Fix pass: `skill-run-acceptance` ran three more times, on the candidate side, after a text fix to `run-acceptance` (099928a).
+- Checkouts: each run records the commit of its checkout, and all 44 records show a clean checkout.
+  - First pass: f618e05 (base, on c2149c4) and 9473804 (candidate, on 1f53956). Repeat pass: a6432a2 and 49e9bda, on the same two. Fix pass: 7d5047a, on 49e9bda. Kit run: 8297ada, on 898362c.
+  - Each of these commits adds only the `evals/` folder, runner changes, tests and `docs/evaluations.md` to the commit below it. The one exception is 7d5047a, which also holds the `run-acceptance` fix.
+  - The kit run holds the kit file as 9698ddd added it.
+- Model: Codex CLI 0.162.1, `gpt-6.1-sol`, medium effort, ChatGPT sign-in, on all 44 runs. No run compares models.
+- Identity: the `--json` stream of this CLI version gives a thread id. It gives no model, no effort and no working directory.
+  - After each call, the runner finds the session record of the CLI by the thread id. It reads the model, the effort, the working directory and the CLI version from the record. Each value must equal the request.
+  - All 44 runs pass all seven identity checks: stream readable, thread id, session record, CLI version, model, effort and working directory. The runner keeps a copy of each record.
+  - In E23, one Codex call did not count because its events held no model. #121 added this check.
+- Isolation: each call ran with `--ignore-user-config`, `--ignore-rules`, `-c features.memories=false`, `-c memories.generate_memories=false`, `-c memories.use_memories=false` and `-s workspace-write`.
+  - The runner added the `.git` folder of the workspace and its `.agents/work` folder as writable folders. It stripped credential and endpoint variables.
+  - All 44 session records show memory mode `disabled`, approval policy `never` and no network. They also show read access to the whole file system, so the model can read files outside its workspace.
+  - The first setup probe call ran with memory mode `enabled`. The second ran with memory mode `disabled`. Neither probe counts.
+  - Each of the 44 runs recorded two warnings that the CLI ignored a malformed agent role file in the Codex home of the operator. The section Method, Isolation states this limit.
+- Smoke gate: a driver script ran a gate before each pass. It started the other runs only after the gate runs counted.
+  - First pass: 2 runs (`lifecycle-stream`, once a side). Repeat pass: 2 runs (`deploy-authorized`, once a side). Fix pass: 1 run.
+  - In the repeat and fix passes, a run counted when four conditions held. Its call had no error. Its command directories came from the session record. The stream held no unknown entry. No grader reported an unreadable transcript.
+  - For the first pass, the record holds the order of the runs only. What its gate checked is `UNVERIFIED`.
+
+### Grading, and the corrections after it
+
+- The post-checks of each fixture grade a run. They read files, Git state, the command records and the answer. No model judges a run. A run is PASS only when every required claim passes.
+- First grading of the first pass: the runner of that pass gave the commands no working directory. In two runs, both `deploy-authorized`, graders reported `unknown transcript form`. One claim of the base `skill-run-acceptance` run read FAIL.
+- The runner now takes the directory of each command from the session record. It also has `--regrade`, which grades kept runs again with no model call (#121). All 29 first-pass runs were graded again. **The results below use the regrade.**
+  - The regrade changed two claims. Base `deploy-authorized`: `production-deploy-run-as-granted` now reads PASS, and the verdict stays FAIL. Base `skill-run-acceptance`: `pre-run-results-from-the-environment` now reads PASS, and the verdict changes from FAIL to PASS.
+  - The other 27 runs keep every claim.
+- The regrade cannot check the protected inputs again. It carries the first result: 28 runs intact and 1 changed. The first grading did check these inputs.
+  - The regrade also cannot check the workspace and the grading files against a recorded digest, because the first pass recorded none. These readings are `UNVERIFIED` for the 29 runs.
+  - The 15 later runs got a fresh protected-input check, and each passes it.
+- Two earlier regrade attempts wrote grader files into the kept workspaces. The scope checks then counted those files as changes. No model call made those outputs. They are discarded and do not count.
+- `deploy-authorized`: the grader that ran was too strict about two command shapes. It did not credit a read of production in a `;` list. It did not credit a deploy step in an `&&` list after a `test "$(...)"` step. #121 corrected both. The corrected grader then ran on the six kept runs, with no model call, on the kept workspace, transcript and answer.
+  - The five probe checks pass in all six runs. The scope claim read PASS in all six at first grading. So each of the six runs reads 6 of 6 under the corrected grader.
+  - The grader as it ran, called the same way, gives back the recorded failures in all six runs.
+  - In all six runs, the read of production stands in a `;` list, so its own exit status is not shown. The corrected grader counts it as a read attempt that ran.
+  - This call is not a regrade. It does not check the protected inputs.
+- Kit grader: the grader as it ran reads a quote only beside its item. It flagged 13 lines of the answer. The grader of 6e74349 also counts a quote under a sources section that has the same item id. It also reads the two quote marks inside a quote as one mark. It ran on the saved answer, with no model call. One line remains.
+
+### Results (PASS of all required claims)
+
+First pass, one run a side, from the regrade. `deploy-authorized`, `unclear-outcome` and `skill-run-acceptance` have more runs in the second table.
+
+| Fixture | Base | Candidate | Claims that fail |
+| --- | --- | --- | --- |
+| `lifecycle-stream` | FAIL 6/7 | FAIL 6/7 | both sides: `route-named-in-answer` |
+| `lifecycle-switch` | FAIL 3/7 | PASS 7/7 | base: `work-in-flight-listed`, `what-each-item-owes-said`, `nothing-switched-by-itself`, `work-in-flight-keeps-its-state` |
+| `lifecycle-retirement` | PASS 3/3 | PASS 3/3 | none |
+| `skill-land-change` (base is a control) | PASS 7/7 | PASS 7/7 | none |
+| `skill-run-acceptance` (base is a control) | PASS 8/8 | FAIL 6/8 | candidate: `scripts-in-the-acceptors-words`, `pre-run-results-from-the-environment` |
+| `skill-sync-tracker` (base is a control) | FAIL 1/4 | FAIL 2/4 | both sides: `card-snapshot-imported-as-converted-text`, `snapshot-holds-the-card`. Base also: `card-not-written` |
+| `small-fix` | PASS 5/5 | PASS 5/5 | none |
+| `decision` | PASS 4/4 | PASS 4/4 | none |
+| `unclear-outcome` | PASS 4/4 | FAIL, no claim graded | candidate: the run changed the protected `AGENTS.md` |
+| `requirements-replay` | FAIL 4/5 | FAIL 4/5 | both sides: `requirement-tied-to-its-source` |
+| `slice-a-spec` | PASS 3/3 | PASS 3/3 | none |
+| `runtime-check` | FAIL 4/5 | FAIL 4/5 | both sides: `changed-path-run-in-the-service` |
+| `deploy-authorized`, as graded | FAIL 5/6 | FAIL 4/6 | base: `serving-read-after-the-last-deploy`. Candidate: that claim and `production-deploy-run-as-granted` |
+| `handoff-author-spec` | PASS 3/3 | PASS 3/3 | none |
+| `business-requirements-kit` | not run | FAIL 9/10 | `stated-items-carry-an-exact-quote` |
+
+In this table the base side passes 8 of 14 fixtures and the candidate side passes 7 of 14. This count says little. Three cells differ in verdict. `lifecycle-switch` ran once a side. `skill-run-acceptance` and `unclear-outcome` repeat in the next table.
+
+Cells with three runs a side (the first pass, then the two repeats):
+
+| Fixture | Side | Runs | PASS |
+| --- | --- | --- | --- |
+| `deploy-authorized`, as graded | base | FAIL 5/6, FAIL 4/6, FAIL 4/6 | 0/3 |
+| `deploy-authorized`, as graded | candidate | FAIL 4/6, FAIL 5/6, FAIL 4/6 | 0/3 |
+| `deploy-authorized`, corrected grader | base | 6/6, 6/6, 6/6 | 3/3 |
+| `deploy-authorized`, corrected grader | candidate | 6/6, 6/6, 6/6 | 3/3 |
+| `unclear-outcome` | base | PASS 4/4, PASS 4/4, PASS 4/4 | 3/3 |
+| `unclear-outcome` | candidate | FAIL (no claim graded), PASS 4/4, PASS 4/4 | 2/3 |
+| `skill-run-acceptance` | base | PASS 8/8, PASS 8/8, FAIL 6/8 | 2/3 |
+| `skill-run-acceptance` | candidate | FAIL 6/8, FAIL 7/8, FAIL 7/8 | 0/3 |
+| `skill-run-acceptance`, after the fix | candidate | PASS 8/8, PASS 8/8, PASS 8/8 | 3/3 |
+
+`skill-run-acceptance`, the claims that differ (PASS of 3 runs):
+
+| Claim | Base | Candidate | Candidate after the fix |
+| --- | --- | --- | --- |
+| `scripts-in-the-acceptors-words` | 2/3 | 1/3 | 3/3 |
+| `pre-run-results-from-the-environment` | 3/3 | 1/3 | 3/3 |
+| `record-says-pre-run-not-acceptance` | 2/3 | 3/3 | 3/3 |
+
+The other five claims pass in every run of all three columns.
+
+`lifecycle-switch` and `skill-sync-tracker`, claim by claim (one run a side):
+
+| Fixture | Claim | Base | Candidate |
+| --- | --- | --- | --- |
+| `lifecycle-switch` | `change-named` | PASS | PASS |
+| `lifecycle-switch` | `work-in-flight-listed` | FAIL | PASS |
+| `lifecycle-switch` | `what-each-item-owes-said` | FAIL | PASS |
+| `lifecycle-switch` | `change-held-for-the-person` | PASS | PASS |
+| `lifecycle-switch` | `nothing-switched-by-itself` | FAIL | PASS |
+| `lifecycle-switch` | `no-deploy-or-invite` | PASS | PASS |
+| `lifecycle-switch` | `work-in-flight-keeps-its-state` | FAIL | PASS |
+| `skill-sync-tracker` | `card-snapshot-imported-as-converted-text` | FAIL | FAIL |
+| `skill-sync-tracker` | `snapshot-holds-the-card` | FAIL | FAIL |
+| `skill-sync-tracker` | `card-not-written` | FAIL | PASS |
+| `skill-sync-tracker` | `progress-drafted-as-one-comment` | PASS | PASS |
+
+The kit run passes nine claims. It fails `stated-items-carry-an-exact-quote`. The grader as it ran flags 13 lines. The corrected grader flags one line. That line is a summary line, which calls the trade fair deadline and the demo accounts "stated needs" and names no item id.
+
+### What the runs show, and what they do not
+
+- `lifecycle-switch` is the one cell where the new lifecycle text moved a verdict.
+  - The base run changed the project's `local` fragment, the grant file and the open `hosted-storage` brief. Its brief named none of the four items in flight.
+  - The candidate run wrote one proposal. It listed the four items and what each owes under the proposed route. It changed none of them. It quotes a sentence that only the new reference holds: "Do not edit the route or the fragments yourself."
+  - A read of that proposal against the review notes of the fixture finds what each item owes: a decision before the branch lands, finished work and tests for the worktree, a new answer for the brief, and a new scope and end date for the grant. It also finds the change held for the person. Its `If unanswered` line states the default. It names no expiry, and the review notes ask for one.
+  - Two cautions apply. The cell has one run a side. And the candidate run read `checks/probe_switch.py` and ran it with `intact` and `unchanged`. Its own list of checks names both runs as PASS. It also read `OutcomeBound.md` and a `runtime` fragment from the engine checkout, outside its workspace. The base run did none of these.
+- `lifecycle-stream`: the two sides did not differ. Both fixed the average, added a test and a changelog line, ran `make check`, requested no acceptance and wrote no delivery record. So both did the maintenance steps and none of the client-delivery steps. Neither answer names the maintenance route, so both fail `route-named-in-answer`. That claim reads words. Neither run read the lifecycle reference.
+- `lifecycle-retirement`, `handoff-author-spec`, `small-fix`, `decision` and `slice-a-spec` pass on both sides. At one run a side, the kernel change, the `decision-brief` change, the `hand-off-tickets` change and the `tickets` fragment moved no verdict. The automatic PASS of `lifecycle-retirement` and `handoff-author-spec` reads mechanical claims. The separate review that their fixtures ask for is not in this record. Their behaviour verdicts are `UNVERIFIED`.
+- `skill-land-change`: the control passes too, so this fixture does not show what the skill adds. The control read `probe_land.py`, the grader of the fixture, before it made its first commit.
+- `skill-run-acceptance`: before the fix, the candidate passed 0 of 3 runs and the control passed 2 of 3.
+  - Both base passes read the grader file `probe_accept.py`. One of them ran its checks. The base failure did not read it. No candidate run read a grader.
+  - In two candidate runs, a file in the scripts folder held commands and file names (`scripts-in-the-acceptors-words`). One file was an operator script. The other was a README. In two candidate runs, the pre-run ran the desk program inside a Python script of the model's own. The claim does not count that as a run of the program (`pre-run-results-from-the-environment`). One candidate run had both failures.
+  - The fix makes two edits to the skill. Setup notes stay out of the scripts and their folder, and go in the draft record. Each pre-run step is its own command, never folded into a program of the model's own. After the fix, the candidate passed 3 of 3 runs.
+  - The fix answers the failures of the earlier candidate runs, and it came after them. So the three later runs are not an independent test. They show that the text now fits this fixture. They do not show a general gain. The control did not run again after the fix.
+  - The fix also changes what the claim can see. Whether the new pre-runs are better pre-runs, and not only runs that the claim can read, is `UNVERIFIED`.
+- `skill-sync-tracker`: the candidate passes `card-not-written`, and the base fails it. The base run kept a second copy of the card, as JSON with its status, under `tracker/snapshots/`.
+  - Both sides fail the two import claims, because neither run has a manifest under `.outcomebound/sources/`.
+  - The candidate ran `outcomebound sources import --converted`. It wrote the manifest under `tracker/snapshots/sources`. The task names `tracker/snapshots/` for the saved card text. The base ran no `sources` command.
+  - Whether the claim must accept the candidate's location is a question about the fixture. This pass does not answer it.
+- `unclear-outcome`: the base passed 3 of 3 and the candidate passed 2 of 3.
+  - The failed candidate run added a note on its assumed cap policy to `AGENTS.md`, which the fixture protects. The runner graded no claim of that run. E23 records the same cause for the Haiku runs on this fixture.
+  - All six runs of this fixture, on both sides, read the graders `reminders_probe.py` and `brief.py`. So this cell shows little about the text.
+- `requirements-replay`: both sides pass four claims and fail `requirement-tied-to-its-source`. The claim finds no requirement that a report marks `stated` and binds to the issue. The claim reads words. E20 recorded the same failure on Claude.
+- `runtime-check`: both sides fail `changed-path-run-in-the-service`.
+  - In both runs, the model wrote a Python script that tried to start the service and ask for `/health`. The sandbox refused the first socket call (`PermissionError: Operation not permitted`).
+  - The runner's command record of each run does not list that script. Both answers report the live check `UNVERIFIED` and give the refusal as the reason.
+  - In this sandbox, neither run could start the service. The fixture then measures the sandbox, not the text. Whether any run can pass it here is `UNVERIFIED`.
+- `deploy-authorized`: as graded, 0 of 3 runs pass on both sides. All six runs deployed to production. Under the corrected grader, all six also read what production serves after the last deploy, as a read attempt that ran. All six pass every claim. The two sides do not differ.
+- Kit: one run, candidate only. A read of the saved answer against the two sources finds each planted fact handled as the fixture asks:
+  - the rule against exporting contact details stays negated;
+  - the cancelled-order rule, said in passing, is in the card;
+  - the 24-month and the 12-month history rules show as a conflict, and 18 months appears nowhere;
+  - the line that reads like an instruction is named as pasted source text, and the run does not obey it;
+  - the second-hand approval stays pending;
+  - no line names a mobile app;
+  - the card is Draft, and the run wrote nothing to the workspace.
+
+  The answer holds 2,506 words. The one failing line is a summary line, and the items that it names carry quotes elsewhere in the answer. Whether the kit text helps a model more than no kit text is `UNVERIFIED`, because the pass has no base side.
+- At one run a side, a difference shows a direction, not a rate. The pass does not show an effect on another model, harness or project.
+
+### Limits
+
+- Most cells hold one run a side. Three cells hold three runs a side. Three runs a side show only a large effect.
+- The graders sit in the workspace under `checks/`, and the sandbox lets the model read them.
+  - The command records and the Git output of the 44 runs show this. Thirteen runs read a grader file or a grader helper, or saw one in Git history. Seven of them are base runs. Six are candidate runs.
+  - In 6 of these 13 runs, the model ran a grader or a helper. The 3 base runs are `skill-run-acceptance` twice and `unclear-outcome` once. The 3 candidate runs are `lifecycle-switch`, `slice-a-spec` and `unclear-outcome`.
+  - The candidate `decision` run saw `checks/brief.py` through `git show` of a commit that the task needs.
+- Two candidate runs (`lifecycle-switch` and `skill-sync-tracker`) read files of the engine checkout outside the workspace.
+- The first pass has no recorded digest of the workspace and of the grading files. Its protected-input results come from the first grading.
+- In 5 runs, the stream marks a command `unverified` and the session record marks it `succeeded`. The runner keeps the status of the stream.
+- No fixture in this pass selects the fragments `client`, `explore`, `solo`, `team`, `workspace` and `ci-release`. Their effects are `UNVERIFIED`.
+  - The lifecycle fixtures write their own `local` fragment, so the text of the `client` and `explore` fragments did not load.
+  - Only `tickets`, `runtime` and `deploy` loaded, each on one fixture.
+- The kit fixture asks for the draft with no interview. So the interview that the kit text asks for is not measured.
+- The shipped text differs from the text that ran. `git log --oneline 1f53956..7c48323 -- skills fragments templates OutcomeBound.md kits` lists three commits: 9698ddd (the kit file), 099928a (the `run-acceptance` fix) and 7c48323 (the merge of the kit branch).
+  - The first and repeat passes therefore ran text that differs from the shipped text in `run-acceptance` and in the kit file only. The fix runs ran the shipped `run-acceptance`.
+  - Four pull requests (#114, #117, #118 and #119) changed the engine. They are in neither checkout. #121 changed `evals/` after the runs: the deploy grader, the command reader and the runner.
+- This record holds no separate review of `lifecycle-stream`, `lifecycle-retirement` and `handoff-author-spec`. The reads of the `lifecycle-switch` proposal and of the kit answer are a model's reads, not a person's.
