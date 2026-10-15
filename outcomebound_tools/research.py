@@ -28,7 +28,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
-from outcomebound_tools import fileplan, paths, programs
+from outcomebound_tools import fileplan, gitenv, paths, programs
 from outcomebound_tools.gitenv import git_environment
 
 REPOSITORY = "https://github.com/rajasdevel/outcomebound-research"
@@ -55,13 +55,7 @@ DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # What Git inherits from a hook or a caller would point it at another repository, or add
 # configuration (`url.*.insteadOf` among it) that the person never wrote.
 GIT_UNSET = (
-    "GIT_DIR",
-    "GIT_WORK_TREE",
-    "GIT_INDEX_FILE",
-    "GIT_COMMON_DIR",
-    "GIT_OBJECT_DIRECTORY",
-    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-    "GIT_CEILING_DIRECTORIES",
+    *gitenv.GIT_UNSET,
     "GIT_CONFIG",
     "GIT_CONFIG_COUNT",
     "GIT_CONFIG_PARAMETERS",

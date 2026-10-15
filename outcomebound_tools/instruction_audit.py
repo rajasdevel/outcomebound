@@ -209,7 +209,6 @@ _NEXT = {
 # Git runs under `GIT_READ_CONFIGURATION`; these flags add no textconv, and a tree-to-tree
 # diff never reads the index.
 _SAFE_DIFF = ("--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--no-renames")
-_GIT_UNSET = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_EXTERNAL_DIFF", "GIT_PAGER")
 
 
 class AuditError(ValueError):
@@ -1127,7 +1126,7 @@ def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     `AuditError`. Git comes from PATH's absolute entries only (`programs.require`), so the target
     cannot supply its own, on Windows too."""
 
-    inherited = {key: value for key, value in os.environ.items() if key not in _GIT_UNSET}
+    inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
         part for part in inherited.get("PATH", "").split(os.pathsep) if os.path.isabs(part)
     )
