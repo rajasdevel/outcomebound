@@ -115,7 +115,7 @@ NEW, NOBASE, AGAIN, HELD_BEFORE = "new", "nobase", "again", "held-before"
 # followed the run on its tree.
 UNCHANGED, RECORDED, FOLLOWED = "unchanged", "recorded", "followed"
 # The kinds of notice the `told` file keys, beside the verdicts.
-RUNNING, DEAD, STUCK_KIND, ERROR, SLOW, DIGEST_KIND, KNOWN_KIND, PAUSED_KIND = (
+RUNNING, DEAD, STUCK_KIND, ERROR, SLOW, DIGEST_KIND, KNOWN_KIND, PAUSED_KIND, UNHELD = (
     "running",
     "dead",
     "stuck",
@@ -124,6 +124,16 @@ RUNNING, DEAD, STUCK_KIND, ERROR, SLOW, DIGEST_KIND, KNOWN_KIND, PAUSED_KIND = (
     "digest",
     "known",
     "paused",
+    "unheld",
+)
+# The note a run ends with where a failure held but the held list could not be written, so the
+# hold went to the person and not to the model; and why the person is told it.
+UNHELD_NOTE = "not held: the list of failures this session was held for could not be written"
+# The note a run that ran no Done ends with where it delivered the tree's failure to the model.
+DELIVERED_NOTE = "its failure was held for the agent"
+UNHELD_WHY = (
+    "the list of failures this session was held for could not be written, so a hold could not "
+    "be kept to once"
 )
 # What starts the engine again for the detached run, isolated as the launcher starts it.
 LAUNCH = (
@@ -765,16 +775,20 @@ def prompt_input(row: Any, payload: dict[str, Any] | None) -> str | None:
 
 
 def begin_turn(
-    digest: str, payload: dict[str, Any] | None, cwd: Path, session: str
+    digest: str,
+    payload: dict[str, Any] | None,
+    cwd: Path,
+    session: str,
+    deadline: float | None = None,
 ) -> tuple[Path, str | None] | None:
     """Keep the target's HEAD and tree as the turn's start, in the Git directory, with the
     session and the time, over a mark the last turn's end stamped. Where the HEAD or tree cannot
     be read in time, the mark of the turn before goes, so that no turn is compared with a tree
     it did not begin with. (the target, the tree it read, None where it kept the turn's mark and
     read none) where there is a target; errors are the caller's to swallow, and nothing is
-    printed."""
+    printed. `deadline` is the entry's, `MARK_SECONDS` from now by default."""
 
-    deadline = time.monotonic() + MARK_SECONDS
+    deadline = time.monotonic() + MARK_SECONDS if deadline is None else deadline
     target, found = find_target(payload, cwd)
     path = _state(target, deadline, MARK) if found else None
     if path is None:
@@ -2258,19 +2272,20 @@ def held_signatures(
 
 def keep_held(
     target: Path, session: str | None, signature: str, tree: str, deadline: float | None = None
-) -> None:
+) -> bool:
     """Add `signature` to the session's held list, before the hold is printed: from then on the
-    same failure in this session goes to the person. The list is not pruned."""
+    same failure in this session goes to the person. Whether it was written: a hold goes out
+    only where it was. The list is not pruned."""
 
     common = _common_dir(target, deadline) if session else None
     if common is None or session is None:
-        return
+        return False
     path = common / HELD
     document = _held_document(path)
     document.setdefault(session, []).append(
         {"signature": signature, "time": now_text(), "tree": tree}
     )
-    write_whole(path, json.dumps({"sessions": document}, ensure_ascii=False) + "\n")
+    return write_whole(path, json.dumps({"sessions": document}, ensure_ascii=False) + "\n")
 
 
 # --- What the person is told, once for each session, tree and kind ---------------
@@ -2311,7 +2326,8 @@ def tell(
     target: Path, session: str | None, notices: Sequence[Notice], deadline: float | None = None
 ) -> list[str]:
     """The texts of the notices the person was not yet told in this session, for their tree and
-    kind, kept as told now. With no session every notice is told, and nothing is kept."""
+    kind, kept as told now; the file keeps this session's entries only. With no session every
+    notice is told, and nothing is kept."""
 
     unique = list({(notice.tree, notice.kind): notice for notice in notices}.values())
     path = _state(target, deadline, TOLD) if session else None
@@ -2320,7 +2336,9 @@ def tell(
     known = _told(path)
     fresh = [notice for notice in unique if (session, notice.tree, notice.kind) not in known]
     if fresh:
-        keys = known | {(session, notice.tree, notice.kind) for notice in fresh}
+        # Only this session's entries are kept: another session's are never read again by it.
+        mine = {key for key in known if key[0] == session}
+        keys = mine | {(session, notice.tree, notice.kind) for notice in fresh}
         write_whole(path, json.dumps({"told": sorted(list(key) for key in keys)}) + "\n")
     return [notice.text for notice in fresh]
 
@@ -2835,20 +2853,26 @@ class _Context:
         return self.until + REMEMBER_SECONDS
 
 
-def _wake_from(context: _Context, record: Checked | None, tree: str) -> tuple[int, str]:
-    """Exit 2 with the hold's report where the run's row wakes the model and `record`, the check
-    of this tree, holds for this run's input, and no new turn began; the signature goes to the
-    held list first. Else exit 0."""
+def _wake_from(
+    context: _Context, record: Checked | None, tree: str, deadline: float | None = None
+) -> tuple[int, str, str]:
+    """(exit code, report, note): exit 2 with the hold's report where the run's row wakes the
+    model and `record`, the check of this tree, holds for this run's input, and no new turn
+    began; the signature goes to the held list first, and where it cannot, exit 0 with
+    `UNHELD_NOTE`, so the person is told and the model is not. Else exit 0. The held list is read
+    and written by `deadline`, the run's own by default."""
 
+    deadline = context.book if deadline is None else deadline
     if not context.wake or record is None:
-        return 0, ""
-    held = held_signatures(context.target, context.session, context.book)
+        return 0, "", ""
+    held = held_signatures(context.target, context.session, deadline)
     if not deliverable(record, context.session, context.guarded, context.paused, held, tree):
-        return 0, ""
-    if _new_turn(context.target, context.session, context.book):
-        return 0, ""
-    keep_held(context.target, context.session, record.holding, record.tree, context.book)
-    return 2, hold_report(record, context.target)
+        return 0, "", ""
+    if _new_turn(context.target, context.session, deadline):
+        return 0, "", ""
+    if not keep_held(context.target, context.session, record.holding, record.tree, deadline):
+        return 0, "", UNHELD_NOTE
+    return 2, hold_report(record, context.target), ""
 
 
 @dataclass(frozen=True)
@@ -2916,8 +2940,9 @@ def _check(
     current = checked_for(target, tree, context.until)
     unchanged = mark is not None and mark.tree == tree and mark.head == head
     if unchanged or (current is not None and current.repeats(tree, context.timeout)):
-        code, text = _wake_from(context, current, tree)
-        return (UNCHANGED if unchanged else RECORDED), "", code, text
+        code, text, note = _wake_from(context, current, tree)
+        note = DELIVERED_NOTE if code == 2 else note
+        return (UNCHANGED if unchanged else RECORDED), note, code, text
     held = held_signatures(target, context.session, context.until)
     baseline = checked_for(target, mark.tree, context.until) if mark is not None else None
     turn = _Turn(tree, mark, baseline, held)
@@ -2946,8 +2971,8 @@ def _check(
     drop_fixed(target, known, results, book)
     if changed:
         return CHANGED, cause, 0, ""
-    code, text = _wake_from(context, record, tree)
-    return verdict, "", code, text
+    code, text, note = _wake_from(context, record, tree)
+    return verdict, note, code, text
 
 
 def _stuck(target: Path, context: _Context, tree: str, other: Run | None) -> None:
@@ -3021,7 +3046,11 @@ def run(
     head = _head(target, context.until)
     if tree is None or head is None:
         return 0, ""
-    lock = RunLock(gitdir / RUN_LOCK)
+    try:
+        lock = RunLock(gitdir / RUN_LOCK)
+    except OSError as error:
+        _unlocked(context, gitdir, tree, head, error)
+        return 0, ""
     try:
         role, other = acquire(lock, gitdir / RUN, tree)
         if role == STUCK_ROLE:
@@ -3030,10 +3059,35 @@ def run(
         if role == FOLLOWER:
             if not follow(lock, context.begun + timeout):
                 return 0, ""
-            return _wake_from(context, checked_for(target, tree, context.book), tree)
+            # The follower's own budget may have passed while it waited: the held list is read
+            # and written with time of its own, so the holder's hold is seen and not sent twice.
+            later = max(context.book, time.monotonic() + REMEMBER_SECONDS)
+            record = checked_for(target, tree, later)
+            code, text, _ = _wake_from(context, record, tree, later)
+            return code, text
         return _as_holder(context, gitdir, tree, head, mark)
     finally:
         lock.close()
+
+
+def _unlocked(context: _Context, gitdir: Path, tree: str, head: str, error: OSError) -> None:
+    """The record of a run that could not open the run lock: ended at once with the error, so the
+    person is told and the check is never silent."""
+
+    outcome = f"error: the run lock {RUN_LOCK} cannot be opened: {type(error).__name__}: {error}"
+    record = Run(
+        os.getpid(),
+        tree,
+        head,
+        context.started,
+        context.session,
+        None,
+        context.digest,
+        context.timeout,
+        context.guarded,
+        {"time": now_text(), "outcome": outcome},
+    )
+    write_whole(gitdir / RUN, json.dumps(record.document()) + "\n")
 
 
 def _as_holder(
@@ -3087,7 +3141,9 @@ def _run_argv(
     """The command that starts the detached run: this engine, isolated as the launcher runs it,
     told the stop's input and the mark the stop trusted."""
 
-    keys = ("session_id", "transcript_path", "stop_hook_active", "hook_event_name")
+    # No transcript path: `ps` shows the command line to every account, and the run reads the
+    # transcript only where it reads the mark itself, which it never does with `--input`.
+    keys = ("session_id", "stop_hook_active", "hook_event_name")
     given: dict[str, Any] = {k: payload[k] for k in keys if payload is not None and k in payload}
     given["cwd"] = str(target)
     given["finish_check_mark"] = mark.document() if mark is not None else None
@@ -3165,8 +3221,15 @@ def _run_notices(
             f"({outcome}); nothing was held."
         )
         return [Notice(last.tree, ERROR, text)]
+    if (last.ended or {}).get("note") == UNHELD_NOTE and last.session == viewer.session:
+        record = checked_for(target, last.tree, deadline)
+        return [_unheld_notice(record, target)] if record is not None and record.results else []
     if from_run and outcome == UNCHANGED and last.session == viewer.session and last.mark:
-        verdict = _unchanged_verdict(checked_for(target, last.tree, deadline), last.tree, target)
+        if (last.ended or {}).get("note") == DELIVERED_NOTE:
+            # The run delivered this failure to the model; the person is not told it was not.
+            return []
+        record = checked_for(target, last.tree, deadline)
+        verdict = _unchanged_verdict(record, last.tree, target)
         text = str(marked_told(verdict, last.mark.get("time", ""), True)["systemMessage"])
         return [Notice(last.tree, UNCHANGED, text)]
     return []
@@ -3212,6 +3275,13 @@ def notices(
         if notice is not None:
             found.append(notice)
     return found
+
+
+def _unheld_notice(record: Checked, target: Path) -> Notice:
+    """The person's notice of a failure that held where the held list could not be written."""
+
+    verdict = verdict_for(record.results, False, target, record.timeout, why=UNHELD_WHY)
+    return Notice(record.tree, UNHELD, str(verdict["systemMessage"]))
 
 
 def _slow_stop(
@@ -3283,10 +3353,12 @@ def stop(
     repeating = current is not None and current.repeats(tree, entry.timeout)
     starts = not unchanged and not repeating and not running
     argv = _run_argv(entry, payload, target, mark) if starts else None
+    unheld: list[Notice] = []
     if hold is not None:
-        keep_held(target, session, hold.holding, hold.tree)
-        return {"decision": "block", "reason": hold_report(hold, target, both=True)}, argv
-    found_notices = notices(target, viewer, deadline, from_run=False)
+        if keep_held(target, session, hold.holding, hold.tree):
+            return {"decision": "block", "reason": hold_report(hold, target, both=True)}, argv
+        unheld = [_unheld_notice(hold, target)]
+    found_notices = unheld + notices(target, viewer, deadline, from_run=False)
     if unchanged and mark is not None:
         verdict = _unchanged_verdict(current, tree, target)
         text = str(marked_told(verdict, mark.written.isoformat(), True)["systemMessage"])
@@ -3301,11 +3373,14 @@ def stop(
 # --- What a person reads ------------------------------------------------------------
 
 
-def turn_notices(target: Path, session: str, tree: str | None, digest: str) -> list[str]:
+def turn_notices(
+    target: Path, session: str, tree: str | None, digest: str, deadline: float | None = None
+) -> list[str]:
     """The claude-code turn-start entry's message: each notice not yet told to this session,
-    since an async stop entry can show the person nothing but its wake."""
+    since an async stop entry can show the person nothing but its wake. `deadline` is the
+    entry's, `MARK_SECONDS` from now by default."""
 
-    deadline = time.monotonic() + MARK_SECONDS
+    deadline = time.monotonic() + MARK_SECONDS if deadline is None else deadline
     done = recorded_done(target)
     if not done or done_digest(done) != digest:
         return tell(target, session, [Notice("", DIGEST_KIND, _digest_text(target))], deadline)
@@ -3377,7 +3452,7 @@ def status(folder: Path) -> str:
     guarded = last.guarded if last is not None else False
     viewer = Viewer(session, tree, guarded, held_signatures(target, session))
     lines = [f"finish-check status of {paths.shell_path(target)}", _run_line(state, last, tree)]
-    told_kinds = (DEAD, RUNNING, ERROR, STUCK_KIND, UNCHANGED)
+    told_kinds = (DEAD, RUNNING, ERROR, STUCK_KIND, UNCHANGED, UNHELD)
     shown = notices(target, viewer, None, from_run=True)
     lines += [notice.text for notice in shown if notice.kind in told_kinds]
     records = _shown_records(target, tree, None)
@@ -3489,14 +3564,16 @@ def _begin(words: Sequence[str]) -> int:
         session = prompt_input(row, payload) if DIGEST.fullmatch(args.done) else None
         if session is None:
             return 0
-        began = begin_turn(args.done, payload, Path.cwd(), session)
+        # One budget for the whole entry, within the harness's timeout for it.
+        deadline = time.monotonic() + MARK_SECONDS
+        began = begin_turn(args.done, payload, Path.cwd(), session, deadline)
         hook = hook_of(row)
         if began is None or hook is None or not isinstance(hook.get("wake"), dict):
             return 0
         target, tree = began
         if tree is None:
-            tree = tree_digest(target, args.done, time.monotonic() + MARK_SECONDS)
-        texts = turn_notices(target, session, tree, args.done)
+            tree = tree_digest(target, args.done, deadline)
+        texts = turn_notices(target, session, tree, args.done, deadline)
         if texts:
             sys.stdout.write(json.dumps({"systemMessage": "\n\n".join(texts)}) + "\n")
             sys.stdout.flush()
@@ -3589,7 +3666,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     payload = read_input(getattr(sys.stdin, "buffer", None))
     if isinstance(hook.get("wake"), dict):
         return _woken(entry, payload)
-    verdict, start = stop(entry, payload, Path.cwd())
+    try:
+        verdict, start = stop(entry, payload, Path.cwd())
+    except Exception:
+        # A stop must never fail the turn end: nothing for the model, nothing started.
+        verdict, start = {}, None
     sys.stdout.write(json.dumps(verdict) + "\n")
     sys.stdout.flush()
     _close_stdout()

@@ -234,9 +234,13 @@ def hook(
     finish_helpers.wait_for_run(git_root(root), since)
     if "decision" in first:
         return done.returncode, first
+    since = finish_helpers.now()
     again = fire(row, digest, root, stdin, cwd, timeout, transcript)
     assert isinstance(again, subprocess.CompletedProcess)
     assert again.returncode == 0, again.stderr.decode()
+    # The delivering stop may start a run of its own (a record that never repeats, such as a
+    # missing tool's): it ends before the next turn end of the test.
+    finish_helpers.settle(git_root(root), since)
     result: dict[str, Any] = json.loads(again.stdout)
     return again.returncode, result
 
@@ -3467,16 +3471,10 @@ def outputs(row: str, digest: str, root: Path, **options: Any) -> list[Any]:
         return [(done.returncode, done.stdout, done.stderr)]
     since = finish_helpers.now()
     printed = [stop_json(row, digest, root, **options)]
-    record = None
-    deadline = time.monotonic() + 3
-    while record is None and time.monotonic() < deadline:
-        found = finish_helpers.run_record(git_root(root))
-        when = finish_helpers.started_at(found) if found else None
-        record = found if when is not None and when >= since else None
-        time.sleep(0.05)
-    if record is not None:
-        finish_helpers.wait_for_run(git_root(root), since)
+    if finish_helpers.settle(git_root(root), since) is not None:
+        since = finish_helpers.now()
         printed.append(stop_json(row, digest, root, **options))
+        finish_helpers.settle(git_root(root), since)
     return printed
 
 
@@ -4208,3 +4206,156 @@ def test_the_run_writes_nothing_outside_the_git_directory(tmp_path: Path, row: s
     hook(row, digest, root)
 
     assert outside() == before
+
+
+# --- The constant-time stop: what the built change's review found -----------------------
+
+
+def test_a_follower_whose_budget_ended_first_does_not_wake_the_model_a_second_time(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a follower that waited past its own budget reads the held list with that spent
+    budget, finds it empty and sends the holder's hold again."""
+
+    started, go, gate = gated(tmp_path)
+    root, digest = target(tmp_path / "t", [f"{gate}; echo boom; exit 1"])
+    holder = fire(CC, digest, root, timeout=600, background=True)
+    wait_for(started)
+    follower = fire(CC, digest, root, timeout=31, background=True)
+    # The follower's budget for its records ends 16 s after it starts; the holder ends after.
+    time.sleep(finish_check.REMEMBER_SECONDS + 3)
+    assert follower.poll() is None
+    write(go, "")
+
+    code, out, err = finished(holder)
+    assert (code, out) == (2, b"") and "boom" in err.decode()
+    assert finished(follower) == (0, b"", b"")
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_failure_whose_held_list_cannot_be_written_goes_to_the_person_not_the_model(
+    tmp_path: Path, row: str
+) -> None:
+    """Breaks if a hold goes out while the held list cannot be written, so that the same failure
+    would reach the model at every turn end, or if the person is not told of it."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    (root / ".git" / finish_check.HELD).mkdir()
+
+    if row == CC:
+        assert hook(row, digest, root) == (0, {})
+        message = turn(row, digest, root)
+        assert finish_check.UNHELD_WHY in message and "boom" in message
+        assert finish_check.UNHELD_WHY in finish_helpers.status(root)
+    else:
+        _, verdict = hook(row, digest, root)
+        assert list(verdict) == ["systemMessage"], verdict
+        assert finish_check.UNHELD_WHY in verdict["systemMessage"]
+
+
+@posix_only
+def test_a_run_lock_that_cannot_be_opened_is_told_to_the_person(tmp_path: Path) -> None:
+    """Breaks if a lock file the run cannot open leaves no record and no notice."""
+
+    if os.geteuid() == 0:
+        pytest.skip("root opens a file of mode 0")
+    root, digest = target(tmp_path / "t", ["true"])
+    lock = root / ".git" / finish_check.RUN_LOCK
+    write(lock, "")
+    lock.chmod(0)
+    try:
+        assert hook(CC, digest, root) == (0, {})
+        shown = finish_helpers.status(root)
+        message = turn(CC, digest, root)
+    finally:
+        lock.chmod(0o600)
+    assert "cannot be opened" in shown
+    assert "ended without a verdict" in message and "cannot be opened" in message
+
+
+def test_a_failure_an_unchanged_turn_delivered_is_not_told_as_kept_from_the_agent(
+    tmp_path: Path,
+) -> None:
+    """Breaks if, after a stop that ran nothing delivered the tree's failure to the model, the
+    next prompt tells the person it was told to them and not to the agent."""
+
+    root, digest = target(tmp_path / "t", ["echo boom; exit 1"])
+    assert hook(CC, digest, root, stdin=paused(root, WAITING[0])) == (0, {})
+    turn(CC, digest, root)
+
+    code, verdict = hook(CC, digest, root)
+    assert code == 2 and "boom" in verdict["reason"]
+
+    assert "not the agent" not in turn(CC, digest, root)
+
+
+def test_the_turn_start_entry_keeps_to_one_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the turn-start entry gives its notices a fresh budget after the one it spent
+    reading the tree, which together could pass the harness's timeout for the entry."""
+
+    seen: dict[str, float | None] = {}
+
+    def begin(digest: str, payload: Any, cwd: Path, session: str, deadline: Any = None) -> Any:
+        seen["begin"] = deadline
+        return tmp_path, "0" * 40
+
+    def notices(target: Path, session: str, tree: Any, digest: str, deadline: Any = None) -> Any:
+        seen["notices"] = deadline
+        return []
+
+    monkeypatch.setattr(finish_check, "begin_turn", begin)
+    monkeypatch.setattr(finish_check, "turn_notices", notices)
+    payload = json.dumps({"session_id": "s", "hook_event_name": "UserPromptSubmit"}).encode()
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload)))
+    words = ["--mark", "--harness", CC, "--done", "0" * 64]
+
+    assert finish_check.main(words) == 0
+    assert seen["begin"] is not None and seen["notices"] == seen["begin"]
+
+
+def test_a_codex_stop_that_raises_prints_nothing_for_the_model_and_exits_0(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if an unexpected error in the codex stop ends the hook with a traceback and exit 1,
+    which codex shows as a hook error at the turn end."""
+
+    def broken(*_: Any) -> Any:
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(finish_check, "stop", broken)
+    monkeypatch.setattr(finish_check, "_close_stdout", lambda: None)
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+
+    code = finish_check.main(["--harness", "codex", "--done", "0" * 64])
+
+    assert (code, capsys.readouterr().out) == (0, "{}\n")
+
+
+def test_the_told_file_keeps_only_the_current_sessions_entries(tmp_path: Path) -> None:
+    """Breaks if the file of notices told grows with every session that ever ran."""
+
+    root, _digest = target(tmp_path / "t", ["true"])
+    path = root / ".git" / finish_check.TOLD
+    old = [["old-session", "a" * 40, "pass"], ["s", "b" * 40, "pass"]]
+    write(path, json.dumps({"told": old}) + "\n")
+
+    told = finish_check.tell(root, "s", [finish_check.Notice("c" * 40, "fail", "text")])
+
+    assert told == ["text"]
+    kept = json.loads(path.read_text(encoding="utf-8"))["told"]
+    assert sorted(kept) == [["s", "b" * 40, "pass"], ["s", "c" * 40, "fail"]]
+
+
+def test_the_detached_runs_command_line_names_no_transcript(tmp_path: Path) -> None:
+    """Breaks if the codex run's command line, which `ps` shows to every account, carries the
+    transcript path."""
+
+    entry = finish_check.Entry("codex", {"guard": "stop_hook_active"}, "0" * 64, 600)
+    payload = {"session_id": "s", "transcript_path": "/secret/transcript.jsonl", "cwd": "x"}
+
+    argv = finish_check._run_argv(entry, payload, tmp_path, None)
+
+    assert "/secret/transcript.jsonl" not in " ".join(argv)
+    assert json.loads(argv[-1])["session_id"] == "s"
