@@ -22,7 +22,7 @@ version: 1
 ```
 
 Each `detect` glob is relative to the target root, and must not leave it. The optional keys
-`condition`, `edges` and `skills` are in `CONTRIBUTING.md`.
+`condition` and `edges` are in `CONTRIBUTING.md`.
 
 ## Context
 

@@ -6,6 +6,7 @@ Only the catalog acceptance tests read the `fragments/` tree itself.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +14,8 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools.fragments import (
+    FRONTMATTER_KEYS,
+    OPTIONAL_KEYS,
     SKILLS,
     FragmentError,
     byte_cap,
@@ -652,3 +655,17 @@ def test_an_edge_the_facts_line_would_split_is_refused(edge: str) -> None:
 def test_a_backticked_command_on_the_mechanisms_line_is_refused_with_the_rule() -> None:
     with pytest.raises(FragmentError, match="only mechanism ids take backticks"):
         parse_fragment(_local(mechanisms="`review` before `make deploy`."))
+
+
+def test_the_fragment_proposal_form_names_the_keys_the_parser_reads() -> None:
+    """Breaks if the public fragment proposal form names a frontmatter key the parser refuses
+    (a retired one), or leaves out one it reads: a contributor who follows it writes a fragment
+    that fails."""
+
+    text = (ROOT / ".github/ISSUE_TEMPLATE/fragment-proposal.md").read_text(encoding="utf-8")
+    example = text.split("```yaml\n", 1)[1].split("```", 1)[0]
+    required = [line.split(":", 1)[0] for line in example.splitlines() if line.strip()]
+    optional_sentence = text.split("The optional keys", 1)[1].split(" are in", 1)[0]
+    optional = re.findall(r"`([a-z_]+)`", optional_sentence)
+    assert tuple(required) == FRONTMATTER_KEYS
+    assert sorted(optional) == sorted(OPTIONAL_KEYS)
