@@ -261,8 +261,9 @@ the rest of `templates/`, and `adopt` never copies it into a project, as with
   source, the paths and signals that make it present, and its parts. A part names its source,
   the lifecycles and acts it is for, `write` or `offer`, the facts that must hold (visibility,
   host, acts), and whether it brings the file into the set where no base part does;
-- each platform act: its text, who does it, the lifecycles and acts it is for, and its status on
-  each visibility and host.
+- each platform act: its text, who does it, the lifecycles and acts it is for, the acts that must
+  hold as well (the staging environment is for organization with `--acts deploy`), and its status
+  on each visibility and host.
 
 The engine reads the file set from the manifest only. A test holds every source to a part, and
 every part to a source, so no template ships that no lifecycle writes.
@@ -439,7 +440,7 @@ send them to a brief (`tickets`, `client`, `ci-release`, `deploy`).
 | run the agent in the harness sandbox; give it no production credential and no real data (`templates/harness/` has ask rules) | the person | every preset | listed | listed |
 | a rule on the main branch: changes by pull request only, no force push, no deletion, the CI check required | a repository admin | solo, team, organization | not enforced | `UNVERIFIED` |
 | required review by one human who is neither the author nor the person who directed the agent; an AI approval does not count; no one, admins included, bypasses it | a repository admin | team, organization | not enforced | `UNVERIFIED` |
-| code-owner review, with `CODEOWNERS` | a repository admin | organization, with `--with codeowners` | not enforced; `CODEOWNERS` refused | `UNVERIFIED` |
+| code-owner review, with `CODEOWNERS` | a repository admin | organization, beside the `--with codeowners` offer | not enforced; `CODEOWNERS` refused | `UNVERIFIED` |
 | a secret scan, and a scan that refuses a push holding a secret | a repository admin | solo, team, organization | a paid product for a private organization repository, and `UNVERIFIED` for a private personal one; the floor's gitleaks claim checks on the machine instead | `UNVERIFIED` |
 | multi-factor authentication on each maintainer's account | each maintainer | solo, team, organization | listed | listed |
 | an agent identity with a scoped token, never an admin token, and a log of its actions and approvals | a repository admin | organization; unattended-agents | listed | `UNVERIFIED` |
@@ -619,7 +620,9 @@ of `adopt` is. `--check` reads CRLF and a byte-order mark. The Git that lists th
 ## Standard library
 
 `outcomebound_tools/scaffold.py` imports the standard library and the engine's own modules only
-(`fileplan`, `paths`, `textio`, `programs`, `gitenv`, `schemacheck`), and `make gate` holds it.
+(`fileplan`, `paths`, `textio`, `programs`, `gitenv`, `schemacheck`, and `identity` for the managed
+blocks, `walk` for a target Git cannot list and `home` for the engine's own files), and `make gate`
+holds it.
 
 ## Decisions
 
@@ -739,8 +742,9 @@ In the existing files:
 36. The release-check test that holds the CI templates to the release also holds the scaffold's
     CI workflow.
 37. `tests/test_model_text_limits.py` adds `templates/scaffold/**/*.md` to its globs, with
-    `ALLOWED` rows for "within 24 hours", "72 hours" and "ten years" in the eu-market parts, each
-    naming Regulation (EU) 2024/2847 and the day it was read;
+    `ALLOWED` rows for what its rules match in the eu-market lines ("within 2", "24 hours",
+    "within 7" and "72 hours"; "ten years" matches no rule), each naming Regulation (EU) 2024/2847
+    and the day it was read;
     `tests/test_no_economic_vocabulary.py` adds `templates/scaffold`;
     `tests/test_skill_paths_resolve.py` and `tests/test_adopt_drift.py` take the renamed template
     paths.
