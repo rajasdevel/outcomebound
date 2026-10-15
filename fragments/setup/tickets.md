@@ -4,7 +4,7 @@ family: setup
 applies: projects that declare a ticket store
 condition: when reading, working or changing this project's tickets or their declaration
 detect: []
-version: 12
+version: 13
 ---
 **Context** — `.outcomebound/tickets.json` declares where this project's tickets live; the
 engine reads them and reports, and writes nothing. How work lands here is what `CONTRIBUTING.md`
@@ -18,8 +18,9 @@ index, map or parity entry for the ticket's own files, or a test that asserts te
 is inside the ticket's authority and the implementer's: make it, name it in the handover with its
 path, and ask nothing. An edit outside them that changes what anything else does, that repairs what
 was broken before the ticket, or that lands in a path the project's instructions or configured
-protections reserve for a person, is the person's: put it as a decision brief and go on with what
-does not wait on it. An accepted ticket's title, body and decision keys are the user's, and a body
+protections reserve for a person, is the person's: where the goal envelope's Follow-ups line
+accepts it, file it as a follow-up with `discovered-from` and build it before the ticket it
+unblocks; else put it as a decision brief and go on with what does not wait on it. An accepted ticket's title, body and decision keys are the user's, and a body
 changes only on the person's word, so an edit outside `bounds` is named in the handover, never
 written into the body; assigning it, commenting on it and closing it are the agent's, and when you
 start a ticket you claim it, by assigning it or commenting where the declaration grants tracker writes (otherwise print the
