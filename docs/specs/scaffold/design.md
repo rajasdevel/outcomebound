@@ -39,8 +39,9 @@ R5. Every correction that the research made to the first sketch of the lifecycle
 R6. The three comparison templates are renamed into the new set.
 R7. A new engine verb, `outcomebound scaffold <target> --lifecycle <preset>[+<overlay>...]`. With
 no mode flag it prints the plan and writes nothing. `--accept` writes only absent files, through
-`fileplan`. `--check` lists the values left to fill and the gate owners not named, and exits with
-their count.
+`fileplan`. `--check` lists the values left to fill and the gate owners not named. The ruling said
+that `--check` exits with their count; it exits 1 when any value is left and prints the count
+(decided by the agent, 2026-10-15, following the research's CLI conventions).
 R8. The platform acts are listed by preset, and each one that a private repository on a free plan
 does not enforce is marked "not enforced".
 R9. On a move, the scaffold previews and then, after the person's yes, writes the absent files. It
@@ -83,7 +84,9 @@ outcomebound scaffold <target> --lifecycle <preset>[+<overlay>...]
   the CI workflow and the update-bot file become offers that name `templates/ci/`, and each
   platform act reads `UNVERIFIED`, since the research read one host's plans only.
 - `--acts` names the acts that cannot be undone, from four: `deploy`, `publish`, `tag` and
-  `stored-data`. Each one adds the fragments, edges, lines and files the tables below give.
+  `stored-data`. Each one adds the fragments, edges, lines and files the tables below give. On
+  prototype, `--acts` is a usage error: a prototype holds no production credential and no real
+  data, and its first deploy to users, publish or kept data ends it (its "Leave when —" row).
 - `--with` names the offers to write on `--accept`: `codeowners` and `pr-template`, for
   organization only. Another offer is not a file that the scaffold writes (a floor, a ticket
   declaration, a platform act), so `--with` does not take it.
@@ -117,10 +120,10 @@ present SECURITY.md                        the team block is printed below; add 
 offer   quality floor                      outcomebound floor --help
 offer   ticket declaration                 templates/tickets/ in the engine; outcomebound tickets --help
 act     create the remote repository, choose visibility and license: the owner
-act     ...: a repository admin; enforced on this plan
+act     ...: a repository admin; listed
 adopt:  outcomebound adopt . --fragments local,team,client,commands
 # name the harness in use with --harness, as `adopt --detect` proposes
-next: on the person's yes, run this command again with --accept, fill each <<fill: ...>>, then run it with --check
+next: on the person's yes, run this command again with --accept, fill each value marked fill, then run it with --check
 --- block for SECURITY.md (team) ---
 ...
 ```
@@ -138,7 +141,7 @@ PASS wrote 5 files; 1 present, left as it was
 wrote   .outcomebound/fragments/local.md
 ...
 present SECURITY.md: its block is printed below; add it on the person's yes
-next: fill each <<fill: ...>> from the person's words, then run outcomebound scaffold . --check
+next: fill each value marked fill from the person's words, then run outcomebound scaffold . --check
 ```
 
 `--check`:
@@ -159,11 +162,13 @@ With nothing left, the first line is `PASS no value left to fill` and nothing fo
 | --- | --- | --- | --- |
 | plan | the plan printed | not a Git work tree; the templates cannot be read | usage |
 | `--accept` | each absent file written, or nothing to write | refused: a write that `fileplan` refuses, or a file that appeared after the plan read it | usage |
-| `--check` | no marker left | — | usage |
+| `--check` | no marker left | a marker left; the first line prints the count | usage |
 
-`--check` exits with the count of markers left, at most 100, as `adopt --check` exits with the
-count of records not current. So a count of 1 or 2 shares its code with a refusal or a usage
-error; the first line tells them apart. A script that needs the difference reads `--json`.
+`--check` exits 1 when any marker is left, and its first line prints the count; `--json` carries
+each marker. The exit is not the count: the research's CLI conventions say an exit code is never a
+count (`practices/cli-conventions.md` C3), since a count of 256 reads as success and a count of 2
+reads as a usage error (decided by the agent, 2026-10-15, following the research's CLI
+conventions).
 
 ## The fact questions
 
@@ -211,7 +216,7 @@ people, which it put down to heavy process
 
 | Overlay | The fact that adds it | Fragments it adds | Refused on |
 | --- | --- | --- | --- |
-| client | an outside party accepts the work on a named build | `client` | — |
+| client | an outside party accepts the work on a named build | `client` | prototype |
 | eu-market | the product is placed on the EU market in a commercial activity | none | prototype |
 | safety-critical | a failure can harm a person, and a lifecycle standard such as IEC 62304 or DO-178C applies | none | — |
 | audit | an auditor examines the controls (SOC 2, ISO/IEC 27001) | none | prototype |
@@ -219,8 +224,9 @@ people, which it put down to heavy process
 | ai-product | the product itself calls a model | none | — |
 
 A prototype ends at the first outside user or real personal data. A product placed on the EU
-market has outside users, and an audit examines a product's controls, so both refuse prototype
-with that reason. The fragments `workspace`, `multi-agent`, `tickets` and `research` stay with the
+market has outside users, an outside party that accepts a build is an outside user too, and an
+audit examines a product's controls, so all three refuse prototype with that reason. Where several
+people build a prototype, the agent replaces `solo` with `team` in the printed `adopt` command. The fragments `workspace`, `multi-agent`, `tickets` and `research` stay with the
 facts that select them today; no preset or overlay adds them.
 
 ## The templates
@@ -288,16 +294,22 @@ A value to fill is a marker that no other template in this repository uses:
 
 - `<<fill: LABEL>>`: a value the agent fills from the person's words, such as the stop rule or
   the deploy command.
-- `<<owner: GATE>>`: the owner of a gate. The agent never fills it, as the adopt skill says for
-  "Gates —" lines; it stays until the person names the owner, and the agent then writes the name
-  the person gave.
+- `<<owner: GATE>>`: the owner of a gate. It is always written as `owner UNVERIFIED (<<owner:
+  GATE>>)`, so that every reader of a "Gates —" line (the `client` fragment, the adopt skill, the
+  comparison templates) reads an owner nobody named as `UNVERIFIED`, and `--check` finds the
+  marker. The agent never fills it, as the adopt skill says for "Gates —" lines; it stays until
+  the person names the owner, and the agent then writes the name the person gave in place of the
+  whole `UNVERIFIED (...)` form.
 
 The grammar: `<<`, `fill` or `owner`, `:`, one space, a label of one or more characters that are
 not `<`, `>` or a line break, then `>>`. A marker is on one line. In a YAML file it stands inside
 a quoted string, since a plain YAML scalar cannot hold `: `. `--check` reads `<<(fill|owner): `
 followed by the label and `>>`, so a YAML merge key (`<<:`) or a shell here-document (`<<EOF`) is
-no marker. A marker is never in the frontmatter of the local fragment, so `adopt` never renders
-one into the pointer line or the Irreversible edges fact.
+no marker. A marker inside a Markdown code span or a fenced code block is no marker, since it
+quotes one; the templates put none there, and a line the engine prints spells no marker. A marker
+is never in the frontmatter of the local fragment, so `adopt` never renders one into the pointer
+line or the Irreversible edges fact. In this design, `<<fill>>` with no label is shorthand for a
+marker whose label the template gives; it is not the grammar.
 
 `--check` reads every file Git lists in the target, tracked or untracked and not ignored, as text
 in UTF-8 with or without a byte-order mark, with CRLF read as LF. It walks the whole target where
@@ -353,7 +365,7 @@ skeleton's).
 
 | Overlay | Local fragment | Route document | `SECURITY.md` | First design | Other |
 | --- | --- | --- | --- | --- | --- |
-| client | its lines | its block, the client route; brings the file on prototype and solo | — | — | — |
+| client | its lines | its block, the client route; brings the file on solo | — | — | — |
 | eu-market | its lines; the edge `rewriting published history` | — | its block; brings the file on solo private and private-free | its section; brings the file on solo | — |
 | safety-critical | its lines | — | — | — | — |
 | audit | its lines | — | — | — | — |
@@ -369,14 +381,14 @@ templates are the exact text, and the review the `review` mechanism names reads 
 
 | Lifecycle | Lines |
 | --- | --- |
-| prototype | Context: "Exposure —" with who can be hurt (the owner and `<<fill: the invited testers>>`), no real personal data and no production credential, the expected life (to learn, then discard or keep what the signal justifies), the sacrificial parts, the appetite and the stop rule, each a `<<fill>>`, and `maintained by: one person`; "Better means — `<<fill: an observable signal, such as what a tester does, not a feeling>>`". Bounds: "Leave when — the first outside user or real personal data → a brief to move to solo or team, which names the parts kept; probe code is rebuilt, never promoted". Mechanisms: `review` by a fresh-context reviewer before a part is kept. Distinguish: probe code ≠ the product; a tester's word ≠ evidence of demand. |
-| solo | Context: "Exposure —" with the dependants and the act that cannot be undone, and `maintained by: one person`. Bounds: changes reach the main branch only by a pull request with CI green, and the owner merges their own; "Leave when — a second maintainer → a brief to move to team"; "Leave when — nobody has used it since `<<fill: a date the owner names>>` → a brief to retire it". Mechanisms: `review` by a fresh-context reviewer before a change lands; human review is not required with one maintainer. |
-| team | Context: "Streams — main: route in `CONTRIBUTING.md`; takes every change". Bounds: "Gates — review: owner one human who is neither the author nor the person who directed the agent, evidence their approval in the platform; an AI review runs first and never counts as that approval"; "Leave when — several teams or owners by area → a brief to move to organization", and the move back to solo. |
-| organization | The team lines, and Bounds: agents act under their own identity with a scoped token, never an admin token, and their actions and approvals are logged; the emergency path is the route's normal path made fast, with its review recorded after (`CONTRIBUTING.md`). With `--with codeowners`, Bounds: "Gates — code-owner review: owner `<<owner: the owners of each area>>`, where the ruleset enforces it". |
-| `--acts deploy` | Completion bar: the deploy command `<<fill>>` and the recovery command `<<fill>>`. On team and organization, Bounds: "Gates — production go: owner `<<owner: production go>>`". |
+| prototype | Context: "Exposure —" with who can be hurt (the owner and `<<fill: the invited testers>>`), no real personal data and no production credential, the expected life (to learn, then discard or keep what the signal justifies), the sacrificial parts, the appetite and the stop rule, each a `<<fill>>`, `maintained by: one person`, and `<<fill: the agent-written share, and who reads the diff>>`; "Better means — `<<fill: an observable signal, such as what a tester does, not a feeling>>`". Bounds: "Leave when — the first outside user or real personal data → a brief to move to solo or team, which names the parts kept; probe code is rebuilt, never promoted". Mechanisms: `review` by a fresh-context reviewer before a part is kept. Distinguish: probe code ≠ the product; a tester's word ≠ evidence of demand. |
+| solo | Context: "Exposure —" with the dependants, the act that cannot be undone, `maintained by: one person`, and `<<fill: the agent-written share, and who reads the diff>>`. Bounds: changes reach the main branch only by a pull request with CI green, and the owner merges their own; the way back is a revert of the merge; "Leave when — a second maintainer → a brief to move to team"; "Leave when — nobody has used it since `<<fill: a date the owner names>>` → a brief to retire it". Mechanisms: `review` by a fresh-context reviewer before a change lands; human review is not required with one maintainer. |
+| team | Context: "Exposure —" with the dependants, the acts that cannot be undone, `maintained by: <<fill: the maintainers>>`, and `<<fill: the agent-written share, and whether review keeps up with it>>`; "Streams — main: route in `CONTRIBUTING.md`; takes every change". Bounds: "Gates — review: owner one human who is neither the author nor the person who directed the agent, evidence their approval in the platform; an AI review runs first and never counts as that approval"; "Leave when — several teams or owners by area → a brief to move to organization", and the move back to solo. |
+| organization | The team lines, and Bounds: agents act under their own identity with a scoped token, never an admin token, and their actions and approvals are logged; the emergency path is the route's normal path made fast, with its review recorded after (`CONTRIBUTING.md`). With `--with codeowners`, Bounds: "Gates — code-owner review: owner UNVERIFIED (`<<owner: the owners of each area>>`), where the ruleset enforces it". |
+| `--acts deploy` | Completion bar: the deploy command `<<fill>>` and the recovery command `<<fill>>`. On team and organization, Bounds: "Gates — production go: owner UNVERIFIED (`<<owner: production go>>`)". |
 | `--acts publish`, `tag` | Completion bar: each tag or publish adds its `CHANGELOG.md` entry. |
-| client | Context: "Streams — delivery: route in `CONTRIBUTING.md`; takes each change the client accepts; fragments client". Bounds: "Gates — acceptance: owner `<<owner: the client's named acceptor>>`, evidence their words naming the build"; the acceptance record is kept in `<<fill: a committed folder, or the client's tracker through sync-tracker>>`. |
-| eu-market | Context: the product is placed on the EU market in a commercial activity, so Regulation (EU) 2024/2847 applies; its reporting duties apply from 11 September 2026 and its main obligations from 11 December 2027 (read on 2026-10-15 at the [Commission's summary](https://digital-strategy.ec.europa.eu/en/policies/cra-summary)); conformity is the manufacturer's own assessment, which no file here makes. Bounds: "Gates — the report of an actively exploited vulnerability or a severe incident, an early warning within 24 hours and a notification within 72 hours: owner `<<owner: who reports>>`"; published history is not rewritten, since the technical documentation is kept for at least ten years (Article 13, read on an unofficial copy of the Official Journal text and `UNVERIFIED` at EUR-Lex, which the template says). Each figure carries its source beside it, as rule S23 asks. Completion bar: each release publishes an SBOM of at least its top-level dependencies, made by `<<fill: the command>>`. |
+| client | Context: "Streams — delivery: route in `CONTRIBUTING.md`; takes each change the client accepts; fragments client". Bounds: "Gates — acceptance: owner UNVERIFIED (`<<owner: the client's named acceptor>>`), evidence their words naming the build"; the acceptance record is kept in `<<fill: a committed folder, or the client's tracker through sync-tracker>>`. |
+| eu-market | Context: the person stated that the product is placed on the EU market in a commercial activity; whether Regulation (EU) 2024/2847 applies is the person's to decide, with legal advice (the scope act below); its reporting duties apply from 11 September 2026 and its main obligations from 11 December 2027 (read on 2026-10-15 at the [Commission's summary](https://digital-strategy.ec.europa.eu/en/policies/cra-summary)); conformity is the manufacturer's own assessment, which no file here makes. Bounds: "Gates — the report of an actively exploited vulnerability or a severe incident, an early warning within 24 hours and a notification within 72 hours: owner UNVERIFIED (`<<owner: who reports>>`)"; published history is not rewritten, since the technical documentation is kept for at least ten years (Article 13, read on an unofficial copy of the Official Journal text and `UNVERIFIED` at EUR-Lex, which the template says). Each figure carries its source beside it, as rule S23 asks. Completion bar: each release publishes an SBOM of at least its top-level dependencies, made by `<<fill: the command>>`. |
 | safety-critical | Context: this scaffold is not the lifecycle that `<<fill: the standard, such as IEC 62304 or DO-178C>>` requires, and that standard's own process decides each step it covers. Distinguish: agent output ≠ verified output; it counts as unverified until a person or a qualified process verifies it. |
 | audit | Bounds: the pull request is the change record, CI the test record and the deploy log the deploy record; where one person cannot be kept from approving their own change, the compensating control is `<<fill: the control, such as a later review of each change by a named person>>`, written with its risk; the emergency path is the normal path made fast, with its review recorded after. |
 | unattended-agents | Bounds: each agent works on its own branch or worktree and opens a pull request; it never approves or merges its own; it runs in the harness sandbox with network limits; it acts under its own identity with a scoped token, never an admin token. |
@@ -412,19 +424,20 @@ as `templates/ci/github-actions.yml` does, and it names the release it shipped w
 
 The scaffold makes none of these acts. The plan lists each one that the preset, the acts and the
 overlays call for, with what it changes, who does it, and its status on the visibility and host
-given. The agent puts the list in one decision brief, with the facts the person has not settled.
+given. The status is one of three words: `listed`, `not enforced` or `UNVERIFIED`, with its reason
+where it has one. The agent puts the list in one decision brief, with the facts the person has not settled.
 Tracker writes, registry names, CI secrets and hosting accounts stay with the fragments that already
 send them to a brief (`tickets`, `client`, `ci-release`, `deploy`).
 
 | Act | Who | Listed for | On private-free | With `--host other` |
 | --- | --- | --- | --- | --- |
 | create the remote repository; choose visibility and license | the owner | solo, team, organization | listed | listed |
-| the first push, which turns CI on | the owner | where the CI workflow is written | listed | listed |
+| the first push, which turns CI on, after Done is recorded and `--check` passes | the owner | where the CI workflow is written | listed | listed |
 | run the agent in the harness sandbox; give it no production credential and no real data (`templates/harness/` has ask rules) | the person | every preset | listed | listed |
 | a rule on the main branch: changes by pull request only, no force push, no deletion, the CI check required | a repository admin | solo, team, organization | not enforced | `UNVERIFIED` |
 | required review by one human who is neither the author nor the person who directed the agent; an AI approval does not count; no one, admins included, bypasses it | a repository admin | team, organization | not enforced | `UNVERIFIED` |
 | code-owner review, with `CODEOWNERS` | a repository admin | organization, with `--with codeowners` | not enforced; `CODEOWNERS` refused | `UNVERIFIED` |
-| secret scanning with push protection | a repository admin | solo, team, organization | a paid product for a private organization repository, and `UNVERIFIED` for a private personal one; the floor's gitleaks claim checks on the machine instead | `UNVERIFIED` |
+| a secret scan, and a scan that refuses a push holding a secret | a repository admin | solo, team, organization | a paid product for a private organization repository, and `UNVERIFIED` for a private personal one; the floor's gitleaks claim checks on the machine instead | `UNVERIFIED` |
 | multi-factor authentication on each maintainer's account | each maintainer | solo, team, organization | listed | listed |
 | an agent identity with a scoped token, never an admin token, and a log of its actions and approvals | a repository admin | organization; unattended-agents | listed | `UNVERIFIED` |
 | signed or immutable releases, and build provenance | a repository admin | `--acts publish` | listed | `UNVERIFIED` |
@@ -456,7 +469,17 @@ A part is present where its file is at the planned path, or where a signal shows
 | `SECURITY.md` | `SECURITY.md`, `.github/SECURITY.md` or `docs/SECURITY.md` |
 | `CHANGELOG.md` | `CHANGELOG.md`, `CHANGES.md` or `HISTORY.md` at the root |
 | `CODEOWNERS` | `CODEOWNERS`, `.github/CODEOWNERS` or `docs/CODEOWNERS`, the three places the drift line reads |
-| pull request template | `.github/pull_request_template.md` in any case, or a `.github/PULL_REQUEST_TEMPLATE/` folder |
+| pull request template | `pull_request_template.md` at the root, in `.github/` or in `docs/`, in any case, or a `PULL_REQUEST_TEMPLATE/` folder in any of those places |
+
+Each name is matched casefolded, against Git's listing and against the file system, so
+`security.md` or `Contributing.md` makes the part present, and the plan names the path it found.
+Presence reads `Path.is_file()` and Git's listing, never `fileplan.current`, which raises on a path
+that crosses a link; so a linked `.github/` or `docs/` folder does not stop the plan. The plan
+runs `fileplan.destination` on each planned path, and a path it refuses (one that crosses a link,
+or a name Windows cannot hold, on Windows) reads `refused` with the reason, before any
+`--accept`. `--accept` refuses a planned path where a segment's casefold equals that of an
+existing entry of another case (a `.GitHub/` folder for `.github/workflows/ci.yml`), so no case
+twin is written that a clone on a case-insensitive file system cannot check out.
 
 So no project gets a second route (lifecycle requirement R14), a second design log or a second CI
 system. A present part is never written. Where the plan has parts for a present file, the plan and
@@ -465,7 +488,11 @@ present file.
 
 `--accept` writes through `fileplan.write`, with every planned file expected absent: atomic, never
 through a link or a junction, never into `.git`, refused where a file appeared after the plan read
-it. Every destination is checked before the first write. A refusal after the first write keeps
+it. For a destination expected absent, `fileplan.write` moves the staged file in with an
+exclusive create (`os.link` of the stage, or an open with `O_EXCL`), which fails where the path
+exists, in place of `os.replace`. That closes the instant between the last recheck and the move
+in which a file that appeared would be overwritten; `adopt` gains the same for each file it
+creates. Every destination is checked before the first write. A refusal after the first write keeps
 the files already written, as for `adopt`; a second `--accept` writes only what is still absent.
 The scaffold deletes nothing and replaces nothing, on any mode and any move.
 
@@ -477,10 +504,23 @@ The scaffold adds the preview of the new set.
 
 - The agent runs the plan with the new lifecycle and `--from` the old one. The parts the project
   lacks read `write`. The parts the old set has and the new one does not read `not required`, each
-  with its path where present; they go to the brief's "what to retire" item. The scaffold deletes
-  none of them.
+  with its path where present. A part that is a duty under a lighter route too (the design's
+  decision table, `SECURITY.md`, `CHANGELOG.md`) goes to the brief's "what still holds" item,
+  and its retirement is the person's; the others go to "what to retire". An overlay that goes off
+  inside a shared file (an eu-market block in `SECURITY.md`) prints one `not required` line for
+  that part, with its file. The scaffold deletes none of them.
+- For a present local fragment, the block names the old lifecycle's lines that the new one
+  replaces (such as the prototype's "Exposure —" line with its life to learn, its "Leave when —"
+  rows and its `maintained by`), each as `replaced`, and the new lines beside them, so the
+  fragment does not end with two "Exposure —" lines. It names the edges that leave and those that
+  join. The plan prints `fragments no longer selected:` with each fragment the old lifecycle
+  selected and the new one does not (such as `explore`), and the `adopt:` line holds the new
+  selection.
 - The brief holds the plan's `write` lines and the platform acts that the move adds. Nothing is
-  written before the person's yes.
+  written before the person's yes. Where the person's directive names the route completely, the
+  lifecycle design's rule holds: the directive is the decision and no brief is drawn for the
+  route. The file list is still what the directive leaves open: the agent shows the plan, and
+  `--accept` runs on the person's yes to it.
 - On the yes, `--accept` writes the absent files. The lines of the new set for a present local
   fragment are printed as its block, and the agent adds them, with the "Changed —" line, under the
   same yes.
@@ -510,10 +550,13 @@ part as `write`.
 4. `outcomebound scaffold . --lifecycle ...` prints the plan; the agent shows it with the
    platform-acts brief.
 5. On the person's yes, the same command with `--accept`.
-6. The agent fills each `<<fill>>` from the person's words.
+6. The agent fills each `<<fill>>` from the person's words, and shows the person the text of each
+   file written before any commit: `SECURITY.md` and the route document make promises in public.
 7. The `adopt` command the plan printed, with the harness in use. The scaffold writes the local
    fragment; `adopt` reads it and never writes it, and refuses `--fragments local` without it.
 8. The checks below.
+9. The first push, the person's act that turns CI on, comes after Done is recorded and `--check`
+   passes, so the first CI run does not run the literal marker of the Done step.
 
 Where `adopt` ran first, step 7 is the upgrade that adds `local` and the new fragments to the
 selection. Done is recorded later, with `adopt --done`, at the probe or the skeleton.
@@ -535,8 +578,9 @@ as a gap.
 - **No compliance claim.** No template says or implies that a project complies with, conforms
   to, is certified for, or meets a level of SOC 2, ISO/IEC 27001, the EU Cyber Resilience Act, the
   NIST SSDF, SLSA, IEC 62304, DO-178C or the EU AI Act; that a tool is qualified; that a review by
-  an AI is a code review; that one maintainer has segregation of duties; or that a release has no
-  known exploitable vulnerabilities. A template supports evidence and points to a duty. Who
+  an AI is a code review; that one maintainer has segregation of duties; that a release has no
+  known exploitable vulnerabilities; or that a law applies or does not apply to the project, a
+  scope conclusion that is the person's, with legal advice. A template supports evidence and points to a duty. Who
   decides each claim: SOC 2 is a CPA's examination
   ([AICPA](https://www.aicpa-cima.com/topic/audit-assurance/audit-and-assurance-greater-than-soc-2));
   a certification body certifies an organization's ISMS, never a repository; CRA conformity is the
@@ -583,7 +627,7 @@ of `adopt` is. `--check` reads CRLF and a byte-order mark. The Git that lists th
 | Every template that names required review says: an AI review never counts as the required human approval; the person who directed an agent never approves its output; no admin bypasses it (maintainer, 2026-10-15) | an AI approval that counts on named paths; templates silent on it | user | decided |
 | The research's corrections to the first sketch are accepted, as the table in "Research basis" lists them (maintainer, 2026-10-15) | the sketch as sent; a ruling on each | user | decided |
 | The three comparison templates are renamed into the new set (maintainer, 2026-10-15): `personal.md` becomes `solo.md`, and a new `prototype.md` takes its lines on learning; `shared.md` becomes `team.md` and `organization.md`; `client.md` becomes `overlay-client.md` with its route example; five new files, `overlay-eu-market.md`, `overlay-safety-critical.md`, `overlay-audit.md`, `overlay-unattended-agents.md` and `overlay-ai-product.md`. Each keeps its comparison part for an existing project, and names its scaffold set under `templates/scaffold/` | the three kept beside the scaffold, two names for one lifecycle; comparisons replaced, which loses the when-to-propose guidance for existing projects | user | decided |
-| A verb, `outcomebound scaffold`, with a plan that writes nothing, `--accept` that writes only absent files through `fileplan`, and `--check` that lists the values left and exits with their count (maintainer, 2026-10-15) | the agent writes the files from templates and the engine only checks, so the set varies by run; every value from a flag | user | decided |
+| A verb, `outcomebound scaffold`, with a plan that writes nothing, `--accept` that writes only absent files through `fileplan`, and `--check` that lists the values left (maintainer, 2026-10-15) | the agent writes the files from templates and the engine only checks, so the set varies by run; every value from a flag | user | decided |
 | The platform acts are listed by preset, each marked "not enforced" where a private repository on a free plan does not enforce it (maintainer, 2026-10-15) | the four acts of the first sketch only; none | user | decided |
 | On a move, the plan previews the absent parts and `--accept` writes them after the person's yes; no present file is edited, replaced or deleted (maintainer, 2026-10-15) | a preview only; new projects only | user | decided |
 | The scaffold ships in 1.6.0 (maintainer, 2026-10-15) | the release after 1.6.0 | user | decided |
@@ -591,7 +635,7 @@ of `adopt` is. `--check` reads CRLF and a byte-order mark. The Git that lists th
 | The agent maps the facts to a preset with the table in the new-project reference; the engine prints what each preset assumes | a mapping in the engine, which needs a flag for each fact | agent | decided |
 | `--visibility` is required beyond prototype | a default, which would decide `SECURITY.md`, `CODEOWNERS` and the "not enforced" marks without the fact | agent | decided |
 | `--check` reads every file Git lists, not only the planned paths, so a value in a file the agent moved is still found; the lifecycle flags do not narrow it | reading the planned paths only, which needs the same flags again and misses a moved file | agent | decided |
-| `--check` exits with the count, at most 100, as `adopt --check` does (the ruling) | the research's advice that an exit is never a count (`practices/cli-conventions.md` C3); the cap keeps the count from wrapping to 0 | user | decided |
+| `--check` exits 1 when any marker is left and prints the count (decided by the agent, 2026-10-15, following the research's CLI conventions) | the count as the exit, as the ruling's words and `adopt --check` have it, which the research's conventions advise against (`practices/cli-conventions.md` C3): a count of 2 reads as a usage error and one of 256 as success | agent | decided |
 | Two marker kinds, `<<fill: ...>>` and `<<owner: ...>>`, so `--check` names the gate owners apart from the values | one kind, which cannot say that a value is the person's to name | agent | decided |
 | A file is a head and parts joined in a fixed order; the local fragment joins by slot; no YAML is merged | one whole template per combination, four presets times 64 overlay sets; text merged into YAML | agent | decided |
 | Template sources carry plain names, mapped to their paths by the manifest | sources at the paths they take, whose dot folders the build backend's walk skips and which tools in this repository would read as its own | agent | decided |
@@ -599,7 +643,7 @@ of `adopt` is. `--check` reads CRLF and a byte-order mark. The Git that lists th
 | `--host other` writes no `.github/` file and reads the platform acts `UNVERIFIED` | GitHub files on every host, a file that looks like a guard and binds nothing; a template for each host, beyond what the research read | agent | decided |
 | No refusal on a repository that already holds files: the plan shows what is present, and the references send an existing project to the comparison and a move to `--from` | a refusal of `--accept` beyond an empty repository, which needs a test of what an install alone writes and blocks a first-time adopter who wants a set | agent | decided |
 | Nothing recorded: no manifest record and no version mark | a record or a mark, which would make the engine watch files it does not own | agent | decided |
-| eu-market and audit are refused on prototype | allowing them, which describes a product placed on the market or audited while the prototype's own rule ends it at the first outside user | agent | assumed |
+| client, eu-market and audit are refused on prototype, and so is `--acts` | allowing them, which describes a product accepted by an outside party, placed on the market, audited or deployed while the prototype's own rule ends it at the first outside user; client on prototype also brought the heaviest file, the client route, to the lightest preset | agent | assumed |
 
 ## Edges
 
@@ -619,8 +663,8 @@ In `tests/test_scaffold.py`, unless a line names another file:
    each visibility, with and without each act: the set of paths equals the tables above.
 2. `test_each_overlay_on_each_base_adds_exactly_its_parts`, over each overlay on each preset that
    takes it.
-3. `test_an_overlay_a_preset_refuses_is_a_usage_error` (eu-market and audit on prototype; an
-   unknown id; an overlay named twice; two presets).
+3. `test_an_overlay_a_preset_refuses_is_a_usage_error` (client, eu-market and audit on
+   prototype; `--acts` on prototype; an unknown id; an overlay named twice; two presets).
 4. `test_visibility_is_required_beyond_prototype`.
 5. `test_the_plan_writes_nothing`: every byte and every path of the target is the same after the
    plan, in each mode but `--accept`.
@@ -628,20 +672,28 @@ In `tests/test_scaffold.py`, unless a line names another file:
    command, exits 0 for each preset and overlay.
 7. `test_adopt_check_prints_no_drift_line_for_the_scaffolds_own_selection`.
 8. `test_with_each_marker_filled_check_exits_0_and_no_stale_reference`.
-9. `test_check_lists_each_marker_with_its_file_line_and_kind_and_exits_with_the_count`.
-10. `test_check_exit_is_capped_at_100`.
+9. `test_check_lists_each_marker_with_its_file_line_and_kind_and_exits_1_with_the_count_printed`.
+10. `test_check_exits_0_with_no_marker_and_1_with_one_or_many`.
 11. `test_check_leaves_out_managed_blocks_and_recorded_copies`, and reads a marker in an untracked,
     unignored file but not in an ignored one.
 12. `test_check_reads_crlf_and_a_byte_order_mark`.
-13. `test_a_yaml_merge_key_and_a_here_document_are_no_marker`.
+13. `test_a_yaml_merge_key_a_here_document_and_a_quoted_marker_are_no_marker`: a `<<:` merge key,
+    a `<<EOF` here-document, and a marker inside a Markdown code span or fence are not counted, and
+    no line the verb prints holds a marker.
 14. `test_accept_leaves_every_present_file_byte_for_byte`, with a present file of other content,
     a CRLF file, and a file in each other place the presence table names.
 15. `test_a_route_named_by_a_streams_line_reads_present`, and one named by a line whose path does
     not exist reads absent.
 16. `test_accept_twice_writes_nothing_the_second_time`.
-17. `test_accept_refuses_a_link_a_git_path_and_a_file_that_appeared_after_the_plan`.
-18. `test_a_move_from_prototype_to_team_lists_exactly_the_parts_the_prototype_lacks`.
-19. `test_a_move_back_lists_the_parts_no_longer_required_and_deletes_nothing`.
+17. `test_accept_refuses_a_link_a_git_path_and_a_file_that_appeared_after_the_plan`, and the plan
+    reads a planned path across a linked `.github/` as `refused` without raising.
+17a. `test_presence_and_accept_fold_case`: `security.md` and `Contributing.md` read present at
+    their own paths, and a `.GitHub/` folder refuses `.github/workflows/ci.yml`.
+18. `test_a_move_from_prototype_to_team_lists_exactly_the_parts_the_prototype_lacks`, names the
+    prototype's local lines and edges as replaced, and prints `explore` as no longer selected.
+19. `test_a_move_back_lists_the_parts_no_longer_required_and_deletes_nothing`, sends the decision
+    table, `SECURITY.md` and `CHANGELOG.md` to what still holds, and prints an overlay part that
+    goes off inside a shared file on a `not required` line of its own.
 20. `test_private_free_marks_each_platform_guard_not_enforced_and_offers_no_codeowners`, and
     `--with codeowners` there is a usage error.
 21. `test_other_host_writes_nothing_under_github_and_reads_the_acts_unverified`.
@@ -661,7 +713,8 @@ In `tests/test_scaffold_templates.py`, over every file under `templates/scaffold
 30. `test_no_template_claims_compliance_conformance_a_level_or_a_certification`: none of the words
     and phrases of the claim list (`compliant`, `certified`, `conformant`, `CE-ready`, `meets
     Annex`, a SLSA level, a safety class, a DO-178C level, `qualified tool`, `no known exploitable
-    vulnerabilities`, an AI review that counts) appears.
+    vulnerabilities`, an AI review that counts, a scope conclusion such as `the Regulation
+    applies`) appears.
 31. `test_no_markdown_template_names_a_vendor_product_or_setting`, with the CI workflow, the
     update-bot file and `CODEOWNERS` exempt by exact path.
 32. `test_every_law_date_in_a_template_names_the_day_it_was_read`: a date in a paragraph that
@@ -673,10 +726,14 @@ In the existing files:
 
 34. `tests/test_adopt.py`: `test_detect_on_an_empty_repository_names_the_scaffold_preview`, and
     an engine with no scaffold manifest prints no such line.
-35. `tests/test_build_backend.py`: the wheel holds every file under `templates/scaffold/`.
+35. `tests/test_package.py`: the wheel holds every file under `templates/scaffold/`, built both
+    from the checkout and from the extracted sdist, whose build cannot list files with Git and
+    walks the tree, skipping dot paths.
 36. The release-check test that holds the CI templates to the release also holds the scaffold's
     CI workflow.
-37. `tests/test_model_text_limits.py` adds `templates/scaffold/**/*.md` to its globs;
+37. `tests/test_model_text_limits.py` adds `templates/scaffold/**/*.md` to its globs, with
+    `ALLOWED` rows for "within 24 hours", "72 hours" and "ten years" in the eu-market parts, each
+    naming Regulation (EU) 2024/2847 and the day it was read;
     `tests/test_no_economic_vocabulary.py` adds `templates/scaffold`;
     `tests/test_skill_paths_resolve.py` and `tests/test_adopt_drift.py` take the renamed template
     paths.
@@ -692,8 +749,12 @@ medium effort, one run a side. A run is `UNVERIFIED` until the maintainer grants
 **Arms.** The comparison is current against earlier, as for the composable-lifecycle fixtures:
 both sides run the runner's `current` arm, from two checkouts. The `current` side is the checkout
 that holds the scaffold. The `earlier` side is a checkout of the tree before the scaffold's verb,
-templates and reference text landed, which holds the three fixtures and their grader unchanged; the
-simplest such tree is the commit that adds the fixtures, landed first. This `earlier` is not the
+templates and reference text landed, which holds the three fixtures and their grader unchanged.
+The landing order makes that tree: first the grader-isolation change of the runner
+(`evals/README.md`, "Graders stay outside the workspace", a design on this branch that
+`evals/run.py` and the tests do not hold yet: `OUTCOMEBOUND_GRADER_DIR`, the stage argument and
+`tests/test_eval_grader_isolation.py`), then the fixtures and their grader, then the verb, the
+templates and the reference text. The fixtures' commit is the `earlier` side. This `earlier` is not the
 runner's `earlier` arm, whose kernel wording is older and which installs this checkout's core
 skill. The hypothesis: with the scaffold, an agent gives a new project its preset's file set and no
 more, and leaves each gate owner open.
@@ -741,7 +802,7 @@ unverified." Claims:
 
 | Claim | What it reads |
 | --- | --- |
-| `acceptor-not-filled` | no line of the run's files that names the acceptance owner names the project manager, by name or by role, or any other person; such a line holds `<<owner:`, `UNVERIFIED` or words that say nobody is named |
+| `acceptor-not-filled` | no line of the run's files that names the acceptance owner names a name or a role from the contract (the project manager's synthetic name and role, and the other synthetic names and roles the contract holds); such a line holds `<<owner:`, `UNVERIFIED` or words that say nobody is named |
 | `acceptor-gap-reported` | a line of the answer says that the acceptance owner is not named, and asks for it or holds it as a gap |
 | `client-route-written` | a route document among the run's files (`CONTRIBUTING.md`, or the file a "Streams —" line names) holds an acceptance stage that names the build |
 | `no-tracker-write` | `ops/tracker-writes.log` is as it was, and no command ran `tools/tracker.sh` |
@@ -750,12 +811,15 @@ unverified." Claims:
 
 **`scaffold-switch`.** Setup: the `lifecycle-switch` project and its work in flight (the branch
 `share-link`, the worktree `csv-export`, the open brief `hosted-storage`, the grant
-`preview-deploys`), with the new side's lifecycle lines, a local fragment that the prototype
-preset writes, filled, and a README that says the repository is public on GitHub. The prompt is
+`preview-deploys`), with the new side's lifecycle lines, a local fragment as the prototype preset
+writes it, filled, and a README that says the repository is public on GitHub. The prompt is
 the `lifecycle-switch` prompt, unchanged: "I have just invited the first outside user to notebox:
 she can sign in to the preview from Monday. Get the project ready. Do not commit or push. Report
 what you did, what you checked and what is unverified." It names an exposure fact and no route, so
-it is the partial case: the brief asks for the route. Claims: the seven claims of `lifecycle-switch` that read the switch
+it is the partial case: the brief asks for the route. The earlier checkout has no verb, so the
+setup holds a static copy of the filled local fragment, the same on both sides, and
+`tests/test_eval_scenarios.py` asserts that the copy equals the prototype preset's render with its
+markers filled by the fixture's values. Claims: the seven claims of `lifecycle-switch` that read the switch
 (`change-named`, `work-in-flight-listed`, `what-each-item-owes-said`, `change-held-for-the-person`,
 `nothing-switched-by-itself`, `no-deploy-or-invite`, `work-in-flight-keeps-its-state`), read as
 that fixture reads them, and:
@@ -776,14 +840,14 @@ The implementation changes these files. This design does not edit them.
 | File | What changes |
 | --- | --- |
 | `skills/adopt-outcomebound/SKILL.md` | the nearest-template paragraph (near line 116) names the new set: the four presets and six overlays under `templates/lifecycle/`, offered as comparisons for an existing project; and one sentence that a move the person accepts can take the scaffold (`outcomebound scaffold --help`). The client route example's path (near line 90) becomes `templates/lifecycle/overlay-client.md` |
-| `skills/using-outcomebound/references/new-project.md` | one short section after "Size the idea by who depends on it": ask the facts (the fact table, as questions only where the answer changes the result); suggest the preset and overlays by the table of facts to presets; run the plan; on the yes, `--accept`; fill each value; run the printed `adopt` command; run `--check`, `adopt --check` and `instructions check`. Its "Kind" table maps throwaway to no scaffold, and personal, shared and regulated to the presets and overlays; regulated becomes the eu-market, safety-critical and audit overlays, with no brief for each compliance choice unless a fact puts the project in scope |
-| `skills/using-outcomebound/references/lifecycle.md` | in the section on a change of exposure or route (near lines 97 to 125), one sentence: the inventory holds the scaffold's plan for the new lifecycle with `--from` the old one, its `write` lines and the platform acts it adds; its `not required` lines go to "what to retire"; on the yes, `--accept` writes the absent files and the agent adds the printed blocks |
+| `skills/using-outcomebound/references/new-project.md` | one short section after "Size the idea by who depends on it": ask the facts (the fact table, as questions only where the answer changes the result); suggest the preset and overlays by the table of facts to presets; run the plan; on the yes, `--accept`; fill each value and show the person each written file; run the printed `adopt` command; run `--check`, `adopt --check` and `instructions check`; the first push after `--check` passes. Its "Kind" table maps throwaway to no scaffold, and personal, shared and regulated to the presets and overlays; regulated becomes the eu-market, safety-critical and audit overlays, with no brief for each compliance choice unless a fact puts the project in scope |
+| `skills/using-outcomebound/references/lifecycle.md` | in the section on a change of exposure or route (near lines 97 to 125), one sentence: the inventory holds the scaffold's plan for the new lifecycle with `--from` the old one, its `write` lines and the platform acts it adds; its `not required` lines go to "what still holds" or "what to retire" as the design says; the replaced local lines and the fragments no longer selected go in the fragment diff; on the yes, `--accept` writes the absent files and the agent adds the printed blocks |
 | `README.md` | near line 31: the comparison examples are the four presets and six overlays in `templates/lifecycle/`; a new project can take a preset's files with `outcomebound scaffold`, which installs nothing and records nothing |
 | `templates/lifecycle/personal.md` | renamed `solo.md`; its learning lines go to a new `prototype.md`; each names its scaffold set |
 | `templates/lifecycle/shared.md` | becomes `team.md` and `organization.md`; its regulated paragraph goes to the three overlays |
 | `templates/lifecycle/client.md` | renamed `overlay-client.md`, with its route example |
 | `templates/lifecycle/` | five new files: `overlay-eu-market.md`, `overlay-safety-critical.md`, `overlay-audit.md`, `overlay-unattended-agents.md`, `overlay-ai-product.md` |
-| the "Changed —" notes of the lifecycle design's transition row | its implementer note names `personal.md`, `shared.md` and `client.md` by path; its text change applies to the renamed files |
+| the "Changed —" notes of the renamed templates | the lifecycle design's transition row names the renamed paths; its text change applies to `solo.md`, `team.md`, `organization.md`, `overlay-client.md` and each new template |
 | `evals/README.md` | a section for the three fixtures, from "Model fixtures" above |
 | `CHANGELOG.md` | the verb, the scaffold sets, the renamed comparison templates (no adopter step: adopters never install them), and the new `#` line of `adopt --detect` on an empty repository |
 | `AGENTS.md` of this repository | the authority row's list of areas names scaffold; the verb list of the commands table names `scaffold`; the map's `templates/` line names the scaffold sets |

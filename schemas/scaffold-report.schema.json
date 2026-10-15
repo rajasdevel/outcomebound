@@ -40,7 +40,8 @@
           "present_at": {"type": "string", "minLength": 1, "description": "For present: where the part was found, when that is not the planned path."},
           "block": {"type": "string", "description": "For present: the text the plan's parts would add, for the agent to add on the person's yes."},
           "offer": {"type": "string", "minLength": 1, "description": "For offer: the `--with` value, or the command or template the offer names."},
-          "reason": {"type": "string", "minLength": 1, "description": "For refused: why the write was refused."}
+          "reason": {"type": "string", "minLength": 1, "description": "For refused: why the path was refused, in the plan or at --accept."},
+          "part": {"type": "string", "minLength": 1, "description": "For not required: the preset, act or overlay whose part inside this file the new lifecycle does not need, where the file itself stays required."}
         }
       }
     },
