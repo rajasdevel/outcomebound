@@ -786,8 +786,8 @@ def test_claims_that_read_outside_the_bounds_fold_into_one_text_row_each(
     )
     plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
     plan["claims"] += [
-        {"name": "whole-tree", "command": ["true"], "required_paths": ["."]},
-        {"name": "tool-only", "command": ["true"], "required_paths": ["tools/run.py"]},
+        {"name": "whole-tree", "command": ["make", "whole"], "required_paths": ["."]},
+        {"name": "tool-only", "command": ["make", "tool"], "required_paths": ["tools/run.py"]},
     ]
     write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
 
@@ -1386,3 +1386,131 @@ def test_tests_import_only_public_names() -> None:
             reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
     assert reached == 8, "this file imports exactly the seam it tests"
+
+
+# --- a claim another claim of the ticket already runs ---------------------------------
+
+
+def subsuming(tmp_path: Path, *documents: dict[str, object], **commands: list[str]) -> Path:
+    """A checkout whose plan defines each claim of `commands`, with the files a test path
+    names, so a word that names a path exists from the plan's directory."""
+
+    root = checkout(tmp_path, *documents)
+    for relative in ("tests/test_a.py", "tests/test_b.py", "docker/done.sh"):
+        write(root, relative, "\n")
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"] += [{"name": name, "command": argv} for name, argv in commands.items()]
+    write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+    return root
+
+
+def test_a_claim_that_another_named_claim_already_runs_is_a_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if a ticket that names the suite and the suite narrowed to two of its files
+    passes the lint silently, so each ticket runs the slow command twice; the wider command
+    itself names a path, as a project's own suite script does."""
+
+    root = subsuming(
+        tmp_path,
+        document("#1", done_when=["suite", "gate"]),
+        suite=["sh", "docker/done.sh"],
+        gate=["sh", "docker/done.sh", "tests/test_a.py", "tests/test_b.py"],
+    )
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == ["CLAIM_SUBSUMED"]
+    [text] = said(found, "CLAIM_SUBSUMED")
+    assert "`gate`" in text and "of `suite` with paths added" in text and "testpaths" in text
+
+
+def test_equal_commands_under_two_names_warn_on_the_later_claim(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = subsuming(
+        tmp_path, document("#1", done_when=["one", "two"]), one=["pytest"], two=["pytest"]
+    )
+
+    found = report(root, capsys=capsys, expect=0)
+
+    [text] = said(found, "CLAIM_SUBSUMED")
+    assert "drop `two` from `done-when`; `one` runs it" in text
+
+
+@pytest.mark.parametrize(
+    "narrow",
+    [
+        ["make", "test", "X=1"],
+        ["pytest", "-k", "a"],
+        ["pytest", "tests/missing.py"],
+        ["ruff", "check"],
+    ],
+)
+def test_a_claim_is_not_subsumed_by_a_flag_a_variable_a_missing_path_or_another_tool(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], narrow: list[str]
+) -> None:
+    wide = ["make", "test"] if narrow[0] == "make" else ["pytest"]
+    root = subsuming(
+        tmp_path, document("#1", done_when=["wide", "narrow"]), wide=wide, narrow=narrow
+    )
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert "CLAIM_SUBSUMED" not in codes(found, "#1")
+
+
+def test_two_claims_on_two_tickets_are_not_subsumed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = subsuming(
+        tmp_path,
+        document("#1", done_when=["suite"]),
+        document("#2", done_when=["gate"]),
+        suite=["pytest"],
+        gate=["pytest", "tests/test_a.py"],
+    )
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert "CLAIM_SUBSUMED" not in every_code(found)
+
+
+def test_a_subsumed_claim_on_many_tickets_is_one_text_row(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if a breakdown that repeats the pair on twelve tickets prints twelve rows."""
+
+    root = subsuming(
+        tmp_path,
+        *(document(f"#{n}", done_when=["suite", "gate"]) for n in range(1, 13)),
+        suite=["pytest"],
+        gate=["pytest", "tests/test_a.py"],
+    )
+
+    code, out, _ = run(root, capsys=capsys)
+
+    assert code == 0
+    folded = [line for line in out.splitlines() if "CLAIM_SUBSUMED" in line]
+    assert len(folded) == 1 and "the same on 12 tickets" in folded[0], out
+
+
+def test_the_outside_bounds_advice_keeps_bounds_first_and_widens_only_inside_the_authority(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if the advice leads an agent to widen `bounds` over a shared input it never
+    writes."""
+
+    root = checkout(tmp_path, document("#1", bounds=["src/feature"], done_when=["whole-tree"]))
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"].append({"name": "whole-tree", "command": ["true"], "required_paths": ["."]})
+    write(root, CLAIMS_PATH, json.dumps(plan, indent=1))
+
+    found = report(root, capsys=capsys, expect=0)
+    _, out, _ = run(root, capsys=capsys)
+
+    [text] = said(found, "CLAIM_READS_OUTSIDE_BOUNDS")
+    row = next(line for line in out.splitlines() if "CLAIM_READS_OUTSIDE_BOUNDS" in line)
+    for shown in (text, row):
+        assert "keep `bounds`" in shown or "keep the `bounds`" in shown
+        assert "already reaches" in shown and "`blocked-by`" in shown

@@ -153,8 +153,17 @@ that each ticket names in `reads`. The WARNING says which to do for each kind.
 A claim can declare the paths that it needs, as `required_paths` in the plan. When a ticket's
 claim declares a path that the ticket's `bounds` do not cover, `check` gives a WARNING,
 `CLAIM_READS_OUTSIDE_BOUNDS`. A finding in that path is one that the ticket's work may not
-repair. Widen `bounds`, or put a ticket that repairs it first in `blocked-by`. A claim that
-declares no paths is not examined, because the plan does not say what its command reads.
+repair. Keep `bounds` where the claim passes today. Widen them only where the outcome's authority
+already reaches those paths; else put a ticket that repairs them first in `blocked-by`. A claim that
+declares no paths is not examined, because the plan does not say what its command reads. The plan
+does not say whether a declared path is an input the claim reads (a config, a compose file) or a
+subject it judges, so the warning also comes for an input; keeping `bounds` covers that case.
+
+When a ticket names two claims and the plan's command of one is the other's with only existing
+paths added, or the same command, `check` gives a WARNING, `CLAIM_SUBSUMED`, on the narrower claim:
+one run of the wider claim covers it, unless the tool's config narrows that run (a `testpaths`, an
+exclude), which the command cannot show. Drop the narrower claim where the wider run reads those
+paths. Nothing runs to decide it. In text, the same pair on several tickets is one row.
 When a declared path is not in the checkout as it resolves from the plan's `cwd`, but is in the
 checkout as it resolves from the checkout root, `check` gives a WARNING about the plan,
 `CLAIM_PATH_ABSENT`, with no ticket id. A run of that claim reads `UNVERIFIED`. When a declared
