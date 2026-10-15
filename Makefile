@@ -12,7 +12,17 @@ OB_BASE ?= origin/main
 # Where `make kits` writes one <name>.zip and one <name>.md per kit under kits/.
 KITS_OUT ?= dist/kits
 
-.PHONY: test gate check scrub canary release-check kits
+.PHONY: python test gate check scrub canary release-check kits
+# A $(PYTHON) that runs but is older than 3.10 stops every target here, by name, before a script
+# fails on it with a raw error. One that is absent is left to fail in the recipe with make's own
+# line. The message is the launcher's, so one phrase means one thing.
+python:
+	@if command -v $(PYTHON) >/dev/null 2>&1 && ! $(PYTHON) -c 'import sys; sys.exit(sys.version_info < (3, 10))' >/dev/null 2>&1; then \
+		echo "outcomebound: no Python 3.10 or later: PYTHON=$(PYTHON) runs $$($(PYTHON) -V 2>&1) at $$(command -v $(PYTHON)); name one with PYTHON=/path/to/python3, or put one first on PATH" >&2; \
+		exit 127; \
+	fi
+test gate check scrub canary release-check kits: python
+
 test:
 	@if $(PYTHON) -m pytest --version >/dev/null 2>&1; then \
 		if $(PYTHON) -c "import xdist" >/dev/null 2>&1; then $(PYTHON) -m pytest -n auto; \

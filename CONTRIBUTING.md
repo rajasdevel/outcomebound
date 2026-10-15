@@ -80,6 +80,9 @@ make test
 - `make test` uses xdist to run the suite across CPUs where xdist is installed, else runs it
   serially. If your `python3` has no pytest and `uv` is on `PATH`, the fallback runs the pinned
   pytest and xdist versions from the `Makefile` through uv.
+- Every target first checks that `python3` is 3.10 or later. An older one stops the target at
+  once with a line that names its version and path; the uv fallback does not rescue it. Name
+  another interpreter with `PYTHON=/path/to/python3`, or put one first on `PATH`.
 - `make scrub` applies a local list of private names to the same text as the public-text check
   ([Agents and releases](#agents-and-releases)). A maintainer runs it before a merge.
 
