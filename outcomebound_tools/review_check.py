@@ -28,7 +28,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools import instruction_audit, textio
+from outcomebound_tools import instruction_audit, textio, walk
 
 PASS, FAIL, WARN, INFO = "PASS", "FAIL", "WARN", "INFO"
 VERSION = 1
@@ -304,18 +304,24 @@ def _declares(text: str) -> bool:
 
 def _candidates(folder: Path) -> tuple[list[Path], list[str]]:
     """Each `.md` file one to `SWEEP_DEPTH` levels below `folder`, and each `.md` file not read:
-    a link, or a file over `SWEEP_BYTES`. A linked folder is not entered."""
+    a link, or a file over `SWEEP_BYTES`. The walk is `walk.folders`: a linked folder, `.git` and a
+    folder that holds its own `.git` (a scratch clone, a worktree) are not entered."""
 
     found: list[Path] = []
     unread: list[str] = []
-    for top, folders, files in os.walk(folder, followlinks=False):
-        depth = len(Path(top).relative_to(folder).parts)
-        folders[:] = [] if depth + 1 >= SWEEP_DEPTH else sorted(folders)
-        for name in files:
-            path = Path(top) / name
+    for entered in walk.folders(folder):
+        depth = 0 if entered.relative == "." else len(Path(entered.relative).parts)
+        if depth >= SWEEP_DEPTH:
+            continue
+        for name in entered.files:
+            path = entered.path / name
             if not name.endswith(".md"):
                 continue
-            if path.is_symlink() or path.stat().st_size > SWEEP_BYTES:
+            try:
+                large = path.is_symlink() or path.stat().st_size > SWEEP_BYTES
+            except OSError:
+                large = True
+            if large:
                 unread.append(str(path))
             else:
                 found.append(path)

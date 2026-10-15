@@ -10,7 +10,6 @@ ROOT = Path(__file__).resolve().parents[1]
 # The fragments no fixture selects, each with why: effect UNVERIFIED wherever it is claimed.
 UNMEASURED = {
     "client": "no fixture; added for the agency lifecycle",
-    "commands": "no fixture; a hang or a pager needs a harness turn to show",
     "explore": "no fixture",
     "research": "no fixture; the research clone is outside a fixture repository",
     "solo": "no fixture",
