@@ -3410,3 +3410,187 @@ def test_an_install_warns_of_each_hook_that_names_a_project_file_from_the_workin
     assert "PreToolUse hook `bash scripts/hooks/guard.sh`" in warned[0]
     assert "Stop hook `./scripts/hooks/guard.sh`" in warned[1]
     assert all("$CLAUDE_PROJECT_DIR" in line for line in warned)
+
+
+# --- hook entries that run the finish check and no record holds ------------------
+
+DIGEST = "0" * 64
+HAND_MADE = f"outcomebound finish-check --harness claude-code --done {DIGEST} --timeout 600"
+UNMANAGED_FILES = [".claude/settings.json", ".claude/settings.local.json", ".codex/hooks.json"]
+
+
+def hook_settings(*commands: str, event: str = "Stop") -> str:
+    """A settings document with one group under `event` for each command."""
+
+    groups = [{"hooks": [{"type": "command", "command": command}]} for command in commands]
+    return json.dumps({"hooks": {event: groups}}, indent=2) + "\n"
+
+
+def unmanaged_lines(out: str) -> list[str]:
+    return [line for line in out.splitlines() if line.startswith("unmanaged")]
+
+
+def installed_without_finish_check(tmp_path: Path, capsys: Capture) -> Path:
+    """A project with a current install that has Done recorded and no finish-check entry."""
+
+    target = repo(tmp_path / "t")
+    assert run(capsys, str(target), "--harness", "claude-code", "--done", "true")[0] == 0
+    return target
+
+
+def test_check_reports_a_hand_made_stop_entry_with_its_replacement_and_counts_it(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a hand-made finish-check entry that no record holds, with no turn-start entry
+    beside it, is passed over, or if the exit or the `next:` line does not count and name it."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    write(target / ".claude/settings.json", hook_settings(HAND_MADE))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    fix = f"outcomebound adopt {paths.shell_path(target)} --finish-check"
+    assert code == 1
+    (line,) = unmanaged_lines(out)
+    assert ".claude/settings.json" in line and "Stop" in line and HAND_MADE in line
+    assert f"`{fix}`" in line
+    assert next_lines(out) == [
+        f"next: remove each unmanaged entry, then {fix} writes both managed entries"
+    ]
+    assert run(capsys, str(target), "--check")[0] == 1
+
+
+@pytest.mark.parametrize("path", UNMANAGED_FILES)
+def test_check_reads_each_hook_file_adopt_reads_and_counts_each_entry(
+    tmp_path: Path, capsys: Capture, path: str
+) -> None:
+    """Breaks if an entry in `.claude/settings.local.json` or `.codex/hooks.json`, or under an
+    event no record names, goes unreported, or if each entry is not one in the exit."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    (target / path).parent.mkdir(exist_ok=True)
+    write(target / path, hook_settings(HAND_MADE, HAND_MADE + " --again", event="SessionEnd"))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 2
+    lines = unmanaged_lines(out)
+    assert len(lines) == 2 and all(path in line and "SessionEnd" in line for line in lines)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"sh -c 'outcomebound finish-check --harness claude-code --done {DIGEST}'",
+        f'bash -c "$HOME/.local/bin/outcomebound finish-check --done {DIGEST}"',
+        f"python3 -m outcomebound_tools.finish_check --harness claude-code --done {DIGEST}",
+        f"python -m outcomebound_tools finish-check --harness claude-code --done {DIGEST}",
+        "C:/tools/outcomebound.exe finish-check --mark",
+    ],
+    ids=["sh-c", "bash-c-path", "module-underscore", "module-verb", "windows-exe"],
+)
+def test_check_reads_an_entry_inside_sh_c_and_both_module_forms(
+    tmp_path: Path, capsys: Capture, command: str
+) -> None:
+    """Breaks if a finish check run through `sh -c`, a path, either Python module form or a
+    Windows launcher name is not seen."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    write(target / ".claude/settings.json", hook_settings(command))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1 and len(unmanaged_lines(out)) == 1
+
+
+def test_check_does_not_read_a_wrapper_script_or_a_hook_that_runs_another_verb(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the lexical match opens a script a hook names (the stated residual), or takes
+    another verb, another program or a longer word for the finish check."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    (target / "scripts").mkdir()
+    write(target / "scripts/wrap.sh", "#!/bin/sh\noutcomebound finish-check --done x\n")
+    controls = [
+        "./scripts/wrap.sh",
+        "outcomebound floor check .",
+        "outcomebound finish-checker",
+        "my-outcomebound finish-check",
+        "echo outcomebound-finish-check",
+        "python -m outcomebound_tools floor check .",
+    ]
+    write(target / ".claude/settings.json", hook_settings(*controls))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 0 and unmanaged_lines(out) == [] and next_lines(out) == []
+
+
+def test_detect_reports_an_entry_on_a_comment_line_with_no_install_and_the_same_exit(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--detect` leaves an entry out where no manifest exists, prints it other than
+    as a `#` line, escapes none of the command's control characters, or changes its exit."""
+
+    target = repo(tmp_path / "t", {".claude/settings.json": hook_settings(HAND_MADE + " \x1b[31m")})
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0
+    notes = [line for line in notes_of(out) if line.startswith("# unmanaged: ")]
+    assert len(notes) == 1 and "\x1b" not in out and "\\x1b[31m" in notes[0]
+    assert ".claude/settings.json" in notes[0] and "Stop" in notes[0]
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 2 and len(unmanaged_lines(out)) == 1
+
+
+def test_a_recorded_entry_is_not_reported_and_an_edited_one_is_not_counted_twice(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if adopt's own two entries read `unmanaged`, if an entry edited by hand reads
+    both `edited` and `unmanaged`, or if a second, hand-made copy is not the one `unmanaged`."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and unmanaged_lines(out) == []
+
+    settings, name = target / ".claude/settings.json", ".claude/settings.json (finish-check)"
+    document = json.loads(settings.read_text(encoding="utf-8"))
+    document["hooks"]["Stop"][0]["hooks"][0]["timeout"] = 30
+    write(settings, json.dumps(document, indent=2) + "\n")
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 1 and states(out)[name] == "edited" and unmanaged_lines(out) == []
+
+    document["hooks"]["Stop"].append({"hooks": [{"type": "command", "command": HAND_MADE}]})
+    write(settings, json.dumps(document, indent=2) + "\n")
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 2 and states(out)[name] == "edited"
+    (line,) = unmanaged_lines(out)
+    assert HAND_MADE in line
+    assert "--force makes every record current; for each unmanaged entry" in next_lines(out)[0]
+
+
+def test_an_install_warns_of_an_entry_it_did_not_write_and_changes_no_byte_of_it(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install refuses over the entry, removes or rewrites it, does not warn of
+    it, or warns of the two entries it writes itself."""
+
+    module = f"python3 -m outcomebound_tools finish-check --harness claude-code --done {DIGEST}"
+    target = repo(tmp_path / "t", {".claude/settings.json": hook_settings(module)})
+
+    code, out, _ = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0
+    warned = [line for line in out.splitlines() if "runs the finish check" in line]
+    assert len(warned) == 1 and warned[0].startswith("warning") and module in warned[0]
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == module
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 1 and len(unmanaged_lines(out)) == 1
+    assert states(out)[".claude/settings.json (finish-check)"] == "current"

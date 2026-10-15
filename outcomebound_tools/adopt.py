@@ -1840,6 +1840,90 @@ def hook_path_notes(target: Path) -> Notes:
     return notes
 
 
+# Every settings file adopt reads for hooks, whichever harness a record names.
+HOOK_FILES = (*CLAUDE_SETTINGS, ".codex/hooks.json")
+# A command that runs the finish check: `outcomebound` as a word or a path's last part (with
+# `.cmd` or `.exe` on Windows), whitespace and `finish-check`, or one of the two module forms.
+# The match is lexical, also inside a `sh -c` string, and runs nothing: a script a hook names
+# is not opened, a residual no lexical rule closes.
+RUNS_FINISH_CHECK = re.compile(
+    r"(?<![\w.-])outcomebound(?i:\.cmd|\.exe)?\s+finish-check(?![\w-])"
+    r"|-m\s+outcomebound_tools(?:\.finish_check(?![\w-])|\s+finish-check(?![\w-]))"
+)
+
+
+def _unmanaged_in(settings: Settings, own: Sequence[Record]) -> list[tuple[str, str]]:
+    """(event, command) for each command handler of `settings` that runs the finish check, in a
+    group that none of `own`'s hook records for this file holds. The group a record holds is the
+    one `--check` reads for it, `Settings.find`: so an entry edited by hand reads `edited`, once,
+    and a second copy of adopt's entry, or one under an event no record names, is unmanaged."""
+
+    events = settings.data.get("hooks")
+    if not isinstance(events, dict):
+        return []
+    held = {
+        spot
+        for record in own
+        if record["kind"] == HOOK and record["path"] == settings.path
+        for spot in [settings.find(record["sha256"], record["id"] == FINISH_MARK)]
+        if spot is not None
+    }
+    found: list[tuple[str, str]] = []
+    for event, groups in events.items():
+        for index, group in enumerate(groups if isinstance(groups, list) else []):
+            handlers = group.get("hooks") if isinstance(group, dict) else None
+            for hook in handlers if isinstance(handlers, list) else ():
+                command = hook.get("command") if isinstance(hook, dict) else None
+                if (
+                    (event, index) not in held
+                    and isinstance(command, str)
+                    and RUNS_FINISH_CHECK.search(command)
+                ):
+                    found.append((str(event), command))
+    return found
+
+
+def unmanaged_hooks(
+    target: Path, own: Sequence[Record], planned: dict[str, Settings] | None = None
+) -> list[tuple[str, str, str]]:
+    """(file, event, command) for each hook entry in a settings file adopt reads that runs the
+    finish check and that no record of `own` holds; `planned` holds the documents an install
+    plans to write, read in place of the files. A file adopt cannot read is passed over."""
+
+    found: list[tuple[str, str, str]] = []
+    for relative in HOOK_FILES:
+        settings = (planned or {}).get(relative)
+        if settings is None:
+            try:
+                settings = Settings.parse(relative, _read(target, relative))
+            except AdoptError:
+                continue
+        found += [(relative, event, command) for event, command in _unmanaged_in(settings, own)]
+    return found
+
+
+def _replacement(target: Path, own: Sequence[Record]) -> str:
+    """The command that writes both managed entries, `--done` named where none is recorded."""
+
+    flag = "" if recorded_done(own) else " --done CMD"
+    return f"outcomebound adopt {paths.shell_path(target)} --finish-check{flag}"
+
+
+def unmanaged_lines(
+    target: Path, own: Sequence[Record], planned: dict[str, Settings] | None = None
+) -> list[str]:
+    """One line for each unmanaged hook entry: its file, its event, its command, and the fix.
+    Adopt removes no entry it did not write, since the bytes are the project's."""
+
+    fix = _replacement(target, own)
+    return [
+        f"{relative}: the {_printable(event)} hook `{_printable(command)}` runs the finish "
+        f"check and no install record holds it; remove that entry, then `{fix}` writes both "
+        "managed entries"
+        for relative, event, command in unmanaged_hooks(target, own, planned)
+    ]
+
+
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     """Where the install includes codex, the configuration route that lets an unattended
     session write the workspace folders and commit. Codex's default `workspace-write` sandbox
@@ -2016,6 +2100,9 @@ def install(
     run.notes.extend(ancestor_notes(target, found))
     run.notes.extend(reference_notes(target, found))
     run.notes.extend(hook_path_notes(target))
+    run.notes.extend(
+        ("warning", line) for line in unmanaged_lines(target, run.records, run.settings)
+    )
     run.notes.extend(codex_sandbox_notes(target, found))
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
@@ -2183,29 +2270,41 @@ def moved(target: Path, source: Path, record: Record, own: Sequence[Record]) -> 
     return "; ".join(parts)
 
 
-def next_step(target: Path, found: Sequence[str]) -> str | None:
+def next_step(
+    target: Path, found: Sequence[str], own: Sequence[Record] = (), unmanaged: int = 0
+) -> str | None:
     """The command that makes every record current, for a person who did not install; None
-    where each already is. An edited record is refused without `--force`, which would replace
-    the edit, so the edit is moved out first."""
+    where each already is and no hook entry is unmanaged. An edited record is refused without
+    `--force`, which would replace the edit, so the edit is moved out first. An unmanaged entry
+    is the project's own bytes: it is removed by hand, then `--finish-check` writes adopt's."""
 
     command = f"outcomebound adopt {paths.shell_path(target)}"
+    step = None
     if "edited" in found:
-        return (
+        step = (
             "next: move each edit out of OutcomeBound's blocks and files, then "
             f"{command} --force makes every record current"
         )
-    if any(state != "current" for state in found):
-        return f"next: {command} makes every record current"
-    return None
+    elif any(state != "current" for state in found):
+        step = f"next: {command} makes every record current"
+    if not unmanaged:
+        return step
+    fix = f"{_replacement(target, own)} writes both managed entries"
+    if step is None:
+        return f"next: remove each unmanaged entry, then {fix}"
+    return f"{step}; for each unmanaged entry, remove it, then {fix}"
 
 
 def check(target: Path, source: Path) -> int:
     manifest = load_manifest(target)
+    unmanaged = unmanaged_lines(target, manifest.own)
     if manifest.raw is None:
         print(f"missing  {MANIFEST}")
+        for line in unmanaged:
+            print(f"{'unmanaged':<8} {line}")
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
-        return 1
+        return min(1 + len(unmanaged), CHECK_CAP)
     found: list[str] = []
     for record in manifest.own:
         found.append(state(target, source, record, manifest.own))
@@ -2216,15 +2315,17 @@ def check(target: Path, source: Path) -> int:
         elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
             detail = moved(target, source, record, manifest.own)
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
+    for line in unmanaged:
+        print(f"{'unmanaged':<8} {line}")
     note = measurement_note(target, manifest.own)
     if note is not None:
         print(f"{'note':<8} {note}")
     for line in _drift_lines(target, source, manifest.own, facts.read_ci(target)):
         print(f"{'drift':<8} {line}")
-    step = next_step(target, found)
+    step = next_step(target, found, manifest.own, len(unmanaged))
     if step is not None:
         print(step)
-    return min(sum(state != "current" for state in found), CHECK_CAP)
+    return min(sum(state != "current" for state in found) + len(unmanaged), CHECK_CAP)
 
 
 def _drift_lines(
@@ -2562,6 +2663,7 @@ def detect(target: Path, source: Path) -> int:
     notes += _signal_notes(target, files)
     notes += _readiness_notes(target, done, files)
     notes += [f"drift: {line}" for line in _drift_lines(target, source, own, files)]
+    notes += [f"unmanaged: {line}" for line in unmanaged_lines(target, own)]
     guide = (Path(source).resolve() / GUIDE).as_posix()
     notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
     print(textio.visible(" ".join(map(paths.shell_word, words))))
@@ -2648,10 +2750,20 @@ its exit; a dry run does not run Done. adopt writes the document back with
 its keys, their order and its indentation kept, rewriting only its whitespace, and refuses one
 with comments. A Done change rewrites the entry, and Codex skips a changed entry until each
 person trusts it again in /hooks, which the install report says; --no-finish-check or --remove
-takes it out."""
+takes it out.
+
+--check and --detect also read .claude/settings.json, .claude/settings.local.json and
+.codex/hooks.json for a hook entry that runs the finish check and that no record holds, and
+report each as unmanaged: the file, the event, the command and the fix, which is to remove that
+entry, then run adopt with --finish-check. A command counts where it names `outcomebound`
+followed by `finish-check`, also inside sh -c, or a Python module form (-m
+outcomebound_tools.finish_check, or -m outcomebound_tools finish-check). The match is lexical
+and runs nothing, so a hook that calls a script of your own that runs the check is not seen.
+An install prints each as a warning. Nothing is refused, and adopt removes no entry it did not
+write; --check counts each in its exit, --detect prints each as a # line and exits as before."""
 EPILOG = """\
 exit: 0 done, 1 refused or failed, 2 usage; --check exits with the number of records that are
-not current, at most 100."""
+not current plus the number of unmanaged hook entries, at most 100."""
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -2674,8 +2786,9 @@ def _parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="print current, edited, stale or missing for each record, one note line on the "
-        "measurement of Done (never counted in the exit), then the command that makes each "
-        "current; write nothing",
+        "measurement of Done (never counted in the exit), each unmanaged hook entry that runs the "
+        "finish check (counted in the exit), then the command that makes each current; write "
+        "nothing",
     )
     verb.add_argument("--remove", action="store_true", help="remove every recorded block and file")
     finish = parser.add_mutually_exclusive_group()
