@@ -3471,6 +3471,25 @@ def test_a_failure_another_session_recorded_is_never_held(tmp_path: Path, row: s
 
 
 @pytest.mark.parametrize("row", ROWS)
+def test_a_turn_that_makes_a_tree_another_session_saw_fail_is_held(tmp_path: Path, row: str) -> None:
+    """Breaks if another session's failure record on the tree this turn made stands in for
+    this turn's own run: the turn changed the tree, so it may have caused the failure."""
+
+    root, digest = target(tmp_path / "t", ["test ! -e broken || { echo boom; exit 1; }"])
+    write(root / "broken", "x\n")
+    since = finish_helpers.now()
+    assert stop_json("codex", digest, root, stdin=other_session("codex", root)) == {}
+    finish_helpers.wait_for_run(root, since)
+    (root / "broken").unlink()
+
+    turn(row, digest, root)
+    write(root / "broken", "x\n")
+    _, verdict = hook(row, digest, root)
+
+    assert verdict.get("decision") == "block" and "boom" in verdict["reason"]
+
+
+@pytest.mark.parametrize("row", ROWS)
 def test_a_recorded_failure_on_an_older_tree_is_never_held(tmp_path: Path, row: str) -> None:
     """Breaks if a failure recorded on a tree that has changed since is held without a run
     that finds it again."""

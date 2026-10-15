@@ -690,6 +690,17 @@ class Checked:
             and (self.verdict == PASS or timeout == self.timeout)
         )
 
+    def repeats_for(
+        self, tree: str | None, timeout: int, session: str | None, mark: Mark | None
+    ) -> bool:
+        """`repeats`, except for another session's failure where this session's trusted mark
+        shows the turn changed the tree: that turn may have caused the failure, so Done runs
+        again and the record becomes this session's own, which holds."""
+
+        if not self.repeats(tree, timeout):
+            return False
+        return self.verdict == PASS or mark is None or self.session == session
+
 
 def _checked(document: object) -> Checked | None:
     """One record as `Checked.document` wrote it, or None; a record an engine before the
@@ -3127,7 +3138,10 @@ def _check(
     target, book = context.target, context.book
     current = checked_for(target, tree, context.until)
     unchanged = mark is not None and mark.tree == tree and mark.head == head
-    if unchanged or (current is not None and current.repeats(tree, context.timeout)):
+    if unchanged or (
+        current is not None
+        and current.repeats_for(tree, context.timeout, context.session, mark)
+    ):
         code, text, note = _wake_from(context, current, tree)
         note = DELIVERED_NOTE if code == 2 else note
         return (UNCHANGED if unchanged else RECORDED), note, code, text
@@ -3545,7 +3559,7 @@ def stop(
     hold = _stop_hold(target, viewer, current, mark, unchanged)
     state, last = run_state(target, deadline)
     running = state == LIVE and last is not None and last.tree == tree
-    repeating = current is not None and current.repeats(tree, entry.timeout)
+    repeating = current is not None and current.repeats_for(tree, entry.timeout, session, mark)
     starts = not unchanged and not repeating and not running
     argv = _run_argv(entry, payload, target, mark) if starts else None
     unheld: list[Notice] = []
