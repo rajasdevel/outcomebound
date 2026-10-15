@@ -59,8 +59,8 @@ After each round of fixes, count the findings that have a verified disposition: 
 replied to, or a reply with evidence that the comment is wrong. Do not count thread closures, since
 a thread another person owns stays open until they close it. A thread that waits on its reviewer
 waits; it is not a failed repair. Ask the person, naming the findings and what you tried, when a
-round gave no finding a verified disposition, or a finding comes back or the reviewer and you
-disagree after the same reply. When a finding you marked fixed comes back, find why first. Where a
+round gave no finding a verified disposition, or the reviewer and you disagree after the same
+reply. When a finding you marked fixed comes back, find why first. Where a
 later change undid the fix and the cause is plain, repair it inside the task with its regression
 check, and say the cause in the thread. Where the fix did not hold, or the finding comes back again,
 the assumption behind the fix is wrong: ask the person. More rounds of the same kind of fix repeat

@@ -33,7 +33,10 @@ An environment may serve more than one build or flag state, by route, by user gr
 what it serves may not be the one you expect. Before you run or hand over a script, read which build
 the environment serves: the version, commit or build id it reports about itself, from the environment
 and not from the pipeline's log, and the service versions and the flag or configuration state that
-the script exercises. Read them again after the run. Identity is what the artifact is: a digest or
+the script exercises. Read them again after the run. Two reads cannot show a change and back
+between them: pin the build or route where the project can; else keep the build each response
+names with its result; else say in the record that the build between the two reads is
+`UNVERIFIED`. Identity is what the artifact is: a digest or
 a version for a delivered file or a library, the environment's own report for a service. Where the
 environment does not report it, say so; the build is then `UNVERIFIED`, and so is every result. A
 run during which the build or the state changed, or that reached a mix of them, is `UNVERIFIED`:
