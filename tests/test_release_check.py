@@ -191,6 +191,21 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
         assert expected in failed[0] and result.returncode == 1, said
 
 
+def test_a_pass_read_from_a_saved_file_says_it_is_a_snapshot(tmp_path: Path) -> None:
+    """Breaks if a CI pass read from a saved file reads as GitHub's current answer: a later
+    failure of the same commit would not show in it."""
+
+    spec = importlib.util.spec_from_file_location("release_check", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    head = "a" * 40
+    saved = tmp_path / "runs.json"
+    saved.write_text(json.dumps({"workflow_runs": [{"head_sha": head, **PASSING[0]}]}))
+    passed, what = module.main_ci(head, saved)
+    assert passed and "snapshot" in what and "runs.json" in what, what
+
+
 @pytest.mark.parametrize(
     ("version", "today", "covered"),
     [
