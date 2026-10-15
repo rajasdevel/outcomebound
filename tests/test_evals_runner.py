@@ -804,6 +804,127 @@ def test_the_summary_counts_the_verdict_and_each_claim_by_fixture_and_arm(
     assert RUN.summarize([tmp_path / "empty"]) == 1
 
 
+SUMMARY_RUN = {
+    "fixture": "synthetic",
+    "harness": "codex",
+    "arm": "current",
+    "model": "named",
+    "effort": "medium",
+    "error": "",
+    "repetition": 1,
+    "verdict": "PASS",
+    "claims": {"guard": "PASS"},
+    "protected_intact": True,
+    "observations": [],
+    "kernel_sha256": "a",
+    "arm_files": {},
+    "commit": "a" * 40,
+    "dirty": False,
+    "tokens_used": 0,
+    "grading_files_sha256": "g1",
+    "graders_sha256": "s1",
+    "thread_id": "one",
+}
+
+
+def _summary(tmp_path: Path, capsys: pytest.CaptureFixture[str], *records: dict) -> list[str]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    for index, record in enumerate(records):
+        (tmp_path / f"{index}.meta.json").write_text(json.dumps(record), "utf-8")
+    assert RUN.summarize([tmp_path]) == 0
+    return capsys.readouterr().out.splitlines()
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        {"kernel_sha256": "b"},
+        {"arm_files": {"a": "1"}},
+        {"graders_sha256": "s2"},
+        {"grading_files_sha256": "g2"},
+        {"graders_sha256": None},
+    ],
+)
+def test_the_summary_never_pools_runs_of_different_instruments(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], changed: dict
+) -> None:
+    """Different kernels, installed files or graders are different measurements, so each is its
+    own group; a field a record does not keep is its own value, equal to no recorded one."""
+
+    other = {**SUMMARY_RUN, **changed, "thread_id": "two"}
+    if changed.get("graders_sha256", 1) is None:
+        del other["graders_sha256"]
+    printed = _summary(tmp_path, capsys, SUMMARY_RUN, other)
+    headers = [line for line in printed if line.startswith("synthetic |")]
+    assert headers == ["synthetic | codex | current | named medium: PASS 1/1"] * 2, printed
+    assert sum(line.startswith("  instrument:") for line in printed) == 2, printed
+    assert not any("2/2" in line for line in printed), printed
+
+
+def test_the_summary_keeps_runs_of_one_instrument_in_one_group_even_without_digests(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bare = {k: v for k, v in SUMMARY_RUN.items() if k not in ("graders_sha256", "arm_files")}
+    printed = _summary(tmp_path, capsys, bare, {**bare, "thread_id": "two"})
+    assert printed[0] == "synthetic | codex | current | named medium: PASS 2/2", printed
+    assert not any(line.startswith("  instrument:") for line in printed), printed
+
+
+def test_a_regrade_is_an_alternate_measurement_of_its_attempt_and_not_another_attempt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    original = {**SUMMARY_RUN, "verdict": "FAIL", "claims": {"guard": "FAIL"}}
+    regrade = {**SUMMARY_RUN, "regraded_from": "/kept/run"}
+    printed = _summary(tmp_path, capsys, original, regrade)
+    assert printed[0] == "synthetic | codex | current | named medium: PASS 0/1", printed
+    assert "  guard: PASS 0/1" in printed, printed
+    assert any(
+        "repetition 1" in line and "regrade" in line and "PASS" in line and "FAIL" in line
+        for line in printed
+    ), printed
+    reverse = _summary(tmp_path / "reverse", capsys, regrade, original)
+    assert reverse[0] == "synthetic | codex | current | named medium: PASS 0/1", reverse
+
+
+def test_a_regrade_whose_graders_differ_still_belongs_to_its_original_attempt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    regrade = {**SUMMARY_RUN, "graders_sha256": "s2", "regraded_from": "/kept/run"}
+    printed = _summary(tmp_path, capsys, SUMMARY_RUN, regrade)
+    assert [line for line in printed if line.startswith("synthetic |")] == [
+        "synthetic | codex | current | named medium: PASS 1/1"
+    ], printed
+
+
+def test_a_regrade_with_no_original_beside_it_is_the_one_measurement_of_its_attempt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    printed = _summary(tmp_path, capsys, {**SUMMARY_RUN, "regraded_from": "/kept/run"})
+    assert printed[0] == "synthetic | codex | current | named medium: PASS 1/1", printed
+
+
+def test_the_summary_counts_an_attempt_once_by_run_identity_where_no_thread_was_kept(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bare = {**SUMMARY_RUN, "thread_id": None, "run_id": "r1"}
+    printed = _summary(
+        tmp_path,
+        capsys,
+        bare,
+        {**bare, "verdict": "FAIL", "regraded_from": "/kept/run"},
+        {**bare, "run_id": "r2", "repetition": 2},
+    )
+    assert printed[0] == "synthetic | codex | current | named medium: PASS 2/2", printed
+
+
+def test_two_copies_of_one_original_attempt_count_once(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    printed = _summary(tmp_path, capsys, SUMMARY_RUN, SUMMARY_RUN)
+    assert printed[0] == "synthetic | codex | current | named medium: PASS 1/1", printed
+    assert any("not counted" in line for line in printed), printed
+
+
 def test_the_summary_gives_median_tokens_and_seconds_reading_a_missing_count_from_the_transcript(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
