@@ -9,7 +9,8 @@ Use `outcomebound` on PATH: installed from a release, or `scripts/outcomebound` 
 checkout. Read the target's existing agent instructions and its dirty state first; they are
 preserved.
 
-You are done when the install is current (`outcomebound adopt <target> --check` exits 0), Done was
+You are done when the install is current (an install that exits 0 wrote and checked every record;
+`outcomebound adopt <target> --check` is for a later day or another clone), Done was
 measured or the report says why not, each line you proposed for the project's `local` guidance
 cites the file that shows it, each fact the install reports `UNVERIFIED` is named, and what only the
 person can answer has gone to them as one decision brief. Write no overview of the repository: an

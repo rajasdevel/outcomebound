@@ -1040,6 +1040,9 @@ class Run:
         self.records: list[Record] = []
         self.edited: list[str] = []
         self.notes: Notes = []
+        # What the facts restate about this target: printed only by a run that changes a file,
+        # so a run with nothing to change restates nothing.
+        self.restated: Notes = []
         # The Done commands and the timeout the install measures once its writes are made, and
         # whether it measures as a hook runs Done (False: with this process's own PATH).
         self.measure: tuple[list[str], int, bool] | None = None
@@ -1316,10 +1319,12 @@ def desired(
     if WORKSPACE in ids:
         wants.append(Want("ignore", WORKSPACE_IGNORE, WORKSPACE, workspace_ignore(source)))
     wants.append(Want("ignore", LOCAL_IGNORE, LOCAL_RECORDS, LOCAL_IGNORE_TEXT))
-    run.notes.extend(("UNVERIFIED", text) for text in made.rendered.unverified)
+    run.restated.extend(("UNVERIFIED", text) for text in made.rendered.unverified)
+    if made.rendered.absent:
+        run.restated.append(("note", f"left out: {', '.join(made.rendered.absent)}"))
     wants.extend(imports)
     if any(item.harness == GENERIC for item in found):
-        run.notes.append(("UNVERIFIED", f"{GENERIC}: that the harness reads {AGENTS}"))
+        run.restated.append(("UNVERIFIED", f"{GENERIC}: that the harness reads {AGENTS}"))
     wants.extend(_skills(source, found, made.skills))
     return wants
 
@@ -2099,12 +2104,12 @@ def unmanaged_lines(
 
 
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
-    """Where the install includes codex, the configuration route that lets an unattended
-    session write the workspace folders and commit. Codex's default `workspace-write` sandbox
-    keeps `<root>/.agents` and the Git directory read-only (research harnesses/codex.md section
-    9), and a Desktop or IDE session is reported to have no `--add-dir` flag, which the research
-    does not record. The `writable_roots` key is not in the research either, and whether the
-    harness can write the folders is not something adopt sees."""
+    """For a run that adds codex, once, the configuration route that lets an unattended session
+    write the workspace folders and commit. Codex's default `workspace-write` sandbox keeps
+    `<root>/.agents` and the Git directory read-only (research harnesses/codex.md section 9),
+    which records `--add-dir` as observed but not the `writable_roots` key, and not whether a
+    desktop or IDE session lacks the flag; whether the harness can write the folders is not
+    something adopt sees."""
 
     if not any(route.harness == "codex" for route in found):
         return []
@@ -2114,13 +2119,11 @@ def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     return [
         (
             "UNVERIFIED",
-            "codex: the default workspace-write sandbox keeps .agents and the Git directory "
-            "read-only (research harnesses/codex.md section 9), and a Desktop or IDE session is "
-            "reported to have no --add-dir flag, which the research does not record; for "
-            f"unattended sessions add {roots} to writable_roots under [sandbox_workspace_write] "
-            "in your Codex config.toml (the CLI can pass --add-dir for each); the key is not in "
-            "the research either, so check both against your Codex release, and adopt cannot "
-            "see whether the harness can write them",
+            "codex: the default sandbox keeps .agents and the Git directory read-only (research "
+            f"harnesses/codex.md section 9); for unattended sessions pass --add-dir for {roots}, "
+            "or add them to writable_roots under [sandbox_workspace_write] in config.toml; the "
+            "research records the flag, not the key, and not whether a desktop or IDE session "
+            "lacks the flag, and adopt cannot see whether the harness can write them",
         )
     ]
 
@@ -2283,13 +2286,15 @@ def install(
     run.notes.extend(
         ("warning", line) for line in unmanaged_lines(target, run.records, run.settings)
     )
-    run.notes.extend(codex_sandbox_notes(target, found))
+    added = {route.harness for route in found} - set(recorded_harnesses(own))
+    run.notes.extend(codex_sandbox_notes(target, found) if "codex" in added else [])
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
     owned = sorted({MANIFEST, *(record["path"] for record in run.records)})
     run.notes.extend(ignored_notes(target, owned))
     run.notes.extend(uncommitted_notes(target, planned))
-    return planned, run.edited, run.notes, run.measure
+    notes = [*run.restated, *run.notes] if planned else run.notes
+    return planned, run.edited, notes, run.measure
 
 
 def remove(target: Path, source: Path, force: bool) -> tuple[Planned, list[str], Notes]:
@@ -3166,6 +3171,10 @@ def _diffs(planned: Planned) -> None:
     """A unified diff for each planned text change; a file that is not UTF-8 text is named."""
 
     for path, (before, after) in planned.items():
+        if before is None and after is not None:
+            # A new file is its whole text, which the install writes as shipped: its size only.
+            print(f"new      {path}: {len(after)} bytes, written as shipped")
+            continue
         try:
             old = [] if before is None else before.decode("utf-8").splitlines(keepends=True)
             new = [] if after is None else after.decode("utf-8").splitlines(keepends=True)

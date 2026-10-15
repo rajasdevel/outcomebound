@@ -1316,3 +1316,75 @@ def test_no_text_calls_the_inbox_file_a_way_to_send_a_finding() -> None:
         text = " ".join((ROOT / path).read_text("utf-8").split())
         assert "for the research maintainer to collect" not in text, path
         assert "Offline, or" not in text, path
+
+
+# --- --find: the index rows that hold every term ---------------------------------------
+
+FIND_INDEX = """# Index
+
+| Document | Title | Scope | Last checked | Volatility |
+| --- | --- | --- | --- | --- |
+| [models/a/haiku.md](models/a/haiku.md) | Claude Haiku | How to instruct it | 2026-10-01 | M |
+| [models/a/sonnet.md](models/a/sonnet.md) | Claude Sonnet | How to instruct | 2026-10-01 | M |
+| [practices/x.md](practices/x.md) | Practice | Review loops | 2026-10-01 | M |
+"""
+
+
+def test_find_prints_the_rows_that_hold_every_term_after_counts_commit_and_sha(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    """Breaks if an agent must print the whole index, in pieces, to find one document, or if the
+    rows it finds lose the provenance a decision cites."""
+
+    clone = make_clone(tmp_path / "clone")
+    write(clone / "INDEX.md", FIND_INDEX)
+    link_to(home, clone)
+
+    status, out, err = run(capsys, "--find", "CLAUDE", "haiku")
+
+    assert (status, err) == (0, "")
+    first, *rows = out.splitlines()
+    assert first.startswith('research: 1 of 3 rows of INDEX.md hold "CLAUDE haiku" (')
+    assert "sha256" in first and "of the whole INDEX.md text" in first
+    assert rows == [FIND_INDEX.splitlines()[4]]
+
+
+def test_find_reads_the_document_title_and_scope_cells_only(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    """Breaks if a term every row holds in its status cell matches every row."""
+
+    clone = make_clone(tmp_path / "clone")
+    write(clone / "INDEX.md", FIND_INDEX)
+    link_to(home, clone)
+
+    assert run(capsys, "--find", "2026-10-01")[0] == 1
+    assert len(run(capsys, "--find", "review")[1].splitlines()) == 2
+
+
+def test_find_with_no_match_exits_1_and_names_the_whole_index(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    clone = make_clone(tmp_path / "clone")
+    write(clone / "INDEX.md", FIND_INDEX)
+    link_to(home, clone)
+
+    status, out, err = run(capsys, "--find", "nothing-like-it")
+
+    assert (status, out) == (1, "")
+    assert "outcomebound research prints the whole index" in err
+
+
+def test_find_without_a_clone_exits_3(
+    home: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
+) -> None:
+    assert run(capsys, "--find", "x")[0] == 3
+
+
+def test_find_with_a_path_is_a_usage_error(
+    home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    link_to(home, make_clone(tmp_path / "clone"))
+    with pytest.raises(SystemExit) as stopped:
+        research.main(["models/README.md", "--find", "x"])
+    assert stopped.value.code == 2

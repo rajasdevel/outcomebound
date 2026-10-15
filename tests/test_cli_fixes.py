@@ -7,6 +7,7 @@ Every project here is a synthetic throwaway under `tmp_path`.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -52,14 +53,20 @@ def test_adopt_help_says_omitted_flags_keep_the_recorded_values() -> None:
     assert "keeps the" in adopt.DESCRIPTION and "manifest records" in adopt.DESCRIPTION
 
 
-def test_a_dry_run_prints_a_unified_diff_of_each_changed_file(
+def test_a_dry_run_diffs_each_changed_file_and_sizes_each_new_one(
     tmp_path: Path, capsys: Capture
 ) -> None:
+    """Breaks if a fresh install's dry run prints every new file whole (about 150 KB of shipped
+    text), or stops showing the diff of a file the person already has."""
+
     target = repo(tmp_path / "t", {"README.md": "# T\n", "AGENTS.md": "# Mine\n"})
     code, out, _ = run(capsys, str(target), "--harness", "claude-code", "--dry-run")
     assert code == 0
     assert "--- a/AGENTS.md" in out and "+++ b/AGENTS.md" in out
-    assert "--- /dev/null" in out and "+++ b/.outcomebound/manifest.json" in out
+    assert "--- /dev/null" not in out
+    assert re.search(
+        r"^new +\.outcomebound/manifest\.json: \d+ bytes, written as shipped$", out, re.M
+    )
     assert not (target / ".outcomebound").exists()
 
 

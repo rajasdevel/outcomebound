@@ -12,7 +12,8 @@ it actually touched are the evidence. The orchestrator's context is not shared s
 choice to name, since a harness default can be the session's model. The bounds are written in the
 brief itself, since a delegate may load no project instructions. The brief also says that a
 refusal by a harness, hook or sandbox stands: the delegate reports it, goes on with the rest and
-never reaches the same effect another way (a split command, another directory). Each delegate owns explicit
+never reaches the same effect another way (a split command, another directory), and it names the
+guidance files the task needs. Each delegate owns explicit
 paths; the integration commit, the shared branch, and any effect outside a delegate's paths
 belong to the orchestrator. Another worker's worktree is preserved state.
 **Mechanisms** — `review` when a miss would reach users and no check the orchestrator can run would catch it;

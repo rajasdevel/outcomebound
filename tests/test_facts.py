@@ -423,7 +423,7 @@ def test_a_stack_fragment_alone_adds_no_publishing_edge(tmp_path: Path) -> None:
     rendered = facts.render(tmp_path, selected, [], ["AGENTS.md"], [])
 
     assert "publish" not in rendered.facts and "registry tag" not in rendered.facts
-    assert any(line.startswith("Irreversible edges:") for line in rendered.unverified)
+    assert any(line.startswith("Irreversible edges (") for line in rendered.absent)
 
 
 def test_done_names_every_command_in_run_order(tmp_path: Path) -> None:
@@ -478,7 +478,7 @@ def test_setup_names_every_command_in_run_order_between_done_and_ci_test(tmp_pat
     assert not any(note.startswith("Setup:") for note in rendered.unverified)
     none = facts.render_chosen(target, [], facts.Chosen(["make test"]), ["AGENTS.md"], [])
     assert "- Setup:" not in none.facts
-    assert "Setup: no command is recorded; adopt records one with --setup" in none.unverified
+    assert "Setup (none recorded; --setup records one)" in none.absent
     assert facts.moved(none.facts, rendered.facts) == ["Setup"]
 
 
@@ -493,27 +493,32 @@ def test_a_linked_workflow_is_not_followed(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("files", "left_out"),
+    ("files", "unverified", "absent"),
     [
-        ({}, {"Done", "Setup", "CI test", "Irreversible edges"}),
-        (workflows(release=RELEASE), {"Done", "Setup", "CI test", "Irreversible edges"}),
-        (workflows(ci=MATRIX), {"Done", "Setup", "CI test", "Irreversible edges"}),
-        ({**workflows(ci=NODE), facts.FLOOR: "{}\n"}, {"Done", "Setup"}),
+        ({}, {"Done"}, {"Setup", "CI test", "Irreversible edges"}),
+        (workflows(release=RELEASE), {"Done", "CI test"}, {"Setup", "Irreversible edges"}),
+        (workflows(ci=MATRIX), {"Done", "CI test"}, {"Setup", "Irreversible edges"}),
+        ({**workflows(ci=NODE), facts.FLOOR: "{}\n"}, {"Done"}, {"Setup"}),
     ],
     ids=["nothing", "no-test", "unsettled", "floor-and-ci"],
 )
-def test_a_fact_it_cannot_observe_is_left_out_and_named_unverified(
-    tmp_path: Path, files: dict[str, str], left_out: set[str]
+def test_a_fact_it_cannot_observe_is_unverified_and_one_it_found_absent_is_a_note(
+    tmp_path: Path, files: dict[str, str], unverified: set[str], absent: set[str]
 ) -> None:
+    """Breaks if a fact the engine read every place for and found absent is reported as
+    unverified, which nothing a person does clears, or if Done or an unread CI file stops being
+    unverified."""
+
     target = project(tmp_path, files)
 
     rendered = facts.render(target, [], [], ["AGENTS.md"], [])
 
     written = {line[2:].split(":", 1)[0] for line in rendered.facts.splitlines()[1:-1]}
-    named = {note.split(":", 1)[0] for note in rendered.unverified}
-    assert named == left_out
+    assert {note.split(":", 1)[0] for note in rendered.unverified} == unverified
+    assert {note.split(" (", 1)[0] for note in rendered.absent} == absent
+    assert all(" (" in note and note.endswith(")") for note in rendered.absent)
     # Text for people is chosen with --human-style, not observed: absent, it is not unverified.
-    assert written == set(facts.LABELS) - left_out - {"Text for people"}
+    assert written == set(facts.LABELS) - unverified - absent - {"Text for people"}
     assert "Precedence" in written
 
 

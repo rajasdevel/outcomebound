@@ -466,19 +466,22 @@ def read_ci(target: Path) -> list[CiFile]:
     return result
 
 
-def _ci_fact(files: Sequence[CiFile]) -> tuple[str | None, list[str]]:
-    """The CI test line, or None, and each command or file left UNVERIFIED."""
+def _ci_fact(files: Sequence[CiFile]) -> tuple[str | None, list[str], list[str]]:
+    """The CI test line, or None; each command or file left UNVERIFIED; and the CI file the
+    engine looked for and found absent, which is a fact, not a gap."""
 
     unverified = [f"CI test: {item.path}: {note}" for item in files for note in item.unread]
     settled = [item for item in files if item.tests]
+    absent = []
     if not files:
-        unverified.append(f"CI test: no {WORKFLOWS}/*.yml or {GITLAB} to read")
+        absent.append(f"CI test (no {WORKFLOWS}/*.yml or {GITLAB}; other CI systems are not read)")
     elif not settled and not unverified:
-        unverified.append(f"CI test: no test command in {', '.join(i.path for i in files)}")
+        listed = ", ".join(i.path for i in files)
+        unverified.append(f"CI test: no test command recognized in {listed}")
     if not settled:
-        return None, unverified
+        return None, unverified, absent
     parts = [f"{', '.join(code(test) for test in item.tests)} ({item.path})" for item in settled]
-    return f"- CI test: {'; '.join(parts)}", unverified
+    return f"- CI test: {'; '.join(parts)}", unverified, absent
 
 
 # --- The two blocks ---------------------------------------------------------------
@@ -492,6 +495,7 @@ class Rendered:
     pointers: str | None
     unverified: tuple[str, ...]
     inputs: dict[str, str]
+    absent: tuple[str, ...] = ()
 
 
 class Chosen(NamedTuple):
@@ -542,17 +546,19 @@ def render_chosen(
         lines.append(done_line(done, skip))
     else:
         unverified.append("Done: no command is recorded; adopt records one with --done")
+    absent: list[str] = []
     if setup:
         lines.append(f"- Setup: {both([code(command) for command in setup])}")
     else:
-        unverified.append("Setup: no command is recorded; adopt records one with --setup")
+        absent.append("Setup (none recorded; --setup records one)")
     ci = read_ci(target)
     inputs.update(
         (item.path, sha256(textio.fold(item.data))) for item in ci if item.data is not None
     )
-    line, left_out = _ci_fact(ci)
+    line, left_out, missing = _ci_fact(ci)
     lines.extend([line] if line else [])
     unverified.extend(left_out)
+    absent.extend(missing)
     edges = [edge for item in selected for edge in item.edges]
     try:
         floor = paths.read_bounded(target, FLOOR)
@@ -566,7 +572,10 @@ def render_chosen(
         joined = f"{EDGE_SEPARATOR} ".join(dict.fromkeys(edges))
         lines.append(f"- Irreversible edges: {joined}")
     else:
-        unverified.append("Irreversible edges: no selected fragment declares one, and no floor")
+        absent.append(
+            "Irreversible edges (none declared, and no floor; "
+            "a local fragment's edges: declares one)"
+        )
     lines.extend(f"- Text for people: {STYLES[name]}" for name in style)
     own = " or ".join(dict.fromkeys(files))
     lines.append(
@@ -576,7 +585,11 @@ def render_chosen(
     )
     facts = identity.format_managed_block(FACTS, VERSION, "\n".join(lines))
     return Rendered(
-        facts, pointers(selected, skills), tuple(unverified), dict(sorted(inputs.items()))
+        facts,
+        pointers(selected, skills),
+        tuple(unverified),
+        dict(sorted(inputs.items())),
+        tuple(absent),
     )
 
 

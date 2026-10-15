@@ -52,6 +52,16 @@ not a bounded path; a symlink on the way; a folder; not in the clone (`INDEX.md`
 document; for a path under `models/`, `models/README.md` says which models have a file, and a
 model with no file takes the spec tier, `applications/implementer-tiers.md`).
 
+**Find.** `outcomebound research --find TERM...` reads `INDEX.md` as Print does and prints only its
+rows (lines that start `| [`) whose document, title or scope cell holds every term, case-folded,
+after one line: `research: <n> of <rows> rows of INDEX.md hold "<terms>" (<the provenance Print
+gives> of the whole INDEX.md text)`, so a citation keeps the commit and digest. No row: standard
+error says so and names the whole index, exit 1. With a `PATH` other than `INDEX.md`: usage, exit 2.
+It is an option of Print, not a subcommand, so no first word is reserved; it reads the index and no
+document (rejected: a `search` subcommand; a titles-only index, which is a push to the research
+repository; a full-text search of the documents; `research | grep`, which drops the first line a
+citation needs).
+
 **Not configured** (exit 3, standard error): `research: no clone configured: <why>`, then
 `read it at <public blob URL of PATH>` and `clone it once per machine, with the person's yes:
 outcomebound research clone <destination>`. The why: no variable or link, a folder without `INDEX.md`, a dangling link, or an unreadable clone.

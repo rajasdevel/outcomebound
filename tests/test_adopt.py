@@ -1835,7 +1835,8 @@ def test_setup_is_recorded_in_run_order_kept_cleared_and_never_run(
 
     _, out, _ = run(capsys, str(target), *first)
 
-    assert "UNVERIFIED Setup: no command is recorded; adopt records one with --setup" in out
+    assert "Setup (none recorded; --setup records one)" in out
+    assert "UNVERIFIED Setup" not in out
     assert "Setup" not in facts_lines(target)
 
     code, out, err = run(
@@ -1857,7 +1858,7 @@ def test_setup_is_recorded_in_run_order_kept_cleared_and_never_run(
     assert facts_lines(target)["Setup"] == lines["Setup"]
 
     code, out, _ = run(capsys, str(target), "--setup", "")
-    assert code == 0 and "UNVERIFIED Setup: no command is recorded" in out
+    assert code == 0 and "Setup (none recorded; --setup records one)" in out
     assert "Setup" not in facts_lines(target)
     assert "setup" not in manifest(target)["artifacts"][1]
     assert run(capsys, str(target), "--check")[0] == 0
