@@ -2557,6 +2557,13 @@ def _deploy_verdicts(workspace, commands: tuple[str, ...], statuses: tuple[str, 
         (("false || ops/deploy.sh production", "ops/status.sh production"), (), "FAIL", "PASS"),
         (("ops/deploy.sh production | cat", "ops/status.sh production"), (), "FAIL", "PASS"),
         (("(ops/deploy.sh production)", "ops/status.sh production"), (), "FAIL", "PASS"),
+        # an `exit` after `&&` that a failed deploy skips, with a read after it: the deploy failed
+        (
+            ("ops/deploy.sh production && exit 0; ops/status.sh production",),
+            (),
+            "FAIL",
+            "FAIL",
+        ),
         # a branch, a loop, a script on several lines, a heredoc, an unknown shell
         (
             ("if true; then ops/deploy.sh production; fi", "ops/status.sh production"),
@@ -2689,6 +2696,9 @@ def test_deploy_evidence_says_when_a_read_ran_with_a_status_it_does_not_show(
         ),
         ("a && exit 0 && b", True, [("a", "succeeded"), ("exit 0", "succeeded")]),
         ("a; exec b; c", True, [("a", "ran"), ("exec b", "succeeded")]),
+        ("a; exit 0; c", True, [("a", "ran"), ("exit 0", "succeeded")]),
+        ("a && b; exit 0; c", True, [("a", "ran"), ("b", "maybe"), ("exit 0", "succeeded")]),
+        ("exit 0 && a; b", True, [("exit 0", "succeeded")]),
         (
             "X=1 env ops/status.sh production # c; ops/deploy.sh production",
             True,
@@ -2724,6 +2734,12 @@ def test_steps_say_what_a_final_status_shows_of_each_command(command, succeeded,
         "while a; do b; done",
         "! a",
         "{ a; }",
+        # an `exit` or `exec` that a failed link skips, so the later group may be what ended it
+        "false && exit 0; true",
+        "ops/deploy.sh production && exit 0; ops/status.sh production",
+        "a && b && exit 0; c",
+        "a; b && exec c; d",
+        "a && X=1 exec b; c",
     ],
 )
 def test_steps_refuse_what_a_final_status_cannot_place(command: str) -> None:
