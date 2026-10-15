@@ -1379,6 +1379,38 @@ def test_an_edit_inside_a_dirty_submodule_changes_the_tree_digest(tmp_path: Path
     assert passing is not None and finish_check.tree_digest(root, digest) != passing
 
 
+@pytest.mark.skipif(os.name != "posix", reason="the planted diff command is a POSIX script")
+def test_a_repositorys_own_diff_settings_run_no_command_in_a_submodule(tmp_path: Path) -> None:
+    """Breaks if a read of the tree runs a command a repository's own config names: with
+    `diff.submodule=diff` in the parent, Git diffs inside each submodule without `--no-ext-diff`,
+    where the submodule's `diff.external` would run."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run([GIT, "-C", str(where), *identity, *argv], check=True)
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    git(library, "init", "-q")
+    write(library / "value.txt", "ok\n")
+    git(library, "add", "-A")
+    git(library, "commit", "-qm", "lib")
+    root, digest = target(tmp_path / "t", ["true"])
+    git(root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(library), "lib")
+    git(root, "commit", "-qm", "add lib")
+    marker = tmp_path / "ran"
+    script = tmp_path / "planted.sh"
+    write(script, f"#!/bin/sh\ntouch {q(marker)}\n")
+    script.chmod(0o755)
+    git(root, "config", "diff.submodule", "diff")
+    git(root / "lib", "config", "diff.external", str(script))
+    write(root / "lib" / "value.txt", "changed\n")
+
+    assert finish_check.tree_digest(root, digest) is not None
+    assert not marker.exists()
+
+
 def test_a_large_untracked_file_stops_its_hash_at_the_deadline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

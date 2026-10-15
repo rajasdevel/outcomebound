@@ -9,8 +9,10 @@ everything else the caller composed is passed through untouched.
 that names Git as `programs.require("git")`, to this helper.
 
 It also holds the one argv prefix that every Git read of a target uses, `GIT_READ_CONFIGURATION`:
-no pager, no fsmonitor, no untracked cache and no external diff, so that a `core.fsmonitor` or
-`diff.external` setting in the target's own `.git/config` names no command that a read runs.
+no pager, no fsmonitor, no untracked cache, no external diff and no inline submodule diff, so that
+a `core.fsmonitor` or `diff.external` setting in the target's own `.git/config` names no command
+that a read runs: a `diff.submodule=diff` setting would start a diff inside each submodule without
+`--no-ext-diff`, where that submodule's `diff.external` runs.
 
 What it does not decide: which Git runs (PATH's absolute entries, as `programs` finds it, so
 that the folder a read runs in never supplies one), or anything the caller puts in the
@@ -53,6 +55,8 @@ GIT_READ_CONFIGURATION: tuple[str, ...] = (
     "core.untrackedCache=false",
     "-c",
     "diff.external=",
+    "-c",
+    "diff.submodule=short",
 )
 
 
