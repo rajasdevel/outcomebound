@@ -2277,9 +2277,10 @@ loosening with --base, then one verdict line last: `floor check: PASS 9 checks`,
 verdict and the names of the checks that did not pass. A passing loosening prints its count
 only; --verbose also lists the ruled loosenings and their Floor-Loosening lines.
 
-A claim whose files match no tracked file passes: 0 findings in 0 files. A `files` entry `*.sh`
-also selects each tracked file Git records as executable whose name has no extension and whose
-first line is a shell shebang (sh, bash, dash or ksh, by path or through env).
+A claim whose files match no tracked file passes: 0 findings in 0 files. The `files` entry
+"(extensionless shell scripts)" selects each tracked file Git records as executable whose name
+has no extension and whose first line is a shell shebang (sh, bash, dash or ksh, by path or
+through env); the shell recipes write it beside `*.sh`, and a floor without it does not read them.
 
 With --base REF, gitleaks scans the commits REF..HEAD (without it, the commits since the
 floor's adoption record or, where there is none, the files Git tracks in the working tree,
@@ -2292,7 +2293,8 @@ header (a comment or a reorder too); an added noqa, type ignore, mypy, shellchec
 gitleaks-allow comment (in a document, only gitleaks-allow).
 None of these loosens: a claim floor.json adds, with its first baseline; a claim's move
 from baseline to gate; a claim's timeout_seconds; a tracked folder or Python file a types
-claim adds after the folders it names; an adoption record where there was none; a
+claim adds after the folders it names; "(extensionless shell scripts)" added at the end of a
+claim's files; an adoption record where there was none; a
 baseline line that moves with its file, where Git reports the file renamed; a blank line in
 a tool config.
 Where the floor was adopted after the merge base (the merge base holds no floor.json and no
