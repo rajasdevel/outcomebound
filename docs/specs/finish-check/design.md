@@ -120,7 +120,7 @@ Tests, in `tests/test_finish_check.py` unless named.
   `test_the_run_stamps_only_a_mark_of_its_own_session`,
   `test_a_woken_failure_is_not_held_again_at_the_next_stop`.
 - The next stop: `test_a_recorded_failure_on_the_unchanged_tree_is_delivered_at_once`,
-  `test_on_claude_code_an_undelivered_failure_on_a_changed_tree_holds_only_after_a_run_finds_it_again`,
+  `test_on_claude_code_a_failure_on_a_changed_tree_holds_only_after_a_run_finds_it_again`,
   `test_on_claude_code_an_undelivered_failure_the_turn_fixed_is_never_held`,
   `test_on_codex_an_undelivered_failure_holds_one_stop_later_with_the_times_of_both_runs`,
   `test_a_failure_another_session_recorded_is_never_held`,
@@ -131,12 +131,12 @@ Tests, in `tests/test_finish_check.py` unless named.
   hold prints `decision` or writes standard error with exit 2;
   `test_each_notice_is_told_once_for_a_session_tree_and_kind`;
   `test_status_prints_the_run_and_the_record_of_the_current_tree_and_writes_nothing`;
-  `test_the_claude_code_turn_start_entry_prints_each_untold_notice_as_system_message_once_and_nothing_else`;
+  `test_the_claude_code_turn_start_entry_prints_each_untold_notice_once_as_a_system_message`;
   `test_the_codex_turn_start_entry_prints_nothing`.
 - One hold per failure: `test_a_failure_held_once_goes_to_the_person_on_any_later_tree_in_the_session`,
   `test_a_new_failure_id_exit_code_or_assertion_message_holds_in_the_same_session`,
   `test_another_session_holds_the_same_failure_once`,
-  `test_the_signature_reads_digits_hex_runs_the_target_path_the_temporary_folder_and_line_order_away`,
+  `test_the_signature_reads_digits_hex_runs_the_target_path_temp_folder_and_line_order_away`,
   `test_with_failure_ids_a_new_warning_line_does_not_change_the_signature`.
 - The turn's own failures: `test_a_failure_the_turn_began_with_is_not_held_when_a_run_delivers_it`,
   `test_another_sessions_changed_tree_record_is_a_baseline_and_its_failure_is_told`,

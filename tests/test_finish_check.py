@@ -3315,7 +3315,7 @@ def deferred(tmp_path: Path, root: Path, digest: str, started: Path, go: Path) -
     started.unlink()
 
 
-def _an_undelivered_failure_holds_after_a_run_finds_it_again(
+def test_on_claude_code_a_failure_on_a_changed_tree_holds_only_after_a_run_finds_it_again(
     tmp_path: Path,
 ) -> None:
     """Breaks if a failure no wake delivered wakes the model at once on a tree the next turn
@@ -3339,13 +3339,6 @@ def _an_undelivered_failure_holds_after_a_run_finds_it_again(
         f"finish-check FAIL: Done failed on the tree this turn began with, at {clock(first.time)}, "
         "and still fails now"
     )
-
-
-# The design's name for this test is longer than a line.
-globals()[
-    "test_on_claude_code_an_undelivered_failure_on_a_changed_tree_holds_only_after_a_run_"
-    "finds_it_again"
-] = _an_undelivered_failure_holds_after_a_run_finds_it_again
 
 
 def test_on_claude_code_an_undelivered_failure_the_turn_fixed_is_never_held(
@@ -3597,7 +3590,7 @@ def test_status_prints_the_run_and_the_record_of_the_current_tree_and_writes_not
     assert "this tree" in shown and "```output\nboom\n```" in shown
 
 
-def _the_turn_start_entry_prints_each_untold_notice_once(
+def test_the_claude_code_turn_start_entry_prints_each_untold_notice_once_as_a_system_message(
     tmp_path: Path,
 ) -> None:
     """Breaks if the claude-code person never hears a verdict that did not hold (an async hook
@@ -3613,13 +3606,6 @@ def _the_turn_start_entry_prints_each_untold_notice_once(
     assert turn(CC, digest, root) == ""
     other = {"session_id": "another", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
     assert "finish-check FAIL" in turn(CC, digest, root, stdin=other)
-
-
-# The design's name for this test is longer than a line.
-globals()[
-    "test_the_claude_code_turn_start_entry_prints_each_untold_notice_as_system_message_"
-    "once_and_nothing_else"
-] = _the_turn_start_entry_prints_each_untold_notice_once
 
 
 def test_the_codex_turn_start_entry_prints_nothing(tmp_path: Path) -> None:
@@ -3697,7 +3683,7 @@ def failed(output: str, command: str = "make test", code: int = 2) -> finish_che
     return finish_check.Result(command, finish_check.FAIL, 1.0, "exit", data, code=code, ids=ids)
 
 
-def _the_signature_reads_volatile_text_away(
+def test_the_signature_reads_digits_hex_runs_the_target_path_temp_folder_and_line_order_away(
     tmp_path: Path,
 ) -> None:
     """Breaks if a timing, a process id, an object id, a scratch path, the checkout's own place
@@ -3721,13 +3707,6 @@ def _the_signature_reads_volatile_text_away(
     assert one == two
     changed = lines(first, 12, "tmp1234", 1).replace("the last line", "another line")
     assert finish_check.signature(failed(changed), first) != one
-
-
-# The design's name for this test is longer than a line.
-globals()[
-    "test_the_signature_reads_digits_hex_runs_the_target_path_the_temporary_folder_and_"
-    "line_order_away"
-] = _the_signature_reads_volatile_text_away
 
 
 def test_with_failure_ids_a_new_warning_line_does_not_change_the_signature(

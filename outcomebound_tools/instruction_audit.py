@@ -1010,7 +1010,7 @@ def _own_entry(
 ) -> bool:
     """Whether a group under a hook event is the one adopt writes for `harness` at `path`: its
     canonical JSON is byte for byte `finish_check.entry` for the row whose `finish_hook` names
-    this file, the recorded Done commands' digest and the timeout the hook carries, where the row
+    this file, the recorded Done commands' digest and the limit its command names, where the verb
     admits it, or `finish_check.mark_entry`, the turn-start entry beside it; and a manifest `hook`
     record for this file holds that digest. Any other key, hook type, argument or Done digest
     makes it an ordinary entry."""
@@ -1023,9 +1023,9 @@ def _own_entry(
     written = canonical(value)
     if written == canonical(finish_check.mark_entry(harness, digest)):
         return hashlib.sha256(written).hexdigest() in own
-    first = hooks[0] if hooks and isinstance(hooks[0], dict) else {}
-    timeout = first.get("timeout")
-    if not isinstance(timeout, int) or not finish_check.admits_timeout(timeout):
+    # The run's limit is the one the command names; the handler's own `timeout` is the harness's.
+    timeout = finish_check.limit_of(value)
+    if timeout is None:
         return False
     expected = canonical(finish_check.entry(harness, digest, timeout))
     return written == expected and hashlib.sha256(written).hexdigest() in own
