@@ -100,8 +100,9 @@ Name each line form in double quotes, never in backticks, when you write about i
   briefs, standing grants, a deploy in a partial phase. Write
   the moves back too. For a change of route, the inventory is most of the brief, not a fragment diff.
   A row whose signal already reaches the owner is left out.
-- "Changed —" (Context): written only after the person's yes on a transition, with its date, what
-  moved, who decided and what it invalidates; never at adoption.
+- "Changed —" (Context): written after a complete directive or the person's answer to the transition
+  brief, with its date, the person's words in quotes, who decided and what it invalidates; one
+  line for each stream, the older one removed; never at adoption.
 
 Select fragments from the exposure facts and what the files show: `team` for two or more
 maintainers or required review, else `solo`; `deploy` and `runtime` where it deploys a service;

@@ -33,7 +33,8 @@ Leave when — the contract ends or the client stops accepting builds (observabl
   tickets, the standing grants, any deploy in a partial phase, and what each item now owes.
 Leave when — the client's acceptance moves to a regulator or a second party → opens a brief on
   the gates whose owner changes.
-Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>.
+Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
+  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
 ```
 
 ## When to propose each line, and when to leave it out
@@ -49,7 +50,7 @@ Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>
   go) is reported as a gap to the person; an agent never fills the owner, and its own pre-run is
   never the acceptance.
 - "Leave when —": propose a row only where a transition is near and its signal can be watched.
-- "Changed —": written after a person's yes on a transition, never at adoption.
+- "Changed —": written after a complete directive or a person's answer to the transition brief, one line for each stream with the older one removed, never at adoption.
 
 ## A route example for a client delivery
 

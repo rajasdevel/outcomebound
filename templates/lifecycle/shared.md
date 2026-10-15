@@ -33,7 +33,8 @@ Leave when — a client or a regulator starts to accept the work (observable: <a
   uncommitted work, the open briefs, the standing grants, and what each item now owes.
 Leave when — the last outside user is gone, or the owner says it serves only themselves → opens a
   brief to move back to `personal`: which gates and standing grants end, and what is retired.
-Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>.
+Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
+  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
 ```
 
 ## When to propose each line, and when to leave it out
@@ -50,4 +51,4 @@ Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>
 - "Leave when —": the right side is the brief to open and what it inventories, mostly the work in
   flight, not a fragment diff. Propose a row only where its signal can be watched and a transition
   is near; leave out a row that fires on a decision that already reaches the owner.
-- "Changed —": written after a person's yes on a transition, never at adoption.
+- "Changed —": written after a complete directive or a person's answer to the transition brief, one line for each stream with the older one removed, never at adoption.

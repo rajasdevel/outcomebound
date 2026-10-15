@@ -101,11 +101,15 @@ fragment's Bounds slot, on a line of its own with a reason, marks it settled; th
 prints beside the current evidence, so a settlement that no longer fits is seen. Do not raise a
 settled line again unless the evidence now differs from the reason given.
 
-Nothing switches on its own. Where the person's directive names the new route or exposure, the
-directive is the decision: write one decision brief (the `decision-brief` skill) that records it
-and asks only what the directive left open. Otherwise the brief asks for the decision. Its
-main value is the inventory of work in flight and what each item now owes, so it is written even
-when no fragment changes. It holds:
+Nothing switches on its own. A directive that names the new route completely, the route (a
+lifecycle template or the fragment set) and the exposure, is the decision: write the "Changed —"
+line with the person's words in quotes, run the inventory below, apply what the directive
+settles, and write a brief (the `decision-brief` skill) only for what it leaves open; where
+nothing is open, write none. A directive that names only an exposure fact (a first outside user, a
+second maintainer, a client contract) is partial: the inventory runs, the brief asks for the
+route, and the line is written when the brief is answered. Otherwise the brief asks for the
+decision. The inventory's main value is the work in flight and what each item now owes, so it runs
+even when no fragment changes. It holds:
 
 - the fragment diff: which fragments turn on and which turn off, which may be none when only the
   route changes, as with the person's directive;
@@ -124,9 +128,11 @@ when no fragment changes. It holds:
   them in the commit that adds the "Changed —" line, and quote the old term in that line, so the
   line does not count.
 
-On a yes, add a dated line to the local fragment's Context: "Changed — <date>: <what>, decided by
-<who>, invalidated <what>". Where adoption refuses the change, the line reads "approved, not
-applied", and the old selection stays active until the check that refused passes. Plan the stages
+After a complete directive or the person's answer to the brief, add a dated line to the local
+fragment's Context: `Changed — <date> (stream: <stream>): "<the person's words>", decided by
+<who>, invalidated <what>`. Keep one line for each stream: it replaces that stream's older line,
+which Git keeps. Where adoption refuses the change, the line reads "approved, not applied", and
+the old selection stays active until the check that refused passes. Plan the stages
 not yet reached again, and plan again each finished stage whose evidence the change invalidates: it
 keeps its dated result as history, reads `UNVERIFIED` for the new exposure, and gets its own
 corrective item. Each item in flight keeps the state its own record shows; do not mark it done or

@@ -27,7 +27,8 @@ Leave when — a second person starts to depend on it (observable: the owner say
   author appears in the history; watched by: the owner) → opens a brief to move to `shared`:
   the work in flight, the standing grants and their end dates, and what each item now owes.
 Leave when — nobody has used it since <the date the owner names> → opens a brief to retire it.
-Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>.
+Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
+  invalidated <what no longer holds>. One line for each stream; it replaces the stream's older one.
 ```
 
 ## When to propose each line, and when to leave it out
@@ -42,4 +43,4 @@ Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>
   gate; a line that says so changes no decision.
 - "Leave when —": propose the move to `shared` where the history shows a second author, an invited
   user or a public repository coming. Leave it out when none is near.
-- "Changed —": write it only after a person's yes on a transition, never at adoption.
+- "Changed —": write it after a complete directive or a person's answer to the transition brief, one line for each stream with the older one removed, never at adoption.
