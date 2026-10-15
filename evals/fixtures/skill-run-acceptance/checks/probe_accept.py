@@ -281,7 +281,7 @@ SUCCEEDED = frozenset({"succeeded", "exited 0"})
 DESK = Path("env/acceptance/desk.py")
 METADATA_FLAGS = ("--version", "-h", "--help", "-V")
 INTERPRETER = re.compile(r"^(?:python3?(?:\.\d+)?|bash|sh|zsh|dash)$")
-# Option letters that do not name a script: the code or module to run, and options that take a value.
+# Option letters: those that run code or a module, not a script, and those that take a value.
 RUNS_NO_SCRIPT = {"python": "cm", "shell": "c"}
 TAKES_VALUE = {"python": "WX", "shell": "oO"}
 
