@@ -12,6 +12,17 @@ MODEL_LINE = re.compile(r"^model: (\S+)$", re.MULTILINE)
 TOKENS_LINE = re.compile(r"^tokens used\s*\n\s*([\d,]+)\s*$", re.MULTILINE)
 
 
+def command_outcome(item: dict) -> str:
+    """The status a completed command item records: `succeeded`, `exited N`, `failed`,
+    `declined`, or `unverified` where it names no exit code or a status this does not know.
+    The same rule reads a stream item and an item of the native session."""
+
+    code, status = item.get("exit_code"), item.get("status")
+    if status == "completed" and type(code) is int:
+        return "succeeded" if code == 0 else f"exited {code}"
+    return status if status in ("failed", "declined") else "unverified"
+
+
 def _completed_command(item: dict, prior: Command) -> Command | None:
     command, directory = item.get("command"), item.get("cwd", "")
     if command != prior.command or not isinstance(directory, str):
@@ -21,13 +32,7 @@ def _completed_command(item: dict, prior: Command) -> Command | None:
         prior = Command(prior.command, prior.status, "")
     if directory and prior.cwd and directory != prior.cwd:
         return None
-    code, status = item.get("exit_code"), item.get("status")
-    outcome = "unverified"
-    if status == "completed" and type(code) is int:
-        outcome = "succeeded" if code == 0 else f"exited {code}"
-    elif status in ("failed", "declined"):
-        outcome = status
-    return Command(command, outcome, directory or prior.cwd)
+    return Command(command, command_outcome(item), directory or prior.cwd)
 
 
 def _command_records(events: list[dict]) -> list[Command] | None:
@@ -68,20 +73,73 @@ def _command_records(events: list[dict]) -> list[Command] | None:
     return records if not pending else None
 
 
-def _supported_items(events: list[dict]) -> bool:
-    """Unknown tool items cannot establish that no command or environment act occurred."""
+# Item types that are not a command and cannot change what "no command ran" means: messages,
+# reasoning, a to-do list, an apply-patch edit (`file_change`) and a CLI warning (`error`).
+PASSIVE_ITEMS = frozenset({"agent_message", "reasoning", "todo_list", "file_change", "error"})
+LIFECYCLE_EVENTS = frozenset({"thread.started", "turn.started", "turn.completed", "error"})
+ITEM_EVENTS = ("item.started", "item.updated", "item.completed")
 
-    passive = {"agent_message", "reasoning", "todo_list"}
-    lifecycle = {"thread.started", "turn.started", "turn.completed", "error"}
+
+def parse_events(stdout: str) -> list[dict] | None:
+    """The stream's events, or None where a line is not JSON or an event is not an object."""
+
+    try:
+        events = [json.loads(line) for line in stdout.split("\n") if line.strip()]
+    except ValueError:
+        return None
+    return events if all(isinstance(event, dict) for event in events) else None
+
+
+def unknown_types(events: list[dict]) -> list[str]:
+    """Each event or item type that this decoder does not know, as `event.<type>` or
+    `item.<type>`: an unknown tool form cannot establish that no command or environment act
+    occurred."""
+
+    found: set[str] = set()
     for event in events:
-        if event.get("type") in lifecycle:
+        kind = event.get("type")
+        if kind in LIFECYCLE_EVENTS:
             continue
-        if event.get("type") not in ("item.started", "item.updated", "item.completed"):
-            return False
+        if kind not in ITEM_EVENTS:
+            found.add(f"event.{kind}")
+            continue
         item = event.get("item")
-        if not isinstance(item, dict) or item.get("type") not in passive | {"command_execution"}:
-            return False
-    return True
+        item_type = item.get("type") if isinstance(item, dict) else "<not-an-object>"
+        if item_type not in PASSIVE_ITEMS | {"command_execution"}:
+            found.add(f"item.{item_type}")
+    return sorted(found)
+
+
+def item_types(events: list[dict]) -> list[str]:
+    """Each item type the stream carried, known or not."""
+
+    return sorted(
+        {str(event["item"].get("type")) for event in events if isinstance(event.get("item"), dict)}
+    )
+
+
+def warnings(events: list[dict]) -> list[str]:
+    """The text of each `error` item: a warning the CLI printed, such as a role file it ignored."""
+
+    return [
+        str(event["item"].get("message", ""))
+        for event in events
+        if event.get("type") == "item.completed"
+        and isinstance(event.get("item"), dict)
+        and event["item"].get("type") == "error"
+    ]
+
+
+def stream_models(events: list[dict]) -> set[str]:
+    """Each model an older CLI's `thread.started` or `turn.started` event names."""
+
+    return {
+        event["model"]
+        for event in events
+        if event.get("type") in ("thread.started", "turn.started")
+        and isinstance(event.get("model"), str)
+        and event["model"]
+    }
 
 
 def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
@@ -91,13 +149,9 @@ def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
         stdout = stdout.decode("utf-8", "replace")
     if isinstance(stderr, bytes):
         stderr = stderr.decode("utf-8", "replace")
-    try:
-        events = [json.loads(line) for line in stdout.split("\n") if line.strip()]
-    except ValueError:
-        events = []
+    events = parse_events(stdout) or []
     valid = (
         bool(events)
-        and all(isinstance(event, dict) for event in events)
         and events[0].get("type") == "thread.started"
         and sum(event.get("type") == "thread.started" for event in events) == 1
         and events[-1].get("type") == "turn.completed"
@@ -106,7 +160,7 @@ def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
     return json.dumps(
         {
             "format": "outcomebound-command-events-v1",
-            "commands": _command_records(events) if valid and _supported_items(events) else None,
+            "commands": _command_records(events) if valid and not unknown_types(events) else None,
             "events": events if valid else [],
             "stdout": stdout,
             "stderr": stderr,
@@ -142,13 +196,7 @@ def observed_model(transcript: str) -> str | None:
     if isinstance(document, dict):
         if document.get("commands") is None:
             return None
-        models = {
-            event["model"]
-            for event in document.get("events", [])
-            if event.get("type") in ("thread.started", "turn.started")
-            and isinstance(event.get("model"), str)
-            and event["model"]
-        }
+        models = stream_models(document.get("events", []))
         return next(iter(models)) if len(models) == 1 else None
     _before, found, after = transcript.partition("\nworkdir: ")
     named = MODEL_LINE.search(after) if found else None
