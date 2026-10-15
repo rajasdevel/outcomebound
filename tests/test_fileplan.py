@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import fileplan
-from tests.portable import WINDOWS
+from tests.portable import WINDOWS, posix_only
 
 
 def test_a_name_windows_cannot_hold_is_refused_before_anything_is_written(
@@ -149,3 +149,85 @@ def test_an_edit_made_while_the_stage_is_written_is_kept_and_the_write_refused(
 
     assert (tmp_path / "f.md").read_bytes() == b"concurrent"
     assert not list(tmp_path.glob("*.outcomebound-stage"))
+
+
+def test_an_edit_made_while_a_refused_rename_waits_is_kept_and_the_write_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if a retry after Windows refused the rename for a moment skips the recheck: an
+    edit made during the wait would be overwritten."""
+
+    (tmp_path / "f.md").write_bytes(b"old")
+    real = os.replace
+    tries: list[int] = []
+
+    def replace(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
+        tries.append(1)
+        if len(tries) == 1:
+            raise PermissionError(13, "in use")
+        real(source, destination)
+
+    def wait(seconds: float) -> None:
+        (tmp_path / "f.md").write_bytes(b"concurrent edit")
+
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr(fileplan.time, "sleep", wait)
+    monkeypatch.setattr(os, "replace", replace)
+
+    with pytest.raises(fileplan.WriteError, match="changed after it was read"):
+        fileplan.write(tmp_path, {"f.md": b"planned"}, {"f.md": b"old"})
+
+    assert (tmp_path / "f.md").read_bytes() == b"concurrent edit"
+    assert tries == [1]
+    assert not list(tmp_path.glob("*.outcomebound-stage"))
+
+
+@posix_only
+def test_a_refused_write_leaves_a_stage_a_changed_folder_link_reaches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the cleanup of a refused write follows a folder that became a link while the
+    stage was written, and deletes another writer's stage outside the target."""
+
+    root, outside = tmp_path / "root", tmp_path / "outside"
+    (root / "docs").mkdir(parents=True)
+    outside.mkdir()
+    (root / "docs/f.md").write_bytes(b"old")
+    foreign = outside / ("f.md" + fileplan.STAGE_SUFFIX)
+    foreign.write_bytes(b"foreign stage")
+    real = os.fsync
+
+    def fsync(descriptor: int) -> None:
+        real(descriptor)
+        (root / "docs").rename(root / "moved")
+        (root / "docs").symlink_to(outside, target_is_directory=True)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+
+    with pytest.raises(fileplan.WriteError, match="symlink"):
+        fileplan.write(root, {"docs/f.md": b"planned"}, {"docs/f.md": b"old"})
+
+    assert foreign.read_bytes() == b"foreign stage"
+    assert (root / "moved/f.md").read_bytes() == b"old"
+
+
+def test_a_stage_another_writer_makes_after_the_rename_is_left(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the cleanup after a rename deletes the stage name, which the rename freed and
+    another writer may already use."""
+
+    (tmp_path / "f.md").write_bytes(b"old")
+    stage = tmp_path / ("f.md" + fileplan.STAGE_SUFFIX)
+    real = os.replace
+
+    def replace(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
+        real(source, destination)
+        stage.write_bytes(b"another writer's stage")
+
+    monkeypatch.setattr(os, "replace", replace)
+
+    fileplan.write(tmp_path, {"f.md": b"planned"}, {"f.md": b"old"})
+
+    assert (tmp_path / "f.md").read_bytes() == b"planned"
+    assert stage.read_bytes() == b"another writer's stage"

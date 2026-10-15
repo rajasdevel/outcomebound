@@ -185,11 +185,12 @@ prints, the measurement note `--check` prints, the rerun of a failing Done comma
 
 Writes stay inside the target and go through `fileplan.write`: never through a symlink (on Windows, nor a junction), never into
 `.git` in any spelling, staged and renamed atomically, and refused when a file changed after it was
-read. The change is checked before the first write and again just before each rename; that is a
-recheck, not a compare-and-swap, so an edit in the instant between the last check and the rename is
-still overwritten. A destination expected absent is created exclusively, so a file that appears in
+read. The change is checked before the first write and again just before each rename, and before
+each retry of a rename that Windows refused for a moment; that is a recheck, not a compare-and-swap,
+so an edit in the instant between the last check and the rename is still overwritten. A destination expected absent is created exclusively, so a file that appears in
 that instant is refused, not overwritten (the [scaffold design](../scaffold/design.md)). A staging file left by an earlier run is refused before the first write and never
-removed, and a failure after the first write does not roll the earlier files back. Every byte adopt did not write is preserved, save a settings document's whitespace and an
+removed; a failed write removes only the stage it created, so a stage name that another writer took
+after the rename, or that a folder changed into a link reaches, is left; and a failure after the first write does not roll the earlier files back. Every byte adopt did not write is preserved, save a settings document's whitespace and an
 empty `hooks` object or event list (`Stop`, `UserPromptSubmit`) it had, which `--remove` deletes; `--remove` restores a file
 adopt created or extended to what it held before: the fragment copies, the skill folders and
 `.agents/.gitignore` and `.outcomebound/.gitignore` go, the project's own `local.md` stays. Reading a fact runs nothing from the

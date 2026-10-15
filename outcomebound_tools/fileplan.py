@@ -3,13 +3,17 @@
 `write` holds three properties: no symlink anywhere on a destination's path (on Windows, no
 junction either, and no name Windows cannot hold), every write staged with O_EXCL, fsynced and
 renamed over its destination, and a refusal whenever a destination's bytes are not the bytes its
-caller read. Every destination is checked before the first write, and again just before its own
-rename. That is a recheck, not a compare-and-swap: an edit that lands in the instant between the
-last check and the rename is still overwritten, and no lock closes that window. A destination the
+caller read. Every destination is checked before the first write, and again just before each
+attempt at its own rename, a retry after Windows refused the rename for a moment included. That is
+a recheck, not a compare-and-swap: an edit that lands in the instant between the last check and the
+rename is still overwritten, and no lock closes that window. A destination the
 caller read as absent is created exclusively instead (a hard link of the stage, or an open with
 O_EXCL where the file system holds no link), so a file that appears in that instant is refused,
 never overwritten. A staging file left
-by an earlier run is refused before the first write and is never removed. Nothing here recovers an
+by an earlier run is refused before the first write and is never removed; a failed write removes
+only the stage it created, so a stage name that now holds another file, or that a folder changed
+into a link reaches, is left as it is, even where that leaves this write's own stage. Nothing here
+recovers an
 interrupted run, and a failure after the first write does not roll the earlier writes back; the
 target's Git history is the undo.
 """
@@ -124,6 +128,8 @@ def _replace(
         raise WriteError(
             f"a staging file is in the way: {stage}; inspect it, then remove it"
         ) from error
+    made = os.fstat(descriptor)
+    moved = False
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(content)
@@ -134,8 +140,23 @@ def _replace(
         if create:
             _create(stage, path, content)
         else:
-            _move(stage, path)
+            _move(stage, path, recheck)
+            moved = True
     finally:
+        if not moved:
+            _remove_own(stage, made)
+
+
+def _remove_own(stage: Path, made: os.stat_result) -> None:
+    """Remove `stage` only while its name still holds the file this write created: after a
+    rename the name is free for another writer, and a folder on its path that became a link
+    reaches someone else's file. Between this check and the removal a residual instant stays."""
+
+    try:
+        now = os.lstat(stage)
+    except OSError:
+        return
+    if stat.S_ISREG(now.st_mode) and (now.st_dev, now.st_ino) == (made.st_dev, made.st_ino):
         stage.unlink(missing_ok=True)
 
 
@@ -164,15 +185,17 @@ def _create(stage: Path, path: Path, content: bytes) -> None:
         os.fsync(handle.fileno())
 
 
-def _move(stage: Path, path: Path) -> None:
+def _move(stage: Path, path: Path, recheck: Callable[[], None]) -> None:
     """Rename the staged file over its destination. On Windows a scanner or an editor that has the
     destination open, or just closed the stage, makes the rename fail for a moment, so it is tried
-    a few times before the refusal; a read-only destination fails every time."""
+    a few times before the refusal, the destination checked again after each wait; a read-only
+    destination fails every time."""
 
     for _ in range(REPLACE_TRIES - 1 if paths.on_windows() else 0):
         if _replaced(stage, path):
             return
         time.sleep(REPLACE_WAIT)
+        recheck()
     os.replace(stage, path)
 
 
