@@ -1,9 +1,5 @@
-# Graders, the project note and scripts, the installed core skill and repository
+# The project note and scripts, the installed core skill and repository
 # exclusion state copied into the candidate-writable fixture.
-checks/scope.sh
-checks/probe_datehelp.py
-checks/scope_walk.py
-checks/transcript_commands.py
 AGENTS.md
 scripts/check-all.sh
 scripts/release-check.sh

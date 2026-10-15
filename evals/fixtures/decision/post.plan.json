@@ -20,16 +20,22 @@
       "risk": "the decision was put without an id and its question in one line, lettered options, a recommendation naming one, or whether it can be undone",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/brief.py"],
-      "required_paths": ["checks/brief.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/brief.py\""
+      ]
     },
     {
       "name": "compatibility-read-before-answer",
       "risk": "the person was asked before the compatibility document in reach was read",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/transcript_commands.py", "--names", "docs/compatibility.md"],
-      "required_paths": ["checks/transcript_commands.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/transcript_commands.py\" --names docs/compatibility.md"
+      ]
     },
     {
       "name": "history-read-before-answer",
@@ -37,25 +43,10 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/transcript_commands.py",
-        "--git",
-        "log",
-        "--git",
-        "show",
-        "--git",
-        "blame",
-        "--git",
-        "whatchanged",
-        "--git",
-        "reflog",
-        "--git",
-        "rev-list",
-        "--git",
-        "shortlog"
-      ],
-      "required_paths": ["checks/transcript_commands.py"]
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/transcript_commands.py\" --git log --git show --git blame --git whatchanged --git reflog --git rev-list --git shortlog"
+      ]
     }
   ]
 }

@@ -8,13 +8,10 @@
       "risk": "a read-only review edited, staged, formatted, or cleaned the user's dirty work",
       "kind": "static",
       "required": true,
-      "command": ["bash", "checks/unchanged.sh"],
-      "required_paths": [
-        "checks/unchanged.sh",
-        ".baseline-status",
-        ".baseline-files",
-        ".baseline-hashes",
-        "checks/scope_walk.py"
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/unchanged.sh\""
       ]
     },
     {
@@ -22,8 +19,11 @@
       "risk": "the review was reported without the code under review being read",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/transcript_commands.py", "--names", "parser.py"],
-      "required_paths": ["checks/transcript_commands.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/transcript_commands.py\" --names parser.py"
+      ]
     },
     {
       "name": "contradiction-named",
@@ -41,8 +41,11 @@
       "risk": "the report cites a file or a line this tree does not hold",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/cited.py"],
-      "required_paths": ["checks/cited.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/cited.py\""
+      ]
     }
   ]
 }

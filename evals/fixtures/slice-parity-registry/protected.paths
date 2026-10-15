@@ -1,5 +1,5 @@
 # The project note, the design, the workflow document, the ticket template, the store
-# declaration and claims plan, the module registry and its test, the graders, the installed
+# declaration and claims plan, the module registry and its test, the installed
 # core skill and repository exclusion state copied into the candidate-writable fixture.
 AGENTS.md
 CONTRIBUTING.md
@@ -9,8 +9,6 @@ docs/specs/markdown-format.md
 .outcomebound/ticket-claims.json
 audit/module_registry.py
 tests/test_module_registry.py
-checks/drafts.py
-checks/ticket_cut.py
 .outcomebound/skills/using-outcomebound/SKILL.md
 .agents/skills/using-outcomebound/SKILL.md
 .git/config

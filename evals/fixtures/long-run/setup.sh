@@ -5,11 +5,12 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
-mkdir -p src deploy checks docs/goals
+mkdir -p src deploy "$stage/checks" docs/goals
 
 cat > src/legacy.py <<'EOF'
 def old_name(value):
@@ -69,11 +70,11 @@ cat > README.md <<'EOF'
 - `deploy/` holds the production manifest and the release script.
 EOF
 
-cp "$here/checks/completion.sh" checks/completion.sh
-cp "$here/checks/scope.sh" checks/scope.sh
-cp "$repo/evals/graders/scope_walk.py" checks/scope_walk.py
-cp "$repo/evals/graders/transcript_commands.py" checks/transcript_commands.py
-chmod +x checks/*
+cp "$here/checks/completion.sh" "$stage/checks/completion.sh"
+cp "$here/checks/scope.sh" "$stage/checks/scope.sh"
+cp "$repo/evals/graders/scope_walk.py" "$stage/checks/scope_walk.py"
+cp "$repo/evals/graders/transcript_commands.py" "$stage/checks/transcript_commands.py"
+chmod +x "$stage"/checks/*
 
 # The core skill, where the kernel's routing names it and where codex looks for skills;
 # none in the kernel-off arm.

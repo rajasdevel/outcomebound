@@ -5,7 +5,8 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -86,7 +87,7 @@ newest first.
 | A private repository with no license yet | An open source license | user | decided |
 MD
 
-mkdir -p checks
-cp "$repo/evals/graders/new_project.py" checks/
+mkdir -p "$stage/checks"
+cp "$repo/evals/graders/new_project.py" "$stage/checks/"
 
 . "$here/../skills-close/close.sh"

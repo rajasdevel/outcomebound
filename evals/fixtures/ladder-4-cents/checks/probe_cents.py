@@ -2,13 +2,12 @@
 
 probe.py new        a new database: prices go in as 12.50, come out the same, and are
                     stored as integer cents
-probe.py existing   a copy of the shop's stock as it was before the change, brought up to
-                    date by the workspace's own migrations: every price and quantity
-                    survives, now as integer cents, and the value is unchanged
+probe.py existing   the shop's stock as it was before the change, rebuilt from its SQL and
+                    brought up to date by the workspace's own migrations: every price and
+                    quantity survives, now as integer cents, and the value is unchanged
 """
 
 import importlib.util
-import shutil
 import sqlite3
 import sys
 import tempfile
@@ -22,7 +21,7 @@ if _SPEC is None or _SPEC.loader is None:
 cli = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(cli)
 
-BEFORE = Path(__file__).resolve().parent / "stock-before.db"
+BEFORE = Path(__file__).resolve().parent / "stock-before.sql"
 
 
 def cents_column(database, want):
@@ -76,8 +75,10 @@ def new(scratch):
 
 def existing(scratch):
     database = Path(scratch) / "stock.db"
-    shutil.copy(BEFORE, database)
-    kept = rows(BEFORE)
+    conn = sqlite3.connect(str(database))
+    conn.executescript(BEFORE.read_text(encoding="utf-8"))
+    conn.close()
+    kept = rows(database)
     status, _out, err = cli.run(database, "migrate")
     if status != 0:
         raise SystemExit(f"migrate on the stock as it was exited {status}: {err.strip()}")

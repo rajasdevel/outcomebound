@@ -9,13 +9,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "scripts-cover-examples"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" scripts-cover-examples"
       ]
     },
     {
@@ -24,13 +20,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "scripts-in-their-words"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" scripts-in-their-words"
       ]
     },
     {
@@ -39,13 +31,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "record-names-served"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" record-names-served"
       ]
     },
     {
@@ -54,13 +42,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "mismatch-said"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" mismatch-said"
       ]
     },
     {
@@ -69,13 +53,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "pre-run-not-acceptance"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" pre-run-not-acceptance"
       ]
     },
     {
@@ -84,13 +64,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "nobody-accepted"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" nobody-accepted"
       ]
     },
     {
@@ -99,14 +75,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_accept.py",
-        "pre-run-in-environment"
-      ],
-      "required_paths": [
-        "checks/probe_accept.py",
-        "checks/transcript_commands.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_accept.py\" pre-run-in-environment"
       ]
     },
     {
@@ -115,14 +86,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "bash",
-        "checks/allowed_paths.sh",
-        "acceptance/*",
-        ".agents/work/*"
-      ],
-      "required_paths": [
-        "checks/allowed_paths.sh",
-        "checks/scope_walk.py"
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'acceptance/*' '.agents/work/*'"
       ]
     }
   ]

@@ -20,48 +20,66 @@
       "risk": "the decision that turns on values the person judges has no page the engine built, or the engine's check fails on it",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/page.py", "check"],
-      "required_paths": ["checks/page.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" check"
+      ]
     },
     {
       "name": "page-declares-an-expectation",
       "risk": "no number the page shows is held to a value worked out apart from the page's code",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/page.py", "expect"],
-      "required_paths": ["checks/page.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" expect"
+      ]
     },
     {
       "name": "page-is-not-the-starter",
       "risk": "the page is a starter built unchanged, so it shows the starter's example and not this decision",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/page.py", "own"],
-      "required_paths": ["checks/page.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" own"
+      ]
     },
     {
       "name": "one-page-only",
       "risk": "the choice that the brief settles alone was given a page too: not exactly one built page",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/page.py", "one"],
-      "required_paths": ["checks/page.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" one"
+      ]
     },
     {
       "name": "brief-for-each-decision",
       "risk": "a decision was left without its own brief: an id and its question in one line, lettered options, a recommendation naming one, and whether it can be undone",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/brief_each.py"],
-      "required_paths": ["checks/brief_each.py", "checks/brief.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/brief_each.py\""
+      ]
     },
     {
       "name": "page-named-in-the-answer",
       "risk": "the page was built but the answer does not say where it is, so the person cannot open it",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/page.py", "named"],
-      "required_paths": ["checks/page.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" named"
+      ]
     }
   ]
 }

@@ -1,10 +1,11 @@
 # The close shared by the onboarding fixtures, sourced from a fixture's setup.sh in the workspace
 # after the setup plants the project in `target/project/`. It needs `$here` (the fixture's folder),
-# `$repo` (this checkout) and the workspace as the current folder. It makes the project its own
-# Git repository, with a seed commit that holds no OutcomeBound install, and records that commit
-# in `target-seed.txt`; copies the graders into `checks/`; writes the workspace note that points at
-# the project; installs the core skill (none in the kernel-off arm); and makes the workspace's seed
-# commit and tag. The arm's own install sits at the workspace root, never in the project.
+# `$repo` (this checkout), `$stage` (the grading stage, outside the workspace) and the workspace as
+# the current folder. It makes the project its own Git repository, with a seed commit that holds
+# no OutcomeBound install, and records that commit in `target-seed.txt`; copies the graders into
+# the stage's `checks/`; writes the workspace note that points at the project; installs the core
+# skill (none in the kernel-off arm); and makes the workspace's seed commit and tag. The arm's own
+# install sits at the workspace root, never in the project.
 project=target/project
 (
     cd "$project"
@@ -36,17 +37,20 @@ Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work her
 NOTE
 printf 'target/\n' > .gitignore
 
-mkdir -p checks
+mkdir -p "$stage/checks"
 for check in "$here"/checks/*; do
     # Importing a grader can leave a bytecode directory; it is not a fixture input.
     if [ "${check##*/}" = __pycache__ ]; then
         continue
     fi
-    cp "$check" checks/
+    cp "$check" "$stage/checks/"
 done
 cp "$repo/evals/graders/onboard.py" "$repo/evals/graders/new_project.py" \
-  "$repo/evals/graders/scope_walk.py" "$repo/evals/graders/transcript_commands.py" checks/
-chmod +x checks/*
+  "$repo/evals/graders/scope_walk.py" "$repo/evals/graders/transcript_commands.py" "$stage/checks/"
+chmod +x "$stage"/checks/*
+# The checks read the `local` fragment's template beside the `evals/` folder the runner names.
+mkdir -p "$stage/templates"
+cp "$repo/templates/fragment-local.md" "$stage/templates/"
 
 bash "$repo/evals/fixtures/core-skill.sh" "$repo" AGENTS.md
 

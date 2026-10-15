@@ -9,13 +9,11 @@
       "kind": "runtime",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_links.py",
-        "behaviour"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_links.py\" behaviour"
       ],
       "required_paths": [
-        "checks/probe_links.py",
         "links.py"
       ]
     },
@@ -25,13 +23,11 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_links.py",
-        "reuses"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_links.py\" reuses"
       ],
       "required_paths": [
-        "checks/probe_links.py",
         "links.py"
       ]
     },
@@ -41,14 +37,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "bash",
-        "checks/allowed_paths.sh",
-        "links.py",
-        "test_links.py"
-      ],
-      "required_paths": [
-        "checks/allowed_paths.sh",
-        "checks/scope_walk.py"
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" links.py test_links.py"
       ]
     },
     {
@@ -57,14 +48,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_links.py",
-        "plain"
-      ],
-      "required_paths": [
-        "checks/probe_links.py",
-        "checks/transcript_commands.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_links.py\" plain"
       ]
     }
   ]

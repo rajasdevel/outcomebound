@@ -9,13 +9,9 @@
       "kind": "runtime",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "clear-fixed"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" clear-fixed"
       ]
     },
     {
@@ -24,13 +20,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "clear-reply"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" clear-reply"
       ]
     },
     {
@@ -39,13 +31,9 @@
       "kind": "runtime",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "design-left"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" design-left"
       ]
     },
     {
@@ -54,13 +42,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "design-asked"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" design-asked"
       ]
     },
     {
@@ -69,13 +53,9 @@
       "kind": "runtime",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "returning-handled"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" returning-handled"
       ]
     },
     {
@@ -84,13 +64,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "nothing-closed"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" nothing-closed"
       ]
     },
     {
@@ -99,13 +75,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_land.py",
-        "checks-not-loosened"
-      ],
-      "required_paths": [
-        "checks/probe_land.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_land.py\" checks-not-loosened"
       ]
     }
   ]

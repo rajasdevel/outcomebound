@@ -6,7 +6,8 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -118,7 +119,7 @@ Run the tests with `python3 -B -m unittest`.
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
 
-mkdir -p checks
-cp "$repo/evals/graders/report_records.py" checks/
+mkdir -p "$stage/checks"
+cp "$repo/evals/graders/report_records.py" "$stage/checks/"
 
 . "$here/../skills-close/close.sh"

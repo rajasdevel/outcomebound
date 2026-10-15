@@ -8,32 +8,45 @@
       "risk": "format_range is missing or wrong on an equal pair, a pair with cents or a zero",
       "kind": "runtime",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_prices.py", "behaviour"],
-      "required_paths": ["checks/probe_prices.py", "prices.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_prices.py\" behaviour"
+      ],
+      "required_paths": ["prices.py"]
     },
     {
       "name": "only-the-module-and-its-test-changed",
       "risk": "a task with no picture grew a ledger, a note or a new module",
       "kind": "static",
       "required": true,
-      "command": ["bash", "checks/allowed_paths.sh", "prices.py", "test_prices.py"],
-      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" prices.py test_prices.py"
+      ]
     },
     {
       "name": "no-picture-text-in-the-answer",
       "risk": "the answer carries a gap list about pictures or reference rows where no picture was given",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_prices.py", "quiet"],
-      "required_paths": ["checks/probe_prices.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_prices.py\" quiet"
+      ]
     },
     {
       "name": "no-source-import-run",
       "risk": "a source import or check ran for a request that holds no source",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_prices.py", "plain"],
-      "required_paths": ["checks/probe_prices.py", "checks/transcript_commands.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_prices.py\" plain"
+      ]
     }
   ]
 }

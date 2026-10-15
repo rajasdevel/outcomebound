@@ -6,7 +6,8 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -134,10 +135,10 @@ Run the tests with `python3 -B -m unittest`.
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
 
-mkdir -p checks
-cp "$repo/evals/fixtures/decision/checks/brief.py" checks/brief.py
-cp "$here/checks/reminders_probe.py" checks/reminders_probe.py
-chmod +x checks/*
+mkdir -p "$stage/checks"
+cp "$repo/evals/fixtures/decision/checks/brief.py" "$stage/checks/brief.py"
+cp "$here/checks/reminders_probe.py" "$stage/checks/reminders_probe.py"
+chmod +x "$stage"/checks/*
 
 # The core skill, where the note names it and where codex looks for skills;
 # none in the kernel-off arm.

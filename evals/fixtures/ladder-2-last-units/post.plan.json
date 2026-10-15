@@ -11,12 +11,7 @@
       "command": [
         "sh",
         "-c",
-        "python3 -B checks/footprint.py; exec python3 -B checks/probe_last_units.py"
-      ],
-      "required_paths": [
-        "checks/footprint.py",
-        "checks/probe_last_units.py",
-        "checks/cli_probe.py"
+        "python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/footprint.py\"; exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_last_units.py\""
       ]
     },
     {
@@ -25,12 +20,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/no_process_document.py"
-      ],
-      "required_paths": [
-        "checks/no_process_document.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/no_process_document.py\""
       ]
     },
     {
@@ -39,16 +31,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/transcript_commands.py",
-        "--not-executed",
-        "scripts/check-all.sh",
-        "--not-executed",
-        "tests/integration/run.py"
-      ],
-      "required_paths": [
-        "checks/transcript_commands.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/transcript_commands.py\" --not-executed scripts/check-all.sh --not-executed tests/integration/run.py"
       ]
     }
   ]

@@ -6,12 +6,14 @@
 #
 # The project's `local` fragment is the same in both texts under test, except that the new text
 # adds the lines the composable lifecycle reads: `Exposure` and `Better means` in Context, `Leave
-# when` in Bounds. `checks/inflight.json` records the work in flight as built, for the checks.
+# when` in Bounds. `checks/inflight.json` of the grading stage records the work in flight as built,
+# for the checks.
 set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -167,10 +169,10 @@ python3 -B -m unittest discover -s tests -t . -q >/dev/null 2>&1 \
   || { echo "the planted project's own tests must pass" >&2; exit 1; }
 find . -name __pycache__ -prune -exec rm -rf {} +
 
-mkdir -p checks
-cp "$here/checks/probe_switch.py" checks/
-cp "$repo/evals/graders/transcript_commands.py" checks/
-chmod +x checks/*
+mkdir -p "$stage/checks"
+cp "$here/checks/probe_switch.py" "$stage/checks/"
+cp "$repo/evals/graders/transcript_commands.py" "$stage/checks/"
+chmod +x "$stage"/checks/*
 bash "$repo/evals/fixtures/core-skill.sh" "$repo" AGENTS.md
 
 git init -q .
@@ -259,10 +261,11 @@ cat > .agents/work/grants.md <<'NOTE'
 NOTE
 
 # What the checks compare the end state with.
-python3 -B - <<'PY'
+python3 -B - "$stage" <<'PY'
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 files = [
@@ -283,10 +286,10 @@ record = {
     "files": {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in files},
     "logs": {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in logs},
 }
-Path("checks/inflight.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+(Path(sys.argv[1]) / "checks" / "inflight.json").write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
 PY
 
 git add -A
-git commit -qm "keep the open brief, the grant and the checks' record"
+git commit -qm "keep the open brief and the grant"
 git tag seed
 echo "fixture ready: $target"
