@@ -109,16 +109,16 @@ one line for each item, then `next:`.
 Plan, for example `--lifecycle team+client --visibility public`:
 
 ```text
-plan team+client (public, github): 5 to write, 1 present, 2 to offer; 9 platform acts; writes nothing without --accept
+plan team+client (public, github): 4 to write, 1 present, 3 to offer; 9 platform acts; writes nothing without --accept
 assumes: life: a product; maintainers: two or more in one team; dependants: outside users; who accepts: an outside party on a named build
 write   .outcomebound/fragments/local.md   team, client
 write   CONTRIBUTING.md                    team, client
-write   docs/specs/foundations/design.md   team
 write   .github/workflows/ci.yml           team
 write   .github/dependabot.yml             team
 present SECURITY.md                        the team block is printed below; add it on the person's yes
 offer   quality floor                      outcomebound floor --help
 offer   ticket declaration                 templates/tickets/ in the engine; outcomebound tickets --help
+offer   first design                       bash "$(outcomebound home)/scripts/new-spec.sh" <slug>, at the first hard-to-undo choice
 act     create the remote repository, choose visibility and license: the owner
 act     ...: a repository admin; listed
 adopt:  outcomebound adopt . --fragments local,team,client,commands
@@ -137,7 +137,7 @@ fragment selection. The blocks for present files come last.
 `--accept`:
 
 ```text
-PASS wrote 5 files; 1 present, left as it was
+PASS wrote 4 files; 1 present, left as it was
 wrote   .outcomebound/fragments/local.md
 ...
 present SECURITY.md: its block is printed below; add it on the person's yes
@@ -272,8 +272,9 @@ every part to a source, so no template ships that no lifecycle writes.
 A file is its head followed by its parts, in this order: the preset's part, the act parts in the
 order `deploy`, `publish`, `tag`, `stored-data`, then the overlay parts in the canonical order.
 
-- `blocks`, for a Markdown document (`CONTRIBUTING.md`, `SECURITY.md`, the design): each part is
-  appended after the head, with one blank line between.
+- `blocks`, for a Markdown document (`CONTRIBUTING.md`, `SECURITY.md`): each part is appended
+  after the head, with one blank line between. A file with no head is never written: its parts
+  are printed as blocks to add once the file exists. The first design is such a file.
 - `slots`, for the local fragment: the head holds the frontmatter and the five slot lines in the
   order the fragment parse requires. Each part is written in the same five-slot form and holds
   only the slots it adds to. Its lines go after the lines already in that slot. The frontmatter
@@ -332,7 +333,7 @@ changes or the risk it reduces.
 | --- | --- | --- | --- | --- | --- |
 | local fragment (`.outcomebound/fragments/local.md`) | write | write | write | write | every task loads it, and in a new project nothing else tells an agent the exposure; `adopt --fragments local` refuses without it |
 | route document (`CONTRIBUTING.md`) | — | — | write | write | how a change lands, its size, who reviews, the revert, the deploy; for solo one local line holds the route |
-| first design (`docs/specs/foundations/design.md`) | — | — | write | write | the hard-to-undo choices of shared work in one decision table, which is also the decision log |
+| first design | — | — | offer: `bash "$(outcomebound home)/scripts/new-spec.sh" <slug>` when the first hard-to-undo choice comes | offer, as team | the hard-to-undo choices of shared work in one decision table, which is also the decision log; written when the first such choice comes, as the new-project reference's "Decide what is hard to undo" says, not before it (maintainer, 2026-10-15) |
 | CI workflow (`.github/workflows/ci.yml`) | — | write | write | write | an independent check of every change: Done and `outcomebound adopt . --check`, actions pinned by commit, a read-only token |
 | update-bot file (`.github/dependabot.yml`) | — | write, with the CI workflow | write | write | keeps the commit pins of the actions current |
 | `SECURITY.md` | — | write on public | write | write, with the disclosure-policy block | a private channel for a vulnerability report |
@@ -353,8 +354,8 @@ So a fresh empty repository gets these files from `--accept`:
 | prototype | 1: local fragment |
 | solo, public | 4: local fragment, CI workflow, update-bot file, `SECURITY.md` |
 | solo, private or private-free | 3: local fragment, CI workflow, update-bot file |
-| team, any visibility | 6: local fragment, route document, first design, CI workflow, update-bot file, `SECURITY.md` |
-| organization, any visibility | 6, as team, with the organization's parts |
+| team, any visibility | 5: local fragment, route document, CI workflow, update-bot file, `SECURITY.md` |
+| organization, any visibility | 5, as team, with the organization's parts |
 
 Each act adds `CHANGELOG.md` where it says so above, and the overlays add the files below. Never
 written by any preset: a goal envelope (one is written for a run), an ADR folder (a second log
@@ -366,11 +367,11 @@ skeleton's).
 | Overlay | Local fragment | Route document | `SECURITY.md` | First design | Other |
 | --- | --- | --- | --- | --- | --- |
 | client | its lines | its block, the client route; brings the file on solo | — | — | — |
-| eu-market | its lines; the edge `rewriting published history` | — | its block; brings the file on solo private and private-free | its section; brings the file on solo | — |
+| eu-market | its lines; the edge `rewriting published history` | — | its block; brings the file on solo private and private-free | its rows, printed as a block to add to the design once it exists | — |
 | safety-critical | its lines | — | — | — | — |
 | audit | its lines | — | — | — | — |
 | unattended-agents | its lines | — | — | — | — |
-| ai-product | its lines | — | — | its section where the file is in the set | — |
+| ai-product | its lines | — | — | its rows, printed as a block to add to the design once it exists | — |
 
 ### The lines of the local fragment
 
@@ -392,15 +393,17 @@ templates are the exact text, and the review the `review` mechanism names reads 
 | safety-critical | Context: this scaffold is not the lifecycle that `<<fill: the standard, such as IEC 62304 or DO-178C>>` requires, and that standard's own process decides each step it covers. Distinguish: agent output ≠ verified output; it counts as unverified until a person or a qualified process verifies it. |
 | audit | Bounds: the pull request is the change record, CI the test record and the deploy log the deploy record; where one person cannot be kept from approving their own change, the compensating control is `<<fill: the control, such as a later review of each change by a named person>>`, written with its risk; the emergency path is the normal path made fast, with its review recorded after. |
 | unattended-agents | Bounds: each agent works on its own branch or worktree and opens a pull request; it never approves or merges its own; it runs in the harness sandbox with network limits; it acts under its own identity with a scoped token, never an admin token. |
-| ai-product | Completion bar: the evaluation tasks and their grader run as part of Done, `<<fill: the evaluation command>>`, and were written before the code that calls the model. Where no design is in the set, Context: the model provider is `<<fill: the provider>>`. |
+| ai-product | Completion bar: the evaluation tasks and their grader run as part of Done, `<<fill: the evaluation command>>`, and were written before the code that calls the model. Context: the model provider is `<<fill: the provider>>`, until the design's provider row holds it. |
 
-The design's section for eu-market holds rows for the cybersecurity risk assessment, the due
-diligence on third-party components and the support period (`<<fill: the end of support, and the
-day it was checked>>`). The section for ai-product holds rows for the provider and for how its
-output is evaluated. The first design's own table holds the hard-to-undo choices the new-project
-reference names, each with `<<fill>>` cells: where data lives, authentication and the trust
-boundary, hosting and its spending, the language and framework, module boundaries, and license and
-visibility.
+The scaffold writes no design (maintainer, 2026-10-15). The plan offers one and names
+`bash "$(outcomebound home)/scripts/new-spec.sh" <slug>` for the moment the first hard-to-undo
+choice comes; the slug is the person's or the agent's then, so no slug is assumed. The plan prints
+the eu-market and ai-product rows as a block to add to that design's decision table once it exists,
+and prints the block again on each later run while the overlay holds; where a design exists, the
+offer reads `present` with its path, and the block names that file. The eu-market rows cover the
+cybersecurity risk assessment, the due diligence on third-party components and the support period
+(`<<fill: the end of support, and the day it was checked>>`). The ai-product rows cover the
+provider and how its output is evaluated.
 
 The route document of team holds: changes on short branches merged by pull request with CI green;
 the size of a change and its revert; the review the "Gates — review" line names, with the three
@@ -463,7 +466,7 @@ A part is present where its file is at the planned path, or where a signal shows
 | --- | --- |
 | local fragment | `.outcomebound/fragments/local.md` exists |
 | route document | `CONTRIBUTING.md`, `.github/CONTRIBUTING.md` or `docs/CONTRIBUTING.md` exists, or a "Streams —" line of the local fragment names a route path, in a code span, that exists |
-| first design | any `docs/specs/*/design.md` exists |
+| first design (an offer) | any `docs/specs/*/design.md` exists; the overlay blocks then name it |
 | CI workflow | any `.github/workflows/*.yml` or `*.yaml`, or `.gitlab-ci.yml`: the files the CI test fact reads |
 | update-bot file | `.github/dependabot.yml` or `.yaml`, `renovate.json`, `renovate.json5`, `.github/renovate.json`, `.renovaterc` or `.renovaterc.json` |
 | `SECURITY.md` | `SECURITY.md`, `.github/SECURITY.md` or `docs/SECURITY.md` |
@@ -639,7 +642,7 @@ of `adopt` is. `--check` reads CRLF and a byte-order mark. The Git that lists th
 | Two marker kinds, `<<fill: ...>>` and `<<owner: ...>>`, so `--check` names the gate owners apart from the values | one kind, which cannot say that a value is the person's to name | agent | decided |
 | A file is a head and parts joined in a fixed order; the local fragment joins by slot; no YAML is merged | one whole template per combination, four presets times 64 overlay sets; text merged into YAML | agent | decided |
 | Template sources carry plain names, mapped to their paths by the manifest | sources at the paths they take, whose dot folders the build backend's walk skips and which tools in this repository would read as its own | agent | decided |
-| The first design's path is `docs/specs/foundations/design.md`, and any `docs/specs/*/design.md` makes it present | a slug the person names, which `--accept` cannot know; no design, which leaves shared work no decision table | agent | assumed |
+| The first design is an offer on team and organization: the plan names `new-spec.sh` for the first hard-to-undo choice, and prints the eu-market and ai-product rows as a block to add to it once it exists (maintainer, 2026-10-15) | a design written at scaffold time with a row to fill for each choice, which changes no decision before the route reaches those choices, and a fixed slug | user | decided |
 | `--host other` writes no `.github/` file and reads the platform acts `UNVERIFIED` | GitHub files on every host, a file that looks like a guard and binds nothing; a template for each host, beyond what the research read | agent | decided |
 | No refusal on a repository that already holds files: the plan shows what is present, and the references send an existing project to the comparison and a move to `--from` | a refusal of `--accept` beyond an empty repository, which needs a test of what an install alone writes and blocks a first-time adopter who wants a set | agent | decided |
 | Nothing recorded: no manifest record and no version mark | a record or a mark, which would make the engine watch files it does not own | agent | decided |
@@ -660,7 +663,11 @@ plan writes beyond making a part present.
 In `tests/test_scaffold.py`, unless a line names another file:
 
 1. `test_each_preset_writes_exactly_its_file_set_into_an_empty_repository`, over each preset and
-   each visibility, with and without each act: the set of paths equals the tables above.
+   each visibility, with and without each act: the set of paths equals the tables above (team
+   and organization: 5 files on a fresh repository, and no file under `docs/specs/`).
+1a. `test_the_first_design_is_offered_and_the_overlay_rows_are_printed_as_a_block`: with
+   eu-market and ai-product, the plan offers the design with `new-spec.sh`, prints both rows'
+   block, and writes nothing under `docs/specs/`; with a design present, the block names it.
 2. `test_each_overlay_on_each_base_adds_exactly_its_parts`, over each overlay on each preset that
    takes it.
 3. `test_an_overlay_a_preset_refuses_is_a_usage_error` (client, eu-market and audit on

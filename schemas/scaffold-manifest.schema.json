@@ -104,7 +104,7 @@
                   "items": {"type": "string", "pattern": "^[a-z][a-z-]*[a-z]$"},
                   "uniqueItems": true
                 },
-                "mode": {"enum": ["write", "offer"]},
+                "mode": {"enum": ["write", "offer"], "description": "write: --accept writes it where absent. offer: printed; written only where --with names its `offer` value. A part of a file with no `head` is printed as a block to add once the file exists, and is never written."},
                 "offer": {"enum": ["codeowners", "pr-template"], "description": "For mode offer: the `--with` value that writes it."},
                 "brings": {"type": "boolean", "description": "For an overlay's part: true puts the file into the set where no preset or act part does."},
                 "when": {
