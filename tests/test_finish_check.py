@@ -439,6 +439,24 @@ def test_a_paused_session_runs_done_and_holds_nothing_until_a_stop_that_is_not_p
     assert counted(count) == 1
 
 
+def test_the_paused_notice_promises_a_hold_only_where_done_still_fails(tmp_path: Path) -> None:
+    """Breaks if the person is told that a failure found while paused is held at the first turn
+    end that is not paused, when a turn that fixes it before then holds nothing."""
+
+    count = tmp_path / "count"
+    line = f"echo run >> {q(count)}; test -f fixed.txt || {{ echo boom; exit 1; }}"
+    root, digest = target(tmp_path / "t", [line])
+    stop = {**INPUT["claude-code"], "cwd": str(root), "background_tasks": [{"task_id": "b1"}]}
+    assert hook("claude-code", digest, root, stdin=stop) == (0, {})
+    prompt = {"session_id": "s", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
+    told = json.loads(mark("claude-code", digest, root, stdin=prompt).stdout)["systemMessage"]
+    assert "while the session was paused" in told and "where Done still fails" in told, told
+
+    write(root / "fixed.txt", "x\n")
+    assert hook("claude-code", digest, root, stdin={**stop, "background_tasks": []}) == (0, {})
+    assert counted(count) == 2
+
+
 @pytest.mark.parametrize("waiting", WAITING, ids=["background-tasks", "session-crons"])
 def test_background_work_leaves_a_tree_that_passed_silent(
     tmp_path: Path, waiting: dict[str, Any]

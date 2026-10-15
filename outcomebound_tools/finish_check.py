@@ -2442,7 +2442,7 @@ def _failure_notice(record: Checked, viewer: Viewer, target: Path) -> Notice | N
         head = (
             "finish-check FAIL: a Done command failed while the session was paused, with "
             "background work in flight; it is held at the first turn end of the session that is "
-            "not paused."
+            "not paused, where Done still fails."
         )
         return Notice(record.tree, PAUSED_KIND, report(head, record.results))
     else:
