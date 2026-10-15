@@ -18,10 +18,19 @@ outside the build. The run writes scripts under `acceptance/scripts/` and a draf
                              gives acceptance in a name: the fields for who accepted, when, and
                              their words hold nothing but a placeholder
     pre-run-in-environment   where the record reports results (and does not say the pre-run was
-                             not run or is held), some command ran the desk program in or on
-                             `env/acceptance/` and did not fail; a read of the environment's
-                             files or of its build (cat, ls, grep, head, sed, stat, `--version`)
-                             is no run (a transcript that cannot be read is UNVERIFIED)
+                             not run or is held), a command ran the environment's own entry
+                             point, `env/acceptance/desk.py`, and succeeded: an interpreter
+                             whose script argument (not a word after `-c` or `-m`) is that file,
+                             or that file run as the program, resolved against the command's
+                             directory and any `cd` before it. A mention of it in a printed
+                             string, a read of the environment's files or of its build (cat, ls,
+                             grep, `--version`, `--help`) is no run. Only a run that succeeded
+                             passes. Where the only runs have a status of `unverified`, or a
+                             relative path that cannot be placed because no directory was
+                             recorded, the check is UNVERIFIED (exit 2); where there is no such
+                             run or every one failed it exits 1. The `cd` is read as a word, not
+                             as a shell: one that a subshell may hold leaves the path unplaced.
+                             (a transcript that cannot be read is UNVERIFIED)
 
 The checks read words, not meaning. Whether a script reads like the acceptor's own words, and
 whether a pre-run result is true, need a reader. Each exits 0 where it holds and 1 naming what
@@ -245,47 +254,104 @@ def pre_run_in_environment() -> int:
     if records is None:
         print(transcript.UNKNOWN)
         return 2
-    in_environment = [
-        (command, status)
-        for command, status, directory in records
-        if _runs_the_program(transcript, command, directory)
-    ]
-    if any(status in ("succeeded", "unverified") for _command, status in in_environment):
+    placed, unplaced = [], []
+    for command, status, directory in records:
+        found = _desk_runs(transcript, command, directory)
+        placed += [status for kind in found if kind == "run"]
+        unplaced += [status for kind in found if kind == "unplaced"]
+    if any(status in SUCCEEDED for status in placed):
         return 0
-    if in_environment:
-        print("every command that ran the desk program in env/acceptance failed or was declined")
+    if "unverified" in placed or any(status in SUCCEEDED | {"unverified"} for status in unplaced):
+        print(
+            "UNVERIFIED: the only commands that may have run env/acceptance/desk.py have a "
+            "status or a directory the transcript does not settle"
+        )
+        return 2
+    if placed:
+        print("every command that ran env/acceptance/desk.py failed or was declined")
     else:
         print(
-            "the record reports pre-run results, yet no command ran the desk program in "
-            "env/acceptance (a read of its files or of its build is not a run)"
+            "the record reports pre-run results, yet no command ran env/acceptance/desk.py "
+            "(a read of its files, a printed mention of it, or its version or help is not a run)"
         )
     return 1
 
 
-# Programs that only read, list or measure files; a command of these is no acceptance action.
-READERS = frozenset(
-    {"cat", "ls", "grep", "egrep", "fgrep", "rg", "head", "tail", "sed", "awk", "stat", "wc"}
-    | {"file", "find", "tree", "less", "more", "diff", "cmp", "sha256sum", "shasum", "md5sum"}
-    | {"od", "xxd", "echo", "printf", "test", "cd", "pwd", "true", "realpath", "readlink"}
-)
+SUCCEEDED = frozenset({"succeeded", "exited 0"})
+DESK = Path("env/acceptance/desk.py")
 METADATA_FLAGS = ("--version", "-h", "--help", "-V")
+INTERPRETER = re.compile(r"^(?:python3?(?:\.\d+)?|bash|sh|zsh|dash)$")
+# Option letters that do not name a script: the code or module to run, and options that take a value.
+RUNS_NO_SCRIPT = {"python": "cm", "shell": "c"}
+TAKES_VALUE = {"python": "WX", "shell": "oO"}
 
 
-def _runs_the_program(transcript, command: str, directory: str) -> bool:
-    """Whether `command` runs the desk program, with something other than a request for its
-    version or help, in or on the acceptance environment. A reader of its files is not a run."""
+def _script(argv: list[str]) -> tuple[str, list[str]] | None:
+    """The script a command runs and the words after it, or None where it runs none: a program
+    other than an interpreter or `desk.py` itself, or an interpreter given `-c` or `-m`."""
 
-    if "env/acceptance" not in command and not directory.rstrip("/").endswith("env/acceptance"):
-        return False
+    name = Path(argv[0]).name
+    if name == "desk.py":
+        return argv[0], argv[1:]
+    if not INTERPRETER.match(name):
+        return None
+    kind = "python" if name.startswith("python") else "shell"
+    words, index = argv[1:], 0
+    while index < len(words) and words[index].startswith("-") and words[index] != "-":
+        word, index = words[index], index + 1
+        if word == "--":
+            break
+        if word.startswith("--"):
+            continue
+        for position, letter in enumerate(word[1:], 1):
+            if letter in RUNS_NO_SCRIPT[kind]:
+                return None
+            if letter in TAKES_VALUE[kind]:
+                index += position == len(word) - 1
+                break
+    return (words[index], words[index + 1 :]) if index < len(words) else None
+
+
+def _moved(here: Path | None, word: str) -> Path | None:
+    """The directory after `cd word` from `here`, None where it cannot be told."""
+
+    if word.startswith(("$", "~", "-")) or any(char in word for char in "*?[{"):
+        return None
+    if Path(word).is_absolute():
+        return Path(word)
+    return here / word if here is not None else None
+
+
+def _desk_runs(transcript, command: str, directory: str) -> list[str]:
+    """One entry per run of `env/acceptance/desk.py` in `command`: `run`, or `unplaced` where
+    the script is `desk.py` by name but its directory is not known. A request for the version
+    or help is no run. The directory is that of the record, moved by each `cd` word before the
+    run; a command with a parenthesis moves it to unknown."""
+
+    here: Path | None = Path(directory) if directory else None
+    grouped = "(" in command
+    expected = os.path.realpath(Path.cwd() / DESK)
+    found = []
     for words in transcript._simple_commands(command):
         argv = transcript._program(words)
-        if not argv or Path(argv[0]).name in READERS:
+        if not argv:
             continue
-        interpreter = re.match(r"^(?:python3?(?:\.\d+)?|bash|sh|zsh)$", Path(argv[0]).name)
-        runs = (interpreter or Path(argv[0]).name == "desk.py") and any("desk" in w for w in argv)
-        if runs and not any(flag in argv for flag in METADATA_FLAGS):
-            return True
-    return False
+        if argv[0] == "cd" and len(argv) == 2:
+            here = None if grouped else _moved(here, argv[1])
+            continue
+        script = _script(argv)
+        if script is None or any(flag in script[1] for flag in METADATA_FLAGS):
+            continue
+        path = Path(script[0])
+        if not path.is_absolute():
+            if here is None:
+                if path.name == "desk.py":
+                    found.append("unplaced")
+                continue
+            path = here / path
+        if os.path.realpath(path) == expected:
+            found.append("run")
+    return found
 
 
 CHECKS = {

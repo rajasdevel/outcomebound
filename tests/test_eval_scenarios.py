@@ -6184,6 +6184,71 @@ def test_run_acceptance_fails_pre_run_results_no_command_made(
     )
 
 
+def test_run_acceptance_fails_a_command_that_only_names_the_desk_program(
+    workspace: Callable[..., Path],
+) -> None:
+    """The desk entry point must be what runs: its words in a printed string, in another script's
+    arguments, after `-c` or `-m`, or in a copy outside the environment are no run."""
+    for label, commands in (
+        ("print-only", ("python3 -c 'print(\"desk env/acceptance\")'",)),
+        ("c-in-env", ("cd env/acceptance && python3 -c 'import desk; desk.main()'",)),
+        ("module", ("cd env/acceptance && python3 -m desk --today 2026-03-20",)),
+        ("other-script", ("python3 env/acceptance/other.py desk.py",)),
+        ("arguments", ("cd env/acceptance && python3 other.py desk.py",)),
+        ("tip-copy", ("python3 desk.py --today 2026-03-20 env/acceptance",)),
+        ("echo", ("echo python3 env/acceptance/desk.py",)),
+        ("help", ("python3 env/acceptance/desk.py --help",)),
+    ):
+        _accept(
+            workspace,
+            label,
+            ACCEPT_RIGHT,
+            commands=commands,
+            pre_run_results_from_the_environment="FAIL",
+        )
+    for label, command in (
+        ("script-option", "python3 -B env/acceptance/desk.py --today 2026-03-20"),
+        ("absolute", "python3 {root}/env/acceptance/desk.py --today 2026-03-20"),
+        ("as-program", "cd env/acceptance && ./desk.py --today 2026-03-20"),
+        ("wrapped", "env TZ=UTC python3 env/acceptance/desk.py"),
+    ):
+        target = workspace(ACCEPT, label)
+        _act(target, ACCEPT_RIGHT)
+        verdicts = _grade(
+            target,
+            ACCEPT,
+            _said(target, command.format(root=target)),
+            ACCEPT_ANSWER,
+        )
+        assert verdicts["pre-run-results-from-the-environment"] == "PASS", (label, verdicts)
+
+
+def test_run_acceptance_leaves_an_unverified_pre_run_unverified(
+    workspace: Callable[..., Path],
+) -> None:
+    """A declared check that exits 2 is graded FAIL and its output says UNVERIFIED; exit 1 does
+    not say it."""
+
+    name = "pre-run-results-from-the-environment"
+    unverified = (ACCEPT_ENV_RUN, "unverified")
+    printed = ("python3 -c 'print(\"desk env/acceptance\")'", "unverified")
+    for label, runs, wanted, said in (
+        ("unverified", [unverified], "FAIL", True),
+        ("unverified-then-failed", [unverified, (ACCEPT_ENV_RUN, "exited 1")], "FAIL", True),
+        ("unverified-then-run", [unverified, ACCEPT_ENV_RUN], "PASS", False),
+        ("unverified-print", [printed], "FAIL", False),
+        ("failed", [(ACCEPT_ENV_RUN, "exited 1")], "FAIL", False),
+    ):
+        target = workspace(ACCEPT, label)
+        _act(target, ACCEPT_RIGHT)
+        verdicts = _grade(target, ACCEPT, _said(target, *runs), ACCEPT_ANSWER)
+        assert verdicts[name] == wanted, (label, verdicts["_output"])
+        assert ("UNVERIFIED: the only commands" in verdicts["_output"]) is said, (
+            label,
+            verdicts["_output"],
+        )
+
+
 def test_run_acceptance_fails_a_pre_run_whose_command_failed(
     workspace: Callable[..., Path],
 ) -> None:
