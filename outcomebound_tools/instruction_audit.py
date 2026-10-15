@@ -1806,6 +1806,10 @@ class _Retirement:
     # starts.
     other_case: bool
     allowed: tuple[re.Pattern[str], ...]
+    # The term's first word after its first letter, as a pattern with the entry's flags: every
+    # occurrence holds it one character (or `./` and one character) after its start, so a search
+    # for it finds the few places where `pattern` can match. None where that word is empty.
+    probe: re.Pattern[str] | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1816,7 +1820,15 @@ class _RetiredList:
 
 
 def _patterns(raw: Any) -> tuple[re.Pattern[str], ...]:
-    return tuple(_glob_pattern(glob) for glob in raw or ())
+    """The list's path patterns; one with no `*` or `?` names a file or a folder, and so also
+    each path under that folder."""
+
+    return tuple(
+        re.compile(re.escape(glob.rstrip("/")) + r"(?:/.*)?\Z")
+        if "*" not in glob and "?" not in glob
+        else _glob_pattern(glob)
+        for glob in raw or ()
+    )
 
 
 def _retirement(raw: Mapping[str, Any]) -> _Retirement:
@@ -1837,21 +1849,24 @@ def _retirement(raw: Mapping[str, Any]) -> _Retirement:
         if other_case
         else re.escape(first)
     )
-    body = head + _GAP.join(re.escape(word) for word in re.split(r" +", rest))
+    words = re.split(r" +", rest)
+    body = head + _GAP.join(re.escape(word) for word in words)
     if kind == "path":
         # A leading `./` is read away first; then neither side may touch a word character, `-`,
         # `/` or `.` (`docs/old.md.bak`), though a full stop that ends a sentence may follow.
         pattern = rf"(?<![{_BOUNDARY}/.])(?:\./)?{body}(?![{_BOUNDARY}/])(?!\.\w)"
     else:
         pattern = rf"(?<![{_BOUNDARY}]){body}(?![{_BOUNDARY}])"
+    flags = re.IGNORECASE if ignore else 0
     return _Retirement(
         term=term,
         kind=kind,
         day=raw["retired"],
         replaced_by=raw["replaced_by"],
-        pattern=re.compile(pattern, re.IGNORECASE if ignore else 0),
+        pattern=re.compile(pattern, flags),
         other_case=other_case,
         allowed=_patterns(raw.get("allowed_in")),
+        probe=re.compile(re.escape(words[0]), flags) if words[0] else None,
     )
 
 
@@ -1980,8 +1995,8 @@ def _released_lines(lines: Sequence[str], flags: Sequence[bool]) -> frozenset[in
 
 def _sentence_start(text: str, index: int) -> bool:
     """Whether a sentence starts at `text[index]`: after a full stop, `!` or `?`; at the start
-    of a block (the text, a paragraph, a list item, a heading, a quote or a table cell); or at the
-    start of a line after one that ends a sentence."""
+    of a block (the text, a paragraph, a list item, a heading, a quote or the first table cell);
+    or at the start of a line after one that ends a sentence."""
 
     start = text.rfind("\n", 0, index) + 1
     before = text[start:index]
@@ -1998,8 +2013,8 @@ def _sentence_start(text: str, index: int) -> bool:
 def _record_spans(
     lines: Sequence[str], starts: Sequence[int], flags: Sequence[bool]
 ) -> list[tuple[int, int]]:
-    """The quotes and code spans that start on a `Changed -` line: what the line records, which
-    does not count, wherever in its paragraph the quote ends."""
+    """The quotes and code spans in the paragraph a `Changed -` line starts: what the line
+    records, which does not count, on the `Changed` line or on a line it wraps onto."""
 
     spans: list[tuple[int, int]] = []
     for index, line in enumerate(lines):
@@ -2017,7 +2032,6 @@ def _record_spans(
         spans.extend(
             (starts[index] + found.start(), starts[index] + found.end())
             for found in _QUOTED.finditer(joined)
-            if found.start() < len(line)
         )
     return spans
 
@@ -2077,6 +2091,8 @@ def _retired_file(root: Path, relative: str, retired: _RetiredList, scope: _Scop
     """The findings in one file: each occurrence, or why the file was not read; none where it
     was read and holds no occurrence."""
 
+    if any(pattern.match(relative) for pattern in retired.history):
+        return []
     why = _unopened(root, relative, scope)
     text = None
     if why is None:
@@ -2104,15 +2120,12 @@ def _retired_file(root: Path, relative: str, retired: _RetiredList, scope: _Scop
                 "retired-reference", relative, 0, UNVERIFIED, fact, next=_NEXT["stale-reference"]
             )
         ]
-    if any(pattern.match(relative) for pattern in retired.history):
-        return []
     found = []
     for retirement in retired.entries:
         if any(pattern.match(relative) for pattern in retirement.allowed):
             continue
         view = views.prose if retirement.kind == "term" else views.full
-        for match in retirement.pattern.finditer(view):
-            where = match.start()
+        for where in _matches(retirement, view):
             if (
                 retirement.other_case
                 and view[where] != retirement.term[0]
@@ -2125,10 +2138,37 @@ def _retired_file(root: Path, relative: str, retired: _RetiredList, scope: _Scop
     return found
 
 
-def _retired_files(root: Path, listed: Sequence[str] | None, retired: _RetiredList) -> list[str]:
+def _matches(retirement: _Retirement, view: str) -> Iterator[int]:
+    """Where each occurrence of `retirement` in `view` starts, as `pattern.finditer` gives them:
+    the pattern is tried only where its probe is found, since a pattern that opens with a
+    lookbehind is otherwise tried at every character."""
+
+    if retirement.probe is None:
+        yield from (match.start() for match in retirement.pattern.finditer(view))
+        return
+    leads = (3, 1) if retirement.kind == "path" else (1,)
+    starts: set[int] = set()
+    at = 0
+    while hit := retirement.probe.search(view, at):
+        starts.update(hit.start() - lead for lead in leads if hit.start() >= lead)
+        at = hit.start() + 1
+    end = 0
+    for start in sorted(starts):
+        if start < end:
+            continue
+        match = retirement.pattern.match(view, start)
+        if match:
+            end = match.end()
+            yield start
+
+
+def _retired_files(
+    root: Path, listed: Sequence[str] | None, retired: _RetiredList, scope: _Scope
+) -> list[str]:
     """The files the check reads: every Markdown or text file Git lists (every one under the
     target where Git cannot list it) inside the list's `scope`, and the project's own local
-    fragment, by name; not a copy of OutcomeBound's text that the manifest records."""
+    fragment, by name; not a copy of OutcomeBound's text that the manifest records, nor a file
+    the harness table records as one person's."""
 
     if listed is None:
         listed = [
@@ -2148,6 +2188,7 @@ def _retired_files(root: Path, listed: Sequence[str] | None, retired: _RetiredLi
         for path in listed
         if path.lower().endswith(_TEXT_SUFFIXES)
         and path not in copies
+        and not scope.personal(path)
         and (retired.scope is None or any(pattern.match(path) for pattern in retired.scope))
     }
     if os.path.lexists(root / LOCAL):
@@ -2164,7 +2205,7 @@ def _retired_reference(root: Path, listed: Sequence[str] | None, scope: _Scope) 
     if retired is None:
         return [problem] if problem else []
     findings: list[Finding] = []
-    for relative in _retired_files(root, listed, retired):
+    for relative in _retired_files(root, listed, retired, scope):
         found = _retired_file(root, relative, retired, scope)
         findings.extend(
             found or [_finding("retired-reference", relative, 0, PASS, "nothing matched")]

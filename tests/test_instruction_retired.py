@@ -694,6 +694,16 @@ def test_a_quote_that_runs_on_across_a_soft_break_does_not_count() -> None:
     assert lines({"doc.md": text}, entry("review board")) == []
 
 
+def test_a_quote_that_opens_on_the_line_a_changed_line_wraps_onto_does_not_count() -> None:
+    text = (
+        'Changed — 2026-10-15 (stream: app): "we moved to shared", decided by R;\n'
+        '  retired "review board"; invalidated nothing.\n'
+        "\n"
+        "The review board met.\n"
+    )
+    assert lines({"doc.md": text}, entry("review board")) == [4]
+
+
 def test_the_same_words_outside_the_quotes_count() -> None:
     text = (
         'Changed — 2026-10-15: "kept" and the review board stays.\n'  # 1
@@ -702,9 +712,10 @@ def test_the_same_words_outside_the_quotes_count() -> None:
         'Changed — 2026-10-15: "x\ny" then\nthe review board.\n'  # 4-6
         'Changed — "the review board", decided\nby the review board.\n'  # 7-8
         "A note: Changed — the review board.\n"  # 9, not a Changed line
-        'Unchanged — "the review board"\n'  # 10, quotes are no record here
+        "\n"  # a new paragraph: the quotes of line 7's paragraph end here
+        'Unchanged — "the review board"\n'  # 11, quotes are no record here
     )
-    assert lines({"doc.md": text}, entry("review board")) == [1, 2, 3, 6, 8, 9, 10]
+    assert lines({"doc.md": text}, entry("review board")) == [1, 2, 3, 6, 8, 9, 11]
 
 
 def test_a_quote_is_the_record_for_a_path_and_a_command_too() -> None:
@@ -891,3 +902,63 @@ def test_base_with_only_retired_reference_reports_no_change_check(tmp_path: Path
     report = check(root, only=["retired-reference"], base="HEAD~1")
     assert {f.check for f in report.findings} == {"retired-reference"}
     assert report.result == "PASS"
+
+
+def test_a_pattern_with_no_glob_names_a_folder_and_what_is_under_it(tmp_path: Path) -> None:
+    root = repository(
+        tmp_path / "t",
+        {
+            LIST: retired(entry("review board"), scope=["docs"], history=["docs/adr"]),
+            "docs/a.md": "the review board\n",
+            "docs/adr/0001.md": "the review board\n",
+            "docs-old/b.md": "the review board\n",
+            "other.md": "the review board\n",
+        },
+    )
+    report = check(root, only=["retired-reference"])
+    assert [f.path for f in hits(report)] == ["docs/a.md"]
+    assert {f.path for f in report.findings} == {"docs/a.md", "docs/adr/0001.md"}
+
+
+def test_one_persons_file_is_not_listed_among_the_files_read(tmp_path: Path) -> None:
+    root = repository(tmp_path / "t", {LIST: retired(entry("review board")), "a.md": "clean\n"})
+    write(root / "CLAUDE.local.md", "the review board\n")
+    report = check(root, ["claude-code"], only=["retired-reference"])
+    assert "CLAUDE.local.md" not in {f.path for f in report.findings}
+
+
+def test_a_history_file_is_not_opened(tmp_path: Path) -> None:
+    root = repository(
+        tmp_path / "t",
+        {LIST: retired(entry("review board"), history=["log/**"]), "a.md": "clean\n"},
+    )
+    (root / "log").mkdir()
+    (root / "log" / "old.md").write_bytes(b"the review board\x00\xff\n")
+    git(root, "add", "-A")
+    report = check(root, only=["retired-reference"])
+    assert [f.verdict for f in report.findings if f.path == "log/old.md"] == ["PASS"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        entry("review board"),
+        entry("review", match="ignore-case"),
+        entry("aa aa"),
+        entry("docs/old.md", "path"),
+        entry("make release-notes", "command"),
+        entry("x"),
+    ],
+)
+def test_the_probe_finds_what_the_pattern_finds_alone(raw: dict[str, Any]) -> None:
+    """The search narrowed by the probe gives the starts the pattern's own scan gives."""
+
+    retirement = instruction_audit._retirement(raw)
+    text = (
+        "Review board, the review\nboard, review-board, pre-review board, aaa aa aa aaaa aa. "
+        "./docs/old.md docs/old.md. docs/old.md.bak x/docs/old.md make release-notes "
+        "make  release-notes xmake release-notes x x-x REVIEW reviewer "
+    ) * 3
+    expected = [match.start() for match in retirement.pattern.finditer(text)]
+    assert list(instruction_audit._matches(retirement, text)) == expected
+    assert expected

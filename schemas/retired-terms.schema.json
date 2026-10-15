@@ -10,13 +10,13 @@
     "version": {"const": 1},
     "scope": {
       "type": "array",
-      "description": "Path patterns, relative to the project root, of the files the check reads, as in `history`. Absent: every Markdown or text file Git lists.",
+      "description": "Path patterns, relative to the project root, of the files the check reads, as in `history`; a pattern with no `*` or `?` names a file or a folder and each path under it (`docs`). Absent: every Markdown or text file Git lists.",
       "items": {"type": "string", "minLength": 1, "pattern": "^(?![/~])(?!.*(^|/)\\.\\.(/|$)).+$"},
       "uniqueItems": true
     },
     "history": {
       "type": "array",
-      "description": "Path patterns, relative to the project root, of files that hold history for every entry: decision logs and ADRs, for example `docs/adr/**`. `*` matches within one path segment and `**` matches any number of segments. Released sections of a `CHANGELOG.md` are history without a pattern.",
+      "description": "Path patterns, relative to the project root, of files that hold history for every entry: decision logs and ADRs, for example `docs/adr/**`. `*` matches within one path segment and `**` matches any number of segments; a pattern with neither `*` nor `?` names a file or a folder and each path under it. Released sections of a `CHANGELOG.md` are history without a pattern.",
       "items": {"type": "string", "minLength": 1, "pattern": "^(?![/~])(?!.*(^|/)\\.\\.(/|$)).+$"},
       "uniqueItems": true
     },
