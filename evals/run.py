@@ -54,6 +54,7 @@ from evals.evidence import (
     grading_digest,
     grading_hashes,
     seal,
+    sealed_changes,
     tree_digest,
     tree_hashes,
     workspace_digest,
@@ -552,6 +553,28 @@ def check_graders(sealed: Sealed, name: str) -> tuple[bool, str]:
     return True, ""
 
 
+class SealMoved(Exception):
+    """The sealed copy differs from what was sealed before the call; the message names what."""
+
+
+def seal_graders(sealed: Sealed, name: str, destination: Path) -> str:
+    """Copy what grades `name` into `destination` and return the copy's digest, once the copy is
+    shown to hold what was sealed before the call. A difference, which a process the call left
+    running could make, removes the copy and raises `SealMoved` with the report that fails the
+    run."""
+
+    plan = FIXTURES / name / "post.plan.json"
+    digest = seal(sealed.stage, plan, evals_dir(), name, destination)
+    moved = sealed_changes(destination, sealed.stage_files, sealed.grading_files, name)
+    if moved:
+        shutil.rmtree(destination, ignore_errors=True)
+        raise SealMoved(
+            "FAIL protected-grading-inputs — changed after the check, in the sealed copy: "
+            + ", ".join(moved)
+        )
+    return digest
+
+
 def seed_commit(workdir: Path) -> str | None:
     command = ["git", "rev-parse", "--verify", "refs/tags/seed^{commit}"]
     status, seed, _error = _run(command, cwd=workdir)
@@ -801,15 +824,16 @@ def judged_inputs(
     workspace, the stage and the grading files), the report that says so, and, where all are,
     the sealed copy of the graders that the post-checks run from."""
 
-    workdir, stage, place, extra = scene
+    workdir, _stage, place, extra = scene
     intact, report = check_protected(workdir, protected)
     held, moved = check_graders(sealed, name)
     if intact and held:
         graders = place.graders or workdir.parent / f"{workdir.name}{SEALED_SUFFIX}"
         try:
-            plan = FIXTURES / name / "post.plan.json"
-            extra["graders_sha256"] = seal(stage, plan, evals_dir(), name, graders)
+            extra["graders_sha256"] = seal_graders(sealed, name, graders)
             return True, report, graders
+        except SealMoved as problem:
+            moved = str(problem)
         except OSError as problem:
             extra["error"] = f"the graders could not be sealed: {type(problem).__name__}: {problem}"
             moved = f"UNVERIFIED sealed-graders — {problem}"
@@ -1011,9 +1035,13 @@ def _regrade_graders(path: Path, name: str, meta: dict[str, Any], plan: dict[str
             return f"{copy.name} is missing"
         if tree_digest(copy) != sealed:
             return f"{copy.name} differs from the digest the meta recorded (graders_sha256)"
-        # A record that kept no digest of the grading files is not complete.
+        # The copy keeps the grading files' paths under `evals/`, so their digest reproduces; a
+        # record that kept none is not complete.
+        recorded = meta.get("grading_files_sha256")
+        if recorded and grading_digest(copy / "evals", str(name)) != recorded:
+            return f"{copy.name} holds grading files that differ from grading_files_sha256"
         plan["graders"] = copy
-        plan["grading_files"] = "PASS" if meta.get("grading_files_sha256") else UNVERIFIED
+        plan["grading_files"] = "PASS" if recorded else UNVERIFIED
         return ""
     recorded = meta.get("grading_files_sha256")
     if recorded and recorded != grading_digest(evals_dir(), str(name)):

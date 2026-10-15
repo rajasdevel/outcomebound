@@ -273,15 +273,17 @@ def grade(key: str, subagent_jsonl: str, seal: str) -> None:
     if not held:
         lines = [line for line in (protected_report if not intact else "", moved) if line]
         protected_report, intact = "\n".join(lines), False
-    verdict, output, sealed = "FAIL", "VERDICT: FAIL\n", None
+    verdict, output, copy = "FAIL", "VERDICT: FAIL\n", None
     if intact:
-        sealed = STATE / f"{key}{run.SEALED_SUFFIX}"
-        shutil.rmtree(sealed, ignore_errors=True)
-        state["graders_sha256"] = run.seal(
-            stage, run.FIXTURES / fixture / "post.plan.json", run.evals_dir(), fixture, sealed
-        )
+        copy = STATE / f"{key}{run.SEALED_SUFFIX}"
+        shutil.rmtree(copy, ignore_errors=True)
+        try:
+            state["graders_sha256"] = run.seal_graders(sealed, fixture, copy)
+        except run.SealMoved as problem:
+            protected_report, intact = str(problem), False
+    if intact and copy is not None:
         verdict, output, _logs = run.post_check(
-            run.FIXTURES / fixture, workdir, state["seed"], transcript, answer, sealed
+            run.FIXTURES / fixture, workdir, state["seed"], transcript, answer, copy
         )
     claims = {claim: result for result, claim in run.CLAIM_LINE.findall(output)}
     record = {

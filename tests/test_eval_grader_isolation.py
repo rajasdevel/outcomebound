@@ -94,7 +94,16 @@ def _blob_id(data: bytes) -> str:
 # What is a grader beside the stage and `evals/graders`: the files of a fixture folder that a
 # plan or a close runs to judge a run. A fixture folder also holds what its setup plants for the
 # model to read (a sample, a design), which is not a grader.
-GRADER_NAMES = ("accept*", "grade*", "probe*", "case.py", "post.plan.json", "protected.paths")
+GRADER_NAMES = (
+    "accept*",
+    "grade*",
+    "probe*",
+    "support*.py",
+    "export.py",
+    "case.py",
+    "post.plan.json",
+    "protected.paths",
+)
 
 
 def _graders(facts: dict[str, Any]) -> dict[str, bytes]:
@@ -474,3 +483,66 @@ def test_a_stage_changed_during_the_call_fails_the_run_unexecuted(
     assert "FAIL protected-grading-inputs" in report
     assert meta["protected_intact"] is False
     assert not (out / f"{CONTROL}.graders").exists()
+
+
+def test_a_bytecode_cache_written_into_the_stage_is_not_sealed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The seal does not digest a `__pycache__`, so the sealed copy holds none."""
+
+    def cache(cwd: Path, stage: Path) -> None:
+        _write_fix(cwd)
+        folder = stage / "checks" / "__pycache__"
+        folder.mkdir()
+        (folder / "probe_datehelp.cpython-313.pyc").write_bytes(b"forged")
+
+    _evals, meta, out = _kept(tmp_path, monkeypatch, cache)
+    assert meta["verdict"] == "PASS", meta
+    sealed = out / f"{CONTROL}.graders"
+    assert not list(sealed.rglob("__pycache__"))
+
+
+def test_a_stage_changed_after_the_check_and_before_the_copy_fails_the_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A writer that outlived the call and changes the stage after the check is caught when the
+    copy is compared with what was sealed before the call."""
+
+    checked = RUN.check_graders
+
+    def late(sealed: Any, name: str) -> tuple[bool, str]:
+        result = checked(sealed, name)
+        (sealed.stage / "checks" / "probe_datehelp.py").write_text("raise SystemExit(0)\n", "utf-8")
+        return result
+
+    monkeypatch.setattr(RUN, "check_graders", late)
+    _evals, meta, out = _kept(tmp_path, monkeypatch)
+    assert meta["verdict"] == "FAIL" and meta["claims"] == {}, meta
+    report = (out / f"{CONTROL}.transcript.txt").read_text(encoding="utf-8")
+    assert "FAIL protected-grading-inputs" in report
+    assert "stage/checks/probe_datehelp.py" in report
+    assert meta["protected_intact"] is False
+    assert not (out / f"{CONTROL}.graders").exists()
+
+
+def test_regrade_compares_the_grading_files_in_the_sealed_copy_with_their_digest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`grading_files_unchanged` says what the regrade compared: the grading files in the copy
+    against `grading_files_sha256`, even where the copy's own digest was rewritten to match."""
+
+    from evals.evidence import tree_digest
+
+    _evals, meta, out = _kept(tmp_path, monkeypatch)
+    new = tmp_path / "regraded"
+    assert _regrade(out, new) == 0
+    again = json.loads((new / f"{CONTROL}.meta.json").read_text(encoding="utf-8"))
+    assert again["grading_files_unchanged"] == "PASS"
+    sealed = out / f"{CONTROL}.graders"
+    (sealed / "evals" / "graders" / "scope_walk.py").write_text("raise SystemExit(0)\n", "utf-8")
+    meta["graders_sha256"] = tree_digest(sealed)
+    (out / f"{CONTROL}.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    other = tmp_path / "regraded-again"
+    assert _regrade(out, other) == 2
+    assert "grading_files_sha256" in capsys.readouterr().err
+    assert not other.exists()

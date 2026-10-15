@@ -110,12 +110,21 @@ def changed(before: dict[str, str], now: dict[str, str]) -> list[str]:
     return sorted(name for name in before.keys() | now.keys() if before.get(name) != now.get(name))
 
 
+def _skipped(folder: str, names: list[str]) -> list[str]:
+    """The folders of `names` that `tree_hashes` does not enter, so the copy holds no file the
+    seal did not digest, such as a `__pycache__` written into the stage during the call."""
+
+    return [
+        name for name in names if name in SKIP_DIRS and os.path.isdir(os.path.join(folder, name))
+    ]
+
+
 def seal(stage: Path, plan: Path, evals: Path, fixture: str, destination: Path) -> str:
     """Copy what grades `fixture` into the new folder `destination`, and return its digest: the
     stage as it stands, the fixture's `post.plan.json` and the grading files, which keep their
-    paths under `evals/`."""
+    paths under `evals/`. A `__pycache__` or `.git` folder of the stage is not copied."""
 
-    shutil.copytree(stage, destination, symlinks=True)
+    shutil.copytree(stage, destination, symlinks=True, ignore=_skipped)
     shutil.copy2(plan, destination / "post.plan.json")
     for path in grading_files(evals, fixture):
         target = destination / "evals" / path.relative_to(evals)
@@ -173,3 +182,23 @@ def workspace_digest(workdir: Path, env: dict[str, str]) -> str | None:
     ):
         _untracked(workdir, digest, name)
     return digest.hexdigest()
+
+
+def sealed_changes(
+    copy: Path, stage_files: dict[str, str], grading: dict[str, str], fixture: str
+) -> list[str]:
+    """What the sealed copy `copy` holds that differs from what was sealed before the call: the
+    stage's files (`stage_files`, by path) and the grading files (`grading`, by path under
+    `evals/`). A process that outlived the call could change either between the check and the
+    copy."""
+
+    held = tree_hashes(copy)
+    staged = {
+        name: value
+        for name, value in held.items()
+        if name != "post.plan.json" and not name.startswith("evals/")
+    }
+    return [
+        *(f"stage/{name}" for name in changed(stage_files, staged)),
+        *(f"evals/{name}" for name in changed(grading, grading_hashes(copy / "evals", fixture))),
+    ]

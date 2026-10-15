@@ -78,7 +78,9 @@ done
   from `native_sha256`. A meta with no sealed copy, from before the graders left the workspace, is
   graded with this checkout's files that grade the fixture (`grading_files_sha256`: its fixture
   folder, the fixture folders its files name, `evals/fixtures/*` files and `evals/graders`), and
-  is refused where they differ from the recorded digest. A meta from before
+  is refused where they differ from the recorded digest. For a run with a sealed copy,
+  `grading_files_unchanged` is `PASS` where the grading files in the copy have the recorded
+  `grading_files_sha256`; the run is refused where they differ. A meta from before
   these digests were kept is not refused: `workspace_unchanged` and `grading_files_unchanged` say
   `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
@@ -136,7 +138,9 @@ fixture, as in `small-fix.meta.json`:
   `native_sha256`, `native_copy` and `observed` (`model`, `effort`, `cwd`, `cli_version`).
   It also records, taken at the end of the run, `workspace_sha256` (the Git status, `HEAD`, the
   diff against `HEAD` and the content of every untracked file; nothing under `.git`),
-  `grading_files_sha256` and `protected_snapshot`, which `--regrade` compares.
+  `grading_files_sha256` and `protected_snapshot`. `--regrade` compares a run that kept a sealed
+  copy by `graders_sha256`, and the grading files in that copy by `grading_files_sha256`; it
+  compares a run with no sealed copy by `grading_files_sha256` against this checkout.
   The record does not say what the model did: arbitrary JavaScript in a custom tool call is not
   automatically interpreted, so review of command order and effects stays separate from the
   automatic report, and disclosure of instrumentation stays in the prompt.
@@ -245,8 +249,8 @@ runs. So every fixture now works as the hand-off fixtures do, and the runner hol
   checks (a copy of the sources, a baseline such as a database snapshot taken before the call).
   `setup.sh` takes a second argument, the grading stage, a folder the runner makes outside the
   workspace and outside the workspace root (in the system temporary folder, mode 0700, prefix
-  `ob-graders-`), and writes all of these under `<stage>/checks/` with the layout the workspace's
-  `checks/` had. It writes nothing for the checks into the workspace, and its seed commit holds no
+  `ob-graders-`), and writes all of these under `<stage>/checks/` (and, for the onboarding
+  fixtures, `<stage>/templates/`) with the layout the workspace's `checks/` had. It writes nothing for the checks into the workspace, and its seed commit holds no
   grader, so no grader is in the workspace's Git history either. A grader that named a sibling
   by `checks/<file>` from the working directory names it from its own folder.
 - **The runner seals the stage before the call.** After `setup.sh` and before the call it records
@@ -254,7 +258,10 @@ runs. So every fixture now works as the hand-off fixtures do, and the runner hol
   stage or a grading file that changed fails the run unexecuted, as a changed protected path
   does. It then copies the stage, the fixture's `post.plan.json` and the grading files (as
   `grading_files_sha256` names them) into the run directory, as `<fixture>.graders/`, the sealed
-  copy, records its digest as `graders_sha256` in the meta, and removes the stage. Nothing is
+  copy, and compares the copy with the digests it took before the call: a difference fails the
+  run as a changed stage does, and no sealed copy is kept. Otherwise it records the copy's digest
+  as `graders_sha256` in the meta, and removes the stage. A `__pycache__` folder in the stage is
+  not copied. Nothing is
   copied into the workspace, before or after the call: the kept workspace stays what the model
   left, and `workspace_sha256` and the scope checks read no grader. Two earlier attempts to
   regrade by writing graders into the kept workspaces made the scope checks count them as
@@ -280,6 +287,9 @@ runs. So every fixture now works as the hand-off fixtures do, and the runner hol
   `test_regrade_runs_the_sealed_copy_not_the_checkout` (a grader changed in the checkout after
   the run changes no regraded verdict), `test_regrade_refuses_a_sealed_copy_that_differs_from_its_digest`
   and `test_a_stage_changed_during_the_call_fails_the_run_unexecuted`. These run no model.
+  `test_the_sealed_copy_holds_every_file_the_checks_of_the_fixture_read` sees only an error line
+  that names the sealed folder; a grader that catches a missing file and reports `UNVERIFIED` is
+  not seen by it.
 - **The tests this change breaks, and what each asserts after it.** Each site that runs a
   `setup.sh` with one argument gives it a stage folder of its own as the second:
   `tests/test_eval_scenarios.py` (its fixture builders, near lines 99, 1062, 2216, 2248, 4937 and
@@ -315,7 +325,9 @@ checkout's `evals/`, and the sealed copies of earlier runs in the run directory.
 longer holds or names them, and the transcript of a run that reads one shows it, as the hand-off
 fixtures' `eval-files-unread` shows; a read that no recorded command shows is not seen. Under
 `claude_arm.py` the stage sits outside the state folder and the seal covers it, but the subagent
-has a shell and can reach any path, as its limits below say.
+has a shell and can reach any path, as its limits below say. A process the model leaves running
+after the call is outside the seal, except that a change it makes to the stage or the grading
+files before the copy is made fails the run.
 
 ## Claude as the model
 
