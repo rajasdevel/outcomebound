@@ -5,8 +5,11 @@ model does.
 A run builds each fixture's disposable repository, hands a harness (today `codex exec`) one
 arm's kernel and the fixture's task, and judges what the model left with the fixture's
 deterministic post-checks, run through `outcomebound_tools.validation`. The post-checks are the
-verdict. The model, effort and working directory a call counts for are the ones the harness's
-own session record states, never the ones requested (evals/harnesses/__init__.py).
+verdict. The graders never enter the workspace: a fixture's setup writes them to a grading stage
+outside it, the runner seals the stage and the grading files before the call and checks them
+after it, and the post-checks run from a sealed copy kept with the run, which `--regrade` uses
+too. The model, effort and working directory a call counts for are the ones the harness's own
+session record states, never the ones requested (evals/harnesses/__init__.py).
 
 Four arms: `earlier`, an earlier wording of the operating-contract kernel, kept in
 `evals/arms/earlier-kernel.md`; `current`,
@@ -46,7 +49,15 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from evals.codex_events import command_transcript, observed_model, tokens_used
-from evals.evidence import grading_digest, workspace_digest
+from evals.evidence import (
+    changed,
+    grading_digest,
+    grading_hashes,
+    seal,
+    tree_digest,
+    tree_hashes,
+    workspace_digest,
+)
 from evals.harnesses import Request
 from evals.harnesses.codex import CodexHarness
 from evals.native_commands import fill_directories
@@ -137,9 +148,15 @@ HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 # once, before the model runs, and hands that commit to the checks.
 SEED_SHA_ENV = "OUTCOMEBOUND_SEED_SHA"
 TRANSCRIPT_ENV = "OUTCOMEBOUND_EVAL_TRANSCRIPT"
-# Where a post-check finds what stays outside the workspace: this checkout's evals/, holding
-# graders and acceptance tests the model never has in its workspace.
+# Where a post-check finds what stays outside the workspace: the run's sealed copy of its
+# graders (`<fixture>.graders/`, holding `checks/` and a copy of the grading files under
+# `evals/`), and the `evals/` folder inside it.
+GRADER_DIR_ENV = "OUTCOMEBOUND_GRADER_DIR"
 EVAL_DIR_ENV = "OUTCOMEBOUND_EVAL_DIR"
+# A temporary folder outside the workspace, where a fixture's setup writes its graders, and the
+# end of the name of the sealed copy that the run keeps of them beside its other files.
+STAGE_PREFIX = "ob-graders-"
+SEALED_SUFFIX = ".graders"
 ANSWER_ENV = "OUTCOMEBOUND_EVAL_ANSWER"
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
 OBSERVED = "observed: "
@@ -164,6 +181,12 @@ def selected_fragments(name: str) -> tuple[str, ...]:
         return ()
     ids = (line.split("#", 1)[0].strip() for line in path.read_text("utf-8").splitlines())
     return tuple(item for item in ids if item)
+
+
+def evals_dir() -> Path:
+    """The `evals/` folder the fixtures and graders are read from."""
+
+    return FIXTURES.parent
 
 
 def sha256_text(text: str) -> str:
@@ -500,6 +523,35 @@ def check_protected(workdir: Path, snapshot: dict[str, str]) -> tuple[bool, str]
     return True, "PASS protected-grading-inputs — graders, authority and exclusions match setup"
 
 
+class Sealed(NamedTuple):
+    """What grades a run, as it stood after the build and before the call: the stage, the SHA-256
+    of each of its files and of each grading file of this checkout."""
+
+    stage: Path
+    stage_files: dict[str, str]
+    grading_files: dict[str, str]
+
+
+def seal_inputs(stage: Path, name: str) -> Sealed:
+    """Record what grades `name` now: the stage and the grading files."""
+
+    return Sealed(stage, tree_hashes(stage), grading_hashes(evals_dir(), name))
+
+
+def check_graders(sealed: Sealed, name: str) -> tuple[bool, str]:
+    """Whether the stage and the grading files are as they were sealed, and if not, the report
+    that fails the run before any check executes."""
+
+    now = grading_hashes(evals_dir(), name)
+    moved = [
+        *(f"stage/{item}" for item in changed(sealed.stage_files, tree_hashes(sealed.stage))),
+        *(f"evals/{item}" for item in changed(sealed.grading_files, now)),
+    ]
+    if moved:
+        return False, "FAIL protected-grading-inputs — changed or missing: " + ", ".join(moved)
+    return True, ""
+
+
 def seed_commit(workdir: Path) -> str | None:
     command = ["git", "rev-parse", "--verify", "refs/tags/seed^{commit}"]
     status, seed, _error = _run(command, cwd=workdir)
@@ -507,24 +559,36 @@ def seed_commit(workdir: Path) -> str | None:
 
 
 def post_check(
-    fixture: Path, workdir: Path, seed: str | None, transcript: str, answer: str
+    fixture: Path,
+    workdir: Path,
+    seed: str | None,
+    transcript: str,
+    answer: str,
+    graders: Path | None = None,
 ) -> tuple[str, str, Path]:
     """The fixture's plan, run by validation from a run-owned directory beside the workspace.
 
-    The plan is copied there, so repetitions never share logs, and the transcript and the
-    answer are written there before any check reads them.
+    The plan and the graders are the run's sealed copy, `graders`, which the plan names through
+    `OUTCOMEBOUND_GRADER_DIR` and its `evals/` folder through `OUTCOMEBOUND_EVAL_DIR`. A run
+    from before the graders left the workspace has no sealed copy: its plan is the fixture's, its
+    graders are the ones its kept workspace holds, and `evals/` is this checkout's.
+
+    The plan is copied into the run-owned directory, so repetitions never share logs, and the
+    transcript and the answer are written there before any check reads them.
     """
 
     grading = Path(tempfile.mkdtemp(prefix="ob-grading-", dir=str(workdir.parent)))
     plan = grading / "post.plan.json"
-    plan.write_bytes((fixture / "post.plan.json").read_bytes())
+    plan.write_bytes(((graders or fixture) / "post.plan.json").read_bytes())
     (grading / "transcript.txt").write_text(transcript, encoding="utf-8")
     (grading / "answer.md").write_text(answer, encoding="utf-8")
     env = {
         **child_env(),
         **HERMETIC_GIT,
         "PYTHONPATH": str(REPO),
-        EVAL_DIR_ENV: str(REPO / "evals"),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        GRADER_DIR_ENV: str(graders or workdir),
+        EVAL_DIR_ENV: str(graders / "evals" if graders else evals_dir()),
         TRANSCRIPT_ENV: str(grading / "transcript.txt"),
         ANSWER_ENV: str(grading / "answer.md"),
     }
@@ -563,19 +627,36 @@ def new_workspace(workspace: Path | None) -> Path:
     return workspace
 
 
+def new_stage(avoid: tuple[Path, ...] = ()) -> Path:
+    """The folder a fixture's setup writes its graders to: new, private (mode 0700), in the
+    system's temporary folder, and not inside any folder of `avoid` (the workspace and the
+    workspace root). ValueError where the temporary folder is inside one."""
+
+    stage = Path(tempfile.mkdtemp(prefix=STAGE_PREFIX)).resolve()
+    for folder in avoid:
+        if folder.resolve() in (stage, *stage.parents):
+            shutil.rmtree(stage, ignore_errors=True)
+            raise ValueError(f"the grading stage {stage} would be inside {folder}")
+    return stage
+
+
 class Place(NamedTuple):
     """Where a run keeps its evidence: the new directory its workspace is built in (None for a
-    temporary one) and the file its harness copies the native session to (None for a file
-    beside the workspace)."""
+    temporary one), the file its harness copies the native session to (None for a file beside
+    the workspace), the new folder that holds the sealed copy of its graders (None for one beside
+    the workspace) and the workspace root, which the stage must stay outside."""
 
     workspace: Path | None = None
     keep: Path | None = None
+    graders: Path | None = None
+    root: Path | None = None
 
 
 def build_workspace(
-    name: str, arm: Arm, workdir: Path, extra: dict[str, Any]
+    name: str, arm: Arm, workdir: Path, extra: dict[str, Any], stage: Path
 ) -> tuple[str | None, dict[str, str], str | None, str]:
-    """Install the arm's files and build the fixture in `workdir`.
+    """Install the arm's files and build the fixture in `workdir`; its setup writes the graders
+    to `stage`, never into `workdir`.
 
     Returns None, the protected digests, the seed commit and the prompt (the arm's kernel, then
     the fixture's task); or, where the build fails, the report of why with the error in `extra`.
@@ -585,7 +666,7 @@ def build_workspace(
     install(workdir, arm.files)
     try:
         built = bounded_command(
-            ["bash", str(fixture / "setup.sh"), str(workdir)],
+            ["bash", str(fixture / "setup.sh"), str(workdir), str(stage)],
             env={**fixture_setup_env(), "OB_EVAL_ARM": arm.name},
             timeout=SETUP_TIMEOUT,
         )
@@ -617,6 +698,16 @@ def build_workspace(
     return None, protected, seed, prompt
 
 
+class Scene(NamedTuple):
+    """Where one run happens: its workspace, its grading stage, where it keeps its evidence and
+    the record that it builds."""
+
+    workdir: Path
+    stage: Path
+    place: Place
+    extra: dict[str, Any]
+
+
 def run_fixture(
     name: str,
     request: Request,
@@ -627,6 +718,9 @@ def run_fixture(
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     """Build the fixture, let the model act in it through the harness, then judge what it left.
 
+    The graders never enter the workspace: the fixture's setup writes them to a stage, a folder
+    of its own outside the workspace, which exists for this call only.
+
     Returns the answer, the report (the harness's output, then the post-checks'), its exit
     status (None where no call finished) and what the run's record keeps, the prompt among
     it. A post-check FAIL is the measurement; only a fixture that cannot be built, or a call
@@ -636,17 +730,36 @@ def run_fixture(
     harness = harness or make_harness()
     place = place or Place()
     workdir = new_workspace(place.workspace)
-    keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
     extra: dict[str, Any] = {
         "verdict": "UNVERIFIED",
         "claims": {},
         "fixture_repo": str(workdir),
         "harness": harness.name,
     }
-    failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra)
+    try:
+        stage = new_stage((workdir, *((place.root,) if place.root else ())))
+    except ValueError as problem:
+        extra["error"] = f"the grading stage could not be made: {problem}"
+        return "", extra["error"], None, extra
+    try:
+        return _call_and_judge(
+            name, request, arm, path, harness, Scene(workdir, stage, place, extra)
+        )
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
+def _call_and_judge(
+    name: str, request: Request, arm: Arm, path: str, harness: CodexHarness, scene: Scene
+) -> tuple[str, str, int | None, dict[str, Any]]:
+    workdir, stage, place, extra = scene
+    keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
+    failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage)
     if failure is not None:
         return "", failure, None, extra
     extra["prompt"] = prompt
+    sealed = seal_inputs(stage, name)  # after the build and before the call; checked after it
+    grading_files = grading_digest(evals_dir(), name)
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
@@ -667,16 +780,41 @@ def run_fixture(
         transcript = partial_output(problem)
     elapsed = round(time.monotonic() - started, 1)
 
-    intact, protected_report = check_protected(workdir, protected)
-    report = grade(name, workdir, Left(seed, transcript, answer), (intact, protected_report), extra)
+    intact, report, graders = judged_inputs(name, scene, sealed, protected)
+    left = Left(seed, transcript, answer)
+    report = grade(name, workdir, left, (intact, report), extra, graders)
     extra.update(
         protected_snapshot=protected,
         elapsed_seconds=elapsed,
-        grading_files_sha256=grading_digest(REPO / "evals", name),
+        grading_files_sha256=grading_files,
+        graders_copy=graders.name if graders else None,
         # Taken last, after the post-checks: it is what a later `--regrade` finds.
         workspace_sha256=workspace_digest(workdir, {**child_env(), **HERMETIC_GIT}),
     )
     return answer, report, returncode, extra
+
+
+def judged_inputs(
+    name: str, scene: Scene, sealed: Sealed, protected: dict[str, str]
+) -> tuple[bool, str, Path | None]:
+    """After the call: whether every grading input is as it was (the protected files of the
+    workspace, the stage and the grading files), the report that says so, and, where all are,
+    the sealed copy of the graders that the post-checks run from."""
+
+    workdir, stage, place, extra = scene
+    intact, report = check_protected(workdir, protected)
+    held, moved = check_graders(sealed, name)
+    if intact and held:
+        graders = place.graders or workdir.parent / f"{workdir.name}{SEALED_SUFFIX}"
+        try:
+            plan = FIXTURES / name / "post.plan.json"
+            extra["graders_sha256"] = seal(stage, plan, evals_dir(), name, graders)
+            return True, report, graders
+        except OSError as problem:
+            extra["error"] = f"the graders could not be sealed: {type(problem).__name__}: {problem}"
+            moved = f"UNVERIFIED sealed-graders — {problem}"
+    lines = [line for line in (report if not intact else "", moved) if line]
+    return False, "\n".join(lines), None
 
 
 class Left(NamedTuple):
@@ -694,11 +832,12 @@ def grade(
     left: Left,
     protected: tuple[bool, str],
     extra: dict[str, Any],
+    graders: Path | None = None,
 ) -> str:
-    """Judge what a run left: the post-checks, unless a grading input changed (`protected` is
-    whether none did, and the protected check's report). Sets the verdict, the claims and what
-    the checks observed in `extra`, and returns the report: the transcript, then the protected
-    check and the post-checks' own output."""
+    """Judge what a run left: the post-checks, from the run's sealed copy of its graders, unless
+    a grading input changed (`protected` is whether none did, and the protected check's report).
+    Sets the verdict, the claims and what the checks observed in `extra`, and returns the
+    report: the transcript, then the protected check and the post-checks' own output."""
 
     seed, transcript, answer = left
     intact, protected_report = protected
@@ -706,7 +845,7 @@ def grade(
     if intact:
         try:
             verdict, output, log_dir = post_check(
-                FIXTURES / name, workdir, seed, transcript, answer
+                FIXTURES / name, workdir, seed, transcript, answer, graders
             )
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
@@ -811,7 +950,12 @@ def run_one(
         arm,
         path,
         harness,
-        Place(workspace, out / f"{name}.native.jsonl"),
+        Place(
+            workspace,
+            out / f"{name}.native.jsonl",
+            out / f"{name}{SEALED_SUFFIX}",
+            Path(root) if root else None,
+        ),
     )
     (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
     error = call_error(returncode, answer, extra, status["model"])
@@ -833,18 +977,10 @@ UNVERIFIED = "UNVERIFIED"
 POST_CHECKS = "\n--- post-checks ---\n"
 
 
-def _regrade_plan(source: Path, path: Path, meta: dict[str, Any]) -> tuple[dict[str, Any], str]:
-    """What one kept run needs to be judged again, and why it cannot be: the saved files, the
-    workspace and the two digests, each compared where the source run recorded one.
+def _regrade_files(path: Path, name: str, meta: dict[str, Any], plan: dict[str, Any]) -> str:
+    """Name the saved files of the run in `plan`, and why one is missing or differs from its
+    recorded digest; an empty string where all is well."""
 
-    The returned dict holds the paths and the two statements for the new meta; the string is
-    the reason to refuse, or empty."""
-
-    name = meta.get("fixture", "")
-    fixture = FIXTURES / str(name)
-    plan: dict[str, Any] = {"meta": meta, "name": name}
-    if not name or not (fixture / "post.plan.json").is_file():
-        return plan, f"this checkout has no fixture {name!r}"
     for key, suffix in (
         ("answer", "answer.md"),
         ("prompt", "prompt.md"),
@@ -852,23 +988,64 @@ def _regrade_plan(source: Path, path: Path, meta: dict[str, Any]) -> tuple[dict[
     ):
         plan[key] = path.with_name(f"{name}.{suffix}")
         if not plan[key].is_file():
-            return plan, f"{plan[key].name} is missing"
+            return f"{plan[key].name} is missing"
     plan["native"] = path.with_name(f"{name}.native.jsonl")
     if plan["native"].is_file():
         recorded = meta.get("native_sha256")
         if recorded and hashlib.sha256(plan["native"].read_bytes()).hexdigest() != recorded:
-            return plan, f"{plan['native'].name} differs from the digest the meta recorded"
+            return f"{plan['native'].name} differs from the digest the meta recorded"
     else:
         plan["native"] = None
+    return ""
+
+
+def _regrade_graders(path: Path, name: str, meta: dict[str, Any], plan: dict[str, Any]) -> str:
+    """Find the graders that judge the run again, in `plan`, and why they cannot: the run's own
+    sealed copy where it kept one, which must be as its digest says; otherwise this checkout's
+    files, which must be as the run recorded them, where it recorded them."""
+
+    sealed = meta.get("graders_sha256")
+    if sealed:
+        copy = path.with_name(f"{name}{SEALED_SUFFIX}")
+        if not copy.is_dir():
+            return f"{copy.name} is missing"
+        if tree_digest(copy) != sealed:
+            return f"{copy.name} differs from the digest the meta recorded (graders_sha256)"
+        # A record that kept no digest of the grading files is not complete.
+        plan["graders"] = copy
+        plan["grading_files"] = "PASS" if meta.get("grading_files_sha256") else UNVERIFIED
+        return ""
+    recorded = meta.get("grading_files_sha256")
+    if recorded and recorded != grading_digest(evals_dir(), str(name)):
+        return "this checkout's fixture files under evals/ differ from the ones the run used"
+    plan["grading_files"] = "PASS" if recorded else UNVERIFIED
+    return ""
+
+
+def _regrade_plan(source: Path, path: Path, meta: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """What one kept run needs to be judged again, and why it cannot be: the saved files, the
+    sealed copy of its graders, the workspace and the digests, each compared where the source run
+    recorded one.
+
+    The returned dict holds the paths and the statements for the new meta; the string is the
+    reason to refuse, or empty."""
+
+    name = meta.get("fixture", "")
+    plan: dict[str, Any] = {"meta": meta, "name": name, "graders": None}
+    if not name:
+        return plan, "the meta names no fixture"
+    if not meta.get("graders_sha256") and not (FIXTURES / str(name) / "post.plan.json").is_file():
+        return plan, f"this checkout has no fixture {name!r}"
+    refused = _regrade_files(path, name, meta, plan)
+    if refused:
+        return plan, refused
     workdir = Path(str(meta.get("fixture_repo", "")))
     if not workdir.is_dir():
         return plan, f"the kept workspace {workdir} is missing"
     plan["workdir"] = workdir
-    now = grading_digest(REPO / "evals", str(name))
-    recorded = meta.get("grading_files_sha256")
-    if recorded and recorded != now:
-        return plan, "this checkout's fixture files under evals/ differ from the ones the run used"
-    plan["grading_files"] = "PASS" if recorded else UNVERIFIED
+    refused = _regrade_graders(path, name, meta, plan)
+    if refused:
+        return plan, refused
     before = workspace_digest(workdir, {**child_env(), **HERMETIC_GIT})
     recorded = meta.get("workspace_sha256")
     if recorded and recorded != before:
@@ -940,7 +1117,7 @@ def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any
     intact, protected_report, protected_check = _regrade_protected(workdir, meta)
     extra: dict[str, Any] = {}
     left = Left(meta.get("seed_sha"), transcript, answer)
-    report = grade(name, workdir, left, (intact, protected_report), extra)
+    report = grade(name, workdir, left, (intact, protected_report), extra, plan["graders"])
     problem = extra.pop("error", "")
     record = {
         **meta,
@@ -958,6 +1135,8 @@ def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any
     (out / f"{name}.transcript.txt").write_text(report, encoding="utf-8")
     if plan["native"]:
         shutil.copyfile(plan["native"], out / f"{name}.native.jsonl")
+    if plan["graders"]:
+        shutil.copytree(plan["graders"], out / f"{name}{SEALED_SUFFIX}", symlinks=True)
     _write(out / f"{name}.meta.json", record)
     claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
     print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else ""))
@@ -1145,8 +1324,9 @@ def _parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="judge again, with no model call, the runs kept under DIR: rebuild each run's "
         "command records from its native session copy and run the protected check and the "
-        "post-checks on its kept workspace, into the new --out; refuses where the fixture's "
-        "files under evals/ or the workspace differ from what the run recorded",
+        "post-checks on its kept workspace, from the run's own sealed graders, into the new "
+        "--out; refuses where the sealed graders or the workspace differ from what the run "
+        "recorded",
     )
     parser.add_argument(
         "--summary",

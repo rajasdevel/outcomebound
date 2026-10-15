@@ -3,7 +3,9 @@
 `--regrade` judges a kept workspace again without a model call. It needs two facts from the
 original run: that the workspace is as the run left it, and that the fixture's files under
 `evals/` (its definition, the graders and what they share) are as the run was graded with.
-Standard library only, like the rest of `evals/`.
+A run also seals its graders: they stay outside the workspace in a stage, and what the stage and
+the grading files held before the call must be what they hold after it. The functions here name
+those files, digest them and copy them. Standard library only, like the rest of `evals/`.
 """
 
 from __future__ import annotations
@@ -11,12 +13,13 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
-# A fixture's setup and plan name the fixture directories they share as `../<name>/` or
-# `fixtures/<name>/`; those are part of what grades it.
-SHARED = re.compile(r"(?:\.\./|fixtures/)([A-Za-z0-9_-]+)/")
+# A fixture's setup, plan and graders name the fixture directories they share as `../<name>/`,
+# `fixtures/<name>/` or `parent / "<name>/`; those are part of what grades it.
+SHARED = re.compile(r"(?:\.\./|fixtures/|parent\s*/\s*\")([A-Za-z0-9_-]+)/")
 SKIP_DIRS = {"__pycache__", ".git"}
 
 
@@ -35,10 +38,10 @@ def _files(root: Path) -> list[Path]:
     return found
 
 
-def grading_digest(evals: Path, fixture: str) -> str:
-    """The SHA-256 of the files that grade `fixture` under `evals`: its fixture directory, each
+def grading_files(evals: Path, fixture: str) -> list[Path]:
+    """The files that grade `fixture` under `evals`, sorted: its fixture directory, each
     fixture directory its files name as shared, the files directly in `fixtures/`, and the
-    graders. Each file counts by its path relative to `evals` and its bytes."""
+    graders."""
 
     fixtures = evals / "fixtures"
     folders: set[str] = set()
@@ -55,10 +58,70 @@ def grading_digest(evals: Path, fixture: str) -> str:
     for folder in sorted(folders):
         paths += _files(fixtures / folder)
     paths += _files(evals / "graders")
+    return sorted(set(paths))
+
+
+def grading_hashes(evals: Path, fixture: str) -> dict[str, str]:
+    """The SHA-256 of each file that grades `fixture`, by its path relative to `evals`."""
+
+    return {
+        path.relative_to(evals).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in grading_files(evals, fixture)
+    }
+
+
+def grading_digest(evals: Path, fixture: str) -> str:
+    """The SHA-256 of the files that grade `fixture` under `evals`. Each file counts by its path
+    relative to `evals` and its bytes."""
+
     digest = hashlib.sha256()
-    for path in sorted(set(paths)):
+    for path in grading_files(evals, fixture):
         _feed(digest, path.relative_to(evals).as_posix(), path.read_bytes())
     return digest.hexdigest()
+
+
+def tree_hashes(root: Path) -> dict[str, str]:
+    """The SHA-256 of each file under `root`, by relative path; a link by its target. A
+    `__pycache__` or `.git` folder is not entered."""
+
+    found = {}
+    for path in _files(root):
+        name = path.relative_to(root).as_posix()
+        found[name] = (
+            "link:" + os.readlink(path)
+            if path.is_symlink()
+            else hashlib.sha256(path.read_bytes()).hexdigest()
+        )
+    return found
+
+
+def tree_digest(root: Path) -> str:
+    """One SHA-256 for the files under `root`, as `tree_hashes` names them."""
+
+    digest = hashlib.sha256()
+    for name, value in sorted(tree_hashes(root).items()):
+        _feed(digest, name, value.encode())
+    return digest.hexdigest()
+
+
+def changed(before: dict[str, str], now: dict[str, str]) -> list[str]:
+    """The names whose digest differs between two maps, or that only one of them holds."""
+
+    return sorted(name for name in before.keys() | now.keys() if before.get(name) != now.get(name))
+
+
+def seal(stage: Path, plan: Path, evals: Path, fixture: str, destination: Path) -> str:
+    """Copy what grades `fixture` into the new folder `destination`, and return its digest: the
+    stage as it stands, the fixture's `post.plan.json` and the grading files, which keep their
+    paths under `evals/`."""
+
+    shutil.copytree(stage, destination, symlinks=True)
+    shutil.copy2(plan, destination / "post.plan.json")
+    for path in grading_files(evals, fixture):
+        target = destination / "evals" / path.relative_to(evals)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+    return tree_digest(destination)
 
 
 def _git(workdir: Path, env: dict[str, str], *arguments: str) -> bytes | None:
