@@ -129,8 +129,8 @@ even when no fragment changes. It holds:
   line does not count.
 
 After a complete directive or the person's answer to the brief, add a dated line to the local
-fragment's Context: `Changed — <date> (stream: <stream>): "<the person's words>", decided by
-<who>, invalidated <what>`. Keep one line for each stream: it replaces that stream's older line,
+fragment's Context: "Changed — <date> (stream: <stream>): <the person's words in quotation marks>, decided by
+<who>, invalidated <what>". Keep one line for each stream: it replaces that stream's older line,
 which Git keeps. Where adoption refuses the change, the line reads "approved, not applied", and
 the old selection stays active until the check that refused passes. Plan the stages
 not yet reached again, and plan again each finished stage whose evidence the change invalidates: it
