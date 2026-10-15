@@ -68,13 +68,17 @@ done
   again, with no model call. For each `<fixture>.meta.json` it reads the kept workspace, the saved
   transcript, answer and native copy; rebuilds the command records from the native copy (see
   `<fixture>.transcript.txt` below); runs the protected check and the post-checks as a normal
-  run does, from a new grading folder; and writes the new meta, transcript, answer, prompt and
-  native files and an `INDEX.json` to `NEW_DIR`. Each new meta names `regraded_from` and keeps the
+  run does, from a new grading folder, with the graders of the run's own sealed copy (see
+  [Graders stay outside the workspace](#graders-stay-outside-the-workspace)), never this
+  checkout's; and writes the new meta, transcript, answer, prompt and native files, a copy of the
+  sealed graders and an `INDEX.json` to `NEW_DIR`. Each new meta names `regraded_from` and keeps the
   identity the source run observed. It refuses, exit 2 and nothing written, where a run's kept
-  workspace differs from the digest (`workspace_sha256`) its meta recorded, where this checkout's
-  files that grade the fixture (`grading_files_sha256`: its fixture folder, the fixture folders its
-  files name, `evals/fixtures/*` files and `evals/graders`) differ from the recorded digest, or
-  where a kept file is missing or the native copy differs from `native_sha256`. A meta from before
+  workspace differs from the digest (`workspace_sha256`) its meta recorded, where the run's sealed
+  copy differs from `graders_sha256`, or where a kept file is missing or the native copy differs
+  from `native_sha256`. A meta with no sealed copy, from before the graders left the workspace, is
+  graded with this checkout's files that grade the fixture (`grading_files_sha256`: its fixture
+  folder, the fixture folders its files name, `evals/fixtures/*` files and `evals/graders`), and
+  is refused where they differ from the recorded digest. A meta from before
   these digests were kept is not refused: `workspace_unchanged` and `grading_files_unchanged` say
   `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
@@ -220,10 +224,69 @@ An `outcomebound` that is already on your PATH reaches the `earlier` and `none` 
 records the one that its calls resolve, as `outcomebound_on_path`.
 
 The runner hashes the graders of each fixture, and reads its seed commit, before the model runs. A
-changed grader fails the run unexecuted. This holds for the fixtures that keep their graders in
-the workspace. The hand-off fixtures keep theirs outside it (see below), so nothing hashes them.
-Their integrity rests on the `workspace-write` sandbox of codex, and on the `commit` and `dirty`
-provenance that each run records.
+changed grader fails the run unexecuted. No fixture keeps a grader in its workspace: the next
+section says where they are and when they run.
+
+## Graders stay outside the workspace
+
+A grader the model can read is a grader the model can pass without the behaviour it measures. When
+fixtures copied their `checks/` into the workspace, one pass on Codex found that 13 of its 44 runs
+read a grader, a grader's helper, or one in Git history, and that 6 of them ran one
+([`docs/evaluations.md`](../docs/evaluations.md), E25 limits; E12 found the same on an earlier
+pass). The hand-off fixtures, whose graders were never in the workspace, showed no such read in 63
+runs. So every fixture now works as the hand-off fixtures do, and the runner holds it:
+
+- **During the call no grader is in the workspace.** A grader is every file a post plan runs or
+  reads that is not the model's work: the fixture's `checks/` files, the files of
+  `evals/graders/` a fixture uses, the hand-off graders, and what a `setup.sh` writes for its
+  checks (a copy of the sources, a baseline such as a database snapshot taken before the call).
+  `setup.sh` takes a second argument, the grading stage, a folder the runner makes outside the
+  workspace and outside the workspace root (in the system temporary folder, mode 0700, prefix
+  `ob-graders-`), and writes all of these under `<stage>/checks/` with the layout the workspace's
+  `checks/` had. It writes nothing for the checks into the workspace, and its seed commit holds no
+  grader, so no grader is in the workspace's Git history either. A grader that named a sibling
+  by `checks/<file>` from the working directory names it from its own folder.
+- **The runner seals the stage before the call.** After `setup.sh` and before the call it records
+  the digest of the stage and of this checkout's grading files. After the call it checks both: a
+  stage or a grading file that changed fails the run unexecuted, as a changed protected path
+  does. It then copies the stage, the fixture's `post.plan.json` and the grading files (as
+  `grading_files_sha256` names them) into the run directory, as `<fixture>.graders/`, the sealed
+  copy, records its digest as `graders_sha256` in the meta, and removes the stage. Nothing is
+  copied into the workspace, before or after the call: the kept workspace stays what the model
+  left, and `workspace_sha256` and the scope checks read no grader. Two earlier attempts to
+  regrade by writing graders into the kept workspaces made the scope checks count them as
+  changes (E25).
+- **The post-checks run from outside.** The runner runs the plan from the sealed copy, its working
+  directory the workspace as before, with `OUTCOMEBOUND_GRADER_DIR` naming
+  `<fixture>.graders/` and `OUTCOMEBOUND_EVAL_DIR` naming the `evals/` folder inside it, so the
+  hand-off graders also run from the sealed copy. `--regrade` runs the same way from the source
+  run's sealed copy, after it checks `graders_sha256`.
+- **A test holds the rule.** `tests/test_eval_grader_isolation.py` builds every fixture under
+  every arm with a stand-in harness whose `call` runs while the workspace is as the model finds
+  it, and fails where any file in the workspace, or any blob in its Git objects, has the bytes of
+  a file in the stage or among the grading files, or a path under `checks/`; and where a
+  `post.plan.json` names `checks/` other than as `$OUTCOMEBOUND_GRADER_DIR/checks/`. A control
+  fixture that copies one grader into its workspace makes the test fail. The same file has
+  `test_regrade_runs_the_sealed_copy_not_the_checkout` (a grader changed in the checkout after
+  the run changes no regraded verdict), `test_regrade_refuses_a_sealed_copy_that_differs_from_its_digest`
+  and `test_a_stage_changed_during_the_call_fails_the_run_unexecuted`. These run no model.
+
+What each `post.plan.json` needs. In every fixture whose plan names `checks/`, each such word
+becomes an absolute path from the sealed copy: an argv command runs through `sh -c` with
+`"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/<file>"` in place of
+`checks/<file>`, as the hand-off plans name `OUTCOMEBOUND_EVAL_DIR`, and a `checks/` word inside
+an `sh -c` string the same way; `required_paths` keeps only paths in the workspace and drops the
+`checks/` ones, since the runner checks the sealed copy's digest before any claim runs; `cwd`
+stays `.`. Each `protected.paths` drops its `checks/` lines and keeps the rest (the project note,
+scripts, installed skills, `.git/config`, `.git/info/exclude`), and every list keeps at least one
+path. A plan that names no `checks/` file, the hand-off plans among them, needs no change.
+
+Limits. A model can still read files outside its workspace: the stage during the call, this
+checkout's `evals/`, and the sealed copies of earlier runs in the run directory. The workspace no
+longer holds or names them, and the transcript of a run that reads one shows it, as the hand-off
+fixtures' `eval-files-unread` shows; a read that no recorded command shows is not seen. Under
+`claude_arm.py` the stage sits outside the state folder and the seal covers it, but the subagent
+has a shell and can reach any path, as its limits below say.
 
 ## Claude as the model
 
@@ -553,8 +616,9 @@ package does to a strong model, are in the workspace of a `current` run. A read 
 `guidance_reads`.
 
 The acceptance tests and the graders (`evals/fixtures/handoff/grade.py`) are never in the
-workspace. The runner gives the post-checks the `evals/` of this checkout in
-`OUTCOMEBOUND_EVAL_DIR`, and the plan runs them from there. A model can read files outside its
+workspace. The runner gives the post-checks the `evals/` of the run's sealed copy in
+`OUTCOMEBOUND_EVAL_DIR` ([Graders stay outside the workspace](#graders-stay-outside-the-workspace)),
+and the plan runs them from there. A model can read files outside its
 workspace, so `eval-files-unread` shows a run that did, by the commands it ran. A read that no
 recorded command shows is not seen.
 

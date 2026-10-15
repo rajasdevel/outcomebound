@@ -1992,6 +1992,7 @@ The kit run passes nine claims. It fails `stated-items-carry-an-exact-quote`. Th
   - The command records and the Git output of the 44 runs show this. Thirteen runs read a grader file or a grader helper, or saw one in Git history. Seven of them are base runs. Six are candidate runs.
   - In 6 of these 13 runs, the model ran a grader or a helper. The 3 base runs are `skill-run-acceptance` twice and `unclear-outcome` once. The 3 candidate runs are `lifecycle-switch`, `slice-a-spec` and `unclear-outcome`.
   - The candidate `decision` run saw `checks/brief.py` through `git show` of a commit that the task needs.
+  - The repair is designed in [`evals/README.md`](../evals/README.md#graders-stay-outside-the-workspace): no grader is in the workspace or its Git history during a call, the post-checks run from a sealed copy outside it after the call, and `--regrade` uses that copy. This pass ran before it. No pass has run under it, so its effect on the reads above is `UNVERIFIED`.
 - Two candidate runs (`lifecycle-switch` and `skill-sync-tracker`) read files of the engine checkout outside the workspace.
 - The first pass has no recorded digest of the workspace and of the grading files. Its protected-input results come from the first grading.
 - In 5 runs, the stream marks a command `unverified` and the session record marks it `succeeded`. The runner keeps the status of the stream.
