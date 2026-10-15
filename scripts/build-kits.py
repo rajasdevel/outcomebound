@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Pack each kit under kits/ into OUT_DIR/<name>.zip, whose one entry is <name>/SKILL.md.
 
 Usage: python3 scripts/build-kits.py OUT_DIR
@@ -6,7 +7,7 @@ The archives are deterministic: every entry carries the fixed date 1980-01-01 an
 permissions, and the same source gives the same bytes. Standard library only.
 """
 
-import sys
+import argparse
 import zipfile
 from pathlib import Path
 
@@ -33,14 +34,17 @@ def build(out_dir: Path) -> list[Path]:
     return written
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: python3 scripts/build-kits.py OUT_DIR", file=sys.stderr)
-        return 2
-    for archive in build(Path(argv[1])):
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="build-kits.py",
+        description="Pack each kit under kits/ into OUT_DIR/<name>.zip, holding <name>/SKILL.md.",
+    )
+    parser.add_argument("out_dir", metavar="OUT_DIR", help="the folder the archives go to")
+    args = parser.parse_args(argv)
+    for archive in build(Path(args.out_dir)):
         print(archive)
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())

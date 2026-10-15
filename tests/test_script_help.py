@@ -1,4 +1,4 @@
-"""Every scripts/*.sh entry point, and every executable scripts/*.py one, handles -h/--help before any target validation.
+"""Every scripts/*.sh entry point, and every scripts/*.py one with a `__main__` entry, handles -h/--help before any target validation.
 
 A stranger's first move with an unfamiliar CLI is `--help`. A script that took `--help`
 for a positional argument (a target directory, a slug, a manifest path) would fail with a
@@ -6,7 +6,6 @@ confusing domain error instead of printing usage, so each has the same shape: ch
 -h/--help first, print one usage line, exit 0 -- before touching `$1` as anything else.
 """  # noqa: E501 - the summary line is one line, as written
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +16,13 @@ from tests.portable import needs_bash, run_bash
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = sorted((ROOT / "scripts").glob("*.sh"))
-PY_SCRIPTS = sorted(path for path in (ROOT / "scripts").glob("*.py") if os.access(path, os.X_OK))
+# A script is chosen by its `__main__` entry, never by its execute bit: the bit does not exist on
+# Windows, so choosing by it ran the check there alone and let a script without it pass elsewhere.
+PY_SCRIPTS = sorted(
+    path
+    for path in (ROOT / "scripts").glob("*.py")
+    if 'if __name__ == "__main__":' in path.read_text(encoding="utf-8")
+)
 
 
 def _run(script: Path, flag: str) -> subprocess.CompletedProcess[str]:
@@ -48,10 +53,10 @@ def test_help_exits_zero_with_usage_and_no_traceback(script, flag):
 
 @pytest.mark.parametrize("script", PY_SCRIPTS, ids=[p.name for p in PY_SCRIPTS])
 @pytest.mark.parametrize("flag", ["-h", "--help"])
-def test_every_executable_python_script_answers_help_with_usage(
+def test_every_python_script_answers_help_with_usage(
     script: Path, flag: str, tmp_path: Path
 ) -> None:
-    """An executable script reads `--help` as a request for usage, never as an argument.
+    """A script reads `--help` as a request for usage, never as an argument.
 
     Run from a directory holding nothing, so a script that would read `--help` as a
     path, or check it as a root and find nothing, cannot pass by accident.
