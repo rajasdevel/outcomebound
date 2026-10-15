@@ -3353,3 +3353,47 @@ def test_an_install_warns_of_each_stale_reference_and_refuses_nothing(
     stale = [line for line in out.splitlines() if "stale reference" in line]
     assert len(stale) == 1 and stale[0].startswith("warning") and "AGENTS.md:3" in stale[0]
     assert "gone" in stale[0] and "kept.md" not in stale[0]
+
+
+def test_an_install_warns_of_each_hook_that_names_a_project_file_from_the_working_directory(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install stays silent about a project hook that Claude Code cannot find once
+    the agent's `cd` moves the working directory (#113), warns of a hook that names its file
+    from `$CLAUDE_PROJECT_DIR`, runs a command on PATH or names no file of the target, or
+    refuses the install for it."""
+
+    settings = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash",
+                    "hooks": [
+                        {"type": "command", "command": "bash scripts/hooks/guard.sh"},
+                        {
+                            "type": "command",
+                            "command": 'bash "$CLAUDE_PROJECT_DIR"/scripts/hooks/guard.sh',
+                        },
+                        {"type": "command", "command": "echo not/a/file"},
+                    ],
+                }
+            ],
+            "Stop": [{"hooks": [{"type": "command", "command": "./scripts/hooks/guard.sh"}]}],
+        }
+    }
+    files = {
+        ".claude/settings.json": json.dumps(settings) + "\n",
+        "scripts/hooks/guard.sh": "exit 0\n",
+    }
+    target = repo(tmp_path / "t", files)
+
+    code, out, _ = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0
+    warned = [line for line in out.splitlines() if "relative to the working directory" in line]
+    assert len(warned) == 2 and all(line.startswith("warning") for line in warned)
+    assert "PreToolUse hook `bash scripts/hooks/guard.sh`" in warned[0]
+    assert "Stop hook `./scripts/hooks/guard.sh`" in warned[1]
+    assert all("$CLAUDE_PROJECT_DIR" in line for line in warned)
