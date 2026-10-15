@@ -1991,6 +1991,20 @@ FLOOR_CHANGES = {
         {"run.sh": "", "bin/run.sh": EVAL, HELD: "bin/run.sh:pipe-to-shell\n"},
         "FAIL",
     ),
+    "a claim's files gain only the extensionless shell scripts": (
+        {floor.FLOOR_PATH: floor_text({**shipped("shell.injection"), "files": ["*.sh"]})},
+        {floor.FLOOR_PATH: floor_text(shipped("shell.injection"))},
+        "PASS",
+    ),
+    "a claim's files trade *.sh for the extensionless shell scripts": (
+        {floor.FLOOR_PATH: floor_text({**shipped("shell.injection"), "files": ["*.sh"]})},
+        {
+            floor.FLOOR_PATH: floor_text(
+                {**shipped("shell.injection"), "files": [floor.SHELL_SCRIPTS]}
+            )
+        },
+        "FAIL",
+    ),
     "a new file's finding joins the baseline": (
         {
             floor.FLOOR_PATH: floor_text(shipped("shell.injection", mode="baseline")),
@@ -2588,6 +2602,21 @@ def test_an_executable_extensionless_shell_script_is_read_by_the_shell_claims(
 
     assert (status, verdicts["shell.injection"]) == (1, "FAIL"), output
     assert "hooks/pre-commit" in output
+
+
+def test_a_floor_recorded_before_1_6_0_reads_no_extensionless_script(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if an upgrade turns a recorded floor red over scripts it never read: a shell claim
+    whose `files` holds `*.sh` alone, as floors recorded before 1.6.0 do, reads `*.sh` alone."""
+
+    root = repository(tmp_path, {"hooks/pre-commit": HOOK_SCRIPT, "README.md": "x\n"})
+    executable(root, "hooks/pre-commit")
+    install(root, {**shipped("shell.injection"), "files": ["*.sh"]})
+
+    status, verdicts, output = run(capsys, "check", str(root))
+
+    assert (status, verdicts["shell.injection"]) == (0, "PASS"), output
 
 
 @pytest.mark.parametrize(

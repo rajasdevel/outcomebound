@@ -57,6 +57,12 @@ GATE, BASELINE = "gate", "baseline"
 # scratch file the tool writes its report to.
 
 _LEAKS = ["--redact", "--no-banner", "--report-format", "json", "--report-path", "{report}"]
+# The `files` entry that adds the extensionless shell scripts `shell_scripts` finds. Recipes from
+# 1.6.0 write it; a floor recorded before keeps `*.sh` alone and reads what it read, so that an
+# upgrade turns no floor red over scripts it never read before.
+SHELL_SCRIPTS = "(extensionless shell scripts)"
+
+
 RECIPES: dict[str, tuple[dict[str, Any], ...]] = {
     "python": (
         {
@@ -90,17 +96,22 @@ RECIPES: dict[str, tuple[dict[str, Any], ...]] = {
             "mode": GATE,
             "tool": "bash",
             "argv": ["bash", "-n", "{file}"],
-            "files": ["*.sh"],
+            "files": ["*.sh", SHELL_SCRIPTS],
             "parser": "bash-n",
         },
-        {"name": "shell.injection", "mode": GATE, "files": ["*.sh"], "parser": "injection"},
+        {
+            "name": "shell.injection",
+            "mode": GATE,
+            "files": ["*.sh", SHELL_SCRIPTS],
+            "parser": "injection",
+        },
         {
             "name": "shell.lint",
             "mode": BASELINE,
             "tool": "shellcheck",
             "min_version": "0.9.0",
             "argv": ["shellcheck", "-f", "json1", "{file}"],
-            "files": ["*.sh"],
+            "files": ["*.sh", SHELL_SCRIPTS],
             "parser": "shellcheck",
         },
     ),
@@ -117,7 +128,10 @@ RECIPES: dict[str, tuple[dict[str, Any], ...]] = {
         },
     ),
 }
-STACKS = (("python", ("pyproject.toml", "setup.cfg", "*.py")), ("shell", ("*.sh",)))
+STACKS = (
+    ("python", ("pyproject.toml", "setup.cfg", "*.py")),
+    ("shell", ("*.sh", SHELL_SCRIPTS)),
+)
 # Offered where the project holds a list of retired terms: the instruction audit's own check, run
 # alone, so a retired term that comes back into a tracked document fails `check`.
 RETIRED_CLAIM: dict[str, Any] = {
@@ -485,11 +499,12 @@ def shell_scripts(root: Path) -> list[str]:
 
 
 def _scripts(root: Path, patterns: Sequence[str]) -> list[str]:
-    """The tracked regular files matching `patterns`, and with `*.sh` the extensionless shell
-    scripts `shell_scripts` finds; a symlink is not followed."""
+    """The tracked regular files matching `patterns`, and with `SHELL_SCRIPTS` among them the
+    extensionless shell scripts `shell_scripts` finds; a symlink is not followed."""
 
-    listed = set(_tracked(root, patterns))
-    if "*.sh" in patterns:
+    globs = [pattern for pattern in patterns if pattern != SHELL_SCRIPTS]
+    listed = set(_tracked(root, globs)) if globs else set()
+    if SHELL_SCRIPTS in patterns:
         listed.update(shell_scripts(root))
     return sorted(
         path for path in listed if (root / path).is_file() and not (root / path).is_symlink()
@@ -1253,7 +1268,8 @@ def _python_path(root: Path, commit: str | None, word: str) -> bool:
 def _kept(before: Claim, after: Claim | None, root: Path, commit: str | None) -> bool:
     """`after` is `before`, or `before` with its mode moved from baseline to gate, or a types
     claim that names folders with more after them, each a Python file or a folder holding
-    one that Git tracks at `commit`, which mypy then reads too. Its `timeout_seconds` may
+    one that Git tracks at `commit`, which mypy then reads too, or a claim whose `files` gain only
+    `SHELL_SCRIPTS` at their end, which reads more and hides nothing. Its `timeout_seconds` may
     differ: a claim that times out reads UNVERIFIED, which fails too."""
 
     if after is None:
@@ -1268,6 +1284,9 @@ def _kept(before: Claim, after: Claim | None, root: Path, commit: str | None) ->
         and all(_python_path(root, commit, word) for word in extra)
     ):
         after = replace(after, argv=before.argv)
+    if SHELL_SCRIPTS not in before.files and tuple(after.files) == (*before.files, SHELL_SCRIPTS):
+        # The entry only adds the extensionless shell scripts to what the claim reads.
+        after = replace(after, files=before.files)
     return after == before or (before.mode == BASELINE and after == replace(before, mode=GATE))
 
 
