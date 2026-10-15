@@ -279,7 +279,8 @@ See the [floor design](docs/specs/floor/design.md).
 - **Research:** the [research library](https://github.com/rajasdevel/outcomebound-research) holds
   dated model, harness, provider and practice evidence. `outcomebound research clone <folder> --accept`
   prepares a local clone; `outcomebound research <path>` returns a file with its commit and digest.
-  Cite the file by its path, that commit and that digest.
+  Cite the file by its path, that commit and that digest in a record; in text a person reads, by its
+  path and the day you read it.
   `outcomebound research ingest` prepares an issue link and local record; it sends nothing.
 
 The repository includes a business requirements kit,

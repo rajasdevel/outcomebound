@@ -1679,6 +1679,27 @@ def _since(root: Path, base_commit: str, adopted: Adoption | None) -> str:
     return _adopted_after(root, fork, adopted) or base_commit
 
 
+def _uncommitted(root: Path) -> str:
+    """`; N uncommitted or untracked paths, not read by this check` where the working tree holds
+    any, since the loosening check reads commits only; empty where it holds none or Git cannot
+    say. It takes no optional lock, so it writes nothing under `.git`."""
+
+    try:
+        listed = _git(root, "--no-optional-locks", "status", "--porcelain", "-z")
+    except FloorError:
+        return ""
+    entries = iter(listed.split(b"\0"))
+    count = 0
+    for entry in entries:
+        if len(entry) > 3:
+            count += 1
+            if entry[:1] in b"RC" or entry[1:2] in b"RC":
+                next(entries, None)  # a move or copy lists its source next
+    if not count:
+        return ""
+    return f"; {_plural(count, 'uncommitted or untracked path')}, not read by this check"
+
+
 def loosening(context: Context) -> Outcome:
     """FAIL on a loosening between the merge base with `--base` and HEAD, unless each commit in
     that range that makes it carries a `Floor-Loosening: <what>; ruled <id>` line. Where the
@@ -1699,8 +1720,9 @@ def loosening(context: Context) -> Outcome:
     span = f"{context.base}..HEAD"
     if adopted is not None:
         span = f"{adopted[:12]}..HEAD, the commits since the floor's adoption"
+    unread = _uncommitted(context.root)
     if not units:
-        return Outcome(name, PASS, f"none in {span}")
+        return Outcome(name, PASS, f"none in {span}{unread}")
     unruled = sum(not ruled for _, ruled in shown)
     if context.verbose:
         details: tuple[str, ...] = (*(text for text, _ in shown), *rulings)
@@ -1711,7 +1733,7 @@ def loosening(context: Context) -> Outcome:
     else:
         details = ()
     if not unruled:
-        return Outcome(name, PASS, f"{len(shown)} in {span}, ruled", details)
+        return Outcome(name, PASS, f"{len(shown)} in {span}, ruled{unread}", details)
     summary = (
         f"{len(shown)} in {span}, {unruled} not ruled; the commit that makes a loosening"
         " carries Floor-Loosening: <what>; ruled <id>"

@@ -2696,3 +2696,34 @@ def test_a_format_finding_in_a_document_names_both_ways_out(tmp_path: Path) -> N
     assert "`ruff format docs/s.md`" in document[0].message
     assert "exclude the document" in document[0].message and "loosening" in document[0].message
     assert code[0].message == "the formatter would rewrite this file"
+
+
+def test_the_loosening_pass_says_when_uncommitted_paths_were_not_read(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if a PASS on a tree with an uncommitted suppression reads as if the tree were read:
+    the loosening check reads commits only."""
+
+    root = repository(tmp_path, {"a.sh": "#!/bin/sh\necho ok\n", "b.py": "x = 1\n"})
+    install(root, shipped("shell.injection"))
+    base = commit(root, "floor", {})
+    write(root / "b.py", "x = 1  # noqa\n")
+    git(root, "mv", "a.sh", "c.sh")
+    write(root / "new.txt", "n\n")
+
+    output = run(capsys, "check", str(root), "--base", base)[2]
+
+    [line] = [line for line in output.splitlines() if line.startswith("PASS loosening")]
+    assert "; 3 uncommitted or untracked paths, not read by this check" in line, line
+
+
+def test_the_loosening_pass_line_is_unchanged_on_a_clean_tree(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {"a.sh": "#!/bin/sh\necho ok\n"})
+    install(root, shipped("shell.injection"))
+    base = commit(root, "floor", {})
+
+    output = run(capsys, "check", str(root), "--base", base)[2]
+
+    assert f"PASS loosening (none in {base}..HEAD)" in output

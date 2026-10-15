@@ -44,7 +44,7 @@ first, with or without a clone, against the engine's path grammar, then read by
 `paths.read_bounded`: relative, no `..` or `.git`, no symlink on the way, a regular file. Standard
 output starts `research: <PATH> (working tree of the clone at <commit, 12 hex>, HEAD moved
 <YYYY-MM-DD>; sha256 <12 hex> of the text below)`, then the file. A modified file shows a new
-digest under the same commit; cite path, commit and digest. The commit: `.git` is a
+digest under the same commit; cite path, commit and digest in a record, and path and day in text a person reads. The commit: `.git` is a
 folder or a file whose `gitdir:` names one; `HEAD`'s ref is read from the loose ref (in the
 `commondir` for a worktree), then `packed-refs`; a detached `HEAD` as it is; else `unknown`.
 Refusals go to standard error as `research: <PATH>: <why>`, exit 1, nothing on standard output:

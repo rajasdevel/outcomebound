@@ -535,7 +535,7 @@ _EXAMPLE = """\
       "heading": "Keep the old flag for one release?",
       "recommend": "two adopters still set it",
       "recommend_way": "keep it",
-      "confidence": "80% (inferred)",
+      "confidence": "fact",
       "options": [
         ["keep it", "adopters get a warning first",
          "one more release carries the old code path"],
@@ -574,8 +574,8 @@ The document is one JSON object (schemas/decision-briefs.schema.json):
            changes the answer: options ([way, what it leads to, its downside]
            triples, two or more), recommend (why; required with options),
            recommend_way (the way of options recommended, required with
-           options; its letter is written), confidence (fact, or NN%
-           (inferred)), why_now, asked (a list), debt, and diagram
+           options; its letter is written), confidence (`fact` where a
+           command you ran shows it, else `inferred`), why_now, asked (a list), debt, and diagram
            ({{"caption": ..., "edges": [[from, to] or [from, to, label],
            ...]}}, drawn after the brief where order, dependency, flow or
            before/after is the point)

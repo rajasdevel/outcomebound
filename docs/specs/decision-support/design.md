@@ -155,7 +155,7 @@ In the emoji form, where the session's surface renders Mermaid:
 
 ````text
 ### D1 · Keep the old flag for one release?
-- 👉 Recommend: A — two adopters still set it · confidence 80% (inferred)
+- 👉 Recommend: A — two adopters still set it
 - Options:
   - A keep it — adopters get a warning first
     - 🔻 Downside: one more release carries the old code path

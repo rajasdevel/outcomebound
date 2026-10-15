@@ -3258,6 +3258,8 @@ def test_a_human_style_is_recorded_kept_on_upgrade_and_cleared_by_an_empty_one(
     assert list(lines)[-2:] == ["Text for people", "Precedence"]
     assert "ASD-STE100 Simplified Technical English" in lines["Text for people"]
     assert "no length limit" in lines["Text for people"]
+    assert "has not used is explained or left out" in lines["Text for people"]
+    assert "save one a check or the project's rule requires" in lines["Text for people"]
     assert "every fact, number and caveat is kept" in lines["Text for people"]
     assert manifest(target)["artifacts"][1]["style"] == ["ste"]
     assert run(capsys, str(target), "--check")[0] == 0

@@ -1308,6 +1308,7 @@ def test_the_fragment_and_the_readme_cite_the_commit_and_the_digest() -> None:
     readme = " ".join((ROOT / "README.md").read_text("utf-8").split())
     assert "cites the path, the commit and the sha256" in fragment
     assert "path, that commit and that digest" in readme
+    assert "text a person reads cites the path and the day" in fragment
 
 
 def test_no_text_calls_the_inbox_file_a_way_to_send_a_finding() -> None:
