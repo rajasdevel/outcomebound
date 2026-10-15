@@ -1093,3 +1093,22 @@ def test_a_detached_start_on_windows_has_no_console_its_own_group_and_leaves_the
         assert call["stdin"] == call["stdout"] == call["stderr"] == subprocess.DEVNULL
         assert call["close_fds"] is True and call["cwd"] == "here"
         assert "start_new_session" not in call
+
+
+@pytest.mark.skipif(
+    not Path("/proc/self/stat").exists(), reason="a zombie's state is read in /proc"
+)
+def test_an_ended_child_not_yet_reaped_is_not_alive() -> None:
+    """Breaks if a zombie reads as running: in a container with no init, an ended background run
+    stays a zombie, and a hook that reads it as alive waits on it for ever."""
+
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    deadline = time.monotonic() + 30
+    while Path(f"/proc/{child.pid}/stat").read_bytes().rpartition(b")")[2].split()[0] != b"Z":
+        assert time.monotonic() < deadline, "the child never ended"
+        time.sleep(0.05)
+
+    try:
+        assert not programs.alive(child.pid)
+    finally:
+        child.wait()

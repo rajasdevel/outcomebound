@@ -767,9 +767,10 @@ def _system_processes() -> _Processes | None:
 
 def alive(pid: int) -> bool:
     """Whether a process with this id runs: `os.kill(pid, 0)` on POSIX (a process this user may
-    not signal still runs), `OpenProcess` and `GetExitCodeProcess` on Windows, where `os.kill`
-    would end it. An id can name another process once the one it named has ended; a caller that
-    must know which process it is asks something else as well. Never raises."""
+    not signal still runs; a Linux zombie, ended and not yet reaped, does not), `OpenProcess` and
+    `GetExitCodeProcess` on Windows, where `os.kill` would end it. An id can name another
+    process once the one it named has ended; a caller that must know which process it is asks
+    something else as well. Never raises."""
 
     if type(pid) is not int or pid <= 0:
         return False
@@ -784,7 +785,20 @@ def alive(pid: int) -> bool:
         return True
     except (OSError, OverflowError):
         return False
-    return True
+    return not _zombie(pid)
+
+
+def _zombie(pid: int) -> bool:
+    """Whether a Linux process has ended and waits to be reaped: in a container with no init,
+    an ended background run can stay a zombie, which `os.kill(pid, 0)` still finds."""
+
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as handle:
+            stat = handle.read()
+    except OSError:
+        return False
+    state = stat.rpartition(b")")[2].split()[:1]
+    return state in ([b"Z"], [b"X"])
 
 
 def terminate(pid: int) -> bool:

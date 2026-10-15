@@ -2278,7 +2278,8 @@ def fire(target: Path, command: str) -> dict[str, Any]:
     assert done.returncode == 0, done.stderr
     verdict: dict[str, Any] = json.loads(done.stdout)
     started = None
-    deadline = time.monotonic() + 5
+    # A detached run can take seconds to start on a loaded or Windows runner.
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline and started is None:
         found = finish_helpers.run_record(target) or {}
         when = finish_helpers.started_at(found)

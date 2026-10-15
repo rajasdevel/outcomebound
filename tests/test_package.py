@@ -562,8 +562,12 @@ def test_the_wheel_holds_every_scaffold_template_built_from_the_checkout_and_the
         if path.is_file()
     }
     assert any(name.endswith("/scaffold.json") for name in expected)
-    with tarfile.open(built[1]) as archive:
-        archive.extractall(tmp_path, filter="data")
+    # `filter` exists from 3.10.12 and 3.11.4; an older 3.10 unpacks as it always did. The
+    # archive is the one this test built.
+    if hasattr(tarfile, "data_filter"):
+        shutil.unpack_archive(built[1], tmp_path, filter="data")
+    else:
+        shutil.unpack_archive(built[1], tmp_path)
     out = tmp_path / "out"
     out.mkdir()
     rebuilt = out / backend(tmp_path / DIST).build_wheel(str(out))

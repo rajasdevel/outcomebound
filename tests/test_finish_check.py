@@ -526,8 +526,10 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
     raising the timeout cannot get the same tree checked."""
 
     count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; sleep 3"])
-    short = finish_check.MARGIN_SECONDS + 1
+    # Done gets 3 seconds under the short timeout, so a run a loaded or Windows runner starts
+    # slowly still starts within it, and a sleep of 8 outlasts it.
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; sleep 8"])
+    short = finish_check.MARGIN_SECONDS + 3
 
     def runs() -> int:
         return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
@@ -2970,7 +2972,10 @@ def test_the_codex_stop_prints_its_json_and_closes_stdout_before_the_run_starts(
 
     assert finish_check.main(["--constant-time", "--harness", "codex", "--done", digest]) == 0
 
-    assert seen == [("closed", b"{}\n"), ("started", True)]
+    assert seen in (
+        [("closed", b"{}\n"), ("started", True)],
+        [("closed", b"{}\r\n"), ("started", True)],
+    )
 
 
 class Kept(io.BytesIO):
