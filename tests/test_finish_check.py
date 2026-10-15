@@ -2801,6 +2801,36 @@ def test_failure_ids_above_the_kept_tail_are_still_read(tmp_path: Path) -> None:
     assert again is not None and again.ids == result.ids
 
 
+def test_a_scan_of_failure_ids_that_stopped_early_never_makes_a_failure_known(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a scan that stopped at the id cap, or at its time limit, reads as every id the
+    output named: a new failure printed after the cap and above the kept tail would look known,
+    and the report would say no named failure is new."""
+
+    old = "".join(
+        f"FAILED tests/test_old.py::test_{n} - old\n" for n in range(finish_check.MAX_IDS)
+    )
+    pad = ("z" * 99 + "\n") * 2200
+    out = tmp_path / "out.txt"
+    root, _ = target(tmp_path / "t", ["true"])
+    line = f"cat {q(out)}; exit 1"
+    write(out, old + pad)
+    before = finish_check.run_one(root, line, 60)
+    write(out, old + "FAILED tests/test_new.py::test_new - new\n" + pad)
+    after = finish_check.run_one(root, line, 60)
+
+    known = finish_check.Failure(1, finish_check.result_ids(before))
+    tolerated, why = known.tolerates(after)
+    assert not tolerated and "not known" in why, why
+    again = finish_check.Result.of(after.document())
+    assert again is not None and not known.tolerates(again)[0]
+
+    with open(out, "rb") as sink:
+        ids, complete = finish_check._ids_in(sink, time.monotonic() - 1)
+    assert not ids and not complete
+
+
 def test_a_hold_says_where_a_command_was_compared_by_its_exit_code_alone(tmp_path: Path) -> None:
     """Breaks if a hold hides that a known command was compared by exit code only, which is
     weaker than comparing failure ids."""
