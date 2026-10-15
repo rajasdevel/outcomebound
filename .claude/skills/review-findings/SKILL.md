@@ -32,6 +32,10 @@ the question, where the ticket or the design holds it. Write each disposition wh
 keeps reviews, else in your reply to the reviewer or your report; do not make a review file for
 it.
 
+A reviewer you dispatch reads again only where a fix changes a claim its finding rests on or a
+result a user can observe, and then reads that change alone. A finding that changes neither takes
+its disposition in this round and starts no other.
+
 ## Writing a review
 
 A review states the revision it read. Each finding names the claim, where it holds and the

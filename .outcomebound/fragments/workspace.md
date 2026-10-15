@@ -4,7 +4,7 @@ family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 8
+version: 9
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -50,7 +50,7 @@ a process, folder or file of an owner you cannot name stays as it is, and the ha
 The one exception to that sentence: where the task needs disk it lacks, you may remove what a tool
 rebuilds or fetches again on its next use (a build cache, a package cache, a dangling image of this
 project), with a command that names what it removes, unless the project's instructions forbid it.
-Never a volume, a container, named data, or anything another project or owner uses. Name what you
+Never a volume, a container or named data, except what the person's order for this project covers and a copy you verified restores; never anything another project or owner uses. Name what you
 reclaimed in your report. A cloud or background
 session starts from the pushed branch, without this machine's ignored folders, uncommitted files or
 tools: commit the install; where its verbs are needed, give the environment's setup script the

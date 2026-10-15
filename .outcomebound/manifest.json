@@ -30,9 +30,9 @@
         ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
         ".outcomebound/fragments/commands.md": "7b6079fcd7cb806b2a98ce356829bbb20841913c55bdc00dd991a48ca9a9dda2",
         ".outcomebound/fragments/local.md": "9a35020a322f57f157c3251962773358a09bb594bf1af6405ccd03981010b101",
-        ".outcomebound/fragments/multi-agent.md": "1e166d2b46d27c16af15c52724b633a85a789ae64d09b7f9dee1b827e4d48f70",
+        ".outcomebound/fragments/multi-agent.md": "8cf2dd5e179a3ab606d791dfcc5e15c21c8c277198a95905dd8af41504e2709d",
         ".outcomebound/fragments/research.md": "6aba8d35ac030f470b0c0c0b946cd78b8ff77b72ac3386dce759196231571ef5",
-        ".outcomebound/fragments/workspace.md": "b83c53552ed23eefdf38190c8d8214ff5681a71fe1a1bec08104d6fa0bd92615"
+        ".outcomebound/fragments/workspace.md": "4d1d2b52425225dcd2274056f172fa0bfb44155eb625a37c1e3da7339bc9f5e8"
       },
       "style": [
         "ste"
@@ -50,13 +50,13 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "1e166d2b46d27c16af15c52724b633a85a789ae64d09b7f9dee1b827e4d48f70"
+      "sha256": "8cf2dd5e179a3ab606d791dfcc5e15c21c8c277198a95905dd8af41504e2709d"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "b83c53552ed23eefdf38190c8d8214ff5681a71fe1a1bec08104d6fa0bd92615"
+      "sha256": "4d1d2b52425225dcd2274056f172fa0bfb44155eb625a37c1e3da7339bc9f5e8"
     },
     {
       "kind": "fragment",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "46f5730bfa5b47b2c7c8321a83fadc628fac0e63b731d6a24f3e4df82a933f1f"
+      "sha256": "9e0a17c8f9789f9f8c289f2b317cef83b02562f484ed5444660103d9df0701ce"
     },
     {
       "kind": "skill",
@@ -170,7 +170,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "34211115a747ceaebd53745783fd83a35c7d09652439d87925d982494ea3b269"
+      "sha256": "b43333deca4519d360396bf16625fc98856fe1ec609402a549934f3756d5454f"
     },
     {
       "kind": "skill",
