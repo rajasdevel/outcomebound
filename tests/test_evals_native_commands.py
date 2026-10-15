@@ -78,6 +78,58 @@ def test_NEGATIVE_CONTROL_a_repeated_command_in_two_directories_cannot_be_paired
     assert [r[2] for r in json.loads(text)["commands"]] == ["", "", ""]
 
 
+def test_NEGATIVE_CONTROL_a_repeated_command_in_two_directories_is_refused_in_the_same_order() -> (
+    None
+):
+    """Equal lists are not enough: identical text cannot say which completion is which start."""
+
+    row = ["/bin/sh -c pwd", "unverified", ""]
+    session = [_item(["/bin/sh", "-c", "pwd"], "file:///b"), _item(["/bin/sh", "-c", "pwd"])]
+    text, meta = fill_directories(_transcript(row, row), session)
+    assert meta["command_cwd_source"].startswith("none: the native commands do not match")
+    assert [r[2] for r in json.loads(text)["commands"]] == ["", ""]
+
+
+def test_a_repeated_command_in_one_directory_is_still_filled_in_the_same_order() -> None:
+    row = ["/bin/sh -c pwd", "unverified", ""]
+    session = [_item(["/bin/sh", "-c", "pwd"]), _item(["/bin/sh", "-c", "pwd"])]
+    text, meta = fill_directories(_transcript(row, row), session)
+    assert meta["command_cwd_source"] == "native"
+    assert [r[2] for r in json.loads(text)["commands"]] == ["/work/space"] * 2
+
+
+def test_a_success_the_native_record_contradicts_is_unverified_and_both_values_are_listed() -> None:
+    stream = "/bin/zsh -lc 'make check'"
+    text, meta = fill_directories(
+        _transcript([stream, "succeeded", ""]), [_item(_shell("make check"), code=2)]
+    )
+    assert json.loads(text)["commands"][0] == [stream, "unverified", "/work/space"]
+    assert meta["command_native_disagreements"] == [
+        {"index": 0, "field": "status", "stream": "succeeded", "native": "exited 2"}
+    ]
+
+
+def test_a_success_in_a_directory_the_native_record_contradicts_is_unverified() -> None:
+    stream = "/bin/zsh -lc ls"
+    text, meta = fill_directories(
+        _transcript([stream, "succeeded", "/elsewhere"]), [_item(_shell("ls"))]
+    )
+    assert json.loads(text)["commands"][0] == [stream, "unverified", "/elsewhere"]
+    assert meta["command_native_disagreements"] == [
+        {"index": 0, "field": "cwd", "stream": "/elsewhere", "native": "/work/space"}
+    ]
+
+
+def test_a_failure_stays_a_failure_and_a_success_the_native_record_shares_stays() -> None:
+    failed, agreed = "/bin/zsh -lc 'false'", "/bin/zsh -lc true"
+    text, meta = fill_directories(
+        _transcript([failed, "exited 1", "/elsewhere"], [agreed, "succeeded", ""]),
+        [_item(_shell("false"), code=1), _item(_shell("true"))],
+    )
+    assert [row[1] for row in json.loads(text)["commands"]] == ["exited 1", "succeeded"]
+    assert [d["field"] for d in meta["command_native_disagreements"]] == ["cwd"]
+
+
 def test_a_status_that_differs_is_kept_from_the_stream_and_listed() -> None:
     stream = "/bin/zsh -lc 'make check'"
     text, meta = fill_directories(

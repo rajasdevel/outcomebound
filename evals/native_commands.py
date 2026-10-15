@@ -5,8 +5,8 @@ no working directory, and a command may run in a directory other than the sessio
 `workdir`). The native session the CLI keeps does give one for each command, in an
 `item_completed` event of type `CommandExecution`: `command` is the argv list, `cwd` a
 `file://` URI. This module sets those directories into the stream's command records, only where
-the two lists match exactly. A directory is never taken from the session's own working directory
-or from the request.
+the two lists match exactly and no command repeats with more than one directory. A directory is
+never taken from the session's own working directory or from the request.
 
 The stream's command string is the argv, shell-quoted; reading it back with `shlex.split` gives
 the argv exactly, on every command of 29 recorded runs. That is the whole correspondence rule.
@@ -65,8 +65,15 @@ def directory_of(value: Any) -> str:
 
 def _pairs(streams: list[list[str]], natives: list[list[str]], cwds: list[str]):
     """For each stream command, the index of its native command and whether the pair is
-    unambiguous; or None where the two lists do not match."""
+    unambiguous; or None where the two lists do not match, or where one command repeats with
+    different directories. Identical text cannot say which completion belongs to which start,
+    and the records give no identity of their own, so that holds in the same order too."""
 
+    place: dict[tuple[str, ...], list[int]] = {}
+    for index, argv in enumerate(natives):
+        place.setdefault(tuple(argv), []).append(index)
+    if any(len({cwds[i] for i in indexes}) > 1 for indexes in place.values()):
+        return None
     if streams == natives:
         return [(index, True) for index in range(len(streams))]
     if sorted(streams) != sorted(natives):
@@ -74,11 +81,6 @@ def _pairs(streams: list[list[str]], natives: list[list[str]], cwds: list[str]):
     # The stream lists commands as they start, the session as they complete, so calls that
     # overlapped come in another order. Matching by text is exact where a repeated command
     # has one directory throughout.
-    place: dict[tuple[str, ...], list[int]] = {}
-    for index, argv in enumerate(natives):
-        place.setdefault(tuple(argv), []).append(index)
-    if any(len({cwds[i] for i in indexes}) > 1 for indexes in place.values()):
-        return None
     taken: dict[tuple[str, ...], int] = {}
     pairs = []
     for argv in streams:
@@ -143,9 +145,13 @@ def fill_directories(
     `none: <reason>`) and `command_native_disagreements`.
 
     The records are filled only where the session has as many commands as the stream, with the
-    same argv at the same place, or in another order where every repeated command has one
-    directory. Otherwise the transcript is returned as it came. A stream status that differs
-    from the session's is kept and listed, never replaced.
+    same argv at the same place or in another order, and every repeated command has one directory
+    throughout. Otherwise the transcript is returned as it came. A stream status that differs
+    from the session's is kept and listed. Where the stream says `succeeded` and the session
+    shows no success for that command, or the stream's own directory is not the session's, the
+    command is set to `unverified`, as the stream cannot then credit it; both source values stay
+    in the disagreements. A stream status that is already not a success is not changed, nor is a
+    stream `unverified` raised to the session's success.
     """
 
     meta: dict[str, Any] = {SOURCE_KEY: "", DISAGREE_KEY: []}
@@ -156,16 +162,21 @@ def fill_directories(
     document, items, pairs, cwds = found
     for position, row in enumerate(document["commands"]):
         index, unique = pairs[position]
+        contradicted = False
         if not row[2]:
             row[2] = cwds[index]
         elif row[2] != cwds[index]:
+            contradicted = True
             meta[DISAGREE_KEY].append(
                 {"index": position, "field": "cwd", "stream": row[2], "native": cwds[index]}
             )
         native = command_outcome(items[index])
         if unique and row[1] != native:
+            contradicted = contradicted or native != "succeeded"
             meta[DISAGREE_KEY].append(
                 {"index": position, "field": "status", "stream": row[1], "native": native}
             )
+        if contradicted and row[1] == "succeeded":
+            row[1] = "unverified"
     meta[SOURCE_KEY] = "native"
     return json.dumps(document), meta
