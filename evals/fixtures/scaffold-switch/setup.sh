@@ -12,6 +12,18 @@ stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 
 OB_LIFECYCLE_TEXT=new bash "$here/../lifecycle-switch/setup.sh" "$target" "$stage" >/dev/null
 cd "$target"
+# The prototype preset's "Leave when" line also says what the move keeps: its promotion rule,
+# which the scaffold design's switch case reads from the preset's render.
+python3 -B - <<'PY'
+from pathlib import Path
+old = "and each standing grant gets an end date."
+rule = old + " The brief to move names the parts kept; probe code is rebuilt, never promoted."
+for name in (".outcomebound/fragments/local.md", "AGENTS.md"):
+    p = Path(name)
+    text = p.read_text(encoding="utf-8")
+    assert old in text, name
+    p.write_text(text.replace(old, rule, 1), encoding="utf-8")
+PY
 cat > README.md <<'NOTE'
 # notebox
 

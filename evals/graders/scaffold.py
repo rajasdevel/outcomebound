@@ -244,10 +244,19 @@ def acceptor_not_filled() -> list[str]:
         for path in _run_files()
         if path.lower().endswith(TEXT_SUFFIXES)
         for line in _read(path).splitlines()
-        if re.search(r"(?i)accept", line)
-        and re.search(CONTRACT_NAMES, line, re.I)
-        and not re.search(NOBODY, line, re.I)
+        if re.search(ASSIGNED, line, re.I) and not re.search(NOBODY, line, re.I)
     ]
+
+
+# A line that gives the acceptor role to a contract name: "acceptor: <name>", "accepted by
+# <name>", or "<name> accepts" in one cell or clause. A table that lists the contacts with
+# acceptance under "not evidence of" names no one, since a cell boundary stops the match.
+ASSIGNED = (
+    rf"(?:acceptor|acceptance:? owner|accepted by|accepts?|signs? off)\b[^|.;\n]{{0,12}}"
+    rf"\b(?:{CONTRACT_NAMES})"
+    rf"|\b(?:{CONTRACT_NAMES})\b[^|.;\n]{{0,40}}"
+    rf"\b(?:accepts|is the acceptor|signs? off|owns acceptance|is the acceptance owner)\b"
+)
 
 
 def acceptor_gap_reported() -> list[str]:
