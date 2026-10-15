@@ -28,6 +28,7 @@ CASES = {
     "stale-pin": "pins v1.1.0",
     "stale-readme": "README.md installs v1.1.0",
     "stale-gitlab": "every other install line pins it",
+    "stale-scaffold": "every other install line pins it",
     "lightweight": "is annotated",
     "wrong-tag": "names VERSION",
     "tag-behind": "points at HEAD",
@@ -91,6 +92,8 @@ STALE = {
     "stale-pin": ("templates/ci/github-actions.yml", "v1.1.0", "v1.0.0"),
     "stale-readme": ("README.md", "v1.1.0", "v1.0.0"),
     "stale-gitlab": ("templates/ci/gitlab-ci.yml", "v1.1.0", "v1.0.0"),
+    # The CI workflow the scaffold writes names its release, as the CI templates do.
+    "stale-scaffold": ("templates/scaffold/common/ci.yml", "v1.1.0", "v1.0.0"),
     "pypi-unpinned": (
         ".github/workflows/ci.yml",
         "gh-action-pypi-publish@",
@@ -118,6 +121,9 @@ def release_files(case: str) -> dict[str, str]:
             '        run: python -m pip install "git+https://github.com/example/outcomebound@v1.1.0"\n'
         ),
         "templates/ci/gitlab-ci.yml": "    - pip install git+https://github.com/example/outcomebound@v1.1.0\n",
+        "templates/scaffold/common/ci.yml": (
+            '        run: python -m pip install "git+https://github.com/example/outcomebound@v1.1.0"\n'
+        ),
         "README.md": "uv tool install git+https://github.com/example/outcomebound@v1.1.0\n",
         # The release workflow and the build backend are the repository's own: what the two
         # PyPI checks read.

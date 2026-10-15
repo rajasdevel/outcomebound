@@ -548,6 +548,33 @@ def test_a_wheel_built_from_the_source_archive_is_the_same_wheel(
     assert rebuilt.read_bytes() == built[0].read_bytes()
 
 
+def test_the_wheel_holds_every_scaffold_template_built_from_the_checkout_and_the_sdist(
+    built: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """The scaffold's sources carry plain names, so the build's walk, which skips dot paths where
+    Git cannot list the files, takes every one of them: from the checkout and from the extracted
+    source archive alike."""
+
+    scaffold = ROOT / "templates" / "scaffold"
+    expected = {
+        f"outcomebound_tools/_home/{path.relative_to(ROOT).as_posix()}"
+        for path in scaffold.rglob("*")
+        if path.is_file()
+    }
+    assert any(name.endswith("/scaffold.json") for name in expected)
+    with tarfile.open(built[1]) as archive:
+        archive.extractall(tmp_path, filter="data")
+    out = tmp_path / "out"
+    out.mkdir()
+    rebuilt = out / backend(tmp_path / DIST).build_wheel(str(out))
+
+    for wheel in (built[0], rebuilt):
+        with zipfile.ZipFile(wheel) as opened:
+            names = set(opened.namelist())
+        shipped = {name for name in names if "/_home/templates/scaffold/" in name}
+        assert shipped == expected, wheel.name
+
+
 def test_a_tree_without_the_engine_builds_nothing(tmp_path: Path) -> None:
     """A build from the wrong folder would install a command with no engine behind it."""
 

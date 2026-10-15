@@ -1657,6 +1657,37 @@ def test_detect_on_a_folder_with_only_git_names_the_new_project_route(
     assert "a new project starts" not in out and "Start a new project" not in out
 
 
+SCAFFOLD_LINE = (
+    "# a new project: outcomebound scaffold . --lifecycle <preset> previews the files of its "
+    "lifecycle; the new-project reference says how to choose\n"
+)
+
+
+def test_detect_on_an_empty_repository_names_the_scaffold_preview(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--detect` in a folder with only `.git` does not name the scaffold's preview
+    where the engine holds the scaffold manifest, names it where the engine has none, or names it
+    for a folder that holds any other file."""
+
+    source = engine_copy(tmp_path)
+    empty = repo(tmp_path / "empty")
+    code_only = repo(tmp_path / "code", {"app.py": "x = 1\n"})
+
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert "outcomebound scaffold" not in out
+
+    manifest = source / "templates/scaffold/scaffold.json"
+    manifest.parent.mkdir(parents=True)
+    shutil.copy2(ROOT / "templates/scaffold/scaffold.json", manifest)
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert SCAFFOLD_LINE in out
+    assert out.index("a new project starts from this command") < out.index(SCAFFOLD_LINE)
+
+    _, out, _ = run(capsys, str(code_only), "--detect", source=source)
+    assert "outcomebound scaffold" not in out
+
+
 @pytest.mark.skipif(WINDOWS, reason="a control character cannot be part of a Windows file name")
 def test_detect_escapes_every_string_the_target_gave(tmp_path: Path, capsys: Capture) -> None:
     """Breaks if a path, a CI command, a pattern or a value that the target holds reaches the
