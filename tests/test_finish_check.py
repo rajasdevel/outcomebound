@@ -1354,6 +1354,22 @@ def test_the_tree_is_not_read_once_its_deadline_has_passed(tmp_path: Path) -> No
     assert finish_check.tree_digest(root, digest) is not None
 
 
+def test_a_large_untracked_file_stops_its_hash_at_the_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the hash of one untracked file runs on past the deadline: a large file must not
+    take a stop past its hook's timeout before the run starts."""
+
+    root, _ = target(tmp_path / "t", ["true"])
+    with (root / "big.bin").open("wb") as handle:
+        handle.truncate(8 * 1024 * 1024)
+    clock = iter(range(1_000_000))
+    monkeypatch.setattr(finish_check.time, "monotonic", lambda: float(next(clock)))
+
+    assert finish_check._content(root / "big.bin", 3.0) is None
+    assert finish_check._content(root / "big.bin") is not None
+
+
 def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     tmp_path: Path,
 ) -> None:
@@ -3424,7 +3440,8 @@ def test_on_codex_an_undelivered_failure_holds_one_stop_later_with_the_times_of_
 ) -> None:
     """Breaks if codex's stop holds on a record of the tree its turn began on before a run has
     found the failure again, or never holds it: the stop after the confirming run holds it, with
-    the time of each run."""
+    the time of each run, and says the turn changed the tree since, so it claims no failure of
+    the current tree."""
 
     count = tmp_path / "count"
     root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; echo boom; exit 1"])
@@ -3452,7 +3469,8 @@ def test_on_codex_an_undelivered_failure_holds_one_stop_later_with_the_times_of_
 
     assert verdict["decision"] == "block"
     head = verdict["reason"].splitlines()[0]
-    assert f"at {clock(first.time)}, and still fails now" in head and clock(second.time) in head
+    assert f"at {clock(first.time)}, and again at {clock(second.time)}; this turn changed" in head
+    assert "still fails now" not in head
 
 
 @pytest.mark.parametrize("row", ROWS)

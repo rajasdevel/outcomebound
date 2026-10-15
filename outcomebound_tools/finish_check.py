@@ -542,9 +542,10 @@ def _git(target: Path, *arguments: str, deadline: float | None = None) -> bytes 
     return done.stdout if done.returncode == 0 else None
 
 
-def _content(path: Path) -> bytes:
+def _content(path: Path, deadline: float | None = None) -> bytes | None:
     """What an untracked path holds, for the tree digest: a link's text, or a file's digest and
-    whether it may be executed, since a script that loses its execute bit no longer runs."""
+    whether it may be executed, since a script that loses its execute bit no longer runs; None
+    where `deadline` passes while a large file is read."""
 
     try:
         if path.is_symlink():
@@ -554,6 +555,8 @@ def _content(path: Path) -> bytes:
         digest = hashlib.sha256(b"x" if os.access(path, os.X_OK) else b"-")
         with path.open("rb") as handle:
             for block in iter(lambda: handle.read(1024 * 1024), b""):
+                if deadline is not None and time.monotonic() > deadline:
+                    return None
                 digest.update(block)
         return digest.digest()
     except OSError:
@@ -582,7 +585,10 @@ def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str
     for name in sorted(item for item in untracked.split(b"\0") if item):
         if deadline is not None and time.monotonic() > deadline:
             return None
-        total.update(name + b"\0" + _content(target / os.fsdecode(name)))
+        content = _content(target / os.fsdecode(name), deadline)
+        if content is None:
+            return None
+        total.update(name + b"\0" + content)
     return total.hexdigest()
 
 
@@ -2630,13 +2636,21 @@ def _failure_notice(record: Checked, viewer: Viewer, target: Path) -> Notice | N
     return Notice(record.tree, FAIL, str(text))
 
 
-def hold_report(record: Checked, target: Path, both: bool = False) -> str:
+def hold_report(record: Checked, target: Path, both: bool = False, tree: str | None = None) -> str:
     """The report a hold gives the model: its first line says how the failure stands (found
     again after the session recorded it, with the time of each run where `both`; with no record
     of the tree the turn began with; or new), then what to do, then the commands and the output.
-    """
+    A record of a tree other than `tree`, the current one, says the turn changed the tree since:
+    the failure is not known to stand on it."""
 
-    if record.hold == AGAIN and record.first:
+    if record.hold == AGAIN and record.first and tree is not None and record.tree != tree:
+        first = (
+            "finish-check FAIL: Done failed on the tree this turn began with, at "
+            f"{clock_of(record.first)}, and again at {clock_of(record.time)}; this turn changed "
+            "the tree since, and Done has not yet run on it. Run the failing command again: if "
+            "your change fixed it, say so and end the turn."
+        )
+    elif record.hold == AGAIN and record.first:
         first = (
             "finish-check FAIL: Done failed on the tree this turn began with, at "
             f"{clock_of(record.first)}, and still fails now"
@@ -3564,7 +3578,8 @@ def stop(
     unheld: list[Notice] = []
     if hold is not None:
         if keep_held(target, session, hold.holding, hold.tree):
-            return {"decision": "block", "reason": hold_report(hold, target, both=True)}, argv
+            reason = hold_report(hold, target, both=True, tree=tree)
+            return {"decision": "block", "reason": reason}, argv
         unheld = [_unheld_notice(hold, target)]
     found_notices = unheld + notices(target, viewer, deadline, from_run=False)
     if unchanged and mark is not None:

@@ -901,7 +901,10 @@ def values(root: Path) -> list[Value]:
             continue
         try:
             data = paths.read_bounded(root, relative)
-        except paths.PathError:
+        except paths.PathError as error:
+            # A regular file it cannot read may hold a value: the check cannot read PASS over it.
+            if isinstance(error.__cause__, OSError):
+                found.append(Value(relative, 0, "unread", str(error)))
             continue
         if b"\0" in data:
             continue
@@ -1052,15 +1055,21 @@ def check_text(found: Sequence[Value]) -> str:
     if not found:
         return "PASS no value left to fill\n"
     fills = sum(value.kind == "fill" for value in found)
-    owners = len(found) - fills
-    lines = [
+    owners = sum(value.kind == "owner" for value in found)
+    unread = sum(value.kind == "unread" for value in found)
+    head = (
         f"FAIL {_count(len(found), 'value')} left: {fills} to fill, "
         f"{_count(owners, 'gate owner')} not named"
-    ]
+    )
+    if unread:
+        head += f", {_count(unread, 'file')} not read"
+    lines = [head]
     for value in found:
         line = f"{_shown(value.path)}:{value.line}: {value.kind}: {_shown(value.label)}"
         if value.kind == "owner":
             line += "; next: the person names the owner, and the agent writes the name they give"
+        if value.kind == "unread":
+            line += "; next: make it readable, then run the check again"
         lines.append(line)
     lines.append(
         "next: fill each value from the person's words; a gate owner is the person's to name"

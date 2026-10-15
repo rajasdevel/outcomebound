@@ -434,6 +434,30 @@ def test_check_exits_0_with_no_marker_and_1_with_one_or_many(
         assert out.splitlines()[0].startswith(f"FAIL {count} value")
 
 
+@pytest.mark.skipif(
+    os.name != "posix" or os.geteuid() == 0,
+    reason="mode 000 keeps a file unreadable only for a POSIX user that is not root",
+)
+def test_check_counts_a_file_it_cannot_read_as_a_value_left(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a file the check cannot read, which may hold a marker, reads PASS."""
+
+    root = target(tmp_path, files={"SECURITY.md": "Report to <<fill: reporting channel>>.\n"})
+    (root / "SECURITY.md").chmod(0)
+    try:
+        code, out, _ = run(capsys, root, "--check")
+    finally:
+        (root / "SECURITY.md").chmod(0o644)
+
+    assert code == 1
+    assert (
+        out.splitlines()[0]
+        == "FAIL 1 value left: 0 to fill, 0 gate owners not named, 1 file not read"
+    )
+    assert "SECURITY.md:0: unread: cannot read SECURITY.md" in out
+
+
 def test_check_leaves_out_managed_blocks_and_recorded_copies(
     tmp_path: Path, capsys: Capture
 ) -> None:
