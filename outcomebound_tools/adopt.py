@@ -1369,7 +1369,7 @@ def finish_hooks(
             continue
         if not paths.admits(hook.get("file")):
             raise AdoptError(f"{name}: the harness table names no settings file inside the target")
-        entry = finish_check.entry(name, digest, timeout)
+        entry = finish_check.entry(name, digest, timeout, hook.get("wake"))
         data = finish_check.canonical(entry)
         extra: dict[str, Any] = {"harness": name, "timeout": timeout}
         event = hook["event"]
@@ -1401,9 +1401,34 @@ def finish_hooks(
                 f"desktop may not share with the shell{caution}",
             )
         )
+    run.notes.extend(wake_notes(hooks, [item.harness for item in found]))
     if wants:
         plan_measure(run, done, timeout, bool(asked) or selection.verify)
     return wants
+
+
+def wake_notes(
+    hooks: Sequence[tuple[str, dict[str, Any] | None]], selected: Sequence[str]
+) -> Notes:
+    """A warning where Cursor is selected beside a row whose stop entry wakes the model in the
+    background (claude-code's `asyncRewake`): Cursor runs the hooks of .claude/settings.json by
+    default and is not documented to read the key, so there the entry would wait for all of Done
+    at each stop, and, with no `stop_hook_active` in its input, never hold."""
+
+    if "cursor" not in selected:
+        return []
+    return [
+        (
+            "warning",
+            f"{name} finish-check: Cursor, also selected, runs the hooks of {hook['file']} by "
+            f"default and is not documented to read `{hook['wake']['key']}`, so there this entry "
+            "would run for all of Done at each stop, the wait it is written to remove, and would "
+            "never hold; turn off Cursor's \"Include Third-Party Plugins, Skills, and Other "
+            'Configs" setting where that cost is not wanted',
+        )
+        for name, hook in hooks
+        if hook is not None and isinstance(hook.get("wake"), dict)
+    ]
 
 
 def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FINISH_CHECK) -> Notes:
@@ -1422,7 +1447,7 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
     if entry == FINISH_CHECK:
         if not before:
             return []
-        why = "since its Done commands or its timeout changed"
+        why = "since its Done commands, its timeout or the form this engine writes changed"
         return [
             (
                 "action",
@@ -2267,7 +2292,8 @@ def _hook_rendered(source: Path, record: Record, own: Sequence[Record]) -> bytes
     if record["id"] == FINISH_MARK:
         return finish_check.canonical(finish_check.mark_entry(harness, digest))
     timeout = int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
-    return finish_check.canonical(finish_check.entry(harness, digest, timeout))
+    entry = finish_check.entry(harness, digest, timeout, hook.get("wake"))
+    return finish_check.canonical(entry)
 
 
 def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> str:
