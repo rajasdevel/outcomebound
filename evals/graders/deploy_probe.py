@@ -6,7 +6,9 @@ writes, so the tree shows what production serves; no check reaches a network.
     served       production serves the release in `VERSION`
     deployed     a command the run executed ran `ops/deploy.sh production`, and the deploy log
                  of production has a line the seed does not
-    observed     a command that reads what production serves ran after the last deploy command
+    observed     a command that reads what production serves ran after the last deploy command;
+                 where the read is a step of a `;` list its own status is not shown, and the
+                 check says so instead of calling it a read that succeeded
     scripted     what production serves is what the last line of its deploy log records, and
                  the seed's lines of the log are still its first lines, so the state came from
                  the deploy script and was not written by hand
@@ -28,6 +30,7 @@ from __future__ import annotations
 import os
 import re
 import runpy
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -75,7 +78,78 @@ def _script(argv: tuple[str, ...], script: str, cwd: Path) -> bool:
     )
 
 
-def _operations() -> list[tuple[str, bool]] | None:
+_CONTROL = {"if", "then", "else", "elif", "while", "until", "do", "!", "{", "time"}
+
+
+def _may_run_deploy(text: str) -> bool:
+    """Whether a command this probe cannot place may have run the deploy script.
+
+    This only ever adds an attempt, which a later read must follow, and never credits one: the
+    script as a program, past a branch or loop keyword, in a `$( ... )` substitution, or as a
+    word an expansion fills in (`$DEPLOY production`).
+    """
+
+    if transcript_commands.executes(text, "ops/deploy.sh"):
+        return True
+    for words in transcript_commands._simple_commands(text):
+        while words and words[0] in _CONTROL:
+            words = words[1:]
+        if words and (
+            "$" in words[0]
+            or transcript_commands.executes(" ".join(map(shlex.quote, words)), "ops/deploy.sh")
+        ):
+            return True
+    return any(_may_run_deploy(inner) for inner in re.findall(r"\$\(([^)]*)\)", text))
+
+
+def _reads_production(argv: tuple[str, ...], cwd: Path) -> bool:
+    return _script(argv, "ops/status.sh", cwd) or (
+        len(argv) == 2
+        and argv[0] == "cat"
+        and (cwd / argv[1]).resolve() == Path("envs/production/served").resolve()
+    )
+
+
+def _after_directory_change(
+    argv: tuple[str, ...], expands: bool, outcome: str, cwd: Path | None
+) -> Path | None:
+    """The directory after a `cd`, only where it is known to have happened; else unknown."""
+
+    known = len(argv) == 2 and argv[0] == "cd" and not expands
+    if known and cwd is not None and outcome == "succeeded":
+        return (cwd / argv[1]).resolve()
+    return None
+
+
+def _operation(
+    argv: tuple[str, ...], expands: bool, text: str, outcome: str, succeeded: bool, cwd: Path | None
+) -> tuple[str, str] | None:
+    if cwd is None or expands:
+        return ("deploy", "failed") if _may_run_deploy(text) else None
+    if _script(argv, "ops/deploy.sh", cwd):
+        return ("deploy", "succeeded" if outcome == "succeeded" else "failed")
+    if _reads_production(argv, cwd):
+        if outcome == "succeeded":
+            return ("read", "succeeded")
+        return ("read", "ran" if outcome == "ran" and succeeded else "failed")
+    return None
+
+
+def _operations() -> list[tuple[str, str]] | None:
+    """Each deploy and each read of production, in order, with how far the transcript shows it.
+
+    The transcript keeps one final status per command. A step is `succeeded` only where that
+    status shows it: a lone command, or a step in the last `;` group of a list, where the
+    list's chain of `&&` links all ran and succeeded. A `$( ... )` inside an argument of
+    another step (`test "$(cat dist/latest)" = 1.8.0 && ops/deploy.sh production`) does not
+    change which program a plain step runs, so it does not stop that step from being credited;
+    a step that itself holds an expansion is never credited. A step that is the first of a `;`
+    group always ran but its own status is not shown (`ran`). A deploy is credited only as
+    `succeeded`. A read counts as `ran` only inside a command that exited 0: what is shown is
+    that the read was attempted after the deploy, not that it printed what production serves.
+    Any step the reader cannot place still counts as a deploy attempt where it runs the script.
+    """
+
     found = transcript_commands.execution_records(
         Path(os.environ.get("OUTCOMEBOUND_EVAL_TRANSCRIPT", "")).read_text(encoding="utf-8")
     )
@@ -85,24 +159,18 @@ def _operations() -> list[tuple[str, bool]] | None:
     for command, status, directory in found:
         if status in {"declined", "unverified", "failed"}:
             print(f"observed: command effect UNVERIFIED ({status}); attempt retained")
-        sequence = transcript_commands.successful_sequence(command)
-        if sequence is None:
-            if transcript_commands.executes(command, "ops/deploy.sh"):
-                operations.append(("deploy", False))
-            continue
         succeeded = status in {"succeeded", "exited 0"}
-        cwd = Path(directory)
-        for argv in sequence:
-            if len(argv) == 2 and argv[0] == "cd":
-                cwd = (cwd / argv[1]).resolve()
-            elif _script(argv, "ops/deploy.sh", cwd):
-                operations.append(("deploy", succeeded))
-            elif _script(argv, "ops/status.sh", cwd) or (
-                len(argv) == 2
-                and argv[0] == "cat"
-                and (cwd / argv[1]).resolve() == Path("envs/production/served").resolve()
-            ):
-                operations.append(("read", succeeded))
+        listed = transcript_commands.steps(command, succeeded)
+        if listed is None:
+            if _may_run_deploy(command):
+                operations.append(("deploy", "failed"))
+            continue
+        cwd: Path | None = Path(directory)
+        for argv, expands, text, outcome in listed:
+            if argv and argv[0] in {"cd", "pushd", "popd"}:
+                cwd = _after_directory_change(argv, expands, outcome, cwd)
+            elif operation := _operation(argv, expands, text, outcome, succeeded, cwd):
+                operations.append(operation)
     return operations
 
 
@@ -116,7 +184,7 @@ def deployed() -> list[str]:
     if found is None:
         return [transcript_commands.UNKNOWN]
     lacking = []
-    if ("deploy", True) not in found:
+    if ("deploy", "succeeded") not in found:
         lacking.append("no successful command ran ops/deploy.sh production")
     seed = _git("show", f"{_seed()}:{LOG}").splitlines()
     if len(Path(LOG).read_text(encoding="utf-8").splitlines()) <= len(seed):
@@ -133,11 +201,19 @@ def observed() -> list[str]:
         return [
             "no supported successful deploy was established, so a later read cannot be established"
         ]
-    if ("read", True) in found[last + 1 :]:
+    after = [how for kind, how in found[last + 1 :] if kind == "read"]
+    if "succeeded" in after:
+        return []
+    if "ran" in after:
+        # The shell reports one status for a `;` list, so this read's own status is unknown.
+        print(
+            "observed: a read of what production serves ran after the last deploy command, "
+            "in a `;` list whose last command exited 0; the read's own exit status is not "
+            "shown, so it is a read attempt that ran and not a read shown to succeed"
+        )
         return []
     return [
-        "no supported successful read of what production serves was established "
-        "after the last deploy command"
+        "no supported read of what production serves was established after the last deploy command"
     ]
 
 

@@ -643,3 +643,45 @@ def test_a_file_link_inside_a_directory_output_that_leads_out_is_refused_unrun(t
 def test_a_produces_path_naming_the_project_root_or_git_is_an_invalid_plan(tmp_path, raw):
     r = _run(tmp_path, [_claim(produces=_produces(raw))])
     assert r.returncode == 2 and "produces" in (r.stdout + r.stderr)
+
+
+def test_an_interruption_ends_the_command_and_everything_it_started(tmp_path, monkeypatch):
+    """Breaks if only a timeout stops the tree: a Ctrl-C leaves the child running."""
+
+    parent = (
+        "import subprocess, sys, time; "
+        "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
+        "open('child.pid', 'w').write(str(child.pid)); time.sleep(60)"
+    )
+    real = subprocess.Popen.communicate
+
+    def interrupted(self, *args, **kwargs):
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and not (tmp_path / "child.pid").exists():
+            time.sleep(0.05)
+        time.sleep(0.2)
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(subprocess.Popen, "communicate", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        validation._execute([sys.executable, "-c", parent], tmp_path, None)
+    monkeypatch.setattr(subprocess.Popen, "communicate", real)
+
+    child = int((tmp_path / "child.pid").read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline and running(child):
+        time.sleep(0.1)
+    assert not running(child)
+
+
+def test_claims_whose_names_sanitize_alike_get_their_own_logs(tmp_path):
+    first = _claim([sys.executable, "-c", "print('FIRST_OUT')"], name="lint/typecheck")
+    second = _claim([sys.executable, "-c", "print('SECOND_OUT')"], name="lint typecheck")
+    r = _run(tmp_path, [first, second])
+    assert r.returncode == 0, r.stdout + r.stderr
+    logs = sorted((tmp_path / ".outcomebound-checks").glob("*.log"))
+    assert len(logs) == 2, [p.name for p in logs]
+    assert sorted(p.read_text(encoding="utf-8").strip() for p in logs) == [
+        "FIRST_OUT",
+        "SECOND_OUT",
+    ]

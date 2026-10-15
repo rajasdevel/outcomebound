@@ -3,7 +3,12 @@
 `write` holds three properties: no symlink anywhere on a destination's path (on Windows, no
 junction either, and no name Windows cannot hold), every write staged with O_EXCL, fsynced and
 renamed over its destination, and a refusal whenever a destination's bytes are not the bytes its
-caller read. Nothing here recovers an interrupted run; the target's Git history is the undo.
+caller read. Every destination is checked before the first write, and again just before its own
+rename. That is a recheck, not a compare-and-swap: an edit that lands in the instant between the
+last check and the rename is still overwritten, and no lock closes that window. A staging file left
+by an earlier run is refused before the first write and is never removed. Nothing here recovers an
+interrupted run, and a failure after the first write does not roll the earlier writes back; the
+target's Git history is the undo.
 """
 
 from __future__ import annotations
@@ -11,7 +16,7 @@ from __future__ import annotations
 import os
 import stat
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from outcomebound_tools import paths
@@ -63,8 +68,10 @@ def write(
     """
 
     root = Path(root)
-    for relative in changes:
+    for relative, content in changes.items():
         _unchanged(root, relative, expected)
+        if content is not None:
+            _no_stage_in_the_way(destination(root, relative))
     for relative, content in changes.items():
         _unchanged(root, relative, expected)
         path = destination(root, relative)
@@ -72,7 +79,24 @@ def write(
             path.unlink(missing_ok=True)
             _prune(root, path.parent)
         else:
-            _replace(path, content)
+
+            def recheck(relative: str = relative) -> None:
+                _unchanged(root, relative, expected)
+
+            _replace(path, content, recheck)
+
+
+def _stage_of(path: Path) -> Path:
+    return path.with_name(path.name + STAGE_SUFFIX)
+
+
+def _no_stage_in_the_way(path: Path) -> None:
+    """Refuse before the first write when a staging file, left by an earlier run, stands where
+    a later destination's stage would go. It is never removed here: it is not this run's."""
+
+    stage = _stage_of(path)
+    if os.path.lexists(stage):
+        raise WriteError(f"a staging file is in the way: {stage}; inspect it, then remove it")
 
 
 def _unchanged(root: Path, relative: str, expected: Mapping[str, bytes | None]) -> None:
@@ -82,10 +106,10 @@ def _unchanged(root: Path, relative: str, expected: Mapping[str, bytes | None]) 
         raise WriteError(f"{relative} changed after it was read; nothing more was written")
 
 
-def _replace(path: Path, content: bytes) -> None:
+def _replace(path: Path, content: bytes, recheck: Callable[[], None]) -> None:
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else NEW_FILE_MODE
     path.parent.mkdir(parents=True, exist_ok=True)
-    stage = path.with_name(path.name + STAGE_SUFFIX)
+    stage = _stage_of(path)
     try:
         descriptor = os.open(stage, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
     except FileExistsError as error:
@@ -98,6 +122,7 @@ def _replace(path: Path, content: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(stage, mode)
+        recheck()
         _move(stage, path)
     finally:
         stage.unlink(missing_ok=True)

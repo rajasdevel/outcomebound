@@ -209,7 +209,6 @@ _NEXT = {
 # Git runs under `GIT_READ_CONFIGURATION`; these flags add no textconv, and a tree-to-tree
 # diff never reads the index.
 _SAFE_DIFF = ("--no-ext-diff", "--no-textconv", "--ignore-submodules=all", "--no-renames")
-_GIT_UNSET = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_EXTERNAL_DIFF", "GIT_PAGER")
 
 
 class AuditError(ValueError):
@@ -570,6 +569,32 @@ def _notes(root: Path) -> list[str]:
     return found
 
 
+# A file of these kinds, or one holding a NUL byte, is not text anyone retypes: it is reported
+# as binary and leaves the result as it is.
+_BINARY = "a binary file, not an instruction file; no text check read it"
+_BINARY_SUFFIXES = frozenset(
+    [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".bmp",
+        ".ico",
+        ".pdf",
+        ".zip",
+        ".gz",
+        ".tar",
+        ".tgz",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".mp4",
+        ".mov",
+    ]
+)
+
+
 def _read(root: Path, relative: str) -> tuple[str | None, str]:
     """The file's text, or None and why no check could read it. Opened only after `_inside`."""
 
@@ -580,7 +605,10 @@ def _read(root: Path, relative: str) -> tuple[str | None, str]:
     try:
         return data.decode("utf-8"), ""
     except UnicodeDecodeError:
-        return None, "not UTF-8 text; no check read it"
+        pass
+    if b"\0" in data or Path(relative).suffix.lower() in _BINARY_SUFFIXES:
+        return None, _BINARY
+    return None, "not UTF-8 text; no check read it"
 
 
 def _lines(text: str) -> Iterator[tuple[int, str]]:
@@ -1101,7 +1129,8 @@ def _harness_config(
         docs = config.get("docs") or "none recorded"
         step = (
             f"carry this to your handoff, where a person confirms that {harness} should load "
-            f"it, and go on with the work; its permissions and hooks documentation: {docs}"
+            f"it, and can record that with `outcomebound instructions rule`; go on with the "
+            f"work; its permissions and hooks documentation: {docs}"
         )
         hits = _config_hits(path, text, harness, own, done, done_shown)
         findings.extend(
@@ -1127,7 +1156,7 @@ def _git_status(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
     `AuditError`. Git comes from PATH's absolute entries only (`programs.require`), so the target
     cannot supply its own, on Windows too."""
 
-    inherited = {key: value for key, value in os.environ.items() if key not in _GIT_UNSET}
+    inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
         part for part in inherited.get("PATH", "").split(os.pathsep) if os.path.isabs(part)
     )
@@ -1797,6 +1826,18 @@ def _file_findings(
     own: Mapping[str, frozenset[str]] | None = None,
 ) -> list[Finding]:
     text, why = _read(root, relative)
+    if text is None and why == _BINARY:
+        return [
+            _finding(
+                "hidden-characters",
+                relative,
+                0,
+                UNVERIFIED,
+                why,
+                decides=False,
+                next="none: nothing to retype in a binary file",
+            )
+        ]
     if text is None:
         return [_finding("hidden-characters", relative, 0, UNVERIFIED, why)]
     found: list[Finding] = []
@@ -2017,7 +2058,11 @@ def _only(harness: str, names: Sequence[str], present: Sequence[str]) -> bool:
     return any(own.wants(path) and not others.wants(path) for path in present)
 
 
-def check(target: Path, harnesses: Sequence[str] = (), base: str | None = None) -> Report:
+def check(
+    target: Path,
+    harnesses: Sequence[str] = (),
+    base: str | None = None,
+) -> Report:
     """Select the harnesses, find what they load under `target`, and check it."""
 
     root = Path(target).resolve()
@@ -2294,7 +2339,7 @@ _DESCRIPTION = (
 _EXITS = (
     "exits: 0 PASS, 1 FAIL, 2 UNVERIFIED or a usage error. A finding marked (does not change "
     "the result) is reported and leaves the exit as it is; a review hit a person ruled safe is "
-    "one, until its file changes."
+    "one, until its file changes, and so is a binary file."
 )
 _RULE = (
     "Record that a person judged review hits safe. Each <id> is one that check printed for a "
@@ -2338,7 +2383,9 @@ def _parser() -> argparse.ArgumentParser:
         "--json", action="store_true", help="print one JSON report instead of text"
     )
     check_parser.add_argument(
-        "--strict", action="store_true", help="count a review hit or an UNVERIFIED fact as FAIL"
+        "--strict",
+        action="store_true",
+        help="count a review hit or an UNVERIFIED fact as FAIL",
     )
     check_parser.add_argument(
         "--verbose", action="store_true", help="also print the checks that passed"

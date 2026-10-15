@@ -2,7 +2,8 @@
 
 `evals/run.py` calls a real model, so it lives outside `outcomebound_tools` and is loaded
 here by path. No test here calls a model: codex is a fake executable ahead of the real one
-on PATH, which records every call it gets.
+on PATH, which records every call it gets and writes the native session a codex-cli 0.162.1
+call leaves under `$CODEX_HOME/sessions`.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from evals.harnesses import CallResult, Request
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
 from tests.portable import needs_posix_bash
 
@@ -42,19 +45,27 @@ METERED = (
 
 # codex, faked. Every call is appended to $OB_FAKE_CALLS. An exec call keeps its argv and
 # the prompt it read, runs the test's action in the workspace, answers with the test's
-# answer and the keys it could see, and prints a transcript in codex's form naming the
-# model it was given (or $OB_FAKE_MODEL) and the commands the test lists.
+# answer and the keys it could see, prints a stream in the form of codex-cli 0.162.1 (a thread
+# id and no model) with the commands the test lists, and leaves the native session record
+# under $CODEX_HOME/sessions: the model and effort it was given, unless a test sets
+# $OB_FAKE_MODEL or $OB_FAKE_EFFORT, and its working directory. $OB_FAKE_SESSION breaks the
+# record in one way (none, twice, symlink, wrong-id, no-turn-context, split-model, no-version);
+# $OB_FAKE_ITEMS names extra item types for the stream; $OB_FAKE_STREAM_MODEL makes the stream
+# name a model, as an older CLI did. $OB_FAKE_NATIVE_COMMANDS makes the stream give each command
+# as the shell-quoted argv of a `zsh -lc` call with no working directory, as 0.162.1 does, and
+# the session record each command's `CommandExecution` item with its `cwd`: `exact`; `workdir`
+# (the first command ran in a subfolder of the session's cwd); `count` (one item missing);
+# `text` (the first item's script differs).
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
-  --version) echo "${OB_FAKE_VERSION:-codex-cli 0.0.0-fake}"; exit 0 ;;
+  --version) echo "${OB_FAKE_VERSION:-codex-cli 0.162.1}"; exit 0 ;;
   login) echo "${OB_FAKE_LOGIN:-Logged in using ChatGPT}"; exit "${OB_FAKE_LOGIN_EXIT:-0}" ;;
 esac
 printf '%s\n' "$@" > "$OB_FAKE_ARGV"
-out=""; model=""; prev=""
+out=""; prev=""
 for arg in "$@"; do
   if [ "$prev" = "--output-last-message" ]; then out="$arg"; fi
-  if [ "$prev" = "-m" ]; then model="$arg"; fi
   prev="$arg"
 done
 cat > "$OB_FAKE_PROMPT"
@@ -65,24 +76,72 @@ sh "$OB_FAKE_ACTION" >/dev/null 2>&1 || exit 9
     printf '%s=%s\n' "$name" "$(printenv "$name" || echo '<absent>')"
   done
 } > "$out"
-OB_TEST_MODEL="${OB_FAKE_MODEL:-$model}" python3 - <<'EVENTS'
-import json,os
+python3 - <<'EVENTS'
+import json,os,shlex
 from pathlib import Path
-key="11111111-1111-4111-8111-111111111111"
+argv=Path(os.environ["OB_FAKE_ARGV"]).read_text().splitlines()
+model=os.environ.get("OB_FAKE_MODEL") or argv[argv.index("-m")+1]
+effort=os.environ.get("OB_FAKE_EFFORT") or next(
+    a.split("=",1)[1] for a in argv if a.startswith("model_reasoning_effort="))
+cwd=os.environ.get("OB_FAKE_CWD") or os.getcwd()
+key="0192f0aa-1111-7222-8333-444455556666"
+mode=os.environ.get("OB_FAKE_SESSION","")
 started={"type":"thread.started","thread_id":key}
-if not os.environ.get("OB_FAKE_UNOBSERVED_MODEL"):
-    started["model"]=os.environ["OB_TEST_MODEL"]
+if os.environ.get("OB_FAKE_STREAM_MODEL"):
+    started["model"]=os.environ["OB_FAKE_STREAM_MODEL"]
 print(json.dumps(started))
-if os.environ.get("OB_FAKE_NATIVE_SESSIONS"):
-    folder=Path(os.environ["OB_FAKE_NATIVE_SESSIONS"])
-    folder.mkdir(parents=True,exist_ok=True)
-    record={"type":"session_meta","payload":{"id":key}}
-    (folder/f"rollout-test-{key}.jsonl").write_text(json.dumps(record)+"\n")
+extras=[name for name in os.environ.get("OB_FAKE_ITEMS","").split(",") if name]
+if "error" in extras:
+    warning={"id":"item_0","type":"error","message":"Ignoring malformed agent role definition"}
+    print(json.dumps({"type":"item.completed","item":warning}))
+print(json.dumps({"type":"turn.started"}))
+native=os.environ.get("OB_FAKE_NATIVE_COMMANDS","")
+ran=[]
 for number,command in enumerate(Path(os.environ["OB_FAKE_COMMANDS"]).read_text().splitlines()):
+    argv_=["/bin/zsh","-lc",command]
+    ran.append((argv_,os.getcwd()+"/sub" if native=="workdir" and number==0 else os.getcwd()))
     item={"id":str(number),"type":"command_execution","command":command,"cwd":os.getcwd()}
+    if native:
+        item={"id":str(number),"type":"command_execution","command":shlex.join(argv_)}
     print(json.dumps({"type":"item.started","item":item}))
     print(json.dumps({"type":"item.completed","item":{**item,"status":"completed","exit_code":0}}))
+if "file_change" in extras:
+    edit={"id":"item_8","type":"file_change","changes":[{"path":"a.py","kind":"update"}]}
+    print(json.dumps({"type":"item.started","item":{**edit,"status":"in_progress"}}))
+    print(json.dumps({"type":"item.completed","item":{**edit,"status":"completed"}}))
+if "future_tool" in extras:
+    print(json.dumps({"type":"item.completed","item":{"id":"item_9","type":"future_tool"}}))
 print(json.dumps({"type":"turn.completed","usage":{"input_tokens":0,"output_tokens":0}}))
+if mode != "none" and os.environ.get("CODEX_HOME"):
+    home=Path(os.environ["CODEX_HOME"])
+    day=home/"sessions"/"2026"/"10"/"14"
+    day.mkdir(parents=True,exist_ok=True)
+    meta={"id":"11111111-1111-4111-8111-111111111111" if mode=="wrong-id" else key,
+          "cwd":cwd,"cli_version":"0.162.1","originator":"codex_exec","source":"exec"}
+    if mode=="no-version":
+        del meta["cli_version"]
+    context={"cwd":cwd,"model":model,"effort":effort,"approval_policy":"never"}
+    records=[{"type":"session_meta","payload":meta}]
+    if mode!="no-turn-context":
+        records.append({"type":"turn_context","payload":context})
+    shown=ran[:-1] if native=="count" else ran
+    if native=="text":
+        shown=[([*shown[0][0][:2],shown[0][0][2]+" --changed"],shown[0][1]),*shown[1:]]
+    for number,(a,where) in enumerate(shown if native else []):
+        item={"type":"CommandExecution","id":f"exec-{number}","command":a,
+              "cwd":"file://"+where,"status":"completed","exit_code":0}
+        records.append({"type":"event_msg","payload":{"type":"item_completed","item":item}})
+    if mode=="split-model":
+        records.append({"type":"turn_context","payload":{**context,"model":"gpt-6-astra"}})
+    text="".join(json.dumps(record)+"\n" for record in records)
+    name=f"rollout-2026-10-14T00-00-00-{key}.jsonl"
+    if mode=="symlink":
+        (home/"elsewhere.jsonl").write_text(text)
+        (day/name).symlink_to(home/"elsewhere.jsonl")
+    else:
+        (day/name).write_text(text)
+    if mode=="twice":
+        (day/f"rollout-2026-10-14T00-00-01-{key}.jsonl").write_text(text)
 EVENTS
 
 """
@@ -105,6 +164,27 @@ SMALL_FIX = ("--arm", "current", "--model", "gpt-6-sol", "--fixtures", "small-fi
 LAUNCHER = "scripts/outcomebound"
 
 
+# The session folder and the results of a run must lie outside every folder the model may write,
+# and the system's temporary folders are among them (the sandbox grants them), so a run's
+# CODEX_HOME and output directory live under the checkout, not under pytest's tmp_path.
+_TRUSTED: list[Path] = []
+
+
+def _trusted() -> Path:
+    base = ROOT / ".agents" / "work" / "eval-native-tests"
+    base.mkdir(parents=True, exist_ok=True)
+    folder = Path(tempfile.mkdtemp(prefix="run-", dir=base))
+    _TRUSTED.append(folder)
+    return folder
+
+
+@pytest.fixture(autouse=True)
+def _remove_trusted_folders():
+    yield
+    while _TRUSTED:
+        shutil.rmtree(_TRUSTED.pop(), ignore_errors=True)
+
+
 def _invoke(
     tmp_path: Path,
     arguments: tuple[str, ...] = SMALL_FIX,
@@ -122,7 +202,8 @@ def _invoke(
     (tmp_path / "commands.txt").write_text("\n".join(CHECKED) + "\n", encoding="utf-8")
     (tmp_path / "answer.md").write_text(REPORTED, encoding="utf-8")
     (tmp_path / "fixtures").mkdir(exist_ok=True)
-    out = output_dir or tmp_path / "out"
+    trusted = _trusted()
+    out = output_dir or trusted / "out"
     environment = {
         **os.environ,
         **{name: f"should-not-survive-{name.lower()}" for name in METERED},
@@ -134,6 +215,7 @@ def _invoke(
         "OB_FAKE_COMMANDS": str(tmp_path / "commands.txt"),
         "OB_FAKE_ANSWER": str(tmp_path / "answer.md"),
         "OUTCOMEBOUND_FIXTURE_ROOT": str(tmp_path / "fixtures"),
+        "CODEX_HOME": str(trusted / "home"),
         **(env or {}),
     }
     done = subprocess.run(
@@ -178,7 +260,7 @@ def test_NEGATIVE_CONTROL_a_run_that_names_no_model_is_refused_before_anything_r
     assert not out.exists(), "a refused run created its directory"
     assert not (tmp_path / "calls.txt").exists(), "a refused run called codex"
     with pytest.raises(ValueError, match="name the model"):
-        RUN.codex_command("", "medium", tmp_path, tmp_path / "last.md")
+        RUN.make_harness().command("", "medium", tmp_path, tmp_path / "last.md")
 
 
 def test_help_names_the_arms_and_the_model_rule() -> None:
@@ -463,7 +545,7 @@ def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Pat
         assert f"{name}=<absent>" in answer
     meta = _meta(out)
     assert set(meta["api_keys_removed_from_environment"]) >= set(METERED)
-    assert meta["auth"] == "subscription" and meta["cli_version"] == "codex-cli 0.0.0-fake"
+    assert meta["auth"] == "subscription" and meta["cli_version"] == "codex-cli 0.162.1"
     assert (meta["arm"], meta["model"], meta["effort"]) == ("earlier", "gpt-6-sol", "medium")
     kernel = RUN.kernel("earlier")
     assert meta["kernel_sha256"] == hashlib.sha256(kernel.encode("utf-8")).hexdigest()
@@ -474,8 +556,7 @@ def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Pat
     assert argv[argv.index("-m") + 1] == "gpt-6-sol" == meta["model_observed"]
     assert meta["verdict"] == "PASS" and meta["error"] == "", meta
     assert set(meta["claims"].values()) == {"PASS"} and len(meta["claims"]) == 5, meta
-    assert Path(meta["fixture_repo"]).parent == tmp_path / "fixtures"
-    assert Path(meta["fixture_repo"]).name.startswith("ob-fixture-")
+    assert Path(meta["fixture_repo"]) == tmp_path / "fixtures" / out.name / "small-fix-r1"
     assert (meta["arm_files"], meta["arm_launcher"]) == ({}, None)
     assert not (Path(meta["fixture_repo"]) / ".agents/skills/decision-brief").exists()
 
@@ -485,7 +566,8 @@ def test_NEGATIVE_CONTROL_a_run_whose_codex_reports_another_model_does_not_count
 ) -> None:
     done, out = _invoke(tmp_path, env={"OB_FAKE_MODEL": "gpt-6-astra"})
     assert done.returncode == 1, done.stdout + done.stderr
-    assert _meta(out)["error"] == "codex reported running gpt-6-astra, not gpt-6-sol"
+    error = "the native session reports model gpt-6-astra, not gpt-6-sol"
+    assert _meta(out)["error"] == error
 
 
 def test_a_preflight_that_observes_no_login_exits_3_before_any_call(tmp_path: Path) -> None:
@@ -692,11 +774,11 @@ def test_the_summary_counts_the_verdict_and_each_claim_by_fixture_and_arm(
     assert RUN.summarize([tmp_path]) == 0
     printed = capsys.readouterr().out.splitlines()
     assert printed == [
-        "decision | current | gpt-6-sol medium: PASS 1/2 (1 failed call(s) not counted)",
+        "decision | codex | current | gpt-6-sol medium: PASS 1/2 (1 failed call(s) not counted)",
         f"  {brief}: PASS 1/2",
         "  repetition 1 observed: a Mermaid diagram",
         "  repetition 2 observed: no diagram",
-        "decision | earlier | gpt-6-sol medium: PASS 0/1",
+        "decision | codex | earlier | gpt-6-sol medium: PASS 0/1",
         f"  {brief}: PASS 0/1",
     ]
     (tmp_path / "empty").mkdir()
@@ -733,7 +815,7 @@ def test_the_summary_gives_median_tokens_and_seconds_reading_a_missing_count_fro
     assert RUN.summarize([tmp_path]) == 0
     printed = capsys.readouterr().out.splitlines()
     assert printed[:2] == [
-        "small-fix | current | gpt-6-sol medium: PASS 3/3",
+        "small-fix | codex | current | gpt-6-sol medium: PASS 3/3",
         "  median tokens 200, seconds 20",
     ]
 
@@ -814,12 +896,21 @@ def test_fixture_timeout_still_returns_a_record(tmp_path, monkeypatch):
     monkeypatch.setattr(RUN, "FIXTURES", fixtures)
     monkeypatch.setattr(RUN, "SETUP_TIMEOUT", 0.1)
     answer, report, code, extra = RUN.run_fixture(
-        "slow", "requested", "medium", RUN.load_arm("none"), ""
+        "slow", Request("requested", "medium"), RUN.load_arm("none"), ""
     )
     assert code is None and not answer
     assert extra["verdict"] == "UNVERIFIED"
     assert "TimeoutExpired" in extra["error"]
     assert "setup partial" in report
+
+
+class StubHarness:
+    """A harness whose call finishes at once with an answer and no identity."""
+
+    name = "codex"
+
+    def call(self, *_args):
+        return CallResult("partial answer", "", 0, None, {}, "", [])
 
 
 @pytest.mark.parametrize("phase", ["task", "post-check"])
@@ -831,9 +922,12 @@ def test_phase_timeout_preserves_partial_evidence(monkeypatch, phase):
         monkeypatch.setattr(RUN, "task_text", timed_out)
     else:
         monkeypatch.setattr(RUN, "post_check", timed_out)
-        monkeypatch.setattr(RUN, "call_codex", lambda *_args: ("partial answer", "", 0))
     _answer, report, _code, extra = RUN.run_fixture(
-        "small-fix", "requested", "medium", RUN.load_arm("none"), ""
+        "small-fix",
+        Request("requested", "medium"),
+        RUN.load_arm("none"),
+        "",
+        harness=StubHarness(),
     )
     assert f"{phase} partial evidence" in report
     assert extra["error"]
@@ -906,77 +1000,6 @@ def test_command_event_boundaries_fail_closed(boundary):
     assert result == (("echo check", expected, ""),) if expected else result is None
 
 
-@pytest.mark.parametrize("version", sorted(RUN.NO_OBSERVED_MODEL))
-def test_known_unsupported_json_transport_spends_no_model_call(tmp_path, version):
-    done, out = _invoke(tmp_path, env={"OB_FAKE_VERSION": version})
-    assert done.returncode == RUN.PREFLIGHT_EXIT
-    assert "No model call started" in done.stderr
-    assert "--retain-native" in done.stderr
-    assert (tmp_path / "calls.txt").read_text().splitlines() == ["--version"]
-    assert json.loads((out / "STATUS.json").read_text())["status"] == "UNVERIFIED"
-    assert not (out / "small-fix.meta.json").exists()
-
-
-def test_batch_stops_after_first_unobserved_model(tmp_path):
-    done, out = _invoke(
-        tmp_path,
-        ("--arm", "current", "--model", "gpt-6-sol", "--fixtures", "small-fix,ladder-2-last-units"),
-        env={"OB_FAKE_UNOBSERVED_MODEL": "1"},
-    )
-    assert done.returncode == 1
-    calls = (tmp_path / "calls.txt").read_text().splitlines()
-    assert sum(line.startswith("exec ") for line in calls) == 1
-    assert not (out / "ladder-2-last-units.meta.json").exists()
-    state = json.loads((out / "STATUS.json").read_text())
-    assert state["completed_fixtures"] == ["small-fix"]
-    assert _meta(out)["error"] == "codex did not report the model it ran"
-
-
-def test_retained_single_case_keeps_native_bytes_and_automatic_failure(tmp_path, capsys):
-    # Receipt files must be outside both the fixture and the sandbox's implicit temp grants.
-    trusted = ROOT / ".agents" / "work" / "eval-native-tests"
-    trusted.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="receipt-", dir=trusted) as folder:
-        saved = Path(folder)
-        sessions = saved / "sessions"
-        sessions.mkdir()
-        done, out = _invoke(
-            tmp_path,
-            (*SMALL_FIX, "--retain-native", str(sessions)),
-            env={
-                "OB_FAKE_VERSION": "codex-cli 0.160.1",
-                "OB_FAKE_UNOBSERVED_MODEL": "1",
-                "OB_FAKE_NATIVE_SESSIONS": str(sessions),
-            },
-            output_dir=saved / "out",
-        )
-        assert done.returncode == 1
-        assert _meta(out)["error"] == "codex did not report the model it ran"
-        copied = out / "small-fix.native.jsonl"
-        assert copied.read_bytes() == next(sessions.glob("*.jsonl")).read_bytes()
-        receipt = json.loads((out / "small-fix.native.receipt.json").read_text())
-        assert receipt["exact_session_copy"] == "PASS"
-        assert receipt["sha256"] == hashlib.sha256(copied.read_bytes()).hexdigest()
-        assert receipt["identity_qualification"] == "UNVERIFIED"
-        assert receipt["behavioral_verdict"] == "UNVERIFIED"
-        argv = (tmp_path / "argv.txt").read_text().splitlines()
-        assert "--ephemeral" not in argv
-        assert "--ignore-user-config" in argv and "--ignore-rules" in argv
-        assert RUN.summarize([out]) == 0
-        summary = capsys.readouterr().out
-        assert "small-fix" in summary and "PASS 0/0" in summary
-
-
-def test_native_retention_requires_one_named_case_before_any_call(tmp_path):
-    done, out = _invoke(
-        tmp_path, (*SMALL_FIX[:-1], "small-fix,decision", "--retain-native", str(tmp_path))
-    )
-    assert done.returncode == 2
-    assert "exactly one named fixture" in done.stderr
-    assert not out.exists()
-    assert not (tmp_path / "calls.txt").exists()
-
-
 def test_native_receipt_never_becomes_model_writable(tmp_path, monkeypatch):
     from evals import native_receipts
 
@@ -987,37 +1010,6 @@ def test_native_receipt_never_becomes_model_writable(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="receipt destination is inside a model writable root"):
         capture.check_roots((workspace,))
     assert not capture.destination.exists()
-
-
-@pytest.mark.parametrize("problem", ["missing", "duplicate", "wrong-id", "symlink", "forged"])
-def test_native_receipt_rejects_ambiguous_or_unmatched_session(tmp_path, problem):
-    from evals.native_receipts import NativeCapture, retain
-
-    key = "11111111-1111-4111-8111-111111111111"
-    sessions = tmp_path / "sessions"
-    sessions.mkdir()
-    source = sessions / f"rollout-test-{key}.jsonl"
-    original = json.dumps({"type": "session_meta", "payload": {"id": key}}) + "\n"
-    if problem != "missing":
-        source.write_text(original)
-    if problem == "duplicate":
-        (sessions / f"another-{key}.jsonl").write_text(original)
-    elif problem == "wrong-id":
-        source.write_text(original.replace(key, "22222222-2222-4222-8222-222222222222"))
-    elif problem == "symlink":
-        external = tmp_path / "external.jsonl"
-        external.write_text(original)
-        source.unlink()
-        source.symlink_to(external)
-    stdout = json.dumps({"type": "thread.started", "thread_id": key}) + "\n"
-    if problem == "forged":
-        stdout = json.dumps({"type": "item.completed", "item": {"aggregated_output": stdout}})
-    destination = tmp_path / "retained.jsonl"
-    transcript = RUN.command_transcript(stdout, "")
-    receipt = retain(transcript, NativeCapture(sessions, destination))
-    assert receipt["exact_session_copy"] == "UNVERIFIED"
-    assert receipt["error"]
-    assert not destination.exists()
 
 
 def test_failed_login_output_does_not_authorize_a_model_call(tmp_path):
@@ -1061,23 +1053,6 @@ def test_conflicting_actual_model_events_do_not_qualify_identity():
     assert RUN.observed_model(transcript) is None
 
 
-@pytest.mark.parametrize("path_kind", ["source", "destination"])
-def test_implicit_temporary_write_grants_refuse_retained_evidence(tmp_path, path_kind):
-    from evals.native_receipts import NativeCapture, temporary_write_roots
-
-    trusted = ROOT / ".agents" / "work"
-    for temporary in temporary_write_roots():
-        source = temporary / "sessions" if path_kind == "source" else trusted / "sessions"
-        destination = (
-            temporary / "receipt.jsonl" if path_kind == "destination" else trusted / "copy"
-        )
-        capture = NativeCapture(source, destination)
-        with pytest.raises(ValueError, match="model writable root"):
-            RUN.call_codex(
-                "Task", "named", "high", trusted / "fixture", "", RUN.CallOptions((), capture)
-            )
-
-
 def test_unknown_top_level_execution_form_is_not_an_empty_command_record():
     events = [
         {"type": "thread.started", "thread_id": "synthetic", "model": "named"},
@@ -1089,40 +1064,131 @@ def test_unknown_top_level_execution_form_is_not_an_empty_command_record():
     assert RUN.call_error(0, "done", {"model_observed": RUN.observed_model(transcript)}, "named")
 
 
-@pytest.mark.parametrize("path_kind", ["source", "destination"])
-def test_cli_refuses_implicit_temp_receipts_before_model_spawn(tmp_path, path_kind):
-    trusted = ROOT / ".agents" / "work" / "eval-native-tests"
-    trusted.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="receipt-", dir=trusted) as folder:
-        saved = Path(folder)
-        model_temp = saved / "model-temp"
-        model_temp.mkdir()
-        sessions = (model_temp if path_kind == "source" else saved) / "sessions"
-        sessions.mkdir()
-        output = (model_temp if path_kind == "destination" else saved) / "out"
-        done, out = _invoke(
-            tmp_path,
-            (*SMALL_FIX, "--retain-native", str(sessions)),
-            env={"OB_FAKE_VERSION": "codex-cli 0.160.1", "TMPDIR": str(model_temp)},
-            output_dir=output,
-        )
-        assert done.returncode == 1
-        boundary = (
-            "sessions directory overlaps"
-            if path_kind == "source"
-            else "receipt destination is inside"
-        )
-        assert boundary in _meta(out)["error"]
-        assert not any(
-            line.startswith("exec ") for line in (tmp_path / "calls.txt").read_text().splitlines()
-        )
+# --- command directories from the native session, and judging kept runs again --------------
 
 
-def test_native_retention_refuses_relative_temporary_root_before_spawn(monkeypatch):
-    from evals.native_receipts import NativeCapture
+def _saved(out: Path, fixture: str = "small-fix") -> dict:
+    """The command-events document at the head of a run's saved transcript."""
 
-    name = "TEMP" if os.name == "nt" else "TMPDIR"
-    monkeypatch.setenv(name, "relative-temp")
-    capture = NativeCapture(ROOT / ".agents" / "sessions", ROOT / ".agents" / "receipt.jsonl")
-    with pytest.raises(ValueError, match=r"temporary write root.*relative"):
-        RUN.call_codex("Task", "named", "high", ROOT / "fixture", "", RUN.CallOptions((), capture))
+    text = (out / f"{fixture}.transcript.txt").read_text(encoding="utf-8")
+    return json.loads(text.split("\n--- post-checks ---\n", 1)[0])
+
+
+def _directories(out: Path) -> list[str]:
+    return [row[2] for row in _saved(out)["commands"]]
+
+
+@pytest.mark.parametrize("mode", ["exact", "workdir"])
+def test_a_command_takes_its_directory_from_the_native_session_even_where_it_is_not_the_cwd(
+    tmp_path: Path, mode: str
+) -> None:
+    """The 0.162.1 stream gives no directory; the native session gives each command's own."""
+
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": mode})
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    workspace = Path(meta["fixture_repo"]).resolve()
+    assert meta["command_cwd_source"] == "native" and meta["command_native_disagreements"] == []
+    assert _directories(out) == [
+        str(workspace / "sub") if mode == "workdir" else str(workspace),
+        str(workspace),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("mode", "reason"),
+    [
+        ("count", "none: the stream has 2 commands, the native session 1"),
+        ("text", "none: the native commands do not match the stream's by text"),
+    ],
+)
+def test_NEGATIVE_CONTROL_a_native_session_that_does_not_match_the_stream_fills_nothing(
+    tmp_path: Path, mode: str, reason: str
+) -> None:
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": mode})
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _meta(out)["command_cwd_source"] == reason
+    assert _directories(out) == ["", ""], "a directory was filled without an exact match"
+
+
+def _regrade(source: Path, target: Path, capsys: pytest.CaptureFixture[str]) -> tuple[int, str]:
+    code = RUN._main(["--regrade", str(source), "--out", str(target)])
+    return code, capsys.readouterr().err
+
+
+def test_a_kept_run_is_judged_again_with_no_model_call_and_keeps_its_observed_identity(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": "exact"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    original = _meta(out)
+    calls = (tmp_path / "calls.txt").read_text(encoding="utf-8")
+    new = out.parent / "regraded"
+    assert _regrade(out, new, capsys)[0] == 0
+    assert (tmp_path / "calls.txt").read_text(encoding="utf-8") == calls, "a call was made"
+    meta = _meta(new)
+    assert meta["regraded_from"] == str(out)
+    assert (meta["verdict"], meta["claims"]) == (original["verdict"], original["claims"])
+    assert meta["observed"] == original["observed"] and meta["thread_id"] == original["thread_id"]
+    assert meta["workspace_unchanged"] == "PASS" == meta["grading_files_unchanged"]
+    assert meta["protected_check"] == "PASS" and meta["command_cwd_source"] == "native"
+    assert meta["post_check_log_dir"] != original["post_check_log_dir"]
+    assert _directories(new) == _directories(out) != ["", ""]
+    assert (new / "small-fix.native.jsonl").read_bytes() == (
+        out / "small-fix.native.jsonl"
+    ).read_bytes()
+    rows = json.loads((new / "INDEX.json").read_text(encoding="utf-8"))
+    assert [(row["fixture"], row["harness"], row["verdict"]) for row in rows] == [
+        ("small-fix", "codex", original["verdict"])
+    ]
+    assert RUN.summarize([new]) == 0
+
+
+def test_a_run_from_before_digests_were_kept_is_judged_again_and_says_what_is_unverified(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The pass this was built for kept no digest, no protected snapshot and no directories."""
+
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": "workdir"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    path = out / "small-fix.meta.json"
+    old = _meta(out)
+    for key in ("workspace_sha256", "grading_files_sha256", "protected_snapshot"):
+        del old[key]
+    path.write_text(json.dumps(old), encoding="utf-8")
+    document = _saved(out)
+    for row in document["commands"]:
+        row[2] = ""
+    saved = out / "small-fix.transcript.txt"
+    after = saved.read_text(encoding="utf-8").split("\n--- post-checks ---\n", 1)[1]
+    saved.write_text(json.dumps(document) + "\n--- post-checks ---\n" + after, encoding="utf-8")
+    new = out.parent / "regraded"
+    assert _regrade(out, new, capsys)[0] == 0
+    meta = _meta(new)
+    assert meta["workspace_unchanged"] == "UNVERIFIED" == meta["grading_files_unchanged"]
+    assert meta["protected_check"] == "UNVERIFIED" and meta["verdict"] == "PASS"
+    assert meta["command_cwd_source"] == "native" and "" not in _directories(new)
+    assert meta["workspace_sha256"], "a digest is kept from here on"
+
+
+@pytest.mark.parametrize("what", ["workspace", "grading-files", "native-copy", "no-workspace"])
+def test_NEGATIVE_CONTROL_a_run_whose_evidence_changed_is_refused_and_nothing_is_written(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], what: str
+) -> None:
+    done, out = _invoke(tmp_path, env={"OB_FAKE_NATIVE_COMMANDS": "exact"})
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    workspace = Path(meta["fixture_repo"])
+    if what == "workspace":
+        (workspace / "added-later.txt").write_text("x", encoding="utf-8")
+    elif what == "grading-files":
+        meta["grading_files_sha256"] = "0" * 64
+        (out / "small-fix.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    elif what == "native-copy":
+        (out / "small-fix.native.jsonl").write_bytes(b'{"type":"x"}\n')
+    else:
+        shutil.rmtree(workspace)
+    new = out.parent / "regraded"
+    code, error = _regrade(out, new, capsys)
+    assert code == 2 and "refused small-fix" in error, error
+    assert not new.exists()

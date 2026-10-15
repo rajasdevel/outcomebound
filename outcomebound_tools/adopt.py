@@ -38,6 +38,7 @@ undo, so the target must be inside a Git work tree, and every write goes through
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -1768,6 +1769,77 @@ def reference_notes(target: Path, found: Sequence[Route]) -> Notes:
     ]
 
 
+# The project settings files whose hooks Claude Code runs in the agent's current directory,
+# which follows each `cd` (research harnesses/claude-code.md section 7).
+CLAUDE_SETTINGS = (".claude/settings.json", ".claude/settings.local.json")
+
+
+def _hook_commands(data: object) -> list[tuple[str, str]]:
+    """(event, command) for each command hook a Claude Code settings document holds."""
+
+    events = data.get("hooks") if isinstance(data, dict) else None
+    found: list[tuple[str, str]] = []
+    for event, groups in events.items() if isinstance(events, dict) else ():
+        for group in groups if isinstance(groups, list) else ():
+            hooks = group.get("hooks") if isinstance(group, dict) else None
+            for hook in hooks if isinstance(hooks, list) else ():
+                command = hook.get("command") if isinstance(hook, dict) else None
+                if isinstance(command, str):
+                    found.append((str(event), command))
+    return found
+
+
+def _relative_files(target: Path, command: str) -> list[str]:
+    """Each word of a hook command that names a file of the target by a path relative to the
+    working directory; none where the command does not split as a shell would split it."""
+
+    try:
+        words = shlex.split(command)
+    except ValueError:
+        return []
+    named = []
+    for word in words:
+        if "/" not in word or word.startswith(("/", "~", "-")) or "$" in word:
+            continue
+        try:
+            path = paths.resolve_bounded(target, word.removeprefix("./"))
+        except (paths.PathError, OSError):
+            continue
+        if path.is_file():
+            named.append(word)
+    return list(dict.fromkeys(named))
+
+
+def hook_path_notes(target: Path) -> Notes:
+    """A warning for each project hook that Claude Code would run by a path relative to the
+    working directory: the agent's `cd` moves that directory, so from any other folder the
+    script is not found, the shell exits 127, and Claude Code passes over the hook as a
+    non-blocking error (#113). It refuses nothing; a file adopt cannot read is passed over."""
+
+    notes: Notes = []
+    for relative in CLAUDE_SETTINGS:
+        try:
+            raw = _read(target, relative)
+            data = json.loads(textio.decode(raw)) if raw is not None else None
+        except (AdoptError, ValueError):
+            continue
+        for event, command in _hook_commands(data):
+            for word in _relative_files(target, command):
+                notes.append(
+                    (
+                        "warning",
+                        f"{relative}: the {_printable(event)} hook "
+                        f"`{_printable(command)}` names {_printable(word)} relative to the "
+                        "working directory; Claude Code runs a hook in the folder the agent "
+                        "is in, which each `cd` moves, so from any other folder the hook "
+                        "fails and the session goes on without it; name it from "
+                        '"$CLAUDE_PROJECT_DIR" (the folder the session started in; the '
+                        "hook's input `cwd` names the folder the agent is in)",
+                    )
+                )
+    return notes
+
+
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     """Where the install includes codex, the configuration route that lets an unattended
     session write the workspace folders and commit. Codex's default `workspace-write` sandbox
@@ -1943,6 +2015,7 @@ def install(
     run.notes.extend(nested_bytes(run, table, found))
     run.notes.extend(ancestor_notes(target, found))
     run.notes.extend(reference_notes(target, found))
+    run.notes.extend(hook_path_notes(target))
     run.notes.extend(codex_sandbox_notes(target, found))
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
@@ -2506,7 +2579,9 @@ USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [-
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
-Install or upgrade OutcomeBound in <target>, inside a Git work tree. AGENTS.md gets three
+Install or upgrade OutcomeBound in <target>, inside a Git work tree. A flag you omit keeps the
+value the manifest records (--harness, --fragments, --done, --setup, --human-style,
+--finish-check); pass only what changes. AGENTS.md gets three
 blocks: the operating contract; the project facts (Done: the --done commands; Setup: the --setup
 commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
@@ -2668,7 +2743,9 @@ def _parser() -> argparse.ArgumentParser:
         "Technical English); '' for none; omitted keeps the recorded one",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="print what would change; write nothing"
+        "--dry-run",
+        action="store_true",
+        help="print what would change, with a unified diff of each text file; write nothing",
     )
     parser.add_argument(
         "--force",
@@ -2722,6 +2799,22 @@ def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
         print(f"{verb:<8} {text}")
 
 
+def _diffs(planned: Planned) -> None:
+    """A unified diff for each planned text change; a file that is not UTF-8 text is named."""
+
+    for path, (before, after) in planned.items():
+        try:
+            old = [] if before is None else before.decode("utf-8").splitlines(keepends=True)
+            new = [] if after is None else after.decode("utf-8").splitlines(keepends=True)
+        except UnicodeDecodeError:
+            print(f"binary   {path}: changed; no diff for a file that is not UTF-8 text")
+            continue
+        old_name = "/dev/null" if before is None else f"a/{path}"
+        new_name = "/dev/null" if after is None else f"b/{path}"
+        text = "".join(difflib.unified_diff(old, new, old_name, new_name))
+        print(text if text.endswith("\n") or not text else text + "\n\\ No newline at end of file")
+
+
 def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
     if args.detect:
         return detect(target, source)
@@ -2744,6 +2837,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
         _report(planned, edited, notes)
+        _diffs(planned)
         if measure is not None:
             print(f"{'skip':<8} finish-check: a dry run does not run Done; an install runs it once")
         print("dry run: nothing written")

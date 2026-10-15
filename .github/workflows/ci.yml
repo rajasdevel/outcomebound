@@ -25,6 +25,29 @@ permissions:
   actions: read
 
 jobs:
+  # A tag run checks the tag once, not in each leg of the matrix: annotated, v<VERSION>, on this
+  # commit, and the changelog and CI template agreeing with it (scripts/release-check.py). The
+  # `release` job needs this job, so a tag that fails the check publishes nothing.
+  verify-tag:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A checkout can leave the tag lightweight (actions/checkout before v6.0.2 did); fetch
+          # the annotated tag before reading it.
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          python3 scripts/release-check.py --tag "$RELEASE_TAG"
+
   test:
     runs-on: ubuntu-latest
     strategy:
@@ -44,19 +67,6 @@ jobs:
           fetch-depth: 0
           # Later steps run code from the pull request; they do not keep the token.
           persist-credentials: false
-
-      # A tag run checks the tag against the release commit: annotated, v<VERSION>, on this
-      # commit, and the changelog and CI template agreeing with it (scripts/release-check.py).
-      - name: Verify release tag
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # A checkout can leave the tag lightweight (actions/checkout before v6.0.2 did); fetch
-          # the annotated tag before reading it.
-          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
-          python3 scripts/release-check.py --tag "$RELEASE_TAG"
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -235,9 +245,9 @@ jobs:
         run: |
           python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider
 
-  # A release tag is published only after every Linux, Windows and container job passes.
-  # The job needs all three, so a failed platform check publishes nothing. It builds the wheel
-  # and source archive from the tagged commit (reproducible: dated from the commit), attests
+  # A release tag is published only after the tag check and every Linux, Windows and container
+  # job pass. The job needs all four, so a failed check publishes nothing. It builds the wheel and
+  # source archive from the tagged commit (reproducible: dated from the commit), attests
   # them with signed build
   # provenance, and attaches them to a draft release whose notes are the tag's changelog
   # section. Then it publishes the draft. Where the repository has immutable releases on, the
@@ -245,7 +255,7 @@ jobs:
   # here: the release, the provenance signature and its record.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test, windows, container]
+    needs: [verify-tag, test, windows, container]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -274,7 +284,7 @@ jobs:
 
       # The notes are the changelog section of the tag's version: from its `## [<version>]`
       # heading to the next `## [` heading. scripts/release-check.py has already checked in
-      # `test` that the section exists and names this version.
+      # `verify-tag` that the section exists and names this version.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}

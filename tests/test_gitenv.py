@@ -151,3 +151,45 @@ def test_no_read_of_a_target_runs_the_fsmonitor_program_its_git_config_names(
     json.loads(capsys.readouterr().out)
 
     assert not marker.exists()
+
+
+def test_inherited_repository_variables_do_not_redirect_a_read_of_a_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With `GIT_DIR`, `GIT_WORK_TREE` and `GIT_INDEX_FILE` pointing at repository B, the head
+    commit read of repository A is still A's."""
+
+    from outcomebound_tools import tickets_git
+    from outcomebound_tools.gitenv import git_environment
+
+    def commit(folder: Path, message: str) -> str:
+        folder.mkdir()
+        for arguments in (
+            ["init", "-q"],
+            [
+                "-c",
+                "user.name=t",
+                "-c",
+                "user.email=t@t",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                message,
+            ],
+            ["rev-parse", "HEAD"],
+        ):
+            done = subprocess.run(
+                ["git", *arguments], cwd=folder, capture_output=True, text=True, check=True
+            )
+        return done.stdout.strip()
+
+    first = commit(tmp_path / "a", "first")
+    second = commit(tmp_path / "b", "second")
+    assert first != second
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "b" / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path / "b"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "b" / ".git" / "index"))
+    assert tickets_git.head_commit(tmp_path / "a") == first
+    composed = git_environment()
+    assert not {"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"} & composed.keys()

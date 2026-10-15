@@ -7,6 +7,11 @@ Plain printed transcripts cannot distinguish these sources and return None. A
 post-check then reports UNVERIFIED rather than crediting or inventing an attempt.
 Missing working directories stay empty; effect checks must not infer one.
 
+`steps` reads a `;` and `&&` list and says, for each command in it, what the one final status
+of the whole shows: that the command ran and succeeded, that it ran with its own status unknown,
+or that it may not have run. `successful_sequence` is the stricter reader of a lone command or a
+`&&` chain with no expansion at all.
+
 As a command line, with no condition it prints the commands one per line (a multi-line
 command joined with ` ; `), exit 0, or exits 2 printing `UNVERIFIED unknown transcript
 form`. With conditions it exits 0 where every condition holds and 1 where one does not,
@@ -130,6 +135,180 @@ def successful_sequence(command: str) -> tuple[tuple[str, ...], ...] | None:
         return None
     sequence.append(tuple(_program(words)))
     return tuple(sequence) if all(sequence) else None
+
+
+_KEYWORDS = {
+    "if", "then", "else", "elif", "fi", "while", "until", "do", "done", "for", "case", "esac",
+    "select", "function", "{", "}", "!", "[[", "coproc",
+}  # fmt: skip
+_TERMINATING = {"exit"}
+
+
+class _Scanner:
+    """The words and the `;` and `&&` operators of one line, with quotes taken off the words."""
+
+    def __init__(self, command: str) -> None:
+        self.command = command
+        self.tokens: list[tuple[str, str, bool, int]] = []  # (kind, text, expands, position)
+        self.word: str | None = None
+        self.expands = False
+        self.quote = ""
+        self.index = 0
+        self.end = len(command)
+
+    def _add(self, text: str, expands: bool = False) -> None:
+        self.word = (self.word or "") + text
+        self.expands = self.expands or expands
+
+    def _flush(self) -> None:
+        if self.word is not None:
+            self.tokens.append(("word", self.word, self.expands, self.index))
+        self.word, self.expands = None, False
+
+    def _single(self, char: str) -> bool:
+        if char == "'":
+            self.quote = ""
+        else:
+            self._add(char)
+        return True
+
+    def _double(self, char: str) -> bool:
+        if char == '"':
+            self.quote = ""
+        elif char == "$":
+            return self._dollar()
+        else:
+            self._add(char)
+        return True
+
+    def _dollar(self) -> bool:
+        after = self.command[self.index + 1 : self.index + 2]
+        if after == "{":
+            return False
+        if after != "(":
+            self._add("$", True)
+            return True
+        close = self.command.find(")", self.index)
+        inner = self.command[self.index + 2 : close]
+        if self.quote != '"' or close < 0 or any(mark in inner for mark in "\"'`($"):
+            return False
+        self._add(self.command[self.index : close + 1], True)
+        self.index = close
+        return True
+
+    def _operator(self) -> bool:
+        self._flush()
+        operator = ";" if self.command[self.index] == ";" else "&&"
+        self.tokens.append(("op", operator, False, self.index))
+        self.index += len(operator) - 1
+        return True
+
+    def _bare(self, char: str) -> bool:
+        if char in "'\"":
+            self.quote = char
+            self.word = self.word or ""
+        elif char == "$":
+            return self._dollar()
+        elif char in " \t":
+            self._flush()
+        elif char == "#" and self.word is None:
+            self.end, self.index = self.index, len(self.command)
+        elif char == ";" or self.command.startswith("&&", self.index):
+            return self._operator()
+        elif char in "&|()<>":
+            return False
+        else:
+            self._add(char)
+        return True
+
+    def run(self) -> list[tuple[str, str, bool, int]] | None:
+        handlers = {"'": self._single, '"': self._double}
+        while self.index < len(self.command):
+            if not handlers.get(self.quote, self._bare)(self.command[self.index]):
+                return None
+            self.index += 1
+        if self.quote:
+            return None
+        self._flush()
+        return self.tokens
+
+
+def _scan(command: str):
+    """The simple commands of a `;` and `&&` list as `(operator before, words, expands, text)`.
+
+    Words are unquoted. `expands` is True where a word holds a variable or a `$( ... )`
+    substitution outside single quotes. A pipe, `||`, `&`, a redirect, a subshell, a backtick,
+    a backslash, a `${`, a newline, an unclosed quote or an empty command (`;;`, a trailing
+    `;`) is not a list this reader supports, and the answer is None. A substitution is
+    supported only inside double quotes, with no quote, backtick or further parenthesis inside
+    it, so that its text cannot hide a separator this scan would read as one.
+    """
+
+    if "\n" in command or "\\" in command or "`" in command:
+        return None
+    scanner = _Scanner(command)
+    tokens = scanner.run()
+    if tokens is None:
+        return None
+    found: list[tuple[str, list[str], bool, str]] = []
+    words: list[str] = []
+    expands, operator, start = False, "", 0
+    for kind, value, holds, position in [*tokens, ("op", "", False, scanner.end)]:
+        if kind == "word":
+            words.append(value)
+            expands = expands or holds
+            continue
+        if not words:
+            return None
+        found.append((operator, words, expands, command[start:position].strip()))
+        words, expands, operator, start = [], False, value, position + len(value)
+    return found
+
+
+def steps(command: str, succeeded: bool):
+    """The simple commands of a `;` and `&&` list, each with what its run is known to be.
+
+    Returns `(argv, expands, text, outcome)` per command, in order, or None for a command
+    this reader does not support: an unknown shell form (see `_scan`), a branch, a loop, a
+    negation or a group. `argv` starts at the program, past leading assignments and plain
+    wrappers. `expands` is True where a word of the command holds a variable or a quoted
+    `$( ... )`, so the program or an argument may not be what it reads as. `outcome` is what
+    the shell's one final status, `succeeded`, and the list's shape show of that command:
+
+        succeeded   it ran and exited 0: it is in the last `;` group, a chain of `&&`, and
+                    the status of the whole is a success, which needs each link to succeed
+        ran         it ran, and its own status is not shown: it is the first command of a
+                    `;` group, which always runs, but only the last status is reported
+        maybe       it may not have run: an earlier link of its `&&` chain may have failed
+
+    A command after `exit`, or after one that `exec` replaces the shell with, never ran and
+    is left out. This is not a general shell interpreter.
+    """
+
+    found = _scan(command)
+    if found is None:
+        return None
+    parsed = []
+    for operator, words, expands, text in found:
+        argv = tuple(_program(words))
+        if argv and argv[0] in _KEYWORDS:
+            return None
+        parsed.append((operator, argv, expands, text))
+        if "exec" in words[: len(words) - len(argv)] or (argv and argv[0] in _TERMINATING):
+            break
+    # A `;` ends a group, so the operator before a command says where its group starts.
+    starts = [index for index, (operator, *_) in enumerate(parsed) if operator != "&&"]
+    last = starts[-1] if starts else 0
+    result = []
+    for index, (operator, argv, expands, text) in enumerate(parsed):
+        if index >= last and succeeded:
+            outcome = "succeeded"
+        elif operator != "&&":
+            outcome = "ran"
+        else:
+            outcome = "maybe"
+        result.append((argv, expands, text, outcome))
+    return tuple(result)
 
 
 def _simple_commands(command: str) -> list[list[str]]:

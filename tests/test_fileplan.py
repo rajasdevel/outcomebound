@@ -109,3 +109,43 @@ def test_a_refused_rename_is_not_tried_again_on_another_platform(
         fileplan.write(tmp_path, {"f.md": b"new"}, {"f.md": b"old"})
 
     assert tries == [1]
+
+
+def test_a_stale_stage_for_a_later_destination_refuses_before_any_write(tmp_path: Path) -> None:
+    (tmp_path / "a.md").write_bytes(b"old-a")
+    (tmp_path / "b.md").write_bytes(b"old-b")
+    stale = tmp_path / ("b.md" + fileplan.STAGE_SUFFIX)
+    stale.write_bytes(b"foreign")
+
+    with pytest.raises(fileplan.WriteError, match="staging file"):
+        fileplan.write(
+            tmp_path,
+            {"a.md": b"new-a", "b.md": b"new-b"},
+            {"a.md": b"old-a", "b.md": b"old-b"},
+        )
+
+    assert (tmp_path / "a.md").read_bytes() == b"old-a"
+    assert (tmp_path / "b.md").read_bytes() == b"old-b"
+    assert stale.read_bytes() == b"foreign", "a foreign stage is never removed"
+    stale.unlink()
+    fileplan.write(tmp_path, {"b.md": b"new-b"}, {"b.md": b"old-b"})
+    assert (tmp_path / "b.md").read_bytes() == b"new-b"
+
+
+def test_an_edit_made_while_the_stage_is_written_is_kept_and_the_write_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "f.md").write_bytes(b"old")
+    real = os.fsync
+
+    def fsync(descriptor: int) -> None:
+        (tmp_path / "f.md").write_bytes(b"concurrent")
+        real(descriptor)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+
+    with pytest.raises(fileplan.WriteError, match="changed after it was read"):
+        fileplan.write(tmp_path, {"f.md": b"planned"}, {"f.md": b"old"})
+
+    assert (tmp_path / "f.md").read_bytes() == b"concurrent"
+    assert not list(tmp_path.glob("*.outcomebound-stage"))

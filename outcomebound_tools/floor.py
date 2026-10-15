@@ -426,12 +426,7 @@ def load_floor(root: Path) -> Floor:
 def _git(root: Path, *arguments: str) -> bytes:
     """What one read-only git command printed in `root`; a failure raises `FloorError`."""
 
-    inherited = {
-        key: value
-        for key, value in os.environ.items()
-        if key not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE")
-    }
-    environment = git_environment({**inherited, "GIT_OPTIONAL_LOCKS": "0"})
+    environment = git_environment({**os.environ, "GIT_OPTIONAL_LOCKS": "0"})
     try:
         status, output, _ = validation._execute(
             ["git", *GIT_READ_CONFIGURATION, *arguments], root, None, environment
@@ -2226,7 +2221,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    arguments = build_parser().parse_args(argv)
+    given = list(sys.argv[1:] if argv is None else argv)
+    if "--json" in given:
+        print(
+            "floor: no verb takes --json; `floor check` prints text and exits 0 on PASS, else 1 "
+            "(`tickets check --json` has a JSON report)",
+            file=sys.stderr,
+        )
+        return 2
+    arguments = build_parser().parse_args(given)
     root = arguments.target.resolve()
     try:
         if not root.is_dir():

@@ -375,12 +375,14 @@ implementer, not the kernel. The package is part of the message, not of the inst
 
 An arm keeps to what it claims only with isolation.
 
-- Every codex call runs with `--ephemeral --ignore-user-config --ignore-rules -c
-  features.memories=false`. These flags keep the configuration file, the rules and the memories of
-  the operator out of the run. They keep no session.
+- Every codex call runs with `--ignore-user-config --ignore-rules -c features.memories=false`.
+  These flags keep the configuration file, the rules and the memories of the operator out of the
+  run. The call keeps its session, since the model, effort and working directory it counts for are
+  read from that record. Earlier passes also ran with `--ephemeral`.
 - The fixture is built and checked with no global or system Git configuration.
 - Credential and endpoint variables are stripped from the environment of the model.
-- The model is named on every run. The runner compares it with the model that codex reports.
+- The model is named on every run. The runner compares it, and the effort and the working
+  directory, with those in the native session that codex kept for the call.
 - The skills of the `current` arm are committed into the fixture before its setup runs. No check
   counts them as a change by the model.
 
@@ -1555,16 +1557,18 @@ run deterministic engine and package checks; it makes no model calls.
 
 ### Current bounded retention support
 
-The current runner supports `--retain-native SESSIONS_DIR` for one explicitly named fixture.
-It runs without `--ephemeral` and retains the exact matching native session outside the model's
-writable roots, including implicit temporary roots. The record and its receipt digest support
-separate review; retention does not establish model identity, execution order or behavior.
-Automatic missing-model or working-directory evidence stays missing. The
-[evaluation guide](../evals/README.md) defines the invocation and retained files.
+The current runner drops `--ephemeral` and reads the model, effort and working directory of each
+counted call from the native session that codex kept, found by the thread id of the call's stream
+and copied byte for byte beside the results, because the `--json` stream of codex-cli 0.162.1
+names none of them. A missing session or field, or a value that differs from the request, is a
+call error; no version is refused by its number. The record and its digest support separate
+review; they do not establish execution order or behavior. The
+[evaluation guide](../evals/README.md) defines the invocation, the retained files and the
+`--probe` check.
 
-Normal runs on the known unsupported Codex CLI 0.160.1 transport refuse before a model call.
-For an unknown transport, the first call error stops the remaining batch. Unknown executable
-or tool-event forms cannot prove that no command ran. No extra model preflight or automatic
+An apply-patch edit and a CLI warning are known stream items. Any other unknown executable or
+tool-event form is named in the run's record and cannot prove that no command ran. For an unknown
+transport, the first call error stops the remaining batch. No extra model preflight or automatic
 retry is added.
 
 The instrument update itself adds no model result. The separately selected call below used

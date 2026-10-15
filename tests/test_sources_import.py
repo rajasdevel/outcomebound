@@ -224,3 +224,25 @@ def test_a_fence_shaped_line_with_an_info_string_does_not_close_a_fence(work, ca
     run(capsys, "notes.md", "--name", "notes")
 
     assert [i["id"] for i in manifest(work)["items"]] == ["notes:notes:a", "notes:notes:b"]
+
+
+def test_a_symlinked_default_folder_is_refused_and_nothing_is_written_outside(work, capsys):
+    (work / "notes.md").write_text(NOTES)
+    outside = work / "outside"
+    outside.mkdir()
+    (work / ".outcomebound").symlink_to(outside, target_is_directory=True)
+
+    got, out, err = run(capsys, "notes.md", "--name", "notes")
+
+    assert got == 1 and err.startswith("SOURCE_UNWRITABLE: ") and out == ""
+    assert list(outside.iterdir()) == []
+
+
+def test_an_out_that_names_a_file_is_a_typed_refusal(work, capsys):
+    (work / "notes.md").write_text(NOTES)
+    (work / "taken").write_bytes(b"keep")
+
+    got, _, err = run(capsys, "notes.md", "--name", "notes", "--out", "taken")
+
+    assert got == 1 and err.startswith("SOURCE_UNWRITABLE: ") and "Traceback" not in err
+    assert (work / "taken").read_bytes() == b"keep"

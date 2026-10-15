@@ -47,6 +47,9 @@ from evals.claude_events import _transcript
 REPO = Path(__file__).resolve().parent.parent
 run = importlib.import_module("evals.run")
 
+# What a result of this route is keyed by, so it never merges with a run of another harness.
+HARNESS = "claude-subagent"
+
 # Prepared fixtures and results stay outside the tree: `--state DIR` moves them.
 STATE = Path(tempfile.gettempdir()) / "outcomebound-claude-arm"
 
@@ -164,6 +167,7 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     state_file.write_text(
         json.dumps(
             {
+                "harness": HARNESS,
                 "fixture": fixture,
                 "arm": arm_name,
                 "workdir": str(workdir),
@@ -249,6 +253,7 @@ def grade(key: str, subagent_jsonl: str, seal: str) -> None:
     claims = {claim: result for result, claim in run.CLAIM_LINE.findall(output)}
     record = {
         **state,
+        "harness": HARNESS,
         "verdict": verdict,
         "claims": claims,
         "protected_intact": intact,
