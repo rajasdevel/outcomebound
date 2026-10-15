@@ -2296,6 +2296,18 @@ def _note_finding(finding: Finding) -> Finding:
     return replace(finding, verdict=UNVERIFIED, next=_NEXT["note"])
 
 
+def _loaded(relative: str, scope: _Scope) -> bool:
+    """Whether a harness loads `relative` as instructions or configuration: the selected rows'
+    scope, or any row's, since a NUL byte in such a file makes it unread, never a harmless
+    binary attachment."""
+
+    return (
+        scope.wants(relative)
+        or relative in scope.config
+        or _scope(adapters.harness_names()).wants(relative)
+    )
+
+
 def _file_findings(
     root: Path,
     relative: str,
@@ -2304,6 +2316,8 @@ def _file_findings(
     own: Mapping[str, frozenset[str]] | None = None,
 ) -> list[Finding]:
     text, why = _read(root, relative)
+    if text is None and why == _BINARY and _loaded(relative, scope):
+        why = "not UTF-8 text, and a harness loads it; no check read it"
     if text is None and why == _BINARY:
         return [
             _finding(
