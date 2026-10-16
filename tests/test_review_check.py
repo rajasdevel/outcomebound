@@ -207,7 +207,8 @@ def test_sweep_fails_on_an_open_finding_anywhere_under_the_work_folder(tmp_path,
     assert code == 1
     first = out.splitlines()[0]
     assert first == "FAIL 2 failing line(s) in 2 of 3 review file(s)"
-    assert "b/reviews/x.md" in out and "c/v1/round/y.md" in out and "R1 has no Disposition" in out
+    assert str(Path("b/reviews/x.md")) in out and str(Path("c/v1/round/y.md")) in out
+    assert "R1 has no Disposition" in out
 
 
 def test_sweep_passes_when_every_finding_has_a_disposition(tmp_path, capsys):

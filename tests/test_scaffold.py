@@ -695,7 +695,10 @@ def test_a_rerun_asks_to_add_nothing_the_files_already_hold_filled_or_not(
     root = target(tmp_path)
     accept(capsys, root, *flags[1:])
     local = root / LOCAL
-    write(local, re.sub(r"<<fill: [^<>]+>>", "filled by the person", local.read_text()))
+    write(
+        local,
+        re.sub(r"<<fill: [^<>]+>>", "filled by the person", local.read_text(encoding="utf-8")),
+    )
 
     code, out, _ = run(capsys, root, *flags, "--accept")
 

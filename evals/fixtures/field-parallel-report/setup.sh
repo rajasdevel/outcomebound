@@ -116,7 +116,9 @@ finding is fixed or listed there. Several sessions work in this repository, and 
 
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
-make check >/dev/null 2>&1 || { echo "the planted project's own tests must pass" >&2; exit 1; }
+# The recipe of `make check`, run directly where a machine has no make.
+python3 -B -m unittest discover -s tests -t . -q >/dev/null 2>&1 \
+  || { echo "the planted project's own tests must pass" >&2; exit 1; }
 find . -name __pycache__ -prune -exec rm -rf {} +
 field_close field.py
 field_seed

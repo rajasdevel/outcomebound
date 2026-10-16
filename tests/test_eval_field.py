@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 
@@ -789,6 +790,8 @@ def test_a_right_run_passes_every_claim_and_a_wrong_run_fails_the_claims_it_brea
     _built: Callable[[str], Path], tmp_path: Path, name: str, case: tuple
 ) -> None:
     label, script, commands, answer, expected = case
+    if shutil.which("make") is None and re.search(r"\bmake\b", script):
+        pytest.skip("the case runs make, which this machine does not have")
     target = copy_built(_built(name), tmp_path / "workspace")
     if script:
         act(target, script)
