@@ -60,28 +60,87 @@ def wait_for_run(root: Path, since: datetime, ended: bool = True, seconds: float
         time.sleep(0.05)
 
 
-def _detached_runs(root: Path) -> list[str] | None:
-    """The command lines of the detached runs a codex stop started on `root` that still run, or
-    None where the process table cannot be read (Windows, or no `ps`). A codex stop starts its
-    run before it exits, so the run is in the table as soon as the stop has ended."""
+def _proc_commands() -> list[str] | None:
+    """The command lines of the live processes in `/proc` (Linux, where a slim container has no
+    `ps`), its arguments joined by spaces; a zombie is left out."""
 
+    proc = Path("/proc")
+    if not (proc / "self" / "cmdline").is_file():
+        return None
+    commands = []
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            state = (entry / "stat").read_text(encoding="utf-8").rpartition(")")[2].split()[0]
+            words = (entry / "cmdline").read_bytes().split(b"\0")
+        except (OSError, IndexError):
+            continue
+        if state not in ("Z", "X"):
+            commands.append(" ".join(word.decode("utf-8", "replace") for word in words))
+    return commands
+
+
+def _ps_commands() -> list[str] | None:
     ps = shutil.which("ps")
-    if ps is None or os.name == "nt":
+    if ps is None:
         return None
     listed = subprocess.run(
         [ps, "-A", "-ww", "-o", "stat=,command="], capture_output=True, text=True, check=False
     )
     if listed.returncode != 0:
         return None
-    names = {str(root), str(root.resolve())}
-    found = []
+    commands = []
     for line in listed.stdout.splitlines():
         state, _, command = line.strip().partition(" ")
-        if state.startswith("Z") or "--run" not in command.split():
-            continue
-        if finish_check.ID in command and any(name in command for name in names):
-            found.append(command)
-    return found
+        if not state.startswith("Z"):
+            commands.append(command)
+    return commands
+
+
+def _windows_commands() -> list[str] | None:
+    shell = shutil.which("powershell") or shutil.which("pwsh")
+    if shell is None:
+        return None
+    listed = subprocess.run(
+        [
+            shell,
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "Get-CimInstance Win32_Process | ForEach-Object { $_.CommandLine }",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return listed.stdout.splitlines() if listed.returncode == 0 else None
+
+
+def _detached_runs(root: Path) -> list[str] | None:
+    """The command lines of the detached runs a codex stop started on `root` that still run, or
+    None where the process table cannot be read. A codex stop starts its run before it exits, so
+    the run is in the table as soon as the stop has ended, however slowly it then starts."""
+
+    if os.name == "nt":
+        commands = _windows_commands()
+    else:
+        commands = _proc_commands()
+        commands = _ps_commands() if commands is None else commands
+    if commands is None:
+        return None
+    # The run's command line holds the target inside its JSON `--input`, escaped as JSON.
+    names = {str(root), str(root.resolve())}
+    names |= {json.dumps(name)[1:-1] for name in names}
+    return [
+        command
+        for command in commands
+        if "--run" in command.split()
+        and finish_check.ID in command
+        and any(name in command for name in names)
+    ]
 
 
 def settle(root: Path, since: datetime, seconds: float = 120) -> dict[str, Any] | None:

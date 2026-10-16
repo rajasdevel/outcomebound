@@ -519,11 +519,6 @@ def test_an_unchanged_failing_tree_repeats_its_verdict_unheld_and_runs_nothing(
     assert "finish-check FAIL: " in shown and "not run again" in shown and runs() == 3
 
 
-@pytest.mark.skipif(
-    WINDOWS,
-    reason="a budget of a few seconds for Done does not hold on a hosted Windows runner, where "
-    "Git's sh and a detached run take seconds to start; the logic is the same on POSIX",
-)
 def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout(
     tmp_path: Path,
 ) -> None:
@@ -531,10 +526,10 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
     raising the timeout cannot get the same tree checked."""
 
     count = tmp_path / "count"
-    # Done gets 3 seconds under the short timeout, so a run a loaded or Windows runner starts
-    # slowly still starts within it, and a sleep of 8 outlasts it.
-    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; sleep 8"])
-    short = finish_check.MARGIN_SECONDS + 3
+    # Done gets 15 seconds under the short timeout, so that Git's sh on a hosted Windows runner
+    # still starts within it, and a sleep of 25 outlasts it but not the longer timeout.
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; sleep 25"])
+    short = finish_check.MARGIN_SECONDS + 15
 
     def runs() -> int:
         return len(count.read_text(encoding="utf-8").splitlines()) if count.exists() else 0
@@ -544,15 +539,10 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
     assert hook("codex", digest, root, timeout=short, run=False)[1] == {} and runs() == 1
     again = finish_helpers.status(root)
     assert "finish-check UNVERIFIED: " in again and runs() == 1
-    longer = hook("codex", digest, root, timeout=short + 10)[1]["systemMessage"]
+    longer = hook("codex", digest, root, timeout=short + 30)[1]["systemMessage"]
     assert longer.startswith("finish-check PASS: ") and runs() == 2
 
 
-@pytest.mark.skipif(
-    WINDOWS,
-    reason="a budget of a few seconds for Done does not hold on a hosted Windows runner, where "
-    "Git's sh and a detached run take seconds to start; the logic is the same on POSIX",
-)
 @pytest.mark.parametrize(
     ("line", "code"),
     [
@@ -1346,11 +1336,6 @@ def test_the_tree_is_not_read_once_its_deadline_has_passed(tmp_path: Path) -> No
     assert finish_check.tree_digest(root, digest) is not None
 
 
-@pytest.mark.skipif(
-    WINDOWS,
-    reason="a budget of a few seconds for Done does not hold on a hosted Windows runner, where "
-    "Git's sh and a detached run take seconds to start; the logic is the same on POSIX",
-)
 def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     tmp_path: Path,
 ) -> None:
@@ -1374,13 +1359,13 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     pid_file = tmp_path / "child.pid"
     line = f"{q(sys.executable)} {q(tmp_path / 'holder.py')} {q(pid_file)}"
     root, digest = target(tmp_path / "t", [line])
-    limit = 5
+    limit = 15
     timeout = finish_check.MARGIN_SECONDS + limit
     started = time.monotonic()
 
     _, verdict = hook("codex", digest, root, cwd=root, timeout=timeout)
 
-    assert time.monotonic() - started < 30
+    assert time.monotonic() - started < limit + 25
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
     assert message.startswith(
@@ -3498,11 +3483,6 @@ def outputs(row: str, digest: str, root: Path, **options: Any) -> list[Any]:
     return printed
 
 
-@pytest.mark.skipif(
-    WINDOWS,
-    reason="a budget of a few seconds for Done does not hold on a hosted Windows runner, where "
-    "Git's sh and a detached run take seconds to start; the logic is the same on POSIX",
-)
 def test_no_path_but_a_hold_writes_to_the_model(tmp_path: Path) -> None:
     """Breaks if any verdict but a hold reaches the model: a `decision`, a `reason` or context
     from the codex stop, anything on claude-code's streams, or text from either turn-start entry

@@ -24,7 +24,6 @@ import subprocess
 import sys
 import sysconfig
 import tarfile
-import time
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +32,7 @@ from typing import Any
 
 import pytest
 
+from tests import finish_helpers
 from tests.launcher_helpers import engine
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -218,17 +218,6 @@ class HookSite:
     environment: dict[str, str]
     installed: Path
 
-    def started_since(self, since: datetime) -> dict[str, Any] | None:
-        """The run record of a run that started at or after `since`, or None."""
-
-        path = self.project / ".git" / "outcomebound-finish-check-run"
-        try:
-            record: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-            started = datetime.fromisoformat(record["started"])
-        except (OSError, ValueError, KeyError, TypeError):
-            return None
-        return record if started >= since else None
-
     def once(self, event: str) -> subprocess.CompletedProcess[str]:
         command = self.hooks[event][0]["hooks"][0]["command"]
         return subprocess.run(
@@ -274,17 +263,14 @@ class HookSite:
             return {}
         assert result.returncode == 0, result.stdout + result.stderr
         verdict: dict[str, str] = json.loads(result.stdout)
-        deadline = time.monotonic() + 5
-        while self.started_since(since) is None and time.monotonic() < deadline:
-            time.sleep(0.05)
-        if "decision" in verdict or self.started_since(since) is None:
+        if finish_helpers.settle(self.project, since) is None or "decision" in verdict:
             return verdict
-        deadline = time.monotonic() + 120
-        while "ended" not in (self.started_since(since) or {}):
-            assert time.monotonic() < deadline, "the background run never ended"
-            time.sleep(0.05)
+        since = datetime.now(timezone.utc)
         again = self.once(event)
         assert again.returncode == 0, again.stdout + again.stderr
+        # The delivering stop starts a run of its own where the tree's record never repeats (a
+        # tool the hook's environment lacks); it ends before the test reads the count.
+        finish_helpers.settle(self.project, since)
         later: dict[str, str] = json.loads(again.stdout)
         return later
 
@@ -451,13 +437,13 @@ def test_the_installed_hooks_run_done_without_development_tools(
     assert "finish-check UNVERIFIED: " in unavailable
     assert "could not run in the hook's environment" in unavailable
     assert "synthetic-project-check-tool" in unavailable
-    assert runs() == measured + 4
-    # Same tree: no cached success or environmental refusal, so Done runs again; the person was
-    # told once for this tree.
+    # On codex, the run and the run the delivering stop starts: the record of a tool the hook's
+    # environment lacks never repeats.
+    again = 2 if row == "codex" else 1
+    assert runs() == measured + 3 + again
+    # Same tree, the same again; the person was told once for this tree.
     assert "decision" not in fire("Stop")
-    # On a hosted Windows runner one more Done run was seen here; its cause is UNVERIFIED, and
-    # the 1.6.0 changelog states it as a known limit.
-    assert runs() == measured + 5 or (os.name == "nt" and runs() == measured + 6)
+    assert runs() == measured + 3 + 2 * again
 
 
 def test_home_holds_every_file_the_shipped_skills_name(installed: Path, tmp_path: Path) -> None:
