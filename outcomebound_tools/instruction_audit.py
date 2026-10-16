@@ -1006,14 +1006,20 @@ def _toml_hits(text: str, specs: Sequence[tuple[str, str]]) -> list[tuple[int, s
 
 
 def _own_entry(
-    value: object, own: frozenset[str], harness: str, path: str, done: Sequence[str] | None
+    value: object,
+    own: frozenset[str],
+    harness: str,
+    path: str,
+    done: Sequence[str] | None,
+    event: str,
 ) -> bool:
-    """Whether a group under a hook event is the one adopt writes for `harness` at `path`: its
-    canonical JSON is byte for byte `finish_check.entry` for the row whose `finish_hook` names
-    this file, the recorded Done commands' digest and the limit its command names, where the verb
-    admits it, or `finish_check.mark_entry`, the turn-start entry beside it; and a manifest `hook`
-    record for this file holds that digest. Any other key, hook type, argument or Done digest
-    makes it an ordinary entry."""
+    """Whether a group under the hook event `event` is the one adopt writes for `harness` at
+    `path`: its canonical JSON is byte for byte `finish_check.entry` for the row whose
+    `finish_hook` names this file, the recorded Done commands' digest and the limit its command
+    names, where the verb admits it, under the row's `event`, or `finish_check.mark_entry`, the
+    turn-start entry beside it, under the row's `mark_event`; and a manifest `hook` record for
+    this file holds that digest. Any other event, key, hook type, argument or Done digest makes it
+    an ordinary entry."""
 
     hook = finish_check.hook_of(_row(harness))
     hooks = value.get("hooks") if isinstance(value, dict) else None
@@ -1022,7 +1028,9 @@ def _own_entry(
     digest = finish_check.done_digest(done)
     written = canonical(value)
     if written == canonical(finish_check.mark_entry(harness, digest)):
-        return hashlib.sha256(written).hexdigest() in own
+        return event == hook.get("mark_event") and hashlib.sha256(written).hexdigest() in own
+    if event != hook.get("event"):
+        return False
     # The run's limit is the one the command names; the handler's own `timeout` is the harness's.
     timeout = finish_check.limit_of(value)
     if timeout is None:
@@ -1048,7 +1056,7 @@ def _without_own(
             continue
         kept = []
         for index, group in enumerate(groups):
-            if _own_entry(group, own, harness, path, done):
+            if _own_entry(group, own, harness, path, done, event):
                 found.append((event, index, " ".join(h["command"] for h in group["hooks"])))
             else:
                 kept.append(group)
@@ -2296,6 +2304,18 @@ def _note_finding(finding: Finding) -> Finding:
     return replace(finding, verdict=UNVERIFIED, next=_NEXT["note"])
 
 
+def _loaded(relative: str, scope: _Scope) -> bool:
+    """Whether a harness loads `relative` as instructions or configuration: the selected rows'
+    scope, or any row's, since a NUL byte in such a file makes it unread, never a harmless
+    binary attachment."""
+
+    return (
+        scope.wants(relative)
+        or relative in scope.config
+        or _scope(adapters.harness_names()).wants(relative)
+    )
+
+
 def _file_findings(
     root: Path,
     relative: str,
@@ -2304,6 +2324,8 @@ def _file_findings(
     own: Mapping[str, frozenset[str]] | None = None,
 ) -> list[Finding]:
     text, why = _read(root, relative)
+    if text is None and why == _BINARY and _loaded(relative, scope):
+        why = "not UTF-8 text, and a harness loads it; no check read it"
     if text is None and why == _BINARY:
         return [
             _finding(

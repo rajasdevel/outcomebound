@@ -619,12 +619,14 @@ def write_record(root: Path, folder: Path | None, verdict: str, summary: dict) -
 
 
 def verify(root: Path, folder: Path | None) -> int:
-    """PASS where a PASS record exists for HEAD's tree."""
+    """PASS where a PASS record exists for HEAD's tree: the file its tree names, whose own `tree`
+    is that tree, so a record copied or renamed from another tree is none."""
 
     key = tree(root)
     path = folder / f"{key}.json" if key and folder else None
     try:
-        verdict = json.loads(path.read_text(encoding="utf-8"))["verdict"] if path else None
+        record = json.loads(path.read_text(encoding="utf-8")) if path else None
+        verdict = record["verdict"] if isinstance(record, dict) and record["tree"] == key else None
     except (OSError, ValueError, KeyError, TypeError):
         verdict = None
     if verdict == "PASS":

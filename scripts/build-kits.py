@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Pack each kit under kits/ into OUT_DIR/<name>.zip, whose one entry is <name>/SKILL.md.
+"""Pack each kit under kits/ into OUT_DIR/<name>.zip, whose one entry is <name>/SKILL.md, and
+copy the file as it is to OUT_DIR/<name>.md: the two files a release attaches for each kit.
 
 Usage: python3 scripts/build-kits.py OUT_DIR
 
@@ -30,14 +31,19 @@ def build(out_dir: Path) -> list[Path]:
         archive = out_dir / f"{folder.name}.zip"
         with zipfile.ZipFile(archive, "w") as zf:
             zf.writestr(info, source.read_bytes())
-        written.append(archive)
+        copy = out_dir / f"{folder.name}.md"
+        copy.write_bytes(source.read_bytes())
+        written += [archive, copy]
     return written
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="build-kits.py",
-        description="Pack each kit under kits/ into OUT_DIR/<name>.zip, holding <name>/SKILL.md.",
+        description=(
+            "Pack each kit under kits/ into OUT_DIR/<name>.zip, holding <name>/SKILL.md, and copy "
+            "the file as it is to OUT_DIR/<name>.md."
+        ),
     )
     parser.add_argument("out_dir", metavar="OUT_DIR", help="the folder the archives go to")
     args = parser.parse_args(argv)

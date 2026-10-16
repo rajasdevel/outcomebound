@@ -151,6 +151,31 @@ def test_the_record_is_keyed_by_tree_and_verify_reads_it(
     assert module.verify(repo, folder) == 1
 
 
+def test_a_pass_record_copied_under_another_trees_name_is_no_record(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if verify reads the verdict of the file its tree names without checking that the
+    record is for that tree: a PASS of an older tree, copied or renamed, would pass a new one."""
+
+    module = load_canary()
+    repo = tmp_path / "candidate"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    (repo / "engine.py").write_text("one\n", encoding="utf-8")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-qm", "old tree")
+    folder = tmp_path / "records"
+    module.write_record(repo, folder, "PASS", {})
+    [old] = list(folder.iterdir())
+
+    (repo / "engine.py").write_text("two\n", encoding="utf-8")
+    git(repo, "commit", "-qam", "new tree")
+    (folder / f"{module.tree(repo)}.json").write_bytes(old.read_bytes())
+
+    assert module.verify(repo, folder) == 1
+    capsys.readouterr()
+
+
 def report_text(result: str = "UNVERIFIED", **changes: object) -> str:
     finding = {"check": "loading-ancestors", "verdict": "UNVERIFIED"}
     document: dict[str, object] = {"result": result, "findings": [finding], **changes}

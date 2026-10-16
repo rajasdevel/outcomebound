@@ -27,7 +27,7 @@
     },
     {
       "name": "no-invented-requirement",
-      "risk": "the card holds a requirement that no source mentions (a mobile app)",
+      "risk": "the card holds a requirement that no source mentions (a mobile app, a sum of money, a history length other than 12 or 24 months) or lets a partner see another partner's orders",
       "kind": "static",
       "required": true,
       "command": [

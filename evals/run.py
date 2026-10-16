@@ -1227,12 +1227,98 @@ def _medians(runs: list[dict[str, Any]]) -> str:
     return ", ".join(parts)
 
 
+UNRECORDED = "unrecorded"
+
+
+def _recorded(value: Any) -> str:
+    """A recorded field as text; a field the record does not keep is its own value."""
+
+    return UNRECORDED if value is None else str(value)
+
+
+def _instrument(meta: dict[str, Any]) -> tuple[str, str, str, str]:
+    """What the run was measured with: its kernel, the files its install wrote, the graders that
+    judged it and the grading files they read. Records that differ in one are not one group."""
+
+    files = meta.get("arm_files")
+    return (
+        _recorded(meta.get("kernel_sha256")),
+        UNRECORDED if files is None else json.dumps(files, sort_keys=True),
+        _recorded(meta.get("graders_sha256")),
+        _recorded(meta.get("grading_files_sha256")),
+    )
+
+
+def _attempt(meta: dict[str, Any]) -> tuple[str, ...] | None:
+    """Which attempt a record measured: its native thread, else the run that made the call (a
+    run names one fixture once per repetition). None where it keeps neither."""
+
+    if meta.get("thread_id"):
+        return ("thread", str(meta["thread_id"]))
+    if meta.get("run_id"):
+        return ("run", str(meta["run_id"]), str(meta.get("fixture")), str(meta.get("repetition")))
+    return None
+
+
+def _attempts(
+    metas: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[int, list[dict[str, Any]]], dict[int, int]]:
+    """The records that stand for one attempt each, the other measurements of each (a regrade of
+    it) by the id of the record they belong to, and how many further copies of it were found.
+
+    An original stands for its attempt; a regrade only where no original was kept beside it. The
+    first record found stands where several of one kind are."""
+
+    standing: dict[tuple[str, ...], dict[str, Any]] = {}
+    for meta in metas:
+        key = _attempt(meta)
+        if key is not None:
+            held = standing.get(key)
+            if held is None or (held.get(REGRADED) and not meta.get(REGRADED)):
+                standing[key] = meta
+    counted: list[dict[str, Any]] = []
+    alternates: dict[int, list[dict[str, Any]]] = {}
+    copies: dict[int, int] = {}
+    for meta in metas:
+        key = _attempt(meta)
+        stands = standing.get(key) if key is not None else None
+        if stands is None or stands is meta:
+            counted.append(meta)
+        elif meta.get(REGRADED) and not stands.get(REGRADED):
+            alternates.setdefault(id(stands), []).append(meta)
+        else:
+            copies[id(stands)] = copies.get(id(stands), 0) + 1
+    return counted, alternates, copies
+
+
+def _short(text: str) -> str:
+    return text if text == UNRECORDED else hashlib.sha256(text.encode()).hexdigest()[:12]
+
+
+def _regrade_line(run: dict[str, Any], other: dict[str, Any]) -> str:
+    claims = sorted(
+        claim
+        for claim in {*run["claims"], *other["claims"]}
+        if run["claims"].get(claim) != other["claims"].get(claim)
+    )
+    differing = f"; claims that differ: {', '.join(claims)}" if claims else ""
+    return (
+        f"  repetition {run['repetition']} regrade (an alternate measurement of this attempt, "
+        f"not counted): {other['verdict']}; the original {run['verdict']} is kept{differing}"
+    )
+
+
 def summarize(directories: list[Path]) -> int:
     """Print, per fixture and arm, how many runs PASS the verdict and each claim, and the
     median tokens and seconds of the runs counted.
 
-    A run whose call failed measured the call, not the model, so it is named and not counted.
-    A run whose record keeps no token count has it read from the transcript saved beside it.
+    Records are grouped by fixture, harness, arm, model and effort and by the instrument that
+    measured them (kernel, installed files and graders, a field not recorded being a value of
+    its own), so runs of different instruments are never pooled. An attempt counts once, by its
+    native thread or run: a regrade of it, and a further copy of its record, are printed and not
+    counted. A run whose call failed measured the call, not the model, so it is named and not
+    counted. A run whose record keeps no token count has it read from the transcript saved
+    beside it.
     """
 
     metas = [
@@ -1243,33 +1329,57 @@ def summarize(directories: list[Path]) -> int:
     if not metas:
         print("no run records under " + ", ".join(str(item) for item in directories))
         return 1
+    counted, alternates, copies = _attempts(metas)
     # The harness is part of the key: runs of different harnesses are never merged. A record
     # from before runs named a harness came from codex.
-    groups: dict[tuple[str, str, str, str, str], list[dict[str, Any]]] = {}
-    for meta in metas:
-        key = (meta["fixture"], meta.get("harness", HARNESS), meta["arm"], meta["model"])
-        groups.setdefault((*key, meta["effort"]), []).append(meta)
-    for (fixture, harness_name, arm, model, effort), group in sorted(groups.items()):
-        runs = sorted((run for run in group if not run["error"]), key=lambda run: run["repetition"])
-        passed = sum(1 for run in runs if run["verdict"] == "PASS")
-        failed = len(group) - len(runs)
-        tail = f" ({failed} failed call(s) not counted)" if failed else ""
-        label = f"{fixture} | {harness_name} | {arm} | {model} {effort}"
-        print(f"{label}: PASS {passed}/{len(runs)}{tail}")
-        spent = _medians(runs)
-        if spent:
-            print(f"  median {spent}")
-        for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
-            count = sum(1 for run in runs if run["claims"].get(claim) == "PASS")
-            print(f"  {claim}: PASS {count}/{len(runs)}")
-        for run in runs:
-            if not run["protected_intact"]:
-                print(f"  repetition {run['repetition']}: a grading input was changed")
-            for line in run["observations"]:
-                print(f"  repetition {run['repetition']} {line}")
+    groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for meta in counted:
+        label = (meta["fixture"], meta.get("harness", HARNESS), meta["arm"], meta["model"])
+        groups.setdefault((*label, meta["effort"], *_instrument(meta)), []).append(meta)
+    labels = [group_key[:5] for group_key in groups]
+    for group_key, group in sorted(groups.items()):
+        _print_group(group_key, group, labels.count(group_key[:5]) > 1, alternates, copies)
     for line in _provenance(metas):
         print(line)
     return 0
+
+
+def _print_group(
+    key: tuple[str, ...],
+    group: list[dict[str, Any]],
+    split: bool,
+    alternates: dict[int, list[dict[str, Any]]],
+    copies: dict[int, int],
+) -> None:
+    """One group's counts and lines; its instrument where another group has the same label."""
+
+    fixture, harness_name, arm, model, effort, *instrument = key
+    runs = sorted((run for run in group if not run["error"]), key=lambda run: run["repetition"])
+    passed = sum(1 for run in runs if run["verdict"] == "PASS")
+    failed = len(group) - len(runs)
+    tail = f" ({failed} failed call(s) not counted)" if failed else ""
+    print(f"{fixture} | {harness_name} | {arm} | {model} {effort}: PASS {passed}/{len(runs)}{tail}")
+    if split:
+        names = ("kernel", "files", "graders", "grading files")
+        found = zip(names, instrument, strict=True)
+        print("  instrument: " + ", ".join(f"{name} {_short(value)}" for name, value in found))
+    spent = _medians(runs)
+    if spent:
+        print(f"  median {spent}")
+    for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
+        count = sum(1 for run in runs if run["claims"].get(claim) == "PASS")
+        print(f"  {claim}: PASS {count}/{len(runs)}")
+    for run in runs:
+        if not run["protected_intact"]:
+            print(f"  repetition {run['repetition']}: a grading input was changed")
+        for line in run["observations"]:
+            print(f"  repetition {run['repetition']} {line}")
+    for run in sorted(group, key=lambda run: run["repetition"]):
+        for other in alternates.get(id(run), []):
+            print(_regrade_line(run, other))
+    extra = sum(copies.get(id(run), 0) for run in group)
+    if extra:
+        print(f"  {extra} further record(s) of an attempt already counted, not counted")
 
 
 def _parser() -> argparse.ArgumentParser:

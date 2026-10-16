@@ -685,3 +685,27 @@ def test_claims_whose_names_sanitize_alike_get_their_own_logs(tmp_path):
         "FIRST_OUT",
         "SECOND_OUT",
     ]
+
+
+@pytest.mark.parametrize(
+    "names",
+    [("lint/typecheck", "lint-typecheck-f9a13aac"), ("lint", "LINT")],
+    ids=["generated-and-plain", "letter-case"],
+)
+def test_each_claim_keeps_its_own_log_whatever_its_name(tmp_path, names):
+    """Breaks if a legal name lands on another claim's log: a plain name equal to the name a
+    sanitized one was given, or two names a case-insensitive file system folds together. The
+    failing claim's excerpt must show its own output, not the later passing claim's."""
+
+    first = _claim([sys.executable, "-c", "print('FIRST_FAILURE'); raise SystemExit(1)"])
+    first["name"] = names[0]
+    second = _claim([sys.executable, "-c", "print('SECOND_PASS')"], name=names[1])
+    r = _run(tmp_path, [first, second])
+    assert r.returncode == 1, r.stdout + r.stderr
+    logs = sorted((tmp_path / ".outcomebound-checks").glob("*.log"))
+    assert len(logs) == 2, [p.name for p in logs]
+    assert sorted(p.read_text(encoding="utf-8").strip() for p in logs) == [
+        "FIRST_FAILURE",
+        "SECOND_PASS",
+    ]
+    assert "| FIRST_FAILURE" in r.stdout and "| SECOND_PASS" not in r.stdout

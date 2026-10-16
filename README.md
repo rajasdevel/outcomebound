@@ -62,8 +62,10 @@ guide has the agent install and run `outcomebound instructions check`. With your
 a flaky one. The guide asks the agent to propose only the project facts that an agent would
 otherwise get wrong, each with the file that shows it, to write no overview of your code, and to
 ask you once for what the repository cannot show, such as the outcome, the users, or an act that
-cannot be undone. No evaluation has run the guide yet, so what it changes for an agent is not
-measured; the engine's part (`--detect`, `--verify`, the checks) is held by its test suite.
+cannot be undone. One evaluation ran the guide, on Claude Sonnet 5.5 with three runs for each
+side: on a repository with project signals, 2 of 3 runs passed with the guide and 0 of 3 without
+it ([E23](docs/evaluations.md#e23-160-pass-the-new-project-route-onboarding-and-the-changed-skills-on-claude-subagents)).
+The engine's part (`--detect`, `--verify`, the checks) is held by its test suite.
 
 Run the command that detection gives you, read the diff, and commit the intended shared files.
 Start a new agent session and check that your harness loads them. For a machine-local install,
@@ -98,8 +100,11 @@ asks the agent to size the idea by who depends on it, and to frame the outcome, 
 is out of scope, the strongest case against the idea and a stop rule. It asks for throwaway probes
 of what could end the idea, a record of the choices that are hard to undo, and then a walking
 skeleton: the thinnest real path through the product, with a Done command that can fail. A small
-idea skips most of these stages. No evaluation has run the reference yet, so what it changes for
-an agent is not measured. When the skeleton has a Done command, record it with
+idea skips most of these stages. One evaluation ran the reference, on Claude Sonnet 5.5 with
+three runs for each side: 3 of 3 runs passed with it and 0 of 3 without it on a weak idea and on a
+spike that misses its bar, and 2 of 3 against 0 of 3 on an idea that needs real people
+([E23](docs/evaluations.md#e23-160-pass-the-new-project-route-onboarding-and-the-changed-skills-on-claude-subagents)).
+When the skeleton has a Done command, record it with
 `outcomebound adopt . --done '<command>'`.
 
 Add `outcomebound adopt . --check` to CI to detect stale, edited or missing managed files.
@@ -277,7 +282,9 @@ See the [floor design](docs/specs/floor/design.md).
   Cite the file by its path, that commit and that digest.
   `outcomebound research ingest` prepares an issue link and local record; it sends nothing.
 
-The repository includes a business requirements kit at `kits/business-requirements/SKILL.md`.
+The repository includes a business requirements kit,
+[`kits/business-requirements/SKILL.md`](kits/business-requirements/SKILL.md); each release attaches
+it as `business-requirements.md` and `business-requirements.zip`.
 A Business Owner or Scrum Master pastes it into their own AI assistant to produce the business part
 of a requirements card, with each item's source and approval recorded. `adopt` does not install
 it, and no named assistant is claimed to work with it yet.

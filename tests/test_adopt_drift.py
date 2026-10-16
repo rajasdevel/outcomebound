@@ -674,6 +674,12 @@ def test_a_release_workflow_that_pushes_an_image_and_publishes_a_package_prints_
         pytest.param("deleting a tag from the cache", None, id="tag-word"),
         pytest.param("pushing the fix to product pages", None, id="product-word"),
         pytest.param("tagging a version", "publishing", id="tagging"),
+        pytest.param("redeploy the service", "deploy", id="redeploy"),
+        pytest.param("roll to prod", "deploy", id="roll-to-prod"),
+        pytest.param("delete deployment cache", None, id="deployment-cache"),
+        pytest.param("reset promotion counter", None, id="promotion-counter"),
+        pytest.param("release a database lock", None, id="database-lock"),
+        pytest.param("read registry metadata", None, id="registry-read"),
     ],
 )
 def test_an_edge_the_local_fragment_declares_answers_the_act_it_names(
@@ -771,6 +777,10 @@ def test_an_unknown_signal_id_in_a_drift_line_is_ignored(tmp_path: Path, capsys:
         pytest.param("> Drift — deploy: quoted", id="quoted"),
         pytest.param("`Drift — deploy: code span`", id="code-span"),
         pytest.param("```\nDrift — deploy: fenced\n```", id="fenced"),
+        pytest.param(
+            "````markdown\n```\nDrift — deploy: example\n```\n````", id="four-backtick-fence"
+        ),
+        pytest.param("~~~~\n~~~ not a close\nDrift — deploy: example\n~~~~", id="tilde-fence"),
         pytest.param("    Drift — deploy: indented code block", id="indented-code"),
         pytest.param("<!--\nDrift — deploy: commented out\n-->", id="html-comment"),
     ],

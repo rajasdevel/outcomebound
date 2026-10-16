@@ -435,14 +435,33 @@ def _produced(
 
 
 def _log_path(log_dir: Path, name: str) -> Path:
-    """One log name per claim name. A name that sanitizing left as it was keeps its plain name;
-    one it changed gains a short digest of the original, so `lint/typecheck` and `lint typecheck`
-    do not share a log."""
+    """The readable log name of one claim name. A name that sanitizing left as it was keeps its
+    plain name; one it changed gains a short digest of the original, so `lint/typecheck` and
+    `lint typecheck` do not share a log. `_log_paths` makes the names of one plan unique."""
 
     safe = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-") or "claim"
     if safe != name:
         safe = f"{safe}-{hashlib.sha256(name.encode('utf-8')).hexdigest()[:8]}"
     return log_dir / f"{safe}.log"
+
+
+def _log_paths(log_dir: Path, names: Sequence[str]) -> list[Path]:
+    """One log per claim of a plan, in its order, no two alike once letter case is folded: a
+    plain name can equal the name a sanitized one was given (`lint-typecheck-f9a13aac`), and a
+    case-insensitive file system holds `lint` and `LINT` in one file. A later claim whose name
+    is taken gains its place in the plan (`lint-2.log`), so each log holds its own output."""
+
+    taken: set[str] = set()
+    found = []
+    for place, name in enumerate(names, 1):
+        path = _log_path(log_dir, name)
+        number = place
+        while path.name.casefold() in taken:
+            path = log_dir / f"{path.name.removesuffix('.log')}-{number}.log"
+            number += 1
+        taken.add(path.name.casefold())
+        found.append(path)
+    return found
 
 
 def _execute(
@@ -493,12 +512,14 @@ def _execute(
             process.stdout.close()
 
 
-def run_claim(claim: Claim, cwd: Path, log_dir: Path | None) -> Result:
+def run_claim(
+    claim: Claim, cwd: Path, log_dir: Path | None, log_path: Path | None = None
+) -> Result:
     """Run one claim, judged by its exit status alone.
 
     With a ``log_dir`` the command's output is written to one sanitized name
-    inside it, rewritten in place; ``log_dir=None`` runs the command and writes
-    nothing at all.
+    inside it, ``log_path`` where the plan gave the claim one, rewritten in place;
+    ``log_dir=None`` runs the command and writes nothing at all.
     """
 
     missing = [raw for raw in claim.required_paths if not _resolve_required_path(cwd, raw).exists()]
@@ -507,7 +528,7 @@ def run_claim(claim: Claim, cwd: Path, log_dir: Path | None) -> Result:
     before = _before(claim, cwd)
     if isinstance(before, Result):
         return before
-    log_path = None if log_dir is None else _log_path(log_dir, claim.name)
+    log_path = None if log_dir is None else log_path or _log_path(log_dir, claim.name)
     if log_path is not None:
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -573,7 +594,11 @@ def tail(log_path: Path | None, lines: int = LOG_TAIL_LINES) -> str:
 
 
 def run_plan(plan: Plan) -> tuple[Result, ...]:
-    return tuple(run_claim(claim, plan.cwd, plan.log_dir) for claim in plan.claims)
+    logs = _log_paths(plan.log_dir, [claim.name for claim in plan.claims])
+    return tuple(
+        run_claim(claim, plan.cwd, plan.log_dir, log)
+        for claim, log in zip(plan.claims, logs, strict=True)
+    )
 
 
 def verdict(results: tuple[Result, ...]) -> str:

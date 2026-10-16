@@ -9,7 +9,7 @@ XDIST_VERSION ?= 3.8.0
 # The ref the floor's loosening check reads the change against: what it replaces.
 OB_BASE ?= origin/main
 
-# Where `make kits` writes one <name>.zip per kit under kits/.
+# Where `make kits` writes one <name>.zip and one <name>.md per kit under kits/.
 KITS_OUT ?= dist/kits
 
 .PHONY: test gate check scrub canary release-check kits
@@ -78,6 +78,7 @@ else
 endif
 
 # Each kit under kits/ (a SKILL.md a person pastes into their own assistant) packed as
-# $(KITS_OUT)/<name>.zip, one entry, <name>/SKILL.md. Deterministic; standard library only.
+# $(KITS_OUT)/<name>.zip, one entry, <name>/SKILL.md, and copied as $(KITS_OUT)/<name>.md, the
+# two files a release attaches. Deterministic; standard library only.
 kits:
 	$(PYTHON) scripts/build-kits.py $(KITS_OUT)

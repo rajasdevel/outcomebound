@@ -205,6 +205,11 @@ def main_ci(head: str, source: Path | None) -> tuple[bool, str]:
         key=lambda run: str(run.get("created_at") or ""),
     )
     if completed and completed[-1].get("conclusion") == "success":
+        if source is not None:
+            return True, (
+                f"HEAD has a passing CI run on main in the saved file {source.name}, a snapshot: "
+                "read GitHub again before the tag push"
+            )
         return True, "HEAD has a passing CI run on main"
     seen = ", ".join(sorted({str(run.get("conclusion") or run.get("status")) for run in on_main}))
     return False, f"HEAD has no passing CI run on main ({seen or 'none'})"

@@ -969,6 +969,11 @@ class Failure:
 
         if result.verdict != FAIL or result.code != self.code:
             return False, ""
+        if not result.ids_complete:
+            return False, (
+                f"not known: the scan for failure ids stopped at {MAX_IDS} ids or the time limit "
+                "before its output ended, so a new id after that point would not be seen"
+            )
         now = result_ids(result)
         if self.ids is None and not now:
             return True, "known by its exit code only, since its output names no failure ids"
@@ -1421,8 +1426,10 @@ class Result:
     commit: str = ""
     # Whether a known failure is one the working tree a turn began with already had.
     before: bool = False
-    # The failure ids the command's whole output named, not only its kept tail.
+    # The failure ids the command's whole output named, not only its kept tail; and whether the
+    # scan read that output to its end, not stopping at `MAX_IDS` or the time limit.
     ids: frozenset[str] = frozenset()
+    ids_complete: bool = True
 
     def line(self) -> str:
         shown = shorten(self.command)
@@ -1456,6 +1463,7 @@ class Result:
             "commit": self.commit,
             "before": self.before,
             "ids": sorted(self.ids),
+            "ids_complete": self.ids_complete,
         }
 
     @classmethod
@@ -1469,7 +1477,7 @@ class Result:
         output, cause, seconds = item.get("output"), item.get("cause"), item.get("seconds")
         code, known, note = item.get("code"), item.get("known", False), item.get("note", "")
         commit, before = item.get("commit", ""), item.get("before", False)
-        listed = item.get("ids", [])
+        listed, complete = item.get("ids", []), item.get("ids_complete", True)
         if not (
             isinstance(command, str)
             and verdict in (PASS, FAIL, UNVERIFIED)
@@ -1485,6 +1493,7 @@ class Result:
             and isinstance(before, bool)
             and isinstance(listed, list)
             and all(isinstance(one, str) for one in listed)
+            and isinstance(complete, bool)
         ):
             return None
         data = output.encode("utf-8")
@@ -1501,6 +1510,7 @@ class Result:
             commit,
             before,
             frozenset(listed),
+            complete,
         )
 
 
@@ -1543,18 +1553,19 @@ MAX_IDS = 2000
 LINE_BYTES = 64 * 1024
 
 
-def _ids_in(sink: IO[bytes], deadline: float | None) -> frozenset[str]:
+def _ids_in(sink: IO[bytes], deadline: float | None) -> tuple[frozenset[str], bool]:
     """The failure ids named anywhere in a command's output, read line by line so that memory
-    holds the ids and not the text; at most `MAX_IDS` of them, and none after `deadline`."""
+    holds the ids and not the text, and whether the scan reached the output's end: it stops at
+    `MAX_IDS` ids, or at `deadline`, and then says so."""
 
     found: set[str] = set()
     sink.seek(0)
     while len(found) < MAX_IDS and (deadline is None or time.monotonic() < deadline):
         line = sink.readline(LINE_BYTES)
         if not line:
-            break
+            return frozenset(found), True
         found |= failure_ids(line)
-    return frozenset(found)
+    return frozenset(found), sink.read(1) == b""
 
 
 # The signals that stop a Done run from outside: Ctrl-C, and SIGTERM where adopt maps it.
@@ -1675,8 +1686,8 @@ def run_one(
             note = f"its output says `{missing}` is not on this PATH"
             return Result(line, UNVERIFIED, elapsed, why, tail, ENVIRONMENT, code, note=note)
         why = f"exit {code} after {elapsed:.0f} s"
-        ids = _ids_in(sink, None if seconds is None else started + seconds)
-        return Result(line, FAIL, elapsed, why, tail, code=code, ids=ids)
+        ids, complete = _ids_in(sink, None if seconds is None else started + seconds)
+        return Result(line, FAIL, elapsed, why, tail, code=code, ids=ids, ids_complete=complete)
 
 
 def run_all(
@@ -2431,7 +2442,7 @@ def _failure_notice(record: Checked, viewer: Viewer, target: Path) -> Notice | N
         head = (
             "finish-check FAIL: a Done command failed while the session was paused, with "
             "background work in flight; it is held at the first turn end of the session that is "
-            "not paused."
+            "not paused, where Done still fails."
         )
         return Notice(record.tree, PAUSED_KIND, report(head, record.results))
     else:

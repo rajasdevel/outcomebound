@@ -58,8 +58,11 @@ Authority to read is not authority to write, and a grant for one kind of write i
 another.
 
 Before each write, read the card's updated time again. If it moved since your snapshot, import a new
-snapshot and look at what changed before you write. Unless a standing grant covers this kind of
-write, show the person the exact text first; under a batch grant, show the text once for the batch.
+snapshot and look at what changed before you write. That read cannot catch a change made after it:
+where the tool can make the write conditional on the version or updated time, do so; where it
+cannot, write only where the grant accepts that race, else give the person a draft. Unless a
+standing grant covers this kind of write, show the person the exact text first; under a batch
+grant, show the text once for the batch.
 
 After each write, read the card back and compare it with what you wrote: the text, the author, and
 the updated time. A write whose read-back you did not make is `UNVERIFIED`.
@@ -68,9 +71,10 @@ Keep a receipt for each write: the card, the text, the account that acted, the t
 words of the grant that covered it. The acting account is the person's own account unless they have
 given you another; say which.
 
-Where the tracker answers that you are sending too fast, wait as long as it says and send again
-with one call in flight at a time. Before any retry, read the card back: the first call may have
-succeeded.
+Where the tracker answers that you are sending too fast, wait as long as it says, with one call in
+flight at a time, and read the card back before you send again: the first call may have succeeded.
+Where the read-back shows its effect, keep its receipt and do not send again; where it cannot tell,
+do not send again, and say why.
 
 Where access is denied, or the harness has no tool that writes to the tracker, do not look for
 another way in. Write a draft file with the text and the card it belongs to, and give it to the person

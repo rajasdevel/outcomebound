@@ -84,8 +84,9 @@ it reads any instruction file; the fixtures are listed in `evals/README.md`.
 A kit is a self-contained skill for a person outside the repository, used in their own
 assistant: pasted as a first message or loaded as a skill. `adopt` never installs it. Each kit
 is one source file, `kits/<name>/SKILL.md`, whose frontmatter holds `name` (the folder name) and
-a non-empty `description`. The file is published as it is and as `<name>.zip`, which `make kits`
-builds deterministically (`scripts/build-kits.py`). The whole file is at most 7500 characters.
+a non-empty `description`. Each release attaches the file as it is, as `<name>.md`, and as
+`<name>.zip`, which `make kits` and the release job build deterministically
+(`scripts/build-kits.py`). The whole file is at most 7500 characters.
 It uses no OutcomeBound vocabulary and no project or client content, since its reader has
 neither. Its behaviour is proved by a fixture before a release claims it works in a named
 assistant; until then it is `UNVERIFIED`. `tests/test_kits.py` holds the frontmatter, the size,

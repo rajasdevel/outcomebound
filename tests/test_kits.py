@@ -89,3 +89,4 @@ def test_make_kits_packs_each_kit_as_its_source(tmp_path: Path) -> None:
             assert packed.namelist() == [entry]
             content = packed.read(entry)
         assert content == (folder / "SKILL.md").read_bytes()
+        assert (out / f"{folder.name}.md").read_bytes() == content

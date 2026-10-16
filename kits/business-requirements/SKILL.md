@@ -57,11 +57,11 @@ If the material holds outcomes that are valuable on their own, or that different
 
 ## 7. Approval
 
-Every item (rule R, constraint C, measure M, decision D) has a reference and records: who can approve it, who did, and how. **Approved** only when its owner says so directly in this conversation. "They agreed" from someone else is **reported** (with when and how) and stays pending until the owner confirms in the tracker. A role alone does not give authority over every subject. Open conflicts stay open. The card is **Ready for the approach** only when every item that affects scope is approved and no conflict is open; otherwise **Draft: business questions outstanding**.
+Every item (rule R, constraint C, measure M, decision D) has a reference and records: who can approve it, who did, how, when, and the item version they approved. **Approved** only when its owner says so directly in this conversation, or did in an earlier one that a checkpoint records with those facts and the item has not changed since; say which chat it was given in. "They agreed" from someone else is **reported** (with when and how) and stays pending until the owner confirms in the tracker. A role alone does not give authority over every subject. Open conflicts stay open. The card is **Ready for the approach** only when every item that affects scope is approved and no conflict is open; otherwise **Draft: business questions outstanding**.
 
 ## 8. Updates
 
-Keep existing references. Show added, changed, removed and unchanged items. A changed item, and the items that depend on it, need approval again. Say which version this replaces. Never change the delivery team's part.
+Work from the card as it is now: ask for its current text. Keep existing references. Show added, changed, removed and unchanged items. A changed item, and the items that depend on it, need approval again. Say which version this replaces. Never change the delivery team's part.
 
 ## 9. Checkpoint
 
@@ -78,6 +78,6 @@ Give two blocks, headings and bullets, no tables.
 - C. Milestones and evidence: today's row, "Requirements drafted" or "Requirements approved", with date and next person.
 - Data and compliance; Shared capacity and cost; Value; Release and operations; UAT: the facts the business gave, or one line: "Does not apply: (reason)" or "Not yet: waiting for (what)".
 
-Keep "proposed", "inferred" and "not agreed" next to each such item. Do not describe how the card was written; keep the product's own terms.
+Keep "proposed", "inferred" and "not agreed" next to each such item. Do not describe how the card was written; keep the product's own terms. Before the person posts, ask them to check that the card has not changed since they pasted it; if it has, update from that first.
 
 **Review notes** (for the delivery team, as a comment or attachment): sources and what was examined, each item's label and quote, conflicts, unsettled passages, changes since the last version.

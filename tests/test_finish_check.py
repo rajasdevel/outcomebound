@@ -439,6 +439,24 @@ def test_a_paused_session_runs_done_and_holds_nothing_until_a_stop_that_is_not_p
     assert counted(count) == 1
 
 
+def test_the_paused_notice_promises_a_hold_only_where_done_still_fails(tmp_path: Path) -> None:
+    """Breaks if the person is told that a failure found while paused is held at the first turn
+    end that is not paused, when a turn that fixes it before then holds nothing."""
+
+    count = tmp_path / "count"
+    line = f"echo run >> {q(count)}; test -f fixed.txt || {{ echo boom; exit 1; }}"
+    root, digest = target(tmp_path / "t", [line])
+    stop = {**INPUT["claude-code"], "cwd": str(root), "background_tasks": [{"task_id": "b1"}]}
+    assert hook("claude-code", digest, root, stdin=stop) == (0, {})
+    prompt = {"session_id": "s", "hook_event_name": "UserPromptSubmit", "cwd": str(root)}
+    told = json.loads(mark("claude-code", digest, root, stdin=prompt).stdout)["systemMessage"]
+    assert "while the session was paused" in told and "where Done still fails" in told, told
+
+    write(root / "fixed.txt", "x\n")
+    assert hook("claude-code", digest, root, stdin={**stop, "background_tasks": []}) == (0, {})
+    assert counted(count) == 2
+
+
 @pytest.mark.parametrize("waiting", WAITING, ids=["background-tasks", "session-crons"])
 def test_background_work_leaves_a_tree_that_passed_silent(
     tmp_path: Path, waiting: dict[str, Any]
@@ -2799,6 +2817,36 @@ def test_failure_ids_above_the_kept_tail_are_still_read(tmp_path: Path) -> None:
     assert result.ids == {f"pytest {name}" for name in names}
     again = finish_check.Result.of(result.document())
     assert again is not None and again.ids == result.ids
+
+
+def test_a_scan_of_failure_ids_that_stopped_early_never_makes_a_failure_known(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a scan that stopped at the id cap, or at its time limit, reads as every id the
+    output named: a new failure printed after the cap and above the kept tail would look known,
+    and the report would say no named failure is new."""
+
+    old = "".join(
+        f"FAILED tests/test_old.py::test_{n} - old\n" for n in range(finish_check.MAX_IDS)
+    )
+    pad = ("z" * 99 + "\n") * 2200
+    out = tmp_path / "out.txt"
+    root, _ = target(tmp_path / "t", ["true"])
+    line = f"cat {q(out)}; exit 1"
+    write(out, old + pad)
+    before = finish_check.run_one(root, line, 60)
+    write(out, old + "FAILED tests/test_new.py::test_new - new\n" + pad)
+    after = finish_check.run_one(root, line, 60)
+
+    known = finish_check.Failure(1, finish_check.result_ids(before))
+    tolerated, why = known.tolerates(after)
+    assert not tolerated and "not known" in why, why
+    again = finish_check.Result.of(after.document())
+    assert again is not None and not known.tolerates(again)[0]
+
+    with open(out, "rb") as sink:
+        ids, complete = finish_check._ids_in(sink, time.monotonic() - 1)
+    assert not ids and not complete
 
 
 def test_a_hold_says_where_a_command_was_compared_by_its_exit_code_alone(tmp_path: Path) -> None:

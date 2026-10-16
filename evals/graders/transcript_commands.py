@@ -282,19 +282,25 @@ def steps(command: str, succeeded: bool):
         maybe       it may not have run: an earlier link of its `&&` chain may have failed
 
     A command after `exit`, or after one that `exec` replaces the shell with, never ran and
-    is left out. This is not a general shell interpreter.
+    is left out. Where that `exit` or `exec` follows `&&` and a later `;` group follows it,
+    the `exit` may not have run and the later group may have ended the shell: the answer is
+    None. This is not a general shell interpreter.
     """
 
     found = _scan(command)
     if found is None:
         return None
     parsed = []
-    for operator, words, expands, text in found:
+    for position, (operator, words, expands, text) in enumerate(found):
         argv = tuple(_program(words))
         if argv and argv[0] in _KEYWORDS:
             return None
         parsed.append((operator, argv, expands, text))
         if "exec" in words[: len(words) - len(argv)] or (argv and argv[0] in _TERMINATING):
+            # An `exit` or `exec` after `&&` runs only if the links before it succeeded. If a
+            # later `;` group follows, that group may be what ended the shell.
+            if operator == "&&" and any(later != "&&" for later, *_ in found[position + 1 :]):
+                return None
             break
     # A `;` ends a group, so the operator before a command says where its group starts.
     starts = [index for index, (operator, *_) in enumerate(parsed) if operator != "&&"]

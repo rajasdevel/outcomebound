@@ -60,21 +60,36 @@ _ACKNOWLEDGED = re.compile(
     re.MULTILINE,
 )
 _HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
-_FENCE = re.compile(r"^[ \t]*(```|~~~)[^\n]*\n.*?(?:^[ \t]*\1[^\n]*$|\Z)", re.MULTILINE | re.DOTALL)
+# A fenced block, as CommonMark reads one: three or more backticks or tildes open it, and only a
+# line of the same character, at least as many and nothing after them but blanks, closes it, so a
+# shorter fence inside a longer one is the example's text.
+_FENCE = re.compile(
+    r"^[ \t]*(?P<fence>(?P<mark>[`~])(?P=mark){2,})[^\n]*\n.*?"
+    r"(?:^[ \t]*(?P=fence)(?P=mark)*[ \t]*$|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
 SIGNAL_IDS = ("recent-authors", "codeowners", "deploy", "publishing", "exposure")
-# What a declared edge names: the act of publishing (a publish, a release, pushing or cutting a
-# tag, a package or a release, a registry), or of deploying (a deploy, a promotion, a push or
-# release to production). A word such as `production` or `tag` alone names a place or a thing,
-# not the act, and a database edge that mentions production data is not a deploy.
+# What a declared edge names: an edge starts with its act, after an article, and names the act's
+# object where its verb has other uses. Publishing: a publish, a tag, a push, upload or cut of a
+# tag, package, release or registry, a release of a version, package or build. Deploying: a deploy
+# or redeploy, a promotion, going live, a push, release, ship or roll to production. A word such as
+# `production`, `tag`, `deployment`, `promotion`, `release` or `registry` alone names a place or a
+# thing, not the act, so an edge for another act (deleting production data or a deployment cache,
+# releasing a database lock) leaves the line.
+_EDGE_START = r"^[ \t]*(?:(?:a|an|the|any|every)[ \t]+)?"
+_WORDS = r"[ \t]+(?:[\w-]+[ \t]+){0,3}"
 _PUBLISH_EDGE = re.compile(
-    r"\b(publish\w*|releas\w*|registry\b|tagg\w*|tag[ \t]+(a|the)\b|tag[ \t]+push\w*"
-    r"|(push|upload|ship|cut|creat|mov)\w*[ \t]+([\w-]+[ \t]+){0,3}(tag|package|release)\w*)",
-    re.I,
+    _EDGE_START + r"(?:publish\w*|tag(?:s|ged|ging)?\b"
+    r"|(?:push|upload|ship|cut|creat|mak|mov)\w*" + _WORDS + r"(?:tag|package|release|registr)\w*"
+    r"|releas(?:e|es|ed|ing)" + _WORDS + r"(?:version|package|build|artifact|wheel|crate|gem"
+    r"|binar|v?\d)\w*)",
+    re.I | re.M,
 )
 _DEPLOY_EDGE = re.compile(
-    r"\b(deploy\w*|promot\w*|go[ \t]+live"
-    r"|(push|releas|ship|roll)\w*[ \t]+([\w-]+[ \t]+){0,3}to[ \t]+prod(uction)?\b)",
-    re.I,
+    _EDGE_START
+    + r"(?:(?:re-?)?deploy(?:s|ed|ing)?\b|promot(?:e|es|ed|ing)\b|go(?:es|ing)?[ \t]+live"
+    r"|(?:push|releas|ship|roll)\w*" + _WORDS + r"to[ \t]+prod(?:uction)?\b)",
+    re.I | re.M,
 )
 # A workflow that builds or pushes a container image.
 _IMAGE = re.compile(
