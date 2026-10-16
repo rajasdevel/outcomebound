@@ -1044,10 +1044,17 @@ def test_bounded_command_keeps_partial_output_and_stops_descendant(
     import time
 
     pid = int(child_pid.read_text(encoding="utf-8"))
-    deadline = time.monotonic() + 10
+    # A killed process ends only when it leaves the kernel; on a loaded runner a process in an
+    # uninterruptible disk wait takes longer, so the bound is wide and the state is reported.
+    deadline = time.monotonic() + 60
     while running(pid) and time.monotonic() < deadline:
         time.sleep(0.05)
-    assert not running(pid), "timed-out child still runs"
+    alive = running(pid)
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rpartition(")")[2].split()
+    except OSError:
+        state = []  # Gone, or no /proc (macOS).
+    assert not alive, f"timed-out child still runs, state {state[:1] or 'unknown'}"
 
 
 def test_fixture_timeout_still_returns_a_record(tmp_path, monkeypatch):
