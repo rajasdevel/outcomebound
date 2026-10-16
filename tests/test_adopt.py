@@ -2910,7 +2910,9 @@ def test_a_changed_codex_entry_names_the_new_trust_in_hooks(
     out = run(capsys, str(target), "--finish-timeout", "900")[1]
     assert "action   codex finish-check: the entry changed" in out and again in out
     assert "claude-code finish-check: the entry changed" not in out
-    assert again in run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
+    assert f"the run's time limit {finish_check.DEFAULT_TIMEOUT} s to 900 s" in out
+    out = run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
+    assert again in out and "the entry changed, the Done commands changed;" in out
 
     # An upgrade from the entry written before the constant-time stop changes it as well.
     assert run(capsys, str(target), "--done", "true")[0] == 0

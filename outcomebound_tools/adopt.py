@@ -1431,7 +1431,11 @@ def finish_hooks(
                 entry=began,
             )
         )
-        run.notes.extend(review_again(name, data, own))
+        run.notes.extend(
+            review_again(
+                name, data, own, previous=_previous_entry(run.target, hook, name), current=entry
+            )
+        )
         run.notes.extend(review_again(name, began_data, own, FINISH_MARK))
         caution = f"; {finish_check.CAUTION[name]}" if name in finish_check.CAUTION else ""
         run.notes.append(
@@ -1473,7 +1477,63 @@ def wake_notes(
     ]
 
 
-def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FINISH_CHECK) -> Notes:
+def _previous_entry(target: Path, hook: Mapping[str, Any], harness: str) -> object:
+    """The stop entry of `harness` as its settings file holds it now, in the shape adopt writes,
+    else None: a file that is absent, unreadable or not JSON, or an entry a person edited, gives
+    none, and the line then does not say what changed."""
+
+    try:
+        document = json.loads((target / hook["file"]).read_text(encoding="utf-8"))
+        groups = document["hooks"][hook["event"]]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    for group in groups if isinstance(groups, list) else ():
+        if _own_command(group, harness, False) is not None:
+            return group
+    return None
+
+
+def _entry_change(old: object, new: object) -> str:
+    """In a few words, what differs between two stop entries adopt writes: the run's limit, the
+    Done commands (their digest), the hook's own timeout, or else the command's form. Empty where
+    `old` is not an entry in that shape."""
+
+    def parts(group: object) -> tuple[str, str, str, object] | None:
+        hooks = group.get("hooks") if isinstance(group, dict) else None
+        handler = hooks[0] if isinstance(hooks, list) and hooks else None
+        if not isinstance(handler, dict) or not isinstance(handler.get("command"), str):
+            return None
+        words = handler["command"].split()
+
+        def after(flag: str) -> str:
+            return words[words.index(flag) + 1] if flag in words[:-1] else ""
+
+        form = " ".join(word for word in words if word not in (after("--done"), after("--timeout")))
+        return after("--timeout"), after("--done"), form, handler.get("timeout")
+
+    before, after = parts(old), parts(new)
+    if before is None or after is None:
+        return ""
+    found = []
+    if before[0] != after[0]:
+        found.append(f"the run's time limit {before[0] or 'none'} s to {after[0] or 'none'} s")
+    if before[1] != after[1]:
+        found.append("the Done commands changed")
+    if before[2] != after[2]:
+        found.append("the command's form changed")
+    if before[3] != after[3]:
+        found.append(f"the hook's timeout {before[3]} s to {after[3]} s")
+    return " and ".join(found)
+
+
+def review_again(
+    name: str,
+    data: bytes,
+    own: Sequence[Record],
+    entry: str = FINISH_CHECK,
+    previous: object = None,
+    current: object = None,
+) -> Notes:
     """The line asking each person to trust `name`'s entry again, where its harness skips a
     changed entry until then and this install changes the one recorded; for the turn-start
     entry (`entry` is `FINISH_MARK`), also where an install that has the stop entry adds it."""
@@ -1489,7 +1549,9 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
     if entry == FINISH_CHECK:
         if not before:
             return []
-        why = "since its Done commands, its timeout or the form this engine writes changed"
+        why = _entry_change(previous, current) or (
+            "since its Done commands, its timeout or the form this engine writes changed"
+        )
         return [
             (
                 "action",
