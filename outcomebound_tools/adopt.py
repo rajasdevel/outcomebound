@@ -1431,7 +1431,11 @@ def finish_hooks(
                 entry=began,
             )
         )
-        run.notes.extend(review_again(name, data, own))
+        run.notes.extend(
+            review_again(
+                name, data, own, previous=_previous_entry(run.target, hook, name), current=entry
+            )
+        )
         run.notes.extend(review_again(name, began_data, own, FINISH_MARK))
         caution = f"; {finish_check.CAUTION[name]}" if name in finish_check.CAUTION else ""
         run.notes.append(
@@ -1473,7 +1477,63 @@ def wake_notes(
     ]
 
 
-def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FINISH_CHECK) -> Notes:
+def _previous_entry(target: Path, hook: Mapping[str, Any], harness: str) -> object:
+    """The stop entry of `harness` as its settings file holds it now, in the shape adopt writes,
+    else None: a file that is absent, unreadable or not JSON, or an entry a person edited, gives
+    none, and the line then does not say what changed."""
+
+    try:
+        document = json.loads((target / hook["file"]).read_text(encoding="utf-8"))
+        groups = document["hooks"][hook["event"]]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    for group in groups if isinstance(groups, list) else ():
+        if _own_command(group, harness, False) is not None:
+            return group
+    return None
+
+
+def _entry_change(old: object, new: object) -> str:
+    """In a few words, what differs between two stop entries adopt writes: the run's limit, the
+    Done commands (their digest), the hook's own timeout, or else the command's form. Empty where
+    `old` is not an entry in that shape."""
+
+    def parts(group: object) -> tuple[str, str, str, object] | None:
+        hooks = group.get("hooks") if isinstance(group, dict) else None
+        handler = hooks[0] if isinstance(hooks, list) and hooks else None
+        if not isinstance(handler, dict) or not isinstance(handler.get("command"), str):
+            return None
+        words = handler["command"].split()
+
+        def after(flag: str) -> str:
+            return words[words.index(flag) + 1] if flag in words[:-1] else ""
+
+        form = " ".join(word for word in words if word not in (after("--done"), after("--timeout")))
+        return after("--timeout"), after("--done"), form, handler.get("timeout")
+
+    before, after = parts(old), parts(new)
+    if before is None or after is None:
+        return ""
+    found = []
+    if before[0] != after[0]:
+        found.append(f"the run's time limit {before[0] or 'none'} s to {after[0] or 'none'} s")
+    if before[1] != after[1]:
+        found.append("the Done commands changed")
+    if before[2] != after[2]:
+        found.append("the command's form changed")
+    if before[3] != after[3]:
+        found.append(f"the hook's timeout {before[3]} s to {after[3]} s")
+    return " and ".join(found)
+
+
+def review_again(
+    name: str,
+    data: bytes,
+    own: Sequence[Record],
+    entry: str = FINISH_CHECK,
+    previous: object = None,
+    current: object = None,
+) -> Notes:
     """The line asking each person to trust `name`'s entry again, where its harness skips a
     changed entry until then and this install changes the one recorded; for the turn-start
     entry (`entry` is `FINISH_MARK`), also where an install that has the stop entry adds it."""
@@ -1489,7 +1549,9 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
     if entry == FINISH_CHECK:
         if not before:
             return []
-        why = "since its Done commands, its timeout or the form this engine writes changed"
+        why = _entry_change(previous, current) or (
+            "since its Done commands, its timeout or the form this engine writes changed"
+        )
         return [
             (
                 "action",
@@ -3155,12 +3217,55 @@ def _skips(values: Sequence[Sequence[str]]) -> dict[str, list[str]]:
     return skip
 
 
-def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
-    for name in edited:
-        print(f"edited   {name}: overridden by --force")
+def _skill_root(path: str) -> tuple[str, str] | None:
+    """For a file inside a harness's skills folder, that folder and the skill's name:
+    `.claude/skills/diagnose/SKILL.md` gives (`.claude/skills`, `diagnose`)."""
+
+    parts = path.split("/")
+    for index in range(len(parts) - 2):
+        if parts[index] == "skills":
+            return "/".join(parts[: index + 1]), parts[index + 1]
+    return None
+
+
+def _skill_summaries(planned: Planned) -> tuple[list[str], list[str]]:
+    """The planned paths a report names one by one, and one summary line for each verb and skills
+    folder over the skill files: a three-harness install is about 290 files, and a line each
+    buries the warnings that follow."""
+
+    singles: list[str] = []
+    groups: dict[tuple[str, str], list[str]] = {}
     for path, (before, after) in planned.items():
         verb = "create" if before is None else "delete" if after is None else "update"
+        root = _skill_root(path)
+        if root is None:
+            singles.append(path)
+        else:
+            groups.setdefault((verb, root[0]), []).append(root[1])
+    lines = []
+    for (verb, folder), skills in groups.items():
+        count, names = len(skills), len(set(skills))
+        lines.append(
+            f"{verb:<8} {folder}/: {count} file{'s' if count != 1 else ''} "
+            f"in {names} skill{'s' if names != 1 else ''}"
+        )
+    return singles, lines
+
+
+def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
+    """The report: each file that is not a skill file on its own line, one line per verb and
+    skills folder for the skill files (a changed one is also listed by name in a dry run's
+    diffs), then the notes."""
+
+    for name in edited:
+        print(f"edited   {name}: overridden by --force")
+    singles, summaries = _skill_summaries(planned)
+    for path in singles:
+        before, after = planned[path]
+        verb = "create" if before is None else "delete" if after is None else "update"
         print(f"{verb:<8} {path}")
+    for line in summaries:
+        print(line)
     if not planned:
         print("nothing to change")
     for verb, text in notes:
@@ -3172,8 +3277,10 @@ def _diffs(planned: Planned) -> None:
 
     for path, (before, after) in planned.items():
         if before is None and after is not None:
-            # A new file is its whole text, which the install writes as shipped: its size only.
-            print(f"new      {path}: {len(after)} bytes, written as shipped")
+            # A new file is its whole text, which the install writes as shipped: its size only,
+            # and a new skill file is counted in the report's summary line, not named again.
+            if _skill_root(path) is None:
+                print(f"new      {path}: {len(after)} bytes, written as shipped")
             continue
         try:
             old = [] if before is None else before.decode("utf-8").splitlines(keepends=True)

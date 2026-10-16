@@ -411,6 +411,25 @@ def test_detect_ignores_evidence_that_resolves_outside_the_target(tmp_path, sour
     assert "python" not in detect(target, load_all(source))
 
 
+@shipped_catalog
+def test_detect_does_not_enter_a_folder_git_ignores_or_a_nested_repository(tmp_path):
+    """A large build or output folder that Git ignores, and a repository nested in the target,
+    are not walked: a stack file inside them is not this project's evidence. Evidence that
+    sits in a plain folder still counts."""
+
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    write(tmp_path / ".gitignore", "out/\n")
+    (tmp_path / "out" / "deep").mkdir(parents=True)
+    write(tmp_path / "out" / "deep" / "pyproject.toml", "[project]\n")
+    nested = tmp_path / "nested"
+    subprocess.run(["git", "init", "-q", str(nested)], check=True)
+    write(nested / "package.json", "{}\n")
+    assert not {"python", "node-typescript"} & set(detect(tmp_path, load_all(ROOT)))
+    (tmp_path / "plain").mkdir()
+    write(tmp_path / "plain" / "pyproject.toml", "[project]\n")
+    assert "python" in detect(tmp_path, load_all(ROOT))
+
+
 def test_byte_cap_ignores_a_non_integer_cap(monkeypatch):
     """`isinstance(True, int)` is True: a boolean must not become a 1-byte cap."""
 

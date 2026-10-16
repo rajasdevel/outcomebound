@@ -23,17 +23,18 @@ message and exit 2, never as a traceback out of the parser.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import re
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Iterator, Sequence
 from dataclasses import dataclass, replace
 from os import PathLike
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import adapters, home, textio
+from outcomebound_tools import adapters, discovery, home, textio, walk
 from outcomebound_tools.mechanisms import MECHANISMS, unknown
 
 FAMILIES = ("stack", "setup")
@@ -375,8 +376,68 @@ def inline(source_root: str | PathLike[str], selected: Iterable[Fragment]) -> st
     return "\n\n".join([kernel, *skills, compose_body(selected)]) + "\n"
 
 
-def _matches(root: Path, pattern: str) -> bool:
-    """Does anything under ``root`` match, ignoring vendored and hidden trees?
+class _Unentered(Collection[str]):
+    """The folders `detect` does not enter, as `walk.folders` asks for them by their
+    root-relative path: a vendored or hidden tree no detect pattern names, and what Git
+    ignores whole. Nothing under them is listed, so a large ignored folder costs nothing."""
+
+    def __init__(self, hidden: frozenset[str], ignored: frozenset[str]) -> None:
+        self.hidden = hidden
+        self.ignored = ignored
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.ignored)
+
+    def __len__(self) -> int:
+        return len(self.ignored)
+
+    def __contains__(self, relative: object) -> bool:
+        if not isinstance(relative, str):
+            return False
+        name = relative.rpartition("/")[2]
+        return (
+            name in EXCLUDED_DIRS
+            or (name.startswith(".") and name not in self.hidden)
+            or relative in self.ignored
+        )
+
+
+def _folders(root: Path, patterns: Sequence[str]) -> list[walk.Folder]:
+    """The folders under `root` that a detect pattern can match in: not vendored, not hidden
+    unless a pattern names the hidden folder, not Git-ignored, not a nested repository."""
+
+    named = frozenset(part for pattern in patterns for part in PurePosixPath(pattern).parts)
+    ignored = discovery.git_ignored(root)
+    skip = _Unentered(named, ignored[0] if ignored else frozenset())
+    return list(walk.folders(root, skip=skip))
+
+
+def _hidden_in(folder: walk.Folder, named: set[str]) -> bool:
+    """Whether `folder` lies in a vendored tree or a hidden one that the pattern does not name."""
+
+    return folder.relative != "." and any(
+        part in EXCLUDED_DIRS or (part.startswith(".") and part not in named)
+        for part in folder.relative.split("/")
+    )
+
+
+def _in_folder(folder: walk.Folder, rest: str, resolved: Path) -> bool:
+    """Whether ``rest``, a pattern read from ``folder``, matches there and inside the target."""
+
+    if "/" not in rest:
+        return any(
+            fnmatch.fnmatchcase(name, rest)
+            and (folder.path / name).resolve().is_relative_to(resolved)
+            for name in folder.files
+        )
+    first = PurePosixPath(rest).parts[0]
+    if not (any(character in first for character in "*?[") or (folder.path / first).exists()):
+        return False
+    return any(match.resolve().is_relative_to(resolved) for match in folder.path.glob(rest))
+
+
+def _matches(root: Path, pattern: str, folders: Sequence[walk.Folder]) -> bool:
+    """Does anything in `folders` match ``pattern``, at any depth below ``root``?
 
     A hidden directory is searched only when the pattern names it, so
     ``.github/workflows/*.yml`` detects CI while a bare ``*.yml`` never reaches
@@ -387,24 +448,16 @@ def _matches(root: Path, pattern: str) -> bool:
         return root.is_dir()
     resolved = root.resolve()
     named = set(PurePosixPath(pattern).parts)
+    rest = pattern[3:] if pattern.startswith("**/") else pattern
+    if "**" in rest:
+        raise FragmentError(f"detect pattern {pattern!r} is not usable: ** only leads")
     try:
-        candidates = list(root.rglob(pattern))
+        for folder in folders:
+            if _hidden_in(folder, named) or not _in_folder(folder, rest, resolved):
+                continue
+            return True
     except (ValueError, NotImplementedError, OSError) as error:
         raise FragmentError(f"detect pattern {pattern!r} is not usable: {error}") from error
-    for match in candidates:
-        try:
-            relative = match.relative_to(root).parts
-            inside = match.resolve().is_relative_to(resolved)
-        except (ValueError, OSError):
-            continue
-        if not inside:
-            continue
-        if any(
-            part in EXCLUDED_DIRS or (part.startswith(".") and part not in named)
-            for part in relative[:-1]
-        ):
-            continue
-        return True
     return False
 
 
@@ -417,10 +470,12 @@ def detect(target: str | PathLike[str], catalog: dict[str, Fragment]) -> list[st
     """
 
     root = Path(target)
+    patterns = [pattern for fragment in catalog.values() for pattern in fragment.detect]
+    folders = _folders(root, patterns) if root.is_dir() else []
     return [
         fragment.id
         for fragment in catalog.values()
-        if any(_matches(root, pattern) for pattern in fragment.detect)
+        if any(_matches(root, pattern, folders) for pattern in fragment.detect)
     ]
 
 
