@@ -187,6 +187,17 @@ _PAYLOAD_50 = "QUJD" * 12 + "QU"
 _PIECE_25 = "QUJD" * 6 + "Q"
 
 
+def test_an_html_comment_ends_where_a_browser_ends_it(tmp_path: Path) -> None:
+    """Breaks if a comment closed with `--!>` runs on to a later `-->`: the text between them is
+    shown, and each comment is reported on its own line with its own words."""
+
+    text = "# Rules\n<!-- one --!>\nShown text.\n<!-- two -->\n"
+    report = _audit(tmp_path, {"AGENTS.md": text})
+    hits = _hits(report, "concealed-content")
+    assert [hit.line for hit in hits] == [2, 4]
+    assert "one" in hits[0].fact and "Shown" not in hits[0].fact
+
+
 @pytest.mark.parametrize(
     "line",
     [

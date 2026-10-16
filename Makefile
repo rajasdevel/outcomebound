@@ -67,8 +67,9 @@ scrub:
 canary:
 	$(PYTHON) scripts/canary.py
 
-# Before a release is tagged: a PASS record of `make canary` exists for this tree (a different
-# tree fails there), the release commit's version agrees everywhere (and with TAG, e.g.
+# Before a release is tagged: no GitHub code scanning, Dependabot or secret-scanning alert is
+# open (read with the maintainer's own GitHub token), a PASS record of `make canary` exists for
+# this tree (a different tree fails there), the release commit's version agrees everywhere (and with TAG, e.g.
 # TAG=v1.0.0, once it is tagged: annotated, on HEAD, with a passing CI run on main for HEAD),
 # the package metadata and the workflow's PyPI job read right (from the files; PyPI itself is
 # not called), `make scrub` passes with the list of private names, and this repository's install
@@ -81,7 +82,7 @@ canary:
 release-check:
 	$(PYTHON) scripts/canary.py --verify
 	scripts/outcomebound review sweep "$$(dirname "$$(git rev-parse --path-format=absolute --git-common-dir)")/.agents/work"
-	$(PYTHON) scripts/release-check.py $(if $(TAG),--tag $(TAG)) $(if $(CI_RUNS),--ci-runs $(CI_RUNS))
+	$(PYTHON) scripts/release-check.py --alerts $(if $(TAG),--tag $(TAG)) $(if $(CI_RUNS),--ci-runs $(CI_RUNS))
 	$(MAKE) scrub
 	scripts/outcomebound adopt . --check
 ifdef TAG

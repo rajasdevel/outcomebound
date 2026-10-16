@@ -646,14 +646,14 @@ def test_a_produces_path_that_resolves_outside_the_project_is_refused_unrun(tmp_
 def test_a_file_link_inside_a_directory_output_that_leads_out_is_refused_unrun(tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "secret.txt").write_text("a", "utf-8")
+    (outside / "outside.txt").write_text("a", "utf-8")
     project = tmp_path / "project"
     (project / "d").mkdir(parents=True)
-    (project / "d" / "link.txt").symlink_to(outside / "secret.txt")
-    command = "open('../outside/secret.txt', 'a').write('x')"
+    (project / "d" / "link.txt").symlink_to(outside / "outside.txt")
+    command = "open('../outside/outside.txt', 'a').write('x')"
     r = _run(project, [_claim([sys.executable, "-c", command], produces=_produces("d"))])
     assert r.returncode == 2 and "outside" in r.stdout
-    assert (outside / "secret.txt").read_text("utf-8") == "a"
+    assert (outside / "outside.txt").read_text("utf-8") == "a"
 
 
 @pytest.mark.parametrize("raw", [".", "./out", "out/.", ".git", "a/.git/x", ".GIT", "out/.git."])

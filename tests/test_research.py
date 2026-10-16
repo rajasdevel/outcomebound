@@ -253,12 +253,12 @@ def test_a_symlink_out_of_the_clone_is_refused(
     home: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
 ) -> None:
     clone = make_clone(tmp_path / "clone")
-    secret = tmp_path / "secret.md"
-    write(secret, "secret\n")
-    (clone / "leak.md").symlink_to(secret)
+    outside = tmp_path / "outside.md"
+    write(outside, "outside\n")
+    (clone / "leak.md").symlink_to(outside)
     (clone / "outdir").symlink_to(tmp_path)
     link_to(home, clone)
-    for path in ("leak.md", "outdir/secret.md"):
+    for path in ("leak.md", "outdir/outside.md"):
         status, out, err = run(capsys, path)
         assert (status, out) == (1, "")
         assert "symlink" in err

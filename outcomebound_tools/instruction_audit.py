@@ -744,14 +744,18 @@ def _hidden_characters(path: str, text: str) -> list[Finding]:
 def _is_marker(line: str) -> bool:
     """A line that is only one of OutcomeBound's managed-block marker comments."""
 
-    marker = re.fullmatch(r"\s*<!--(.*?)-->\s*", line)
-    return marker is not None and marker.group(1).strip().startswith(_MARKERS)
+    text = line.strip()
+    for end in ("-->", "--!>"):
+        if text.startswith("<!--") and text.endswith(end) and len(text) >= 4 + len(end):
+            return text[4 : -len(end)].strip().startswith(_MARKERS)
+    return False
 
 
 def _comments(text: str) -> Iterator[tuple[int, str]]:
-    """Each HTML comment's first line and text, OutcomeBound's block markers excepted."""
+    """Each HTML comment's first line and text, OutcomeBound's block markers excepted. A comment
+    ends at `-->` or at `--!>`, as a browser ends it, or at the end of the text."""
 
-    for match in re.finditer(r"<!--(.*?)(-->|\Z)", text, re.DOTALL):
+    for match in re.finditer(r"<!--(.*?)(--!?>|\Z)", text, re.DOTALL):
         number = text.count("\n", 0, match.start()) + 1
         line_start = text.rfind("\n", 0, match.start()) + 1
         line_end = text.find("\n", match.end())

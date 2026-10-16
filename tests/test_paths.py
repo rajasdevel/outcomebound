@@ -168,13 +168,13 @@ def test_read_bounded_separates_a_hostile_path_from_an_unreadable_file(tmp_path)
     # every component and not on the resolved result.
     outside = tmp_path.parent / "outside"
     outside.mkdir(exist_ok=True)
-    write(outside / "secret.md", "secret\n")
+    write(outside / "outside.md", "outside\n")
     (tmp_path / "linked").symlink_to(outside, target_is_directory=True)
     with pytest.raises(paths.PathError) as linked:
-        paths.read_bounded(tmp_path, "linked/secret.md")
+        paths.read_bounded(tmp_path, "linked/outside.md")
     assert "contains a symlink" in str(linked.value)
 
-    (tmp_path / "direct.md").symlink_to(outside / "secret.md")
+    (tmp_path / "direct.md").symlink_to(outside / "outside.md")
     with pytest.raises(paths.PathError):
         paths.read_bounded(tmp_path, "direct.md")
 
