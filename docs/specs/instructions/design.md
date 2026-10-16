@@ -105,7 +105,7 @@ The harness table and the rule ids are the engine's (`adapters/harnesses.json`,
 ## Exits
 
 0 PASS; 1 FAIL, on any gate FAIL; 2 UNVERIFIED, on any review hit or unverified fact, or a usage
-error. A finding that does not change the result (`decides: false` in the report, "(does not
+error, as in the other verbs: exit 2 means a fact was not settled, not that a gate failed, and the text report of an UNVERIFIED result says so on its own line ("nothing failed"). A finding that does not change the result (`decides: false` in the report, "(does not
 change the result)" in the text) is reported and leaves the exit as it is; a review hit a person
 ruled safe is one. `rule` exits 0 when each hit it asked about was recorded or declined, and 2
 without a terminal, on an id that names no current review hit, or on a rulings file it cannot

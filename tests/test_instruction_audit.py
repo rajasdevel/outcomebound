@@ -831,6 +831,21 @@ FIRST_LINE = re.compile(
 )
 
 
+def test_an_unverified_only_report_says_nothing_failed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Exit 2 on UNVERIFIED alone is the verbs' convention; the text says no gate failed, and a
+    report with a FAIL does not say so."""
+
+    root = _target(tmp_path / "t", {"AGENTS.md": "ok\n"})
+    assert main(["check", str(root), "--harness", "claude-code", "--harness", "other"]) == 2
+    out = capsys.readouterr().out
+    assert out.startswith("UNVERIFIED ") and "nothing failed: exit 2" in out
+    root = _target(tmp_path / "u", {"AGENTS.md": f"a{ZWJ}b\n"})
+    assert main(["check", str(root), "--harness", "claude-code"]) == 1
+    assert "nothing failed" not in capsys.readouterr().out
+
+
 def test_first_line_is_the_verdict_and_counts_per_family(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

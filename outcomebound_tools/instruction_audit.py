@@ -2859,6 +2859,11 @@ def render(report: Report, *, verbose: bool = False) -> str:
         f"harnesses: {', '.join(report.harnesses) or 'none'} (selected by {report.selected_by})",
         f"files: {report.listing}",
     ]
+    if report.result == UNVERIFIED:
+        lines.append(
+            "nothing failed: exit 2 here means a fact was not settled (UNVERIFIED), as in the "
+            "other verbs, and --strict counts it as a failure"
+        )
     lines.extend(_line(f) for f in report.findings if f.verdict != PASS)
     if verbose:
         lines.extend(_line(f) for f in report.findings if f.verdict == PASS)
