@@ -18,7 +18,7 @@ names included, and not before:
    left out.
 2. Does the codebase, the standard library, the platform or an installed dependency already meet
    it? Use it before new code.
-3. The smallest change that meets the completion bar; of two that meet it, the smaller.
+3. The smallest change that meets the completion bar.
 
 Check the approach you take with the smallest test, command or observation that settles its
 changed risk, not every check the project has. Report an omission only where it changes a
