@@ -216,6 +216,22 @@ harness must meet these items, and `--probe` shows which one it does not:
   release tag): that ref's kernel, skills and fragments, written as `current` writes them, with
   this checkout's launcher, so a release and the checkout compare as two installs. The run records
   `earlier_ref` in `STATUS.json`; the option is refused for any other arm.
+  - Any ref of the checkout works (a tag, a branch, a commit). The commit it names is recorded as
+    `earlier_commit`, since a branch moves. A skill the ref lacks is not installed and not pointed
+    at; a skill folder that the engine's list (`fragments.SKILLS`) does not name is refused, never
+    left out in silence.
+  - `--earlier-verbatim DIR` makes the earlier arm another guidance set's own files, for guidance
+    that is not an OutcomeBound install. `DIR` is a folder outside this checkout with an
+    `AGENTS.md` and `skills/<name>/SKILL.md` folders. The set's `AGENTS.md` stands, byte for byte,
+    above the fixture's own project note in the fixture's `AGENTS.md`; its skill files are at the
+    skill path that codex reads, byte for byte. Nothing of OutcomeBound is added: the prompt is
+    the task alone, and there is no kernel, core skill, facts block, pointer or launcher. The note
+    loses its sentence that points at the core skill, as under `none`. The meta records
+    `agents_sha256` and the digest of each skill file. It excludes `--earlier-ref`.
+  - `--arm-label NAME` names the arm `NAME` in `STATUS.json`, the metas, `INDEX.json` and the
+    summary, in place of its kind (the kind stays in `arm_kind`). Use it when several refs stand
+    for variants of the guidance, so five arms do not all read `earlier`. Give each variant its own
+    `--out` and `--workspace-root`.
 
 The prompt is the block of the arm, `Task:`, and the `prompt.md` of the fixture. For the hand-off
 fixtures it is what `task.sh` prints, in place of `prompt.md`. The prompt of the `none` arm is
