@@ -109,7 +109,9 @@ nothing is open, write none. A directive that names only an exposure fact (a fir
 second maintainer, a client contract) is partial: the inventory runs, the brief asks for the
 route, and the line is written when the brief is answered. Otherwise the brief asks for the
 decision. The inventory's main value is the work in flight and what each item now owes, so it runs
-even when no fragment changes. It holds:
+even when no fragment changes. Until the route is decided, the inventory and the brief are the
+only writes: each record of the work in flight (a brief, a grant, a ticket, a branch) stays as it
+is, and what it now owes goes in the inventory. It holds:
 
 - the fragment diff: which fragments turn on and which turn off, which may be none when only the
   route changes, as with the person's directive;
@@ -128,9 +130,9 @@ even when no fragment changes. It holds:
   them in the commit that adds the "Changed —" line, and quote the old term in that line, so the
   line does not count.
 
-Between the scaffold's lifecycles, the inventory holds the plan of `outcomebound scaffold .
---lifecycle <new> --from <old>`: its `write` lines and the platform acts the move adds; each `not
-required` line goes to what still holds or to what to retire, as it says; the replaced local lines
+Between the scaffold's lifecycles, run `outcomebound scaffold . --lifecycle <new> --from <old>`,
+which writes nothing, and put its plan in the inventory: its `write` lines and the platform acts
+the move adds; each `not required` line goes to what still holds or to what to retire, as it says; the replaced local lines
 and the fragments no longer selected go in the fragment diff. Once the route is decided, `--accept`
 writes the absent files, and you add the printed blocks.
 

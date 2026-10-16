@@ -829,3 +829,19 @@ def test_ask_refuses_what_the_drawing_refuses(
     code, out, _ = _main(capsys, str(path), "--ask")
 
     assert (code, out) == (1, "")
+
+
+def test_no_shipped_example_shows_a_percentage_confidence() -> None:
+    """Breaks if an example invites a confidence number nothing computes: models copy the
+    shape. The engine still reads an older brief that holds one."""
+
+    shipped = [
+        (ROOT / "skills/decision-brief/SKILL.md").read_text(encoding="utf-8"),
+        (ROOT / "schemas/decision-briefs.schema.json")
+        .read_text(encoding="utf-8")
+        .split("an older document")[0],
+        decision_brief._EXAMPLE,
+        subprocess.run(engine("brief", "--help"), capture_output=True, text=True).stdout,
+    ]
+    for text in shipped:
+        assert not re.search(r"confidence\W{0,4}\d+%|NN%", text), text[:200]

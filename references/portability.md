@@ -69,6 +69,12 @@ The refusal lists the harnesses that can.
   [The evaluation record](../docs/evaluations.md#separate-native-hook-observations) states its
   cases and limits, including the later installed-wheel hook check. Desktop behavior and
   native Windows/Linux hook behavior remain UNVERIFIED.
+- The 1.6.0 background finish check is observed with codex-cli 0.162.1 on macOS on 2026-10-16:
+  in two `codex exec` turns of one session, run with `--dangerously-bypass-hook-trust` on a
+  throw-away project, the turn-start entry wrote its mark and each stop started the run, which
+  recorded `FAIL` after the first turn broke the tests and `PASS` after the second fixed them; no
+  hold reached the model, because the second turn fixed the failure before its stop. Hooks a person
+  trusts in `/hooks`, and the desktop app, are not observed.
 - The hooks page says that the `reason` of a hold becomes a new user prompt, which the model sees,
   and that a `systemMessage` is shown as a warning in the UI or event stream. Thus the model sees a
   hold, and only the person sees a PASS, a known failure or an `UNVERIFIED`.

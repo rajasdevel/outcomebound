@@ -47,7 +47,7 @@ import shlex
 import signal
 import subprocess
 import sys
-from collections.abc import Callable, Sequence, Set
+from collections.abc import Callable, Mapping, Sequence, Set
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -736,6 +736,15 @@ def _check_record(record: Record) -> None:
         value = record.get(name, [])
         if not (isinstance(value, list) and all(isinstance(item, str) for item in value)):
             raise AdoptError(f"{MANIFEST}: the {name} recorded for {path} are not a list of names")
+    skip = record.get(finish_check.SKIP_KEY, {})
+    if not (
+        isinstance(skip, dict)
+        and all(
+            isinstance(globs, list) and all(isinstance(glob, str) for glob in globs)
+            for globs in skip.values()
+        )
+    ):
+        raise AdoptError(f"{MANIFEST}: the Done skip recorded for {path} is not commands and globs")
     inputs = record.get("inputs", {})
     if not (isinstance(inputs, dict) and all(isinstance(v, str) for v in inputs.values())):
         raise AdoptError(f"{MANIFEST}: the inputs recorded for {path} are not paths and digests")
@@ -841,6 +850,16 @@ def recorded_fragments(own: Sequence[Record]) -> list[str]:
 
 def recorded_done(own: Sequence[Record]) -> list[str]:
     return _recorded(own, "done")
+
+
+def recorded_skip(own: Sequence[Record]) -> dict[str, list[str]]:
+    """The changes each Done command is not run for, as `--done-skip` recorded them; none where
+    the record holds none, or one the finish check would not read."""
+
+    for record in own:
+        if record["kind"] == "block" and record["id"] == FACTS:
+            return finish_check.skip_of(record.get("done", []), record.get(finish_check.SKIP_KEY))
+    return {}
 
 
 def recorded_setup(own: Sequence[Record]) -> list[str]:
@@ -1021,6 +1040,9 @@ class Run:
         self.records: list[Record] = []
         self.edited: list[str] = []
         self.notes: Notes = []
+        # What the facts restate about this target: printed only by a run that changes a file,
+        # so a run with nothing to change restates nothing.
+        self.restated: Notes = []
         # The Done commands and the timeout the install measures once its writes are made, and
         # whether it measures as a hook runs Done (False: with this process's own PATH).
         self.measure: tuple[list[str], int, bool] | None = None
@@ -1283,6 +1305,8 @@ def desired(
         extra["style"] = list(chosen.style)
     if chosen.setup:
         extra["setup"] = list(chosen.setup)
+    if chosen.skip:
+        extra[finish_check.SKIP_KEY] = {key: list(globs) for key, globs in chosen.skip.items()}
     wants.append(Want("block", AGENTS, FACTS, made.rendered.facts.encode("utf-8"), extra))
     if made.rendered.pointers is not None:
         block = made.rendered.pointers
@@ -1295,10 +1319,12 @@ def desired(
     if WORKSPACE in ids:
         wants.append(Want("ignore", WORKSPACE_IGNORE, WORKSPACE, workspace_ignore(source)))
     wants.append(Want("ignore", LOCAL_IGNORE, LOCAL_RECORDS, LOCAL_IGNORE_TEXT))
-    run.notes.extend(("UNVERIFIED", text) for text in made.rendered.unverified)
+    run.restated.extend(("UNVERIFIED", text) for text in made.rendered.unverified)
+    if made.rendered.absent:
+        run.restated.append(("note", f"left out: {', '.join(made.rendered.absent)}"))
     wants.extend(imports)
     if any(item.harness == GENERIC for item in found):
-        run.notes.append(("UNVERIFIED", f"{GENERIC}: that the harness reads {AGENTS}"))
+        run.restated.append(("UNVERIFIED", f"{GENERIC}: that the harness reads {AGENTS}"))
     wants.extend(_skills(source, found, made.skills))
     return wants
 
@@ -1339,16 +1365,18 @@ def finish_hooks(
     run: Run,
     table: dict[str, Any],
     found: Sequence[Route],
-    done: Sequence[str],
+    chosen: Chosen,
     selection: Selection,
     own: Sequence[Record],
 ) -> list[Want]:
-    """The finish-check entry for each selected harness whose row has a `finish_hook`, while the
+    """The finish-check entry for each selected harness whose row has a `finish_hook`, for the
+    chosen Done and its skip, while the
     person asked for it (None keeps what the manifest's records `own` hold), its timeout the one
     the person named, else the recorded one, each other selected harness named as not available
     yet. Asked for without Done, or where no selected harness has one, it is refused, as is a
     timeout named for an install with no finish check; an install that empties Done removes it."""
 
+    done, skip = chosen.done, chosen.skip
     asked = selection.finish_check
     recorded = any(record["kind"] == HOOK for record in own)
     timeout = selection.finish_timeout or recorded_timeout(own)
@@ -1376,7 +1404,7 @@ def finish_hooks(
     if not done:
         run.notes.append(("skip", "finish-check: Done is now empty, so its entry is taken out"))
         return []
-    digest = finish_check.done_digest(done)
+    digest = finish_check.done_digest(done, skip)
     wants: list[Want] = []
     for name, hook in hooks:
         if hook is None:
@@ -1417,7 +1445,7 @@ def finish_hooks(
         )
     run.notes.extend(wake_notes(hooks, [item.harness for item in found]))
     if wants:
-        plan_measure(run, done, timeout, bool(asked) or selection.verify)
+        plan_measure(run, done, timeout, bool(asked) or selection.verify, skip)
     return wants
 
 
@@ -1474,7 +1502,13 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
     return [("action", f"{name} finish-check: {what}; {finish_check.REVIEW_AGAIN[name]}")]
 
 
-def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> None:
+def plan_measure(
+    run: Run,
+    done: Sequence[str],
+    timeout: int,
+    asked: bool,
+    skip: Mapping[str, Sequence[str]] | None = None,
+) -> None:
     """Measure Done once after the writes where --finish-check or --verify is named (`asked`), so
     that no install runs the project's Done unasked (docs/specs/finish-check/design.md);
     otherwise name the record that applies here and whether Done outlasts the timeout by its
@@ -1483,7 +1517,7 @@ def plan_measure(run: Run, done: Sequence[str], timeout: int, asked: bool) -> No
     if asked:
         run.measure = (list(done), timeout, True)
         return
-    known = finish_check.known_record(run.target, finish_check.done_digest(done))
+    known = finish_check.known_record(run.target, finish_check.done_digest(done, skip))
     if known is None:
         run.notes.append(
             (
@@ -1590,6 +1624,32 @@ def rerun_notes(measured: finish_check.Measured) -> Notes:
     ]
 
 
+def order_notes(results: Sequence[finish_check.Result]) -> Notes:
+    """A note where a Done command that passed took longer than every later one together: a
+    failure of a later one makes the run, and so the slow one, start again. The engine keeps
+    the recorded order, since a later command may need what an earlier one makes."""
+
+    notes: Notes = []
+    for index, result in enumerate(results[:-1]):
+        later = results[index + 1 :]
+        rest = sum(item.seconds for item in later)
+        if result.verdict == finish_check.PASS and result.seconds > rest:
+            shorter = ", ".join(
+                f"`{finish_check.shorten(item.command, 80)}` ({item.seconds:.0f} s)"
+                for item in later
+            )
+            notes.append(
+                (
+                    "note",
+                    f"finish-check: `{finish_check.shorten(result.command, 80)}` "
+                    f"({result.seconds:.0f} s) runs before {shorter}; a failure of a later one "
+                    "runs it again, so list the shorter first unless a later one needs its output",
+                )
+            )
+            break
+    return notes
+
+
 def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) -> Notes:
     """The install report's lines for the one Done run an install makes."""
 
@@ -1674,6 +1734,7 @@ def measured_notes(target: Path, measured: finish_check.Measured, timeout: int) 
         )
     )
     notes.extend(rerun_notes(measured))
+    notes.extend(order_notes(measured.results))
     notes.extend(slow_done(target, measured.seconds, timeout))
     if not measured.kept:
         notes.append(
@@ -2043,12 +2104,12 @@ def unmanaged_lines(
 
 
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
-    """Where the install includes codex, the configuration route that lets an unattended
-    session write the workspace folders and commit. Codex's default `workspace-write` sandbox
-    keeps `<root>/.agents` and the Git directory read-only (research harnesses/codex.md section
-    9), and a Desktop or IDE session is reported to have no `--add-dir` flag, which the research
-    does not record. The `writable_roots` key is not in the research either, and whether the
-    harness can write the folders is not something adopt sees."""
+    """For a run that adds codex, once, the configuration route that lets an unattended session
+    write the workspace folders and commit. Codex's default `workspace-write` sandbox keeps
+    `<root>/.agents` and the Git directory read-only (research harnesses/codex.md section 9),
+    which records `--add-dir` as observed but not the `writable_roots` key, and not whether a
+    desktop or IDE session lacks the flag; whether the harness can write the folders is not
+    something adopt sees."""
 
     if not any(route.harness == "codex" for route in found):
         return []
@@ -2058,13 +2119,11 @@ def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     return [
         (
             "UNVERIFIED",
-            "codex: the default workspace-write sandbox keeps .agents and the Git directory "
-            "read-only (research harnesses/codex.md section 9), and a Desktop or IDE session is "
-            "reported to have no --add-dir flag, which the research does not record; for "
-            f"unattended sessions add {roots} to writable_roots under [sandbox_workspace_write] "
-            "in your Codex config.toml (the CLI can pass --add-dir for each); the key is not in "
-            "the research either, so check both against your Codex release, and adopt cannot "
-            "see whether the harness can write them",
+            "codex: the default sandbox keeps .agents and the Git directory read-only (research "
+            f"harnesses/codex.md section 9); for unattended sessions pass --add-dir for {roots}, "
+            "or add them to writable_roots under [sandbox_workspace_write] in config.toml; the "
+            "research records the flag, not the key, and not whether a desktop or IDE session "
+            "lacks the flag, and adopt cannot see whether the harness can write them",
         )
     ]
 
@@ -2184,6 +2243,7 @@ class Selection:
     finish_timeout: int | None = None
     setup: list[str] | None = None
     verify: bool = False
+    done_skip: dict[str, list[str]] | None = None
 
 
 def install(
@@ -2201,10 +2261,15 @@ def install(
     done = recorded_done(own) if selection.done is None else selection.done
     style = recorded_style(own) if selection.style is None else selection.style
     setup = recorded_setup(own) if selection.setup is None else selection.setup
+    skip = recorded_skip(own) if selection.done_skip is None else selection.done_skip
+    refused = finish_check.skip_refusal(done, skip) if skip else None
+    if refused is not None:
+        raise AdoptError(refused, "--done-skip '' '' clears the recorded skip")
     run = Run(target, force)
     table = harness_table(source)
-    wants = desired(run, source, found, ids, Chosen(done, style, setup))
-    hooks = finish_hooks(run, table, found, done, selection, own)
+    chosen = Chosen(done, style, setup, skip)
+    wants = desired(run, source, found, ids, chosen)
+    hooks = finish_hooks(run, table, found, chosen, selection, own)
     wants += hooks
     if selection.verify:
         plan_verify(run, done, selection.finish_timeout or recorded_timeout(own), bool(hooks))
@@ -2221,13 +2286,15 @@ def install(
     run.notes.extend(
         ("warning", line) for line in unmanaged_lines(target, run.records, run.settings)
     )
-    run.notes.extend(codex_sandbox_notes(target, found))
+    added = {route.harness for route in found} - set(recorded_harnesses(own))
+    run.notes.extend(codex_sandbox_notes(target, found) if "codex" in added else [])
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
     owned = sorted({MANIFEST, *(record["path"] for record in run.records)})
     run.notes.extend(ignored_notes(target, owned))
     run.notes.extend(uncommitted_notes(target, planned))
-    return planned, run.edited, run.notes, run.measure
+    notes = [*run.restated, *run.notes] if planned else run.notes
+    return planned, run.edited, notes, run.measure
 
 
 def remove(target: Path, source: Path, force: bool) -> tuple[Planned, list[str], Notes]:
@@ -2269,7 +2336,9 @@ def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
 
     ids = recorded_fragments(own)
     found = routes(source, recorded_harnesses(own) or [GENERIC])
-    chosen = Chosen(recorded_done(own), recorded_style(own), recorded_setup(own))
+    chosen = Chosen(
+        recorded_done(own), recorded_style(own), recorded_setup(own), recorded_skip(own)
+    )
     return guidance(target, found, catalog(source, target, ids), ids, chosen)
 
 
@@ -2327,7 +2396,7 @@ def _hook_rendered(source: Path, record: Record, own: Sequence[Record]) -> bytes
         raise AdoptError(
             f"this engine writes no finish-check entry for {harness} at {record['path']}"
         )
-    digest = finish_check.done_digest(done)
+    digest = finish_check.done_digest(done, recorded_skip(own))
     if record["id"] == FINISH_MARK:
         return finish_check.canonical(finish_check.mark_entry(harness, digest))
     timeout = int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
@@ -2509,7 +2578,7 @@ def measurement_note(target: Path, own: Sequence[Record]) -> str | None:
     done = recorded_done(own)
     if not done:
         return None
-    known = finish_check.known_record(target, finish_check.done_digest(done))
+    known = finish_check.known_record(target, finish_check.done_digest(done, recorded_skip(own)))
     if known is None:
         return (
             "finish-check: Done was not measured here, so no record of known failures applies "
@@ -2703,15 +2772,15 @@ def _signal_notes(target: Path, files: Sequence[facts.CiFile]) -> list[str]:
     return notes + [f"not read: {name}: {why}" for name, why in unread]
 
 
-def _recorded_done(target: Path) -> tuple[list[str], int]:
-    """The Done commands and the finish check's timeout an install here recorded; none, and the
-    default timeout, where there is no readable manifest."""
+def _recorded_done(target: Path) -> tuple[list[str], int, dict[str, list[str]]]:
+    """The Done commands, the finish check's timeout and the Done skip an install here recorded;
+    none, the default timeout and no skip, where there is no readable manifest."""
 
     try:
         own = load_manifest(target).own
     except AdoptError:
-        return [], finish_check.DEFAULT_TIMEOUT
-    return recorded_done(own), recorded_timeout(own)
+        return [], finish_check.DEFAULT_TIMEOUT, {}
+    return recorded_done(own), recorded_timeout(own), recorded_skip(own)
 
 
 def _measured_readiness(known: finish_check.Known, timeout: int) -> list[str]:
@@ -2740,12 +2809,13 @@ def _readiness_notes(target: Path, done: Sequence[str], files: Sequence[facts.Ci
     """What the files and a measurement show about whether Done can be trusted, one line each
     with its verdict and next step. No score, no level and no stored history."""
 
-    recorded, timeout = _recorded_done(target)
+    recorded, timeout, skip = _recorded_done(target)
     notes = []
     if not done and not recorded:
         notes.append("readiness UNVERIFIED: no Done candidate; next: record one with --done")
     for commands in dict.fromkeys(tuple(item) for item in (done, recorded) if item):
-        known = finish_check.known_record(target, finish_check.done_digest(commands))
+        skipped = skip if list(commands) == recorded else None
+        known = finish_check.known_record(target, finish_check.done_digest(commands, skipped))
         notes += _measured_readiness(known, timeout) if known is not None else []
     notes += [
         f"readiness UNVERIFIED: {name} has no lockfile beside it; next: a library may commit "
@@ -2832,17 +2902,18 @@ def detect(target: Path, source: Path) -> int:
 # --- Command line ---------------------------------------------------------------
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
-                            [--setup CMD]... [--human-style ste]
+                            [--done-skip CMD GLOBS]... [--setup CMD]... [--human-style ste]
                             [--finish-check | --no-finish-check] [--verify]
                             [--finish-timeout SECONDS] [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
 Install or upgrade OutcomeBound in <target>, inside a Git work tree. A flag you omit keeps the
-value the manifest records (--harness, --fragments, --done, --setup, --human-style,
+value the manifest records (--harness, --fragments, --done, --done-skip, --setup, --human-style,
 --finish-check); pass only what changes. AGENTS.md gets three
-blocks: the operating contract; the project facts (Done: the --done commands; Setup: the --setup
-commands, which a person records and adopt never runs; CI test: the test
+blocks: the operating contract; the project facts (Done: the --done commands, and for each one
+--done-skip names, the changes it is not run for, which the finish check also skips; Setup: the
+--setup commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
 edges: those the selected fragments declare, and a floor loosening where a floor is installed;
 Text for people: with --human-style ste, text an agent writes for a person in the style of
@@ -3003,6 +3074,15 @@ def _parser() -> argparse.ArgumentParser:
         "omitted keeps the recorded ones",
     )
     parser.add_argument(
+        "--done-skip",
+        action="append",
+        nargs=2,
+        metavar=("CMD", "GLOBS"),
+        help="a recorded Done command and the comma-separated globs of the changes it is not run "
+        "for: the finish check skips it where every changed path matches one; repeats add up; "
+        "'' '' for none; omitted keeps the recorded skip",
+    )
+    parser.add_argument(
         "--setup",
         action="append",
         metavar="CMD",
@@ -3062,6 +3142,19 @@ def _commands(values: Sequence[str], flag: str = "--done") -> list[str]:
     return commands
 
 
+def _skips(values: Sequence[Sequence[str]]) -> dict[str, list[str]]:
+    """The skip `--done-skip CMD GLOBS` pairs name; a pair of empty values records none."""
+
+    skip: dict[str, list[str]] = {}
+    for command, globs in values:
+        if not command.strip() and not globs.strip():
+            continue
+        names = [glob.strip() for glob in globs.split(",") if glob.strip()]
+        skip.setdefault(command.strip(), [])
+        skip[command.strip()] += [name for name in names if name not in skip[command.strip()]]
+    return skip
+
+
 def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
     for name in edited:
         print(f"edited   {name}: overridden by --force")
@@ -3078,6 +3171,10 @@ def _diffs(planned: Planned) -> None:
     """A unified diff for each planned text change; a file that is not UTF-8 text is named."""
 
     for path, (before, after) in planned.items():
+        if before is None and after is not None:
+            # A new file is its whole text, which the install writes as shipped: its size only.
+            print(f"new      {path}: {len(after)} bytes, written as shipped")
+            continue
         try:
             old = [] if before is None else before.decode("utf-8").splitlines(keepends=True)
             new = [] if after is None else after.decode("utf-8").splitlines(keepends=True)
@@ -3108,6 +3205,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             args.finish_timeout,
             None if args.setup is None else _commands(args.setup, "--setup"),
             args.verify,
+            None if args.done_skip is None else _skips(args.done_skip),
         )
         planned, edited, notes, measure = install(target, source, selection, args.force)
     if args.dry_run:
@@ -3181,11 +3279,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.finish_timeout is not None
-    chosen = chosen or args.setup is not None or args.verify
+    chosen = chosen or args.setup is not None or args.verify or args.done_skip is not None
     if (args.detect or args.check or args.remove) and (chosen or args.finish_check is not None):
         parser.error(
-            "--harness, --fragments, --done, --setup, --human-style, --finish-check, --verify "
-            "and --finish-timeout apply to an install"
+            "--harness, --fragments, --done, --done-skip, --setup, --human-style, --finish-check, "
+            "--verify and --finish-timeout apply to an install"
         )
     target = Path(args.target).resolve()
     try:

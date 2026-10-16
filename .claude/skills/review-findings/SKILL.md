@@ -32,6 +32,10 @@ the question, where the ticket or the design holds it. Write each disposition wh
 keeps reviews, else in your reply to the reviewer or your report; do not make a review file for
 it.
 
+A reviewer you dispatch reads again only where a fix changes a claim its finding rests on or a
+result a user can observe, and then reads that change alone. A finding that changes neither takes
+its disposition in this round and starts no other.
+
 ## Writing a review
 
 A review states the revision it read. Each finding names the claim, where it holds and the
@@ -39,8 +43,12 @@ evidence: the command and what it printed, or the lines read, so that a reader c
 you. Try a finding's counterexample before you report it; call a finding you did not check
 `UNVERIFIED`. Findings that share one cause go under that cause. Where the change rewrites text that
 carries a requirement, a bound or a verdict, compare the old and new text against what it carries.
-End the review with what it did not read or run. Leave the `Disposition:` line to whoever acts on the finding: a finding
-is open until then, and `outcomebound review check` reads it as FAIL.
+Give the change one verdict, first: `FAIL` while a finding that should change the code stands;
+`UNVERIFIED` where you did not measure the property the change exists to protect, such as a time,
+a limit or a rollback path; else `PASS`. It is your judgment of the change, not of your own scope,
+and not `outcomebound review check`'s verdict on dispositions. End with what you did not read or
+run, and nothing else. Leave the `Disposition:` line to whoever acts on the finding: a finding is
+open until then, and `outcomebound review check` reads it as FAIL.
 
 ## The review file
 

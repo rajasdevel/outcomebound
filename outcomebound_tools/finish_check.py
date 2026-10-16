@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fnmatch
 import hashlib
 import io
 import json
@@ -41,7 +42,7 @@ import tempfile
 import threading
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import IO, Any, NoReturn
@@ -199,11 +200,164 @@ def unavailable(name: str) -> str:
     return UNAVAILABLE.get(name, OTHER)
 
 
-def done_digest(done: Sequence[str]) -> str:
-    """The sha256 of the Done list as canonical JSON: the entry runs only while it matches."""
+def done_digest(done: Sequence[str], skip: Mapping[str, Sequence[str]] | None = None) -> str:
+    """The sha256 of the Done list as canonical JSON, and of the skip where one is declared: the
+    entry runs only while it matches, so a skip that changes is a hook that changes."""
 
-    text = json.dumps(list(done), ensure_ascii=False, separators=(",", ":"))
+    value: object = list(done)
+    if skip:
+        value = {"done": list(done), "skip": {key: list(skip[key]) for key in sorted(skip)}}
+    text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+# --- The changes a Done command is not run for (`adopt --done-skip`) -----------------
+
+# Paths a skip that covers every path matches: each kind of name at each depth.
+_EVERY_PATH = ("a", "a.b", ".a", "a/b", "a/b/c.d", "a/.b/c", "a/b/c/d/e.f")
+
+
+def glob_refusal(glob: str) -> str | None:
+    """Why `glob` is not a skip glob, or None. A glob is `/`-separated and matched from the
+    target's root: `*` and `?` stay inside one segment, a `**` segment matches zero or more."""
+
+    if not glob or glob.startswith("/") or "\\" in glob or "[" in glob:
+        return f"{glob!r} is empty, absolute, or holds a backslash or a bracket"
+    segments = glob.split("/")
+    if any(part in ("", ".", "..") for part in segments):
+        return f"{glob!r} holds an empty, `.` or `..` segment"
+    if any("**" in part and part != "**" for part in segments):
+        return f"{glob!r} holds `**` inside a segment; `**` is a segment of its own"
+    return None
+
+
+def _segments_match(globs: Sequence[str], parts: Sequence[str]) -> bool:
+    if not globs:
+        return not parts
+    if globs[0] == "**":
+        return any(_segments_match(globs[1:], parts[index:]) for index in range(len(parts) + 1))
+    return (
+        bool(parts)
+        and fnmatch.fnmatchcase(parts[0], globs[0])
+        and _segments_match(globs[1:], parts[1:])
+    )
+
+
+def glob_matches(glob: str, path: str) -> bool:
+    """Whether the target-relative `path` matches the skip glob `glob`, case-sensitively."""
+
+    return _segments_match(glob.split("/"), path.split("/"))
+
+
+def skip_refusal(done: Sequence[str], skip: Mapping[str, Sequence[str]]) -> str | None:
+    """Why `skip` cannot go with `done`, or None: each key a Done command, each glob well formed,
+    no command's globs together covering every path, and one command always run."""
+
+    for command, globs in skip.items():
+        if command not in done:
+            return f"--done-skip names {command!r}, which is not a recorded Done command"
+        if not globs:
+            return f"--done-skip names no glob for {command!r}"
+        for glob in globs:
+            why = glob_refusal(glob)
+            if why is not None:
+                return f"--done-skip for {command!r}: {why}"
+        if all(any(glob_matches(glob, path) for glob in globs) for path in _EVERY_PATH):
+            return f"--done-skip for {command!r} covers every path, so it would never run"
+    if all(command in skip for command in done):
+        return (
+            "--done-skip leaves no Done command that always runs; record the check that those "
+            "changes do need (for example the project's documentation check) as a Done command"
+        )
+    return None
+
+
+def recorded_skip(target: Path) -> dict[str, list[str]]:
+    """The skip the manifest's facts record holds, or none where it is absent or not well formed:
+    a skip that fails `skip_refusal` skips nothing, so a hand edit never loosens the check."""
+
+    try:
+        document = json.loads((target / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    artifacts = document.get("artifacts") if isinstance(document, dict) else None
+    for record in artifacts if isinstance(artifacts, list) else []:
+        if isinstance(record, dict) and record.get("kind") == "block" and record.get("id") == FACTS:
+            return skip_of(record.get("done", []), record.get(SKIP_KEY))
+    return {}
+
+
+def skip_of(done: object, value: object) -> dict[str, list[str]]:
+    """`value` as a skip for `done`, where it is a well-formed one; else none."""
+
+    if not (isinstance(done, list) and all(isinstance(item, str) for item in done)):
+        return {}
+    if not isinstance(value, dict) or not all(
+        isinstance(key, str)
+        and isinstance(globs, list)
+        and all(isinstance(glob, str) for glob in globs)
+        for key, globs in value.items()
+    ):
+        return {}
+    skip = {key: list(globs) for key, globs in value.items()}
+    return skip if skip and skip_refusal(done, skip) is None else {}
+
+
+def changed_paths(target: Path, base: str, deadline: float | None = None) -> list[str] | None:
+    """Each path, relative to the target, that differs from the commit `base` (a deletion and
+    each side of a move included) or is untracked and not ignored; None where Git cannot say in
+    time, or where a path outside the target changed."""
+
+    prefix = _git(target, "rev-parse", "--show-prefix", deadline=deadline)
+    diff = _git(
+        target,
+        "diff",
+        "--name-only",
+        "-z",
+        "--no-renames",
+        "--no-ext-diff",
+        base,
+        deadline=deadline,
+    )
+    untracked = _git(
+        target, "ls-files", "-z", "--others", "--exclude-standard", "--full-name", deadline=deadline
+    )
+    if prefix is None or diff is None or untracked is None:
+        return None
+    lead = os.fsdecode(prefix.strip())
+    found: list[str] = []
+    for name in (diff + b"\0" + untracked).split(b"\0"):
+        path = os.fsdecode(name)
+        if not path:
+            continue
+        if not path.startswith(lead):
+            return None
+        found.append(path[len(lead) :])
+    return found
+
+
+def skipped_for(
+    target: Path,
+    done: Sequence[str],
+    skip: Mapping[str, Sequence[str]],
+    base: str,
+    deadline: float | None = None,
+) -> tuple[str, ...]:
+    """The Done commands this change need not run: each whose skip globs match every changed
+    path. None is skipped where nothing changed, where the paths cannot be read in time, where a
+    path outside the target changed, or where every command would be."""
+
+    if not skip:
+        return ()
+    changed = changed_paths(target, base, deadline)
+    if not changed:
+        return ()
+    skipped = tuple(
+        command
+        for command in done
+        if all(any(glob_matches(glob, path) for glob in skip.get(command, ())) for path in changed)
+    )
+    return () if len(skipped) >= len(done) else skipped
 
 
 def command(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> str:
@@ -345,6 +499,9 @@ def find_target(payload: Mapping[str, Any] | None, cwd: Path) -> tuple[Path, boo
     return start, False
 
 
+SKIP_KEY = "done_skip"
+
+
 def recorded_done(target: Path) -> list[str] | None:
     """The Done commands the manifest's facts record holds, or None where it cannot be read."""
 
@@ -385,9 +542,10 @@ def _git(target: Path, *arguments: str, deadline: float | None = None) -> bytes 
     return done.stdout if done.returncode == 0 else None
 
 
-def _content(path: Path) -> bytes:
+def _content(path: Path, deadline: float | None = None) -> bytes | None:
     """What an untracked path holds, for the tree digest: a link's text, or a file's digest and
-    whether it may be executed, since a script that loses its execute bit no longer runs."""
+    whether it may be executed, since a script that loses its execute bit no longer runs; None
+    where `deadline` passes while a large file is read."""
 
     try:
         if path.is_symlink():
@@ -397,17 +555,58 @@ def _content(path: Path) -> bytes:
         digest = hashlib.sha256(b"x" if os.access(path, os.X_OK) else b"-")
         with path.open("rb") as handle:
             for block in iter(lambda: handle.read(1024 * 1024), b""):
+                if deadline is not None and time.monotonic() > deadline:
+                    return None
                 digest.update(block)
         return digest.digest()
     except OSError:
         return b"unreadable"
 
 
+def _submodule_diffs(target: Path, deadline: float | None, depth: int = 0) -> bytes | None:
+    """The tracked diff inside each checked-out submodule of `target`, and of each submodule
+    nested in one, against its own HEAD, by path; None where Git cannot say in time, or the
+    nesting runs deeper than `SUBMODULE_DEPTH`. The parent's diff shows a dirty submodule as one
+    "-dirty" line whatever the edit, so without this two different edits give one digest. Each
+    read is this module's own, with its read configuration and `--no-ext-diff`, since Git's
+    `--submodule=diff` runs the submodule's diff with neither."""
+
+    if depth > SUBMODULE_DEPTH:
+        return None
+    listed = _git(target, "ls-files", "-s", "-z", deadline=deadline)
+    if listed is None:
+        return None
+    found = b""
+    for entry in listed.split(b"\0"):
+        meta, _, name = entry.partition(b"\t")
+        if not meta.startswith(b"160000 "):
+            continue
+        folder = target / os.fsdecode(name)
+        if not os.path.lexists(folder / ".git"):
+            continue
+        inner = _git(
+            folder,
+            *("diff", "--binary", "--no-color", "--no-ext-diff", "--no-textconv", "HEAD"),
+            deadline=deadline,
+        )
+        nested = _submodule_diffs(folder, deadline, depth + 1)
+        if inner is None or nested is None:
+            return None
+        found += name + b"\0" + hashlib.sha256(inner + b"\0" + nested).digest()
+    return found
+
+
+# How deep the tree digest follows submodules nested in submodules; past it, the tree reads as
+# one Git cannot say, and the stop takes its path for a tree it could not read.
+SUBMODULE_DEPTH = 8
+
+
 def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str | None:
     """A digest of the working tree for this Done digest and this target: the tracked diff
-    against HEAD and each untracked file Git does not ignore; None where Git cannot say, or
-    where `deadline` passes first. The target is part of it, so two targets in one repository
-    never share a pass."""
+    against HEAD, the tracked diff inside each checked-out submodule, and each untracked file Git
+    does not ignore (an untracked file inside a submodule is not read); None where Git cannot
+    say, or where `deadline` passes first. The target is part of it, so two targets in one
+    repository never share a pass."""
 
     head = _git(target, "rev-parse", "--verify", "-q", "HEAD^{tree}", deadline=deadline)
     base = head.strip().decode() if head else EMPTY_TREE
@@ -419,13 +618,20 @@ def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str
     untracked = _git(target, "ls-files", "-z", "--others", "--exclude-standard", deadline=deadline)
     if diff is None or untracked is None:
         return None
+    inside = _submodule_diffs(target, deadline)
+    if inside is None:
+        return None
     where = os.fsencode(str(target.resolve()))
     total = hashlib.sha256(f"{digest}\0{base}\0".encode() + where + b"\0")
     total.update(hashlib.sha256(diff).digest())
+    total.update(hashlib.sha256(inside).digest())
     for name in sorted(item for item in untracked.split(b"\0") if item):
         if deadline is not None and time.monotonic() > deadline:
             return None
-        total.update(name + b"\0" + _content(target / os.fsdecode(name)))
+        content = _content(target / os.fsdecode(name), deadline)
+        if content is None:
+            return None
+        total.update(name + b"\0" + content)
     return total.hexdigest()
 
 
@@ -495,6 +701,7 @@ class Checked:
     marked: str = ""
     guarded: bool = False
     paused: bool = False
+    skipped: tuple[str, ...] = ()
 
     def document(self) -> dict[str, Any]:
         return {
@@ -514,6 +721,7 @@ class Checked:
             "marked": self.marked,
             "guarded": self.guarded,
             "paused": self.paused,
+            "skipped": list(self.skipped),
         }
 
     def text(self) -> str:
@@ -530,6 +738,17 @@ class Checked:
             and tree == self.tree
             and (self.verdict == PASS or timeout == self.timeout)
         )
+
+    def repeats_for(
+        self, tree: str | None, timeout: int, session: str | None, mark: Mark | None
+    ) -> bool:
+        """`repeats`, except for another session's failure where this session's trusted mark
+        shows the turn changed the tree: that turn may have caused the failure, so Done runs
+        again and the record becomes this session's own, which holds."""
+
+        if not self.repeats(tree, timeout):
+            return False
+        return self.verdict == PASS or mark is None or self.session == session
 
 
 def _checked(document: object) -> Checked | None:
@@ -559,6 +778,9 @@ def _checked(document: object) -> Checked | None:
     flags = {key: document.get(key, False) for key in ("guarded", "paused")}
     listed = document.get("pending", [])
     pending = [Pending.of(item) for item in listed] if isinstance(listed, list) else [None]
+    skipped = document.get("skipped", [])
+    if not (isinstance(skipped, list) and all(isinstance(item, str) for item in skipped)):
+        return None
     if not (
         all(isinstance(value, str) for value in found.values())
         and (session is None or isinstance(session, str))
@@ -577,6 +799,7 @@ def _checked(document: object) -> Checked | None:
         session,
         seconds=float(seconds),
         pending=tuple(item for item in pending if item is not None),
+        skipped=tuple(skipped),
         **found,
         **flags,
     )
@@ -1824,7 +2047,8 @@ def measure(target: Path, done: Sequence[str], timeout: int, as_hook: bool = Tru
     environment left out. A KeyboardInterrupt, or any exception that stops the wait, stops the
     running command's group and is raised again, with nothing kept."""
 
-    digest = done_digest(done)
+    skip = recorded_skip(target) if recorded_done(target) == list(done) else {}
+    digest = done_digest(done, skip)
     started = time.monotonic()
     head = _head(target)
     before = tree_digest(target, digest)
@@ -2381,7 +2605,11 @@ def _changed_text(record: Checked, target: Path) -> str:
 
 def _pass_text(record: Checked) -> str:
     listed = ", ".join(shorten(result.command, 80) for result in record.results)
-    return f"finish-check PASS: {listed}, {record.seconds:.0f}s; not reviewed, not landed"
+    skipped = ", ".join(shorten(command, 80) for command in record.skipped)
+    not_run = (
+        f"; not run, every changed path is one its --done-skip names: {skipped}" if skipped else ""
+    )
+    return f"finish-check PASS: {listed}, {record.seconds:.0f}s{not_run}; not reviewed, not landed"
 
 
 @dataclass(frozen=True)
@@ -2451,13 +2679,21 @@ def _failure_notice(record: Checked, viewer: Viewer, target: Path) -> Notice | N
     return Notice(record.tree, FAIL, str(text))
 
 
-def hold_report(record: Checked, target: Path, both: bool = False) -> str:
+def hold_report(record: Checked, target: Path, both: bool = False, tree: str | None = None) -> str:
     """The report a hold gives the model: its first line says how the failure stands (found
     again after the session recorded it, with the time of each run where `both`; with no record
     of the tree the turn began with; or new), then what to do, then the commands and the output.
-    """
+    A record of a tree other than `tree`, the current one, says the turn changed the tree since:
+    the failure is not known to stand on it."""
 
-    if record.hold == AGAIN and record.first:
+    if record.hold == AGAIN and record.first and tree is not None and record.tree != tree:
+        first = (
+            "finish-check FAIL: Done failed on the tree this turn began with, at "
+            f"{clock_of(record.first)}, and again at {clock_of(record.time)}; this turn changed "
+            "the tree since, and Done has not yet run on it. Run the failing command again: if "
+            "your change fixed it, say so and end the turn."
+        )
+    elif record.hold == AGAIN and record.first:
         first = (
             "finish-check FAIL: Done failed on the tree this turn began with, at "
             f"{clock_of(record.first)}, and still fails now"
@@ -2856,6 +3092,7 @@ class _Context:
     wake: bool
     begun: float
     started: datetime
+    skip: Mapping[str, Sequence[str]] = field(default_factory=dict)
 
     @property
     def until(self) -> float:
@@ -2900,7 +3137,12 @@ class _Turn:
 
 
 def _record(
-    context: _Context, turn: _Turn, results: Sequence[Result], changed: bool, cause: str
+    context: _Context,
+    turn: _Turn,
+    results: Sequence[Result],
+    changed: bool,
+    cause: str,
+    skipped: Sequence[str] = (),
 ) -> Checked:
     """The record of a run's results: a check of the turn's tree, or, where `changed`, the
     results of a run whose tree changed, with the session's failures carried forward."""
@@ -2941,6 +3183,7 @@ def _record(
         mark.written.isoformat() if mark is not None else "",
         context.guarded,
         context.paused,
+        tuple(skipped),
     )
 
 
@@ -2952,7 +3195,9 @@ def _check(
     target, book = context.target, context.book
     current = checked_for(target, tree, context.until)
     unchanged = mark is not None and mark.tree == tree and mark.head == head
-    if unchanged or (current is not None and current.repeats(tree, context.timeout)):
+    if unchanged or (
+        current is not None and current.repeats_for(tree, context.timeout, context.session, mark)
+    ):
         code, text, note = _wake_from(context, current, tree)
         note = DELIVERED_NOTE if code == 2 else note
         return (UNCHANGED if unchanged else RECORDED), note, code, text
@@ -2963,14 +3208,19 @@ def _check(
     earlier = _earlier(baseline, context.session, held, target)
     results: list[Result] = []
     keep = mark.tree if mark is not None else None
+    # A trusted mark's HEAD is where the turn began, so a turn that commits is read whole.
+    base = mark.head if mark is not None and mark.head else "HEAD"
+    skipped = skipped_for(target, context.done, context.skip, base, context.until)
+    running = [line for line in context.done if line not in skipped]
     try:
         stopping.arm()
-        run_all(target, context.done, context.until, known, earlier, into=results)
+        run_all(target, running, context.until, known, earlier, into=results)
         after = tree_digest(target, context.digest, book)
     except Superseded:
         stopping.armed = False
         if results:
-            remember(target, _record(context, turn, results, True, SUPERSEDED), book, keep)
+            record = _record(context, turn, results, True, SUPERSEDED, skipped)
+            remember(target, record, book, keep)
         return SUPERSEDED, "", 0, ""
     stopping.armed = False
     verdict = _verdict(results).lower()
@@ -2979,7 +3229,7 @@ def _check(
         return verdict, "not remembered: the tree could not be read again in time", 0, ""
     changed = after != tree
     cause = OUTSIDE if changed and _outside(target, context.started, book) else ""
-    record = _record(context, turn, results, changed, cause)
+    record = _record(context, turn, results, changed, cause, skipped)
     remember(target, record, book, keep)
     drop_fixed(target, known, results, book)
     if changed:
@@ -3029,7 +3279,8 @@ def run(
     context_start = time.monotonic(), datetime.now(timezone.utc)
     target, found = find_target(payload, cwd)
     done = recorded_done(target) if found else None
-    if not done or done_digest(done) != digest:
+    skip = recorded_skip(target) if found else {}
+    if not done or done_digest(done, skip) != digest:
         return 0, ""
     context = _Context(
         harness,
@@ -3042,6 +3293,7 @@ def run(
         _paused(payload),
         wake,
         *context_start,
+        skip,
     )
     gitdir = _gitdir(target, context.until)
     if gitdir is None:
@@ -3349,7 +3601,7 @@ def stop(
             f"finish-check UNVERIFIED: no {MANIFEST} found from {target}; nothing ran."
         ), None
     done = recorded_done(target)
-    if not done or done_digest(done) != entry.digest:
+    if not done or done_digest(done, recorded_skip(target)) != entry.digest:
         return told(_digest_text(target)), None
     tree = tree_digest(target, entry.digest, deadline)
     raw = read_mark(target, deadline)
@@ -3363,13 +3615,14 @@ def stop(
     hold = _stop_hold(target, viewer, current, mark, unchanged)
     state, last = run_state(target, deadline)
     running = state == LIVE and last is not None and last.tree == tree
-    repeating = current is not None and current.repeats(tree, entry.timeout)
+    repeating = current is not None and current.repeats_for(tree, entry.timeout, session, mark)
     starts = not unchanged and not repeating and not running
     argv = _run_argv(entry, payload, target, mark) if starts else None
     unheld: list[Notice] = []
     if hold is not None:
         if keep_held(target, session, hold.holding, hold.tree):
-            return {"decision": "block", "reason": hold_report(hold, target, both=True)}, argv
+            reason = hold_report(hold, target, both=True, tree=tree)
+            return {"decision": "block", "reason": reason}, argv
         unheld = [_unheld_notice(hold, target)]
     found_notices = unheld + notices(target, viewer, deadline, from_run=False)
     if unchanged and mark is not None:
@@ -3395,7 +3648,7 @@ def turn_notices(
 
     deadline = time.monotonic() + MARK_SECONDS if deadline is None else deadline
     done = recorded_done(target)
-    if not done or done_digest(done) != digest:
+    if not done or done_digest(done, recorded_skip(target)) != digest:
         return tell(target, session, [Notice("", DIGEST_KIND, _digest_text(target))], deadline)
     viewer = Viewer(session, tree, False, held_signatures(target, session, deadline))
     return tell(target, session, notices(target, viewer, deadline, from_run=True), deadline)
@@ -3459,7 +3712,7 @@ def status(folder: Path) -> str:
     if not found:
         return f"finish-check UNVERIFIED: no {MANIFEST} found from {target}; nothing ran.\n"
     done = recorded_done(target) or []
-    tree = tree_digest(target, done_digest(done)) if done else None
+    tree = tree_digest(target, done_digest(done, recorded_skip(target))) if done else None
     state, last = run_state(target)
     session = last.session if last is not None else None
     guarded = last.guarded if last is not None else False

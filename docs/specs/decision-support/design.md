@@ -92,6 +92,7 @@ These come from the request that added the explorable.
 | --- | --- | --- | --- |
 | Every decision put to a person — in a session, at a handoff, in a tracker comment — is a decision brief, drawn by one renderer, `outcomebound brief`, and shown as markdown, never inside a code block | prose lists; a shape each skill describes in its own words | user | decided |
 | A brief holds only the work that waits on its answer. A run starts without answers, writing a brief never ends the turn while other work can go on, and the brief goes where the person will read it: the handoff, the goal's Progress, a comment on the ticket it holds, or the final message when every remaining item waits on an answer (maintainer, 2026-10-04) | the turn's final message as the first place for a brief, which in an unattended harness ends the run | user | decided |
+| A question already settled is not asked again: the launch block, a grant a project file records (a tickets declaration), a standing order and an earlier answer stand. An order that names a class of acts grants each item the agent's check shows is in the class and restorable (a tool rebuilds it, or a copy the agent verified restores it); an item not checked, one nothing restores and one another owner uses stay held (field: a recorded grant asked again; an order to clear what is not needed overridden for copies the agent had verified) | a typed reason on every brief, a wire change that waits until a field window shows agent-decidable briefs again; an order read as a grant for its whole class, which removed what a check did not cover | agent | decided |
 | The procedure — what to decide yourself, the due diligence, the brief's parts, drawing it — lives in one skill, `decision-brief`, a default skill. The kernel's handoff sentence names it, and the core skill keeps only when to ask and a pointer | the procedure inside the core skill, reached only through it | user | decided |
 | Due diligence comes before the brief. The agent checks everything within reach that could change the answer, works out what each way leads to and its downside, and lets the evidence choose the recommendation. `Not checked` names only what could not be checked, why, and what would settle it | a form filled from whatever is already in hand | user | decided |
 | A brief is a floor, not a form. Always: an id and the question in one line; every way forward when there are two or more, each with what it leads to and its downside; the recommendation first, with why; at least one line of evidence (checked, not checked, or a fact); and whether it can be undone. Anything else appears only when it changes the answer | a fixed form with every slot filled; a brief with no evidence line | user | decided |
@@ -155,7 +156,7 @@ In the emoji form, where the session's surface renders Mermaid:
 
 ````text
 ### D1 · Keep the old flag for one release?
-- 👉 Recommend: A — two adopters still set it · confidence 80% (inferred)
+- 👉 Recommend: A — two adopters still set it
 - Options:
   - A keep it — adopters get a warning first
     - 🔻 Downside: one more release carries the old code path

@@ -22,8 +22,11 @@ the work that waits on it, so every other item goes on. Some harnesses honor aut
 the user's own words: for an act a permission check guards, such as a deletion or a write outside
 the project, the brief names the act so the user's reply can state it, not only a letter.
 
-A question the person already settled is not asked again: their launch block, their standing
-order and their earlier answer stand. An order to run unattended answers "may I ask" only for
+A question the person already settled is not asked again: their launch block, a grant a project
+file records (a tickets declaration), their standing order and their earlier answer stand. An order
+that names a class of acts, such as clearing what is not needed, grants each item your check shows
+is in that class and that a tool rebuilds or a copy you verified restores; hold an item you did not
+check, one nothing restores, and one another owner uses. An order to run unattended answers "may I ask" only for
 questions within what the kernel allows you to decide; it grants no act that a bound or an edge
 holds. A harness or sandbox that refuses an act has raised no new decision only where the person's
 own words name that act and its target: quote them. Then say in the first line of your next
@@ -102,7 +105,7 @@ project's instructions number briefs:
 
 ````markdown
 ### D1 · Keep the old flag for one release?
-- 👉 Recommend: A — two adopters still set it · confidence 80% (inferred)
+- 👉 Recommend: A — two adopters still set it
 - Options:
   - A keep it — adopters get a warning first
     - 🔻 Downside: one more release carries the old code path

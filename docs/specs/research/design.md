@@ -44,13 +44,23 @@ first, with or without a clone, against the engine's path grammar, then read by
 `paths.read_bounded`: relative, no `..` or `.git`, no symlink on the way, a regular file. Standard
 output starts `research: <PATH> (working tree of the clone at <commit, 12 hex>, HEAD moved
 <YYYY-MM-DD>; sha256 <12 hex> of the text below)`, then the file. A modified file shows a new
-digest under the same commit; cite path, commit and digest. The commit: `.git` is a
+digest under the same commit; cite path, commit and digest in a record, and path and day in text a person reads. The commit: `.git` is a
 folder or a file whose `gitdir:` names one; `HEAD`'s ref is read from the loose ref (in the
 `commondir` for a worktree), then `packed-refs`; a detached `HEAD` as it is; else `unknown`.
 Refusals go to standard error as `research: <PATH>: <why>`, exit 1, nothing on standard output:
 not a bounded path; a symlink on the way; a folder; not in the clone (`INDEX.md` lists every
 document; for a path under `models/`, `models/README.md` says which models have a file, and a
 model with no file takes the spec tier, `applications/implementer-tiers.md`).
+
+**Find.** `outcomebound research --find TERM...` reads `INDEX.md` as Print does and prints only its
+rows (lines that start `| [`) whose document, title or scope cell holds every term, case-folded,
+after one line: `research: <n> of <rows> rows of INDEX.md hold "<terms>" (<the provenance Print
+gives> of the whole INDEX.md text)`, so a citation keeps the commit and digest. No row: standard
+error says so and names the whole index, exit 1. With a `PATH` other than `INDEX.md`: usage, exit 2.
+It is an option of Print, not a subcommand, so no first word is reserved; it reads the index and no
+document (rejected: a `search` subcommand; a titles-only index, which is a push to the research
+repository; a full-text search of the documents; `research | grep`, which drops the first line a
+citation needs).
 
 **Not configured** (exit 3, standard error): `research: no clone configured: <why>`, then
 `read it at <public blob URL of PATH>` and `clone it once per machine, with the person's yes:

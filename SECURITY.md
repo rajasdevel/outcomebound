@@ -28,7 +28,7 @@ A report is easiest to act on when it gives:
 ## Supported versions
 
 Security fixes go into the latest release. To take a fix, install that release and run
-`outcomebound adopt` again, as [Try it](README.md#try-it) describes.
+`outcomebound adopt` again, as the [Quick start](README.md#quick-start) describes.
 
 ## What OutcomeBound promises
 
@@ -62,9 +62,10 @@ A report that shows one of these promises broken is a vulnerability.
 
 **The network**
 
-- The engine opens no network connection itself. Three commands run a tool that does:
-  `floor provision --accept` runs pip, and `research clone --accept` and `research pull --accept`
-  run Git.
+- The engine opens no network connection itself. Four commands run a tool that can:
+  `floor provision --accept` runs pip, `research clone --accept` and `research pull --accept`
+  run Git, and `explorable check --browser` starts a headless browser, which loads the page's
+  pinned libraries from their CDN.
 
 ## Limits and behavior by design
 

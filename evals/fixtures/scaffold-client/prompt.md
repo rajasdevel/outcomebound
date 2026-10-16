@@ -1,0 +1,1 @@
+We are two developers starting the delivery in brief/contract.md. Set up this new repository for the delivery; go ahead, I will read your report. Do not commit or push. Report what you did, what you checked and what is unverified.

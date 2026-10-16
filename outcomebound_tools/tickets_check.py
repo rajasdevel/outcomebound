@@ -29,6 +29,7 @@ exactly as it judges a store's, and such a run reads no store at all.
 from __future__ import annotations
 
 import argparse
+import shlex
 from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -292,11 +293,67 @@ def _reach_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
             f"the claim `{item.claim}` of {ticket.id} declares in {plan.path} that it reads "
             f"{', '.join(outside)}, which the ticket's `bounds` do not cover, so a finding "
             "there is one this ticket's work may not repair",
-            "widen `bounds` to cover what the claim reads, or put a ticket that repairs it "
-            "first in `blocked-by`",
+            "keep `bounds` where the claim passes today; widen them only where the outcome's "
+            "authority already reaches those paths, else put a ticket that repairs them first "
+            "in `blocked-by`",
             claim=item.claim,
             reaches=tuple(outside),
         )
+
+
+def _subsumed_messages(ticket: Ticket, plan: ClaimsPlan) -> Iterator[Message]:
+    """Each claim another claim of the same ticket already runs, read from the plan's argv: the
+    same command under two names, or the command of one with only paths added that exist from
+    the plan's directory. A tool's config can narrow the wider run (a `testpaths`, an exclude),
+    which argv cannot show, so it is a warning and its text says so. Nothing is executed; the
+    ticket's id stays out of the text, so the same pair on many tickets folds to one row."""
+
+    named = list(
+        dict.fromkeys(
+            item.claim for item in ticket.done_when if not item.human and item.claim in plan.claims
+        )
+    )
+    for index, narrow in enumerate(named):
+        argv = plan.claims[narrow].command
+        if not argv:
+            continue
+        for other, wide in enumerate(named):
+            base = plan.claims[wide].command
+            if wide == narrow or not base:
+                continue
+            if tuple(argv) == tuple(base):
+                if other > index:
+                    continue
+                yield message(
+                    "CLAIM_SUBSUMED",
+                    ticket.id,
+                    f"the claims `{wide}` and `{narrow}` run the same command, "
+                    f"`{shlex.join(argv)}`, and the ticket names both",
+                    f"drop `{narrow}` from `done-when`; `{wide}` runs it",
+                    claim=narrow,
+                )
+                break
+            added = argv[len(base) :]
+            if (
+                len(base) < len(argv)
+                and tuple(argv[: len(base)]) == tuple(base)
+                and all(
+                    not word.startswith("-") and (plan.cwd_resolved / word).exists()
+                    for word in added
+                )
+            ):
+                yield message(
+                    "CLAIM_SUBSUMED",
+                    ticket.id,
+                    f"the claim `{narrow}` runs `{shlex.join(argv)}`, the command of `{wide}` "
+                    "with paths added, and the ticket names both, so one run of "
+                    f"`{wide}` covers it unless the tool's config narrows that run (a "
+                    "`testpaths`, an exclude)",
+                    f"drop `{narrow}` from `done-when` where the run of `{wide}` reads those "
+                    "paths, else keep both",
+                    claim=narrow,
+                )
+                break
 
 
 def _cwd_messages(plan: ClaimsPlan, target: Path) -> tuple[Message, ...]:
@@ -467,6 +524,7 @@ def _judge(ticket: Ticket, run: _Run) -> TicketResult:
         *run.requirements.uncovered(ticket),
         *_claim_messages(ticket, run.plan),
         *_reach_messages(ticket, run.plan),
+        *_subsumed_messages(ticket, run.plan),
         *_relation_messages(ticket, run.given, run.knots),
         *_wait_messages(ticket),
     )

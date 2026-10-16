@@ -39,13 +39,13 @@
       "mode": "gate",
       "tool": "bash",
       "argv": ["bash", "-n", "{file}"],
-      "files": ["*.sh"],
+      "files": ["*.sh", "(extensionless shell scripts)"],
       "parser": "bash-n"
     },
     {
       "name": "shell.injection",
       "mode": "gate",
-      "files": ["*.sh"],
+      "files": ["*.sh", "(extensionless shell scripts)"],
       "parser": "injection"
     },
     {

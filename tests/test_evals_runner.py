@@ -391,8 +391,14 @@ def test_each_fixture_selects_the_fragment_it_names_and_the_others_none(
     }
     runtime = {"runtime-check", "runtime-none"}
     deploy = {"deploy-authorized", "deploy-none", "deploy-wrong-version"}
-    assert selecting == tickets | runtime | deploy
-    for names, fragment in ((tickets, "tickets"), (runtime, "runtime"), (deploy, "deploy")):
+    commands = {"field-commands-hazards"}
+    assert selecting == tickets | runtime | deploy | commands
+    for names, fragment in (
+        (tickets, "tickets"),
+        (runtime, "runtime"),
+        (deploy, "deploy"),
+        (commands, "commands"),
+    ):
         for name in names:
             assert RUN.selected_fragments(name) == (fragment,)
     fixtures = tmp_path / "fixtures"
@@ -659,11 +665,23 @@ def test_specialized_fixtures_run_only_when_named() -> None:
     """New research cases must not increase the default model-call budget."""
 
     named = [name for name in RUN.fixture_names() if name.startswith(RUN.NAMED_ONLY)]
-    assert len(named) == 40
+    assert len(named) == 50
     assert {"patch-validation", "property-oracles", "testing-no-work"} <= set(named)
     assert {"onboard-plain", "onboard-signals"} <= set(named)
     assert {"lifecycle-stream", "lifecycle-switch"} <= set(named)
     assert {"skill-land-change", "skill-run-acceptance", "skill-sync-tracker"} <= set(named)
+    assert {n for n in named if n.startswith(("field-", "scaffold-"))} == {
+        "field-commands-hazards",
+        "field-docs-only-done",
+        "field-goal-person-items",
+        "field-order-class",
+        "field-parallel-report",
+        "field-report-gap",
+        "field-review-verdict",
+        "scaffold-client",
+        "scaffold-prototype",
+        "scaffold-switch",
+    }
     new_project = {
         "new-project-ai",
         "new-project-idea",

@@ -10,6 +10,17 @@
     "version": {"const": 1},
     "verdict": {"enum": ["PASS", "FAIL"]},
     "reviewed": {"type": "string"},
+    "files": {
+      "description": "Only from `review sweep`: how many review files it read, how many failed, and how many paths it did not read.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read", "failed", "unread"],
+      "properties": {
+        "read": {"type": "integer"},
+        "failed": {"type": "integer"},
+        "unread": {"type": "integer"}
+      }
+    },
     "counts": {
       "type": "object",
       "additionalProperties": false,

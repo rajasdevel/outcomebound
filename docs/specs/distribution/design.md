@@ -40,7 +40,7 @@ the same wheel, byte for byte.
 ## Dependencies and their limits
 
 The engine and build backend import only the Python standard library. The package declares
-Python 3.10 or later and no third-party Python runtime or build requirements. Git 2.52.0 or later
+Python 3.10 or later and no third-party Python runtime or build requirements. This repository's `Makefile` refuses an older `$(PYTHON)` by name before any target runs, with the launcher's words, and leaves an absent one to make's own line. Git 2.52.0 or later
 is required for adoption and repository operations. The installed entry point runs Python; the checkout
 launcher uses POSIX `sh`. The finish check uses a POSIX shell to run Done lines and needs only
 the additional tools that those lines require. Windows uses the shell supplied by Git for

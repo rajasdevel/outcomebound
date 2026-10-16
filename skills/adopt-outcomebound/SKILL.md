@@ -9,7 +9,8 @@ Use `outcomebound` on PATH: installed from a release, or `scripts/outcomebound` 
 checkout. Read the target's existing agent instructions and its dirty state first; they are
 preserved.
 
-You are done when the install is current (`outcomebound adopt <target> --check` exits 0), Done was
+You are done when the install is current (an install that exits 0 wrote and checked every record;
+`outcomebound adopt <target> --check` is for a later day or another clone), Done was
 measured or the report says why not, each line you proposed for the project's `local` guidance
 cites the file that shows it, each fact the install reports `UNVERIFIED` is named, and what only the
 person can answer has gone to them as one decision brief. Write no overview of the repository: an
@@ -22,8 +23,10 @@ agent reads the code, and a summary of it adds text without adding a fact.
    proposes `generic`. Each following line starts with `#`: a candidate it did not put in the
    command, an onboarding signal, a readiness line, and where this guide lives. Change the proposal
    only where the target shows it is wrong; the `--done` commands are the ones that settle done
-   here, in the order they run. Outside a Git work tree it refuses and names `git init`; on an
-   empty repository it names the new-project route.
+   here, in the order they run. Where the project's own text says a kind of change needs no Done
+   command (documentation only, say), record it with `--done-skip CMD GLOBS`, with the check those
+   changes do need as a Done command; propose none its text does not name. Outside a Git work tree
+   it refuses and names `git init`; on an empty repository it names the new-project route.
 2. Run that command. It writes three blocks into `AGENTS.md`: the contract; the project facts
    (Done, Setup, the CI test command, irreversible edges, precedence); and the pointers, the `local`
    fragment in full and a `- <condition>: read <path>` line per fragment and skill. It copies the

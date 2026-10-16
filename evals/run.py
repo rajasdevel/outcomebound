@@ -91,6 +91,8 @@ NAMED_ONLY = (
     "onboard-",
     "skill-",
     "business-requirements-",
+    "field-",
+    "scaffold-",
 )
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"

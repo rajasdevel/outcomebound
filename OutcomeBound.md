@@ -61,7 +61,8 @@ ends only when its completion bar holds or nothing left can proceed.
 
 ## Validate and report
 
-Name the checks that settle the changed risk, and report the checks the completion bar names, each
+Report against the Outcome first: what was asked, what is now true, and what is not done; where the
+work meets only part of the ask, say how much, such as two of ten. Then name the checks that settle the changed risk, and report the checks the completion bar names, each
 as `PASS`, `FAIL`, or `UNVERIFIED`; a named check that was not run is `UNVERIFIED`. Do not list
 checks nobody asked for. A `FAIL` is always reported. `PASS` means only that the declared check
 succeeded. A completion-bar check or a material claim reported `UNVERIFIED` says what evidence is

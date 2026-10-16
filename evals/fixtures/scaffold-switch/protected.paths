@@ -1,0 +1,6 @@
+# The installed core skill and the
+# repository exclusion state copied into the candidate-writable fixture.
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude

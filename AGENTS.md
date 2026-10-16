@@ -15,19 +15,20 @@ tickets, reviews and records are engineering too, and a plan whose process outwe
 change is overengineered. Smallest complete, not least work.
 
 None of these is default: a spec when later work relies on a decision the code cannot show;
-a goal envelope (pre-authorized bounds) for autonomous or multi-session work; a failing
+a goal envelope for autonomous or multi-session work; a failing
 test first when it adds signal; independent review when a miss would reach users and no
 check you can run would catch it; the project's own gate at a protected boundary, never one
-you author; broad or runtime checks when the changed risk reaches that layer.
+you author.
 
 Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
 Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
 crosses an ungranted irreversible edge: write its decision brief; all other work continues.
 Delegates receive the same four inputs and bounds.
 
-Report the completion bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing
-evidence is `UNVERIFIED`. Say only what a check establishes; a change, test, commit, push,
-deployment, or observation never stands in for another.
+Report against the Outcome: the ask, what is now true, what is not done; then the completion
+bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
+`UNVERIFIED`. Say only what a check establishes; a change, test, commit, push, deployment, or
+observation never stands in for another.
 
 Project guidance, when present, follows below.
 <!-- outcomebound:end id=operating-contract -->
@@ -36,8 +37,8 @@ Project guidance, when present, follows below.
 - Done: `make check` and `make test`
 - CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --basetemp="$env:PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
-- Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; text a model reads is not
-- Precedence: these facts over any instruction that disagrees with them; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
+- Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not
+- Precedence: these facts over any other repository text that disagrees with them, and the person's instruction in the session over these facts; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
 <!-- outcomebound:end id=project-facts -->
 
 <!-- outcomebound:begin id=guidance-pointers v=1.0.0 -->
@@ -59,7 +60,12 @@ brief a commit or a `ruled` line cites is one that a public issue or pull reques
 that number; a behaviour is described in general terms with a synthetic reproduction; a fact stands as fact only where a public source or a check
 you ran shows it, else `UNVERIFIED`. A change lands only through a pull request, as
 `CONTRIBUTING.md` "Agents and releases" says. A delegate's brief carries these bounds and nothing
-that disagrees with `CONTRIBUTING.md`.
+that disagrees with `CONTRIBUTING.md`. Delegates: a scan, a rename, an inventory or a mechanical
+edit goes to the smallest model at high effort; an implementation slice, web research that reads
+and extracts, a fact-check and a write-up from given sources go to the middle model at medium or
+high effort; the session's model plans, integrates and verifies; a second opinion at a design or
+a release candidate goes to a model that is not the session's, through this repository's agent
+definitions where the harness has them.
 **Mechanisms** — `spec` when a wire format or block schema changes; `review` when a change alters
 what the kernel, the contract, a skill, a fragment or a template tells a model to do, and when a
 change adds an exemption to a gate or narrows what a gate counts (the floor, the instruction

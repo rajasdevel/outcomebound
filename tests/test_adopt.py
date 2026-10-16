@@ -1835,7 +1835,8 @@ def test_setup_is_recorded_in_run_order_kept_cleared_and_never_run(
 
     _, out, _ = run(capsys, str(target), *first)
 
-    assert "UNVERIFIED Setup: no command is recorded; adopt records one with --setup" in out
+    assert "Setup (none recorded; --setup records one)" in out
+    assert "UNVERIFIED Setup" not in out
     assert "Setup" not in facts_lines(target)
 
     code, out, err = run(
@@ -1857,7 +1858,7 @@ def test_setup_is_recorded_in_run_order_kept_cleared_and_never_run(
     assert facts_lines(target)["Setup"] == lines["Setup"]
 
     code, out, _ = run(capsys, str(target), "--setup", "")
-    assert code == 0 and "UNVERIFIED Setup: no command is recorded" in out
+    assert code == 0 and "Setup (none recorded; --setup records one)" in out
     assert "Setup" not in facts_lines(target)
     assert "setup" not in manifest(target)["artifacts"][1]
     assert run(capsys, str(target), "--check")[0] == 0
@@ -3258,6 +3259,8 @@ def test_a_human_style_is_recorded_kept_on_upgrade_and_cleared_by_an_empty_one(
     assert list(lines)[-2:] == ["Text for people", "Precedence"]
     assert "ASD-STE100 Simplified Technical English" in lines["Text for people"]
     assert "no length limit" in lines["Text for people"]
+    assert "has not used is explained or left out" in lines["Text for people"]
+    assert "save one a check or the project's rule requires" in lines["Text for people"]
     assert "every fact, number and caveat is kept" in lines["Text for people"]
     assert manifest(target)["artifacts"][1]["style"] == ["ste"]
     assert run(capsys, str(target), "--check")[0] == 0

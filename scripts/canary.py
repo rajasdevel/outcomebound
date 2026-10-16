@@ -42,7 +42,8 @@ not the command's documented verdict), an exception adopt reports (`adopt: [Errn
 refusal (another `adopt:` reason, a `floor:` reason, or a ticket verb's named code with no
 report), a changed verdict or exit code, and the report lines added or removed by kind: an adopt
 `warning` or `UNVERIFIED` line by its first four words, each word that is not a plain word shown
-as `<...>`, and any other adopt line by its first word; an instruction finding by its check and
+as `<...>`, and any other adopt line by its first word (a line of the diff that `--dry-run` prints
+under a file has no kind); an instruction finding by its check and
 verdict; a floor claim by its name (a name the engine's recipes do not give shown as `<...>`)
 and its result; a ticket message by its level and its code. The verdict is the last line. A
 crash, an exception or a refusal of the candidate, a command of the candidate that printed no
@@ -180,8 +181,11 @@ def _word(token: str) -> str:
 
 
 def _kind(line: str) -> str | None:
+    """A report line's kind; None for a blank line and for a line of the unified diff that
+    `adopt --dry-run` prints under a file, which starts with a space, `+`, `-`, `@` or `\\`."""
+
     tokens = line.split()
-    if not tokens:
+    if not tokens or line[0] in " +-@\\":
         return None
     first = _word(tokens[0])
     if first in GROUPED:

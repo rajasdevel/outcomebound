@@ -45,7 +45,7 @@
           },
           "confidence": {
             "type": "string",
-            "description": "`fact`, or a whole percentage followed by `(inferred)`; written only with `recommend`.",
+            "description": "`fact` where a command the agent ran shows it, else `inferred`; an older document may hold a whole percentage followed by `(inferred)`; written only with `recommend`.",
             "pattern": "^[^\\r\\n]*$"
           },
           "options": {

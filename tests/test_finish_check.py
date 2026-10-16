@@ -1354,6 +1354,111 @@ def test_the_tree_is_not_read_once_its_deadline_has_passed(tmp_path: Path) -> No
     assert finish_check.tree_digest(root, digest) is not None
 
 
+def test_an_edit_inside_a_dirty_submodule_changes_the_tree_digest(tmp_path: Path) -> None:
+    """Breaks if two different edits inside a submodule that is already dirty give one tree
+    digest, which lets a cached PASS stand for a failing tree."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run([GIT, "-C", str(where), *identity, *argv], check=True)
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    git(library, "init", "-q")
+    write(library / "value.txt", "ok\n")
+    git(library, "add", "-A")
+    git(library, "commit", "-qm", "lib")
+    root, digest = target(tmp_path / "t", ["true"])
+    git(root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(library), "lib")
+    git(root, "commit", "-qm", "add lib")
+    write(root / "lib" / "value.txt", "pass\n")
+    passing = finish_check.tree_digest(root, digest)
+    write(root / "lib" / "value.txt", "broken\n")
+
+    assert passing is not None and finish_check.tree_digest(root, digest) != passing
+
+
+def test_an_edit_inside_a_nested_submodule_changes_the_tree_digest(tmp_path: Path) -> None:
+    """Breaks if two different edits inside a submodule of a submodule give one tree digest."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+    allow = ["-c", "protocol.file.allow=always"]
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run([GIT, "-C", str(where), *identity, *argv], check=True)
+
+    inner = tmp_path / "inner"
+    inner.mkdir()
+    git(inner, "init", "-q")
+    write(inner / "value.txt", "ok\n")
+    git(inner, "add", "-A")
+    git(inner, "commit", "-qm", "inner")
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    git(outer, "init", "-q")
+    git(outer, *allow, "submodule", "add", "-q", str(inner), "inner")
+    git(outer, "commit", "-qm", "outer")
+    root, digest = target(tmp_path / "t", ["true"])
+    git(root, *allow, "submodule", "add", "-q", str(outer), "outer")
+    git(root, *allow, "submodule", "update", "--init", "--recursive", "-q")
+    git(root, "commit", "-qm", "add outer")
+    nested = root / "outer" / "inner" / "value.txt"
+    write(nested, "pass\n")
+    passing = finish_check.tree_digest(root, digest)
+    write(nested, "broken\n")
+
+    assert passing is not None and finish_check.tree_digest(root, digest) != passing
+
+
+@pytest.mark.skipif(os.name != "posix", reason="the planted diff command is a POSIX script")
+def test_a_repositorys_own_diff_settings_run_no_command_in_a_submodule(tmp_path: Path) -> None:
+    """Breaks if a read of the tree runs a command a repository's own config names: with
+    `diff.submodule=diff` in the parent, Git diffs inside each submodule without `--no-ext-diff`,
+    where the submodule's `diff.external` would run."""
+
+    identity = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
+
+    def git(where: Path, *argv: str) -> None:
+        subprocess.run([GIT, "-C", str(where), *identity, *argv], check=True)
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    git(library, "init", "-q")
+    write(library / "value.txt", "ok\n")
+    git(library, "add", "-A")
+    git(library, "commit", "-qm", "lib")
+    root, digest = target(tmp_path / "t", ["true"])
+    git(root, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(library), "lib")
+    git(root, "commit", "-qm", "add lib")
+    marker = tmp_path / "ran"
+    script = tmp_path / "planted.sh"
+    write(script, f"#!/bin/sh\ntouch {q(marker)}\n")
+    script.chmod(0o755)
+    git(root, "config", "diff.submodule", "diff")
+    git(root / "lib", "config", "diff.external", str(script))
+    write(root / "lib" / "value.txt", "changed\n")
+
+    assert finish_check.tree_digest(root, digest) is not None
+    assert not marker.exists()
+
+
+def test_a_large_untracked_file_stops_its_hash_at_the_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breaks if the hash of one untracked file runs on past the deadline: a large file must not
+    take a stop past its hook's timeout before the run starts."""
+
+    root, _ = target(tmp_path / "t", ["true"])
+    with (root / "big.bin").open("wb") as handle:
+        handle.truncate(8 * 1024 * 1024)
+    clock = iter(range(1_000_000))
+    monkeypatch.setattr(finish_check.time, "monotonic", lambda: float(next(clock)))
+
+    assert finish_check._content(root / "big.bin", 3.0) is None
+    assert finish_check._content(root / "big.bin") is not None
+
+
 def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     tmp_path: Path,
 ) -> None:
@@ -3424,7 +3529,8 @@ def test_on_codex_an_undelivered_failure_holds_one_stop_later_with_the_times_of_
 ) -> None:
     """Breaks if codex's stop holds on a record of the tree its turn began on before a run has
     found the failure again, or never holds it: the stop after the confirming run holds it, with
-    the time of each run."""
+    the time of each run, and says the turn changed the tree since, so it claims no failure of
+    the current tree."""
 
     count = tmp_path / "count"
     root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; echo boom; exit 1"])
@@ -3452,7 +3558,8 @@ def test_on_codex_an_undelivered_failure_holds_one_stop_later_with_the_times_of_
 
     assert verdict["decision"] == "block"
     head = verdict["reason"].splitlines()[0]
-    assert f"at {clock(first.time)}, and still fails now" in head and clock(second.time) in head
+    assert f"at {clock(first.time)}, and again at {clock(second.time)}; this turn changed" in head
+    assert "still fails now" not in head
 
 
 @pytest.mark.parametrize("row", ROWS)
@@ -3468,6 +3575,27 @@ def test_a_failure_another_session_recorded_is_never_held(tmp_path: Path, row: s
     _, verdict = hook(row, digest, root, run=False)
 
     assert "decision" not in verdict and "finish-check FAIL" in person(row, root, verdict)
+
+
+@pytest.mark.parametrize("row", ROWS)
+def test_a_turn_that_makes_a_tree_another_session_saw_fail_is_held(
+    tmp_path: Path, row: str
+) -> None:
+    """Breaks if another session's failure record on the tree this turn made stands in for
+    this turn's own run: the turn changed the tree, so it may have caused the failure."""
+
+    root, digest = target(tmp_path / "t", ["test ! -e broken || { echo boom; exit 1; }"])
+    write(root / "broken", "x\n")
+    since = finish_helpers.now()
+    assert stop_json("codex", digest, root, stdin=other_session("codex", root)) == {}
+    finish_helpers.wait_for_run(root, since)
+    (root / "broken").unlink()
+
+    turn(row, digest, root)
+    write(root / "broken", "x\n")
+    _, verdict = hook(row, digest, root)
+
+    assert verdict.get("decision") == "block" and "boom" in verdict["reason"]
 
 
 @pytest.mark.parametrize("row", ROWS)

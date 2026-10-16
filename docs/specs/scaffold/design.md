@@ -488,7 +488,9 @@ twin is written that a clone on a case-insensitive file system cannot check out.
 So no project gets a second route (lifecycle requirement R14), a second design log or a second CI
 system. A present part is never written. Where the plan has parts for a present file, the plan and
 `--accept` print them as a block for the agent to add after the person's yes; the scaffold edits no
-present file.
+present file. A part the file already holds, line for line, with each marker as written or filled,
+and an edge the file already lists, are left out of the block, so a run after `--accept` asks the
+agent to add nothing twice; a part a person reworded is printed again, for the agent to compare.
 
 `--accept` writes through `fileplan.write`, with every planned file expected absent: atomic, never
 through a link or a junction, never into `.git`, refused where a file appeared after the plan read
@@ -642,7 +644,7 @@ holds it.
 | `--visibility` is required beyond prototype | a default, which would decide `SECURITY.md`, `CODEOWNERS` and the "not enforced" marks without the fact | agent | decided |
 | `--check` reads every file Git lists, not only the planned paths, so a value in a file the agent moved is still found; the lifecycle flags do not narrow it | reading the planned paths only, which needs the same flags again and misses a moved file | agent | decided |
 | `--check` exits 1 when any marker is left and prints the count (decided by the agent, 2026-10-15, following the research's CLI conventions) | the count as the exit, as the ruling's words and `adopt --check` have it, which the research's conventions advise against (`practices/cli-conventions.md` C3): a count of 2 reads as a usage error and one of 256 as success | agent | decided |
-| Two marker kinds, `<<fill: ...>>` and `<<owner: ...>>`, so `--check` names the gate owners apart from the values | one kind, which cannot say that a value is the person's to name | agent | decided |
+| Two marker kinds, `<<fill: ...>>` and `<<owner: ...>>`, so `--check` names the gate owners apart from the values; a listed file that cannot be read is a third kind, `unread`, counted as a value left (`N paths not read` on the first line), and so is a folder Git could not open to list, since it may hold a marker and the check must not read `PASS` over it | one kind, which cannot say that a value is the person's to name; skipping an unreadable file, which reads `PASS` with a value still in it | agent | decided |
 | A file is a head and parts joined in a fixed order; the local fragment joins by slot; no YAML is merged | one whole template per combination, four presets times 64 overlay sets; text merged into YAML | agent | decided |
 | Template sources carry plain names, mapped to their paths by the manifest | sources at the paths they take, whose dot folders the build backend's walk skips and which tools in this repository would read as its own | agent | decided |
 | The first design is an offer on team and organization: the plan names `new-spec.sh` for the first hard-to-undo choice, and prints the eu-market and ai-product rows as a block to add to it once it exists (maintainer, 2026-10-15) | a design written at scaffold time with a row to fill for each choice, which changes no decision before the route reaches those choices, and a fixed slug | user | decided |

@@ -223,6 +223,24 @@ def test_a_valid_unverified_report_is_a_verdict_and_no_report_is_a_failure() -> 
     assert result.failures == {"no report": 1}
 
 
+def test_the_diff_a_dry_run_prints_under_a_file_has_no_kind() -> None:
+    """Breaks if each line of the diff `adopt --dry-run` prints is counted as a report kind, which
+    buries the report's own lines under the words of the changed text."""
+
+    module = load_canary()
+    dry_run = next(c for c in module.COMMANDS if c.label == "adopt --dry-run")
+    out = (
+        "update   AGENTS.md\n"
+        "--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1,2 +1,2 @@\n The contract\n-Old line\n+New line\n"
+        "\\ No newline at end of file\n"
+        "warning  claude-code: a session here also loads ../CLAUDE.md\n"
+    )
+
+    outcome = module.read(dry_run, 0, out, "")
+
+    assert set(outcome.kinds) == {"update", "warning claude-code: a session here"}
+
+
 @pytest.mark.parametrize("nested", [False, True])
 def test_canary_records_resolve_git_common_dir_without_path_format(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool

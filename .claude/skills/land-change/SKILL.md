@@ -14,7 +14,8 @@ gates needs only the handover and the merge grant.
 
 The request description is the record a reviewer reads without you. It holds:
 
-- what changed, and why, in the words of the outcome and not of the diff;
+- what changed, and why, in the words of the outcome and not of the diff, and what the ticket
+  asked that is not done;
 - each check the completion bar names and its verdict, `PASS`, `FAIL` or `UNVERIFIED`, with the
   command for a verdict a reader may want to repeat; a check that failed is always listed, and a
   check nobody asked for is not;

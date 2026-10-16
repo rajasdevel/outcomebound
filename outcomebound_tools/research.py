@@ -275,7 +275,11 @@ def version(root: Path) -> str:
 # --- Print -------------------------------------------------------------------------------------
 
 
-def show(path: str) -> int:
+def _document(path: str) -> tuple[str, str]:
+    """The text of `path` in the clone's working tree, LF whatever the checkout has, so that one
+    file has one digest on every machine, and the provenance a citation needs: the clone's
+    commit, the day HEAD moved, and the sha256 of the text."""
+
     if not paths.admits(path):
         raise Refusal(f"{path}: not a bounded relative path")
     root = clone_root(path)
@@ -283,16 +287,46 @@ def show(path: str) -> int:
         data = paths.read_bounded(root, path)
     except paths.PathError as error:
         raise Refusal(f"{path}: {_why_not(root, path, str(error))}") from error
-    # LF whatever the clone's checkout has, so that one file has one digest on every machine.
     text = data.decode("utf-8", "replace").replace("\r\n", "\n")
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
     commit, day = _commit_and_day(root)
     # The bytes are the working tree's, which Git was not asked to compare with the commit.
-    sys.stdout.write(
-        f"research: {path} (working tree of the clone at {commit}, HEAD moved {day}; "
-        f"sha256 {digest} of the text below)\n"
-    )
+    return text, f"working tree of the clone at {commit}, HEAD moved {day}; sha256 {digest}"
+
+
+def show(path: str) -> int:
+    text, provenance = _document(path)
+    sys.stdout.write(f"research: {path} ({provenance} of the text below)\n")
     sys.stdout.write(text)
+    sys.stdout.flush()
+    return 0
+
+
+def find(terms: Sequence[str]) -> int:
+    """The rows of the index whose document, title or scope cell holds every term, case-folded,
+    after one line with the counts and the provenance a citation needs; exit 1 with none."""
+
+    text, provenance = _document(INDEX)
+    rows = [line for line in text.splitlines() if line.startswith("| [")]
+    wanted = [term.casefold() for term in terms]
+    found = [
+        row
+        for row in rows
+        if all(term in " ".join(row.strip("|").split("|")[:3]).casefold() for term in wanted)
+    ]
+    shown = " ".join(terms)
+    if not found:
+        print(
+            f'research: no row of {INDEX} holds "{shown}"; outcomebound research prints the '
+            "whole index",
+            file=sys.stderr,
+        )
+        return 1
+    sys.stdout.write(
+        f'research: {len(found)} of {len(rows)} rows of {INDEX} hold "{shown}" '
+        f"({provenance} of the whole {INDEX} text)\n"
+    )
+    sys.stdout.write("".join(f"{row}\n" for row in found))
     sys.stdout.flush()
     return 0
 
@@ -653,6 +687,9 @@ Read the research repository, and send a finding back to it.
   outcomebound research [PATH]     print PATH (default {INDEX}) from the clone's working tree,
                                    its first line the clone's commit and the sha256 of the
                                    text; with no clone configured, name the public link, exit 3
+  outcomebound research --find TERM...
+                                   print the {INDEX} rows whose document, title or scope holds
+                                   every TERM, after the same first line; exit 1 with none
   outcomebound research clone DESTINATION [--accept]
                                    git clone it into DESTINATION, outside any project, and
                                    link {LINK_TEXT} to it
@@ -689,6 +726,12 @@ def _print_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("path", nargs="?", default=INDEX, metavar="PATH")
+    parser.add_argument(
+        "--find",
+        nargs="+",
+        metavar="TERM",
+        help="print only the index rows whose document, title or scope holds every TERM",
+    )
     return parser
 
 
@@ -729,7 +772,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     try:
         if not arguments or arguments[0] not in SUBCOMMANDS:
-            return show(_print_parser().parse_args(arguments).path)
+            parser = _print_parser()
+            printing = parser.parse_args(arguments)
+            if printing.find is None:
+                return show(printing.path)
+            if printing.path != INDEX:
+                parser.error("--find reads the index; it takes no PATH")
+            return find(printing.find)
         options = _verb_parser().parse_args(arguments)
         if options.verb == "clone":
             return clone(options.destination, options.accept)

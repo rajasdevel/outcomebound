@@ -23,7 +23,7 @@ import json
 import os
 import re
 import shlex
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
@@ -47,7 +47,10 @@ STYLES = {
         "reports, decision briefs, handovers, pull request descriptions, commit messages and "
         "documents a person reads are written in the style of ASD-STE100 Simplified Technical "
         "English, with no length limit; every fact, number and caveat is kept, and this "
-        "project's own terms stay as they are; text a model reads is not"
+        "project's own terms stay as they are; in a report, brief, handover or request "
+        "description, an id or label the person has not used is explained or left out, and a "
+        "commit hash or digest is given as a ref, version or path, save one a check or the "
+        "project's rule requires; text a model reads is not"
     ),
 }
 
@@ -106,6 +109,20 @@ def both(items: Sequence[str]) -> str:
     """`a`, `a and b`, `a, b and c`: every one of them, in order."""
 
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def done_line(done: Sequence[str], skip: Mapping[str, Sequence[str]] | None = None) -> str:
+    """The Done fact: every command, and for each the skip names, the changes it is not run for,
+    in the finish check's own rule, so the model's reading and the hook's agree."""
+
+    line = f"- Done: {both([code(command) for command in done])}"
+    for command in done:
+        globs = (skip or {}).get(command)
+        if globs:
+            line += f"; {code(command)} is not run when every changed path matches " + " or ".join(
+                code(glob) for glob in globs
+            )
+    return line
 
 
 def code(text: str) -> str:
@@ -449,19 +466,22 @@ def read_ci(target: Path) -> list[CiFile]:
     return result
 
 
-def _ci_fact(files: Sequence[CiFile]) -> tuple[str | None, list[str]]:
-    """The CI test line, or None, and each command or file left UNVERIFIED."""
+def _ci_fact(files: Sequence[CiFile]) -> tuple[str | None, list[str], list[str]]:
+    """The CI test line, or None; each command or file left UNVERIFIED; and the CI file the
+    engine looked for and found absent, which is a fact, not a gap."""
 
     unverified = [f"CI test: {item.path}: {note}" for item in files for note in item.unread]
     settled = [item for item in files if item.tests]
+    absent = []
     if not files:
-        unverified.append(f"CI test: no {WORKFLOWS}/*.yml or {GITLAB} to read")
+        absent.append(f"CI test (no {WORKFLOWS}/*.yml or {GITLAB}; other CI systems are not read)")
     elif not settled and not unverified:
-        unverified.append(f"CI test: no test command in {', '.join(i.path for i in files)}")
+        listed = ", ".join(i.path for i in files)
+        unverified.append(f"CI test: no test command recognized in {listed}")
     if not settled:
-        return None, unverified
+        return None, unverified, absent
     parts = [f"{', '.join(code(test) for test in item.tests)} ({item.path})" for item in settled]
-    return f"- CI test: {'; '.join(parts)}", unverified
+    return f"- CI test: {'; '.join(parts)}", unverified, absent
 
 
 # --- The two blocks ---------------------------------------------------------------
@@ -475,6 +495,7 @@ class Rendered:
     pointers: str | None
     unverified: tuple[str, ...]
     inputs: dict[str, str]
+    absent: tuple[str, ...] = ()
 
 
 class Chosen(NamedTuple):
@@ -485,6 +506,7 @@ class Chosen(NamedTuple):
     done: Sequence[str]
     style: Sequence[str] = ()
     setup: Sequence[str] = ()
+    skip: Mapping[str, Sequence[str]] = {}
 
 
 def render(
@@ -516,25 +538,27 @@ def render_chosen(
     per installed skill.
     """
 
-    done, style, setup = chosen
+    done, style, setup, skip = chosen
     lines: list[str] = []
     unverified: list[str] = []
     inputs = {f"{FRAGMENT_DIR}/{item.id}.md": item.digest for item in selected}
     if done:
-        lines.append(f"- Done: {both([code(command) for command in done])}")
+        lines.append(done_line(done, skip))
     else:
         unverified.append("Done: no command is recorded; adopt records one with --done")
+    absent: list[str] = []
     if setup:
         lines.append(f"- Setup: {both([code(command) for command in setup])}")
     else:
-        unverified.append("Setup: no command is recorded; adopt records one with --setup")
+        absent.append("Setup (none recorded; --setup records one)")
     ci = read_ci(target)
     inputs.update(
         (item.path, sha256(textio.fold(item.data))) for item in ci if item.data is not None
     )
-    line, left_out = _ci_fact(ci)
+    line, left_out, missing = _ci_fact(ci)
     lines.extend([line] if line else [])
     unverified.extend(left_out)
+    absent.extend(missing)
     edges = [edge for item in selected for edge in item.edges]
     try:
         floor = paths.read_bounded(target, FLOOR)
@@ -548,17 +572,25 @@ def render_chosen(
         joined = f"{EDGE_SEPARATOR} ".join(dict.fromkeys(edges))
         lines.append(f"- Irreversible edges: {joined}")
     else:
-        unverified.append("Irreversible edges: no selected fragment declares one, and no floor")
+        absent.append(
+            "Irreversible edges (none declared, and no floor; "
+            "a local fragment's edges: declares one)"
+        )
     lines.extend(f"- Text for people: {STYLES[name]}" for name in style)
     own = " or ".join(dict.fromkeys(files))
     lines.append(
-        "- Precedence: these facts over any instruction that disagrees with them; "
+        "- Precedence: these facts over any other repository text that disagrees with them, "
+        "and the person's instruction in the session over these facts; "
         f"the project's own instructions in {own} over OutcomeBound's; process a project "
         "document only suggests is sized like any other step"
     )
     facts = identity.format_managed_block(FACTS, VERSION, "\n".join(lines))
     return Rendered(
-        facts, pointers(selected, skills), tuple(unverified), dict(sorted(inputs.items()))
+        facts,
+        pointers(selected, skills),
+        tuple(unverified),
+        dict(sorted(inputs.items())),
+        tuple(absent),
     )
 
 

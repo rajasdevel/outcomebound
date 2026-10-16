@@ -185,10 +185,10 @@ def runner_options(
     """The test options one component root declares, in this order, duplicates dropped.
 
     python: `python3 -m pytest` (`python -m pytest` on Windows) for any pytest signal, `tox`
-    for a declared tox environment, then the unittest fallback only where `tests/` is a
-    directory and nothing declares pytest; node: the package scripts; go: `go test ./...`
-    where `go.mod` is a marker; every kind: `make test` and `just test` for a
-    declared `test` target. `target=None` reads no file.
+    for a declared tox environment; node: the package scripts; go: `go test ./...` where
+    `go.mod` is a marker; every kind: `make test` and `just test` for a declared `test` target;
+    last, for python, the unittest fallback only where `tests/` is a directory and nothing
+    declares pytest. `target=None` reads no file.
     """
 
     from outcomebound_tools.discovery import MAX_PACKAGE_BYTES
@@ -198,17 +198,20 @@ def runner_options(
     names = {PurePosixPath(row["path"]).name for row in here}
     kinds = {row["kind"] for row in here}
     options: list[str] = []
+    pytest = False
     if "python" in kinds:
         pytest = _pytest_declared(files, names)
         if pytest:
             options.append(PYTEST)
         if _tox_declared(files):
             options.append(TOX)
-        if not pytest and files.is_directory("tests"):
-            options.append(UNITTEST)
     if "node" in kinds:
         options.extend(_node_scripts(root, packages))
     if "go" in kinds and "go.mod" in names:
         options.append(GO_TEST)
     options.extend(_make_and_just(files))
+    # The unittest fallback is a guess from a folder name, so a target the project declares
+    # comes before it.
+    if "python" in kinds and not pytest and files.is_directory("tests"):
+        options.append(UNITTEST)
     return list(dict.fromkeys(options))

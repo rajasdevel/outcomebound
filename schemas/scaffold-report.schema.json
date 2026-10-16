@@ -70,7 +70,7 @@
         "properties": {
           "path": {"type": "string", "minLength": 1},
           "line": {"type": "integer"},
-          "kind": {"enum": ["fill", "owner"]},
+          "kind": {"enum": ["fill", "owner", "unread"]},
           "label": {"type": "string", "minLength": 1}
         }
       }

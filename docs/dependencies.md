@@ -54,6 +54,7 @@ harness can also have requirements of its own.
 | Research reads | A configured OBR clone | Reads the documents offline. Only accepted clone or pull acts need Git and network access. |
 | GitHub ticket export or publication | GitHub CLI and access to GitHub | Produces a local export or performs the separately authorized tracker act. Engine ticket checks read the export and call no tracker. |
 | Optional spec scaffold | Bash, cat, grep, dirname, mkdir and sed | Creates draft files from the shipped templates. |
+| Lifecycle scaffold (`outcomebound scaffold`) | Python and Git | Lists the files a lifecycle needs; writes only absent files, and only with `--accept`. |
 
 [The library pins](../templates/explorable/libraries.json), [floor recipes](../outcomebound_tools/floor.py)
 and [browser finder](../outcomebound_tools/explorable_browser.py) define these requirements.

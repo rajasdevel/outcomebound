@@ -37,6 +37,18 @@ The same two files are also published to PyPI, as the project `outcomebound`, by
 workflow (see below). The first version on PyPI is 1.6.0; no earlier version is there. The tagged
 Git URL stays a supported route for every version.
 
+## When to make a release
+
+Make a release when an adopter needs something in it. Do not make a release for each change: each
+release makes every adopter act.
+
+A fix that no adopter needs now waits for the next release that is due.
+
+Do not make a release while a known issue is open. Step 1 below says how to find the known issues.
+
+If the tag is not pushed yet, prepare the release again to take more fixes. Do not follow it with a
+second release.
+
 ## How a release is made
 
 This section is for the person who prepares a release of OutcomeBound.
@@ -79,7 +91,14 @@ version. A pre-release tag (`v<VERSION>` with `-rc.N`) also uploads, as a pre-re
 
 A maintainer or an agent can prepare the release. Do these steps in this sequence:
 
-1. On a branch from `main`, prepare the complete release tree: `VERSION`, the dated changelog
+1. Find the known issues first. Run `scripts/outcomebound review sweep`, which reads each review
+   file under `.agents/work` (a file with a `Reviewed:` line) and names each finding with no
+   disposition. Read the open issues of the release milestone (`gh issue list --milestone
+   v<VERSION> --state open`) and the open pull requests (`gh pr list --state open`). Close each
+   one: fix it, or record it as an accepted limit in its design. A finding is closed by its
+   `Disposition:` line. The sweep does not read a report that has no `Reviewed:` line: an issue in
+   such a report is known only when it is an issue in the milestone or a finding in a review file.
+   Then, on a branch from `main`, prepare the complete release tree: `VERSION`, the dated changelog
    section, written from the title and description of each pull request that landed since the
    previous release (`git log --first-parent v<previous>..origin/main`), with its "Do these steps
    first" list from their `Adopter steps`; the section names each of those pull requests by its
@@ -91,7 +110,8 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    change that is not committed.
 2. Run `make canary` on that commit. If you change the tree after this step, commit the change
    and run `make canary` again.
-3. Run `make release-check`. It first reads the record of `make canary`. It then checks that the
+3. Run `make release-check`. It first reads the record of `make canary`, and runs the review sweep
+   of step 1 on the main checkout's `.agents/work`, also from a worktree. It then checks that the
    places above agree and that this repository's own install is current. It checks, from the
    files and with no network, that the package metadata is what PyPI accepts (core metadata 2.4,
    an SPDX license expression, the license files, a Markdown long description with no relative

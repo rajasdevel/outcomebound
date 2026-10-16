@@ -131,6 +131,7 @@ _CODES: Mapping[Level, tuple[str, ...]] = {
         "BRIEF_THIN",
         "CLAIM_PLANNED",
         "CLAIM_READS_OUTSIDE_BOUNDS",
+        "CLAIM_SUBSUMED",
         "CLAIM_PATH_ABSENT",
         "CLAIM_CWD_PLAN_FOLDER",
         "BOUNDS_WHOLE_REPOSITORY",
@@ -437,8 +438,9 @@ def _reach_rows(found: Sequence[Message]) -> list[str]:
             text=f"the claim `{claim}` declares that it reads {', '.join(reaches)}, which the "
             f"`bounds` of {len(tickets)} ticket(s), {', '.join(tickets)}, do not cover, so a "
             "finding there is one that the work of these tickets may not repair",
-            next="widen the `bounds` of these tickets to cover what the claim reads, or put a "
-            "ticket that repairs it first in `blocked-by`; `--json` lists each ticket",
+            next="keep the `bounds` of these tickets where the claim passes today; widen them only "
+            "where the outcome's authority already reaches those paths, else put a ticket that "
+            "repairs them first in `blocked-by`; `--json` lists each ticket",
         )
         rows.append(_message_row(summary, "-"))
     return rows

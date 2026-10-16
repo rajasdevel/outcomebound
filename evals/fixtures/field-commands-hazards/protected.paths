@@ -1,0 +1,8 @@
+# The project note, the installed core skill and the repository state copied into the
+# candidate-writable fixture.
+AGENTS.md
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+.git/config
+.git/info/exclude
+ops/editor.sh

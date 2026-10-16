@@ -15,7 +15,7 @@ The ids below are the ones a project's `local` guidance names on its Mechanisms 
 | id | If the task needs… | Use… |
 | --- | --- | --- |
 | `spec` | later work relies on a decision the code cannot show | a spec, edited in place, holding only the decisions later work relies on |
-| `goal-envelope` | work across sessions or meaningful autonomous effects | a goal envelope, its Progress section written as each milestone lands, so the next session resumes from the file and not from memory |
+| `goal-envelope` | work across sessions or meaningful autonomous effects | a goal envelope from `$(outcomebound home)/templates/goal/goal.md`, its Progress section written as each milestone lands, so the next session resumes from the file and not from memory |
 | `failing-test-first` | a failing example that clarifies behavior or prevents regression | a failing test first |
 | `review` | a miss would reach users and no check you can run would catch it | one bounded review |
 | `policy-gate` | a credential, production, PII, or irreversible edge | the project's own policy gate, never one you author |
