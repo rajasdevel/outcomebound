@@ -36,7 +36,8 @@ it; that a route exists allows nothing. Otherwise say in the first line of your 
 was refused, by which rule or command, and ask the person to run the act or to adjust the
 harness; draw no brief with options and a default for it. Where nothing covers the act, the
 refusal is a decision for them: draw its brief. After a refusal, never reach the same effect by
-another route, and continue every item the refusal does not block.
+another route unless the refusing rule allows it, and continue every item the refusal does not
+block.
 
 ## Do the due diligence first
 
