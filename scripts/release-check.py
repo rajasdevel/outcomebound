@@ -13,6 +13,11 @@ main, so no release is cut from a main that failed. One line per check; exit 1 w
 `make release-check TAG=v<VERSION>` runs this on the tag made locally, before it is pushed, and CI
 runs it again on the tag.
 
+With `--alerts`, the repository has no open alert of GitHub's code scanning, Dependabot or secret
+scanning, read with `GH_TOKEN`, `GITHUB_TOKEN` or the token of `gh auth token`; an answer that
+cannot be read fails. `make release-check` passes it; CI's tag job does not, since its token
+cannot read Dependabot or secret-scanning alerts.
+
 A last line says whether a grant in `.outcomebound/tag-grants.json` lets an agent push the tag
 today; it is no check, since a maintainer's own tag needs none.
 """
@@ -169,6 +174,96 @@ def ci_runs(head: str, source: Path | None) -> list[dict[str, object]]:
         answer = json.loads(body)
     runs = answer.get("workflow_runs", []) if isinstance(answer, dict) else []
     return [run for run in runs if isinstance(run, dict)]
+
+
+ALERTS = {
+    "code-scanning": "code scanning",
+    "dependabot": "Dependabot",
+    "secret-scanning": "secret scanning",
+}
+
+
+def _token() -> str | None:
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        return token
+    try:
+        done = subprocess.run(
+            ["gh", "auth", "token"], capture_output=True, text=True, timeout=30, check=False
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return done.stdout.strip() or None
+
+
+def _open_alerts(kind: str) -> list[dict[str, object]]:
+    """The open alerts of one kind, from GitHub; raises OSError where GitHub does not answer."""
+
+    token = _token()
+    if token is None:
+        raise OSError("no GitHub token (GH_TOKEN, GITHUB_TOKEN or gh auth token)")
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "outcomebound-release-check",
+        "Authorization": f"Bearer {token}",
+    }
+    connection = http.client.HTTPSConnection(API_HOST, timeout=30)
+    try:
+        connection.request(
+            "GET", f"{API_PATH}/{kind}/alerts?state=open&per_page=100", headers=headers
+        )
+        response = connection.getresponse()
+        body = response.read()
+    finally:
+        connection.close()
+    if response.status != 200:
+        raise OSError(f"GitHub answered {response.status}")
+    answer = json.loads(body)
+    if not isinstance(answer, list):
+        return []
+    return [alert for alert in answer if isinstance(alert, dict)]
+
+
+def _alert_line(alert: dict[str, object]) -> str:
+    rule = alert.get("rule")
+    name = rule.get("id") if isinstance(rule, dict) else None
+    advisory = alert.get("security_advisory")
+    name = name or (advisory.get("ghsa_id") if isinstance(advisory, dict) else None)
+    name = name or alert.get("secret_type_display_name") or alert.get("secret_type")
+    instance = alert.get("most_recent_instance")
+    location = instance.get("location") if isinstance(instance, dict) else None
+    where = (
+        f" in {location.get('path')}:{location.get('start_line')}"
+        if isinstance(location, dict) and location.get("path")
+        else ""
+    )
+    return f"#{alert.get('number')} {name or 'an alert'}{where}"
+
+
+def alerts(source: Path | None) -> list[tuple[bool, str]]:
+    """One check for each kind of GitHub alert: none open. `source`, for a check with no network,
+    is a JSON file mapping each kind ("code-scanning", "dependabot", "secret-scanning") to
+    GitHub's list of its open alerts; a kind it does not hold cannot be read."""
+
+    saved = json.loads(source.read_text(encoding="utf-8")) if source is not None else None
+    results = []
+    for kind, label in ALERTS.items():
+        what = f"no open {label} alert"
+        try:
+            if source is not None and saved is not None:
+                if kind not in saved:
+                    raise OSError(f"{source.name} holds no {kind} list")
+                found = [alert for alert in saved[kind] if isinstance(alert, dict)]
+            else:
+                found = _open_alerts(kind)
+        except (OSError, ValueError) as error:
+            results.append((False, f"{what}: UNVERIFIED, the alerts could not be read: {error}"))
+            continue
+        lines = "; ".join(_alert_line(alert) for alert in found)
+        results.append((not found, what + (f"; open: {lines}" if found else "")))
+    return results
 
 
 def _repository(run: dict[str, object]) -> str | None:
@@ -356,8 +451,17 @@ def main(argv: list[str] | None = None) -> int:
         help="with --tag: a JSON file holding GitHub's list of HEAD's CI runs, read in place of "
         "GitHub, for a check with no network",
     )
+    parser.add_argument(
+        "--alerts",
+        nargs="?",
+        const="github",
+        help="also check that no GitHub code scanning, Dependabot or secret-scanning alert is "
+        "open; with a JSON file, read the alerts from it in place of GitHub",
+    )
     args = parser.parse_args(argv)
     results = checks(args.root, args.tag, args.ci_runs)
+    if args.alerts is not None:
+        results += alerts(None if args.alerts == "github" else Path(args.alerts))
     for passed, what in results:
         print(f"{'PASS' if passed else 'FAIL'} {what}")
     print(grant(args.root, date.today()))

@@ -242,6 +242,13 @@ off under the DCO; the sign-off is that person's certification. An agent may lan
 request once CI is green, unless the pull request carries `needs-maintainer`. Issues are the
 backlog, and a milestone names what a release waits for.
 
+`main` keeps no open alert of GitHub's code scanning, Dependabot or secret scanning. Before a
+merge, and again once the analysis of the merged commit on `main` has run, read them
+(`python3 scripts/release-check.py --alerts`); an alert a merge caused is fixed by the next pull
+request, before anything else lands. Dismiss an alert only where it is a false positive, with
+GitHub's reason and a comment that says why. A release waits until none is open, which
+`make release-check` checks ([VERSIONING.md](docs/VERSIONING.md#how-a-release-is-made)).
+
 Each pull request lands as one squash commit. Its title and description become that commit on
 `main`, and GitHub adds the `Signed-off-by` lines of the pull request's commits, so the
 description is the commit message that a person reads. Merge with `gh pr merge <n> --squash` and

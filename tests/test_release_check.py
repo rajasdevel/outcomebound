@@ -206,6 +206,52 @@ def test_a_pass_read_from_a_saved_file_says_it_is_a_snapshot(tmp_path: Path) -> 
     assert passed and "snapshot" in what and "runs.json" in what, what
 
 
+CODE_ALERT = {
+    "number": 7,
+    "rule": {"id": "py/example"},
+    "most_recent_instance": {"location": {"path": "a.py", "start_line": 3}},
+}
+
+
+@pytest.mark.parametrize(
+    ("saved", "failing"),
+    [
+        ({"code-scanning": [], "dependabot": [], "secret-scanning": []}, []),
+        (
+            {"code-scanning": [CODE_ALERT], "dependabot": [], "secret-scanning": []},
+            ["no open code scanning alert; open: #7 py/example in a.py:3"],
+        ),
+        (
+            {"code-scanning": [], "dependabot": [{"number": 2}], "secret-scanning": []},
+            ["no open Dependabot alert; open: #2"],
+        ),
+        (
+            {"code-scanning": [], "dependabot": []},
+            ["no open secret scanning alert: UNVERIFIED"],
+        ),
+    ],
+)
+def test_each_open_or_unreadable_kind_of_alert_fails_its_own_line(
+    tmp_path: Path, saved: dict[str, list[object]], failing: list[str]
+) -> None:
+    """Breaks if an open alert of one kind passes, or a kind that could not be read passes, or one
+    kind's alert fails another kind's line."""
+
+    file = tmp_path / "alerts.json"
+    file.write_text(json.dumps(saved))
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--root", str(SCRIPT.parent.parent), "--alerts", str(file)],
+        capture_output=True,
+        text=True,
+    )
+    lines = [line for line in result.stdout.splitlines() if " alert" in line]
+    assert len(lines) == 3, result.stdout
+    failed = [line.removeprefix("FAIL ") for line in lines if line.startswith("FAIL ")]
+    assert len(failed) == len(failing), result.stdout
+    for line, expected in zip(failed, failing, strict=True):
+        assert line.startswith(expected), line
+
+
 @pytest.mark.parametrize(
     ("version", "today", "covered"),
     [

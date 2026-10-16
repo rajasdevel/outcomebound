@@ -118,8 +118,12 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    link) and that the `pypi` job of the release workflow is as stated below. It runs
    `make scrub` itself, so there is no separate scrub step; without the list of private names,
    that line reads `UNVERIFIED` and the check fails. It also runs the gate, the quality floor and
-   the test suite, and they must pass. It cannot see the three account steps above; the
-   maintainer confirms them before step 6.
+   the test suite, and they must pass. It reads GitHub's open alerts of code scanning,
+   Dependabot and secret scanning with the maintainer's own GitHub token (`gh auth token`), and
+   fails while any alert is open or an answer cannot be read: a release ships with no open
+   security or quality alert. Fix the cause; dismiss an alert only where it is a false
+   positive, with GitHub's reason and a comment that says why. It cannot see the three account
+   steps above; the maintainer confirms them before step 6.
 4. Land the release commit through its pull request, as one squash commit. A squash merge keeps
    the tree of the branch, so the record from the branch applies to the commit on `main`.
 5. Make the annotated tag `v<VERSION>` on the commit on `main`, locally, and run
@@ -133,7 +137,8 @@ A maintainer or an agent can prepare the release. Do these steps in this sequenc
    workflow runs `make gate`, the own-install check, the floor on the newest Python and the
    suite on each Python, on Windows and in containers), so with a tag the check does not run
    them a second time here. It still runs `make scrub` here, because CI has the list only where
-   its secret is set.
+   its secret is set, and reads GitHub's open alerts again, because CI's token cannot read
+   Dependabot or secret-scanning alerts.
 6. A maintainer pushes the tag, or an agent where a grant covers it (below).
 7. CI on the tag runs `scripts/release-check.py --tag` once, in the job `verify-tag`, and the
    suite on each platform. It then publishes the release and then the PyPI upload (below).
