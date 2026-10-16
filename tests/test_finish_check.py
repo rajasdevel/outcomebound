@@ -4586,7 +4586,8 @@ def test_the_detached_runs_command_line_names_no_transcript(tmp_path: Path) -> N
         write(go, "")
         pytest.skip("the process table cannot be read here")
     try:
-        assert len(commands) == 1 and '"session_id"' in commands[0], commands
+        # Windows escapes the JSON's quotes on a command line, so the key is matched without them.
+        assert len(commands) == 1 and "session_id" in commands[0], commands
         assert Path(transcript).name not in commands[0] and "transcript" not in commands[0]
     finally:
         write(go, "")
