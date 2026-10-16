@@ -323,5 +323,9 @@ jobs:
           ls -l dist
           test "$(ls dist | wc -l)" -eq 2
 
+      # A re-run after a partial upload skips the file PyPI already holds and uploads the rest;
+      # PyPI refuses a different file under a name it holds, so nothing is replaced.
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          skip-existing: true

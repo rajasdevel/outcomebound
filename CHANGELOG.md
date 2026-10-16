@@ -12,6 +12,306 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-16
+
+A minor release. A new project gets a route from an idea to a walking skeleton (#104).
+Onboarding of an existing repository records facts that a check can show, and it measures the
+Done commands on the person's request (#103). Each project can have its own lifecycle, and three
+new skills cover landing a change, acceptance and the tracker (#122). A business requirements kit
+helps a person who does not use a coding agent (#122). The finish check no longer makes a turn end
+wait: Done runs in the background, and the model hears of it only on a failure the turn caused
+(#123). `outcomebound scaffold` gives a new project the files its lifecycle needs (#123). A report
+starts from the ask, and a project can declare the changes a Done command is not run for (#125).
+Finish-check, Windows process control and the command line have fixes (#106, #108, #117, #118,
+#119, #124, #125). A release now waits until no GitHub code scanning, Dependabot or secret-scanning
+alert is open (#126), and every test of the suite can fail on the break it names (#127, #128).
+This is the first version that the
+release workflow also publishes to PyPI (#107). The engine remains Python standard library only.
+
+Do these steps first:
+
+1. If you upgrade from 1.4.0 or earlier, do the steps of the 1.5.0 section first.
+2. Use Python 3.10 or later and Git 2.52.0 or later. These minimums do not change.
+3. Install the release:
+   `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.6.0`.
+   The tagged Git URL stays a supported route for every version. The release workflow also
+   publishes 1.6.0 to PyPI as `outcomebound` (#107): `uv tool install outcomebound`.
+   Install it on every machine and in every CI job that runs the project's hooks before the
+   changed install of step 4 is committed or pulled there. The 1.6.0 hook entries pass
+   `--constant-time`, which the 1.5.0 engine refuses, so on a machine that still has 1.5.0
+   the finish check stops with a usage error and Done does not run (#123).
+4. Run `outcomebound adopt .` in each project again (#122, #123, #125). The install adds the
+   skills `land-change`, `run-acceptance` and `sync-tracker`, the lifecycle reference, and the
+   changed kernel, skills and fragments. Where the finish check is installed, its hook entries
+   change form (#123): Claude Code needs nothing more; in Codex, trust the changed entry again in
+   `/hooks`, as the `action` line of `adopt` says. Review the managed changes. Retain the intended managed files, including
+   `.outcomebound/manifest.json`, in the project commit, and run the project's own checks.
+5. Read the lines that `adopt` and `adopt --check` print. You can see these new lines:
+   - A `drift` line says that the files show a signal that your recorded fragment selection
+     contradicts. The signals are `recent-authors`, `codeowners`, `deploy`, `publishing` and
+     `exposure`. A drift line does not change the exit code. Change the fragment selection, or
+     settle the line in the `local` fragment with `Drift — <signal>: <reason>` (#122).
+   - A `warning` line says that a path, a Make target or a package script, which your
+     instruction text names, no longer exists (#103).
+   - A `warning` line says that a command hook in `.claude/settings.json` or
+     `.claude/settings.local.json` names a script of the project by a path relative to the
+     working directory. Claude Code runs a hook in the current directory of the session, so the
+     hook can silently not run from another folder. Name the script from
+     `"$CLAUDE_PROJECT_DIR"` (#114).
+   - A `note left out:` line names each project fact the install found nothing for, such as
+     Setup. If the project has commands that take a fresh clone to a state where Done can run,
+     record them with `outcomebound adopt . --setup CMD` (#103, #125).
+   - A `hook` line names a hook entry that runs the finish check and that no install record holds
+     (#123).
+6. If your CI installs a pinned release, change the pin to `v1.6.0` in the same change as the
+   managed install. An engine before 1.6.0 reads the facts block as stale after a project
+   records Setup (#103).
+7. To have a floor recorded before 1.6.0 also read executable shell scripts with no extension
+   (git hooks, `bin/` scripts), add `"(extensionless shell scripts)"` at the end of the `files` of
+   its shell claims. That change alone is not a loosening; fix or record the findings it shows.
+   Without it, the floor reads what it read before.
+8. Where a Done command is long and some changes do not need it (documentation, for example),
+   record that with `outcomebound adopt . --done-skip "<command>" "docs/**,**/*.md"`. The finish
+   check then skips that command only where every changed path matches (#125).
+9. If a script reads the output of `outcomebound adopt --detect`, read only its first line. That
+   line is the install command alone. The notes that follow it start with `#` (#103).
+
+### Added
+
+- `make release-check` reads the open alerts of GitHub's code scanning, Dependabot and secret
+  scanning, and fails while any is open or the answer cannot be read (#126).
+- `make test-containers` runs the suite in the two container images CI runs, on a clean clone of
+  `HEAD`, through the script CI's container job runs (#128).
+- `outcomebound scaffold` writes the files a project's lifecycle needs: four presets (prototype,
+  solo, team, organization) and six overlays (client, eu-market, safety-critical, audit,
+  unattended-agents, ai-product). The plan writes nothing, `--accept` writes only absent files,
+  and `--check` lists each value left to fill and each gate owner not named (#123).
+- `instructions check` has a `retired-reference` check, and `--only`, for a term a project's
+  `.outcomebound/retired.json` retires; `floor propose` offers a `docs.retired` claim where that
+  list exists (#123).
+- `adopt --done-skip CMD GLOBS`: a project declares the changes a Done command is not run for
+  (#125).
+- `outcomebound review sweep <dir>` names each review file with a finding that has no disposition;
+  `make release-check` runs it (#125).
+- `outcomebound research --find TERM` lists the research files that name a term (#125).
+- Ten evaluation fixtures that run only when named copy kinds of failure from adopters' sessions
+  and the scaffold cases; E26 records a pass on them (#125).
+
+- A new-project route takes an idea to a walking skeleton. It sizes the idea by who depends on it,
+  frames the outcome and the strongest case against it, probes what could end the idea, and then
+  builds the thinnest real path through the product. The README has a section "Start a new
+  project" (#104).
+- `adopt --verify` measures the Done commands once after the install, on the person's request
+  (#103).
+- `adopt --setup CMD` records the commands that take a fresh clone to a state where Done can
+  run. The person records and verifies it. `adopt` never runs it (#103).
+- `adopt --detect` reports Setup candidates, onboarding signals (generated files, applied
+  migrations, publishing or deploying workflows, runtime versions, environment variable names and
+  CI secret names), and readiness lines with a verdict and a next step (#103).
+- `adopt --detect` reads two more signals from Git and the version files: `recent-authors` and
+  `release-identity` (#122).
+- `adopt --check` and `adopt --detect` print a drift line where a signal contradicts the recorded
+  fragment selection (#122).
+- `adopt --dry-run` prints a unified diff for each text file that would change. It writes
+  nothing (#118).
+- `outcomebound instructions check` has a third family, `references`, with one check,
+  `stale-reference` (#103).
+- `outcomebound --version`, `-V` and `version` print the version and the engine path (#118).
+- `outcomebound tickets check --summary` prints the counts and only the tickets that do not pass
+  (#118).
+- An unknown verb, such as `claims` or `check`, names the verbs that do that work. `floor ...
+  --json` says that no floor verb takes that flag, and how to read the result (#118).
+- The lifecycle reference gives each project its own route: client delivery, a solo package, an
+  internal system or a prototype. It names the signals for a change of lifecycle and what a
+  change owes (#122).
+- New lifecycle templates (`client`, `personal` and `shared`) and new setup fragments (`client`
+  and `explore`) (#122).
+- The `land-change` skill lands a change through the project's own route, checks and gates. The
+  `run-acceptance` skill prepares the scripts, pre-runs them one step at a time and drafts the
+  record, and a person outside the build gives the acceptance. The `sync-tracker` skill reads and
+  writes a tracker through the project's own rules. The install now carries thirteen working
+  skills (#122).
+- A business requirements kit (`kits/business-requirements/SKILL.md`) lets a person write the
+  business part of a requirements card in their own assistant. The person pastes it as the first
+  message, or loads it as a skill. `adopt` does not install a kit. `make kits` builds an archive
+  of each kit (#122).
+- The release workflow publishes the wheel and the source archive to PyPI through trusted
+  publishing, from 1.6.0. The package metadata is what PyPI accepts, and the build changes each
+  relative README link to an absolute link at the release tag (#107).
+- Evaluation fixtures for the new-project route, for onboarding, for the lifecycle, for the three
+  new skills and for the kit. The records are in `docs/evaluations.md` (#104, #109, #122).
+- The evaluation runner reads the model, the effort and the working directory of each call from
+  the session record of the CLI. It adds `--workspace-root`, `--probe` and `--regrade`, and one
+  seam for other harnesses. `evals/README.md` says what a new harness must meet (#121).
+
+### Changed
+
+- The suite: each test can fail on the production break it names, waits on a condition and not a
+  fixed time, and runs on each platform; duplicates and tests that could not fail are gone, and
+  370 fewer cases run (#127). A text read, write or subprocess that names no encoding fails the
+  suite on every platform, and a fixed wait or a read of today's date in a test
+  must say why (#128). `make check` also reads this repository's own install (#128).
+- Development tools: ruff 0.17.1 and mypy 2.4.0 (#126).
+- A report starts from the Outcome: the ask, what is now true, what is not done. Then it gives the
+  checks that the completion bar names, each as `PASS`, `FAIL` or `UNVERIFIED`; a named check that
+  did not run is `UNVERIFIED`, and a `FAIL` is always reported. Checks that nobody asked for are
+  not listed (#122, #125).
+- The finish check runs Done in the background. On Claude Code, one stop entry wakes the agent
+  only on a failure the turn caused; on Codex, the stop returns at once and holds at a later stop
+  where a run confirms the failure. Text reaches the model only on a real `FAIL` (#123).
+- The generated Precedence line ranks the person's instruction in the session above the project
+  facts (#125).
+- A repair outside a ticket's bounds can go as a follow-up where the goal envelope accepts
+  follow-ups (#125).
+- A lifecycle transition writes nothing but its inventory and brief before the person's yes, and
+  lists the parts the move adds from `scaffold --from` (#125). A directive that names both the
+  route and the exposure is the decision, with one dated "Changed —" line for each stream (#123).
+- `floor`: the shell claims read executable shell scripts with no extension where their `files`
+  names `(extensionless shell scripts)`, which new floors write; a floor recorded before reads
+  what it read (#125).
+- `adopt` prints a fact it found nothing for once, as a note; `adopt --detect` offers a declared
+  `make test` before the unittest fallback; `--dry-run` gives the size of each new file (#125).
+- The README is shorter and leads with what each feature does (#125).
+- The `adopt-outcomebound` skill is now the onboarding procedure. It detects, installs, checks the
+  instructions, verifies Done on the person's yes, and then proposes only the project facts that
+  an agent would get wrong. It also has the lifecycle step (#103, #122).
+- The `description` of each skill opens with the sentence that its pointer line in `AGENTS.md`
+  uses, and a test holds the two equal. `using-outcomebound` routes each kind of step to its skill
+  or reference. The skills `diagnose`, `review-findings`, `explain-spec`, `decision-brief`,
+  `tests-worth-keeping`, `hand-off-tickets` and `explorable` have sharper rules (#104).
+- `decision-brief`: a brief that holds work names a default and the moment it applies. A question
+  that the person already settled is not asked again. When a harness or sandbox refuses an act,
+  the agent raises a decision for the person, and it never reaches the same effect by another
+  route (#122).
+- `gather-requirements` has a reference for the kinds of sources, and it covers reversibility in
+  data and commitments. `hand-off-tickets` starts in full detail where the implementer's tier is
+  unknown (#122).
+- The goal template forbids weakening a Done-when check. The `workspace` fragment (version 7)
+  says what a cloud or background session starts from. The `multi-agent` fragment (version 8) sets
+  a delegate's effort with the tool's own parameter (#104). The fragments `deploy`, `solo`,
+  `team`, `ci-release`, `tickets`, `workspace` and `runtime` state what each route owes (#122).
+- The `explorable` skill has a section "Write it once". The runtime reference states the facts
+  that a first draft needs, so an agent does not read the engine's code to find them (#112).
+- `outcomebound tickets check` folds the reads-outside-bounds warning into one text row for each
+  claim. The JSON report keeps one item for each ticket. A claim warning that is the same for many
+  tickets prints one time, with the ticket list (#103, #118).
+- `instructions check` reports a binary file as not read, and the result does not change. The next
+  step for a harness configuration hit names `outcomebound instructions rule` (#118).
+- On Windows, the end of a command's process tree is now through a job object. A process that a
+  command leaves behind ends with it when the engine releases the command. POSIX does not change
+  (#106, #108).
+- A release has eight steps. The tag is verified once, in the job `verify-tag`, and
+  `make release-check` runs `scrub` itself. Moving projects to a release is a follow-up and not a
+  release step (#120).
+- The design records describe the 1.5.0 lifecycle, install and finish-check as shipped. They
+  state the current counts and limits. The Git 2.52.0 minimum passed on the Linux Python 3.10 leg
+  of hosted CI, and the check on Git for Windows stays `UNVERIFIED` (#102).
+- The wheel declares the license expression `Apache-2.0`. PyPI cannot take a custom exception in
+  an expression. The full terms, with the exception, stay in `LICENSE` (#107).
+
+### Fixed
+
+- The instruction audit ends an HTML comment at `--!>` as a browser does, as well as at `-->`, so
+  the text after such an ending is no longer read as part of the comment (#126).
+- Finish check: a turn that makes a tree another session saw fail runs Done again; a Codex hold
+  from the tree the turn began on says the turn changed the tree since; the tree read stops at its
+  deadline inside a large untracked file; an edit inside a submodule, nested ones included, changes
+  the tree; in a container with no init process, an ended run left as a zombie reads as ended
+  (#123, #125).
+- `scaffold --check` counts a file or folder it cannot read as a value left, and a run after
+  `--accept` prints no block for parts a file already holds (#125).
+- `validation --waive` refuses a claim named twice and a reason with a character that is not
+  printable (#125).
+- Fixes from an adversarial review: validation logs, retried renames, binary instruction files,
+  failure-id scans that stopped early, drift fences, tracker writes and acceptance records, canary
+  records and kit builds (#124).
+
+- A Windows stop at the finish check's time limit could leave a grandchild of the Done command
+  running. The command now starts suspended, joins its job object and then resumes, so every
+  process that it starts is in the job (#106, #108).
+- A Git variable that selects a repository (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and
+  related ones), inherited from a hook, could make finish-check or the tickets layer read a
+  different repository, so a failing Done command could be skipped. Every Git child process now
+  gets the same environment without them (#117).
+- `sources import` without `--out` writes paths relative to the project, and it refuses a
+  symlinked `.outcomebound` folder. `fileplan.write` refuses a staging file that an earlier run
+  left, and it checks each destination again just before the rename. An interrupted validation
+  command stops its whole process tree. Two claims whose names sanitize to the same file name get
+  different log files (#117).
+- In Claude Code, the hook did not run Done while background tasks or session crons were open, and
+  it said nothing. Now it runs Done at such a stop, and it leaves a failure to the first stop that
+  is not paused (#119, #123).
+- A finish-check hold leaves out SKIPPED lines when pytest names failures. It shows the failure
+  ids and the first `E` lines that the output tail cut off. It says when a known command was
+  compared by its exit code only. It names the working directory and the first PATH entries that
+  Done ran with. A repeated FAIL on a tree that did not change is told one time for each session
+  and tree (#119).
+- The new-project reference named a feature list and a pass flag in the goal envelope. The
+  envelope has neither. The reference now points to the Progress section (#110).
+- The finish-check rerun test told one run from two only on a fast runner. It now holds on a
+  runner of any speed (#111).
+- Two definitions that nothing called are removed (#103).
+- The deploy grader of the evaluation runner credits a plain deploy step in an `&&` list, and a
+  read of production in a `;` list. The runner no longer refuses calls by CLI version (#121).
+
+### Verification limits
+
+- E26 (60 Codex runs, one model) measured the field and scaffold fixtures. One fixture showed a gain
+  between the kernels (1 of 3 runs to 3 of 3); the scaffold-switch text fix was measured on runs
+  after the failures it answers, so it is not an independent test (#125).
+- The background finish check was observed in native Codex CLI turns with hook trust bypassed for
+  the run; hooks trusted in `/hooks` and the desktop apps are `UNVERIFIED` (#125).
+
+- The 1.6.0 qualification pass (E25 in `docs/evaluations.md`, 44 runs on one Codex CLI version
+  and one model, mostly one run a side) found one defect in the `run-acceptance` skill. The
+  defect is fixed. The pass showed no other regression (#122).
+- The pass does not show that the new lifecycle text improves behaviour. The one verdict that
+  moved, on `lifecycle-switch`, does not show an effect of the text, because the run read and ran
+  the grader (#122).
+- On `unclear-outcome`, one of three candidate runs changed the protected `AGENTS.md` and was not
+  graded. All three base runs passed. Three runs a side do not show whether the text caused this
+  (#122).
+- The fixes to `run-acceptance` came after the failures that they answer. The three runs after
+  the fix are not an independent test (#122).
+- The business requirements kit is `UNVERIFIED` in each named assistant. No assistant has been
+  tested. One Codex run of the kit passed nine of ten claims, and it had no base run (#122).
+- The three stage skills (`land-change`, `run-acceptance` and `sync-tracker`) were measured only
+  on the fixtures of E25. The control of `skill-land-change` also passed, so that fixture does
+  not show what the skill adds (#122).
+- The lifecycle and onboarding results of E23 are on Claude subagents with three runs a side.
+  They show only large effects. Other skill edits of this release ran only as single Haiku runs,
+  and their effects are `UNVERIFIED` (#103, #104, #109).
+- The real job path of the Windows process fix runs only on hosted Windows CI. The cause of the
+  original miss is likely, but `UNVERIFIED` (#106, #108).
+- The hook warning reads Claude Code hooks only. The Codex case is `UNVERIFIED` (#114).
+- The finish-check change was tested against the documented fields of the Stop payload, and not
+  against the real payload from the harness (#119).
+- The `verify-tag` job and the `pypi` job have not run on GitHub before the first tag. The pending
+  publisher on PyPI and the GitHub environment `pypi` are account settings that no check reads; the
+  maintainer confirms them before the tag is pushed. The upload to PyPI and the rendering of the
+  README on PyPI are `UNVERIFIED` until a person checks them after the tag (#107, #120).
+- The platform limits of 1.5.0 stay: native Windows and Linux sessions, Codex desktop and Git for
+  Windows at the exact minimum are `UNVERIFIED`, and CI runs no models.
+
+### Known issues
+
+- In E25, 13 of 44 runs read a grader file or a grader helper, or saw one in Git history, and 6
+  of them ran one; this limits every comparison in E25. From #123 the runner seals the graders
+  outside the workspace.
+- The fragments `client`, `explore`, `solo`, `team`, `workspace` and `ci-release` have no
+  evaluation fixture of their own. Their effect is `UNVERIFIED` (#122).
+- The graders of a fixture are sealed outside its workspace and kept with the run, so `--regrade`
+  uses the graders that the run had. A grader fix applies only to new runs (#121).
+- `outcomebound validation` matches a claim's `ran_output` pattern after the command has ended,
+  outside the claim's timeout, so a slow pattern on a long output can run past it.
+- `make ob-validate` from `templates/outcomebound.mk` passes no `--waive`; run
+  `outcomebound validation <plan> --waive NAME=REASON` directly to waive a claim.
+- `outcomebound validation` keeps a command's whole output in memory while it reads it, so a check
+  that prints hundreds of megabytes needs memory of about twice that size.
+- The finish check keys its records by the commit and the diff against it, so the first turn after
+  a commit finds no record of the tree it began with, even where the same content passed before the
+  commit. A failure then holds with the first line "the failure may predate this turn", not "new".
+
 ## [1.5.0] - 2026-10-08
 
 A minor release. OutcomeBound connects its existing skills and project gates across the
@@ -933,7 +1233,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.6.0
 [1.5.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.5.0
 [1.4.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.4.0
 [1.3.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.3.0

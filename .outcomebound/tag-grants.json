@@ -18,6 +18,12 @@
             "granted_by": "rajasdevel",
             "on": "2026-10-08",
             "until": "2026-10-09"
+        },
+        {
+            "scope": "1.6.0",
+            "granted_by": "rajasdevel",
+            "on": "2026-10-16",
+            "until": "2026-10-17"
         }
     ]
 }
