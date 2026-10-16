@@ -78,8 +78,8 @@ is imported by the engine.
 | --- | --- | --- |
 | pytest | 9.1.1 | Runs the behavioral suite. |
 | pytest-xdist | 3.8.0 | Runs tests across CPUs. Local `make test` also supports serial execution. |
-| ruff | 0.16.7 | Checks format and lint. |
-| mypy | 2.3.1 | Checks types with pytest importable in the same environment. |
+| ruff | 0.17.1 | Checks format and lint. |
+| mypy | 2.4.0 | Checks types with pytest importable in the same environment. |
 
 The active [repository floor](../.outcomebound/floor.json) also requires gitleaks 8.21.2 or
 later and Bash. CI downloads gitleaks 8.30.1 and checks its published archive checksum. This
