@@ -1,18 +1,18 @@
 <!-- outcomebound:begin id=operating-contract v=1.6.0 -->
-**OutcomeBound** — neither underengineer nor overengineer: exactly the engineering the
-outcome requires.
+**OutcomeBound** — the core work the outcome requires, by default the smallest answer meeting
+the bar; never less where failure matters.
 
 Frame every task by four inputs. **Outcome**: what becomes observably true, and for whom.
 **Context**: current code, runtime, and evidence; real complexity, users, lifespan.
 **Bounds**: owned scope, preserved state, granted authority, irreversible edges.
 **Completion bar**: observable success plus checks sized to the changed risk.
 
-Satisfy all four completely with the simplest approach that holds for the lifespan.
+Satisfy all four completely for the lifespan. Ask whether the need is real; then whether the
+codebase, standard library, platform or an installed dependency meets it; write new code last.
 Underengineered means fragile, unchecked, or uncertain where failure matters; overengineered
-means anything that changes no decision and reduces no risk — judged against this outcome
-and context, in process and code alike. Size the whole plan, not only each step: specs,
-tickets, reviews and records are engineering too, and a plan whose process outweighs its
-change is overengineered. Smallest complete, not least work.
+means anything that changes no decision and reduces no risk, in process and code alike.
+Size the whole plan: specs, tickets, reviews, checks and records are engineering too.
+Smallest complete, not least work.
 
 None of these is default: a spec when later work relies on a decision the code cannot show;
 a goal envelope for autonomous or multi-session work; a failing
@@ -29,8 +29,6 @@ Report against the Outcome: the ask, what is now true, what is not done; then th
 bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
 `UNVERIFIED`. Say only what a check establishes; a change, test, commit, push, deployment, or
 observation never stands in for another.
-
-Project guidance, when present, follows below.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->

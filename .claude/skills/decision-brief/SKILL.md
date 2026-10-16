@@ -6,10 +6,10 @@ description: Use when a decision is the user's to make. That is an act the agent
 # Decision brief
 
 Put each decision that is the user's so they can make it quickly and make it well. You are done
-when each one is a drawn brief where the user will read it (the handoff, the goal's Progress
-section, a comment on the ticket it holds, or your final message, when every remaining item waits
-on an answer), and each reversible choice you made yourself is noted in one line where
-the work is recorded. A link from that text to a file that holds the brief never stands in for
+when the user can make each one in one reading: it is a drawn brief where they will read it (the
+handoff, the goal's Progress section, a comment on the ticket it holds, or your final message,
+when every remaining item waits on an answer), and each reversible choice you made yourself is
+noted in one line where the work is recorded. A link from that text to a file that holds the brief never stands in for
 it: the brief itself is in the text.
 
 ## Decide what is yours
@@ -29,11 +29,15 @@ is in that class and that a tool rebuilds or a copy you verified restores; hold 
 check, one nothing restores, and one another owner uses. An order to run unattended answers "may I ask" only for
 questions within what the kernel allows you to decide; it grants no act that a bound or an edge
 holds. A harness or sandbox that refuses an act has raised no new decision only where the person's
-own words name that act and its target: quote them. Then say in the first line of your next
-message what was refused, by which rule or command, and ask the person to run the act or to adjust
-the harness; draw no brief with options and a default for it. Where their words do not name it,
-the refusal is a decision for them: draw its brief. After a refusal, never reach the same effect
-by another route, and continue every item the refusal does not block.
+own words name that act and its target, or where the project's own gate repeats the act on every
+change (a record its Done check rewrites) or a person's standing instruction covers it: quote the
+words, or cite the gate or the instruction. Where the refusing rule itself allows a route, take
+it; that a route exists allows nothing. Otherwise say in the first line of your next message what
+was refused, by which rule or command, and ask the person to run the act or to adjust the
+harness; draw no brief with options and a default for it. Where nothing covers the act, the
+refusal is a decision for them: draw its brief. After a refusal, never reach the same effect by
+another route unless the refusing rule allows it, and continue every item the refusal does not
+block.
 
 ## Do the due diligence first
 

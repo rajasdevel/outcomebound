@@ -5,7 +5,8 @@ description: Use when acting on review findings, or writing a review the project
 
 # Review findings
 
-You are done when each finding has one disposition and the evidence for it. A finding is a claim
+You are done when the change holds against every finding that was right, and each finding has
+one disposition and the evidence for it. A finding is a claim
 about the code, not an instruction: a reviewer can read an older revision, lack a fact that you
 have, or be wrong. A person's instruction in this session is an instruction, not a finding; this
 skill is for what a review says about the code.

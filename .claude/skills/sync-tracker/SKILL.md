@@ -5,7 +5,8 @@ description: Use when reading a card from a tracker that is not the project's ti
 
 # Sync a tracker
 
-You are done when each card you read is a snapshot that the sources verbs can compare, and each write
+You are done when the project can see what the card says and the tracker holds only what a grant
+covered: each card you read is a snapshot that the sources verbs can compare, and each write
 you made is read back and has a receipt. The tracker belongs to someone else, often a client, and
 its people see what you write. The engine holds no credential and calls no service: every read and
 write goes through a tool the person has already signed in to.

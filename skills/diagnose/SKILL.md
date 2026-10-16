@@ -5,9 +5,9 @@ description: Use when a failure's cause is unknown, or a fix did not hold. The f
 
 # Diagnose a failure
 
-You are done when the failure is reproduced or reported as not reproduced, its cause is stated
-with the evidence for it, the fix removes that cause, and your report says what the fix was
-checked by. A cause that the error already makes plain needs none of the steps below: fix it and
+You are done when the failure is gone because its cause is: the failure is reproduced or reported
+as not reproduced, its cause is stated with the evidence for it, the fix removes that cause, and
+your report says what the fix was checked by. A cause that the error already makes plain needs none of the steps below: fix it and
 run the check. Where the person asks what is wrong and not for a fix, answer from what you can
 read and run without changing anything, and mark what you did not run `UNVERIFIED`.
 

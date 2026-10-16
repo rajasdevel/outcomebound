@@ -11,7 +11,8 @@ The package says what the implementer is given, never how it works; the project'
 done at every tier. The `multi-agent` fragment, where a project selects it, covers dispatching and
 integrating the delegate; this skill covers what its package holds.
 
-**Done when** all four hold:
+**Done when** the implementer holds what its tier needs to build the ticket, and nothing that
+narrows it; that is, all four hold:
 
 1. The hand-off names the implementer's tier and where it came from: the person, the project's
    committed instructions by path, the placement table at the commit its first line names, or the
