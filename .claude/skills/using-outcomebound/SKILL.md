@@ -38,8 +38,9 @@ the product works, and it is no one's approval of this particular action.
 ## A change to code
 
 Before writing, list what the change reaches: callers, tests, fixtures, configuration, exports.
-That list is the scope; a feature, option or abstraction nobody asked for is not in it. A fix
-removes the cause once, in the shared code, and sweeps every caller. Keep the codebase's structure
+That list is the scope, and only what the outcome and the completion bar need goes into it; a
+feature, option or abstraction they do not need stays out. A fix removes the cause once, where
+it lives, and checks every caller that cause reached. Keep the codebase's structure
 and conventions; code you move or merge keeps its validation and error handling. Prefer deleting
 to adding. The report names what you left out and why.
 

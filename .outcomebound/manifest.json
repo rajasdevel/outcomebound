@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "d56876cf54b0b4fff3c41017337384f29ce4b5163bba746dfe402ee1747c4d52"
+      "sha256": "dee8ac7d41a8301ea7712d3cd15e8c19dc19235208543944fd0354cb732d23dd"
     },
     {
       "kind": "skill",
@@ -134,7 +134,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "7001cb8b48010a244b23ff7757d87fb21f7f00d4a5611109b692bbbc4b589bb9"
+      "sha256": "6e8d849013ed11d6eb47ee4c46aba5ce373db0c056db929fb4b7e1848349b7a4"
     },
     {
       "kind": "skill",
@@ -224,7 +224,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "fb43ca4899855267a2483f10b9c407de7cdb3b81c98e8f817c720094896673b1"
+      "sha256": "21c848f60c427b57e11ca752b3b056da908f641a34c7aee4227263a6b9591c4f"
     },
     {
       "kind": "skill",
