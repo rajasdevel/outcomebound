@@ -90,7 +90,7 @@ STALE = {
     "wrong-link": ("CHANGELOG.md", "tag/v1.1.0", "tag/v1.0.0"),
     "stale-compare": ("CHANGELOG.md", "compare/v1.1.0", "compare/v1.0.1"),
     "stale-pin": ("templates/ci/github-actions.yml", "v1.1.0", "v1.0.0"),
-    "stale-readme": ("README.md", "v1.1.0", "v1.0.0"),
+    "stale-readme": ("README.md", "==1.1.0", "==1.0.0"),
     "stale-gitlab": ("templates/ci/gitlab-ci.yml", "v1.1.0", "v1.0.0"),
     # The CI workflow the scaffold writes names its release, as the CI templates do.
     "stale-scaffold": ("templates/scaffold/common/ci.yml", "v1.1.0", "v1.0.0"),
@@ -124,7 +124,7 @@ def release_files(case: str) -> dict[str, str]:
         "templates/scaffold/common/ci.yml": (
             '        run: python -m pip install "git+https://github.com/example/outcomebound@v1.1.0"\n'
         ),
-        "README.md": "uv tool install git+https://github.com/example/outcomebound@v1.1.0\n",
+        "README.md": "uv tool install outcomebound==1.1.0\n",
         # The release workflow and the build backend are the repository's own: what the two
         # PyPI checks read.
         ".github/workflows/ci.yml": WORKFLOW.read_text(encoding="utf-8"),

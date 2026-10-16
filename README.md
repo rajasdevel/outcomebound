@@ -42,7 +42,7 @@ and hand-offs for each stage. Your project records its own lifecycle in a few li
 You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree.
 
 ```sh
-uv tool install git+https://github.com/rajasdevel/outcomebound@v1.6.0
+uv tool install outcomebound==1.6.0
 cd your-repo
 outcomebound adopt . --detect       # writes nothing; prints the install command for your files
 ```
@@ -86,7 +86,7 @@ what could end it, and builds a walking skeleton with a Done command that can fa
 ### Upgrade or remove
 
 ```sh
-uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.6.0
+uv tool install --force outcomebound==1.6.0
 outcomebound adopt .          # every managed file current; an edited block is kept unless --force
 outcomebound adopt . --remove # takes out what the install owns
 ```
@@ -98,9 +98,9 @@ again.
 <details>
 <summary>Other installers and environment requirements</summary>
 
-`pipx install` with the same URL also works, or `python -m pip install` with it inside an
-activated virtual environment. From 1.6.0, the release workflow also publishes each release to
-PyPI as `outcomebound`. These commands work in PowerShell, cmd and POSIX shells; detection prints
+`pipx install outcomebound==1.6.0` also works, or `python -m pip install outcomebound==1.6.0`
+inside an activated virtual environment. Each release is on PyPI from 1.6.0; the tagged Git URL
+(`git+https://github.com/rajasdevel/outcomebound@v1.6.0`) installs the same release, and every earlier one. These commands work in PowerShell, cmd and POSIX shells; detection prints
 commands for POSIX shells and PowerShell. On Windows, install [Git for Windows](https://gitforwindows.org): the finish check uses
 its `sh`. `pip install --user` is not supported. If the environment sets `PYTHONPATH`, use absolute
 folders only. See [dependencies and portability](docs/dependencies.md).

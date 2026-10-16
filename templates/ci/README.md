@@ -23,14 +23,16 @@ Each file holds two checks. They are separate, so wire one or both and delete th
 
 ## Put `outcomebound` on `PATH`
 
-Every template needs `outcomebound` on `PATH`. Install it at a published release:
+Every template needs `outcomebound` on `PATH`. Install it at a published release from PyPI:
 
 - `github-actions.yml` installs it into the job's own Python with
-  `python -m pip install "git+https://github.com/rajasdevel/outcomebound@v<version>"`.
-- The other templates use `uv tool install "git+https://github.com/rajasdevel/outcomebound@v<version>"`.
-- `pipx install` of the same address works. So does `pip install` into a virtual environment, or
-  a link to a checkout's `scripts/outcomebound`.
-- If you install from a fork, change the address to your fork's.
+  `python -m pip install "outcomebound==<version>"`.
+- The other templates use `uv tool install "outcomebound==<version>"`.
+- `pipx install` of the same requirement works. So does `pip install` into a virtual environment,
+  or a link to a checkout's `scripts/outcomebound`.
+- The tagged Git URL `git+https://github.com/rajasdevel/outcomebound@v<version>` installs the same
+  release, and a release before 1.6.0, which is not on PyPI. If you install from a fork, use your
+  fork's URL.
 
 Each template names the release that it shipped with. When you upgrade, change the version in
 your copy.

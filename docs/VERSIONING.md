@@ -18,7 +18,8 @@ section is never edited.
 
 ## How to take a release
 
-1. Install the release with its tag: `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v<version>`.
+1. Install the release: `uv tool install --force outcomebound==<version>` (from 1.6.0), or with its
+   tag: `uv tool install --force git+https://github.com/rajasdevel/outcomebound@v<version>`.
 2. Run `outcomebound adopt .` in your project again.
 
 Until you do step 2, `outcomebound adopt . --check` reads the operating-contract block as stale.
