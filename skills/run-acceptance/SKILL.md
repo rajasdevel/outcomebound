@@ -5,9 +5,9 @@ description: Use when preparing, running or recording acceptance of a delivered 
 
 # Run acceptance
 
-You are done when the acceptor has scripts they can follow in their own words, each script has been
-pre-run on the build the environment serves, and a draft record waits for the person to give or
-withhold acceptance. You do not give acceptance. Your pre-run shows that a script can be followed
+You are done when the acceptor can give or withhold acceptance of the delivered change: they have
+scripts they can follow in their own words, each script has been pre-run on the build the
+environment serves, and a draft record waits for their verdict. You do not give acceptance. Your pre-run shows that a script can be followed
 and what it did; it is not acceptance, and the record says so.
 
 Acceptance is by someone outside the build: a client, a business user, a tester who did not write

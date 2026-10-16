@@ -7,7 +7,8 @@ description: Use when the person asks for an interactive page, wants to try opti
 
 An explorable is a single HTML file the person opens from disk: they change values, step through
 flows, read charts and answer questions, then copy a reply back to you. You write its source; the
-engine joins it to a shared shell and checks it. You are done when `outcomebound explorable check`
+engine joins it to a shared shell and checks it. You are done when the person can open the page
+and act on it: `outcomebound explorable check`
 passes on the page (with `--browser` where a Chromium-family browser exists, else the run is
 `UNVERIFIED` and your report says so), every number the page's answer rests on has an expectation,
 your report names each output that reads `UNVERIFIED`, and the page's path is in the text the person

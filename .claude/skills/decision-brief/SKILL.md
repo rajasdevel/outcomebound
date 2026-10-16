@@ -6,10 +6,10 @@ description: Use when a decision is the user's to make. That is an act the agent
 # Decision brief
 
 Put each decision that is the user's so they can make it quickly and make it well. You are done
-when each one is a drawn brief where the user will read it (the handoff, the goal's Progress
-section, a comment on the ticket it holds, or your final message, when every remaining item waits
-on an answer), and each reversible choice you made yourself is noted in one line where
-the work is recorded. A link from that text to a file that holds the brief never stands in for
+when the user can make each one in one reading: it is a drawn brief where they will read it (the
+handoff, the goal's Progress section, a comment on the ticket it holds, or your final message,
+when every remaining item waits on an answer), and each reversible choice you made yourself is
+noted in one line where the work is recorded. A link from that text to a file that holds the brief never stands in for
 it: the brief itself is in the text.
 
 ## Decide what is yours
@@ -33,7 +33,10 @@ own words name that act and its target: quote them. Then say in the first line o
 message what was refused, by which rule or command, and ask the person to run the act or to adjust
 the harness; draw no brief with options and a default for it. Where their words do not name it,
 the refusal is a decision for them: draw its brief. After a refusal, never reach the same effect
-by another route, and continue every item the refusal does not block.
+by another route, and continue every item the refusal does not block. An act the project's own
+gate repeats on every change (a record its Done check rewrites) or a person's standing instruction
+already covers is no new decision: that cover is the grant, so do it by a route you hold and name
+the refusal and the cover in your report. Nothing covers a way around a refusal of any other act.
 
 ## Do the due diligence first
 

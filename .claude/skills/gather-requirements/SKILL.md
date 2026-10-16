@@ -5,7 +5,8 @@ description: Use when a request's outcome or completion bar is unclear, or requi
 
 # Gather requirements
 
-You are done when the outcome, context, bounds and completion bar are stated where the work is
+You are done when the work proceeds on one reading of the request that nothing readable
+contradicts: the outcome, context, bounds and completion bar are stated where the work is
 recorded, each gap you settled stands there as a one-line assumption, each reading you chose is
 named in your report as one the person may reverse, and each fork that is the person's has gone
 to them as a decision brief.

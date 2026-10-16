@@ -35,6 +35,14 @@ independent review and no full suite unless a row's condition holds or the proje
 A policy gate that passes shows a match with a rule the project configured; it does not show that
 the product works, and it is no one's approval of this particular action.
 
+## A change to code
+
+Before writing, list what the change reaches: callers, tests, fixtures, configuration, exports.
+That list is the scope; a feature, option or abstraction nobody asked for is not in it. A fix
+removes the cause once, in the shared code, and sweeps every caller. Keep the codebase's structure
+and conventions; code you move or merge keeps its validation and error handling. Prefer deleting
+to adding. The report names what you left out and why.
+
 ## Text a model reads
 
 An instruction file, a skill or a prompt is engineering too. Change it only for an observed failure
