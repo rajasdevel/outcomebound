@@ -6,6 +6,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -28,13 +29,40 @@ def load(name: str, relative: str) -> ModuleType:
 RUN = load("eval_run", "evals/run.py")
 
 
-def build_fixture(name: str, target: Path) -> Path:
+def stage_of(target: Path) -> Path:
+    """The grading stage of the workspace `target`: a folder beside it, as the runner makes one
+    outside the workspace, that the fixture's setup writes its graders to."""
+
+    return target.with_name(target.name + ".stage")
+
+
+def run_setup(name: str, target: Path, env: dict[str, str]) -> Path:
+    """The fixture's `setup.sh` run in `target` under `env`, with its graders in
+    `stage_of(target)`, as the runner runs it."""
+
+    stage_of(target).mkdir(parents=True, exist_ok=True)
     subprocess.run(
-        ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
+        ["bash", str(FIXTURES / name / "setup.sh"), str(target), str(stage_of(target))],
         check=True,
         capture_output=True,
-        env=RUN.fixture_setup_env(),
+        env=env,
     )
+    return target
+
+
+def build_fixture(name: str, target: Path, arm: str | None = None) -> Path:
+    """The fixture as its setup builds it in `target`, with its graders in `stage_of(target)`."""
+
+    return run_setup(
+        name, target, {**RUN.fixture_setup_env(), **({"OB_EVAL_ARM": arm} if arm else {})}
+    )
+
+
+def copy_built(source: Path, target: Path) -> Path:
+    """A copy of a built workspace and of its grading stage."""
+
+    shutil.copytree(source, target, symlinks=True)
+    shutil.copytree(stage_of(source), stage_of(target), symlinks=True)
     return target
 
 
@@ -84,6 +112,8 @@ def grade(
     (grading / "answer.md").write_text(answer, encoding="utf-8")
     revision = seed(target)
     env = {**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(ROOT)}
+    # As the runner runs a plan: the graders are in the grading stage, outside the workspace.
+    env["OUTCOMEBOUND_GRADER_DIR"] = str(stage_of(target))
     env.pop("OUTCOMEBOUND_EVAL_DIR", None)
     env.pop("OUTCOMEBOUND_SEED_SHA", None)
     if eval_dir is not None:

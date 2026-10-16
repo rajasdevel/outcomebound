@@ -153,6 +153,8 @@ LOCAL_FRAGMENT = f"{facts.FRAGMENT_DIR}/{LOCAL}.md"
 # What --detect names last, and where a new project starts, as paths in the engine.
 GUIDE = "skills/adopt-outcomebound/SKILL.md"
 NEW_PROJECT_REFERENCE = "skills/using-outcomebound/references/new-project.md"
+# Where the engine holds the scaffold's sets, --detect names its preview on an empty repository.
+SCAFFOLD_MANIFEST = "templates/scaffold/scaffold.json"
 # What --detect proposes first for Done where a floor is installed: the floor's runner, with
 # `--base` the remote's default branch where Git resolves it (`default_base`).
 FLOOR_RUNNER = "outcomebound floor check ."
@@ -657,6 +659,36 @@ class Settings:
         return textio.UTF8_BOM + data if (self.before or b"").startswith(textio.UTF8_BOM) else data
 
 
+# Stand-ins for the digest and the limit in the command adopt writes, which `_own_command`
+# turns into the patterns they stand for.
+_ANY_DIGEST = "DIGEST"
+_ANY_LIMIT = 987654321
+
+
+def _own_command(group: object, harness: str, mark: bool) -> str | None:
+    """The command of `group` where it is exactly the shape adopt writes for `harness`: one
+    command handler, whose command is `finish_check.mark_command` at the turn's start, else
+    `finish_check.command`, with any digest and any limit; None for any other group. The shape
+    comes from those functions, so it follows each change to what adopt writes."""
+
+    hooks = group.get("hooks") if isinstance(group, dict) and list(group) == ["hooks"] else None
+    handler = hooks[0] if isinstance(hooks, list) and len(hooks) == 1 else None
+    if not isinstance(handler, dict) or handler.get("type") != "command":
+        return None
+    command = handler.get("command")
+    if not isinstance(command, str):
+        return None
+    written = (
+        finish_check.mark_command(harness, _ANY_DIGEST)
+        if mark
+        else finish_check.command(harness, _ANY_DIGEST, _ANY_LIMIT)
+    )
+    shape = (
+        re.escape(written).replace(_ANY_DIGEST, "[0-9a-f]{64}").replace(str(_ANY_LIMIT), "[0-9]+")
+    )
+    return command if re.fullmatch(shape, command) else None
+
+
 # --- The manifest ---------------------------------------------------------------
 
 
@@ -1070,11 +1102,37 @@ class Run:
         created the document."""
 
         settings = self.document(want.path)
-        spot = settings.find(record["sha256"] if record else None, want.id == FINISH_MARK)
-        self._judge(label(want.path, want.id), settings.at(spot), want.data, record)
+        if record is None:
+            spot = self._own_shape(settings, want)
+        else:
+            spot = settings.find(record["sha256"], want.id == FINISH_MARK)
+            self._judge(label(want.path, want.id), settings.at(spot), want.data, record)
         settings.put(want.event, want.entry, spot)
         created = settings.before is None or bool(record and record.get("created"))
         want.extra["created"] = created
+
+    def _own_shape(self, settings: Settings, want: HookWant) -> Spot | None:
+        """Where an entry no record holds is one this install may take over: the first group
+        under the event that is exactly the command shape adopt writes for this harness, which
+        the person's `--finish-check` asks to own. It is rewritten to the shape adopt writes now
+        and recorded, with no `--force`, and one line names the old command. Any other entry
+        that runs the finish check stays as it is, and `unmanaged_lines` warns of it."""
+
+        entries = settings.hooks().get(want.event)
+        for index, group in enumerate(entries if isinstance(entries, list) else []):
+            old = _own_command(group, want.extra["harness"], want.id == FINISH_MARK)
+            if old is None:
+                continue
+            if finish_check.canonical(group) != want.data:
+                self.notes.append(
+                    (
+                        "note",
+                        f"took over a hand-made finish-check entry in {want.path}: it ran "
+                        f"`{_printable(old)}`, which this install now writes as its own entry",
+                    )
+                )
+            return want.event, index
+        return None
 
     def drop(self, record: Record) -> None:
         """Remove what `record` says adopt wrote; a path that is now a symlink is left alone."""
@@ -1325,7 +1383,7 @@ def finish_hooks(
             continue
         if not paths.admits(hook.get("file")):
             raise AdoptError(f"{name}: the harness table names no settings file inside the target")
-        entry = finish_check.entry(name, digest, timeout)
+        entry = finish_check.entry(name, digest, timeout, hook.get("wake"))
         data = finish_check.canonical(entry)
         extra: dict[str, Any] = {"harness": name, "timeout": timeout}
         event = hook["event"]
@@ -1357,9 +1415,34 @@ def finish_hooks(
                 f"desktop may not share with the shell{caution}",
             )
         )
+    run.notes.extend(wake_notes(hooks, [item.harness for item in found]))
     if wants:
         plan_measure(run, done, timeout, bool(asked) or selection.verify)
     return wants
+
+
+def wake_notes(
+    hooks: Sequence[tuple[str, dict[str, Any] | None]], selected: Sequence[str]
+) -> Notes:
+    """A warning where Cursor is selected beside a row whose stop entry wakes the model in the
+    background (claude-code's `asyncRewake`): Cursor runs the hooks of .claude/settings.json by
+    default and is not documented to read the key, so there the entry would wait for all of Done
+    at each stop, and, with no `stop_hook_active` in its input, never hold."""
+
+    if "cursor" not in selected:
+        return []
+    return [
+        (
+            "warning",
+            f"{name} finish-check: Cursor, also selected, runs the hooks of {hook['file']} by "
+            f"default and is not documented to read `{hook['wake']['key']}`, so there this entry "
+            "would run for all of Done at each stop, the wait it is written to remove, and would "
+            "never hold; turn off Cursor's \"Include Third-Party Plugins, Skills, and Other "
+            'Configs" setting where that cost is not wanted',
+        )
+        for name, hook in hooks
+        if hook is not None and isinstance(hook.get("wake"), dict)
+    ]
 
 
 def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FINISH_CHECK) -> Notes:
@@ -1378,7 +1461,7 @@ def review_again(name: str, data: bytes, own: Sequence[Record], entry: str = FIN
     if entry == FINISH_CHECK:
         if not before:
             return []
-        why = "since its Done commands or its timeout changed"
+        why = "since its Done commands, its timeout or the form this engine writes changed"
         return [
             (
                 "action",
@@ -1840,6 +1923,125 @@ def hook_path_notes(target: Path) -> Notes:
     return notes
 
 
+# Every settings file adopt reads for hooks, whichever harness a record names.
+HOOK_FILES = (*CLAUDE_SETTINGS, ".codex/hooks.json")
+# A command that runs the finish check: `outcomebound` as a word or a path's last part (with
+# `.cmd` or `.exe` on Windows), whitespace and `finish-check`, or one of the two module forms
+# (`-m` with or without a space after it); a word may stand in single or double quotes. The match
+# is lexical, also inside a `sh -c` string, and runs nothing: a script a hook names is not
+# opened, a residual no lexical rule closes.
+RUNS_FINISH_CHECK = re.compile(
+    r"(?<![\w.-])['\"]?outcomebound(?i:\.cmd|\.exe)?['\"]?\s+['\"]?finish-check['\"]?(?![\w-])"
+    r"|-m\s*['\"]?outcomebound_tools"
+    r"(?:\.finish_check['\"]?(?![\w-])|['\"]?\s+['\"]?finish-check['\"]?(?![\w-]))"
+)
+
+
+def _unmanaged_in(settings: Settings, own: Sequence[Record]) -> list[tuple[str, str]]:
+    """(event, command) for each command handler of `settings` that runs the finish check, in a
+    group that none of `own`'s hook records for this file holds. The group a record holds is the
+    one `--check` reads for it, `Settings.find`: so an entry edited by hand reads `edited`, once,
+    and a second copy of adopt's entry, or one under an event no record names, is unmanaged."""
+
+    events = settings.data.get("hooks")
+    if not isinstance(events, dict):
+        return []
+    held = {
+        spot
+        for record in own
+        if record["kind"] == HOOK and record["path"] == settings.path
+        for spot in [settings.find(record["sha256"], record["id"] == FINISH_MARK)]
+        if spot is not None
+    }
+    found: list[tuple[str, str]] = []
+    for event, groups in events.items():
+        for index, group in enumerate(groups if isinstance(groups, list) else []):
+            handlers = group.get("hooks") if isinstance(group, dict) else None
+            for hook in handlers if isinstance(handlers, list) else ():
+                command = hook.get("command") if isinstance(hook, dict) else None
+                if (
+                    (event, index) not in held
+                    and isinstance(command, str)
+                    and RUNS_FINISH_CHECK.search(command)
+                ):
+                    found.append((str(event), command))
+    return found
+
+
+def _hook_document(target: Path, relative: str) -> tuple[Settings | None, str]:
+    """The hook file as a document, or None and why `--check` and `--detect` cannot read it."""
+
+    try:
+        raw = _read(target, relative)
+        if raw is None:
+            return Settings.parse(relative, None), ""
+        data = json.loads(text := textio.decode(raw))
+    except AdoptError as error:
+        return None, "; ".join(error.reasons)
+    except UnicodeDecodeError:
+        return None, "it is not UTF-8 text"
+    except ValueError as error:
+        return None, f"it is not valid JSON ({error}); adopt reads no comments"
+    if not isinstance(data, dict):
+        return None, "it is not a JSON object"
+    return Settings(relative, raw, data, text), ""
+
+
+def unread_hook_files(target: Path) -> list[str]:
+    """One line for each hook file adopt reads that it cannot read, as it cannot see a finish
+    check entry in it: it reads UNVERIFIED, and moves no exit."""
+
+    lines = []
+    for relative in HOOK_FILES:
+        settings, why = _hook_document(target, relative)
+        if settings is None:
+            lines.append(
+                f"{relative}: not read, so a finish-check entry in it is not seen: "
+                f"{_printable(why)}"
+            )
+    return lines
+
+
+def unmanaged_hooks(
+    target: Path, own: Sequence[Record], planned: dict[str, Settings] | None = None
+) -> list[tuple[str, str, str]]:
+    """(file, event, command) for each hook entry in a settings file adopt reads that runs the
+    finish check and that no record of `own` holds; `planned` holds the documents an install
+    plans to write, read in place of the files. A file adopt cannot read is passed over."""
+
+    found: list[tuple[str, str, str]] = []
+    for relative in HOOK_FILES:
+        settings = (planned or {}).get(relative)
+        if settings is None:
+            settings, _ = _hook_document(target, relative)
+        if settings is None:
+            continue
+        found += [(relative, event, command) for event, command in _unmanaged_in(settings, own)]
+    return found
+
+
+def _replacement(target: Path, own: Sequence[Record]) -> str:
+    """The command that writes both managed entries, `--done` named where none is recorded."""
+
+    flag = "" if recorded_done(own) else " --done CMD"
+    return f"outcomebound adopt {paths.shell_path(target)} --finish-check{flag}"
+
+
+def unmanaged_lines(
+    target: Path, own: Sequence[Record], planned: dict[str, Settings] | None = None
+) -> list[str]:
+    """One line for each unmanaged hook entry: its file, its event, its command, and the fix.
+    Adopt removes no entry it did not write, since the bytes are the project's."""
+
+    fix = _replacement(target, own)
+    return [
+        f"{relative}: the {_printable(event)} hook `{_printable(command)}` runs the finish "
+        f"check and no install record holds it; remove that entry, then `{fix}` writes both "
+        "managed entries"
+        for relative, event, command in unmanaged_hooks(target, own, planned)
+    ]
+
+
 def codex_sandbox_notes(target: Path, found: Sequence[Route]) -> Notes:
     """Where the install includes codex, the configuration route that lets an unattended
     session write the workspace folders and commit. Codex's default `workspace-write` sandbox
@@ -2016,6 +2218,9 @@ def install(
     run.notes.extend(ancestor_notes(target, found))
     run.notes.extend(reference_notes(target, found))
     run.notes.extend(hook_path_notes(target))
+    run.notes.extend(
+        ("warning", line) for line in unmanaged_lines(target, run.records, run.settings)
+    )
     run.notes.extend(codex_sandbox_notes(target, found))
     run.notes.extend(claims_plan_notes(target))
     planned = run.planned(manifest, engine_version(source))
@@ -2103,7 +2308,8 @@ def _hook_rendered(source: Path, record: Record, own: Sequence[Record]) -> bytes
     if record["id"] == FINISH_MARK:
         return finish_check.canonical(finish_check.mark_entry(harness, digest))
     timeout = int(record.get("timeout", finish_check.DEFAULT_TIMEOUT))
-    return finish_check.canonical(finish_check.entry(harness, digest, timeout))
+    entry = finish_check.entry(harness, digest, timeout, hook.get("wake"))
+    return finish_check.canonical(entry)
 
 
 def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> str:
@@ -2183,29 +2389,49 @@ def moved(target: Path, source: Path, record: Record, own: Sequence[Record]) -> 
     return "; ".join(parts)
 
 
-def next_step(target: Path, found: Sequence[str]) -> str | None:
+def next_step(
+    target: Path, found: Sequence[str], own: Sequence[Record] = (), unmanaged: int = 0
+) -> str | None:
     """The command that makes every record current, for a person who did not install; None
-    where each already is. An edited record is refused without `--force`, which would replace
-    the edit, so the edit is moved out first."""
+    where each already is and no hook entry is unmanaged. An edited record is refused without
+    `--force`, which would replace the edit, so the edit is moved out first. An unmanaged entry
+    is the project's own bytes: it is removed by hand, then `--finish-check` writes adopt's."""
 
     command = f"outcomebound adopt {paths.shell_path(target)}"
+    step = None
     if "edited" in found:
-        return (
+        step = (
             "next: move each edit out of OutcomeBound's blocks and files, then "
             f"{command} --force makes every record current"
         )
-    if any(state != "current" for state in found):
-        return f"next: {command} makes every record current"
-    return None
+    elif any(state != "current" for state in found):
+        step = f"next: {command} makes every record current"
+    if not unmanaged:
+        return step
+    fix = f"{_replacement(target, own)} writes both managed entries"
+    if step is None:
+        return f"next: remove each unmanaged entry, then {fix}"
+    return f"{step}; for each unmanaged entry, remove it, then {fix}"
+
+
+def _print_hook_lines(target: Path, unmanaged: Sequence[str]) -> None:
+    """The unmanaged hook entries, then each hook file that could not be read."""
+
+    for line in unmanaged:
+        print(f"{'unmanaged':<8} {line}")
+    for line in unread_hook_files(target):
+        print(f"{'UNVERIFIED':<8} {line}")
 
 
 def check(target: Path, source: Path) -> int:
     manifest = load_manifest(target)
+    unmanaged = unmanaged_lines(target, manifest.own)
     if manifest.raw is None:
         print(f"missing  {MANIFEST}")
+        _print_hook_lines(target, unmanaged)
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
-        return 1
+        return min(1 + len(unmanaged), CHECK_CAP)
     found: list[str] = []
     for record in manifest.own:
         found.append(state(target, source, record, manifest.own))
@@ -2216,15 +2442,16 @@ def check(target: Path, source: Path) -> int:
         elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
             detail = moved(target, source, record, manifest.own)
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
+    _print_hook_lines(target, unmanaged)
     note = measurement_note(target, manifest.own)
     if note is not None:
         print(f"{'note':<8} {note}")
     for line in _drift_lines(target, source, manifest.own, facts.read_ci(target)):
         print(f"{'drift':<8} {line}")
-    step = next_step(target, found)
+    step = next_step(target, found, manifest.own, len(unmanaged))
     if step is not None:
         print(step)
-    return min(sum(state != "current" for state in found), CHECK_CAP)
+    return min(sum(state != "current" for state in found) + len(unmanaged), CHECK_CAP)
 
 
 def _drift_lines(
@@ -2553,6 +2780,13 @@ def detect(target: Path, source: Path) -> int:
         notes.append(
             _Engine(f"nothing here but .git: a new project starts from this command{route}")
         )
+        if (Path(source) / SCAFFOLD_MANIFEST).is_file():
+            notes.append(
+                _Engine(
+                    "a new project: outcomebound scaffold . --lifecycle <preset> previews the "
+                    "files of its lifecycle; the new-project reference says how to choose"
+                )
+            )
     notes += _setup_notes(setups)
     notes += [
         f"lockfile {name}: {command} installs from it; a candidate for --setup, not proposed"
@@ -2562,6 +2796,8 @@ def detect(target: Path, source: Path) -> int:
     notes += _signal_notes(target, files)
     notes += _readiness_notes(target, done, files)
     notes += [f"drift: {line}" for line in _drift_lines(target, source, own, files)]
+    notes += [f"unmanaged: {line}" for line in unmanaged_lines(target, own)]
+    notes += [f"UNVERIFIED {line}" for line in unread_hook_files(target)]
     guide = (Path(source).resolve() / GUIDE).as_posix()
     notes.append(_Engine(f"onboarding guide for an agent: {guide}"))
     print(textio.visible(" ".join(map(paths.shell_word, words))))
@@ -2648,10 +2884,25 @@ its exit; a dry run does not run Done. adopt writes the document back with
 its keys, their order and its indentation kept, rewriting only its whitespace, and refuses one
 with comments. A Done change rewrites the entry, and Codex skips a changed entry until each
 person trusts it again in /hooks, which the install report says; --no-finish-check or --remove
-takes it out."""
+takes it out.
+
+--check and --detect also read .claude/settings.json, .claude/settings.local.json and
+.codex/hooks.json for a hook entry that runs the finish check and that no record holds, and
+report each as unmanaged: the file, the event, the command and the fix, which is to remove that
+entry, then run adopt with --finish-check. A command counts where it names `outcomebound`
+followed by `finish-check`, also inside sh -c, or a Python -m form that runs the engine's
+package or its finish-check module by name. The match is lexical and runs nothing, so a hook
+that calls a script of your own that runs the check is not seen.
+An install prints each as a warning. Nothing is refused, and adopt removes no entry it did not
+write; --check counts each in its exit, --detect prints each as a # line and exits as before.
+The one exception is an entry no record holds that is exactly the command shape adopt writes,
+for the same harness and event: --finish-check takes it over, rewrites it to the shape adopt
+writes now, records it with no --force, and names its old command on one line. A hook file that
+is not valid JSON or not UTF-8 is named on an UNVERIFIED line by --check and --detect, which
+moves no exit."""
 EPILOG = """\
 exit: 0 done, 1 refused or failed, 2 usage; --check exits with the number of records that are
-not current, at most 100."""
+not current plus the number of unmanaged hook entries, at most 100."""
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -2674,8 +2925,9 @@ def _parser() -> argparse.ArgumentParser:
         "--check",
         action="store_true",
         help="print current, edited, stale or missing for each record, one note line on the "
-        "measurement of Done (never counted in the exit), then the command that makes each "
-        "current; write nothing",
+        "measurement of Done (never counted in the exit), each unmanaged hook entry that runs the "
+        "finish check (counted in the exit), then the command that makes each current; write "
+        "nothing",
     )
     verb.add_argument("--remove", action="store_true", help="remove every recorded block and file")
     finish = parser.add_mutually_exclusive_group()

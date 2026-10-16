@@ -1,9 +1,9 @@
 # The slicing fixtures' shared close, sourced by each setup.sh from the workspace after it writes
-# its project: the graders, the core skill, then the first commit. The setup tags `seed` itself,
+# its project: the graders (written to the grading stage, `$stage`), the core skill, then the first commit. The setup tags `seed` itself,
 # after any later commit its history needs.
-mkdir -p checks
-cp "$repo/evals/graders/drafts.py" "$repo/evals/graders/ticket_cut.py" checks/
-chmod +x checks/*
+mkdir -p "$stage/checks"
+cp "$repo/evals/graders/drafts.py" "$repo/evals/graders/ticket_cut.py" "$stage/checks/"
+chmod +x "$stage"/checks/*
 
 # The core skill, where the note names it and where codex looks for skills;
 # none in the kernel-off arm.

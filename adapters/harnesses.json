@@ -122,6 +122,10 @@
       "file": ".claude/settings.json",
       "guard": "stop_hook_active",
       "accept": "workspace trust in an interactive session; nothing under -p, where committed hooks run untrusted",
+      "wake": {
+        "key": "asyncRewake",
+        "source": "https://code.claude.com/docs/en/hooks, read 2026-10-15: asyncRewake runs a command hook in the background and wakes Claude on exit code 2 with its stderr; its timeout is enforced; an async hook's systemMessage and additionalContext go to Claude on its next turn, not to the user; observed on Claude Code 2.1.300 on macOS on 2026-10-15: a wake's own turn end has stop_hook_active true"
+      },
       "source": "https://code.claude.com/docs/en/hooks, read 2026-09-29: Stop; decision block with reason holds the finish; stop_hook_active and an 8-continuation cap; background_tasks; the input's cwd follows the agent into a worktree while CLAUDE_PROJECT_DIR stays where the session started; systemMessage to the user; timeout in seconds, default 600; UserPromptSubmit fires at each prompt, its command timeout 30 s by default; https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/claude-code.md §7"
     },
     "recheck_on": "2026-12-27",
@@ -192,6 +196,7 @@
       "file": ".codex/hooks.json",
       "guard": "stop_hook_active",
       "accept": "trusting the entry in /hooks, again after each change to it",
+      "wake": null,
       "source": "https://learn.chatgpt.com/docs/hooks, read 2026-09-29: Stop reads JSON on stdout; decision block with reason becomes a new prompt; stop_hook_active; systemMessage to the user; timeout in seconds, default 600; UserPromptSubmit is a hook event; hooks run in the session's working directory, which the input's cwd names; per-hook trust in /hooks; https://github.com/openai/codex/issues/17532, open on 2026-09-29; https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/codex.md §7"
     },
     "recheck_on": "2026-12-27",

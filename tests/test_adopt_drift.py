@@ -338,15 +338,25 @@ def test_a_template_sentence_that_names_the_exposure_line_is_not_an_exposure_lin
     ]
 
 
-def test_the_personal_template_example_names_one_person() -> None:
-    """Breaks if the example `maintained by:` value that the personal template teaches does not
-    read as one person to the engine."""
+@pytest.mark.parametrize("name", ["prototype.md", "solo.md"])
+def test_the_one_maintainer_template_examples_name_one_person(name: str) -> None:
+    """Breaks if the example `maintained by:` value that the prototype and solo templates teach
+    does not read as one person to the engine."""
 
-    template = Path(__file__).resolve().parents[1] / "templates" / "lifecycle" / "personal.md"
+    template = Path(__file__).resolve().parents[1] / "templates" / "lifecycle" / name
     example = template.read_text(encoding="utf-8").split("## Example lines", 1)[1]
-    example = example.split("```text", 1)[1].split("Better means", 1)[0]
+    example = example.split("```text", 1)[1].split("```", 1)[0]
 
     assert drift.maintained_by_one(example)
+
+
+def test_the_scaffolds_one_maintainer_lines_name_one_person() -> None:
+    """Breaks if the local lines the scaffold writes for prototype and solo do not read as one
+    person, so that a second author shows as a drift line."""
+
+    scaffold = Path(__file__).resolve().parents[1] / "templates" / "scaffold"
+    for preset in ("prototype", "solo"):
+        assert drift.maintained_by_one((scaffold / preset / "local.md").read_text("utf-8"))
 
 
 def test_a_project_with_no_install_prints_no_drift_line(tmp_path: Path, capsys: Capture) -> None:

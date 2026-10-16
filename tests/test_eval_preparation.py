@@ -275,16 +275,19 @@ def test_shared_fixture_close_does_not_copy_grader_bytecode(tmp_path):
     (checks / "probe.py").write_text("print('fixture probe')\n")
     work = tmp_path / "workspace"
     work.mkdir()
+    stage = tmp_path / "stage"
+    stage.mkdir()
     (work / "AGENTS.md").write_text("# Synthetic project\n")
     result = subprocess.run(
         [
             "bash",
             "-c",
-            'here="$1"; repo="$2"; . "$3"',
+            'here="$1"; repo="$2"; stage="$4"; . "$3"',
             "fixture-close",
             str(here),
             str(FIXTURES.parents[1]),
             str(FIXTURES / "skills-close/close.sh"),
+            str(stage),
         ],
         cwd=work,
         capture_output=True,
@@ -292,8 +295,9 @@ def test_shared_fixture_close_does_not_copy_grader_bytecode(tmp_path):
         env={**os.environ, **HERMETIC_GIT},
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert (work / "checks/probe.py").read_bytes() == (checks / "probe.py").read_bytes()
-    assert not (work / "checks/__pycache__").exists()
+    assert (stage / "checks/probe.py").read_bytes() == (checks / "probe.py").read_bytes()
+    assert not (stage / "checks/__pycache__").exists()
+    assert not (work / "checks").exists()
 
 
 @pytest.mark.parametrize("caller_config", ["system", "no-system", "custom-global"])

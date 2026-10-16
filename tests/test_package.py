@@ -11,6 +11,7 @@ backend refuses a tree without the engine.
 from __future__ import annotations
 
 import base64
+import dataclasses
 import email.parser
 import hashlib
 import importlib.util
@@ -24,11 +25,14 @@ import sys
 import sysconfig
 import tarfile
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
+from tests import finish_helpers
 from tests.launcher_helpers import engine
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -203,6 +207,93 @@ def test_the_installed_command_adopts_exactly_as_the_checkout_does(
     assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
+@dataclasses.dataclass(frozen=True)
+class HookSite:
+    """A project with the installed entries, and how its harness fires them."""
+
+    row: str
+    hooks: dict[str, Any]
+    shell: Path
+    project: Path
+    environment: dict[str, str]
+    installed: Path
+
+    def once(self, event: str) -> subprocess.CompletedProcess[str]:
+        command = self.hooks[event][0]["hooks"][0]["command"]
+        return subprocess.run(
+            [str(self.shell), "-c", command],
+            cwd=self.project,
+            env=self.environment,
+            input=json.dumps(
+                {
+                    "cwd": str(self.project),
+                    "session_id": "package-test",
+                    "hook_event_name": event,
+                    "stop_hook_active": False,
+                }
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+            timeout=60,
+        )
+
+    def fire(self, event: str) -> dict[str, str]:
+        """What one hook prints, in codex's words. The turn-start entry prints nothing, or on
+        claude-code the person's notices. The claude-code stop entry is the run: exit 2 with the
+        report on stderr where it holds, else nothing. The codex stop prints its JSON and starts
+        the run detached; where it started one, the next stop, once it has ended, delivers."""
+
+        since = datetime.now(timezone.utc)
+        result = self.once(event)
+        if event == "UserPromptSubmit":
+            assert result.returncode == 0 and result.stderr == "", result.stderr
+            if self.row == "codex" or not result.stdout:
+                assert result.stdout == ""  # codex marks a turn silently
+                return {}
+            printed: dict[str, str] = json.loads(result.stdout)
+            assert list(printed) == ["systemMessage"]
+            return printed
+        if self.row == "claude-code":
+            if result.returncode == 2:
+                assert result.stdout == ""
+                return {"decision": "block", "reason": result.stderr}
+            assert (result.returncode, result.stdout, result.stderr) == (0, "", ""), result
+            return {}
+        assert result.returncode == 0, result.stdout + result.stderr
+        verdict: dict[str, str] = json.loads(result.stdout)
+        if finish_helpers.settle(self.project, since) is None or "decision" in verdict:
+            return verdict
+        since = datetime.now(timezone.utc)
+        again = self.once(event)
+        assert again.returncode == 0, again.stdout + again.stderr
+        # The delivering stop starts a run of its own where the tree's record never repeats (a
+        # tool the hook's environment lacks); it ends before the test reads the count.
+        finish_helpers.settle(self.project, since)
+        later: dict[str, str] = json.loads(again.stdout)
+        return later
+
+    def person(self, stop: dict[str, str]) -> str:
+        """What the person reads of a turn end that did not hold: codex's message at the stop;
+        on claude-code, whose entry prints nothing, `--status`."""
+
+        if self.row == "codex":
+            assert list(stop) == ["systemMessage"], stop
+            return stop["systemMessage"]
+        assert stop == {}
+        status = subprocess.run(
+            [str(self.installed), "finish-check", "--status", str(self.project)],
+            env=self.environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+            timeout=60,
+        )
+        return status.stdout
+
+
 @pytest.mark.parametrize(
     ("row", "settings"),
     [("claude-code", ".claude/settings.json"), ("codex", ".codex/hooks.json")],
@@ -300,52 +391,32 @@ def test_the_installed_hooks_run_done_without_development_tools(
         check=True,
     )
     hooks = json.loads((project / settings).read_text(encoding="utf-8"))["hooks"]
+    site = HookSite(row, hooks, shell, project, environment, installed)
 
     def fire(event: str) -> dict[str, str]:
-        command = hooks[event][0]["hooks"][0]["command"]
-        result = subprocess.run(
-            [str(shell), "-c", command],
-            cwd=project,
-            env=environment,
-            input=json.dumps(
-                {
-                    "cwd": str(project),
-                    "session_id": "package-test",
-                    "hook_event_name": event,
-                    "stop_hook_active": False,
-                }
-            ),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-            timeout=30,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
-        if event == "UserPromptSubmit":
-            assert result.stdout == ""  # marking a turn is silent
-            return {}
-        return json.loads(result.stdout)
+        return site.fire(event)
 
     def runs() -> int:
         return len(counter.read_text(encoding="utf-8").splitlines())
 
+    def person(stop: dict[str, str]) -> str:
+        return site.person(stop)
+
     measured = runs()
     assert measured == 1
     assert fire("UserPromptSubmit") == {}
-    unchanged = fire("Stop")
-    assert unchanged["systemMessage"].startswith("finish-check: the tree is the one this turn")
+    unchanged = person(fire("Stop"))
+    assert "finish-check: the tree is the one this turn" in unchanged
     assert runs() == measured
 
-    assert fire("UserPromptSubmit") == {}
+    fire("UserPromptSubmit")
     (project / "README.md").write_text("# Changed project\n", encoding="utf-8")
-    passed = fire("Stop")
-    assert list(passed) == ["systemMessage"]
-    assert passed["systemMessage"].startswith("finish-check PASS: ")
+    passed = person(fire("Stop"))
+    assert "finish-check PASS: " in passed
     assert runs() == measured + 1
     assert fire("Stop") == {} and runs() == measured + 1
 
-    assert fire("UserPromptSubmit") == {}
+    fire("UserPromptSubmit")
     state.write_text("rejected\n", encoding="utf-8")
     failed = fire("Stop")
     assert failed["decision"] == "block" and "systemMessage" not in failed
@@ -362,13 +433,17 @@ def test_the_installed_hooks_run_done_without_development_tools(
     assert runs() == measured + 3
 
     state.write_text("missing\n", encoding="utf-8")
-    for expected in (measured + 4, measured + 5):
-        unavailable = fire("Stop")
-        assert list(unavailable) == ["systemMessage"]
-        assert unavailable["systemMessage"].startswith("finish-check UNVERIFIED: ")
-        assert "could not run in the hook's environment" in unavailable["systemMessage"]
-        assert "synthetic-project-check-tool" in unavailable["systemMessage"]
-        assert runs() == expected  # same tree, no cached success or environmental refusal
+    unavailable = person(fire("Stop"))
+    assert "finish-check UNVERIFIED: " in unavailable
+    assert "could not run in the hook's environment" in unavailable
+    assert "synthetic-project-check-tool" in unavailable
+    # On codex, the run and the run the delivering stop starts: the record of a tool the hook's
+    # environment lacks never repeats.
+    again = 2 if row == "codex" else 1
+    assert runs() == measured + 3 + again
+    # Same tree, the same again; the person was told once for this tree.
+    assert "decision" not in fire("Stop")
+    assert runs() == measured + 3 + 2 * again
 
 
 def test_home_holds_every_file_the_shipped_skills_name(installed: Path, tmp_path: Path) -> None:
@@ -459,6 +534,37 @@ def test_a_wheel_built_from_the_source_archive_is_the_same_wheel(
     assert (source / "PKG-INFO").is_file()
     assert rebuilt.name == built[0].name
     assert rebuilt.read_bytes() == built[0].read_bytes()
+
+
+def test_the_wheel_holds_every_scaffold_template_built_from_the_checkout_and_the_sdist(
+    built: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """The scaffold's sources carry plain names, so the build's walk, which skips dot paths where
+    Git cannot list the files, takes every one of them: from the checkout and from the extracted
+    source archive alike."""
+
+    scaffold = ROOT / "templates" / "scaffold"
+    expected = {
+        f"outcomebound_tools/_home/{path.relative_to(ROOT).as_posix()}"
+        for path in scaffold.rglob("*")
+        if path.is_file()
+    }
+    assert any(name.endswith("/scaffold.json") for name in expected)
+    # `filter` exists from 3.10.12 and 3.11.4; an older 3.10 unpacks as it always did. The
+    # archive is the one this test built.
+    if hasattr(tarfile, "data_filter"):
+        shutil.unpack_archive(built[1], tmp_path, filter="data")
+    else:
+        shutil.unpack_archive(built[1], tmp_path)
+    out = tmp_path / "out"
+    out.mkdir()
+    rebuilt = out / backend(tmp_path / DIST).build_wheel(str(out))
+
+    for wheel in (built[0], rebuilt):
+        with zipfile.ZipFile(wheel) as opened:
+            names = set(opened.namelist())
+        shipped = {name for name in names if "/_home/templates/scaffold/" in name}
+        assert shipped == expected, wheel.name
 
 
 def test_a_tree_without_the_engine_builds_nothing(tmp_path: Path) -> None:

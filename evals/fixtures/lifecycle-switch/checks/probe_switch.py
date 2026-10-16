@@ -109,7 +109,7 @@ def _commands() -> list[str] | None:
 
 
 def _inflight() -> dict:
-    return json.loads(Path("checks/inflight.json").read_text(encoding="utf-8"))
+    return json.loads((Path(__file__).resolve().parent / "inflight.json").read_text("utf-8"))
 
 
 def _sha(path: str) -> str | None:

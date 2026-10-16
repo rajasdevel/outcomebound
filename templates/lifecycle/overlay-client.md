@@ -1,18 +1,23 @@
-# Lifecycle: client
+# Lifecycle overlay: client
 
 A comparison for adoption. `adopt` never installs it, and the project owns every line it writes.
 Propose a line below only where the project's committed text does not already lead an agent to the
 decision the line changes; most lines are left out.
 
 **Fits when** a client or a regulator accepts the work: a delivery for an outside party, with
-acceptance by named people on a build. Work that others use but nobody accepts on a build: use
-`shared`. A stream of the same project that no client accepts change by change, such as upkeep, is
-a separate stream and may fit `shared`.
+acceptance by named people on a build. It goes on `solo`, `team` or `organization`, never on
+`prototype`. Work that others use but nobody accepts on a build: no overlay. A stream of the same
+project that no client accepts change by change, such as upkeep, is a separate stream and follows
+the base lifecycle's route.
 
-**Fragments it would select:** `client`; `solo` or `team`; `deploy` and `runtime` where it runs a
-service; `db-migrations` where it changes stored data; `ci-release` where it publishes a package;
+**Fragments it would select:** `client`, beside the base lifecycle's; `deploy` and `runtime` where
+it runs a service; `db-migrations` where it changes stored data; `ci-release` where it publishes a package;
 `tickets` where the project declares its own ticket store; the client's tracker is a source, read
 through the `sync-tracker` skill. No `explore`.
+
+**Scaffold set:** `+client` on the base's `--lifecycle` adds the delivery stream, the acceptance
+gate with its owner left for the person to name, and the client route to `CONTRIBUTING.md`, which it
+writes on `solo` too (`templates/scaffold/client/`).
 
 ## Example lines
 
@@ -29,11 +34,12 @@ Better means — <the project's measure, in its words, and any count it rejects>
 Gates — acceptance: owner <the client's named person>, evidence <their words, naming the build>.
 Gates — production go: owner UNVERIFIED (no file names one); reported as a gap, never filled in.
 Leave when — the contract ends or the client stops accepting builds (observable: <...>; watched by:
-  <who>) → opens a brief to move to `shared` or to retire: the build accepted last, the open
+  <who>) → opens a brief to take the overlay off, or to retire: the build accepted last, the open
   tickets, the standing grants, any deploy in a partial phase, and what each item now owes.
 Leave when — the client's acceptance moves to a regulator or a second party → opens a brief on
   the gates whose owner changes.
-Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>.
+Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired "<old term>";
+  invalidated <what no longer holds>.
 ```
 
 ## When to propose each line, and when to leave it out
@@ -49,7 +55,7 @@ Changed — <date>: <what>, decided by <who>, invalidated <what no longer holds>
   go) is reported as a gap to the person; an agent never fills the owner, and its own pre-run is
   never the acceptance.
 - "Leave when —": propose a row only where a transition is near and its signal can be watched.
-- "Changed —": written after a person's yes on a transition, never at adoption.
+- "Changed —": written after a complete directive or a person's answer to the transition brief, one line for each stream with the older one removed, never at adoption.
 
 ## A route example for a client delivery
 

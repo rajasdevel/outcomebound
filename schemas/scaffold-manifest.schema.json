@@ -1,0 +1,161 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:scaffold-manifest:1",
+  "title": "OutcomeBound scaffold manifest v1",
+  "description": "The engine's own file `templates/scaffold/scaffold.json`: each preset and overlay, each act, each file the scaffold verb can write with its parts, and each platform act it lists. The verb reads the file set from this manifest only (docs/specs/scaffold/design.md). A source path is relative to `templates/scaffold/` and holds no segment that starts with a dot; a target path is relative to the project root, in POSIX form.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "lifecycles", "acts", "files", "platform_acts"],
+  "properties": {
+    "version": {"const": 1},
+    "lifecycles": {
+      "type": "array",
+      "minItems": 10,
+      "description": "The four presets, then the six overlays in their canonical order.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "assumes", "fragments", "edges"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z-]*[a-z]$"},
+          "kind": {"enum": ["preset", "overlay"]},
+          "assumes": {
+            "type": "array",
+            "description": "The facts this lifecycle assumes, one short line each, printed on the plan's `assumes:` line.",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "fragments": {
+            "type": "array",
+            "description": "Fragment ids the printed adopt command selects for this lifecycle.",
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+            "uniqueItems": true
+          },
+          "edges": {
+            "type": "array",
+            "description": "Edges this lifecycle adds to the local fragment's `edges:`, each one line with no `;`.",
+            "items": {"type": "string", "minLength": 1, "pattern": "^[^;\\n]+$"},
+            "uniqueItems": true
+          },
+          "refused_on": {
+            "type": "array",
+            "description": "For an overlay: the presets that refuse it.",
+            "items": {"enum": ["prototype", "solo", "team", "organization"]},
+            "uniqueItems": true
+          },
+          "refusal": {"type": "string", "minLength": 1, "description": "For an overlay with `refused_on`: the reason the usage error prints."}
+        }
+      }
+    },
+    "acts": {
+      "type": "array",
+      "description": "The acts `--acts` takes.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "fragments", "edges"],
+        "properties": {
+          "id": {"enum": ["deploy", "publish", "tag", "stored-data"]},
+          "fragments": {"type": "array", "items": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"}, "uniqueItems": true},
+          "edges": {"type": "array", "items": {"type": "string", "minLength": 1, "pattern": "^[^;\\n]+$"}, "uniqueItems": true}
+        }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "join", "present", "parts"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+          "path": {
+            "type": "string",
+            "description": "Where the file goes in the project.",
+            "pattern": "^(?![/~])(?!.*(^|/)\\.\\.(/|$))(?!.*\\\\).+$"
+          },
+          "join": {
+            "enum": ["slots", "blocks", "whole"],
+            "description": "slots: the local fragment, each part's lines after the lines of the same slot. blocks: each part appended after the head with one blank line between. whole: one source, no part joined."
+          },
+          "head": {
+            "type": "string",
+            "description": "The source of the file's head; required for `slots` and `blocks`.",
+            "pattern": "^(?!\\.)(?!.*/\\.)[^\\\\]+$"
+          },
+          "present": {
+            "type": "array",
+            "minItems": 1,
+            "description": "Path patterns, relative to the project root, any of which makes the part present. `*` matches within one segment. The token `streams-route` means a route path that a \"Streams —\" line of the local fragment names in a code span, where that path exists.",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "parts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["source", "for", "mode"],
+              "properties": {
+                "source": {"type": "string", "pattern": "^(?!\\.)(?!.*/\\.)[^\\\\]+$"},
+                "for": {
+                  "type": "array",
+                  "minItems": 1,
+                  "description": "The lifecycle ids and act ids this part is for; it holds when one of them is selected.",
+                  "items": {"type": "string", "pattern": "^[a-z][a-z-]*[a-z]$"},
+                  "uniqueItems": true
+                },
+                "mode": {"enum": ["write", "offer"], "description": "write: --accept writes it where absent. offer: printed; written only where --with names its `offer` value. A part of a file with no `head` is printed as a block to add once the file exists, and is never written."},
+                "offer": {"enum": ["codeowners", "pr-template"], "description": "For mode offer: the `--with` value that writes it."},
+                "brings": {"type": "boolean", "description": "For an overlay's part: true puts the file into the set where no preset or act part does."},
+                "when": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "description": "Facts that must hold, each key any one of its values; an absent key holds always.",
+                  "properties": {
+                    "visibility": {"type": "array", "items": {"enum": ["public", "private", "private-free"]}, "uniqueItems": true},
+                    "host": {"type": "array", "items": {"enum": ["github", "other"]}, "uniqueItems": true},
+                    "acts": {"type": "array", "items": {"enum": ["deploy", "publish", "tag", "stored-data"]}, "uniqueItems": true}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "platform_acts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text", "who", "for", "status"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+          "text": {"type": "string", "minLength": 1, "description": "The act and what it changes, naming the control and no vendor setting."},
+          "who": {"type": "string", "minLength": 1},
+          "for": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^[a-z][a-z-]*[a-z]$"}, "uniqueItems": true},
+          "when": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Facts that must hold as well as `for`, each key any one of its values, as for a part.",
+            "properties": {
+              "acts": {"type": "array", "items": {"enum": ["deploy", "publish", "tag", "stored-data"]}, "uniqueItems": true}
+            }
+          },
+          "status": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["public", "private", "private-free", "other-host"],
+            "description": "What the plan prints beside the act for each visibility, and for `--host other`.",
+            "properties": {
+              "public": {"type": "string", "minLength": 1},
+              "private": {"type": "string", "minLength": 1},
+              "private-free": {"type": "string", "minLength": 1},
+              "other-host": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  }
+}

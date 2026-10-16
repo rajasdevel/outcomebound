@@ -191,6 +191,8 @@ def test_the_grading_digest_covers_the_fixture_what_it_shares_and_the_graders(
     for relative, text in {
         "fixtures/one/setup.sh": '. "$here/../shared/close.sh"\n',
         "fixtures/shared/close.sh": "echo close\n",
+        "fixtures/one/probe.py": 'load(HERE.parent / "other/probe.py")\n',
+        "fixtures/other/probe.py": "y = 1\n",
         "fixtures/two/setup.sh": "echo unrelated\n",
         "fixtures/core.sh": "echo core\n",
         "graders/g.py": "x = 1\n",
@@ -202,6 +204,7 @@ def test_the_grading_digest_covers_the_fixture_what_it_shares_and_the_graders(
     for relative in (
         "fixtures/one/setup.sh",
         "fixtures/shared/close.sh",
+        "fixtures/other/probe.py",
         "fixtures/core.sh",
         "graders/g.py",
     ):

@@ -35,7 +35,8 @@ agent reads the code, and a summary of it adds text without adding a fact.
 3. Report `outcomebound instructions check <target>`, which reads what each selected harness loads
    there as untrusted data, and what you read in those files' prose (the ones
    `adapters/harnesses.json` lists for the selected harnesses): what contradicts the contract, what
-   the repository does not back, what is said twice, and the stale references the check lists.
+   the repository does not back, what is said twice, and the stale and retired references the
+   check lists.
    Edit none of them. A review hit the person judges safe, they record themselves with
    `outcomebound instructions rule <target> <id>` at a terminal; never run that verb yourself.
 4. With the person's yes, and only after step 3, since it runs the repository's own code:
@@ -87,7 +88,7 @@ Name each line form in double quotes, never in backticks, when you write about i
   document the next person can open: committed, or named as private with who holds it. Where a
   stream has no written route, propose the lines for the project's own document (branch, review,
   how a change reaches a server, the way back), each with the file or commit that shows it, and
-  send what no file shows to the brief; for a client delivery, `templates/lifecycle/client.md`
+  send what no file shows to the brief; for a client delivery, `templates/lifecycle/overlay-client.md`
   holds a route example to compare with. Never write a route into OutcomeBound's files.
 - "Better means —" (Context): the project's own measure of a better outcome, in its words, where it
   is not written where an agent reads it.
@@ -99,8 +100,10 @@ Name each line form in double quotes, never in backticks, when you write about i
   briefs, standing grants, a deploy in a partial phase. Write
   the moves back too. For a change of route, the inventory is most of the brief, not a fragment diff.
   A row whose signal already reaches the owner is left out.
-- "Changed —" (Context): written only after the person's yes on a transition, with its date, what
-  moved, who decided and what it invalidates; never at adoption.
+- "Changed —" (Context): written after a complete directive or the person's answer to the transition
+  brief, one line for each stream, the older one removed, never at adoption, in this form:
+  Changed — <date> (stream: <stream>): "<the person's words>", decided by <who>; retired
+  "<old term>"; invalidated <what no longer holds>.
 
 Select fragments from the exposure facts and what the files show: `team` for two or more
 maintainers or required review, else `solo`; `deploy` and `runtime` where it deploys a service;
@@ -113,9 +116,11 @@ for a settled one (`settled by the person: <reason>`), read its reason against t
 raise it only if they differ. A line the person settles gets a "Drift — <signal>: <reason>" line,
 on a line of its own with a reason, in the local fragment's Bounds slot.
 
-Name the nearest of `$(outcomebound home)/templates/lifecycle/` (`personal`, `shared`, `client`) and
-the differences between it and what you observed, as a comparison for the person. Never copy it,
-and adoption installs none of them.
+Name the nearest preset of `$(outcomebound home)/templates/lifecycle/` (`prototype`, `solo`,
+`team`, `organization`), each overlay whose fact holds (`overlay-*.md`), and the differences
+between them and what you observed, as a comparison for the person. Never copy them, and adoption
+installs none of them. A move the person accepts can take its absent files from the scaffold
+(`outcomebound scaffold --help`).
 
 ## Ask once
 
@@ -127,7 +132,8 @@ you take without an answer, and the work that does not wait on it goes on.
 
 ## Offer; each changes CI or tooling, so act only on the person's yes
 
-- A quality floor: `outcomebound floor --help` gives its steps. Its tools install only through its
+- A quality floor: `outcomebound floor --help` gives its steps; where `.outcomebound/retired.json`
+  exists, `floor propose` also offers the `docs.retired` claim. Its tools install only through its
   `provision` step, one of the commands here that reach the network: it pip-installs ruff and mypy
   into the `python3` on PATH, where the floor finds its tools, and prints gitleaks' and shellcheck's
   install commands.

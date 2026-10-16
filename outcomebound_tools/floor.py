@@ -40,7 +40,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import facts, fileplan, paths, programs, validation
+from outcomebound_tools import facts, fileplan, instruction_audit, paths, programs, validation
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
 FLOOR_PATH = facts.FLOOR
@@ -118,6 +118,15 @@ RECIPES: dict[str, tuple[dict[str, Any], ...]] = {
     ),
 }
 STACKS = (("python", ("pyproject.toml", "setup.cfg", "*.py")), ("shell", ("*.sh",)))
+# Offered where the project holds a list of retired terms: the instruction audit's own check, run
+# alone, so a retired term that comes back into a tracked document fails `check`.
+RETIRED_CLAIM: dict[str, Any] = {
+    "name": "docs.retired",
+    "mode": GATE,
+    "tool": "outcomebound",
+    "argv": ["outcomebound", "instructions", "check", ".", "--only", "retired-reference"],
+    "parser": "exit",
+}
 # A stack no recipe ships for: `propose` says so, and prints the project's own claims to add.
 TYPESCRIPT = ("tsconfig.json", "*.ts", "*.tsx", "*.mts", "*.cts")
 TYPESCRIPT_CLAIMS = (
@@ -1719,6 +1728,25 @@ def mypy_targets(root: Path) -> list[str]:
     return sorted(p for p in packages if PurePosixPath(p).parent.as_posix() not in packages)
 
 
+def _retired_note(root: Path) -> str:
+    """What the retired-terms check finds in the project now, so a person sees what the claim
+    `docs.retired` costs before taking it."""
+
+    lead = f"floor: {instruction_audit.RETIRED} is present, so docs.retired is proposed;"
+    try:
+        report = instruction_audit.check(root, only=["retired-reference"])
+    except instruction_audit.AuditError as problem:
+        return f"{lead} the check could not run: {instruction_audit.plain(str(problem))}"
+    found = [f for f in report.findings if f.check == "retired-reference" and f.verdict == FAIL]
+    unread = [f for f in report.findings if f.verdict == UNVERIFIED and f.decides]
+    if unread:
+        return f"{lead} the check reads UNVERIFIED: {instruction_audit.plain(unread[0].fact)}"
+    noun = "occurrence" if len(found) == 1 else "occurrences"
+    return f"{lead} the check finds {len(found)} {noun} now" + (
+        "; fix each before the claim is applied, as it stays a gate" if found else ""
+    )
+
+
 def propose(root: Path) -> int:
     if not _tracked(root, ()):
         print("floor: Git tracks no file here; nothing to propose", file=sys.stderr)
@@ -1729,6 +1757,9 @@ def propose(root: Path) -> int:
     for claim in claims:
         if claim["parser"] == "mypy" and targets:
             claim["argv"] = [*claim["argv"], *targets]
+    if os.path.lexists(root / instruction_audit.RETIRED):
+        claims.append(dict(RETIRED_CLAIM))
+        print(_retired_note(root), file=sys.stderr)
     floor = parse_floor({"version": FORMAT_VERSION, "claims": claims})
     sys.stdout.write(floor.text().decode("utf-8"))
     if _tracked(root, TYPESCRIPT):
@@ -2092,7 +2123,8 @@ is new.
 
 verbs:
   propose TARGET              print a floor.json for the stacks Git tracks, and a secrets
-                              claim for every project; writes nothing
+                              claim for every project, and docs.retired where
+                              .outcomebound/retired.json exists; writes nothing
   apply TARGET --floor FILE   write FILE to .outcomebound/floor.json, fitted to the findings
                               the project has today (apply --help; --strict fits nothing)
   check TARGET                run the claims (check --help: --base, --claim)
@@ -2174,7 +2206,11 @@ VERBS = {
         "Print a floor.json for the stacks Git tracks (python, shell), and the secrets claim\n"
         "for every project; write nothing. The types claim names each outermost package Git\n"
         "tracks where the project's mypy config names no files. Where Git tracks TypeScript,\n"
-        "say on stderr why no claim is proposed for it, and print claims to add."
+        "say on stderr why no claim is proposed for it, and print claims to add. Where\n"
+        ".outcomebound/retired.json exists, also the claim docs.retired, which runs\n"
+        "`outcomebound instructions check . --only retired-reference` and fails on each retired\n"
+        "term, path or command a tracked Markdown or text file still names; stderr says how many\n"
+        "occurrences it finds now."
     ),
     "apply": APPLY_DESCRIPTION,
     "check": CHECK_DESCRIPTION,

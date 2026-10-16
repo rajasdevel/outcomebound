@@ -581,18 +581,32 @@ def test_a_preflight_that_observes_no_login_exits_3_before_any_call(tmp_path: Pa
 # --- graders the model cannot forge --------------------------------------------------------
 
 RETAG_THE_SEED = "git tag -d seed >/dev/null\ngit tag seed\n"
-# The grader, rewritten to pass and to leave a mark if anything ever runs it.
-REWRITE_THE_GRADER = """cat > checks/scope.sh <<'SH'
+# A grader written into the workspace, to pass and to leave a mark if anything ever runs it. The
+# workspace holds no `checks/` of its own, so the file is one more path out of scope: the
+# fixture's scope claim must fail it, and nothing runs it.
+REWRITE_THE_GRADER = """mkdir -p checks
+cat > checks/scope.sh <<'SH'
 #!/usr/bin/env bash
 touch grader-ran
 echo OK
 SH
 printf 'helper = 1\\n' > unrelated.py
 """
+# The grader in the stage, rewritten during the call. The test gives the run a TMPDIR of its own,
+# so the one stage it makes is the one that this finds.
+REWRITE_THE_STAGE = """for f in "$TMPDIR"/ob-graders-*/checks/scope.sh; do
+  printf '#!/bin/sh\\ntouch grader-ran\\n' > "$f"
+done
+"""
+OUT_OF_SCOPE = 'not allowed: "checks/scope.sh"'
 FORGERIES = {
-    "grader-rewritten": (FIX_THE_DATE + REWRITE_THE_GRADER, "FAIL protected-grading-inputs"),
-    "grader-rewrite-committed-then-seed-moved": (
+    "grader-written-into-the-workspace": (FIX_THE_DATE + REWRITE_THE_GRADER, OUT_OF_SCOPE),
+    "grader-written-committed-then-seed-moved": (
         REWRITE_THE_GRADER + "git add -A\ngit commit -qm tidy\n" + RETAG_THE_SEED + FIX_THE_DATE,
+        OUT_OF_SCOPE,
+    ),
+    "stage-rewritten-during-the-call": (
+        FIX_THE_DATE + REWRITE_THE_STAGE,
         "FAIL protected-grading-inputs",
     ),
     "violation-committed-then-seed-moved": (
@@ -616,11 +630,16 @@ def test_NEGATIVE_CONTROL_a_forged_grader_or_moved_seed_cannot_pass_the_fixture(
     grader is never executed, and the seed is read before the model can move its tag."""
 
     action, reason = FORGERIES[forgery]
-    done, out = _invoke(tmp_path, action=action)
+    (tmp_path / "tmp").mkdir()
+    done, out = _invoke(tmp_path, action=action, env={"TMPDIR": str(tmp_path / "tmp")})
     assert done.returncode == 0, done.stdout + done.stderr
     meta = _meta(out)
     report = (out / "small-fix.transcript.txt").read_text(encoding="utf-8")
     assert meta["verdict"] == "FAIL" and reason in report, report[-2000:]
+    if forgery.startswith("stage"):
+        assert meta["claims"] == {} and meta["protected_intact"] is False, meta
+    elif forgery.startswith("grader"):
+        assert meta["claims"]["only-the-allowed-file-changed"] == "FAIL", meta
     workspace = Path(meta["fixture_repo"])
     assert not (workspace / "grader-ran").exists(), "a rewritten grader was executed"
     tag = subprocess.run(
@@ -835,8 +854,10 @@ def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
     RUN.install(workdir, loaded.files)
     env = {**RUN.child_env(), **RUN.HERMETIC_GIT, "OB_EVAL_ARM": arm}
     fixture = RUN.FIXTURES / "dirty-review"
+    stage = tmp_path / "stage"
+    stage.mkdir()
     subprocess.run(
-        ["bash", str(fixture / "setup.sh"), str(workdir)],
+        ["bash", str(fixture / "setup.sh"), str(workdir), str(stage)],
         check=True,
         env=env,
         capture_output=True,
@@ -851,7 +872,8 @@ def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
         env=env,
         check=True,
     ).stdout
-    assert status == (workdir / ".baseline-status").read_text(encoding="utf-8")
+    assert status == (stage / "checks" / "baseline-status").read_text(encoding="utf-8")
+    assert not (workdir / "checks").exists()
 
 
 def test_missing_observed_model_does_not_count_as_requested_model():
@@ -1171,7 +1193,9 @@ def test_a_run_from_before_digests_were_kept_is_judged_again_and_says_what_is_un
     assert meta["workspace_sha256"], "a digest is kept from here on"
 
 
-@pytest.mark.parametrize("what", ["workspace", "grading-files", "native-copy", "no-workspace"])
+@pytest.mark.parametrize(
+    "what", ["workspace", "grading-files", "sealed-graders", "native-copy", "no-workspace"]
+)
 def test_NEGATIVE_CONTROL_a_run_whose_evidence_changed_is_refused_and_nothing_is_written(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], what: str
 ) -> None:
@@ -1182,8 +1206,12 @@ def test_NEGATIVE_CONTROL_a_run_whose_evidence_changed_is_refused_and_nothing_is
     if what == "workspace":
         (workspace / "added-later.txt").write_text("x", encoding="utf-8")
     elif what == "grading-files":
+        # A run with no sealed copy is judged with this checkout's files, which must be its own.
+        del meta["graders_sha256"]
         meta["grading_files_sha256"] = "0" * 64
         (out / "small-fix.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    elif what == "sealed-graders":
+        (out / "small-fix.graders" / "post.plan.json").write_text("{}\n", encoding="utf-8")
     elif what == "native-copy":
         (out / "small-fix.native.jsonl").write_bytes(b'{"type":"x"}\n')
     else:

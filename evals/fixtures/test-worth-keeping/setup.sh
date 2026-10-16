@@ -9,7 +9,8 @@ export GIT_AUTHOR_NAME="OutcomeBound eval" GIT_AUTHOR_EMAIL=eval@example.invalid
 export GIT_COMMITTER_NAME="OutcomeBound eval" GIT_COMMITTER_EMAIL=eval@example.invalid
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -86,9 +87,9 @@ Tests are `unittest` test cases in `test_*.py` files beside the code. Run them a
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
 
-mkdir -p checks
-cp "$here/checks/suite.py" checks/suite.py
-chmod +x checks/*
+mkdir -p "$stage/checks"
+cp "$here/checks/suite.py" "$stage/checks/suite.py"
+chmod +x "$stage"/checks/*
 
 # The core skill, where the note names it and where codex looks for skills;
 # none in the kernel-off arm.

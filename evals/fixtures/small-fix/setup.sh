@@ -11,7 +11,8 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -52,7 +53,7 @@ release.
 Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.
 NOTE
 
-mkdir -p scripts checks
+mkdir -p scripts "$stage/checks"
 cat > scripts/check-all.sh <<'SCRIPT'
 #!/bin/sh
 # Every check the project has.
@@ -68,11 +69,11 @@ python3 -B test_datehelp.py
 git status --porcelain
 echo "release checklist: done"
 SCRIPT
-cp "$here/checks/scope.sh" checks/scope.sh
-cp "$here/checks/probe_datehelp.py" checks/probe_datehelp.py
-cp "$repo/evals/graders/scope_walk.py" checks/scope_walk.py
-cp "$repo/evals/graders/transcript_commands.py" checks/transcript_commands.py
-chmod +x scripts/*.sh checks/*
+cp "$here/checks/scope.sh" "$stage/checks/scope.sh"
+cp "$here/checks/probe_datehelp.py" "$stage/checks/probe_datehelp.py"
+cp "$repo/evals/graders/scope_walk.py" "$stage/checks/scope_walk.py"
+cp "$repo/evals/graders/transcript_commands.py" "$stage/checks/transcript_commands.py"
+chmod +x scripts/*.sh "$stage"/checks/*
 
 # The core skill, where the note names it and where codex looks for skills;
 # none in the kernel-off arm.

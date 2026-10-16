@@ -4,16 +4,17 @@
 # rewriting an already-modified file leaves its status line identical, so the
 # content hashes decide.
 set -uo pipefail
+# The baselines and the shared walk sit beside this script, in the grading stage's `checks/`.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if command -v sha256sum >/dev/null 2>&1; then checker="sha256sum"; else checker="shasum -a 256"; fi
 
-files="$(find . \( -path ./.git -o -name __pycache__ \) -prune -o -type f -print | grep -v '^\./\.baseline-' | sort)"
+files="$(find . \( -path ./.git -o -name __pycache__ \) -prune -o -type f -print | sort)"
 # The shared fail-closed content walk reads the filesystem, never follows a symlink,
 # and treats an unreadable or unmatched entry as changed, so no name, mode or index
 # bit can hide a path from it. The three comparisons below decide from the same
 # baselines.
-if ! walk="$(python3 checks/scope_walk.py --baseline-hashes .baseline-hashes \
-    --status-baseline .baseline-status --suppressed \
-    --skip .baseline-files --skip .baseline-hashes --skip .baseline-status)"; then
+if ! walk="$(python3 "$here/scope_walk.py" --baseline-hashes "$here/baseline-hashes" \
+    --status-baseline "$here/baseline-status" --suppressed)"; then
   echo "the content walk could not run" >&2
   exit 1
 fi
@@ -29,19 +30,19 @@ if [ "$observed" -ne 0 ]; then
   printf '%s\n' "$walk" | sed -n 's/^PATH /  /p' >&2
   exit 1
 fi
-if ! printf '%s\n' "$files" | diff -q - .baseline-files >/dev/null; then
+if ! printf '%s\n' "$files" | diff -q - "$here/baseline-files" >/dev/null; then
   echo "the file list differs from the baseline" >&2
-  printf '%s\n' "$files" | diff - .baseline-files >&2 || true
+  printf '%s\n' "$files" | diff - "$here/baseline-files" >&2 || true
   exit 1
 fi
-if ! printf '%s\n' "$files" | xargs $checker | diff -q - .baseline-hashes >/dev/null; then
+if ! printf '%s\n' "$files" | xargs $checker | diff -q - "$here/baseline-hashes" >/dev/null; then
   echo "file contents changed since the baseline" >&2
-  printf '%s\n' "$files" | xargs $checker | diff - .baseline-hashes >&2 || true
+  printf '%s\n' "$files" | xargs $checker | diff - "$here/baseline-hashes" >&2 || true
   exit 1
 fi
-if ! git status --porcelain --untracked-files=all | diff -q - .baseline-status >/dev/null; then
+if ! git status --porcelain --untracked-files=all | diff -q - "$here/baseline-status" >/dev/null; then
   echo "git status differs from the baseline" >&2
-  git status --porcelain --untracked-files=all | diff - .baseline-status >&2 || true
+  git status --porcelain --untracked-files=all | diff - "$here/baseline-status" >&2 || true
   exit 1
 fi
 echo "the file list, file contents, and git status all match the baseline"

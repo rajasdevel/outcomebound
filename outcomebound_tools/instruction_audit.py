@@ -3,14 +3,15 @@
 What this module decides: which harnesses a target is checked for (the `--harness`
 names; else those its manifest records, with every other row whose files the target holds,
 since the manifest is the target's own data; else every row of `adapters/harnesses.json`),
-which files within the target those harnesses read, and what seven checks observe:
+which files within the target those harnesses read, and what eight checks observe:
 hidden characters, concealed content, override phrases, harness configuration, with
 `--base` the instruction files changed since a ref, whether each harness's loading
-facts are verified and current, and which path, Make target or package script the
-project's own instruction text names and the target no longer holds. Each check answers to
-one rule of the prompt standard (`docs/prompt-standard.md`) and carries that rule's severity;
-the families run in that order of severity, the security family first and reported first. A
-harness entry that is byte for byte what adopt writes for the
+facts are verified and current, which term, path or command the project's own list
+(`RETIRED`) retires and a Markdown or text file still names, and which path, Make target or
+package script the project's own instruction text names and the target no longer holds. Each
+check answers to one rule of the prompt standard (`docs/prompt-standard.md`) and carries that
+rule's severity; the families run in that order of severity, the security family first and
+reported first. A harness entry that is byte for byte what adopt writes for the
 recorded Done commands, its digest the manifest's record, is a review hit that quotes the
 Done commands it runs, since the manifest is the target's own data; it does not change the
 result while those commands are the ones AGENTS.md's project facts show. A hidden character
@@ -20,7 +21,10 @@ loads from a folder above the target (`ancestors`), which this module names and 
 where every row was selected, the loading facts of a row that loads no file of the
 target that another row does not load too, and each stale reference (`stale_references`):
 only an inline code span of project-owned Markdown text is read for one, as text, and nothing
-a makefile or `package.json` holds is run.
+a makefile or `package.json` holds is run. An occurrence of a retired term, path or command is a
+FAIL, since the project's own list says it is retired; for that check alone the project's data
+(its `scope`, `history` and `allowed_in` patterns) decides what is read and where a retired term may
+stay, and `--only` limits a run to the checks it names.
 
 What it does not decide: whether a flagged line is benign, which a person decides. A person
 records that judgment with the `rule` verb in their own rulings file, outside every target
@@ -57,11 +61,22 @@ from datetime import date
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import adapters, facts, finish_check, identity, programs, walk
+from outcomebound_tools import (
+    adapters,
+    facts,
+    finish_check,
+    home,
+    identity,
+    programs,
+    schemacheck,
+    walk,
+)
 from outcomebound_tools.finish_check import canonical, recorded_done
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
+from outcomebound_tools.textio import decode as _decode
 from outcomebound_tools.textio import plain as _plain
 from outcomebound_tools.textio import quote as _quote
+from outcomebound_tools.textio import universal as _universal
 
 __all__ = [
     "CHECKS",
@@ -94,6 +109,7 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "override-phrases": ("security", "review", "S4"),
     "harness-config": ("security", "review", "S4"),
     "instruction-change": ("security", "review", "S4"),
+    "retired-reference": ("references", "gate", "S14"),
     "stale-reference": ("references", "review", "S14"),
     "load-resolution": ("loading", "gate", "S7"),
 }
@@ -176,6 +192,8 @@ _CATEGORY_LABELS = {
     "bypass": "permission bypasses",
 }
 MANIFEST = ".outcomebound/manifest.json"
+# The project's own list of retired terms, paths and commands (`retired-reference`).
+RETIRED = ".outcomebound/retired.json"
 # The notes an agent leaves for the next session (the workspace fragment): Git ignores them, and
 # a later session reads them as it reads instructions, so they are read here too. A hidden
 # character in a note reads UNVERIFIED for that note, not FAIL for the target: the note is one
@@ -197,6 +215,10 @@ _NEXT = {
     "history",
     "load-resolution": "re-check what the harness loads against its documentation; a wrong or "
     "missing row belongs in OutcomeBound's harness table, adapters/harnesses.json",
+    "retired-reference": "name what replaces it, as the entry says; where the file records "
+    "history, name the file in the list's history or the entry's allowed_in",
+    "retired-list": "correct .outcomebound/retired.json to match "
+    "schemas/retired-terms.schema.json; until then no file is checked against it",
     "stale-reference": "compare the text with the project: restore what it names, or correct "
     "the text",
     "unsettled-reference": "see by hand whether the project holds what the text names; this "
@@ -988,7 +1010,7 @@ def _own_entry(
 ) -> bool:
     """Whether a group under a hook event is the one adopt writes for `harness` at `path`: its
     canonical JSON is byte for byte `finish_check.entry` for the row whose `finish_hook` names
-    this file, the recorded Done commands' digest and the timeout the hook carries, where the row
+    this file, the recorded Done commands' digest and the limit its command names, where the verb
     admits it, or `finish_check.mark_entry`, the turn-start entry beside it; and a manifest `hook`
     record for this file holds that digest. Any other key, hook type, argument or Done digest
     makes it an ordinary entry."""
@@ -1001,9 +1023,9 @@ def _own_entry(
     written = canonical(value)
     if written == canonical(finish_check.mark_entry(harness, digest)):
         return hashlib.sha256(written).hexdigest() in own
-    first = hooks[0] if hooks and isinstance(hooks[0], dict) else {}
-    timeout = first.get("timeout")
-    if not isinstance(timeout, int) or not finish_check.admits_timeout(timeout):
+    # The run's limit is the one the command names; the handler's own `timeout` is the harness's.
+    timeout = finish_check.limit_of(value)
+    if timeout is None:
         return False
     expected = canonical(finish_check.entry(harness, digest, timeout))
     return written == expected and hashlib.sha256(written).hexdigest() in own
@@ -1223,7 +1245,11 @@ def _instruction_change(
             )
         ]
     listed = set(files)
-    hits = [path for path in changed if path in listed or path == MANIFEST or scope.wants(path)]
+    hits = [
+        path
+        for path in changed
+        if path in listed or path in (MANIFEST, RETIRED) or scope.wants(path)
+    ]
     if not hits:
         return [
             _finding(
@@ -1735,6 +1761,458 @@ def _reference_findings(read: Sequence[str], found: Sequence[_Reference]) -> lis
     ]
 
 
+# --- retired-reference -------------------------------------------------------------
+
+# The files the check reads, besides the project's `local` fragment, which it reads by name.
+_TEXT_SUFFIXES = (".md", ".mdc", ".markdown", ".txt", ".rst")
+_SCHEMA = "schemas/retired-terms.schema.json"
+# Stands for a character a view of a file leaves out (managed blocks, quotes, code), so that a
+# phrase never joins across what was left out; line breaks stay, so a line number holds.
+_BLANK = "\x00"
+# A space in a term matches a run of whitespace, a line break included, or one `-`.
+_GAP = r"(?:\s+|-)"
+_BOUNDARY = r"\w\-"
+_OPEN_FENCE = re.compile(r"\s*(`{3,}|~{3,})(.*)\Z")
+_LIST_ITEM = re.compile(r" {0,3}(?:[-*+]|\d{1,9}[.)])(?:\s|\Z)")
+# `Changed` and a dash, after a list marker, emphasis or nothing: the lifecycle reference's dated
+# line. An em or en dash may touch the word; a hyphen or two must follow a space.
+_CHANGED = re.compile(
+    r"[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(?:\*\*|__|\*|_)?Changed(?:\*\*|__|\*|_)?"
+    r"(?:[ \t]*[\u2014\u2013]|[ \t]+(?:--|-))"
+)
+# What a `Changed -` line records: text in double quotes, or in a code span.
+_QUOTED = re.compile(_CODE_SPAN.pattern + '|"[^"]*"|\u201c[^\u201d]*\u201d', re.DOTALL)
+_LEVEL_TWO = re.compile(r" {0,3}##(?!#)\s+(.*)")
+_VERSION = re.compile(r"\d+\.\d+")
+_UNRELEASED = re.compile(r"\bunreleased\b", re.IGNORECASE)
+# The marks that may stand between a sentence's start and its first word.
+_OPENERS = " \t\"'([\u201c\u2018*_"
+_CLOSERS = "\"')]\u201d\u2019*_"
+_BLOCK_MARKS = re.compile(
+    r"[ \t]*((?:(?:[-*+>|]|#{1,6}|\d{1,9}[.)])[ \t]+)*)[\"'(\[\u201c\u2018*_]*\Z"
+)
+
+
+@dataclass(frozen=True, slots=True)
+class _Retirement:
+    """One entry of the list, with the pattern that finds it."""
+
+    term: str
+    kind: str
+    day: str
+    replaced_by: str | None
+    pattern: re.Pattern[str]
+    # An exact `term` entry also matches its first letter in the other case, where a sentence
+    # starts.
+    other_case: bool
+    allowed: tuple[re.Pattern[str], ...]
+    # The term's first word after its first letter, as a pattern with the entry's flags: every
+    # occurrence holds it one character (or `./` and one character) after its start, so a search
+    # for it finds the few places where `pattern` can match. None where that word is empty.
+    probe: re.Pattern[str] | None
+
+
+@dataclass(frozen=True, slots=True)
+class _RetiredList:
+    entries: tuple[_Retirement, ...]
+    scope: tuple[re.Pattern[str], ...] | None
+    history: tuple[re.Pattern[str], ...]
+
+
+def _patterns(raw: Any) -> tuple[re.Pattern[str], ...]:
+    """The list's path patterns; one with no `*` or `?` names a file or a folder, and so also
+    each path under that folder."""
+
+    return tuple(
+        re.compile(re.escape(glob.rstrip("/")) + r"(?:/.*)?\Z")
+        if "*" not in glob and "?" not in glob
+        else _glob_pattern(glob)
+        for glob in raw or ()
+    )
+
+
+def _retirement(raw: Mapping[str, Any]) -> _Retirement:
+    """An entry as a pattern: its term as written, a space as a gap, and the boundaries the
+    design gives its kind."""
+
+    term, kind = raw["term"], raw["kind"]
+    ignore = raw.get("match", "exact") == "ignore-case"
+    first, rest = term[0], term[1:]
+    other_case = (
+        kind == "term"
+        and not ignore
+        and len(first.lower()) == len(first.upper()) == 1
+        and first.lower() != first.upper()
+    )
+    head = (
+        f"[{re.escape(first.lower())}{re.escape(first.upper())}]"
+        if other_case
+        else re.escape(first)
+    )
+    words = re.split(r" +", rest)
+    body = head + _GAP.join(re.escape(word) for word in words)
+    if kind == "path":
+        # A leading `./` is read away first; then neither side may touch a word character, `-`,
+        # `/` or `.` (`docs/old.md.bak`), though a full stop that ends a sentence may follow.
+        pattern = rf"(?<![{_BOUNDARY}/.])(?:\./)?{body}(?![{_BOUNDARY}/])(?!\.\w)"
+    else:
+        pattern = rf"(?<![{_BOUNDARY}]){body}(?![{_BOUNDARY}])"
+    flags = re.IGNORECASE if ignore else 0
+    return _Retirement(
+        term=term,
+        kind=kind,
+        day=raw["retired"],
+        replaced_by=raw["replaced_by"],
+        pattern=re.compile(pattern, flags),
+        other_case=other_case,
+        allowed=_patterns(raw.get("allowed_in")),
+        probe=re.compile(re.escape(words[0]), flags) if words[0] else None,
+    )
+
+
+def _list_problem(fact: str) -> tuple[None, Finding]:
+    """The one finding of a list that cannot be read: UNVERIFIED, which changes the result."""
+
+    finding = _finding(
+        "retired-reference", RETIRED, 0, UNVERIFIED, _plain(fact), next=_NEXT["retired-list"]
+    )
+    return None, finding
+
+
+def _retired_list(root: Path) -> tuple[_RetiredList | None, Finding | None]:
+    """The project's list, or why it cannot be read: (None, None) where the project has none."""
+
+    if not os.path.lexists(root / RETIRED):
+        return None, None
+    if not _inside(root, root / RETIRED):
+        return _list_problem("the list is not a regular file inside the target; it was not opened")
+    try:
+        document = json.loads(_decode((root / RETIRED).read_bytes()))
+    except (OSError, UnicodeDecodeError, ValueError, RecursionError) as error:
+        return _list_problem(f"the list cannot be read: {error}")
+    try:
+        schema = json.loads((home.ROOT / _SCHEMA).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise AuditError(f"the engine's own {_SCHEMA} cannot be read: {error}") from error
+    problems = schemacheck.validate(document, schema)
+    if problems:
+        more = f"; and {len(problems) - 3} more" if len(problems) > 3 else ""
+        return _list_problem(f"the list does not match {_SCHEMA}: {'; '.join(problems[:3])}{more}")
+    return (
+        _RetiredList(
+            entries=tuple(_retirement(raw) for raw in document["entries"]),
+            scope=_patterns(document["scope"]) if "scope" in document else None,
+            history=_patterns(document.get("history")),
+        ),
+        None,
+    )
+
+
+def _mask(text: str, spans: Sequence[tuple[int, int]]) -> str:
+    """`text` with each character of each span `(start, end)` blanked, line breaks kept."""
+
+    pieces, last = [], 0
+    for start, end in sorted(spans):
+        start = max(start, last)
+        if end > start:
+            pieces += [text[last:start], re.sub(r"[^\n]", _BLANK, text[start:end])]
+            last = end
+    pieces.append(text[last:])
+    return "".join(pieces)
+
+
+def _code_lines(lines: Sequence[str]) -> list[bool]:
+    """Which lines are in a fenced code block (an unclosed one runs to the end), or in an
+    indented one: four columns of indent after a blank line or code, and not in a list, where
+    such a line continues its item."""
+
+    flags = [False] * len(lines)
+    fence, previous, in_list = "", "blank", False
+    for index, line in enumerate(lines):
+        opening = _OPEN_FENCE.match(line)
+        if fence:
+            flags[index] = True
+            if (
+                opening
+                and opening.group(1)[0] == fence[0]
+                and len(opening.group(1)) >= len(fence)
+                and not opening.group(2).strip()
+            ):
+                fence = ""
+            continue
+        if opening and not (opening.group(1)[0] == "`" and "`" in opening.group(2)):
+            fence, flags[index], previous = opening.group(1), True, "code"
+            continue
+        if not line.strip():
+            previous = previous if previous == "code" else "blank"
+            continue
+        wide = line.expandtabs(4)
+        indent = len(wide) - len(wide.lstrip(" "))
+        if _LIST_ITEM.match(wide):
+            in_list = True
+        elif indent < 2 and previous in ("blank", "code"):
+            in_list = False
+        if indent >= 4 and not in_list and previous in ("blank", "code"):
+            flags[index], previous = True, "code"
+        else:
+            previous = "text"
+    return flags
+
+
+def _paragraphs(lines: Sequence[str], flags: Sequence[bool]) -> Iterator[list[int]]:
+    """The line numbers (from 0) of each paragraph outside code: split at a blank line and where
+    a list item, heading, quote or table row starts, as a code span wraps within one."""
+
+    block: list[int] = []
+    for index, line in enumerate(lines):
+        if flags[index] or not line.strip():
+            yield block
+            block = []
+        else:
+            if block and _BLOCK_START.match(line):
+                yield block
+                block = []
+            block.append(index)
+    yield block
+
+
+def _released_lines(lines: Sequence[str], flags: Sequence[bool]) -> frozenset[int]:
+    """The lines of a changelog's released sections: from a level-2 heading that holds a version
+    and not `Unreleased`, to the next level-2 heading."""
+
+    held: set[int] = set()
+    inside = False
+    for number, (line, code) in enumerate(zip(lines, flags, strict=True), 1):
+        heading = None if code else _LEVEL_TWO.match(line)
+        if heading:
+            inside = bool(_VERSION.search(heading.group(1))) and not _UNRELEASED.search(
+                heading.group(1)
+            )
+        if inside:
+            held.add(number)
+    return frozenset(held)
+
+
+def _sentence_start(text: str, index: int) -> bool:
+    """Whether a sentence starts at `text[index]`: after a full stop, `!` or `?`; at the start
+    of a block (the text, a paragraph, a list item, a heading, a quote or the first table cell);
+    or at the start of a line after one that ends a sentence."""
+
+    start = text.rfind("\n", 0, index) + 1
+    before = text[start:index]
+    line = _BLOCK_MARKS.fullmatch(before)
+    if line:
+        if line.group(1) or start == 0:
+            return True
+        above = text[text.rfind("\n", 0, start - 1) + 1 : start - 1].strip()
+        return not above.strip(_BLANK) or above.rstrip(_CLOSERS)[-1:] in (".", "!", "?")
+    cut = before.rstrip(_OPENERS)
+    return len(cut) < len(before) and cut.rstrip(_CLOSERS)[-1:] in (".", "!", "?")
+
+
+def _record_spans(
+    lines: Sequence[str], starts: Sequence[int], flags: Sequence[bool]
+) -> list[tuple[int, int]]:
+    """The quotes and code spans in the paragraph a `Changed -` line starts: what the line
+    records, which does not count, on the `Changed` line or on a line it wraps onto."""
+
+    spans: list[tuple[int, int]] = []
+    for index, line in enumerate(lines):
+        if flags[index] or not _CHANGED.match(line):
+            continue
+        end = index + 1
+        while (
+            end < len(lines)
+            and lines[end].strip()
+            and not flags[end]
+            and not _BLOCK_START.match(lines[end])
+        ):
+            end += 1
+        joined = "\n".join(lines[index:end])
+        spans.extend(
+            (starts[index] + found.start(), starts[index] + found.end())
+            for found in _QUOTED.finditer(joined)
+        )
+    return spans
+
+
+@dataclass(frozen=True, slots=True)
+class _Views:
+    """One file's text as the check reads it: `full` leaves out the managed blocks and what a
+    `Changed -` line records, `prose` also the code a `term` entry is not read in."""
+
+    full: str
+    prose: str
+    starts: list[int]
+    released: frozenset[int]
+
+
+def _views(text: str, changelog: bool) -> _Views | None:
+    """`text` as the check reads it, or None where its managed blocks cannot be told apart."""
+
+    try:
+        blocks = identity.find_managed_blocks(text)
+    except identity.IdentityError:
+        return None
+    text = _mask(text, [(block.begin_offset, block.end_offset) for block in blocks])
+    lines = text.split("\n")
+    starts = [0]
+    for line in lines[:-1]:
+        starts.append(starts[-1] + len(line) + 1)
+    flags = _code_lines(lines)
+    full = _mask(text, _record_spans(lines, starts, flags))
+    code = [(starts[i], starts[i] + len(lines[i])) for i, flag in enumerate(flags) if flag]
+    for paragraph in _paragraphs(lines, flags):
+        if paragraph:
+            joined = "\n".join(lines[i] for i in paragraph)
+            base = starts[paragraph[0]]
+            code.extend((base + m.start(), base + m.end()) for m in _CODE_SPAN.finditer(joined))
+    released = _released_lines(lines, flags) if changelog else frozenset()
+    return _Views(full, _mask(full, code), starts, released)
+
+
+def _occurrence(retirement: _Retirement, relative: str, number: int) -> Finding:
+    replaced = (
+        f"replaced by {_quote(retirement.replaced_by)}"
+        if retirement.replaced_by
+        else "nothing replaces it"
+    )
+    return _finding(
+        "retired-reference",
+        relative,
+        number,
+        FAIL,
+        f"names the retired {retirement.kind} {_quote(retirement.term)} "
+        f"(retired {retirement.day}; {replaced})",
+    )
+
+
+def _retired_file(root: Path, relative: str, retired: _RetiredList, scope: _Scope) -> list[Finding]:
+    """The findings in one file: each occurrence, or why the file was not read; none where it
+    was read and holds no occurrence."""
+
+    if any(pattern.match(relative) for pattern in retired.history):
+        return []
+    why = _unopened(root, relative, scope)
+    text = None
+    if why is None:
+        text, why = _read(root, relative)
+    if text is None:
+        # A file the check cannot read is reported and leaves the result as it is, as a binary
+        # file does for the other checks.
+        return [
+            _finding(
+                "retired-reference",
+                relative,
+                0,
+                UNVERIFIED,
+                why,
+                decides=False,
+                next=_NEXT["unopened"],
+            )
+        ]
+    changelog = PurePosixPath(relative).name.lower() == "changelog.md"
+    views = _views(_universal(text), changelog)
+    if views is None:
+        fact = "its managed blocks cannot be told apart, so none of its text was read"
+        return [
+            _finding(
+                "retired-reference", relative, 0, UNVERIFIED, fact, next=_NEXT["stale-reference"]
+            )
+        ]
+    found = []
+    for retirement in retired.entries:
+        if any(pattern.match(relative) for pattern in retirement.allowed):
+            continue
+        view = views.prose if retirement.kind == "term" else views.full
+        for where in _matches(retirement, view):
+            if (
+                retirement.other_case
+                and view[where] != retirement.term[0]
+                and not _sentence_start(view, where)
+            ):
+                continue
+            number = bisect.bisect_right(views.starts, where)
+            if number not in views.released:
+                found.append(_occurrence(retirement, relative, number))
+    return found
+
+
+def _matches(retirement: _Retirement, view: str) -> Iterator[int]:
+    """Where each occurrence of `retirement` in `view` starts, as `pattern.finditer` gives them:
+    the pattern is tried only where its probe is found, since a pattern that opens with a
+    lookbehind is otherwise tried at every character."""
+
+    if retirement.probe is None:
+        yield from (match.start() for match in retirement.pattern.finditer(view))
+        return
+    leads = (3, 1) if retirement.kind == "path" else (1,)
+    starts: set[int] = set()
+    at = 0
+    while hit := retirement.probe.search(view, at):
+        starts.update(hit.start() - lead for lead in leads if hit.start() >= lead)
+        at = hit.start() + 1
+    end = 0
+    for start in sorted(starts):
+        if start < end:
+            continue
+        match = retirement.pattern.match(view, start)
+        if match:
+            end = match.end()
+            yield start
+
+
+def _retired_files(
+    root: Path, listed: Sequence[str] | None, retired: _RetiredList, scope: _Scope
+) -> list[str]:
+    """The files the check reads: every Markdown or text file Git lists (every one under the
+    target where Git cannot list it) inside the list's `scope`, and the project's own local
+    fragment, by name; not a copy of OutcomeBound's text that the manifest records, nor a file
+    the harness table records as one person's."""
+
+    if listed is None:
+        listed = [
+            (folder.path / name).relative_to(root).as_posix()
+            for folder in walk.folders(root)
+            for name in folder.files
+        ]
+    copies = {
+        str(PurePosixPath(artifact["path"]))
+        for artifact in _artifacts(root)
+        if isinstance(artifact, dict)
+        and artifact.get("kind") in _COPIES
+        and isinstance(artifact.get("path"), str)
+    }
+    wanted = {
+        path
+        for path in listed
+        if path.lower().endswith(_TEXT_SUFFIXES)
+        and path not in copies
+        and not scope.personal(path)
+        and (retired.scope is None or any(pattern.match(path) for pattern in retired.scope))
+    }
+    if os.path.lexists(root / LOCAL):
+        wanted.add(LOCAL)
+    return sorted(wanted)
+
+
+def _retired_reference(root: Path, listed: Sequence[str] | None, scope: _Scope) -> list[Finding]:
+    """Every finding of `retired-reference`: nothing where the project has no list, one UNVERIFIED
+    where it cannot be read, else a FAIL for each occurrence and a PASS for each file read
+    without one."""
+
+    retired, problem = _retired_list(root)
+    if retired is None:
+        return [problem] if problem else []
+    findings: list[Finding] = []
+    for relative in _retired_files(root, listed, retired, scope):
+        found = _retired_file(root, relative, retired, scope)
+        findings.extend(
+            found or [_finding("retired-reference", relative, 0, PASS, "nothing matched")]
+        )
+    return findings
+
+
 @dataclass(frozen=True, slots=True)
 class _Inputs:
     """What `check` and `stale_references` both start from: the files of a target and the
@@ -2062,29 +2540,40 @@ def check(
     target: Path,
     harnesses: Sequence[str] = (),
     base: str | None = None,
+    only: Sequence[str] = (),
 ) -> Report:
-    """Select the harnesses, find what they load under `target`, and check it."""
+    """Select the harnesses, find what they load under `target`, and check it. `only` names the
+    checks to run (`CHECKS`); the report and its result then hold those checks alone."""
 
+    unknown = [name for name in only if name not in CHECKS]
+    if unknown:
+        raise AuditError(
+            f"no check is named {', '.join(unknown)}; the checks are {', '.join(CHECKS)}"
+        )
+    wanted = frozenset(only) or frozenset(CHECKS)
     root = Path(target).resolve()
     if not root.is_dir():
         raise AuditError(f"{target} is not a directory")
     inputs = _inputs(root, harnesses)
     names, selected_by, listing = inputs.names, inputs.selected_by, inputs.listing
-    notes = _notes(root)
-    files = inputs.files + notes
-    own = _manifest_entries(root)
-    unused = frozenset(
-        harness
-        for harness in names
-        if selected_by == "table" and not _only(harness, names, inputs.present)
-    )
-    audited = _audit(root, files, names, base, own, unused)
-    read, found = _references(root, inputs.files, inputs.scope, inputs.listed is not None)
-    ordered = tuple(
-        sorted(_with_rulings(root, [*audited, *_reference_findings(read, found)]), key=_order)
-    )
-    if notes:
-        listing += "; and the agents' notes in .agents/handoffs/ and .agents/shared-memory/"
+    findings: list[Finding] = []
+    if wanted - {"retired-reference", "stale-reference"}:
+        notes = _notes(root)
+        unused = frozenset(
+            harness
+            for harness in names
+            if selected_by == "table" and not _only(harness, names, inputs.present)
+        )
+        audited = _audit(root, inputs.files + notes, names, base, _manifest_entries(root), unused)
+        findings.extend(finding for finding in audited if finding.check in wanted)
+        if notes:
+            listing += "; and the agents' notes in .agents/handoffs/ and .agents/shared-memory/"
+    if "retired-reference" in wanted:
+        findings.extend(_retired_reference(root, inputs.listed, inputs.scope))
+    if "stale-reference" in wanted:
+        read, found = _references(root, inputs.files, inputs.scope, inputs.listed is not None)
+        findings.extend(_reference_findings(read, found))
+    ordered = tuple(sorted(_with_rulings(root, findings), key=_order))
     return Report(
         result=_result(ordered),
         target=str(target),
@@ -2243,8 +2732,12 @@ def record_rulings(
 
 
 def _steps(report: Report) -> list[str]:
-    """What a person runs to see what this command cannot; it runs none of them."""
+    """What a person runs to see what this command cannot; it runs none of them. None for a
+    report of the references family alone (`--only`): those checks read files, and nothing there
+    needs a sandboxed run."""
 
+    if all(finding.family == "references" for finding in report.findings):
+        return []
     steps = [
         "run the project's completion check once; a tool it needs that is missing reads UNVERIFIED",
         "copy the target to a scratch directory, plant a defect there (a zero-width joiner in "
@@ -2294,7 +2787,9 @@ def _line(finding: Finding) -> str:
 
 
 def render(report: Report, *, verbose: bool = False) -> str:
-    files = len({f.path for f in report.findings if f.check == "hidden-characters"})
+    files = len({f.path for f in report.findings if f.check == "hidden-characters"}) or len(
+        {f.path for f in report.findings if f.check == "retired-reference"}
+    )
     counts = "; ".join(
         f"{family} " + " ".join(f"{report.counts[family][v]} {v}" for v in VERDICTS)
         for family in FAMILIES
@@ -2307,11 +2802,13 @@ def render(report: Report, *, verbose: bool = False) -> str:
     lines.extend(_line(f) for f in report.findings if f.verdict != PASS)
     if verbose:
         lines.extend(_line(f) for f in report.findings if f.verdict == PASS)
-    lines.append(
-        "for the person to run, sandboxed, without network or credentials; "
-        "this command runs none of them:"
-    )
-    lines.extend(f"- {step}" for step in _steps(report))
+    steps = _steps(report)
+    if steps:
+        lines.append(
+            "for the person to run, sandboxed, without network or credentials; "
+            "this command runs none of them:"
+        )
+        lines.extend(f"- {step}" for step in steps)
     return "\n".join(_plain(line) for line in lines)
 
 
@@ -2328,7 +2825,14 @@ _DESCRIPTION = (
     "without changing its result, each path, Make target or package script that the project's "
     "own Markdown instruction text names in an inline code span and the target no longer holds "
     "(stale-reference); for that check only, it also reads .outcomebound/fragments/local.md "
-    "and the makefiles and package.json files it looks targets and scripts up in, as text. It "
+    "and the makefiles and package.json files it looks targets and scripts up in, as text. Where "
+    ".outcomebound/retired.json exists, it reports as a FAIL each occurrence, in a Markdown or "
+    "text file Git lists (.md, .mdc, .markdown, .txt, .rst; inside the list's scope where it "
+    "names one), of a term, path or command the list retires, outside released changelog "
+    "sections, the list's history and allowed_in files, code a term is not read in, managed "
+    "blocks and what a `Changed -` line quotes (retired-reference); an unreadable or invalid list "
+    "reads UNVERIFIED. --only CHECK, repeatable, limits a run, its report and its exit to the "
+    "checks named. It "
     "starts no process but git, to list the files, to ask which candidate paths it ignores and "
     "for --base, opens no connection, "
     "runs nothing the files name, and writes nothing. It reads the person's own rulings, "
@@ -2378,6 +2882,15 @@ def _parser() -> argparse.ArgumentParser:
         metavar="<ref>",
         help="also list each instruction or configuration file changed between <ref> and HEAD, "
         "from a git tree-to-tree diff",
+    )
+    check_parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        choices=list(CHECKS),
+        metavar="CHECK",
+        help="run this check alone, repeatable, and limit the report and the exit to the checks "
+        f"named; one of {', '.join(CHECKS)}",
     )
     check_parser.add_argument(
         "--json", action="store_true", help="print one JSON report instead of text"
@@ -2440,7 +2953,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         named = [name for name in named if name]
         if args.verb == "rule":
             return _rule(args, named)
-        report = check(Path(args.target), named, args.base)
+        report = check(Path(args.target), named, args.base, args.only)
     except (AuditError, adapters.AdapterError) as error:
         print(f"outcomebound instructions: {_plain(str(error))}", file=sys.stderr)
         return 2

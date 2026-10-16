@@ -11,6 +11,8 @@
 # filesystem and not what the candidate can tell Git to overlook. The seed is the commit
 # OUTCOMEBOUND_SEED_SHA names, else the `seed` tag.
 set -uo pipefail
+# The shared walk sits beside this script, in the grading stage's `checks/`.
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 none_ok=0
 if [ "${1:-}" = "--none-ok" ]; then none_ok=1; shift; fi
 [ "$#" -gt 0 ] || [ "$none_ok" -eq 1 ] || { echo "usage: allowed_paths.sh [--none-ok] PATTERN..." >&2; exit 2; }
@@ -22,7 +24,7 @@ if [ -z "$seed" ] || ! git cat-file -e "$seed^{commit}" 2>/dev/null; then
 fi
 allow=()
 for pattern in "$@"; do allow+=(--allow "$pattern"); done
-if ! walk="$(python3 -I -B checks/scope_walk.py --seed "$seed" --suppressed ${allow[@]+"${allow[@]}"})"; then
+if ! walk="$(python3 -I -B "$here/scope_walk.py" --seed "$seed" --suppressed ${allow[@]+"${allow[@]}"})"; then
   echo "the content walk could not run" >&2
   exit 1
 fi

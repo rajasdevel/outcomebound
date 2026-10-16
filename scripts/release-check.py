@@ -2,8 +2,9 @@
 """Check that a release commit agrees with itself, and with its tag when one is named.
 
 `VERSION`, the dated `CHANGELOG.md` section, its link and the `[Unreleased]` compare link that
-starts at it, and the release the README and the
-shipped CI template install name one version, on a tree that matches HEAD. The package metadata
+starts at it, and the release the README, the
+shipped CI templates and the scaffold's CI workflow install name one version, on a tree that
+matches HEAD. The package metadata
 meets what PyPI accepts, and the release workflow's `pypi` job publishes by trusted publishing,
 both read from the files and with no network. Whether PyPI has the name, the pending publisher
 and the `pypi` environment are account steps no check here can see (docs/VERSIONING.md).
@@ -33,6 +34,8 @@ from pathlib import Path
 REPOSITORY = "https://github.com/rajasdevel/outcomebound"
 CI = "templates/ci"
 GITHUB_TEMPLATE = f"{CI}/github-actions.yml"
+# The CI workflow the scaffold writes into a new project names its release as the CI templates do.
+SCAFFOLD_CI = "templates/scaffold/common/ci.yml"
 # An install line's release: `…/outcomebound@v1.2.0`, a pre-release `…@v1.2.0-rc.1` too.
 PIN = re.compile(r"/outcomebound@v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)")
 
@@ -45,9 +48,11 @@ def _git(root: Path, *arguments: str) -> str | None:
 
 
 def _pins(root: Path) -> dict[str, list[str]]:
-    """Each release an install line names, in the README and every CI template, by file."""
+    """Each release an install line names, in the README, every CI template and the scaffold's
+    CI workflow, by file."""
 
     files = ["README.md", *sorted(f"{CI}/{p.name}" for p in (root / CI).iterdir() if p.is_file())]
+    files += [SCAFFOLD_CI] if (root / SCAFFOLD_CI).is_file() else []
     return {name: PIN.findall((root / name).read_text(encoding="utf-8")) for name in files}
 
 

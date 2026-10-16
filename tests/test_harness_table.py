@@ -140,3 +140,28 @@ def test_a_finish_hook_is_claude_code_and_codex_only_in_a_file_the_audit_reads()
         config = TABLE[name]["config"]
         assert TABLE[name]["finish_hook"]["file"] in config["paths"], name
         assert "hooks" in config["keys"]["hooks"], name
+
+
+def test_the_wake_field_names_async_rewake_on_claude_code_with_its_source_and_none_on_codex():
+    """The finish check's delivery is the row's `wake` field: `asyncRewake`, with the dated
+    source and the observation it rests on, on claude-code; none on codex, whose stop delivers
+    at a later stop.
+
+    Breaks if the field is dropped, which turns claude-code's entry back into a stop that waits
+    for Done, or if it loses the source a reader re-checks it against.
+    """
+
+    hook = TABLE["claude-code"]["finish_hook"]
+    assert hook["wake"]["key"] == "asyncRewake"
+    source = hook["wake"]["source"]
+    assert source.startswith("https://code.claude.com/docs/en/hooks, read 2026-10-15: ")
+    for fact in (
+        "wakes Claude on exit code 2 with its stderr",
+        "its timeout is enforced",
+        "not to the user",
+        "observed on Claude Code 2.1.300 on macOS on 2026-10-15",
+        "stop_hook_active true",
+    ):
+        assert fact in source, fact
+    assert TABLE["codex"]["finish_hook"]["wake"] is None
+    assert "wake" in ROW_SCHEMA["properties"]["finish_hook"]["required"]

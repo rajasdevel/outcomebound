@@ -8,16 +8,23 @@
       "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/drafts.py", "lint"],
-      "required_paths": ["checks/drafts.py", ".outcomebound/tickets.json"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/drafts.py\" lint"
+      ],
+      "required_paths": [".outcomebound/tickets.json"]
     },
     {
       "name": "draft-count-within-the-sizing-rule",
       "risk": "the design, two unrelated outcomes for two implementers at once, was cut into other than two tickets",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/drafts.py", "count", "2", "2"],
-      "required_paths": ["checks/drafts.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/drafts.py\" count 2 2"
+      ]
     },
     {
       "name": "outcomes-not-merged-by-the-shared-file",
@@ -25,10 +32,10 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3", "-B", "checks/ticket_cut.py", "apart",
-        "expenses/categories.py", "expenses/money.py"
-      ],
-      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/ticket_cut.py\" apart expenses/categories.py expenses/money.py"
+      ]
     },
     {
       "name": "shared-file-granted-or-ordered",
@@ -36,10 +43,10 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3", "-B", "checks/ticket_cut.py", "ordered", "docs/status.md",
-        "expenses/categories.py", "expenses/money.py"
-      ],
-      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/ticket_cut.py\" ordered docs/status.md expenses/categories.py expenses/money.py"
+      ]
     }
   ]
 }

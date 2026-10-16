@@ -32,6 +32,7 @@ VERBS = {
     "sources": "sources",
     "review": "review_check",
     "explorable": "explorable",
+    "scaffold": "scaffold",
 }
 USAGE = (
     "usage: outcomebound <verb> [argument ...]\nverbs: home version "

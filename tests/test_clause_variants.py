@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.eval_helpers import FIXTURES, HERMETIC_GIT, RUN, transcript
+from tests.eval_helpers import FIXTURES, HERMETIC_GIT, RUN, stage_of, transcript
 from tests.eval_helpers import build_fixture as build
 from tests.eval_helpers import grade as _grade
 from tests.portable import needs_posix_bash
@@ -54,7 +54,7 @@ def test_guard_comparison_rejects_earlier_refusal_and_setup_errors(tmp_path):
     assert (work / "records.py").read_bytes() == before
     assert probe(work, "scope", "guard").returncode == 0
     kept = subprocess.run(
-        [sys.executable, "-B", "checks/suite.py", "kept"],
+        [sys.executable, "-B", str(stage_of(work) / "checks" / "suite.py"), "kept"],
         cwd=work,
         capture_output=True,
         text=True,

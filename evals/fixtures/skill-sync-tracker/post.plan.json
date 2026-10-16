@@ -9,13 +9,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_sync.py",
-        "snapshot-imported"
-      ],
-      "required_paths": [
-        "checks/probe_sync.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_sync.py\" snapshot-imported"
       ]
     },
     {
@@ -24,13 +20,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_sync.py",
-        "snapshot-complete"
-      ],
-      "required_paths": [
-        "checks/probe_sync.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_sync.py\" snapshot-complete"
       ]
     },
     {
@@ -39,13 +31,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_sync.py",
-        "card-not-written"
-      ],
-      "required_paths": [
-        "checks/probe_sync.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_sync.py\" card-not-written"
       ]
     },
     {
@@ -54,13 +42,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_sync.py",
-        "one-batched-note"
-      ],
-      "required_paths": [
-        "checks/probe_sync.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_sync.py\" one-batched-note"
       ]
     }
   ]

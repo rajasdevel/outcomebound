@@ -8,8 +8,12 @@
       "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/drafts.py", "lint"],
-      "required_paths": ["checks/drafts.py", ".outcomebound/tickets.json"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/drafts.py\" lint"
+      ],
+      "required_paths": [".outcomebound/tickets.json"]
     },
     {
       "name": "module-ticket-grants-the-registry",
@@ -17,10 +21,10 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3", "-B", "checks/ticket_cut.py", "entered",
-        "formats/markdown_out.py", "audit/module_registry.py"
-      ],
-      "required_paths": ["checks/ticket_cut.py", "checks/drafts.py"]
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/ticket_cut.py\" entered formats/markdown_out.py audit/module_registry.py"
+      ]
     }
   ]
 }

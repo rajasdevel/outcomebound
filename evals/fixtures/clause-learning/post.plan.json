@@ -31,13 +31,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/page.py",
-        "check"
-      ],
-      "required_paths": [
-        "checks/page.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" check"
       ]
     },
     {
@@ -46,13 +42,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/page.py",
-        "expect"
-      ],
-      "required_paths": [
-        "checks/page.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" expect"
       ]
     },
     {
@@ -61,13 +53,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/page.py",
-        "own"
-      ],
-      "required_paths": [
-        "checks/page.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" own"
       ]
     },
     {
@@ -76,13 +64,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/page.py",
-        "one"
-      ],
-      "required_paths": [
-        "checks/page.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" one"
       ]
     },
     {
@@ -91,13 +75,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/page.py",
-        "named"
-      ],
-      "required_paths": [
-        "checks/page.py"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/page.py\" named"
       ]
     }
   ]

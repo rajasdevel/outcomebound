@@ -8,32 +8,45 @@
       "risk": "the misspelt name is still there, or the helper returns a wrong mean",
       "kind": "runtime",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_tally.py", "fixed"],
-      "required_paths": ["checks/probe_tally.py", "tally.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_tally.py\" fixed"
+      ],
+      "required_paths": ["tally.py"]
     },
     {
       "name": "only-the-helper-and-its-test-changed",
       "risk": "a failure whose cause the error names grew files, edits elsewhere or a commit",
       "kind": "static",
       "required": true,
-      "command": ["bash", "checks/allowed_paths.sh", "tally.py", "test_tally.py"],
-      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" tally.py test_tally.py"
+      ]
     },
     {
       "name": "no-history-hunt-or-install",
       "risk": "a plain failure was bisected, stashed, searched in history or given a new dependency",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_tally.py", "plain"],
-      "required_paths": ["checks/probe_tally.py", "checks/transcript_commands.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_tally.py\" plain"
+      ]
     },
     {
       "name": "passing-run-reported",
       "risk": "the answer does not say that the tests passed",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/probe_tally.py", "reported"],
-      "required_paths": ["checks/probe_tally.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_tally.py\" reported"
+      ]
     }
   ]
 }

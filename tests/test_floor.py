@@ -968,6 +968,83 @@ def test_propose_for_typescript_offers_secrets_and_says_why_it_proposes_no_type_
         assert floor.parse_claim(claim).mode == "gate"
 
 
+RETIRED_LIST = ".outcomebound/retired.json"
+
+
+def retired_list(*terms: str) -> str:
+    entries = [
+        {"term": term, "kind": "term", "retired": "2026-10-01", "replaced_by": None}
+        for term in terms
+    ]
+    return json.dumps({"version": 1, "entries": entries})
+
+
+@pytest.mark.parametrize(
+    ("guide", "said"),
+    [
+        ("the review board, and the review board again\n", "finds 2 occurrences now; fix each"),
+        ("one review board\n", "finds 1 occurrence now; fix each"),
+        ("no such word\n", "finds 0 occurrences now"),
+    ],
+)
+def test_propose_offers_docs_retired_where_the_project_holds_a_list_and_says_what_it_costs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], guide: str, said: str
+) -> None:
+    files = {
+        "lib/a.py": "x = 1\n",
+        RETIRED_LIST: retired_list("review board"),
+        "docs/guide.md": guide,
+    }
+    root = repository(tmp_path, files)
+    before = tree(root)
+
+    assert floor.main(["propose", str(root)]) == 0
+    printed = capsys.readouterr()
+
+    assert tree(root) == before
+    claims = json.loads(printed.out)["claims"]
+    assert [claim["name"] for claim in claims] == [
+        *(claim["name"] for stack in ("python", "secrets") for claim in floor.RECIPES[stack]),
+        "docs.retired",
+    ]
+    assert claims[-1] == {
+        "name": "docs.retired",
+        "mode": "gate",
+        "tool": "outcomebound",
+        "argv": ["outcomebound", "instructions", "check", ".", "--only", "retired-reference"],
+        "parser": "exit",
+    }
+    assert floor.parse_claim(claims[-1]).mode == "gate"
+    assert said in printed.err
+
+
+def test_propose_offers_docs_retired_beside_the_secrets_claim_alone_and_for_an_unreadable_list(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {RETIRED_LIST: "{", "README": "x\n"})
+
+    assert floor.main(["propose", str(root)]) == 0
+    printed = capsys.readouterr()
+
+    assert [claim["name"] for claim in json.loads(printed.out)["claims"]] == [
+        "secrets",
+        "docs.retired",
+    ]
+    assert "reads UNVERIFIED" in printed.err
+
+
+def test_propose_offers_no_docs_retired_where_the_project_holds_no_list(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {"lib/a.py": "x = 1\n", "docs/g.md": "the review board\n"})
+
+    assert floor.main(["propose", str(root)]) == 0
+    printed = capsys.readouterr()
+
+    assert "docs.retired" not in printed.out
+    assert "retired" not in printed.err
+
+
 PACKAGES = {
     "src/pkg/__init__.py": "\n",
     "src/pkg/sub/__init__.py": "\n",

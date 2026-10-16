@@ -415,6 +415,7 @@
         "file",
         "guard",
         "accept",
+        "wake",
         "source"
       ],
       "description": "The hook that runs when the agent ends a turn, as `outcomebound adopt --finish-check` writes it and `outcomebound finish-check` reads its input; null where the finish check is not available for this harness yet. Every value is read from the harness's own documentation, named in source.",
@@ -444,6 +445,30 @@
           "type": "string",
           "minLength": 1,
           "description": "The one-time act by which a person lets the harness run a committed entry, as the install report names it."
+        },
+        "wake": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "key",
+            "source"
+          ],
+          "description": "How a failure the finish check's background run finds reaches the model with no stop waiting for it: the entry key that runs the stop entry in the background and wakes the model on exit code 2 with its stderr, with its source; null where a later stop delivers it, so that the stop entry decides in constant time and starts the run detached.",
+          "properties": {
+            "key": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The key adopt sets to true on the stop entry."
+            },
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Where this is written down or observed, with the day."
+            }
+          }
         },
         "source": {
           "type": "string",

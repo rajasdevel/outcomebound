@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec python3 -B "$here/../clause/setup.py" interview "${1:?usage: setup.sh <dir>}"
+exec python3 -B "$here/../clause/setup.py" interview "${1:?usage: setup.sh <dir> <grading-stage>}" \
+  "${2:?usage: setup.sh <dir> <grading-stage>}"

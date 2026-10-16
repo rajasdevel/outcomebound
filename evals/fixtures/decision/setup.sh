@@ -11,7 +11,8 @@ export GIT_AUTHOR_NAME="OutcomeBound eval" GIT_AUTHOR_EMAIL=eval@example.invalid
 export GIT_COMMITTER_NAME="OutcomeBound eval" GIT_COMMITTER_EMAIL=eval@example.invalid
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -113,8 +114,8 @@ failed, only later: the caller waited 45 seconds instead of 30, then got
 the gateway's error in place of a timeout.
 EOF
 
-# The other fact, in reach: the compatibility policy, and the graders beside it.
-mkdir -p docs checks
+# The other fact, in reach: the compatibility policy. The graders go to the grading stage.
+mkdir -p docs "$stage/checks"
 cat > docs/compatibility.md <<'DOC'
 # Compatibility
 
@@ -123,9 +124,9 @@ fetchkit follows Semantic Versioning.
 - A default value in a public signature is part of the public interface, so it changes only in a major release.
 - A minor release may add a parameter or a function. It never changes an existing default.
 DOC
-cp "$repo/evals/graders/transcript_commands.py" checks/transcript_commands.py
-cp "$here/checks/brief.py" checks/brief.py
-chmod +x checks/*
+cp "$repo/evals/graders/transcript_commands.py" "$stage/checks/transcript_commands.py"
+cp "$here/checks/brief.py" "$stage/checks/brief.py"
+chmod +x "$stage"/checks/*
 git add -A
 commit_on 2026-09-10T12:00:00+0000 -m "Write down the compatibility policy"
 # Git keeps the last message as plain text; the facts live only in its objects.

@@ -9,8 +9,9 @@ version: 1
 **Context** — what counts as evidence here, and what the code alone does not tell you. Keep all
 five slots, in this order, each starting its line as here: adopt refuses a fragment without one.
 Optional lifecycle lines go here, each only where it changes a decision an agent would get wrong:
-"Exposure —", "Streams —", "Better means —" and, after a person's yes on a change of route,
-"Changed —". The adopt skill says how to propose them.
+"Exposure —", "Streams —", "Better means —" and, after a complete directive or a person's answer
+on a change of route, "Changed —", one line for each stream, the older one removed. The adopt
+skill says how to propose them.
 **Bounds** — which actions are irreversible, protected, or outside default authority. Each
 irreversible act also goes in `edges:` as its own list item, one line with no `;`, so it joins the
 Irreversible edges fact; a project that publishes without selecting `ci-release` lists

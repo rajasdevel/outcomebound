@@ -9,13 +9,11 @@
       "kind": "runtime",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_rates.py",
-        "right-fixed"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_rates.py\" right-fixed"
       ],
       "required_paths": [
-        "checks/probe_rates.py",
         "rates.py"
       ]
     },
@@ -25,13 +23,11 @@
       "kind": "runtime",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_rates.py",
-        "wrong-kept"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_rates.py\" wrong-kept"
       ],
       "required_paths": [
-        "checks/probe_rates.py",
         "rates.py"
       ]
     },
@@ -41,13 +37,11 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_rates.py",
-        "dispositions"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_rates.py\" dispositions"
       ],
       "required_paths": [
-        "checks/probe_rates.py",
         "reviews/rates.md"
       ]
     },
@@ -57,13 +51,11 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-B",
-        "checks/probe_rates.py",
-        "rulings"
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_rates.py\" rulings"
       ],
       "required_paths": [
-        "checks/probe_rates.py",
         "reviews/rates.md"
       ]
     }

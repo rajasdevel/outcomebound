@@ -12,7 +12,8 @@ export GIT_COMMITTER_NAME="OutcomeBound eval" GIT_COMMITTER_EMAIL=eval@example.i
 export GIT_AUTHOR_DATE=2026-10-01T12:00:00+0000 GIT_COMMITTER_DATE=2026-10-01T12:00:00+0000
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
@@ -92,12 +93,12 @@ rm -f .git/hooks/*.sample
 # Bytecode and check logs are byproducts of running a check, not edits.
 printf '__pycache__/\n.outcomebound-checks/\n' >> .git/info/exclude
 
-# The graders, beside the data they judge against.
-mkdir -p checks
-cp "$repo/evals/fixtures/decision/checks/brief.py" checks/brief.py
-cp "$here/checks/brief_each.py" checks/brief_each.py
-cp "$here/checks/page.py" checks/page.py
-chmod +x checks/*
+# The graders go to the grading stage, outside the workspace.
+mkdir -p "$stage/checks"
+cp "$repo/evals/fixtures/decision/checks/brief.py" "$stage/checks/brief.py"
+cp "$here/checks/brief_each.py" "$stage/checks/brief_each.py"
+cp "$here/checks/page.py" "$stage/checks/page.py"
+chmod +x "$stage"/checks/*
 git add -A
 git commit -q -m "Uploads, storage limits and endpoint use"
 # Git keeps the last message as plain text; the facts live only in its objects.

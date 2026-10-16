@@ -23,7 +23,17 @@ from pathlib import Path
 
 import pytest
 
-from tests.eval_helpers import FIXTURES, HERMETIC_GIT, ROOT, RUN, build_fixture, transcript
+from tests.eval_helpers import (
+    FIXTURES,
+    HERMETIC_GIT,
+    ROOT,
+    RUN,
+    build_fixture,
+    copy_built,
+    run_setup,
+    stage_of,
+    transcript,
+)
 from tests.eval_helpers import (
     act as _act,
 )
@@ -115,9 +125,7 @@ def workspace(_built: Callable[[str], Path], tmp_path: Path) -> Callable[..., Pa
     """This test's own copy of a built fixture: no file a setup writes names its directory."""
 
     def copy(name: str, label: str = "run") -> Path:
-        target = tmp_path / label / "workspace"
-        shutil.copytree(_built(name), target, symlinks=True)
-        return target
+        return copy_built(_built(name), tmp_path / label / "workspace")
 
     return copy
 
@@ -933,7 +941,9 @@ def test_the_gate_fixtures_check_reports_findings_in_the_files_its_claim_names(
     claim = next(
         item for item in _plan("slice-gate-findings")["claims"] if item["name"].startswith("gate")
     )
-    assert done.returncode == 1 and reported == set(claim["command"][5:]), done.stdout
+    # The command is `exec python3 -B <grader> gate Makefile <file>...`, run through `sh -c`.
+    files = set(shlex.split(claim["command"][2])[6:])
+    assert done.returncode == 1 and reported == files, done.stdout
 
 
 # --- the transcript reader -------------------------------------------------------------------
@@ -1006,8 +1016,12 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
     assert (FIXTURES / name / "prompt.md").read_text(encoding="utf-8").strip()
     target = workspace(name)
     protected = run.protected_snapshot(FIXTURES / name, target)
-    graders = {path.relative_to(target).as_posix() for path in (target / "checks").iterdir()}
-    assert graders <= set(protected), sorted(graders - set(protected))
+    # The graders are in the grading stage, outside the workspace: none is in the workspace, and
+    # none is among the protected paths, which name only files the model could change.
+    assert not (target / "checks").exists()
+    assert not [path for path in protected if path.startswith("checks/")]
+    if "OUTCOMEBOUND_GRADER_DIR" in json.dumps(_plan(name)):
+        assert any((stage_of(target) / "checks").iterdir())
     for root in SKILL_ROOTS:
         skill = target / root / "using-outcomebound" / "SKILL.md"
         assert skill.read_bytes() == (ROOT / "skills/using-outcomebound/SKILL.md").read_bytes()
@@ -1043,14 +1057,16 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
 )
 def test_shared_grader_copies_are_sealed_and_rewriting_them_is_rejected(workspace, name, helper):
     target = workspace(name)
-    protected = RUN.protected_snapshot(FIXTURES / name, target)
-    copied = target / "checks" / helper
+    stage = stage_of(target)
+    copied = stage / "checks" / helper
     assert copied.read_bytes() == (ROOT / "evals/graders" / helper).read_bytes()
-    assert RUN.check_protected(target, protected)[0]
+    assert not (target / "checks").exists()
+    sealed = RUN.seal_inputs(stage, name)
+    assert RUN.check_graders(sealed, name)[0]
     copied.write_text("raise SystemExit(0)\n")
-    intact, message = RUN.check_protected(target, protected)
-    assert not intact
-    assert f"checks/{helper}" in message
+    held, message = RUN.check_graders(sealed, name)
+    assert not held
+    assert f"stage/checks/{helper}" in message
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -1058,12 +1074,7 @@ def test_the_kernel_off_arm_builds_each_fixture_without_the_core_skill_or_its_po
     tmp_path: Path, name: str
 ) -> None:
     target = tmp_path / "workspace"
-    subprocess.run(
-        ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-        check=True,
-        capture_output=True,
-        env={**os.environ, **HERMETIC_GIT, "OB_EVAL_ARM": "none"},
-    )
+    run_setup(name, target, {**os.environ, **HERMETIC_GIT, "OB_EVAL_ARM": "none"})
     assert not [root for root in SKILL_ROOTS if (target / root).exists()]
     notes = [target / note for note in ("AGENTS.md", "README.md") if (target / note).is_file()]
     assert notes and not [n for n in notes if "using-outcomebound" in n.read_text("utf-8")]
@@ -2163,7 +2174,12 @@ def _judged(target: Path, name: str, wanted: str = "") -> subprocess.CompletedPr
         cwd=str(target),
         capture_output=True,
         text=True,
-        env={**os.environ, **HERMETIC_GIT, **({"OUTCOMEBOUND_SEED_SHA": seed} if seed else {})},
+        env={
+            **os.environ,
+            **HERMETIC_GIT,
+            **({"OUTCOMEBOUND_SEED_SHA": seed} if seed else {}),
+            "OUTCOMEBOUND_GRADER_DIR": str(stage_of(target)),
+        },
     )
 
 
@@ -2212,12 +2228,7 @@ def test_the_current_arms_skills_are_part_of_the_build_and_no_workspace_check_co
         target = tmp_path / order / "workspace"
         if order == "before":
             run.install(target, files)
-        subprocess.run(
-            ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-            check=True,
-            capture_output=True,
-            env={**os.environ, **HERMETIC_GIT},
-        )
+        run_setup(name, target, {**os.environ, **HERMETIC_GIT})
         if order == "after":
             run.install(target, files)
         else:
@@ -2244,12 +2255,7 @@ def test_the_ticket_fixture_carries_the_ticket_skill_whole_in_the_current_arm_on
         files = run.load_arm(arm, run.selected_fragments(name)).files
         target = tmp_path / arm / "workspace"
         run.install(target, files)
-        subprocess.run(
-            ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-            check=True,
-            capture_output=True,
-            env={**os.environ, **HERMETIC_GIT, "OB_EVAL_ARM": arm},
-        )
+        run_setup(name, target, {**os.environ, **HERMETIC_GIT, "OB_EVAL_ARM": arm})
         carried = (target / ".agents/skills/slice-tickets/references/github.md").is_file()
         assert carried == (arm == "current"), arm
 
@@ -2394,7 +2400,7 @@ def test_the_footprint_reads_what_a_run_did_beyond_its_change(
     answer = target.parent / "answer.md"
     answer.write_text("Fixed the comparison.\nShall I add a test for it?\n", encoding="utf-8")
     done = subprocess.run(
-        [sys.executable, "-B", "checks/footprint.py"],
+        [sys.executable, "-B", str(stage_of(target) / "checks/footprint.py")],
         cwd=str(target),
         capture_output=True,
         text=True,
@@ -2624,7 +2630,7 @@ def _observed_output(workspace, commands: tuple[str, ...], tmp_path: Path) -> tu
     said = tmp_path / f"{label}.json"
     said.write_text(transcript(target, *commands), encoding="utf-8")
     done = subprocess.run(
-        [sys.executable, "-I", "-B", "checks/probe_deploy.py", "observed"],
+        [sys.executable, "-I", "-B", str(stage_of(target) / "checks/probe_deploy.py"), "observed"],
         cwd=str(target),
         capture_output=True,
         text=True,
@@ -2998,7 +3004,7 @@ def test_protected_report_source_overrides_candidate_bytecode(
     assert _grade(target, fixture, said, "Done.")[claim] == "FAIL"
     protected = RUN.protected_snapshot(FIXTURES / fixture, target)
     _poison_source_cache(
-        target / "checks/report_records.py",
+        stage_of(target) / "checks/report_records.py",
         'def records(text): return ["Stated amounts stay in cents from issue 31; '
         'badge top right inferred from picture."]\n',
     )
@@ -3019,7 +3025,7 @@ def test_protected_deploy_source_overrides_candidate_bytecode(workspace, fixture
     said = transcript(target)
     assert _grade(target, fixture, said, answer)[claim] == "FAIL"
     protected = RUN.protected_snapshot(FIXTURES / fixture, target)
-    source = target / "checks" / helper
+    source = stage_of(target) / "checks" / helper
     attack = "def _main(argv, program): return 0\n"
     if helper == "transcript_commands.py":
         forged = [
@@ -3068,24 +3074,29 @@ def test_candidate_behaviour_reads_source_instead_of_forged_bytecode(workspace, 
 
 
 def test_scope_walk_cannot_be_replaced_by_a_sourceless_standard_library_shadow(workspace):
+    """A sourceless `argparse.pyc` beside `scope_walk.py` in the stage, where the grader runs, is
+    not imported; one planted in the workspace is not seen either."""
+
     target = workspace("deploy-authorized")
+    stage = stage_of(target)
     claim = "only-the-granted-act-changed-the-environments"
     said = transcript(target)
     protected = RUN.protected_snapshot(FIXTURES / "deploy-authorized", target)
     stray = target / "outside-scope.txt"
     stray.write_text("An unauthorized workspace effect.\n")
     assert _grade(target, "deploy-authorized", said, "Done.")[claim] == "FAIL"
-    shadow = target / "checks/argparse.pyc"
-    _poison_source_cache(
-        target / "checks/scope_walk.py",
+    attack = (
         'print("COUNT changed=0\\nCOUNT files_created_outside_scope=0\\n'
-        'COUNT unauthorized_effects=0")\nraise SystemExit(0)\n',
-        cached=shadow,
+        'COUNT unauthorized_effects=0")\nraise SystemExit(0)\n'
     )
-    poisoned = _grade(target, "deploy-authorized", said, "Done.")
-    assert poisoned[claim] == "FAIL", poisoned["_output"]
-    assert RUN.check_protected(target, protected)[0]
-    shadow.unlink()
+    for where in (stage / "checks", target / "checks"):
+        shadow = where / "argparse.pyc"
+        _poison_source_cache(stage / "checks/scope_walk.py", attack, cached=shadow)
+        poisoned = _grade(target, "deploy-authorized", said, "Done.")
+        assert poisoned[claim] == "FAIL", (where, poisoned["_output"])
+        assert RUN.check_protected(target, protected)[0]
+        shadow.unlink()
+    shutil.rmtree(target / "checks")
     stray.unlink()
     valid = _grade(target, "deploy-authorized", said, "Done.")
     assert valid[claim] == "PASS", valid["_output"]
@@ -4308,7 +4319,7 @@ def _onboarded(
     def make(name: str) -> Path:
         if name not in made:
             target = tmp_path_factory.mktemp("onboarded") / "workspace"
-            shutil.copytree(_built(name), target, symlinks=True)
+            copy_built(_built(name), target)
             _act(target, _onboard_install())
             made[name] = target
         return made[name]
@@ -4331,7 +4342,7 @@ def _onboarding(
     run that left the install, then did `script`, ran `runs` and answered `answer`."""
 
     target = tmp_path / label / "workspace"
-    shutil.copytree(onboarded(name), target, symlinks=True)
+    copy_built(onboarded(name), target)
     if script:
         _act(target, script)
     verdicts = _grade(target, name, _said(target, *runs), answer, eval_dir=EVALS)
@@ -4867,7 +4878,7 @@ def test_a_missing_template_stops_the_checks_that_read_the_local_fragment(
     run's, so they fail and say so, never crediting the template as the run's writing."""
 
     target = tmp_path / "workspace"
-    shutil.copytree(_onboarded("onboard-plain"), target, symlinks=True)
+    copy_built(_onboarded("onboard-plain"), target)
     template = (ROOT / "templates/fragment-local.md").read_text(encoding="utf-8")
     assert (target / LOCAL_FRAGMENT).read_text(encoding="utf-8") == template
     verdicts = _grade(target, "onboard-plain", _said(target, VERIFY_RUN), ONBOARD_ANSWER)
@@ -4933,12 +4944,7 @@ def _lifecycle(tmp_path_factory: pytest.TempPathFactory) -> Callable[[str, str],
     def build(name: str, text: str) -> Path:
         if (name, text) not in built:
             target = tmp_path_factory.mktemp("lifecycle") / "workspace"
-            subprocess.run(
-                ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-                check=True,
-                capture_output=True,
-                env={**RUN.fixture_setup_env(), "OB_LIFECYCLE_TEXT": text},
-            )
+            run_setup(name, target, {**RUN.fixture_setup_env(), "OB_LIFECYCLE_TEXT": text})
             built[(name, text)] = target
         return built[(name, text)]
 
@@ -4950,11 +4956,20 @@ def lifecycle(_lifecycle: Callable[[str, str], Path], tmp_path: Path) -> Callabl
     """This test's own copy of a built fixture: (name, text, label)."""
 
     def copy(name: str, text: str = "new", label: str = "run") -> Path:
-        target = tmp_path / label / "workspace"
-        shutil.copytree(_lifecycle(name, text), target, symlinks=True)
-        return target
+        return copy_built(_lifecycle(name, text), tmp_path / label / "workspace")
 
     return copy
+
+
+def _stage_files(target: Path) -> dict[str, bytes]:
+    """The files of the grading stage of a built workspace, by path under the stage."""
+
+    stage = stage_of(target)
+    return {
+        path.relative_to(stage).as_posix(): path.read_bytes()
+        for path in sorted(stage.rglob("*"))
+        if path.is_file()
+    }
 
 
 def _lifecycle_files(target: Path) -> dict[str, bytes]:
@@ -5000,7 +5015,7 @@ def test_the_two_texts_build_one_project_that_differs_by_the_lifecycle_lines_onl
     from outcomebound_tools import fragments
 
     marks = LIFECYCLE_MARKS[name]
-    trees = {}
+    trees, stages = {}, {}
     for text in ("new", "before"):
         target = lifecycle(name, text, text)
         fragment = fragments.load_fragment(target / ".outcomebound/fragments/local.md")
@@ -5010,10 +5025,14 @@ def test_the_two_texts_build_one_project_that_differs_by_the_lifecycle_lines_onl
             assert (mark in fragment.body) == (text == "new"), (name, text, mark)
             assert (mark in agents) == (text == "new"), (name, text, mark)
         trees[text] = _lifecycle_files(target)
+        stages[text] = _stage_files(target)
     assert trees["new"].keys() == trees["before"].keys()
     differ = {path for path, data in trees["new"].items() if trees["before"][path] != data}
-    # The record of the branches holds commit ids, which differ between two builds.
-    assert differ - {"checks/inflight.json"} == {"AGENTS.md", ".outcomebound/fragments/local.md"}
+    assert differ == {"AGENTS.md", ".outcomebound/fragments/local.md"}
+    # The record of the branches, in the stage, holds commit ids, which differ between two builds.
+    assert stages["new"].keys() == stages["before"].keys()
+    moved = {path for path, data in stages["new"].items() if stages["before"][path] != data}
+    assert moved <= {"checks/inflight.json"}
 
 
 def test_the_stream_fixture_names_both_routes_in_both_texts_and_holds_the_other_streams_records(
@@ -5409,7 +5428,7 @@ def test_the_switch_fixture_holds_each_item_of_the_work_in_flight(
     assert invited[0] == "owner@example.invalid" and len(invited) == 2
     assert git("status", "--porcelain") == ""
     assert git("rev-parse", "HEAD") == git("rev-parse", "refs/tags/seed^{commit}")
-    recorded = json.loads((target / "checks/inflight.json").read_text("utf-8"))
+    recorded = json.loads((stage_of(target) / "checks/inflight.json").read_text("utf-8"))
     assert recorded["branches"]["share-link"] == git("rev-parse", "share-link").strip()
 
 
@@ -5646,11 +5665,10 @@ def test_the_current_arm_installs_over_the_pair_and_the_checks_still_read_the_se
     arm = RUN.fixture_arm(name, RUN.load_arm("current", RUN.selected_fragments(name)))
     target = tmp_path / "workspace"
     RUN.install(target, arm.files)
-    subprocess.run(
-        ["bash", str(FIXTURES / name / "setup.sh"), str(target)],
-        check=True,
-        capture_output=True,
-        env={**RUN.fixture_setup_env(), "OB_EVAL_ARM": "current", "OB_LIFECYCLE_TEXT": "new"},
+    run_setup(
+        name,
+        target,
+        {**RUN.fixture_setup_env(), "OB_EVAL_ARM": "current", "OB_LIFECYCLE_TEXT": "new"},
     )
     assert RUN.as_installed(target, arm) == ""
     assert RUN.installed(target, arm.files) == ""

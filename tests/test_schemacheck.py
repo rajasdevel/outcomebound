@@ -11,8 +11,9 @@ from outcomebound_tools.schemacheck import SUPPORTED, validate
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# JSON Schema keywords that carry no constraint, so ignoring them is correct.
-ANNOTATIONS = frozenset({"$schema", "$id", "title", "description"})
+# JSON Schema keywords that carry no constraint, so ignoring them is correct. `default` is one:
+# the code that reads each document applies each default itself (`raw.get("match", "exact")`).
+ANNOTATIONS = frozenset({"$schema", "$id", "title", "description", "default"})
 
 
 def _schema(name):

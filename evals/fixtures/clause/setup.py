@@ -52,9 +52,9 @@ def git(target, *args):
     subprocess.run(["git", *args], cwd=target, env=ENV, check=True, capture_output=True)
 
 
-def setup(name: str, target: Path) -> None:
+def setup(name: str, target: Path, stage: Path) -> None:
     subprocess.run(
-        ["bash", str(FIXTURES / BASE[name] / "setup.sh"), str(target)],
+        ["bash", str(FIXTURES / BASE[name] / "setup.sh"), str(target), str(stage)],
         env=ENV,
         check=True,
         capture_output=True,
@@ -114,4 +114,4 @@ def setup(name: str, target: Path) -> None:
 
 
 if __name__ == "__main__":
-    setup(sys.argv[1], Path(sys.argv[2]).resolve())
+    setup(sys.argv[1], Path(sys.argv[2]).resolve(), Path(sys.argv[3]).resolve())

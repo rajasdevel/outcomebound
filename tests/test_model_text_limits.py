@@ -12,7 +12,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LISTED = """OutcomeBound.md templates/managed-block.agents.md.tmpl templates/goal/goal.md
 templates/tickets/issue-template.md templates/fragment-local.md"""
-GLOBS = ("templates/spec/*.md", "templates/lifecycle/*.md", "fragments/**/*.md", "skills/**/*.md")
+GLOBS = (
+    "templates/spec/*.md",
+    "templates/lifecycle/*.md",
+    "templates/scaffold/**/*.md",
+    "fragments/**/*.md",
+    "skills/**/*.md",
+)
 UNIT = (
     r"words?|lines?|steps?|pages?|files?|commits?|attempts?|retries|runs?|seconds?|minutes?"
     r"|hours?|days?|bytes?|KiB|MiB|characters?|tokens?"
@@ -41,10 +47,18 @@ LIMITS = (
     re.compile(r"\b(?:stop and ask|stop (?:only|there|the run)|end the run|re-plan)\b", re.I),
 )
 # (path, matched text): the evidence that allows it.
+# The reporting deadlines of Regulation (EU) 2024/2847, Article 14, read on 2026-10-15 at
+# https://digital-strategy.ec.europa.eu/en/policies/cra-summary; the template names the Regulation,
+# the article and the day it was read beside them.
+CRA = "the Regulation's reporting deadlines (EU 2024/2847, Article 14), read on 2026-10-15"
 ALLOWED = {
     ("templates/goal/goal.md", "End the run"): (
         "the end condition names the completion bar and the items left, not a stop"
     ),
+    ("templates/scaffold/eu-market/local.md", "within 2"): CRA,
+    ("templates/scaffold/eu-market/local.md", "24 hours"): CRA,
+    ("templates/scaffold/eu-market/local.md", "within 7"): CRA,
+    ("templates/scaffold/eu-market/local.md", "72 hours"): CRA,
 }
 FRONTMATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
 FENCE = re.compile(r"^\s*(?:```|~~~)")

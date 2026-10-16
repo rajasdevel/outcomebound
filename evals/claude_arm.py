@@ -18,10 +18,14 @@ Limits (each is reported with the results):
   of each file (a symlink, by its target) under `evals/` and `outcomebound_tools/`, except under
   `__pycache__`, and this checkout's HEAD and porcelain
   status, and `grade` refuses where any differs, so an edit of a grader, a post plan or the engine
-  between the two is refused. The state's SHA-256 is the seal: `prepare` prints it, and with
-  `--seal-out PATH` writes it to a path outside the state folder; it writes it nowhere inside that
-  folder, where the subagent works. The person running the evals keeps the seal and passes it to
-  `grade` as `--seal`.
+  between the two is refused. The graders are not in the workspace: `prepare` has the fixture's
+  setup write them to a grading stage, a folder in the system temporary folder outside the state
+  folder, and records the path and the SHA-256 of each file of it in the state, which the seal
+  covers; `grade` refuses where the stage differs, and runs the post-checks from a sealed copy of
+  it. The subagent has a shell, so it can still read the stage. The state's SHA-256 is the seal:
+  `prepare` prints it, and with `--seal-out PATH` writes it to a path outside the state folder; it
+  writes it nowhere inside that folder, where the subagent works. The person running the evals
+  keeps the seal and passes it to `grade` as `--seal`.
 - The transcript is the subagent's own session file. JSON fields keep a command's text or the answer
   from forging a command; the file's integrity rests on the subagent, which could append or delete
   an event. A Bash call with no result of its own in a later user event is refused, which stops
@@ -35,6 +39,7 @@ import importlib
 import json
 import os
 import re
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -123,22 +128,35 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     work = STATE / "work"
     work.mkdir(parents=True, exist_ok=True)
     workdir = Path(tempfile.mkdtemp(prefix=f"{fixture}-{arm_name}-", dir=work))
-    run.install(workdir, arm.files)
-    built = run.bounded_command(
-        ["bash", str(fixture_dir / "setup.sh"), str(workdir)],
-        env={**run.fixture_setup_env(), "OB_EVAL_ARM": arm.name},
-        timeout=run.SETUP_TIMEOUT,
-    )
-    if built.returncode != 0:
-        raise SystemExit(f"setup failed: {built.stderr[-800:]}")
-    unfit = run.as_installed(workdir, arm) or run.installed(workdir, arm.files)
-    if unfit:
-        raise SystemExit(unfit)
-    protected = run.protected_snapshot(
-        fixture_dir, workdir, tuple(arm.files), without_skills=arm.name == run.NONE
-    )
-    seed = run.seed_commit(workdir)
-    prompt = run.build_prompt(arm.kernel, run.task_text(fixture, workdir))
+    try:
+        stage = run.new_stage((workdir, STATE))
+    except ValueError as problem:
+        raise SystemExit(f"setup failed: {problem}") from None
+    try:
+        run.install(workdir, arm.files)
+        built = run.bounded_command(
+            ["bash", str(fixture_dir / "setup.sh"), str(workdir), str(stage)],
+            env={**run.fixture_setup_env(), "OB_EVAL_ARM": arm.name},
+            timeout=run.SETUP_TIMEOUT,
+        )
+        if built.returncode != 0:
+            raise SystemExit(f"setup failed: {built.stderr[-800:]}")
+        unfit = run.as_installed(workdir, arm) or run.installed(workdir, arm.files)
+        if unfit:
+            raise SystemExit(unfit)
+        protected = run.protected_snapshot(
+            fixture_dir, workdir, tuple(arm.files), without_skills=arm.name == run.NONE
+        )
+        seed = run.seed_commit(workdir)
+        prompt = run.build_prompt(arm.kernel, run.task_text(fixture, workdir))
+        graders = {
+            "stage": str(stage),
+            "stage_files": run.tree_hashes(stage),
+            "grading_files": run.grading_hashes(run.evals_dir(), fixture),
+        }
+    except BaseException:
+        shutil.rmtree(stage, ignore_errors=True)
+        raise
     launcher = run.call_path(arm, None).split(os.pathsep)[0] if arm.launcher else None
     skills = _skills(workdir)
     lines = [
@@ -174,6 +192,7 @@ def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
                 "seed": seed,
                 "protected": protected,
                 "kernel_sha256": run.sha256_text(arm.kernel),
+                **graders,
                 "engine": _fingerprint(),
             },
             indent=1,
@@ -244,11 +263,27 @@ def grade(key: str, subagent_jsonl: str, seal: str) -> None:
         transcript, answer = _transcript(Path(subagent_jsonl), str(workdir))
     except (OSError, ValueError) as error:
         raise SystemExit(f"refused: subagent transcript unreadable: {error}") from error
+    fixture = str(state["fixture"])
+    if not all(name in state for name in ("stage", "stage_files", "grading_files")):
+        raise SystemExit("refused: the state records no grading stage")
+    stage = Path(str(state["stage"]))
     intact, protected_report = run.check_protected(workdir, state["protected"])
-    verdict, output = "FAIL", "VERDICT: FAIL\n"
+    sealed = run.Sealed(stage, state["stage_files"], state["grading_files"])
+    held, moved = run.check_graders(sealed, fixture)
+    if not held:
+        lines = [line for line in (protected_report if not intact else "", moved) if line]
+        protected_report, intact = "\n".join(lines), False
+    verdict, output, copy = "FAIL", "VERDICT: FAIL\n", None
     if intact:
+        copy = STATE / f"{key}{run.SEALED_SUFFIX}"
+        shutil.rmtree(copy, ignore_errors=True)
+        try:
+            state["graders_sha256"] = run.seal_graders(sealed, fixture, copy)
+        except run.SealMoved as problem:
+            protected_report, intact = str(problem), False
+    if intact and copy is not None:
         verdict, output, _logs = run.post_check(
-            run.FIXTURES / state["fixture"], workdir, state["seed"], transcript, answer
+            run.FIXTURES / fixture, workdir, state["seed"], transcript, answer, copy
         )
     claims = {claim: result for result, claim in run.CLAIM_LINE.findall(output)}
     record = {

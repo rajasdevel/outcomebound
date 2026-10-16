@@ -13,7 +13,9 @@ stopped by `killpg` on POSIX. On Windows the command also goes into a job object
 `TerminateJobObject` ends everything in the job at once; `taskkill /T /F` and then `Popen.kill`
 are the fallback where there is no job. `start_tree` is how a command starts: on Windows it
 starts the command suspended, joins it to its job, and only then lets it run, so that nothing the
-command starts can be outside the job.
+command starts can be outside the job. `start_detached` starts a process that outlives its
+starter and holds none of its streams; `alive` and `terminate` ask about, or end, a process by its
+id, on Windows through `OpenProcess`, since `os.kill` there ends the process it names.
 
 What it does not decide: whether a program is the right one, or what a caller does where none is
 found. `require` raises `FileNotFoundError`, which every caller of a process already reads.
@@ -37,6 +39,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any, Protocol
 
 __all__ = [
+    "alive",
     "command",
     "environment_value",
     "find",
@@ -45,10 +48,12 @@ __all__ = [
     "require",
     "resolve",
     "shell_environment",
+    "start_detached",
     "start_tree",
     "stop_tree",
     "stub",
     "stub_found",
+    "terminate",
 ]
 
 DEFAULT_PATHEXT = (".COM", ".EXE", ".BAT", ".CMD")
@@ -76,6 +81,17 @@ CREATE_SUSPENDED = 0x4
 TH32CS_SNAPTHREAD = 0x4
 THREAD_SUSPEND_RESUME = 0x2
 SUSPENDED_ONCE = 1
+# What a process that outlives the one that started it is given on Windows: no console
+# (`DETACHED_PROCESS`), a process group of its own, and, where the job the starter runs in allows
+# it, a way out of that job (`CREATE_BREAKAWAY_FROM_JOB`), so that the starter's job ending does
+# not end it. And what asking about a process by its id takes: the right to read its exit code
+# (`PROCESS_QUERY_LIMITED_INFORMATION`) or to end it (`PROCESS_TERMINATE`), and the exit code a
+# process that still runs reports (`STILL_ACTIVE`).
+DETACHED_PROCESS = 0x8
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+PROCESS_TERMINATE = 0x1
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+STILL_ACTIVE = 259
 
 
 def _windows(windows: bool | None) -> bool:
@@ -660,6 +676,148 @@ def start_tree(
         _abandon(process)
         raise OSError("the command started but could not be resumed, and was stopped")
     return process
+
+
+def start_detached(
+    argv: Sequence[str], *, windows: bool | None = None, **options: Any
+) -> subprocess.Popen[bytes]:
+    """Start `argv` so that it outlives this process and holds none of its streams: standard
+    input, output and error on the null device; on POSIX a new session, so that neither this
+    process's group nor its terminal reaches it; on Windows no console, a process group of its
+    own, and a breakaway from the job this process runs in where that job allows it (a start
+    that the job refuses is made again without the breakaway). The caller does not wait for it.
+
+    `options` are `Popen`'s other keywords (`cwd`, `env`), and hold neither the streams nor the
+    group. Raises what `Popen` raises."""
+
+    def start(**group: Any) -> subprocess.Popen[bytes]:
+        return subprocess.Popen(
+            argv,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            **group,
+            **options,
+        )
+
+    if not _windows(windows):
+        return start(start_new_session=True)
+    flags = DETACHED_PROCESS | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+    try:
+        return start(creationflags=flags | CREATE_BREAKAWAY_FROM_JOB)
+    except OSError:
+        return start(creationflags=flags)
+
+
+class _Processes:
+    """The three calls that ask Windows about a process by its id, on a private copy of
+    `kernel32.dll`. Raises `OSError` where there is no Windows API to call."""
+
+    def __init__(self) -> None:
+        import ctypes
+
+        loader = getattr(ctypes, "WinDLL", None)
+        if loader is None:
+            raise OSError("this platform has no Windows API")
+        kernel = loader("kernel32")
+        handle, number = ctypes.c_void_p, ctypes.c_uint32
+        self._ctypes = ctypes
+        self._open = kernel.OpenProcess
+        self._open.argtypes, self._open.restype = [number, ctypes.c_int, number], handle
+        self._code = kernel.GetExitCodeProcess
+        self._code.argtypes = [handle, ctypes.POINTER(number)]
+        self._code.restype = ctypes.c_int
+        self._terminate = kernel.TerminateProcess
+        self._terminate.argtypes, self._terminate.restype = [handle, number], ctypes.c_int
+        self._close = kernel.CloseHandle
+        self._close.argtypes, self._close.restype = [handle], ctypes.c_int
+
+    def alive(self, pid: int) -> bool:
+        process = self._open(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not process:
+            return False
+        try:
+            code = self._ctypes.c_uint32()
+            return bool(self._code(process, self._ctypes.byref(code))) and (
+                code.value == STILL_ACTIVE
+            )
+        finally:
+            self._close(process)
+
+    def terminate(self, pid: int) -> bool:
+        process = self._open(PROCESS_TERMINATE, False, pid)
+        if not process:
+            return False
+        try:
+            return bool(self._terminate(process, JOB_EXIT_CODE))
+        finally:
+            self._close(process)
+
+
+@functools.lru_cache(maxsize=1)
+def _system_processes() -> _Processes | None:
+    if os.name != "nt":
+        return None
+    try:
+        return _Processes()
+    except (OSError, AttributeError, ImportError):
+        return None
+
+
+def alive(pid: int) -> bool:
+    """Whether a process with this id runs: `os.kill(pid, 0)` on POSIX (a process this user may
+    not signal still runs; a Linux zombie, ended and not yet reaped, does not), `OpenProcess` and
+    `GetExitCodeProcess` on Windows, where `os.kill` would end it. An id can name another
+    process once the one it named has ended; a caller that must know which process it is asks
+    something else as well. Never raises."""
+
+    if type(pid) is not int or pid <= 0:
+        return False
+    if os.name == "nt":
+        api = _system_processes()
+        with contextlib.suppress(Exception):
+            return api is not None and api.alive(pid)
+        return False
+    try:
+        os.kill(pid, 0)
+    except PermissionError:
+        return True
+    except (OSError, OverflowError):
+        return False
+    return not _zombie(pid)
+
+
+def _zombie(pid: int) -> bool:
+    """Whether a Linux process has ended and waits to be reaped: in a container with no init,
+    an ended background run can stay a zombie, which `os.kill(pid, 0)` still finds."""
+
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as handle:
+            stat = handle.read()
+    except OSError:
+        return False
+    state = stat.rpartition(b")")[2].split()[:1]
+    return state in ([b"Z"], [b"X"])
+
+
+def terminate(pid: int) -> bool:
+    """Ask the process with this id to end: `SIGTERM` on POSIX, which its handler may act on;
+    `TerminateProcess` on Windows, which ends it at once and runs none of its code, after which
+    every handle it held closes, a job's included. Whether it was sent. Never raises."""
+
+    if type(pid) is not int or pid <= 0:
+        return False
+    if os.name == "nt":
+        api = _system_processes()
+        with contextlib.suppress(Exception):
+            return api is not None and api.terminate(pid)
+        return False
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (OSError, OverflowError):
+        return False
+    return True
 
 
 def _end_job(process: subprocess.Popen[bytes]) -> bool:

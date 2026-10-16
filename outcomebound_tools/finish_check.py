@@ -1,24 +1,28 @@
-"""The finish check: at a harness's stop hook, the project's recorded Done commands run.
+"""The finish check: at a harness's turn end, the project's recorded Done commands are checked, and
+no turn end waits for them.
 
-`outcomebound finish-check --harness <row> --done <digest> --timeout <seconds>` is the command
-adopt writes into a row's settings document (`docs/specs/finish-check/design.md`); the rows are
-those whose harness table entry carries `finish_hook`, `claude-code` and `codex`. It reads the
-hook's input on stdin, finds the target, and runs the manifest's Done commands only while their
-digest is the entry's, and only on a working tree they have not already been checked on: an
-unchanged tree repeats the verdict it was last checked with and runs nothing. A failure holds
-the finish, its report the reason the agent reads, unless it is a known failure: a command that
-fails with the exit code it had when adopt last measured Done (`measure`), and names no failure id
-that measurement did not, which goes on to the next command and holds nothing, and leaves the
-record once it passes. Every other outcome goes to the person as `systemMessage`, or as `{}`
-where there is nothing to say, and holds nothing. It exits 0 whenever it ran, its verdict on
-stdout as both rows read it; a usage error exits 1, never 2, which a row reads as holding the
-finish.
+`outcomebound finish-check --constant-time --harness <row> --done <digest> --timeout <seconds>` is
+the stop entry adopt writes into a row's settings document (`docs/specs/finish-check/design.md`,
+"Constant-time stop"); the rows are those whose harness table entry carries `finish_hook`,
+`claude-code` and `codex`. The Done commands run only while their digest is the entry's, and only
+on a working tree they have not already been checked on, in the run: on a row whose `wake` field
+names a key (claude-code's `asyncRewake`) the entry runs in the background and is the run, which
+exits 2 with the report on stderr only on a failure that holds and otherwise prints nothing; on
+any other row (codex) the stop reads, decides and prints its JSON in constant time and starts the
+run detached, and a later stop delivers what it found. A failure holds unless it is a known
+failure (`measure`), was seen on the tree the turn began with by another session's run or already
+held in this session, or its signature was held once in the session; each other outcome goes to
+the person once for each session, tree and kind: at a codex stop, or through the claude-code
+turn-start entry (`--mark`). `--status` prints the last run and the records and writes nothing.
+The run keeps its record, the checked-tree records, the lock and, in the Git common directory,
+the held list; it writes nothing outside the Git directory. A usage error exits 1, never 2, which
+a row reads as holding the finish.
 
-What it does not decide: whether the harness fires the hook (its install report reads
-`UNVERIFIED` until a person sees a PASS message end a run), or what the Done commands are. It
-compares a known command's exit code and the failure ids its output names; where neither the
-record nor the output names any, a new failure inside a command that fails with the same exit code
-is not told apart from the known one.
+What it does not decide: whether the harness fires the hook or runs an async entry (its install
+report reads `UNVERIFIED` until a person sees it), or what the Done commands are. It compares a
+known command's exit code and the failure ids its output names; where neither the record nor the
+output names any, a new failure inside a command that fails with the same exit code is not told
+apart from the known one.
 """
 
 from __future__ import annotations
@@ -73,10 +77,77 @@ STATE = "outcomebound-finish-check"
 KNOWN = "outcomebound-finish-check-known"
 # The tree a turn began with, kept beside the checked-tree record, and the entry that writes it.
 MARK = f"{STATE}-mark"
-# Set where a stop skipped Done for background work; the next such stop runs it.
-SKIPPED_ONCE = f"{STATE}-skipped"
-# The (session, tree) pair the person was last told an unchanged turn ended on.
+# What the person was told, as (session, tree, kind) triples, so that each notice is told once.
 TOLD = f"{STATE}-told"
+# The constant-time stop's own files: the record of the run in flight or last ended, and the lock
+# that keeps one run for each Git directory, both in the Git directory; the note that a run could
+# not start because the run before it would not stop; and, in the Git common directory, the
+# signatures each session has held, so that a failure goes to the model once in a session.
+RUN = f"{STATE}-run"
+RUN_LOCK = f"{RUN}.lock"
+STUCK = f"{STATE}-stuck"
+HELD = f"{STATE}-held"
+# The seconds the codex stop entry gives the harness, and the part of them the stop spends
+# reading the tree; the run reads it again with its own budget.
+STOP_TIMEOUT = 30
+STOP_READ_SECONDS = 20
+# The seconds a claude-code wake entry's `timeout` adds to the run's limit, so that the run always
+# ends itself first and the harness's end is a backstop; and the age past its limit at which a run
+# record with no end reads as a run that died.
+WAKE_MARGIN = 60
+# The seconds a run waits for the lock once it has asked the run on another tree to stop: the
+# margin the time limit gives a command's stop.
+SUPERSEDE_SECONDS = 30
+# How often a run asks for the lock while it waits.
+LOCK_POLL = 0.05
+# The kinds of a checked-tree record: a check of a tree the commands left as they found it, or
+# the results of a run whose tree changed before it ended, which never reads as checked and
+# serves only as the baseline of a turn that began on that tree. No record before the
+# constant-time stop names a kind, and an absent kind reads as a check; the word "checked" is the
+# decision brief's mark key, which no other engine module names.
+CHECKED, CHANGED = "check", "changed"
+# Why a tree changed under a run: no session moved it (Done, or something outside the session,
+# writes into the tree), or a run on a later tree superseded it.
+OUTSIDE, SUPERSEDED = "outside", "superseded"
+# How a run's holding failure stands: new, with no record of the tree the turn began with to tell,
+# found again after the session recorded it and never delivered it, or already held once in the
+# session.
+NEW, NOBASE, AGAIN, HELD_BEFORE = "new", "nobase", "again", "held-before"
+# How a run ended, besides its verdict: the turn changed nothing, the tree had a record, it
+# followed the run on its tree.
+UNCHANGED, RECORDED, FOLLOWED = "unchanged", "recorded", "followed"
+# The kinds of notice the `told` file keys, beside the verdicts.
+RUNNING, DEAD, STUCK_KIND, ERROR, SLOW, DIGEST_KIND, KNOWN_KIND, PAUSED_KIND, UNHELD = (
+    "running",
+    "dead",
+    "stuck",
+    "error",
+    "slow",
+    "digest",
+    "known",
+    "paused",
+    "unheld",
+)
+# The note a run ends with where a failure held but the held list could not be written, so the
+# hold went to the person and not to the model; and why the person is told it.
+UNHELD_NOTE = "not held: the list of failures this session was held for could not be written"
+# The note a run that ran no Done ends with where it delivered the tree's failure to the model.
+DELIVERED_NOTE = "its failure was held for the agent"
+UNHELD_WHY = (
+    "the list of failures this session was held for could not be written, so a hold could not "
+    "be kept to once"
+)
+# What starts the engine again for the detached run, isolated as the launcher starts it.
+LAUNCH = (
+    "import runpy, sys; sys.path.insert(0, sys.argv[1]); "
+    "sys.argv = ['outcomebound', *sys.argv[2:]]; "
+    "runpy.run_module('outcomebound_tools', run_name='__main__', alter_sys=True)"
+)
+ENGINE_ROOT = Path(__file__).resolve().parent.parent
+# The lines of a failure without failure ids that its signature reads.
+SIGNATURE_LINES = 20
+HEX_RUN = re.compile(r"[0-9A-Fa-f]{8,}")
+DIGIT_RUN = re.compile(r"[0-9]+")
 # The seconds the entry gives the verb: 30 is the documented default of `UserPromptSubmit` on
 # claude-code (research harnesses/claude-code.md §7.3), written out so that both rows carry it;
 # the tree is read within the first 20 of them.
@@ -136,7 +207,13 @@ def done_digest(done: Sequence[str]) -> str:
 
 
 def command(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> str:
-    return f"outcomebound {ID} --harness {harness} --done {digest} --timeout {timeout}"
+    """The stop entry's command. `--constant-time` changes nothing in this engine: an engine from
+    before the constant-time stop refuses it with a usage error rather than run Done under an
+    entry it was not written for."""
+
+    return (
+        f"outcomebound {ID} --constant-time --harness {harness} --done {digest} --timeout {timeout}"
+    )
 
 
 def mark_command(harness: str, digest: str) -> str:
@@ -151,12 +228,51 @@ def mark_entry(harness: str, digest: str) -> dict[str, Any]:
     return {"hooks": [{"type": "command", "command": line, "timeout": MARK_TIMEOUT}]}
 
 
-def entry(harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
-    """The group adopt adds under the row's event, in the order it is written: the harness
-    cancels the hook at `timeout` seconds, and the verb is told the same number."""
+_TABLE_WAKE = object()
+
+
+def wake_of(harness: str) -> dict[str, Any] | None:
+    """The row's `wake` field in this engine's harness table: how a run's failure reaches the
+    model without a stop waiting for it, or None where a later stop delivers it."""
+
+    try:
+        hook = hook_of(adapters.table().get(harness))
+    except adapters.AdapterError:
+        return None
+    wake = hook.get("wake") if hook is not None else None
+    return wake if isinstance(wake, dict) else None
+
+
+def entry(
+    harness: str, digest: str, timeout: int = DEFAULT_TIMEOUT, wake: object = _TABLE_WAKE
+) -> dict[str, Any]:
+    """The group adopt adds under the row's event, in the order it is written. `timeout` is the
+    run's limit, which the verb is told. On a row whose delivery is a wake (claude-code's
+    `asyncRewake`) the entry runs in the background and is the run itself, and its own
+    `timeout` is the limit plus `WAKE_MARGIN`, so that the run ends itself first; on any other
+    row (codex) the entry is the stop, which returns within `STOP_TIMEOUT` seconds and starts the
+    run detached. `wake` is the row's field where the caller holds its own table."""
 
     line = command(harness, digest, timeout)
-    return {"hooks": [{"type": "command", "command": line, "timeout": timeout}]}
+    found = wake_of(harness) if wake is _TABLE_WAKE else wake
+    if isinstance(found, dict) and isinstance(found.get("key"), str):
+        hook = {"type": "command", "command": line, found["key"]: True}
+        return {"hooks": [{**hook, "timeout": timeout + WAKE_MARGIN}]}
+    return {"hooks": [{"type": "command", "command": line, "timeout": STOP_TIMEOUT}]}
+
+
+def limit_of(group: object) -> int | None:
+    """The run's limit an entry's command names (`--timeout`), or None where it names none that
+    the verb admits: the entry's own `timeout` is the harness's, not the run's."""
+
+    hooks = group.get("hooks") if isinstance(group, dict) else None
+    first = hooks[0] if isinstance(hooks, list) and hooks and isinstance(hooks[0], dict) else {}
+    words = str(first.get("command", "")).split()
+    if "--timeout" not in words or words.index("--timeout") + 1 >= len(words):
+        return None
+    text = words[words.index("--timeout") + 1]
+    value = int(text) if text.isdigit() else None
+    return value if admits_timeout(value) else None
 
 
 def admits_timeout(value: object) -> bool:
@@ -313,98 +429,304 @@ def tree_digest(target: Path, digest: str, deadline: float | None = None) -> str
     return total.hexdigest()
 
 
+# The Git directory of each target this process has asked Git for: one hook process reads many
+# files there, and asks Git once.
+_GIT_DIRS: dict[str, Path] = {}
+
+
 def _state(target: Path, deadline: float | None = None, name: str = STATE) -> Path | None:
-    directory = _git(target, "rev-parse", "--absolute-git-dir", deadline=deadline)
-    return Path(os.fsdecode(directory.strip())) / name if directory else None
+    """The file `name` in the target's Git directory, or None where Git cannot say in time."""
+
+    found = _GIT_DIRS.get(str(target))
+    if found is None:
+        directory = _git(target, "rev-parse", "--absolute-git-dir", deadline=deadline)
+        if not directory:
+            return None
+        found = _GIT_DIRS.setdefault(str(target), Path(os.fsdecode(directory.strip())))
+    return found / name if name else found
+
+
+@dataclass(frozen=True)
+class Pending:
+    """A failure a session's run recorded and no hold delivered: its signature, its command and
+    when it was first found. A later run of the session that finds it again holds it."""
+
+    signature: str
+    command: str
+    first: str
+
+    def document(self) -> dict[str, str]:
+        return {"signature": self.signature, "command": self.command, "first": self.first}
+
+    @classmethod
+    def of(cls, item: object) -> Pending | None:
+        if not isinstance(item, dict):
+            return None
+        signature, command, first = (item.get(key) for key in ("signature", "command", "first"))
+        if not (isinstance(signature, str) and isinstance(command, str) and isinstance(first, str)):
+            return None
+        return cls(signature, command, first)
 
 
 @dataclass(frozen=True)
 class Checked:
-    """The last working tree the Done commands were checked on, the timeout they ran under, the
-    verdict, and the results of a verdict other than a pass, which an unchanged tree repeats."""
+    """A working tree the Done commands ran on, the timeout they ran under, the verdict, and the
+    results, which an unchanged tree repeats. `kind` is `CHECKED` where the commands left the
+    tree as they found it, `CHANGED` where it changed before the run ended (`cause` says why
+    where it is known): such a record is never a check, and serves only as the baseline of a
+    turn that began on its tree. The rest is what a later stop delivers from it: the session
+    whose run wrote it, when, the signature of the failure that holds and how it stands, the
+    failures the session recorded and never delivered, the time of the mark the run compared
+    with, and whether its input had the guard set or the session paused."""
 
     tree: str
     timeout: int
     verdict: str
     results: tuple[Result, ...] = ()
+    kind: str = CHECKED
+    session: str | None = None
+    time: str = ""
+    seconds: float = 0.0
+    cause: str = ""
+    holding: str = ""
+    hold: str = ""
+    first: str = ""
+    pending: tuple[Pending, ...] = ()
+    marked: str = ""
+    guarded: bool = False
+    paused: bool = False
 
-    def text(self) -> str:
-        results = [result.document() for result in self.results]
-        document = {
+    def document(self) -> dict[str, Any]:
+        return {
             "tree": self.tree,
             "timeout": self.timeout,
             "verdict": self.verdict,
-            "results": results,
+            "results": [result.document() for result in self.results],
+            "kind": self.kind,
+            "session": self.session,
+            "time": self.time,
+            "seconds": self.seconds,
+            "cause": self.cause,
+            "holding": self.holding,
+            "hold": self.hold,
+            "first": self.first,
+            "pending": [item.document() for item in self.pending],
+            "marked": self.marked,
+            "guarded": self.guarded,
+            "paused": self.paused,
         }
-        return json.dumps(document, ensure_ascii=False) + "\n"
+
+    def text(self) -> str:
+        return json.dumps(self.document(), ensure_ascii=False) + "\n"
 
     def repeats(self, tree: str | None, timeout: int) -> bool:
-        """Whether a turn end on `tree` under `timeout` repeats this verdict without running: the
-        same tree, and for a verdict other than a pass the same timeout, since a longer one may
-        let a command finish."""
+        """Whether a turn end on `tree` under `timeout` repeats this verdict without running: a
+        check of the same tree, not one the hook's environment could not run, and for a verdict
+        other than a pass the same timeout, since a longer one may let a command finish."""
 
-        return tree == self.tree and (self.verdict == PASS or timeout == self.timeout)
+        return (
+            self.kind == CHECKED
+            and self.cause != ENVIRONMENT
+            and tree == self.tree
+            and (self.verdict == PASS or timeout == self.timeout)
+        )
 
 
-def parse_checked(text: str) -> Checked | None:
-    """The record `remember` wrote, or None where it cannot be read as one; a record holding
-    only a tree digest, as 1.0.0 wrote it, is a pass under the default timeout."""
+def _checked(document: object) -> Checked | None:
+    """One record as `Checked.document` wrote it, or None; a record an engine before the
+    constant-time stop wrote has none of the fields after `results`."""
 
-    text = text.strip()
-    if DIGEST.fullmatch(text):
-        return Checked(text, DEFAULT_TIMEOUT, PASS)
+    if not isinstance(document, dict):
+        return None
     try:
-        document = json.loads(text)
         tree, timeout = document["tree"], document["timeout"]
         verdict, items = document["verdict"], list(document["results"])
-    except (ValueError, KeyError, TypeError):
+    except (KeyError, TypeError):
         return None
     results = tuple(result for result in map(Result.of, items) if result is not None)
     if not (isinstance(tree, str) and DIGEST.fullmatch(tree) and admits_timeout(timeout)):
         return None
     if verdict not in (PASS, FAIL, UNVERIFIED) or len(results) != len(items):
         return None
-    if verdict != PASS and verdict not in {result.verdict for result in results}:
+    kind = document.get("kind", CHECKED)
+    if kind not in (CHECKED, CHANGED):
         return None
-    return Checked(tree, int(timeout), str(verdict), results)
+    if kind == CHECKED and verdict != PASS and verdict not in {r.verdict for r in results}:
+        return None
+    texts = ("time", "cause", "holding", "hold", "first", "marked")
+    found = {key: document.get(key, "") for key in texts}
+    session, seconds = document.get("session"), document.get("seconds", 0.0)
+    flags = {key: document.get(key, False) for key in ("guarded", "paused")}
+    listed = document.get("pending", [])
+    pending = [Pending.of(item) for item in listed] if isinstance(listed, list) else [None]
+    if not (
+        all(isinstance(value, str) for value in found.values())
+        and (session is None or isinstance(session, str))
+        and isinstance(seconds, (int, float))
+        and not isinstance(seconds, bool)
+        and all(isinstance(value, bool) for value in flags.values())
+        and all(item is not None for item in pending)
+    ):
+        return None
+    return Checked(
+        tree,
+        int(timeout),
+        str(verdict),
+        results,
+        kind,
+        session,
+        seconds=float(seconds),
+        pending=tuple(item for item in pending if item is not None),
+        **found,
+        **flags,
+    )
+
+
+def parse_records(text: str) -> list[Checked] | None:
+    """The records `remember` wrote, newest first, or None where the file cannot be read as
+    them; a file holding one record, or only a tree digest, as 1.0.0 wrote it (a pass under the
+    default timeout), is a list of one."""
+
+    text = text.strip()
+    if DIGEST.fullmatch(text):
+        return [Checked(text, DEFAULT_TIMEOUT, PASS)]
+    try:
+        document = json.loads(text)
+    except ValueError:
+        return None
+    items = document.get("records") if isinstance(document, dict) else None
+    if not isinstance(items, list):
+        one = _checked(document)
+        return [one] if one is not None else None
+    parsed = [_checked(item) for item in items]
+    kept = [record for record in parsed if record is not None]
+    return kept if kept and len(kept) == len(parsed) else None
+
+
+def parse_checked(text: str) -> Checked | None:
+    """The newest record `remember` wrote, or None where it cannot be read as one."""
+
+    records = parse_records(text)
+    return records[0] if records else None
+
+
+def _records_of(target: Path, deadline: float | None = None) -> list[Checked]:
+    state = _state(target, deadline)
+    try:
+        return (parse_records(state.read_text(encoding="utf-8")) or []) if state else []
+    except (OSError, ValueError):
+        return []
 
 
 def last_checked(target: Path, deadline: float | None = None) -> Checked | None:
-    state = _state(target, deadline)
-    try:
-        return parse_checked(state.read_text(encoding="utf-8")) if state else None
-    except (OSError, ValueError):
+    """The newest record: the tree a run last ended on."""
+
+    records = _records_of(target, deadline)
+    return records[0] if records else None
+
+
+def checked_for(target: Path, tree: str | None, deadline: float | None = None) -> Checked | None:
+    """The record of `tree`, of any age the file keeps, or None."""
+
+    if tree is None:
         return None
+    return next((r for r in _records_of(target, deadline) if r.tree == tree), None)
 
 
-def remember(target: Path, checked: Checked, deadline: float | None = None) -> None:
-    """Keep `checked` as the last tree the Done commands were checked on; a Git directory that
-    cannot take it, or one `deadline` passes before it is found, is left."""
+def remember(
+    target: Path, checked: Checked, deadline: float | None = None, keep: str | None = None
+) -> None:
+    """Keep `checked` as the newest record, and beside it the record of the tree `keep` names,
+    where it differs: the tree the run's turn began on, which the turn's retry still compares
+    with. Every other record goes. A Git directory that cannot take it, or one `deadline`
+    passes before it is found, is left."""
 
     state = _state(target, deadline)
     if state is None:
         return
-    stage = state.with_name(f"{STATE}.{os.getpid()}")
-    try:
-        stage.write_text(checked.text(), encoding="utf-8")
-        os.replace(stage, state)
-    except OSError:
-        stage.unlink(missing_ok=True)
+    kept = [checked]
+    if keep is not None and keep != checked.tree:
+        kept += [record for record in _records_of(target, deadline) if record.tree == keep][:1]
+    document = {"records": [record.document() for record in kept]}
+    write_whole(state, json.dumps(document, ensure_ascii=False) + "\n")
 
 
 @dataclass(frozen=True)
 class Mark:
-    """The commit and the working tree a turn began with, the session that wrote them and when."""
+    """The commit and the working tree a turn began with, the session that wrote them and when,
+    and when the turn ended, where it has: a stamped mark stays until the next prompt writes the
+    next turn's over it."""
 
     head: str
     tree: str
     session: str
     written: datetime
+    ended: datetime | None = None
 
     def clock(self) -> str:
         """The time of day it was written, as the person's clock reads it."""
 
         return self.written.astimezone().strftime("%H:%M:%S")
+
+    def document(self) -> dict[str, Any]:
+        found = {
+            "head": self.head,
+            "tree": self.tree,
+            "session": self.session,
+            "time": self.written.isoformat(),
+        }
+        return found | ({"ended": self.ended.isoformat()} if self.ended else {})
+
+    def same(self, other: Mark | None) -> bool:
+        """Whether `other` is this turn's mark, stamped or not."""
+
+        return other is not None and (self.head, self.tree, self.session, self.written) == (
+            other.head,
+            other.tree,
+            other.session,
+            other.written,
+        )
+
+
+def clock_of(text: str) -> str:
+    """The time of day a UTC-offset time names, as the person's clock reads it, or the text."""
+
+    when = stamp(text)
+    return when.astimezone().strftime("%H:%M:%S") if when is not None else text
+
+
+def now_text() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def write_whole(path: Path, text: str) -> bool:
+    """Write `text` as the whole of `path`: to a file beside it, renamed over it, so that a
+    reader sees the old file or the new one and never a part. Whether it was written. Windows
+    refuses a rename over a file another process holds open for a moment; the rename is tried
+    again then."""
+
+    stage = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}")
+    try:
+        stage.write_text(text, encoding="utf-8")
+    except OSError:
+        stage.unlink(missing_ok=True)
+        return False
+    for _ in range(4):
+        if _renamed(stage, path):
+            return True
+        time.sleep(0.05)
+    if _renamed(stage, path):
+        return True
+    stage.unlink(missing_ok=True)
+    return False
+
+
+def _renamed(stage: Path, path: Path) -> bool:
+    try:
+        os.replace(stage, path)
+    except OSError:
+        return False
+    return True
 
 
 def stamp(text: object) -> datetime | None:
@@ -430,13 +752,16 @@ def read_mark(target: Path, deadline: float | None = None) -> Mark | None:
         document = json.loads(path.read_text(encoding="utf-8"))
         head, tree = document["head"], document["tree"]
         session, written = document["session"], stamp(document["time"])
-    except (OSError, ValueError, KeyError, TypeError):
+        ended = stamp(document["ended"]) if "ended" in document else None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
     if not (isinstance(head, str) and HEAD.fullmatch(head) and isinstance(tree, str)):
         return None
     if not (isinstance(session, str) and session and written is not None):
         return None
-    return Mark(head, tree, session, written) if DIGEST.fullmatch(tree) else None
+    if "ended" in document and ended is None:
+        return None
+    return Mark(head, tree, session, written, ended) if DIGEST.fullmatch(tree) else None
 
 
 def prompt_input(row: Any, payload: dict[str, Any] | None) -> str | None:
@@ -451,46 +776,49 @@ def prompt_input(row: Any, payload: dict[str, Any] | None) -> str | None:
     return session if isinstance(session, str) and session else None
 
 
-def begin_turn(digest: str, payload: dict[str, Any] | None, cwd: Path, session: str) -> None:
+def begin_turn(
+    digest: str,
+    payload: dict[str, Any] | None,
+    cwd: Path,
+    session: str,
+    deadline: float | None = None,
+) -> tuple[Path, str | None] | None:
     """Keep the target's HEAD and tree as the turn's start, in the Git directory, with the
-    session and the time. Where the HEAD or tree cannot be read in time, the mark of the turn
-    before goes, so that no turn is compared with a tree it did not begin with. Errors are the
-    caller's to swallow; nothing is printed."""
+    session and the time, over a mark the last turn's end stamped. Where the HEAD or tree cannot
+    be read in time, the mark of the turn before goes, so that no turn is compared with a tree
+    it did not begin with. (the target, the tree it read, None where it kept the turn's mark and
+    read none) where there is a target; errors are the caller's to swallow, and nothing is
+    printed. `deadline` is the entry's, `MARK_SECONDS` from now by default."""
 
-    deadline = time.monotonic() + MARK_SECONDS
+    deadline = time.monotonic() + MARK_SECONDS if deadline is None else deadline
     target, found = find_target(payload, cwd)
     path = _state(target, deadline, MARK) if found else None
     if path is None:
-        return
+        return None
     live = read_mark(target, deadline)
-    if live is not None and live.session == session:
-        # A prompt inside the turn (a queued message): the turn's first mark stays, since this
-        # tree holds the turn's edits. The stop that ends the turn removes it.
-        return
+    if live is not None and live.session == session and live.ended is None:
+        # A prompt inside the turn (a queued message, or the prompt a codex hold creates): the
+        # turn's first mark stays, since this tree holds the turn's edits.
+        return target, None
     head, tree = _head(target, deadline), tree_digest(target, digest, deadline)
     if head is None or tree is None:
         path.unlink(missing_ok=True)
-        return
-    stage = path.with_name(f"{MARK}.{os.getpid()}")
-    document = {
-        "head": head,
-        "tree": tree,
-        "session": session,
-        "time": datetime.now(timezone.utc).isoformat(),
-    }
-    try:
-        stage.write_text(json.dumps(document) + "\n", encoding="utf-8")
-        os.replace(stage, path)
-    except OSError:
-        stage.unlink(missing_ok=True)
+        return target, None
+    mark = Mark(head, tree, session, datetime.now(timezone.utc))
+    write_whole(path, json.dumps(mark.document()) + "\n")
+    return target, tree
 
 
-def end_turn(target: Path, deadline: float | None = None) -> None:
-    """Remove the turn's mark, so that the next prompt writes the next turn's."""
+def stamp_mark(target: Path, mark: Mark, deadline: float | None = None) -> None:
+    """Stamp `mark` ended, where it is still the mark on file and not stamped: the turn it
+    began has ended. A mark the next prompt wrote meanwhile is left as it is."""
 
     path = _state(target, deadline, MARK)
-    if path is not None:
-        path.unlink(missing_ok=True)
+    now = read_mark(target, deadline)
+    if path is None or now is None or not mark.same(now) or now.ended is not None:
+        return
+    stamped = replace(now, ended=datetime.now(timezone.utc))
+    write_whole(path, json.dumps(stamped.document()) + "\n")
 
 
 # Text the harness writes into a `user` line of its own accord: a slash command's echo and
@@ -1357,16 +1685,18 @@ def run_all(
     deadline: float,
     record: Known | None = None,
     earlier: Mapping[str, Failure] | None = None,
+    into: list[Result] | None = None,
 ) -> list[Result]:
     """Each Done command in run order until `deadline`, stopping at the first that does not
     pass, a known failure aside: a FAIL that the command's `Failure` in `record` tolerates is
     marked known, with the record's commit, and the next command runs; so is one that its
-    `Failure` in `earlier`, the working tree a turn began with, tolerates."""
+    `Failure` in `earlier`, the working tree a turn began with, tolerates. Each result goes into
+    `into` as its command ends, so that a run stopped from outside keeps those that ended."""
 
     known = record.failing if record is not None else {}
     before = earlier or {}
     commit = record.head if record is not None else ""
-    results: list[Result] = []
+    results: list[Result] = [] if into is None else into
     for line in done:
         left = deadline - time.monotonic()
         if left <= 0:
@@ -1534,7 +1864,8 @@ def measure(target: Path, done: Sequence[str], timeout: int, as_hook: bool = Tru
     unsettled = any(result.cause in (ENVIRONMENT, FLAKE) for result in results)
     if kept and before is not None and not unsettled and tree_digest(target, digest) == before:
         verdict = FAIL if failing else PASS
-        remember(target, Checked(before, timeout, verdict, tuple(results) if failing else ()))
+        listed = tuple(results) if failing else ()
+        remember(target, Checked(before, timeout, verdict, listed, time=now_text()))
     return Measured(
         tuple(results), seconds, kept, previous, added, dropped, flaked, as_hook, tuple(reran)
     )
@@ -1720,17 +2051,54 @@ def _environment(target: Path) -> str:
     )
 
 
+HOLD_FIRST = "finish-check FAIL: a Done command failed on this working tree."
+HOLD_GUIDANCE = (
+    "Fix what your change broke and continue with the work. If it failed before your change, a "
+    "tool it needs is missing here, or the fix needs an act outside your authority, say so in "
+    "your report and continue with the work it does not block. End your turn only when your "
+    "work is done."
+)
+
+
+def hold_head(results: Sequence[Result], target: Path, first: str = HOLD_FIRST) -> str:
+    """The first line of a hold: `first`, what the agent is asked to do, and what it needs to
+    tell a failure of this environment or one known before from its own."""
+
+    head = f"{first} {HOLD_GUIDANCE}"
+    if any(result.known for result in results):
+        when = "when adopt measured Done"
+        if any(result.before for result in results):
+            every = all(result.before for result in results if result.known)
+            when = "when this turn began" if every else f"{when} or when this turn began"
+        head += (
+            f" A command marked known failed the same way before your change, {when}; it "
+            "does not hold this turn. One that names new failure ids, or a new exit code, "
+            "does."
+        )
+    if any(result.known and "exit code only" in result.note for result in results):
+        head += (
+            " A command known by its exit code only was compared by that code alone, since "
+            "its output names no failure ids, so a new failure inside it is not told apart."
+        )
+    return head + " " + _environment(target)
+
+
 def verdict_for(
-    results: Sequence[Result], held: bool, target: Path, timeout: int, repeated: bool = False
+    results: Sequence[Result],
+    held: bool,
+    target: Path,
+    timeout: int,
+    repeated: bool = False,
+    why: str = "",
 ) -> Verdict:
     """What a run that did not pass prints; `repeated` where it is the verdict an unchanged tree
-    was last checked with, run again for nothing. Only a failure that is not known holds."""
+    was last checked with, run again for nothing. Only a failure that is not known holds; `why`
+    says why one that is not known was told to the person instead."""
 
     last = results[-1]
     again = " Not run again: the working tree is unchanged since that check." if repeated else ""
     if last.verdict == UNVERIFIED:
         return told(report(_unverified_head(last, target, timeout) + again, results))
-    known = any(result.known for result in results)
     if not any(result.verdict == FAIL and not result.known for result in results):
         coarse = any(result.known and "exit code only" in result.note for result in results)
         limit = (
@@ -1764,32 +2132,8 @@ def verdict_for(
             )
         return told(report(head, results))
     if held and not repeated:
-        coarse = any(result.known and "exit code only" in result.note for result in results)
-        head = (
-            "finish-check FAIL: a Done command failed on this working tree. Fix what your change "
-            "broke and continue with the work. If it failed before your change, a tool it needs "
-            "is missing here, or the fix needs an act outside your authority, say so in your "
-            "report and continue with the work it does not block. End your turn only when your "
-            "work is done."
-        )
-        if known:
-            when = "when adopt measured Done"
-            if any(result.before for result in results):
-                every = all(result.before for result in results if result.known)
-                when = "when this turn began" if every else f"{when} or when this turn began"
-            head += (
-                f" A command marked known failed the same way before your change, {when}; it "
-                "does not hold this turn. One that names new failure ids, or a new exit code, "
-                "does."
-            )
-        if coarse:
-            head += (
-                " A command known by its exit code only was compared by that code alone, since "
-                "its output names no failure ids, so a new failure inside it is not told apart."
-            )
-        head += " " + _environment(target)
-        return {"decision": "block", "reason": report(head, results)}
-    why = (
+        return {"decision": "block", "reason": report(hold_head(results, target), results)}
+    why = why or (
         "the working tree is unchanged since this failure, so it was not run again"
         if repeated
         else "the stop hook already continued once or its input could not be read"
@@ -1812,283 +2156,1317 @@ def drop_fixed(
         keep_known(target, replace(record, failing=left), deadline)
 
 
-def marked_told(verdict: Verdict, mark: Mark, unchanged: bool) -> Verdict:
+def marked_told(verdict: Verdict, when: str, unchanged: bool) -> Verdict:
     """`verdict`, where the turn-start mark has decided it, with what the person sees: that
     Done was not run on the tree the turn began with, or that a failure was known before the
-    turn, and when the mark was written. A hold is the model's and gets nothing added."""
+    turn, and when the mark was written (`when`). A hold is the model's and gets nothing added."""
 
     if "decision" in verdict:
         return verdict
-    when = mark.clock()
+    shown = clock_of(when)
     if unchanged and not verdict:
         text = (
-            f"finish-check: the tree is the one this turn began with (marked {when}); Done was "
+            f"finish-check: the tree is the one this turn began with (marked {shown}); Done was "
             "not run."
         )
         return told(text)
     note = (
-        f" The tree is the one this turn began with (marked {when})."
+        f" The tree is the one this turn began with (marked {shown})."
         if unchanged
-        else f" The turn began with these failures (marked {when})."
+        else f" The turn began with these failures (marked {shown})."
     )
     head, _, rest = str(verdict.get("systemMessage", "")).partition("\n")
     return told(head + note + (f"\n{rest}" if rest else ""))
 
 
-def _turn(
-    harness: str, target: Path, tree: str | None, payload: dict[str, Any] | None, deadline: float
-) -> Mark | None:
-    """The mark of this turn where there is one the stop may use."""
+def _unchanged_verdict(record: Checked | None, tree: str | None, target: Path) -> Verdict:
+    """What a turn that changed nothing repeats: the check of this tree, where it is not a pass,
+    as the person's to see again; else nothing."""
 
-    mark = read_mark(target, deadline) if tree is not None else None
-    return mark if mark is not None and trusted(harness, mark, payload, deadline) else None
-
-
-def _credited(verdict: Verdict, turn: Mark | None, results: Sequence[Result]) -> Verdict:
-    """`verdict`, told with the mark's time where a failure was known before the turn."""
-
-    if turn is not None and any(result.before for result in results):
-        return marked_told(verdict, turn, False)
-    return verdict
+    if record is None or record.tree != tree or record.kind != CHECKED:
+        return {}
+    if record.verdict == PASS or not record.results:
+        return {}
+    return verdict_for(record.results, False, target, record.timeout, repeated=True)
 
 
-def _already_told(target: Path, mark: Mark, deadline: float) -> bool:
-    """Whether the person was told that this session's turns end on this tree; where not, keep
-    that it is now, so that a session that only reads is told once, not after every reply."""
-
-    return _told_once(target, mark.session, mark.tree, deadline)
+# --- The same failure, and the failures a session was held for ---------------------
 
 
-def _told_once(target: Path, session: str, tree: str, deadline: float) -> bool:
-    """Whether the person was already told what this session's stops say about this tree; where
-    not, keep that they now are."""
+def _places(target: Path) -> list[tuple[str, str]]:
+    """Each way a line can write the target and the system's temporary folder, longest first,
+    the target's before the temporary folder's, which may hold it."""
 
-    path = _state(target, deadline, TOLD)
-    if path is None:
-        return False
-    pair = {"session": session, "tree": tree}
+    found: set[tuple[str, str]] = set()
+    for base, name in ((target, "<target>"), (Path(tempfile.gettempdir()), "<tmp>")):
+        try:
+            places = {base, base.resolve()}
+        except OSError:
+            places = {base}
+        found |= {
+            (text, name)
+            for place in places
+            for text in (str(place), place.as_posix())
+            if len(text) > 1
+        }
+    return sorted(found, key=lambda item: (item[1] != "<target>", -len(item[0])))
+
+
+def _normalised(line: str, places: Sequence[tuple[str, str]]) -> str:
+    for text, name in places:
+        line = line.replace(text, name)
+    return DIGIT_RUN.sub("#", HEX_RUN.sub("<hex>", line))
+
+
+def signature(result: Result, target: Path) -> str:
+    """A failure's signature: the sha256 of canonical JSON of its command line, its exit code,
+    its sorted failure ids (empty where its output names none) and a digest of its lines. Where
+    the output names failure ids the lines are the runner's lines that name them, so a new warning
+    or a longer traceback elsewhere does not move it; else the last `SIGNATURE_LINES` non-empty
+    lines of the kept tail. The lines are read with the target's path as `<target>`, the
+    temporary folder as `<tmp>`, each run of 8 or more hexadecimal characters as `<hex>` and each
+    run of digits as `#`, and then sorted: a timing, a process id, an object id, a scratch path
+    or a parallel runner's order does not make the same failure new, and a new message does."""
+
+    ids = sorted(result_ids(result))
+    lines = clean(result.output).split("\n")
+    if ids:
+        kept = [line for line in lines if any(p.match(line) for _, p in FAILURE_IDS)]
+    else:
+        kept = [line for line in lines if line.strip()][-SIGNATURE_LINES:]
+    places = _places(target)
+    shown = sorted(_normalised(line.strip(), places) for line in kept)
+    lines_digest = hashlib.sha256("\n".join(shown).encode("utf-8")).hexdigest()
+    return hashlib.sha256(canonical([result.command, result.code, ids, lines_digest])).hexdigest()
+
+
+def _common_dir(target: Path, deadline: float | None = None) -> Path | None:
+    found = _known_path(target, deadline)
+    return found[0].parent if found is not None else None
+
+
+def _held_document(path: Path) -> dict[str, list[Any]]:
     try:
-        if json.loads(path.read_text(encoding="utf-8")) == pair:
-            return True
+        document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        pass
-    stage = path.with_name(f"{TOLD}.{os.getpid()}")
-    try:
-        stage.write_text(json.dumps(pair) + "\n", encoding="utf-8")
-        os.replace(stage, path)
-    except OSError:
-        stage.unlink(missing_ok=True)
-    return False
-
-
-def _same(
-    turn: Mark | None, tree: str | None, last: Checked | None, target: Path, deadline: float
-) -> Verdict | None:
-    """What a turn that changed nothing since its mark prints, or None where it changed
-    something or has no mark."""
-
-    if turn is None or turn.tree != tree or _head(target, deadline) != turn.head:
-        return None
-    verdict = _unchanged(last, tree, target)
-    if _already_told(target, turn, deadline):
         return {}
-    return marked_told(verdict, turn, True)
-
-
-def _unchanged(last: Checked | None, tree: str | None, target: Path) -> Verdict:
-    """What a turn that changed nothing prints: the verdict recorded for this tree, where it is
-    not a pass, as the person's to see again; else nothing."""
-
-    if last is not None and last.tree == tree and last.verdict != PASS:
-        return verdict_for(last.results, False, target, last.timeout, repeated=True)
-    return {}
-
-
-def _began(turn: Mark | None, last: Checked | None) -> dict[str, Failure]:
-    """The failures the working tree a turn began with had, as the checked-tree record holds
-    them: none where there is no mark, or the record is for another tree or a pass."""
-
-    if turn is None or last is None or last.tree != turn.tree or last.verdict == PASS:
+    sessions = document.get("sessions") if isinstance(document, dict) else None
+    if not isinstance(sessions, dict):
         return {}
-    return failures_of(last.results)
+    return {key: value for key, value in sessions.items() if isinstance(value, list)}
 
 
-def check(
-    harness: str,
-    hook: Mapping[str, Any],
-    digest: str,
-    payload: dict[str, Any] | None,
-    cwd: Path,
-    timeout: int,
-) -> Verdict:
-    """What the hook prints for this input; then the turn's mark ends, unless the stop holds
-    (the turn goes on) or the session is only paused."""
+def held_signatures(
+    target: Path, session: str | None, deadline: float | None = None
+) -> frozenset[str]:
+    """The signatures `session` was held for, in the held list of the Git common directory."""
 
-    started = time.monotonic()
-    verdict = _decide(harness, hook, digest, payload, cwd, timeout)
-    paused = (
-        harness == "claude-code"
-        and payload is not None
-        and (payload.get("background_tasks") or payload.get("session_crons"))
+    common = _common_dir(target, deadline) if session else None
+    if common is None or session is None:
+        return frozenset()
+    items = _held_document(common / HELD).get(session, [])
+    return frozenset(
+        item["signature"]
+        for item in items
+        if isinstance(item, dict) and isinstance(item.get("signature"), str)
     )
-    if "decision" not in verdict and not paused:
-        target, found = find_target(payload, cwd)
-        if found:
-            end_turn(target, started + timeout - MARGIN_SECONDS + REMEMBER_SECONDS)
-    return verdict
 
 
-def _repeat_told(
-    target: Path, payload: dict[str, Any] | None, tree: str | None, deadline: float
+def keep_held(
+    target: Path, session: str | None, signature: str, tree: str, deadline: float | None = None
 ) -> bool:
-    """Whether the person was already told this session's repeated verdict on this tree."""
+    """Add `signature` to the session's held list, before the hold is printed: from then on the
+    same failure in this session goes to the person. Whether it was written: a hold goes out
+    only where it was. The list is not pruned."""
 
-    session = payload.get("session_id") if payload is not None else None
-    if tree is None or not isinstance(session, str) or not session:
+    common = _common_dir(target, deadline) if session else None
+    if common is None or session is None:
         return False
-    return _told_once(target, session, tree, deadline)
+    path = common / HELD
+    document = _held_document(path)
+    document.setdefault(session, []).append(
+        {"signature": signature, "time": now_text(), "tree": tree}
+    )
+    return write_whole(path, json.dumps({"sessions": document}, ensure_ascii=False) + "\n")
 
 
-def _forget_skip(payload: dict[str, Any] | None, cwd: Path, deadline: float) -> None:
-    """Drop the note that a stop skipped Done for background work, once a stop is not paused."""
-
-    target, found = find_target(payload, cwd)
-    state = _state(target, deadline, SKIPPED_ONCE) if found else None
-    if state is not None:
-        state.unlink(missing_ok=True)
+# --- What the person is told, once for each session, tree and kind ---------------
 
 
-def _skipped(
-    digest: str, payload: dict[str, Any] | None, cwd: Path, timeout: int, started: float
-) -> Verdict | None:
-    """What a claude-code stop with background work in flight prints instead of running Done:
-    nothing where the tree is the one Done last ran on; else, at the first such stop, a message
-    to the person that Done was not run and why. None at the second stop in a row that would
-    skip: Done runs then, since the agent has had a turn's notice and a session that always has
-    background work open would never be checked."""
+@dataclass(frozen=True)
+class Notice:
+    """A message for the person about one tree, of one kind; `tree` is empty where it is about
+    none."""
 
-    target, found = find_target(payload, cwd)
-    deadline = started + timeout - MARGIN_SECONDS
-    recorded = recorded_done(target) if found else None
-    if recorded is None or done_digest(recorded) != digest:
-        return {}
-    tree = tree_digest(target, digest, deadline)
-    last = last_checked(target, deadline)
-    if tree is not None and last is not None and last.tree == tree:
-        return {}
-    state = _state(target, deadline, SKIPPED_ONCE)
-    if state is None:
-        return {}
-    if state.exists():
-        state.unlink(missing_ok=True)
-        return None
+    tree: str
+    kind: str
+    text: str
+
+
+def _told(path: Path) -> set[tuple[str, str, str]]:
     try:
-        state.write_text("1\n", encoding="utf-8")
-    except OSError:
-        return {}
-    work = payload.get("background_tasks") or [] if payload is not None else []
-    crons = payload.get("session_crons") or [] if payload is not None else []
-    open_work = ", ".join(
-        part
-        for part in (
-            f"{len(work)} background task{'s' * (len(work) != 1)}" if work else "",
-            f"{len(crons)} scheduled wake-up{'s' * (len(crons) != 1)}" if crons else "",
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    if not isinstance(document, dict):
+        return set()
+    items = document.get("told")
+    if isinstance(items, list):
+        return {
+            (item[0], item[1], item[2])
+            for item in items
+            if isinstance(item, list) and len(item) == 3 and all(isinstance(x, str) for x in item)
+        }
+    session, tree = document.get("session"), document.get("tree")
+    if isinstance(session, str) and isinstance(tree, str):
+        # What an engine before the constant-time stop kept: an unchanged turn told.
+        return {(session, tree, UNCHANGED)}
+    return set()
+
+
+def tell(
+    target: Path, session: str | None, notices: Sequence[Notice], deadline: float | None = None
+) -> list[str]:
+    """The texts of the notices the person was not yet told in this session, for their tree and
+    kind, kept as told now; the file keeps this session's entries only. With no session every
+    notice is told, and nothing is kept."""
+
+    unique = list({(notice.tree, notice.kind): notice for notice in notices}.values())
+    path = _state(target, deadline, TOLD) if session else None
+    if path is None or session is None:
+        return [notice.text for notice in unique]
+    known = _told(path)
+    fresh = [notice for notice in unique if (session, notice.tree, notice.kind) not in known]
+    if fresh:
+        # Only this session's entries are kept: another session's are never read again by it.
+        mine = {key for key in known if key[0] == session}
+        keys = mine | {(session, notice.tree, notice.kind) for notice in fresh}
+        write_whole(path, json.dumps({"told": sorted(list(key) for key in keys)}) + "\n")
+    return [notice.text for notice in fresh]
+
+
+def _digest_text(target: Path) -> str:
+    return (
+        f"finish-check UNVERIFIED: the Done commands in {target / MANIFEST} are not the ones "
+        "this hook was written for; nothing ran. "
+        f"Re-run `outcomebound adopt {paths.shell_path(target)}`."
+    )
+
+
+def _changed_text(record: Checked, target: Path) -> str:
+    head = (
+        "finish-check UNVERIFIED: Done ran on a tree that changed before it ended, so no tree "
+        "was checked; nothing was held."
+    )
+    if record.cause == OUTSIDE:
+        head += (
+            " No prompt was written while it ran: Done, or something outside the session, writes "
+            "into the tree; have Done write only what Git ignores."
         )
-        if part
-    )
-    was = (
-        "no check is recorded for it"
-        if last is None
-        else f"the last check, {last.verdict}, was on another tree"
-    )
-    return told(
-        f"finish-check: Done was not run: {open_work} still open, and the working tree is not one "
-        f"Done was checked on ({was}). It runs at the next stop if that work is still open, and "
-        "at the first stop after it ends."
-    )
+    elif record.cause == SUPERSEDED:
+        head += " It was stopped from outside: a turn end on a later tree, or the harness."
+    return report(head, record.results) if record.results else head
 
 
-def _pause(
-    harness: str,
-    digest: str,
-    payload: dict[str, Any] | None,
-    cwd: Path,
-    timeout: int,
-    started: float,
-) -> Verdict | None:
-    """What a claude-code stop with background work in flight or a scheduled wake-up prints,
-    since that session is paused, not finished; None where Done is to run."""
+def _pass_text(record: Checked) -> str:
+    listed = ", ".join(shorten(result.command, 80) for result in record.results)
+    return f"finish-check PASS: {listed}, {record.seconds:.0f}s; not reviewed, not landed"
 
-    if harness != "claude-code":
+
+@dataclass(frozen=True)
+class Viewer:
+    """Who a notice is for: the session, the tree it stands on, whether its stop has the guard
+    set, and the signatures the session was held for."""
+
+    session: str | None
+    tree: str | None
+    guarded: bool = False
+    held: frozenset[str] = frozenset()
+
+
+def record_notice(record: Checked, viewer: Viewer, target: Path) -> Notice | None:
+    """What the person is told of `record` at a turn end or a prompt of `session` on `tree`, or
+    None: a pass adopt measured (the person saw it), and a failure that is still to be held, or
+    was held from this record, are not told."""
+
+    if record.kind == CHANGED:
+        return Notice(record.tree, CHANGED, _changed_text(record, target))
+    if record.verdict == PASS:
+        if record.session is None or not record.results:
+            return None
+        return Notice(record.tree, PASS, _pass_text(record))
+    if not record.results:
         return None
-    if payload is not None and (payload.get("background_tasks") or payload.get("session_crons")):
-        return _skipped(digest, payload, cwd, timeout, started)
-    _forget_skip(payload, cwd, started + timeout - MARGIN_SECONDS)
-    return None
+    if record.verdict == UNVERIFIED:
+        text = verdict_for(record.results, False, target, record.timeout)["systemMessage"]
+        return Notice(record.tree, UNVERIFIED, text)
+    if not record.holding:
+        repeated = record.session != viewer.session
+        verdict = verdict_for(record.results, False, target, record.timeout, repeated=repeated)
+        if record.marked and any(result.before for result in record.results):
+            verdict = marked_told(verdict, record.marked, False)
+        return Notice(record.tree, KNOWN_KIND, str(verdict["systemMessage"]))
+    return _failure_notice(record, viewer, target)
 
 
-def _decide(
-    harness: str,
-    hook: Mapping[str, Any],
-    digest: str,
-    payload: dict[str, Any] | None,
-    cwd: Path,
-    timeout: int,
-) -> Verdict:
-    """What the hook prints for this input, running the Done commands where they are due, all of
-    it `MARGIN_SECONDS` before the entry's `timeout`."""
+def _failure_notice(record: Checked, viewer: Viewer, target: Path) -> Notice | None:
+    """What the person is told of a failure that holds, where it does not reach the model:
+    another session's, one held once already, the repeat after the guard on the tree it was held
+    on, one after the guard, one while paused; None for one still to be held, or held from this
+    record."""
 
-    started = time.monotonic()
-    noted = _pause(harness, digest, payload, cwd, timeout, started)
-    if noted is not None:
-        return noted
-    held = payload is not None and payload.get(hook["guard"]) is False
+    session, tree, guarded, held = viewer.session, viewer.tree, viewer.guarded, viewer.held
+    own = session is not None and record.session == session
+    if not own:
+        why = "another session's run found it"
+    elif record.hold == HELD_BEFORE:
+        why = "it was held once already in this session"
+    elif record.holding in held:
+        if not (guarded and record.tree == tree):
+            return None
+        why = "the working tree is unchanged since this failure, so it was not run again"
+    elif record.guarded or (guarded and record.tree == tree):
+        why = "the stop hook already continued once or its input could not be read"
+    elif record.paused:
+        head = (
+            "finish-check FAIL: a Done command failed while the session was paused, with "
+            "background work in flight; it is held at the first turn end of the session that is "
+            "not paused."
+        )
+        return Notice(record.tree, PAUSED_KIND, report(head, record.results))
+    else:
+        return None
+    text = verdict_for(record.results, False, target, record.timeout, why=why)["systemMessage"]
+    return Notice(record.tree, FAIL, str(text))
+
+
+def hold_report(record: Checked, target: Path, both: bool = False) -> str:
+    """The report a hold gives the model: its first line says how the failure stands (found
+    again after the session recorded it, with the time of each run where `both`; with no record
+    of the tree the turn began with; or new), then what to do, then the commands and the output.
+    """
+
+    if record.hold == AGAIN and record.first:
+        first = (
+            "finish-check FAIL: Done failed on the tree this turn began with, at "
+            f"{clock_of(record.first)}, and still fails now"
+        )
+        first += f" (found again at {clock_of(record.time)})." if both else "."
+    elif record.hold == NOBASE:
+        first = (
+            "finish-check FAIL: a Done command failed on this working tree; no record of the tree "
+            "this turn began with was found, so the failure may predate this turn."
+        )
+    else:
+        first = HOLD_FIRST
+    return report(hold_head(record.results, target, first), record.results)
+
+
+def deliverable(
+    record: Checked | None,
+    session: str | None,
+    guarded: bool,
+    paused: bool,
+    held: frozenset[str],
+    tree: str | None,
+) -> bool:
+    """Whether a turn end of `session` on `tree` holds for `record` at once: the check of this
+    very tree, by this session's run, with a failure that holds and that no hold delivered, the
+    guard unset and the session not paused."""
+
+    return (
+        record is not None
+        and record.kind == CHECKED
+        and record.tree == tree
+        and record.verdict == FAIL
+        and bool(record.holding)
+        and record.hold in (NEW, NOBASE, AGAIN)
+        and record.holding not in held
+        and session is not None
+        and record.session == session
+        and not guarded
+        and not paused
+    )
+
+
+def confirmed(
+    record: Checked | None, session: str | None, guarded: bool, held: frozenset[str]
+) -> bool:
+    """Whether a codex stop holds for `record`, the record of the tree its turn began on: a run
+    of this session found the failure again there, and no hold delivered it."""
+
+    return (
+        record is not None
+        and record.hold == AGAIN
+        and bool(record.holding)
+        and record.holding not in held
+        and session is not None
+        and record.session == session
+        and not guarded
+    )
+
+
+# --- The run record and the run lock -----------------------------------------------
+
+
+@dataclass(frozen=True)
+class Run:
+    """The record the run that holds the lock writes in the Git directory: its process, the
+    tree and HEAD it started on, when, the session, the mark it read, the Done digest and the
+    limit; and how it ended, once it has."""
+
+    pid: int
+    tree: str
+    head: str
+    started: datetime
+    session: str | None
+    mark: dict[str, str] | None
+    done: str
+    timeout: int
+    guarded: bool = False
+    ended: dict[str, str] | None = None
+
+    def document(self) -> dict[str, Any]:
+        found: dict[str, Any] = {
+            "pid": self.pid,
+            "tree": self.tree,
+            "head": self.head,
+            "started": self.started.isoformat(),
+            "session": self.session,
+            "mark": self.mark,
+            "done": self.done,
+            "timeout": self.timeout,
+            "guarded": self.guarded,
+        }
+        return found | ({"ended": self.ended} if self.ended is not None else {})
+
+
+def _run_of(document: object) -> Run | None:
+    if not isinstance(document, dict):
+        return None
+    pid, tree, head = document.get("pid"), document.get("tree"), document.get("head")
+    started, session = stamp(document.get("started")), document.get("session")
+    mark, done, timeout = document.get("mark"), document.get("done"), document.get("timeout")
+    guarded, ended = document.get("guarded", False), document.get("ended")
+    if not (
+        type(pid) is int
+        and isinstance(tree, str)
+        and isinstance(head, str)
+        and started is not None
+        and (session is None or isinstance(session, str))
+        and (
+            mark is None
+            or (isinstance(mark, dict) and all(isinstance(v, str) for v in mark.values()))
+        )
+        and isinstance(done, str)
+        and type(timeout) is int
+        and admits_timeout(timeout)
+        and isinstance(guarded, bool)
+    ):
+        return None
+    if ended is not None and not (
+        isinstance(ended, dict) and all(isinstance(value, str) for value in ended.values())
+    ):
+        return None
+    return Run(pid, tree, head, started, session, mark, done, int(timeout), guarded, ended)
+
+
+def read_run(target: Path, deadline: float | None = None) -> tuple[Run | None, bool]:
+    """(the run record, whether there is a file): a file that cannot be read or parsed is
+    (None, True), which reads as a run that did not finish."""
+
+    path = _state(target, deadline, RUN)
+    return _read_run_at(path) if path is not None else (None, False)
+
+
+def _read_run_at(path: Path) -> tuple[Run | None, bool]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None, False
+    except OSError:
+        return None, True
+    try:
+        return _run_of(json.loads(text)), True
+    except ValueError:
+        return None, True
+
+
+def _take(descriptor: int) -> bool:
+    """Take the run lock on an open descriptor without waiting: `flock` on POSIX, so that only
+    a close of this very descriptor releases it; on Windows `msvcrt.locking` on the first byte.
+    The operating system releases either when the process ends, however it ends."""
+
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        return False
+    return True
+
+
+def _release_lock(descriptor: int) -> None:
+    with contextlib.suppress(OSError):
+        if sys.platform == "win32":
+            import msvcrt
+
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+
+
+class RunLock:
+    """The run lock of one Git directory, `RUN_LOCK`. A run opens the file once and never again,
+    and keeps the descriptor while it lives: `os.open` makes it non-inheritable and `subprocess`
+    closes inherited descriptors, so no Done command keeps it alive."""
+
+    def __init__(self, path: Path) -> None:
+        self.descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+        self.held = False
+
+    def take(self) -> bool:
+        self.held = self.held or _take(self.descriptor)
+        return self.held
+
+    def close(self) -> None:
+        if self.descriptor < 0:
+            return
+        if self.held:
+            _release_lock(self.descriptor)
+        with contextlib.suppress(OSError):
+            os.close(self.descriptor)
+        self.descriptor, self.held = -1, False
+
+
+def lock_held(path: Path) -> bool:
+    """Whether a run holds the lock: a non-blocking attempt from a descriptor of this call's own
+    fails. Creates nothing; a lock it took is released at once."""
+
+    try:
+        descriptor = os.open(path, os.O_RDWR)
+    except OSError:
+        return False
+    try:
+        if _take(descriptor):
+            _release_lock(descriptor)
+            return False
+        return True
+    finally:
+        os.close(descriptor)
+
+
+NONE, LIVE, ENDED, DEAD = "none", "live", "ended", "dead"
+
+
+def run_state(target: Path, deadline: float | None = None) -> tuple[str, Run | None]:
+    """How the last run stands: `none`, `ended`, `live`, or `dead`. A run record with no end is
+    dead where it cannot be read, where its process is gone, where its start is older than its
+    limit plus `WAKE_MARGIN`, or where no run holds the lock; its process id is read only while
+    the lock is held."""
+
+    run, there = read_run(target, deadline)
+    if run is None:
+        return (DEAD if there else NONE), None
+    if run.ended is not None:
+        return ENDED, run
+    age = (datetime.now(timezone.utc) - run.started).total_seconds()
+    lock = _state(target, deadline, RUN_LOCK)
+    if lock is None or not lock_held(lock) or age > run.timeout + WAKE_MARGIN:
+        return DEAD, run
+    return (LIVE if programs.alive(run.pid) else DEAD), run
+
+
+def _young(run: Run) -> bool:
+    age = (datetime.now(timezone.utc) - run.started).total_seconds()
+    return age <= run.timeout + WAKE_MARGIN
+
+
+HOLDER, FOLLOWER, STUCK_ROLE = "holder", "follower", "stuck"
+
+
+def acquire(lock: RunLock, record: Path, tree: str) -> tuple[str, Run | None]:
+    """Take the run lock: (`HOLDER`, None) once it is this run's; (`FOLLOWER`, the holder) where
+    the run that holds it started on this same tree; (`STUCK_ROLE`, the holder) where a run on
+    another tree, asked to stop once (`programs.terminate`: SIGTERM on POSIX, TerminateProcess on
+    Windows), still holds it `SUPERSEDE_SECONDS` later. The holder's process id is read from its
+    run record only while an attempt on the lock still fails, and never from a record that has
+    ended or outlived its limit."""
+
+    if lock.take():
+        return HOLDER, None
+    asked = False
+    give_up = time.monotonic() + SUPERSEDE_SECONDS
+    other: Run | None = None
+    while True:
+        other, _ = _read_run_at(record)
+        live = (
+            other is not None
+            and other.ended is None
+            and _young(other)
+            and other.pid != os.getpid()
+            and programs.alive(other.pid)
+        )
+        if live and other is not None and other.tree == tree:
+            return FOLLOWER, other
+        if live and other is not None and not asked:
+            if lock.take():
+                return HOLDER, None
+            programs.terminate(other.pid)
+            asked = True
+            give_up = time.monotonic() + SUPERSEDE_SECONDS
+        if lock.take():
+            return HOLDER, None
+        if time.monotonic() > give_up:
+            return STUCK_ROLE, other
+        time.sleep(LOCK_POLL)
+
+
+def follow(lock: RunLock, until: float) -> bool:
+    """Wait for the holder's end, as the lock tells it, until `until`; whether it ended."""
+
+    while time.monotonic() < until:
+        if lock.take():
+            return True
+        time.sleep(0.2)
+    return lock.take()
+
+
+class Superseded(BaseException):
+    """A run on a later tree asked this one to stop (SIGTERM), or the harness did."""
+
+
+class _Stopping:
+    """The run's SIGTERM handler: while armed, it raises `Superseded` where the run is, which
+    stops the live command's process group (`run_one`); otherwise it notes the request, and
+    arming raises it then, so that a request that came before the commands started still
+    stops them. Disarmed while the run writes its records."""
+
+    def __init__(self) -> None:
+        self.armed = False
+        self.asked = False
+
+    def __call__(self, number: int, frame: object) -> None:
+        self.asked = True
+        if self.armed:
+            self.armed = False
+            raise Superseded()
+
+    def arm(self) -> None:
+        if self.asked:
+            raise Superseded()
+        self.armed = True
+
+
+def _session(payload: Mapping[str, Any] | None) -> str | None:
+    found = payload.get("session_id") if payload is not None else None
+    return found if isinstance(found, str) and found else None
+
+
+def _paused(payload: Mapping[str, Any] | None) -> bool:
+    """Whether the session is paused, not finished: background work or a scheduled wake-up will
+    wake it (claude-code's `background_tasks` and `session_crons`)."""
+
+    return bool(payload and (payload.get("background_tasks") or payload.get("session_crons")))
+
+
+def _gitdir(target: Path, deadline: float | None = None) -> Path | None:
+    return _state(target, deadline, "")
+
+
+def _new_turn(target: Path, session: str | None, deadline: float | None = None) -> bool:
+    """Whether a live (unstamped) mark of the session is on file: the person typed and a new
+    turn began, decided by the stamp and never by comparing clocks."""
+
+    mark = read_mark(target, deadline)
+    return mark is not None and mark.session == session and mark.ended is None
+
+
+def _outside(target: Path, started: datetime, deadline: float | None = None) -> bool:
+    """Whether no live mark of any session was written after `started`: no session moved the
+    tree while the run ran."""
+
+    mark = read_mark(target, deadline)
+    return not (mark is not None and mark.ended is None and mark.written >= started)
+
+
+def _earlier(
+    baseline: Checked | None, session: str | None, held: frozenset[str], target: Path
+) -> dict[str, Failure]:
+    """The failures of the tree the turn began with that a turn's run does not hold: those
+    another session's run recorded, those this session was held for already, and those adopt
+    knew. One this session recorded and no hold delivered is the session's own, and holds when
+    a run finds it again."""
+
+    if baseline is None:
+        return {}
+    found: dict[str, Failure] = {}
+    for result in baseline.results:
+        if result.verdict != FAIL or result.code is None:
+            continue
+        if baseline.session != session or result.known or signature(result, target) in held:
+            found[result.command] = Failure(result.code, result_ids(result) or None)
+    return found
+
+
+def _carried(baseline: Checked | None, session: str | None, held: frozenset[str]) -> list[Pending]:
+    if baseline is None or session is None or baseline.session != session:
+        return []
+    return [item for item in baseline.pending if item.signature not in held]
+
+
+def _verdict(results: Sequence[Result]) -> str:
+    if results and results[-1].verdict == UNVERIFIED:
+        return UNVERIFIED
+    return FAIL if any(result.verdict == FAIL for result in results) else PASS
+
+
+@dataclass
+class _Context:
+    """What one run knows from its input and its start."""
+
+    harness: str
+    digest: str
+    done: list[str]
+    target: Path
+    timeout: int
+    session: str | None
+    guarded: bool
+    paused: bool
+    wake: bool
+    begun: float
+    started: datetime
+
+    @property
+    def until(self) -> float:
+        return self.begun + self.timeout - MARGIN_SECONDS
+
+    @property
+    def book(self) -> float:
+        return self.until + REMEMBER_SECONDS
+
+
+def _wake_from(
+    context: _Context, record: Checked | None, tree: str, deadline: float | None = None
+) -> tuple[int, str, str]:
+    """(exit code, report, note): exit 2 with the hold's report where the run's row wakes the
+    model and `record`, the check of this tree, holds for this run's input, and no new turn
+    began; the signature goes to the held list first, and where it cannot, exit 0 with
+    `UNHELD_NOTE`, so the person is told and the model is not. Else exit 0. The held list is read
+    and written by `deadline`, the run's own by default."""
+
+    deadline = context.book if deadline is None else deadline
+    if not context.wake or record is None:
+        return 0, "", ""
+    held = held_signatures(context.target, context.session, deadline)
+    if not deliverable(record, context.session, context.guarded, context.paused, held, tree):
+        return 0, "", ""
+    if _new_turn(context.target, context.session, deadline):
+        return 0, "", ""
+    if not keep_held(context.target, context.session, record.holding, record.tree, deadline):
+        return 0, "", UNHELD_NOTE
+    return 2, hold_report(record, context.target), ""
+
+
+@dataclass(frozen=True)
+class _Turn:
+    """What a run compares its results with: the tree it started on, the mark of the turn that
+    ended there, the record of the tree that turn began with, and the session's held list."""
+
+    tree: str
+    mark: Mark | None
+    baseline: Checked | None
+    held: frozenset[str]
+
+
+def _record(
+    context: _Context, turn: _Turn, results: Sequence[Result], changed: bool, cause: str
+) -> Checked:
+    """The record of a run's results: a check of the turn's tree, or, where `changed`, the
+    results of a run whose tree changed, with the session's failures carried forward."""
+
+    now = now_text()
+    baseline, held, mark = turn.baseline, turn.held, turn.mark
+    carried = _carried(baseline, context.session, held)
+    by_signature = {item.signature: item for item in carried}
+    last = results[-1] if results else None
+    holding = hold = first = ""
+    if last is not None and last.verdict == FAIL and not last.known:
+        holding = signature(last, context.target)
+        if holding in held:
+            hold = HELD_BEFORE
+        elif holding in by_signature:
+            hold, first = AGAIN, by_signature[holding].first
+        else:
+            hold = NOBASE if baseline is None else NEW
+    ran = {result.command for result in results}
+    pending = [item for item in carried if item.command not in ran or item.signature == holding]
+    if hold in (NEW, NOBASE) and last is not None:
+        pending.append(Pending(holding, last.command, now))
+    verdict = _verdict(results)
+    return Checked(
+        turn.tree,
+        context.timeout,
+        UNVERIFIED if changed else verdict,
+        tuple(results),
+        CHANGED if changed else CHECKED,
+        context.session,
+        now,
+        round(time.monotonic() - context.begun, 1),
+        cause or (ENVIRONMENT if last is not None and last.cause == ENVIRONMENT else ""),
+        holding,
+        hold,
+        first,
+        tuple(pending),
+        mark.written.isoformat() if mark is not None else "",
+        context.guarded,
+        context.paused,
+    )
+
+
+def _check(
+    context: _Context, stopping: _Stopping, tree: str, head: str, mark: Mark | None
+) -> tuple[str, str, int, str]:
+    """The holder's work: (outcome, note, exit code, report)."""
+
+    target, book = context.target, context.book
+    current = checked_for(target, tree, context.until)
+    unchanged = mark is not None and mark.tree == tree and mark.head == head
+    if unchanged or (current is not None and current.repeats(tree, context.timeout)):
+        code, text, note = _wake_from(context, current, tree)
+        note = DELIVERED_NOTE if code == 2 else note
+        return (UNCHANGED if unchanged else RECORDED), note, code, text
+    held = held_signatures(target, context.session, context.until)
+    baseline = checked_for(target, mark.tree, context.until) if mark is not None else None
+    turn = _Turn(tree, mark, baseline, held)
+    known = known_record(target, context.digest, context.until)
+    earlier = _earlier(baseline, context.session, held, target)
+    results: list[Result] = []
+    keep = mark.tree if mark is not None else None
+    try:
+        stopping.arm()
+        run_all(target, context.done, context.until, known, earlier, into=results)
+        after = tree_digest(target, context.digest, book)
+    except Superseded:
+        stopping.armed = False
+        if results:
+            remember(target, _record(context, turn, results, True, SUPERSEDED), book, keep)
+        return SUPERSEDED, "", 0, ""
+    stopping.armed = False
+    verdict = _verdict(results).lower()
+    if after is None:
+        drop_fixed(target, known, results, book)
+        return verdict, "not remembered: the tree could not be read again in time", 0, ""
+    changed = after != tree
+    cause = OUTSIDE if changed and _outside(target, context.started, book) else ""
+    record = _record(context, turn, results, changed, cause)
+    remember(target, record, book, keep)
+    drop_fixed(target, known, results, book)
+    if changed:
+        return CHANGED, cause, 0, ""
+    code, text, note = _wake_from(context, record, tree)
+    return verdict, note, code, text
+
+
+def _stuck(target: Path, context: _Context, tree: str, other: Run | None) -> None:
+    path = _state(target, context.book, STUCK)
+    if path is None:
+        return
+    note = {
+        "time": now_text(),
+        "session": context.session,
+        "tree": tree,
+        "pid": other.pid if other is not None else 0,
+    }
+    write_whole(path, json.dumps(note) + "\n")
+
+
+_READ = object()
+
+
+@dataclass(frozen=True)
+class Entry:
+    """What an entry's command names: the row, the row's finish hook, the Done digest and the
+    run's limit."""
+
+    harness: str
+    hook: Mapping[str, Any]
+    digest: str
+    timeout: int
+
+
+def run(
+    entry: Entry, payload: dict[str, Any] | None, cwd: Path, *, wake: bool, given: object = _READ
+) -> tuple[int, str]:
+    """The run: (exit code, report). It runs Done for a turn end and records what it found;
+    where `wake`, the row's delivery (claude-code), it is the entry's own process and exits 2
+    with the report only on a failure that holds. Without `wake` (codex's detached `--run`) it
+    only records; a later stop delivers. `given` is the mark the codex stop read and trusted;
+    otherwise the run reads the mark of its session written before its start, trusts it by the
+    stop's rules, and stamps it ended."""
+
+    harness, hook, digest, timeout = entry.harness, entry.hook, entry.digest, entry.timeout
+    context_start = time.monotonic(), datetime.now(timezone.utc)
+    target, found = find_target(payload, cwd)
+    done = recorded_done(target) if found else None
+    if not done or done_digest(done) != digest:
+        return 0, ""
+    context = _Context(
+        harness,
+        digest,
+        done,
+        target,
+        timeout,
+        _session(payload),
+        payload is None or payload.get(hook["guard"]) is not False,
+        _paused(payload),
+        wake,
+        *context_start,
+    )
+    gitdir = _gitdir(target, context.until)
+    if gitdir is None:
+        return 0, ""
+    if given is _READ:
+        raw = read_mark(target, context.until)
+        own = raw if raw is not None and raw.session == context.session else None
+        own = own if own is not None and own.written < context.started else None
+        if own is not None:
+            stamp_mark(target, own, context.until)
+        mark = own if own is not None and trusted(harness, own, payload, context.until) else None
+    else:
+        mark = given if isinstance(given, Mark) else None
+    tree = tree_digest(target, digest, context.until)
+    head = _head(target, context.until)
+    if tree is None or head is None:
+        return 0, ""
+    try:
+        lock = RunLock(gitdir / RUN_LOCK)
+    except OSError as error:
+        _unlocked(context, gitdir, tree, head, error)
+        return 0, ""
+    try:
+        role, other = acquire(lock, gitdir / RUN, tree)
+        if role == STUCK_ROLE:
+            _stuck(target, context, tree, other)
+            return 0, ""
+        if role == FOLLOWER:
+            if not follow(lock, context.begun + timeout):
+                return 0, ""
+            # The follower's own budget may have passed while it waited: the held list is read
+            # and written with time of its own, so the holder's hold is seen and not sent twice.
+            later = max(context.book, time.monotonic() + REMEMBER_SECONDS)
+            record = checked_for(target, tree, later)
+            code, text, _ = _wake_from(context, record, tree, later)
+            return code, text
+        return _as_holder(context, gitdir, tree, head, mark)
+    finally:
+        lock.close()
+
+
+def _unlocked(context: _Context, gitdir: Path, tree: str, head: str, error: OSError) -> None:
+    """The record of a run that could not open the run lock: ended at once with the error, so the
+    person is told and the check is never silent."""
+
+    outcome = f"error: the run lock {RUN_LOCK} cannot be opened: {type(error).__name__}: {error}"
+    record = Run(
+        os.getpid(),
+        tree,
+        head,
+        context.started,
+        context.session,
+        None,
+        context.digest,
+        context.timeout,
+        context.guarded,
+        {"time": now_text(), "outcome": outcome},
+    )
+    write_whole(gitdir / RUN, json.dumps(record.document()) + "\n")
+
+
+def _as_holder(
+    context: _Context, gitdir: Path, tree: str, head: str, mark: Mark | None
+) -> tuple[int, str]:
+    """The run that holds the lock: its record written before any command starts, and its end
+    written on every exit it controls, before the lock goes."""
+
+    (gitdir / STUCK).unlink(missing_ok=True)
+    shown = {"tree": mark.tree, "time": mark.written.isoformat()} if mark is not None else None
+    record = Run(
+        os.getpid(),
+        tree,
+        head,
+        context.started,
+        context.session,
+        shown,
+        context.digest,
+        context.timeout,
+        context.guarded,
+    )
+    path = gitdir / RUN
+    write_whole(path, json.dumps(record.document()) + "\n")
+    stopping = _Stopping()
+    main = threading.current_thread() is threading.main_thread()
+    previous = signal.signal(signal.SIGTERM, stopping) if main else None
+    outcome, note, code, text = "error", "", 0, ""
+    try:
+        outcome, note, code, text = _check(context, stopping, tree, head, mark)
+    except Superseded:
+        outcome = SUPERSEDED
+    except Exception as error:
+        outcome = f"error: {type(error).__name__}: {error}"
+        code, text = 0, ""
+    finally:
+        stopping.armed = False
+        ended = {"time": now_text(), "outcome": outcome}
+        ended |= {"note": note} if note else {}
+        write_whole(path, json.dumps(replace(record, ended=ended).document()) + "\n")
+        if main and previous is not None:
+            signal.signal(signal.SIGTERM, previous)
+    return code, text
+
+
+# --- The codex stop: decide in constant time, start the run, deliver later ---------
+
+
+def _run_argv(
+    entry: Entry, payload: Mapping[str, Any] | None, target: Path, mark: Mark | None
+) -> list[str]:
+    """The command that starts the detached run: this engine, isolated as the launcher runs it,
+    told the stop's input and the mark the stop trusted."""
+
+    # No transcript path: `ps` shows the command line to every account, and the run reads the
+    # transcript only where it reads the mark itself, which it never does with `--input`.
+    keys = ("session_id", "stop_hook_active", "hook_event_name")
+    given: dict[str, Any] = {k: payload[k] for k in keys if payload is not None and k in payload}
+    given["cwd"] = str(target)
+    given["finish_check_mark"] = mark.document() if mark is not None else None
+    return [
+        sys.executable,
+        "-I",
+        "-X",
+        "utf8",
+        "-c",
+        LAUNCH,
+        str(ENGINE_ROOT),
+        ID,
+        "--run",
+        "--constant-time",
+        "--harness",
+        entry.harness,
+        "--done",
+        entry.digest,
+        "--timeout",
+        str(entry.timeout),
+        "--input",
+        json.dumps(given),
+    ]
+
+
+def _given_mark(document: object) -> Mark | None:
+    if not isinstance(document, dict):
+        return None
+    head, tree, session = document.get("head"), document.get("tree"), document.get("session")
+    written = stamp(document.get("time"))
+    if not (
+        isinstance(head, str)
+        and HEAD.fullmatch(head)
+        and isinstance(tree, str)
+        and DIGEST.fullmatch(tree)
+        and isinstance(session, str)
+        and session
+        and written is not None
+    ):
+        return None
+    return Mark(head, tree, session, written)
+
+
+def _run_notices(
+    target: Path, viewer: Viewer, deadline: float | None, from_run: bool
+) -> list[Notice]:
+    """What the person may be told about the last run: still running on this tree, did not
+    finish, ended with an error; and, at a claude-code prompt (`from_run`), that the turn the run
+    ended changed nothing, which a codex stop says itself."""
+
+    state, last = run_state(target, deadline)
+    if state == DEAD:
+        if last is None:
+            text = (
+                "finish-check UNVERIFIED: the last run did not finish: its record cannot be "
+                "read; nothing was held, and no tree was checked."
+            )
+            return [Notice("", DEAD, text)]
+        text = (
+            f"finish-check UNVERIFIED: the run that started at {clock_of(last.started.isoformat())}"
+            " did not finish: its process is gone, or it outlived its time limit; nothing was "
+            "held, and no tree was checked."
+        )
+        return [Notice(last.tree, DEAD, text)]
+    if last is None:
+        return []
+    when = clock_of(last.started.isoformat())
+    if state == LIVE:
+        text = f"finish-check: Done is still running on this tree since {when}."
+        return [Notice(last.tree, RUNNING, text)] if last.tree == viewer.tree else []
+    outcome = (last.ended or {}).get("outcome", "")
+    if outcome.startswith("error"):
+        text = (
+            f"finish-check UNVERIFIED: the run that started at {when} ended without a verdict "
+            f"({outcome}); nothing was held."
+        )
+        return [Notice(last.tree, ERROR, text)]
+    if (last.ended or {}).get("note") == UNHELD_NOTE and last.session == viewer.session:
+        record = checked_for(target, last.tree, deadline)
+        return [_unheld_notice(record, target)] if record is not None and record.results else []
+    if from_run and outcome == UNCHANGED and last.session == viewer.session and last.mark:
+        if (last.ended or {}).get("note") == DELIVERED_NOTE:
+            # The run delivered this failure to the model; the person is not told it was not.
+            return []
+        record = checked_for(target, last.tree, deadline)
+        verdict = _unchanged_verdict(record, last.tree, target)
+        text = str(marked_told(verdict, last.mark.get("time", ""), True)["systemMessage"])
+        return [Notice(last.tree, UNCHANGED, text)]
+    return []
+
+
+def _stuck_notice(target: Path, deadline: float | None) -> list[Notice]:
+    """That the last run could not start, since the run before it would not stop."""
+
+    path = _state(target, deadline, STUCK)
+    try:
+        note = json.loads(path.read_text(encoding="utf-8")) if path is not None else None
+    except (OSError, ValueError):
+        return []
+    if not (isinstance(note, dict) and isinstance(note.get("time"), str)):
+        return []
+    text = (
+        f"finish-check UNVERIFIED: Done did not start at {clock_of(note['time'])}: the run on "
+        f"another tree (process {note.get('pid')}) did not stop within {SUPERSEDE_SECONDS} s of "
+        "being asked; nothing was held, and the next turn end tries again."
+    )
+    return [Notice(str(note.get("tree", "")), STUCK_KIND, text)]
+
+
+def _shown_records(target: Path, tree: str | None, deadline: float | None) -> list[Checked]:
+    """The record of `tree` and the newest record, once each."""
+
+    found: dict[str, Checked] = {}
+    for record in (checked_for(target, tree, deadline), last_checked(target, deadline)):
+        if record is not None:
+            found.setdefault(record.tree, record)
+    return list(found.values())
+
+
+def notices(
+    target: Path, viewer: Viewer, deadline: float | None, *, from_run: bool
+) -> list[Notice]:
+    """What the person may be told at a codex stop or a claude-code prompt (`from_run`): about
+    the last run, a run that could not start, and each record's verdict."""
+
+    found = _run_notices(target, viewer, deadline, from_run) + _stuck_notice(target, deadline)
+    for record in _shown_records(target, viewer.tree, deadline):
+        notice = record_notice(record, viewer, target)
+        if notice is not None:
+            found.append(notice)
+    return found
+
+
+def _unheld_notice(record: Checked, target: Path) -> Notice:
+    """The person's notice of a failure that held where the held list could not be written."""
+
+    verdict = verdict_for(record.results, False, target, record.timeout, why=UNHELD_WHY)
+    return Notice(record.tree, UNHELD, str(verdict["systemMessage"]))
+
+
+def _slow_stop(
+    target: Path, viewer: Viewer, own: Mark | None, argv: list[str]
+) -> tuple[Verdict, list[str] | None]:
+    """A codex stop whose tree read passed its budget: it tells the person once and starts the
+    run, which reads the tree with its own."""
+
+    text = (
+        f"finish-check UNVERIFIED: the working tree could not be read within {STOP_READ_SECONDS} "
+        "s at this stop; the check runs in the background with its own time, and its verdict "
+        "comes at a later stop."
+    )
+    texts = tell(target, viewer.session, [Notice("", SLOW, text)])
+    if own is not None:
+        stamp_mark(target, own)
+    return (told("\n\n".join(texts)) if texts else {}), argv
+
+
+def _stop_hold(
+    target: Path, viewer: Viewer, current: Checked | None, mark: Mark | None, unchanged: bool
+) -> Checked | None:
+    """The record a codex stop holds for: the check of this tree, at once, where it holds for
+    this session; else the record of the tree the turn began on, where a later run of the session
+    found its failure again."""
+
+    session, guarded, held = viewer.session, viewer.guarded, viewer.held
+    if deliverable(current, session, guarded, False, held, viewer.tree):
+        return current
+    if mark is None or unchanged:
+        return None
+    base = checked_for(target, mark.tree)
+    return base if confirmed(base, session, guarded, held) else None
+
+
+def stop(
+    entry: Entry, payload: dict[str, Any] | None, cwd: Path
+) -> tuple[Verdict, list[str] | None]:
+    """The codex stop: (what it prints, the command that starts the run or None). It reads,
+    decides and returns within `STOP_TIMEOUT`, its tree read within `STOP_READ_SECONDS`, and
+    runs nothing. It holds where a record of this session holds (`_stop_hold`). Otherwise it
+    tells the person what they were not yet told, and stamps the turn's mark. It starts the run
+    where the tree has no check, the turn changed something, and no run is on it; a tree it could
+    not read in time gets the run all the same."""
+
+    deadline = time.monotonic() + STOP_READ_SECONDS
+    session = _session(payload)
+    guarded = payload is None or payload.get(entry.hook["guard"]) is not False
     target, found = find_target(payload, cwd)
     if not found:
-        return told(f"finish-check UNVERIFIED: no {MANIFEST} found from {target}; nothing ran.")
+        return told(
+            f"finish-check UNVERIFIED: no {MANIFEST} found from {target}; nothing ran."
+        ), None
+    done = recorded_done(target)
+    if not done or done_digest(done) != entry.digest:
+        return told(_digest_text(target)), None
+    tree = tree_digest(target, entry.digest, deadline)
+    raw = read_mark(target, deadline)
+    own = raw if raw is not None and raw.session == session else None
+    mark = own if own is not None and trusted(entry.harness, own, payload, deadline) else None
+    viewer = Viewer(session, tree, guarded, held_signatures(target, session, deadline))
+    if tree is None:
+        return _slow_stop(target, viewer, own, _run_argv(entry, payload, target, mark))
+    current = checked_for(target, tree, deadline)
+    unchanged = mark is not None and mark.tree == tree and mark.head == _head(target, deadline)
+    hold = _stop_hold(target, viewer, current, mark, unchanged)
+    state, last = run_state(target, deadline)
+    running = state == LIVE and last is not None and last.tree == tree
+    repeating = current is not None and current.repeats(tree, entry.timeout)
+    starts = not unchanged and not repeating and not running
+    argv = _run_argv(entry, payload, target, mark) if starts else None
+    unheld: list[Notice] = []
+    if hold is not None:
+        if keep_held(target, session, hold.holding, hold.tree):
+            return {"decision": "block", "reason": hold_report(hold, target, both=True)}, argv
+        unheld = [_unheld_notice(hold, target)]
+    found_notices = unheld + notices(target, viewer, deadline, from_run=False)
+    if unchanged and mark is not None:
+        verdict = _unchanged_verdict(current, tree, target)
+        text = str(marked_told(verdict, mark.written.isoformat(), True)["systemMessage"])
+        found_notices = [n for n in found_notices if n.tree != tree or n.kind == RUNNING]
+        found_notices.insert(0, Notice(tree, UNCHANGED, text))
+    texts = tell(target, session, found_notices)
+    if own is not None:
+        stamp_mark(target, own)
+    return (told("\n\n".join(texts)) if texts else {}), argv
+
+
+# --- What a person reads ------------------------------------------------------------
+
+
+def turn_notices(
+    target: Path, session: str, tree: str | None, digest: str, deadline: float | None = None
+) -> list[str]:
+    """The claude-code turn-start entry's message: each notice not yet told to this session,
+    since an async stop entry can show the person nothing but its wake. `deadline` is the
+    entry's, `MARK_SECONDS` from now by default."""
+
+    deadline = time.monotonic() + MARK_SECONDS if deadline is None else deadline
     done = recorded_done(target)
     if not done or done_digest(done) != digest:
-        return told(
-            f"finish-check UNVERIFIED: the Done commands in {target / MANIFEST} are not the ones "
-            "this hook was written for; nothing ran. "
-            f"Re-run `outcomebound adopt {paths.shell_path(target)}`."
-        )
-    deadline = started + timeout - MARGIN_SECONDS
-    before = tree_digest(target, digest, deadline)
-    last = last_checked(target, deadline) if before is not None else None
-    # The tree the turn began with, where the turn's first prompt marked it.
-    turn = _turn(harness, target, before, payload, deadline)
-    same = _same(turn, before, last, target, deadline)
-    if same is not None:
-        return same
-    if last is not None and last.repeats(before, timeout):
-        if last.verdict == PASS or _repeat_told(target, payload, before, deadline):
-            return {}
-        return verdict_for(last.results, False, target, last.timeout, repeated=True)
-    record = known_record(target, digest, deadline) if before is not None else None
-    began = _began(turn, last)
-    results = run_all(target, done, deadline, record, began)
-    if results[-1].verdict == UNVERIFIED:
-        verdict = UNVERIFIED
-    else:
-        verdict = FAIL if any(result.verdict == FAIL for result in results) else PASS
-    # Only a tree the commands left as they found it is remembered with its verdict: one that
-    # changed while they ran was checked part-way through a change. Reading it again and
-    # remembering it stop at their own deadline inside the margin, so the report is never what
-    # the harness cuts off.
-    # A command the hook's environment could not run says nothing about the tree: once the
-    # environment is fixed, the same tree must run again, so that verdict is not remembered.
-    book = deadline + REMEMBER_SECONDS
-    environment = results[-1].cause == ENVIRONMENT
-    if before is not None and not environment and tree_digest(target, digest, book) == before:
-        kept = () if verdict == PASS else tuple(results)
-        remember(target, Checked(before, timeout, verdict, kept), book)
-    drop_fixed(target, record, results, book)
-    if verdict == PASS:
-        seconds = time.monotonic() - started
-        listed = ", ".join(shorten(line, 80) for line in done)
-        return told(f"finish-check PASS: {listed}, {seconds:.0f}s; not reviewed, not landed")
-    return _credited(verdict_for(results, held, target, timeout), turn, results)
+        return tell(target, session, [Notice("", DIGEST_KIND, _digest_text(target))], deadline)
+    viewer = Viewer(session, tree, False, held_signatures(target, session, deadline))
+    return tell(target, session, notices(target, viewer, deadline, from_run=True), deadline)
+
+
+OUTCOMES = {
+    "pass": "PASS",
+    "fail": "FAIL",
+    "unverified": "UNVERIFIED",
+    CHANGED: "UNVERIFIED: the tree changed while it ran",
+    SUPERSEDED: "stopped from outside before it ended",
+    UNCHANGED: "the turn changed nothing; Done was not run",
+    RECORDED: "the tree was already checked; Done was not run",
+}
+
+
+def _where(tree: str, current: str | None) -> str:
+    return "this tree" if tree == current else "another tree"
+
+
+def _run_line(state: str, last: Run | None, tree: str | None) -> str:
+    """How the last run stands, in one line for the person."""
+
+    if last is None:
+        return "run: none recorded" if state == NONE else "run: its record cannot be read"
+    about = (
+        f"started {clock_of(last.started.isoformat())} on {_where(last.tree, tree)}, process "
+        f"{last.pid}, session {last.session}"
+    )
+    if last.mark:
+        about += f", compared with the mark written at {clock_of(last.mark.get('time', ''))}"
+    if state == LIVE:
+        return f"run: running; {about}"
+    if state == DEAD or last.ended is None:
+        return f"run: did not finish; {about}"
+    outcome = last.ended.get("outcome", "")
+    note = f", {last.ended['note']}" if last.ended.get("note") else ""
+    ended = clock_of(last.ended.get("time", ""))
+    return f"run: ended {ended}: {OUTCOMES.get(outcome, outcome)}{note}; {about}"
+
+
+def _record_text(record: Checked, viewer: Viewer, target: Path) -> str:
+    """A record's verdict for the person: what they would be told, else its report."""
+
+    notice = record_notice(record, viewer, target)
+    if notice is not None:
+        return notice.text
+    if record.holding:
+        return hold_report(record, target)
+    if record.verdict == PASS:
+        return _pass_text(record) if record.results else ""
+    return str(verdict_for(record.results, False, target, record.timeout)["systemMessage"])
+
+
+def status(folder: Path) -> str:
+    """What `--status` prints, read-only: the last run (running since, ended and how, or did not
+    finish), each notice it leaves, and the record of the current tree and the newest record,
+    each with its verdict and its report."""
+
+    target, found = find_target(None, folder)
+    if not found:
+        return f"finish-check UNVERIFIED: no {MANIFEST} found from {target}; nothing ran.\n"
+    done = recorded_done(target) or []
+    tree = tree_digest(target, done_digest(done)) if done else None
+    state, last = run_state(target)
+    session = last.session if last is not None else None
+    guarded = last.guarded if last is not None else False
+    viewer = Viewer(session, tree, guarded, held_signatures(target, session))
+    lines = [f"finish-check status of {paths.shell_path(target)}", _run_line(state, last, tree)]
+    told_kinds = (DEAD, RUNNING, ERROR, STUCK_KIND, UNCHANGED, UNHELD)
+    shown = notices(target, viewer, None, from_run=True)
+    lines += [notice.text for notice in shown if notice.kind in told_kinds]
+    records = _shown_records(target, tree, None)
+    for record in records:
+        by = f"session {record.session}" if record.session else "adopt's measurement"
+        when = clock_of(record.time) if record.time else "an earlier engine"
+        where = _where(record.tree, tree)
+        lines.append(f"record: {record.kind} {record.verdict} for {where}, at {when}, by {by}")
+        lines.append(_record_text(record, viewer, target))
+    if not records:
+        lines.append("record: none for this tree")
+    return "\n".join(line for line in lines if line) + "\n"
 
 
 # --- Command line ----------------------------------------------------------------
@@ -2096,29 +3474,30 @@ def _decide(
 DESCRIPTION = """\
 Run at a harness's stop hook, from the entry `outcomebound adopt --finish-check` writes. It reads
 the hook's JSON input on stdin, finds the target (the nearest directory holding
-.outcomebound/manifest.json upward from the input's cwd, else from its own), and runs the manifest's
-Done commands from the target's root, in order, stopping at the first that does not pass, only while
-their digest is --done, and stopping them 30 seconds before --timeout. A working tree they were
-already checked on runs nothing: after a pass it prints {}, after a failure or an UNVERIFIED it
-repeats that verdict; a command the environment could not run is not remembered. A known failure, a
-command that fails with the exit code it had when adopt last measured Done and names no failure id
-that measurement did not (kept in the Git common directory), holds nothing and the next command
-runs; once it passes, it leaves that record. Any other failure while the input's stop_hook_active is
-false holds the finish, its report the reason the agent reads; a pass, a failure after that, a known
-failure alone, a repeated verdict, a digest that no longer matches, a missing manifest, a command
-stopped at the time limit and one the hook's environment could not run (confirmed from its
-diagnostic) go to the person as systemMessage and hold nothing. On claude-code, while
-background_tasks or session_crons is non-empty, a stop on a tree Done did not last run on skips Done
-once and tells the person so; the next such stop runs it. A repeated verdict is told once per
-session and tree.
+.outcomebound/manifest.json upward from the input's cwd, else from its own), and checks the
+manifest's Done commands, only while their digest is --done. No turn end waits for Done. On a row
+whose harness table entry has a wake (claude-code, asyncRewake) the entry runs in the background
+and is the run: it runs Done from the target's root, in order, stopping at the first that does
+not pass and 30 seconds before --timeout, and exits 2 with the report on stderr only on a failure
+that holds; on every other end it exits 0 and prints nothing. On any other row (codex) the stop
+reads, decides and prints its JSON within 30 seconds, then starts the run detached; a later stop
+delivers what the run found: a failure as decision block, everything else to the person as
+systemMessage.
+
+A tree already checked runs nothing. A known failure (adopt measured it) holds nothing. A failure
+goes to the model at most once for each signature in a session, only from a run of that session,
+and never where the tree the turn began with had it and another session recorded it or this
+session was held for it. A pass, a failure told and not held, a run that did not finish and each
+UNVERIFIED go to the person once for each session, tree and kind: on codex at the stop, on
+claude-code through the turn-start entry.
 
 With --mark it runs at a turn's first prompt instead: it keeps the target's HEAD and working tree
-in the Git directory, prints nothing, and exits 0 whatever goes wrong. A stop on that same HEAD and
-tree runs nothing and holds nothing; where the tree changed, a failure the tree it began with
-already had, with the same failure ids, is reported and not held."""
+in the Git directory and exits 0 whatever goes wrong; on claude-code it prints the person's
+untold notices as systemMessage, and nothing else. With --status [FOLDER] it prints the last run
+and the record of the current tree, writes nothing and exits 0."""
 EPILOG = """\
-exit: 0 whenever it ran, its verdict as JSON on stdout; 1 on a usage error, never 2, which a
-harness reads as holding the finish."""
+exit: 0 whenever it ran (its verdict as JSON on stdout at a codex stop); 2 only where a claude-code
+run holds a failure, its report on stderr; 1 on a usage error, never 2."""
 
 
 class _Parser(argparse.ArgumentParser):
@@ -2144,14 +3523,21 @@ def _parser() -> argparse.ArgumentParser:
         "--mark",
         action="store_true",
         help="at a turn's first prompt: keep the commit and tree the turn begins with, print "
-        "nothing and exit 0 whatever goes wrong",
+        "only the person's notices (claude-code) and exit 0 whatever goes wrong",
     )
+    parser.add_argument(
+        "--constant-time",
+        action="store_true",
+        help="the entry of the constant-time stop; an engine from before it refuses the entry",
+    )
+    parser.add_argument("--run", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--input", default="", help=argparse.SUPPRESS)
     parser.add_argument(
         "--timeout",
         type=_seconds,
         default=DEFAULT_TIMEOUT,
         metavar="SECONDS",
-        help=f"the entry's timeout, which the commands stop {MARGIN_SECONDS} seconds before; "
+        help=f"the run's limit, which the commands stop {MARGIN_SECONDS} seconds before; "
         f"default {DEFAULT_TIMEOUT}, the value entries written without it carry",
     )
     return parser
@@ -2169,7 +3555,8 @@ def _seconds(text: str) -> int:
 
 def _begin(words: Sequence[str]) -> int:
     """The `--mark` mode: what a prompt must never fail on, so every error ends as exit 0 with
-    nothing printed and nothing written."""
+    nothing printed and nothing written. On a row whose delivery is a wake it prints the
+    person's untold notices as one `systemMessage`, and nothing else."""
 
     with contextlib.suppress(Exception, SystemExit):
         with contextlib.redirect_stderr(io.StringIO()):
@@ -2177,15 +3564,94 @@ def _begin(words: Sequence[str]) -> int:
         row = adapters.table().get(args.harness)
         payload = read_input(getattr(sys.stdin, "buffer", None))
         session = prompt_input(row, payload) if DIGEST.fullmatch(args.done) else None
-        if session is not None:
-            begin_turn(args.done, payload, Path.cwd(), session)
+        if session is None:
+            return 0
+        # One budget for the whole entry, within the harness's timeout for it.
+        deadline = time.monotonic() + MARK_SECONDS
+        began = begin_turn(args.done, payload, Path.cwd(), session, deadline)
+        hook = hook_of(row)
+        if began is None or hook is None or not isinstance(hook.get("wake"), dict):
+            return 0
+        target, tree = began
+        if tree is None:
+            tree = tree_digest(target, args.done, deadline)
+        texts = turn_notices(target, session, tree, args.done, deadline)
+        if texts:
+            sys.stdout.write(json.dumps({"systemMessage": "\n\n".join(texts)}) + "\n")
+            sys.stdout.flush()
     return 0
+
+
+def _status(words: Sequence[str]) -> int:
+    rest = [word for word in words if word != "--status"]
+    if len(rest) > 1 or (rest and rest[0].startswith("-")):
+        sys.stderr.write(f"usage: outcomebound {ID} --status [FOLDER]\n")
+        return 1
+    folder = Path(native_path(rest[0])) if rest else Path.cwd()
+    try:
+        sys.stdout.write(status(folder))
+    except Exception as error:
+        sys.stdout.write(
+            f"finish-check status: could not be read: {type(error).__name__}: {error}\n"
+        )
+    sys.stdout.flush()
+    return 0
+
+
+def _close_stdout() -> None:
+    """Close standard output, so that the harness reads the stop's JSON to its end before the
+    run starts: the stream, and the descriptor under it, which is pointed at the null device."""
+
+    with contextlib.suppress(Exception):
+        stream = sys.stdout
+        try:
+            number: int | None = stream.fileno()
+        except (OSError, ValueError, io.UnsupportedOperation):
+            number = None
+        stream.flush()
+        stream.close()
+        if number is not None:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, number)
+            os.close(devnull)
+
+
+def _detached(entry: Entry, given: str) -> int:
+    """The `--run` mode a codex stop starts: the run, with the stop's input and the mark the stop
+    trusted in `given`. Nobody reads what it prints, so it prints nothing and exits 0."""
+
+    try:
+        payload = json.loads(given)
+    except ValueError:
+        payload = None
+    payload = payload if isinstance(payload, dict) else None
+    mark = _given_mark(payload.pop("finish_check_mark", None)) if payload else None
+    with contextlib.suppress(Exception):
+        run(entry, payload, Path.cwd(), wake=False, given=mark)
+    return 0
+
+
+def _woken(entry: Entry, payload: dict[str, Any] | None) -> int:
+    """The entry on a row whose delivery is a wake: the run, which exits 2 with the report on
+    standard error only on a failure that holds, and otherwise prints nothing on either
+    stream, since an async hook's output reaches the model on its next turn."""
+
+    try:
+        code, text = run(entry, payload, Path.cwd(), wake=True)
+    except Exception:
+        return 0
+    if code == 2:
+        sys.stderr.write(text + "\n")
+        sys.stderr.flush()
+    return code
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     words = list(sys.argv[1:] if argv is None else argv)
     if "--mark" in words:
         return _begin(words)
+    if "--status" in words:
+        return _status(words)
     parser = _parser()
     args = parser.parse_args(words)
     try:
@@ -2196,10 +3662,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"{args.harness}: not available yet: {unavailable(args.harness)}")
     if not DIGEST.fullmatch(args.done):
         parser.error("--done takes the 64-character digest adopt wrote")
+    entry = Entry(args.harness, hook, args.done, args.timeout)
+    if args.run:
+        return _detached(entry, args.input)
     payload = read_input(getattr(sys.stdin, "buffer", None))
-    verdict = check(args.harness, hook, args.done, payload, Path.cwd(), args.timeout)
+    if isinstance(hook.get("wake"), dict):
+        return _woken(entry, payload)
+    try:
+        verdict, start = stop(entry, payload, Path.cwd())
+    except Exception:
+        # A stop must never fail the turn end: nothing for the model, nothing started.
+        verdict, start = {}, None
     sys.stdout.write(json.dumps(verdict) + "\n")
     sys.stdout.flush()
+    _close_stdout()
+    if start is not None:
+        target, _ = find_target(payload, Path.cwd())
+        with contextlib.suppress(OSError):
+            programs.start_detached(start, cwd=target)
     return 0
 
 

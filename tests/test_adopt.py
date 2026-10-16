@@ -26,6 +26,7 @@ import pytest
 
 from outcomebound_tools import adopt, facts, fileplan, finish_check, fragments, identity, paths
 from outcomebound_tools.declared_tests import PYTEST
+from tests import finish_helpers
 from tests.adopt_helpers import (
     GIT,
     ROOT,
@@ -1656,6 +1657,37 @@ def test_detect_on_a_folder_with_only_git_names_the_new_project_route(
     assert "a new project starts" not in out and "Start a new project" not in out
 
 
+SCAFFOLD_LINE = (
+    "# a new project: outcomebound scaffold . --lifecycle <preset> previews the files of its "
+    "lifecycle; the new-project reference says how to choose\n"
+)
+
+
+def test_detect_on_an_empty_repository_names_the_scaffold_preview(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--detect` in a folder with only `.git` does not name the scaffold's preview
+    where the engine holds the scaffold manifest, names it where the engine has none, or names it
+    for a folder that holds any other file."""
+
+    source = engine_copy(tmp_path)
+    empty = repo(tmp_path / "empty")
+    code_only = repo(tmp_path / "code", {"app.py": "x = 1\n"})
+
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert "outcomebound scaffold" not in out
+
+    manifest = source / "templates/scaffold/scaffold.json"
+    manifest.parent.mkdir(parents=True)
+    shutil.copy2(ROOT / "templates/scaffold/scaffold.json", manifest)
+    _, out, _ = run(capsys, str(empty), "--detect", source=source)
+    assert SCAFFOLD_LINE in out
+    assert out.index("a new project starts from this command") < out.index(SCAFFOLD_LINE)
+
+    _, out, _ = run(capsys, str(code_only), "--detect", source=source)
+    assert "outcomebound scaffold" not in out
+
+
 @pytest.mark.skipif(WINDOWS, reason="a control character cannot be part of a Windows file name")
 def test_detect_escapes_every_string_the_target_gave(tmp_path: Path, capsys: Capture) -> None:
     """Breaks if a path, a CI command, a pattern or a value that the target holds reaches the
@@ -2208,20 +2240,58 @@ def hook_records(target: Path) -> list[dict[str, Any]]:
 
 def fire(target: Path, command: str) -> dict[str, Any]:
     """Run an entry's command as its harness would, `engine()` standing in for the name on
-    PATH, with the stop input both rows send when the guard is unset."""
+    PATH, with the stop input both rows send when the guard is unset, and return what reaches
+    someone, in codex's form. On claude-code the entry is the run: it exits 2 with the report on
+    stderr where it holds, and otherwise prints nothing, so the person's `--status` stands in
+    for the message. On codex a stop that starts the run prints `{}`; the next stop, once the
+    run has ended, delivers its verdict."""
 
     words = shlex.split(command)
     assert words[0] == "outcomebound"
-    done = subprocess.run(
-        engine(*words[1:]),
-        input=json.dumps({"stop_hook_active": False}).encode(),
-        cwd=target,
-        env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
-        capture_output=True,
-        check=True,
-    )
+
+    def once() -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            engine(*words[1:]),
+            input=json.dumps({"stop_hook_active": False, "session_id": "s"}).encode(),
+            cwd=target,
+            env={**os.environ, "CLAUDE_PROJECT_DIR": str(target)},
+            capture_output=True,
+            check=False,
+        )
+
+    since = finish_helpers.now()
+    done = once()
+    if "claude-code" in words:
+        if done.returncode == 2:
+            return {"decision": "block", "reason": done.stderr.decode()}
+        assert (done.returncode, done.stdout, done.stderr) == (0, b"", b""), done
+        record = finish_helpers.run_record(target) or {}
+        when = finish_helpers.started_at(record)
+        ran = when is not None and when >= since
+        outcome = (record.get("ended") or {}).get("outcome")
+        if not ran or outcome in (finish_check.UNCHANGED, finish_check.RECORDED):
+            return {}
+        # What the person reads: the messages `--status` shows, without its own header lines.
+        shown = finish_helpers.status(target).splitlines()
+        told = [line for line in shown if line.startswith("finish-check ")][1:]
+        return {"systemMessage": "\n".join(told)}
+    assert done.returncode == 0, done.stderr
     verdict: dict[str, Any] = json.loads(done.stdout)
-    return verdict
+    started = None
+    # A detached run can take seconds to start on a loaded or Windows runner.
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and started is None:
+        found = finish_helpers.run_record(target) or {}
+        when = finish_helpers.started_at(found)
+        started = when if when is not None and when >= since else None
+        time.sleep(0.05)
+    if verdict or started is None:
+        return verdict
+    finish_helpers.wait_for_run(target, since)
+    again = once()
+    assert again.returncode == 0, again.stderr
+    later: dict[str, Any] = json.loads(again.stdout)
+    return later
 
 
 @pytest.mark.parametrize("seeded", [True, False], ids=["project-settings", "no-settings"])
@@ -2244,7 +2314,7 @@ def test_finish_check_installs_checks_and_removes_its_entry_per_row(
     document = json.loads(text)
     ours = finish_check.entry(row, finish_check.done_digest(["true"]))
     assert document["hooks"]["Stop"][-1] == ours
-    assert ours["hooks"][0]["timeout"] == 600
+    assert ours["hooks"][0]["timeout"] == (660 if row == "claude-code" else 30)
     assert ours["hooks"][0]["command"].endswith(" --timeout 600")
     if seeded:
         assert list(document) == ["zeta", "hooks", "alpha"]
@@ -2388,8 +2458,9 @@ def test_finish_timeout_is_written_kept_and_changed_in_the_one_entry(
     assert stop() == [finish_check.entry("codex", digest, 1200)]
     assert stop()[0]["hooks"][0] == {
         "type": "command",
-        "command": f"outcomebound finish-check --harness codex --done {digest} --timeout 1200",
-        "timeout": 1200,
+        "command": f"outcomebound finish-check --constant-time --harness codex --done {digest} "
+        "--timeout 1200",
+        "timeout": 30,
     }
     assert [r["timeout"] for r in hook_records(target) if r["id"] == "finish-check"] == [1200]
     write(target / "changed.txt", "a change\n")
@@ -2956,6 +3027,171 @@ def test_the_turn_start_entry_runs_the_verb_to_a_mark_and_prints_nothing(
     assert (target / ".git" / finish_check.MARK).is_file()
 
 
+def stop_groups(target: Path, path: str) -> list[dict[str, Any]]:
+    """The groups under the settings document's `Stop` event that run the finish check."""
+
+    document = json.loads((target / path).read_text(encoding="utf-8"))
+    return [group for group in document["hooks"]["Stop"] if finish_check.marked(group)]
+
+
+def test_claude_code_gets_one_wake_entry_with_the_limit_plus_60_s(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if claude-code gets a synchronous stop entry beside the wake entry, which runs in
+    parallel with it and races it on the mark and the lock; if the entry waits for Done (no
+    `asyncRewake`); or if the harness's own end of it can come before the run ends itself."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments, "--finish-timeout", "900")[0] == 0
+
+    [group] = stop_groups(target, SETTINGS["claude-code"])
+    digest = finish_check.done_digest(["true"])
+    assert group == {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"outcomebound finish-check --constant-time --harness claude-code "
+                f"--done {digest} --timeout 900",
+                "asyncRewake": True,
+                "timeout": 960,
+            }
+        ]
+    }
+    assert group == finish_check.entry("claude-code", digest, 900)
+
+
+def test_codex_gets_a_stop_entry_with_a_30_s_timeout(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if the codex stop entry gives the harness the run's whole limit, so that a stop
+    waits for Done, or loses the run's limit from its own command."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "codex", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments, "--finish-timeout", "900")[0] == 0
+
+    [group] = stop_groups(target, SETTINGS["codex"])
+    digest = finish_check.done_digest(["true"])
+    assert group == {
+        "hooks": [
+            {
+                "type": "command",
+                "command": f"outcomebound finish-check --constant-time --harness codex "
+                f"--done {digest} --timeout 900",
+                "timeout": 30,
+            }
+        ]
+    }
+
+
+def test_the_hook_record_timeout_is_the_run_limit(tmp_path: Path, capsys: Capture) -> None:
+    """Breaks if the record keeps the entry's own `timeout` (the limit plus 60 on claude-code, 30
+    on codex), which the next install would read as the run's limit and so change it."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code,codex", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments, "--finish-timeout", "900")[0] == 0
+
+    records = [r for r in hook_records(target) if r["id"] == "finish-check"]
+    assert [(r["harness"], r["timeout"]) for r in records] == [("claude-code", 900), ("codex", 900)]
+    before = snapshot(target)
+    assert run(capsys, str(target))[0] == 0 and snapshot(target) == before
+
+
+def earlier_entry(target: Path, row: str) -> dict[str, Any]:
+    """Put back the stop entry an engine before the constant-time stop wrote, synchronous and
+    without `--constant-time`, with a record that holds its digest, as an install of that
+    engine left it."""
+
+    digest = finish_check.done_digest(["true"])
+    line = f"outcomebound finish-check --harness {row} --done {digest} --timeout 600"
+    earlier = {"hooks": [{"type": "command", "command": line, "timeout": 600}]}
+    path = target / SETTINGS[row]
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["hooks"]["Stop"] = [earlier]
+    write(path, json.dumps(document, indent=2) + "\n")
+    recorded = manifest(target)
+    for record in recorded["artifacts"]:
+        if record["kind"] == "hook" and record["id"] == "finish-check" and record["harness"] == row:
+            record["sha256"] = sha(finish_check.canonical(earlier))
+    write(target / adopt.MANIFEST, json.dumps(recorded))
+    return earlier
+
+
+@pytest.mark.parametrize("row", sorted(SETTINGS))
+def test_check_reads_an_entry_without_constant_time_stale_and_an_upgrade_rewrites_it(
+    tmp_path: Path, capsys: Capture, row: str
+) -> None:
+    """Breaks if `--check` reads an install of the earlier entry as current, which leaves every
+    turn end waiting for Done, if it names no command that brings it current, or if an upgrade
+    with no flag leaves it."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", row, "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    earlier_entry(target, row)
+    name = f"{SETTINGS[row]} (finish-check)"
+
+    _, out, _ = run(capsys, str(target), "--check")
+
+    assert states(out)[name] == "stale"
+    assert next_lines(out) == [
+        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
+    ]
+    assert run(capsys, str(target))[0] == 0
+    digest = finish_check.done_digest(["true"])
+    assert stop_groups(target, SETTINGS[row]) == [finish_check.entry(row, digest)]
+    assert "--constant-time" in stop_groups(target, SETTINGS[row])[0]["hooks"][0]["command"]
+    assert states(run(capsys, str(target), "--check")[1])[name] == "current"
+
+
+def test_a_codex_install_that_changes_the_stop_entry_prints_the_trust_line(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the upgrade to the constant-time entry changes the codex stop entry silently:
+    codex skips a changed hook until each person trusts it again in /hooks, so the check would
+    stop with nobody told."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code,codex", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    for row in SETTINGS:
+        earlier_entry(target, row)
+
+    code, out, _ = run(capsys, str(target))
+
+    assert code == 0
+    assert "action   codex finish-check: the entry changed" in out
+    assert finish_check.REVIEW_AGAIN["codex"] in out
+    assert "claude-code finish-check: the entry changed" not in out
+
+
+@pytest.mark.parametrize("cursor", [True, False], ids=["with-cursor", "without-cursor"])
+def test_an_install_with_cursor_selected_warns_of_the_wake_entry(
+    tmp_path: Path, capsys: Capture, cursor: bool
+) -> None:
+    """Breaks if an install that selects Cursor beside claude-code writes the wake entry with no
+    word that Cursor runs the hooks of .claude/settings.json by default and is not documented to
+    read `asyncRewake`, so there the entry runs for all of Done at each stop and never holds; or
+    if an install without Cursor carries that warning."""
+
+    target = repo(tmp_path / "t")
+    selected = "claude-code,cursor" if cursor else "claude-code"
+    code, out, err = run(
+        capsys, str(target), "--harness", selected, "--done", "true", "--finish-check"
+    )
+
+    assert code == 0, err
+    assert len(stop_groups(target, SETTINGS["claude-code"])) == 1
+    warned = [line for line in out.splitlines() if "asyncRewake" in line]
+    if not cursor:
+        assert warned == []
+        return
+    [line] = warned
+    assert line.startswith("warning  ")
+    assert "Cursor" in line and "for all of Done at each stop" in line
+    assert "Include Third-Party Plugins, Skills, and Other Configs" in line
+
+
 # --- the writer -------------------------------------------------------------------
 
 
@@ -3410,3 +3646,307 @@ def test_an_install_warns_of_each_hook_that_names_a_project_file_from_the_workin
     assert "PreToolUse hook `bash scripts/hooks/guard.sh`" in warned[0]
     assert "Stop hook `./scripts/hooks/guard.sh`" in warned[1]
     assert all("$CLAUDE_PROJECT_DIR" in line for line in warned)
+
+
+# --- hook entries that run the finish check and no record holds ------------------
+
+DIGEST = "0" * 64
+HAND_MADE = finish_check.command("claude-code", DIGEST, 600)
+UNMANAGED_FILES = [".claude/settings.json", ".claude/settings.local.json", ".codex/hooks.json"]
+
+
+def hook_settings(*commands: str, event: str = "Stop") -> str:
+    """A settings document with one group under `event` for each command."""
+
+    groups = [{"hooks": [{"type": "command", "command": command}]} for command in commands]
+    return json.dumps({"hooks": {event: groups}}, indent=2) + "\n"
+
+
+def unmanaged_lines(out: str) -> list[str]:
+    return [line for line in out.splitlines() if line.startswith("unmanaged")]
+
+
+def installed_without_finish_check(tmp_path: Path, capsys: Capture) -> Path:
+    """A project with a current install that has Done recorded and no finish-check entry."""
+
+    target = repo(tmp_path / "t")
+    assert run(capsys, str(target), "--harness", "claude-code", "--done", "true")[0] == 0
+    return target
+
+
+def test_check_reports_a_hand_made_stop_entry_with_its_replacement_and_counts_it(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a hand-made finish-check entry that no record holds, with no turn-start entry
+    beside it, is passed over, or if the exit or the `next:` line does not count and name it."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    write(target / ".claude/settings.json", hook_settings(HAND_MADE))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    fix = f"outcomebound adopt {paths.shell_path(target)} --finish-check"
+    assert code == 1
+    (line,) = unmanaged_lines(out)
+    assert ".claude/settings.json" in line and "Stop" in line and HAND_MADE in line
+    assert f"`{fix}`" in line
+    assert next_lines(out) == [
+        f"next: remove each unmanaged entry, then {fix} writes both managed entries"
+    ]
+    assert run(capsys, str(target), "--check")[0] == 1
+
+
+@pytest.mark.parametrize("path", UNMANAGED_FILES)
+def test_check_reads_each_hook_file_adopt_reads_and_counts_each_entry(
+    tmp_path: Path, capsys: Capture, path: str
+) -> None:
+    """Breaks if an entry in `.claude/settings.local.json` or `.codex/hooks.json`, or under an
+    event no record names, goes unreported, or if each entry is not one in the exit."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    (target / path).parent.mkdir(exist_ok=True)
+    write(target / path, hook_settings(HAND_MADE, HAND_MADE + " --again", event="SessionEnd"))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 2
+    lines = unmanaged_lines(out)
+    assert len(lines) == 2 and all(path in line and "SessionEnd" in line for line in lines)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        f"sh -c 'outcomebound finish-check --harness claude-code --done {DIGEST}'",
+        f'bash -c "$HOME/.local/bin/outcomebound finish-check --done {DIGEST}"',
+        f"python3 -m outcomebound_tools.finish_check --harness claude-code --done {DIGEST}",
+        f"python -m outcomebound_tools finish-check --harness claude-code --done {DIGEST}",
+        "C:/tools/outcomebound.exe finish-check --mark",
+        f"'outcomebound' finish-check --done {DIGEST}",
+        f'"outcomebound" "finish-check" --done {DIGEST}',
+        f"outcomebound 'finish-check' --done {DIGEST}",
+        f"python3 -moutcomebound_tools.finish_check --done {DIGEST}",
+    ],
+    ids=[
+        "sh-c",
+        "bash-c-path",
+        "module-underscore",
+        "module-verb",
+        "windows-exe",
+        "quoted-program",
+        "both-quoted",
+        "quoted-verb",
+        "module-glued",
+    ],
+)
+def test_check_reads_an_entry_inside_sh_c_and_both_module_forms(
+    tmp_path: Path, capsys: Capture, command: str
+) -> None:
+    """Breaks if a finish check run through `sh -c`, a path, either Python module form or a
+    Windows launcher name is not seen."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    write(target / ".claude/settings.json", hook_settings(command))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1 and len(unmanaged_lines(out)) == 1
+
+
+def test_check_does_not_read_a_wrapper_script_or_a_hook_that_runs_another_verb(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the lexical match opens a script a hook names (the stated residual), or takes
+    another verb, another program or a longer word for the finish check."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    (target / "scripts").mkdir()
+    write(target / "scripts/wrap.sh", "#!/bin/sh\noutcomebound finish-check --done x\n")
+    controls = [
+        "./scripts/wrap.sh",
+        "outcomebound floor check .",
+        "outcomebound finish-checker",
+        "my-outcomebound finish-check",
+        "echo outcomebound-finish-check",
+        "python -m outcomebound_tools floor check .",
+    ]
+    write(target / ".claude/settings.json", hook_settings(*controls))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 0 and unmanaged_lines(out) == [] and next_lines(out) == []
+
+
+def test_detect_reports_an_entry_on_a_comment_line_with_no_install_and_the_same_exit(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if `--detect` leaves an entry out where no manifest exists, prints it other than
+    as a `#` line, escapes none of the command's control characters, or changes its exit."""
+
+    target = repo(tmp_path / "t", {".claude/settings.json": hook_settings(HAND_MADE + " \x1b[31m")})
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0
+    notes = [line for line in notes_of(out) if line.startswith("# unmanaged: ")]
+    assert len(notes) == 1 and "\x1b" not in out and "\\x1b[31m" in notes[0]
+    assert ".claude/settings.json" in notes[0] and "Stop" in notes[0]
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 2 and len(unmanaged_lines(out)) == 1
+
+
+def test_a_recorded_entry_is_not_reported_and_an_edited_one_is_not_counted_twice(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if adopt's own two entries read `unmanaged`, if an entry edited by hand reads
+    both `edited` and `unmanaged`, or if a second, hand-made copy is not the one `unmanaged`."""
+
+    target = repo(tmp_path / "t")
+    arguments = ("--harness", "claude-code", "--done", "true", "--finish-check")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and unmanaged_lines(out) == []
+
+    settings, name = target / ".claude/settings.json", ".claude/settings.json (finish-check)"
+    document = json.loads(settings.read_text(encoding="utf-8"))
+    document["hooks"]["Stop"][0]["hooks"][0]["timeout"] = 30
+    write(settings, json.dumps(document, indent=2) + "\n")
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 1 and states(out)[name] == "edited" and unmanaged_lines(out) == []
+
+    document["hooks"]["Stop"].append({"hooks": [{"type": "command", "command": HAND_MADE}]})
+    write(settings, json.dumps(document, indent=2) + "\n")
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 2 and states(out)[name] == "edited"
+    (line,) = unmanaged_lines(out)
+    assert HAND_MADE in line
+    assert "--force makes every record current; for each unmanaged entry" in next_lines(out)[0]
+
+
+def test_an_install_warns_of_an_entry_it_did_not_write_and_changes_no_byte_of_it(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install refuses over the entry, removes or rewrites it, does not warn of
+    it, or warns of the two entries it writes itself."""
+
+    module = f"python3 -m outcomebound_tools finish-check --harness claude-code --done {DIGEST}"
+    target = repo(tmp_path / "t", {".claude/settings.json": hook_settings(module)})
+
+    code, out, _ = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0
+    warned = [line for line in out.splitlines() if "runs the finish check" in line]
+    assert len(warned) == 1 and warned[0].startswith("warning") and module in warned[0]
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == module
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 1 and len(unmanaged_lines(out)) == 1
+    assert states(out)[".claude/settings.json (finish-check)"] == "current"
+
+
+def stop_and_start(stop: str | None, start: str | None, stop_event: str = "Stop") -> str:
+    """A settings document with one hand-made group under the stop event and one under the
+    turn-start event, for each command given."""
+
+    hooks = {}
+    for event, command in ((stop_event, stop), ("UserPromptSubmit", start)):
+        if command is not None:
+            hooks[event] = [{"hooks": [{"type": "command", "command": command, "timeout": 5}]}]
+    return json.dumps({"hooks": hooks}, indent=2) + "\n"
+
+
+def test_an_install_takes_over_an_entry_in_its_own_command_shape_without_force(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an install refuses an unrecorded entry that is exactly adopt's command shape,
+    for the same harness and event, or does not rewrite and record it, or adds a second copy, or
+    leaves the old command out of the one line that says it took the entry over."""
+
+    stop = finish_check.command("claude-code", DIGEST, 900)
+    start = finish_check.mark_command("claude-code", DIGEST)
+    target = repo(tmp_path / "t", {".claude/settings.json": stop_and_start(stop, start)})
+
+    code, out, err = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0, err
+    taken = [line for line in out.splitlines() if "took over a hand-made finish-check" in line]
+    assert len(taken) == 2 and all(".claude/settings.json" in line for line in taken)
+    assert stop in taken[0] and start in taken[1]
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    digest = finish_check.done_digest(["true"])
+    assert document["hooks"]["Stop"] == [finish_check.entry("claude-code", digest)]
+    assert document["hooks"]["UserPromptSubmit"] == [finish_check.mark_entry("claude-code", digest)]
+    assert len(hook_records(target)) == 2
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and unmanaged_lines(out) == []
+
+
+@pytest.mark.parametrize(
+    "stop, event",
+    [
+        (finish_check.command("codex", DIGEST, 600), "Stop"),
+        (finish_check.command("claude-code", DIGEST, 600), "SessionEnd"),
+        (finish_check.command("claude-code", DIGEST, 600) + " --extra", "Stop"),
+        (finish_check.command("claude-code", DIGEST[:-1], 600), "Stop"),
+        (f"outcomebound finish-check --harness claude-code --done {DIGEST} --timeout 600", "Stop"),
+    ],
+    ids=["other-harness", "other-event", "other-shape", "short-digest", "earlier-shape"],
+)
+def test_an_install_leaves_every_other_unmanaged_entry_as_it_is_and_warns(
+    tmp_path: Path, capsys: Capture, stop: str, event: str
+) -> None:
+    """Breaks if an install takes over or refuses an entry that is not exactly adopt's command
+    shape for this harness and event, or does not keep its bytes and warn of it."""
+
+    target = repo(
+        tmp_path / "t", {".claude/settings.json": stop_and_start(stop, None, stop_event=event)}
+    )
+
+    code, out, err = run(
+        capsys, str(target), "--harness", "claude-code", "--done", "true", "--finish-check"
+    )
+
+    assert code == 0, err
+    assert "took over" not in out
+    warned = [line for line in out.splitlines() if "runs the finish check" in line]
+    assert len(warned) == 1 and warned[0].startswith("warning") and stop in warned[0]
+    document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
+    assert document["hooks"][event][0]["hooks"][0]["command"] == stop
+    assert (
+        finish_check.entry("claude-code", finish_check.done_digest(["true"]))
+        in (document["hooks"]["Stop"])
+    )
+
+
+@pytest.mark.parametrize(
+    "name, data, reason",
+    [
+        (".claude/settings.json", b'{\n  // comment\n  "hooks": {}\n}\n', "not valid JSON"),
+        (".claude/settings.local.json", b'{"model": "\xff"}', "not UTF-8"),
+        (".codex/hooks.json", b'["hooks"]', "not a JSON object"),
+    ],
+    ids=["comments", "not-utf-8", "not-an-object"],
+)
+def test_check_and_detect_name_a_hook_file_they_cannot_read_and_count_nothing(
+    tmp_path: Path, capsys: Capture, name: str, data: bytes, reason: str
+) -> None:
+    """Breaks if a settings file that is not plain JSON or not UTF-8 is passed over in silence,
+    if its line leaves out the file or why, or if it moves either exit."""
+
+    target = installed_without_finish_check(tmp_path, capsys)
+    (target / name).parent.mkdir(exist_ok=True)
+    (target / name).write_bytes(data)
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 0 and next_lines(out) == []
+    (line,) = [line for line in out.splitlines() if line.startswith("UNVERIFIED")]
+    assert name in line and reason in line
+    code, out, _ = run(capsys, str(target), "--detect")
+    assert code == 0
+    (note,) = [line for line in notes_of(out) if line.startswith("# UNVERIFIED")]
+    assert name in note and reason in note

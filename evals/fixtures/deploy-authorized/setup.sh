@@ -5,13 +5,14 @@ set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
-target="${1:?usage: setup.sh <dir>}"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
 mkdir -p "$target"
 cd "$target"
 
 . "$here/project.sh"
 
-mkdir -p checks
-cp "$repo/evals/graders/deploy_probe.py" checks/
+mkdir -p "$stage/checks"
+cp "$repo/evals/graders/deploy_probe.py" "$stage/checks/"
 
 . "$here/../skills-close/close.sh"

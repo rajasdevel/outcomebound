@@ -5,7 +5,10 @@ junction either, and no name Windows cannot hold), every write staged with O_EXC
 renamed over its destination, and a refusal whenever a destination's bytes are not the bytes its
 caller read. Every destination is checked before the first write, and again just before its own
 rename. That is a recheck, not a compare-and-swap: an edit that lands in the instant between the
-last check and the rename is still overwritten, and no lock closes that window. A staging file left
+last check and the rename is still overwritten, and no lock closes that window. A destination the
+caller read as absent is created exclusively instead (a hard link of the stage, or an open with
+O_EXCL where the file system holds no link), so a file that appears in that instant is refused,
+never overwritten. A staging file left
 by an earlier run is refused before the first write and is never removed. Nothing here recovers an
 interrupted run, and a failure after the first write does not roll the earlier writes back; the
 target's Git history is the undo.
@@ -83,7 +86,7 @@ def write(
             def recheck(relative: str = relative) -> None:
                 _unchanged(root, relative, expected)
 
-            _replace(path, content, recheck)
+            _replace(path, content, recheck, create=expected[relative] is None)
 
 
 def _stage_of(path: Path) -> Path:
@@ -106,7 +109,12 @@ def _unchanged(root: Path, relative: str, expected: Mapping[str, bytes | None]) 
         raise WriteError(f"{relative} changed after it was read; nothing more was written")
 
 
-def _replace(path: Path, content: bytes, recheck: Callable[[], None]) -> None:
+def _replace(
+    path: Path, content: bytes, recheck: Callable[[], None], *, create: bool = False
+) -> None:
+    """Stage `content` beside `path`, recheck, then move it in: over the destination, or, with
+    `create`, only where nothing is there."""
+
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else NEW_FILE_MODE
     path.parent.mkdir(parents=True, exist_ok=True)
     stage = _stage_of(path)
@@ -123,9 +131,37 @@ def _replace(path: Path, content: bytes, recheck: Callable[[], None]) -> None:
             os.fsync(handle.fileno())
         os.chmod(stage, mode)
         recheck()
-        _move(stage, path)
+        if create:
+            _create(stage, path, content)
+        else:
+            _move(stage, path)
     finally:
         stage.unlink(missing_ok=True)
+
+
+def _create(stage: Path, path: Path, content: bytes) -> None:
+    """Make `path` from the stage only where nothing is there: a hard link, which fails on an
+    existing path, or, on a file system that holds no hard link, an exclusive open."""
+
+    try:
+        os.link(stage, path)
+        return
+    except FileExistsError as error:
+        raise WriteError(
+            f"{path.name} appeared after it was read; nothing more was written"
+        ) from error
+    except OSError:
+        pass
+    try:
+        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, NEW_FILE_MODE)
+    except FileExistsError as error:
+        raise WriteError(
+            f"{path.name} appeared after it was read; nothing more was written"
+        ) from error
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _move(stage: Path, path: Path) -> None:

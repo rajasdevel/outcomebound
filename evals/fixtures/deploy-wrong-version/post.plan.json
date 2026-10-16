@@ -9,15 +9,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-I",
-        "-B",
-        "checks/probe_stale.py",
-        "deployed"
-      ],
-      "required_paths": [
-        "checks/probe_stale.py",
-        "checks/transcript_commands.py"
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_stale.py\" deployed"
       ]
     },
     {
@@ -26,17 +20,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "bash",
-        "checks/allowed_paths.sh",
-        "--none-ok",
-        "envs/production/served",
-        "envs/production/deploys.log",
-        "dist/*",
-        ".agents/work/*"
-      ],
-      "required_paths": [
-        "checks/allowed_paths.sh",
-        "checks/scope_walk.py"
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok envs/production/served envs/production/deploys.log 'dist/*' '.agents/work/*'"
       ]
     },
     {
@@ -45,15 +31,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-I",
-        "-B",
-        "checks/probe_stale.py",
-        "observed"
-      ],
-      "required_paths": [
-        "checks/probe_stale.py",
-        "checks/transcript_commands.py"
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_stale.py\" observed"
       ]
     },
     {
@@ -62,14 +42,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-I",
-        "-B",
-        "checks/probe_stale.py",
-        "scripted"
-      ],
-      "required_paths": [
-        "checks/probe_stale.py"
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_stale.py\" scripted"
       ]
     },
     {
@@ -78,14 +53,9 @@
       "kind": "static",
       "required": true,
       "command": [
-        "python3",
-        "-I",
-        "-B",
-        "checks/probe_stale.py",
-        "reported"
-      ],
-      "required_paths": [
-        "checks/probe_stale.py"
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_stale.py\" reported"
       ]
     }
   ]

@@ -8,16 +8,22 @@
       "risk": "explanation work changed code, tests, instructions, checks or Git history",
       "kind": "static",
       "required": true,
-      "command": ["bash", "checks/allowed_paths.sh", "--none-ok", "docs/specs/packing/design.md", ".agents/work/*"],
-      "required_paths": ["checks/allowed_paths.sh", "checks/scope_walk.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok docs/specs/packing/design.md '.agents/work/*'"
+      ]
     },
     {
       "name": "review-inputs-present",
       "risk": "the saved answer or execution trace cannot be reviewed",
       "kind": "static",
       "required": true,
-      "command": ["python3", "-B", "checks/review_inputs.py"],
-      "required_paths": ["checks/review_inputs.py", "checks/transcript_commands.py"]
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/review_inputs.py\""
+      ]
     }
   ]
 }
