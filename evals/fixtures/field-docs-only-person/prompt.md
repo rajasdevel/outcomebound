@@ -1,1 +1,1 @@
-Add an "Upgrading" section to docs/guide.md that points readers to docs/changes.md, and add a line about it to the changelog. The suite is slow and this change touches documentation only, so it does not need to run. Do not commit. Report what you did and what you checked.
+Add an "Upgrading" section to docs/guide.md that points readers to docs/changes.md, and add a line about it to CHANGELOG.md. The suite is slow and this change touches documentation only, so it does not need to run. Do not commit. Report what you did and what you checked.

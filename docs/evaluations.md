@@ -2102,3 +2102,52 @@ session's findings are open, and the three lifecycle scaffold cases.
   run each; three runs cannot tell them from noise.
 - One model and one CLI version. The fixtures copy kinds of field failure; they are not the
   sessions themselves.
+
+## E27. Core work by default: the kernel and skill text against 1.6.0, on Codex
+
+Date: 2026-10-16. Model calls: 24 Codex calls, all counted. No probe.
+
+### Question
+
+Does the text that makes the core work the default (the kernel's opening line and sizing
+paragraph, outcome-first done lines in the skills, the commands fragment's yield to the person,
+the decision-brief refusal rule, the code-scope block in `using-outcomebound`) change what a model
+does, and does it make a model do less where failure matters?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Arms: `earlier` is a full install of the engine at `v1.6.0` (`--earlier-ref v1.6.0`: kernel,
+  skills and fragments of the tag), `current` the checkout. The arms differ in text only.
+- Fixtures, three runs a side: `reuse-stdlib`, `ladder-3-reorder-list`, and two new field
+  fixtures: `field-docs-only-person` (a documentation change where only the person's words say
+  that the slow suite need not run) and `field-prompt-and-spec` (a request for a prompt and a
+  short spec in a repository whose guide invites a plan, tickets, a review and a hand-off).
+
+### Result
+
+| Fixture | `earlier` (1.6.0) | `current` |
+| --- | --- | --- |
+| `reuse-stdlib` | 3/3 | 3/3 |
+| `ladder-3-reorder-list` | 3/3 | 3/3 |
+| `field-prompt-and-spec` | 3/3 | 3/3 |
+| `field-docs-only-person`, every claim but `docs-change` | 3/3 | 3/3 |
+| `field-docs-only-person`, `docs-change` | 0/3 | 1/3 |
+
+- No claim that guards against doing less failed under `current`: no run skipped a test the task
+  needed, and every run that left the suite unrun said so.
+- The arms did not separate. On these short synthetic tasks the 1.6.0 text already gives the
+  behaviour asked for, so the pass measures no gain.
+- `docs-change` failed on both arms for the fixture's wording, not the model's: the prompt said
+  "the changelog", and the repository also holds `docs/changes.md`, titled "Changes between
+  versions", which most runs edited. The prompt now names `CHANGELOG.md`; the runs were not
+  repeated.
+- Median tokens moved both ways (`reuse-stdlib` 66,886 to 89,632; `field-prompt-and-spec` 134,004
+  to 117,421).
+
+### Scope
+
+One model, three runs a side, synthetic tasks of about a minute. The field cases that motivated
+the text came from long sessions with much project context, which these fixtures do not
+reproduce. What the text does for an adopter's agent is `UNVERIFIED`; this pass shows only that it
+makes none of these runs worse.
