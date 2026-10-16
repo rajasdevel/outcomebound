@@ -2105,7 +2105,7 @@ session's findings are open, and the three lifecycle scaffold cases.
 
 ## E27. Core work by default: the kernel and skill text against 1.6.0, on Codex
 
-Date: 2026-10-16. Model calls: 24 Codex calls, all counted. No probe.
+Date: 2026-10-16 and 2026-10-17. Model calls: 48 Codex calls in two passes, all counted. No probe.
 
 ### Question
 
@@ -2144,6 +2144,24 @@ does, and does it make a model do less where failure matters?
   repeated.
 - Median tokens moved both ways (`reuse-stdlib` 66,886 to 89,632; `field-prompt-and-spec` 134,004
   to 117,421).
+
+### Second pass, on the final text
+
+Date: 2026-10-17. 24 Codex calls, all counted, same model, arms and fixtures. Between the passes
+the text gained the restored "neither underengineer nor overengineer" opening, the
+`using-outcomebound` ladder whose default is no mechanism, and the lifecycle presets' own
+defaults; the `field-docs-only-person` prompt names `CHANGELOG.md`.
+
+| Fixture | `earlier` (1.6.0) | `current` | Median tokens, `earlier` to `current` |
+| --- | --- | --- | --- |
+| `reuse-stdlib` | 3/3 | 3/3 | 67,554 to 66,665 |
+| `ladder-3-reorder-list` | 3/3 | 3/3 | 177,727 to 152,260 |
+| `field-prompt-and-spec` | 3/3 | 3/3 | 136,074 to 135,812 |
+| `field-docs-only-person` | 3/3 | 3/3 | 86,753 to 68,164 |
+
+Every claim passed on both arms, so the arms still do not separate on behaviour. The final text
+used fewer tokens on two fixtures and about the same on two; with three runs a side that is a
+direction, not a measured effect.
 
 ### Scope
 
