@@ -103,6 +103,10 @@ HARNESSES = (HARNESS,)
 # An earlier wording of the kernel, kept as a file so the arm runs in any checkout.
 EARLIER = "earlier"
 EARLIER_KERNEL = REPO / "evals" / "arms" / "earlier-kernel.md"
+# `--earlier-ref REF` makes the earlier arm a full install of the engine at that Git ref (its
+# kernel, its skills, its fragments), in place of the kernel wording kept in EARLIER_KERNEL.
+EARLIER_REF = ""
+_EARLIER_SOURCE: dict[str, Path] = {}
 # The kernel-off arm: the task alone, in a fixture that carries no OutcomeBound text.
 NONE = "none"
 # The current arm less the kernel's sizing paragraph, the one that opens with this phrase.
@@ -243,18 +247,58 @@ def _run(command: list[str], cwd: Path | None = None) -> tuple[int | None, str, 
     return done.returncode, done.stdout, done.stderr
 
 
+def earlier_source() -> Path:
+    """The engine tree at EARLIER_REF, exported once from this checkout's Git objects."""
+
+    if EARLIER_REF in _EARLIER_SOURCE:
+        return _EARLIER_SOURCE[EARLIER_REF]
+    target = Path(tempfile.mkdtemp(prefix="ob-earlier-source-"))
+    archive = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "archive",
+            EARLIER_REF,
+            "VERSION",
+            "templates",
+            "skills",
+            "fragments",
+            "adapters",
+        ],
+        capture_output=True,
+    )
+    if archive.returncode != 0:
+        raise SystemExit(
+            f"run: --earlier-ref {EARLIER_REF}: {archive.stderr.decode(errors='replace').strip()}"
+        )
+    unpacked = subprocess.run(
+        ["tar", "-x", "-C", str(target)], input=archive.stdout, capture_output=True
+    )
+    if unpacked.returncode != 0:
+        raise SystemExit(f"run: --earlier-ref {EARLIER_REF}: the export did not unpack")
+    _EARLIER_SOURCE[EARLIER_REF] = target
+    return target
+
+
+def earlier_install(arm: Arm) -> bool:
+    """Whether the arm is the earlier arm as an install of EARLIER_REF."""
+
+    return arm.name == EARLIER and bool(EARLIER_REF)
+
+
 def kernel(arm: str) -> str:
     """The arm's operating-contract block, sentinels included, as the model receives it; the
     kernel-off arm's is empty."""
 
     if arm == NONE:
         return ""
-    if arm == EARLIER:
+    if arm == EARLIER and not EARLIER_REF:
         return EARLIER_KERNEL.read_text(encoding="utf-8").strip("\n")
     from outcomebound_tools import adopt
 
     try:
-        text = adopt.kernel_block(REPO).strip("\n")
+        text = adopt.kernel_block(earlier_source() if arm == EARLIER else REPO).strip("\n")
     except adopt.AdoptError as error:
         raise SystemExit(f"run: the current arm cannot render its kernel: {error}") from None
     return without_sizing(text) if arm == UNSIZED else text
@@ -306,18 +350,19 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     nothing, whatever is selected."""
 
     text = kernel(name)
-    if name in (EARLIER, NONE):
+    if name == NONE or (name == EARLIER and not EARLIER_REF):
         return Arm(name, text, {}, None)
     from outcomebound_tools import adopt, facts, fragments
 
+    root = earlier_source() if name == EARLIER else REPO
     try:
-        (route,) = adopt.routes(REPO, [HARNESS])
-        chosen = fragments.select(fragments.load_all(REPO), selected) if selected else []
+        (route,) = adopt.routes(root, [HARNESS])
+        chosen = fragments.select(fragments.load_all(root), selected) if selected else []
         carried = fragments.SKILLS
         files = {
             f"{route.skills}/{skill}/{relative}": data
             for skill in carried
-            for relative, data in adopt.skill_files(REPO, skill).items()
+            for relative, data in adopt.skill_files(root, skill).items()
         }
         files.update(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
@@ -369,7 +414,7 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     condition, rendered by the engine as an install renders them.
     """
 
-    if arm.name not in INSTALLED:
+    if arm.name not in INSTALLED and not (arm.name == EARLIER and EARLIER_REF):
         return ""
     from outcomebound_tools import facts, fragments
 
@@ -377,7 +422,8 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         path = workdir / note
         if path.is_file():
             path.write_text(NOTE_POINTER.sub("", path.read_text(encoding="utf-8")), "utf-8")
-    chosen = fragments.select(fragments.load_all(REPO), arm.selected) if arm.selected else []
+    root = earlier_source() if arm.name == EARLIER else REPO
+    chosen = fragments.select(fragments.load_all(root), arm.selected) if arm.selected else []
     rendered = facts.render(workdir, chosen, [], ["AGENTS.md"], list(arm.skills))
     agents = workdir / "AGENTS.md"
     head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
@@ -700,7 +746,11 @@ def build_workspace(
     try:
         built = bounded_command(
             ["bash", str(fixture / "setup.sh"), str(workdir), str(stage)],
-            env={**fixture_setup_env(), "OB_EVAL_ARM": arm.name},
+            env={
+                **fixture_setup_env(),
+                "OB_EVAL_ARM": arm.name,
+                **({"OB_EVAL_SOURCE": str(earlier_source())} if earlier_install(arm) else {}),
+            },
             timeout=SETUP_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError) as problem:
@@ -1424,6 +1474,13 @@ def _parser() -> argparse.ArgumentParser:
         f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher",
     )
     parser.add_argument(
+        "--earlier-ref",
+        default="",
+        metavar="REF",
+        help="make the earlier arm a full install of the engine at this Git ref of the "
+        "checkout (kernel, skills, fragments), in place of the kept earlier kernel wording",
+    )
+    parser.add_argument(
         "--harness",
         choices=HARNESSES,
         default=HARNESS,
@@ -1573,6 +1630,15 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
     return 1 if failed else 0
 
 
+def set_earlier_ref(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Apply `--earlier-ref`: it changes the earlier arm only."""
+
+    global EARLIER_REF
+    if args.earlier_ref and args.arm != EARLIER:
+        parser.error("--earlier-ref changes the earlier arm: use --arm earlier")
+    EARLIER_REF = args.earlier_ref
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -1581,6 +1647,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.regrade:
         return regrade(Path(args.regrade), Path(args.out) if args.out else RAW / uuid.uuid4().hex)
     names = checked_fixtures(parser, args)
+    set_earlier_ref(parser, args)
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     root = workspace_root(args.workspace_root)
@@ -1606,6 +1673,7 @@ def _main(argv: list[str] | None = None) -> int:
         "date": datetime.date.today().isoformat(),
         "harness": tool.name,
         "arm": args.arm,
+        "earlier_ref": EARLIER_REF or None,
         "model": args.model,
         "effort": args.effort,
         "repetition": args.repetition,

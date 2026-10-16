@@ -541,6 +541,41 @@ def test_a_fixture_that_selects_the_tickets_fragment_runs_with_the_ticket_skills
     assert status["arm_files"] == RUN.load_arm("current").record()["arm_files"]
 
 
+def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_path: Path) -> None:
+    """`--earlier-ref REF` replaces the kept kernel wording with an install of the engine at REF:
+    its kernel, its ten skills (in the arm files and in the fixture's note path) and the pointers,
+    while the launcher stays this checkout's. Checked on HEAD, which every clone has."""
+
+    def at_head(path: str) -> bytes:
+        return subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+        ).stdout
+
+    done, out = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", "HEAD", *SMALL_FIX[2:]))
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    status = json.loads((out / "STATUS.json").read_text(encoding="utf-8"))
+    assert (status["arm"], status["earlier_ref"]) == ("earlier", "HEAD")
+    assert meta["arm_files"] and meta["arm_launcher"] == str(ROOT / LAUNCHER)
+    repo = Path(meta["fixture_repo"])
+    skill = at_head("skills/using-outcomebound/SKILL.md")
+    for root in (".agents/skills", ".outcomebound/skills"):
+        assert (repo / root / "using-outcomebound" / "SKILL.md").read_bytes() == skill
+    assert (repo / ".agents/skills/decision-brief/SKILL.md").is_file()
+    prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
+    assert "Task:" in prompt and "id=operating-contract" in prompt
+    assert hashlib.sha256(RUN.kernel("current").encode()).hexdigest() == meta["kernel_sha256"]
+
+
+def test_the_earlier_ref_is_refused_for_another_arm_and_for_an_unknown_ref(tmp_path: Path) -> None:
+    done, _ = _invoke(tmp_path, ("--earlier-ref", "HEAD", *SMALL_FIX))
+    assert done.returncode == 2 and "--earlier-ref changes the earlier arm" in done.stderr
+    done, _ = _invoke(
+        tmp_path, ("--arm", "earlier", "--earlier-ref", "no-such-ref", *SMALL_FIX[2:])
+    )
+    assert done.returncode != 0 and "--earlier-ref no-such-ref" in done.stderr
+
+
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:
     """End to end on small-fix: the keys never reach codex or the commands it runs, codex
     reads the arm's kernel ahead of the task and is named the model, and the post-checks
@@ -675,9 +710,11 @@ def test_specialized_fixtures_run_only_when_named() -> None:
     assert {
         "field-commands-hazards",
         "field-docs-only-done",
+        "field-docs-only-person",
         "field-goal-person-items",
         "field-order-class",
         "field-parallel-report",
+        "field-prompt-and-spec",
         "field-report-gap",
         "field-review-verdict",
         "scaffold-client",
