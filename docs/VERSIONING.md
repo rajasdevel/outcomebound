@@ -179,4 +179,6 @@ release, so that PyPI holds the bytes that carry the provenance, and uploads the
 `pypa/gh-action-pypi-publish` action. It runs in the GitHub environment `pypi`, has no checkout,
 and is the only job besides `release` that holds `id-token: write`, on the job and not on the
 workflow. If the upload fails after the release is published, the GitHub release stays; re-run
-the failed job from the Actions page, or, if PyPI refused the files, make a new version.
+the failed job from the Actions page. The job skips a file that PyPI already holds
+(`skip-existing`), so a re-run after a partial upload uploads only the file that is missing. If
+PyPI refused the files, make a new version.

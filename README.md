@@ -42,7 +42,7 @@ and hand-offs for each stage. Your project records its own lifecycle in a few li
 You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree.
 
 ```sh
-uv tool install git+https://github.com/rajasdevel/outcomebound@v1.5.0
+uv tool install git+https://github.com/rajasdevel/outcomebound@v1.6.0
 cd your-repo
 outcomebound adopt . --detect       # writes nothing; prints the install command for your files
 ```
@@ -86,7 +86,7 @@ what could end it, and builds a walking skeleton with a Done command that can fa
 ### Upgrade or remove
 
 ```sh
-uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.5.0
+uv tool install --force git+https://github.com/rajasdevel/outcomebound@v1.6.0
 outcomebound adopt .          # every managed file current; an edited block is kept unless --force
 outcomebound adopt . --remove # takes out what the install owns
 ```
