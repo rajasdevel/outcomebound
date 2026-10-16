@@ -1049,9 +1049,12 @@ def test_bounded_command_keeps_partial_output_and_stops_descendant(
     deadline = time.monotonic() + 60
     while running(pid) and time.monotonic() < deadline:
         time.sleep(0.05)
-    stat = Path(f"/proc/{pid}/stat")
-    state = stat.read_text(encoding="utf-8").rpartition(")")[2].split()[:1] if stat.is_file() else []
-    assert not running(pid), f"timed-out child still runs, state {state or 'unknown'}"
+    alive = running(pid)
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rpartition(")")[2].split()
+    except OSError:
+        state = []  # Gone, or no /proc (macOS).
+    assert not alive, f"timed-out child still runs, state {state[:1] or 'unknown'}"
 
 
 def test_fixture_timeout_still_returns_a_record(tmp_path, monkeypatch):
