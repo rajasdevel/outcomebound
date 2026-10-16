@@ -31,8 +31,8 @@ Streams — <stream>: route in <the document the next person can open, or "priva
   takes <kind of change>.
 Better means — <the project's measure, in its words>.
 Gates — review: owner one human who is neither the author nor the person who directed the agent,
-  evidence their approval in the platform; an AI review runs first and never counts as that
-  approval; no one, admins included, bypasses it.
+  evidence their approval in the platform; an AI review, where the change warrants one, runs
+  before it and never counts as that approval; no one, admins included, bypasses it.
 Gates — <gate>: owner UNVERIFIED (no file names one); reported as a gap, never filled in.
 Leave when — several teams, or owners by area (observable: <a second team in the history, or the
   owner's word>; watched by: <who>) → opens a brief to move to `organization`.

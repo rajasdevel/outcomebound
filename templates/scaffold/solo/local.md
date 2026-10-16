@@ -5,4 +5,4 @@ A change reaches the main branch only by a pull request with CI green, and the o
 Leave when — a second maintainer → a brief to move to team.
 Leave when — nobody has used it since <<fill: a date the owner names>> → a brief to retire it.
 **Mechanisms** —
-`review` by a fresh-context reviewer before a change lands; human review is not required with one maintainer.
+By default none: the smallest change with CI green; `review` only where a miss would reach users and no check you can run would catch it; human review is not required with one maintainer.
