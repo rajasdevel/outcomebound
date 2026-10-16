@@ -3356,6 +3356,27 @@ def test_an_install_warns_where_a_harness_also_loads_a_folder_above(
     assert warnings(out) == []
 
 
+def test_a_linked_worktree_under_its_own_project_does_not_warn_of_the_project_file(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The workspace fragment puts worktrees under the project's .agents/worktrees, where the
+    folder above is the same project's own checkout: its instruction file is not foreign. A
+    nested repository of another project still warns."""
+
+    main = repo(tmp_path / "main", {"CLAUDE.md": "# Project\n"})
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run([*git, "add", "-A"], cwd=main, check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], cwd=main, check=True)
+    linked = main / ".agents" / "worktrees" / "w"
+    subprocess.run([*git, "worktree", "add", "-q", str(linked)], cwd=main, check=True)
+    foreign = repo(main / "other", {"README.md": "# O\n"})
+
+    _, out, _ = run(capsys, str(linked), "--harness", "claude-code")
+    assert warnings(out) == []
+    _, out, _ = run(capsys, str(foreign), "--harness", "claude-code")
+    assert any("also loads ../CLAUDE.md" in line for line in warnings(out))
+
+
 def test_a_projects_own_local_ignore_file_is_refused_by_name_even_under_force(
     tmp_path: Path, capsys: Capture
 ) -> None:

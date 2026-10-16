@@ -349,8 +349,10 @@ def ancestor_files(target: Path, harness: str) -> list[tuple[Path, str]]:
     nearest first, as its row's `ancestors` records; none where the row records none. A name
     ending in `AGENTS.md` loads only where none of the row's `reads_agents_md` files is in
     `target` or above it, the default setting. The person's own `~/.claude/CLAUDE.md` is user
-    memory, not a folder's instructions, and is left out. Each is (the folder, the name under
-    it); only existence is looked at, and no file is opened."""
+    memory, not a folder's instructions, and is left out, and so is the main worktree of the
+    target's own repository, where the target is a linked worktree below it (the layout the
+    workspace fragment recommends): its instruction files are the project's own. Each is (the
+    folder, the name under it); only existence is looked at, and no file is opened."""
 
     row = _row(harness) or {}
     record = row.get("ancestors")
@@ -365,12 +367,29 @@ def ancestor_files(target: Path, harness: str) -> list[tuple[Path, str]]:
         return not (folder == home and name == ".claude/CLAUDE.md") and (folder / name).is_file()
 
     hidden = any(present(folder, name) for folder in (root, *root.parents) for name in unless)
+    own = _main_worktree(root)
     return [
         (folder, name)
         for folder in root.parents
+        if folder != own
         for name in names
         if present(folder, name) and not (hidden and name.endswith("AGENTS.md"))
     ]
+
+
+def _main_worktree(root: Path) -> Path | None:
+    """The folder holding the common `.git` directory of the repository `root` is in, where
+    `root` is a linked worktree of it, else None. A bare repository, a `.git` of another name
+    and a repository that cannot be read give None."""
+
+    try:
+        common = _git(root, "rev-parse", "--git-common-dir").decode("utf-8").strip()
+    except (AuditError, OSError, UnicodeDecodeError):
+        return None
+    if not common:
+        return None
+    directory = (root / common).resolve()
+    return directory.parent if directory.name == ".git" else None
 
 
 def _ancestors(root: Path, harnesses: Sequence[str]) -> list[Finding]:
