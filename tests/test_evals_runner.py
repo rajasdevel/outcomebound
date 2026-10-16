@@ -757,6 +757,7 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
         capture_output=True,
         text=True,
         check=True,
+        encoding="utf-8",
     ).stdout.split()
     commit = _commit_of(
         {"templates/managed-block.agents.md.tmpl": changed, **dict.fromkeys(tree)}, base="HEAD"
