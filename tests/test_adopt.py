@@ -2910,7 +2910,9 @@ def test_a_changed_codex_entry_names_the_new_trust_in_hooks(
     out = run(capsys, str(target), "--finish-timeout", "900")[1]
     assert "action   codex finish-check: the entry changed" in out and again in out
     assert "claude-code finish-check: the entry changed" not in out
-    assert again in run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
+    assert f"the run's time limit {finish_check.DEFAULT_TIMEOUT} s to 900 s" in out
+    out = run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
+    assert again in out and "the entry changed, the Done commands changed;" in out
 
     # An upgrade from the entry written before the constant-time stop changes it as well.
     assert run(capsys, str(target), "--done", "true")[0] == 0
@@ -3354,6 +3356,27 @@ def test_an_install_warns_where_a_harness_also_loads_a_folder_above(
     assert warned.startswith("warning  claude-code: a session here also loads ../CLAUDE.md")
     _, out, _ = run(capsys, str(child), "--harness", "codex")
     assert warnings(out) == []
+
+
+def test_a_linked_worktree_under_its_own_project_does_not_warn_of_the_project_file(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The workspace fragment puts worktrees under the project's .agents/worktrees, where the
+    folder above is the same project's own checkout: its instruction file is not foreign. A
+    nested repository of another project still warns."""
+
+    main = repo(tmp_path / "main", {"CLAUDE.md": "# Project\n"})
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com"]
+    subprocess.run([*git, "add", "-A"], cwd=main, check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], cwd=main, check=True)
+    linked = main / ".agents" / "worktrees" / "w"
+    subprocess.run([*git, "worktree", "add", "-q", str(linked)], cwd=main, check=True)
+    foreign = repo(main / "other", {"README.md": "# O\n"})
+
+    _, out, _ = run(capsys, str(linked), "--harness", "claude-code")
+    assert warnings(out) == []
+    _, out, _ = run(capsys, str(foreign), "--harness", "claude-code")
+    assert any("also loads ../CLAUDE.md" in line for line in warnings(out))
 
 
 def test_a_projects_own_local_ignore_file_is_refused_by_name_even_under_force(
@@ -3884,3 +3907,32 @@ def test_check_and_detect_name_a_hook_file_they_cannot_read_and_count_nothing(
     assert code == 0
     (note,) = [line for line in notes_of(out) if line.startswith("# UNVERIFIED")]
     assert name in note and reason in note
+
+
+def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A three-harness install writes hundreds of skill files; one summary line per skills
+    folder keeps the warnings and the other files in view, and a dry run does not list each
+    new skill file again."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code,codex,gemini", "--dry-run")
+    lines = out.splitlines()
+    assert len(lines) < 60
+    assert (
+        sum(
+            re.fullmatch(r"create   \.\w+/skills/: \d+ files in 13 skills", x) is not None
+            for x in lines
+        )
+        == 3
+    )
+    assert not any("SKILL.md" in line for line in lines)
+    assert any(line.startswith("create   AGENTS.md") for line in lines)
+
+    run(capsys, str(target), "--harness", "claude-code,codex,gemini")
+    path = target / ".claude" / "skills" / "diagnose" / "SKILL.md"
+    path.write_text("changed\n", encoding="utf-8")
+    _, out, _ = run(capsys, str(target), "--force")
+    assert re.search(r"^update   \.claude/skills/: 1 file in 1 skill$", out, re.MULTILINE)
