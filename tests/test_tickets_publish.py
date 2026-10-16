@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -27,8 +29,7 @@ REPO = "owner/project"
 
 # Answers each `gh issue create` with the next issue URL, and records the
 # arguments and the body read from standard input, one JSON line per call.
-_FAKE_GH = f"""#!{sys.executable}
-import json, os, sys
+_FAKE_GH = f"""import json, os, sys
 log = os.environ["FAKE_GH_LOG"]
 if sys.argv[1:3] == ["issue", "create"] and "--help" in sys.argv:
     print("--blocked-by numbers  --parent number")
@@ -97,8 +98,12 @@ def run(tmp_path: Path, text: str) -> tuple[subprocess.CompletedProcess[str], li
 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
+    # A shell wrapper, not a `#!<interpreter>` line: an interpreter path that is long or holds
+    # a space does not run as a shebang.
+    (bin_dir / "gh.py").write_text(_FAKE_GH, encoding="utf-8")
     gh = bin_dir / "gh"
-    gh.write_text(_FAKE_GH, encoding="utf-8")
+    python, fake = shlex.quote(sys.executable), shlex.quote(str(bin_dir / "gh.py"))
+    gh.write_text(f'#!/bin/sh\nexec {python} {fake} "$@"\n', encoding="utf-8")
     gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
     log = tmp_path / "gh.log"
     environment = {
@@ -250,7 +255,12 @@ def test_a_body_that_cannot_be_built_stops_the_script_before_gh(
     found = write(tmp_path, "drafts/found.md", draft("Found"))
     later = write(tmp_path, "drafts/later.md", draft("Later", "discovered-from: found"))
     text = script(root, later, found, capsys=capsys)
-    broken = "\n".join(line for line in text.splitlines() if not line.startswith("ob_1="))
+    first_body = re.search(r"^(ob_\d+)=", text, re.MULTILINE)
+    assert first_body is not None, text
+    broken = "\n".join(
+        line for line in text.splitlines() if not line.startswith(first_body.group(1) + "=")
+    )
+    assert broken != text
 
     ran, calls = run(tmp_path, broken)
 

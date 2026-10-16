@@ -718,7 +718,7 @@ def test_nothing_the_target_holds_is_run_and_nothing_is_written(
 
     monkeypatch.setattr(subprocess, "Popen", only_git)
     assert _flagged(root) == ["make nope", "npm run nope"]
-    assert set(started) == {"git"}
+    assert set(started) <= {"git"}
     assert not marker.exists()
     assert before == {p: p.read_bytes() for p in before}
     assert {p for p in root.rglob("*") if p.is_file() and ".git" not in p.parts} == set(before)

@@ -12,7 +12,6 @@ import sys
 import venv
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 
@@ -30,7 +29,7 @@ def _make(target, name):
         pytest.skip(f"filesystem rejects the fixture name {name!r}: {error}")
 
 
-def test_discovery_refuses_a_root_with_a_control_character_or_a_leading_tilde(tmp_path):
+def test_discovery_refuses_a_root_with_a_leading_tilde_and_admits_ordinary_roots(tmp_path):
     target = tmp_path / "discovery"
     target.mkdir()
     _make(target, "~home")
@@ -42,16 +41,23 @@ def test_discovery_refuses_a_root_with_a_control_character_or_a_leading_tilde(tm
     _make(target, "pkg~1")
     assert discovery.discover(target, roots=["pkg~1"])["roots"] == ["pkg~1"]
 
-    for name in CONTROL_ROOTS:
-        _make(target, name)
-        with pytest.raises(discovery.DiscoveryError) as control:
-            discovery.discover(target, roots=[name])
-        assert "not a bounded component root" in str(control.value)
-
     # Ordinary roots still pass, including the whole-target root.
     (target / "packages").mkdir()
     assert discovery.discover(target, roots=["."])["roots"] == ["."]
     assert discovery.discover(target, roots=["packages"])["roots"] == ["packages"]
+
+
+@pytest.mark.parametrize("name", CONTROL_ROOTS)
+def test_discovery_refuses_a_root_with_a_control_character(tmp_path, name):
+    """Skipped only where the filesystem cannot hold the name; the grammar's own refusal of the
+    same values is tested on every platform below."""
+
+    target = tmp_path / "discovery"
+    target.mkdir()
+    _make(target, name)
+    with pytest.raises(discovery.DiscoveryError) as control:
+        discovery.discover(target, roots=[name])
+    assert "not a bounded component root" in str(control.value)
 
 
 GRAMMAR_CORPUS = (
@@ -288,18 +294,11 @@ def test_a_real_junction_is_a_way_in_that_a_symlink_is(tmp_path) -> None:
     "word", ["C:/work/owner's repo", "$value; echo altered", "plain-path", "@args"]
 )
 def test_printed_word_round_trips_through_its_supported_shell(tmp_path, word):
-    from outcomebound_tools import tickets_brief
-
     space = tmp_path / "executable path"
     venv.EnvBuilder(with_pip=False, symlinks=not WINDOWS).create(space)
     executable = str(space / ("Scripts/python.exe" if WINDOWS else "bin/python"))
-    definition = SimpleNamespace(
-        command=[executable, "-c", "import json,sys; print(json.dumps(sys.argv[1:]))", word],
-        timeout_seconds=10,
-    )
-    compiled = Mock(plan=SimpleNamespace(claims={"argv": definition}), cwd=".")
-    body = tickets_brief._check_body(Mock(human=None, claim="argv"), compiled)
-    command = body.split("`", 2)[1]
+    words = [executable, "-c", "import json,sys; print(json.dumps(sys.argv[1:]))", word]
+    command = ("& " if WINDOWS else "") + " ".join(map(paths.shell_word, words))
     if WINDOWS:
         shell = shutil.which("pwsh") or shutil.which("powershell")
         if shell is None:

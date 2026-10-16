@@ -37,7 +37,8 @@ def run(capsys: Capture, *argv: str, source: Path = ROOT) -> tuple[int, str, str
 
 
 def snapshot(root: Path) -> dict[str, bytes]:
-    """Every file and symlink under `root` outside `.git`, by relative path."""
+    """Every file and symlink under `root` outside `.git`, by relative path, and every folder,
+    as its path with a closing slash mapped to nothing, so a folder left empty is seen."""
 
     found: dict[str, bytes] = {}
     for path in sorted(root.rglob("*")):
@@ -46,6 +47,8 @@ def snapshot(root: Path) -> dict[str, bytes]:
             continue
         if path.is_symlink():
             found[relative.as_posix()] = b"-> " + os.readlink(path).encode()
+        elif path.is_dir():
+            found[relative.as_posix() + "/"] = b""
         elif path.is_file():
             found[relative.as_posix()] = path.read_bytes()
     return found

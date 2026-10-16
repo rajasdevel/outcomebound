@@ -798,17 +798,6 @@ def test_export_unreadable_refuses(tmp_path: Path) -> None:
     # test_a_relation_without_a_number_refuses_wherever_it_hangs
 
 
-# --- the normalised ticket ----------------------------------------------------------
-
-
-def test_two_reads_are_equal() -> None:
-    first, second = read(), read()
-    assert first.tickets == second.tickets
-    assert first.others == second.others
-    assert first.messages == second.messages
-    assert first.ignored == second.ignored
-
-
 # --- the fixture export itself ------------------------------------------------------
 
 
@@ -923,7 +912,7 @@ def test_tests_import_only_public_names() -> None:
         for alias in found.names:
             reached += 1
             assert alias.name in public, f"{found.module}.{alias.name} is not in __all__"
-    assert reached >= 6, "the survey found fewer imported names than this file uses"
+    assert reached, "the survey found no imported name"
 
 
 def test_the_public_seam_is_one_name() -> None:

@@ -262,7 +262,14 @@ def test_a_wrong_card_fails_though_its_review_notes_are_right(name: str) -> None
     assert check in _failed_text(text), name
 
 
-@pytest.mark.parametrize("name", sorted(WRONG_CARD))
+# One card per check is enough here: the grading itself is tested in process above, and the
+# command line differs between cards only by the check it names.
+ONE_CARD_PER_CHECK = sorted(
+    {check: name for name, (_, check) in sorted(WRONG_CARD.items())}.values()
+)
+
+
+@pytest.mark.parametrize("name", ONE_CARD_PER_CHECK)
 def test_a_wrong_card_fails_by_the_command_line_too(name: str, tmp_path: Path) -> None:
     text, check = WRONG_CARD[name]
     answer = tmp_path / "answer.md"

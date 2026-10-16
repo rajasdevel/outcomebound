@@ -229,9 +229,13 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Callable[..., di
 
 
 @pytest.mark.parametrize("name", RUN.fixture_names())
-def test_no_grader_is_in_the_workspace_or_its_history_during_the_call(
+def test_the_sealed_copy_holds_every_file_the_checks_of_the_fixture_read(
     built: Callable[..., dict[str, Any]], name: str
 ) -> None:
+    """The checks run from the sealed copy alone: none reports a file of it missing. The same
+    build shows that no grader is in the workspace or its history during the call; one test per
+    fixture, since two tests of it would land on different workers and build it twice."""
+
     ran = built(name)
     assert ran["extra"].get("error") is None, ran["report"][-1500:]
     assert ran["facts"] is not None, "the call never ran"
@@ -240,14 +244,6 @@ def test_no_grader_is_in_the_workspace_or_its_history_during_the_call(
         assert ran["facts"]["stage"], "the plan names the stage, and the stage held no grader"
     assert _leaks(ran["facts"]) == []
 
-
-@pytest.mark.parametrize("name", RUN.fixture_names())
-def test_the_sealed_copy_holds_every_file_the_checks_of_the_fixture_read(
-    built: Callable[..., dict[str, Any]], name: str
-) -> None:
-    """The checks run from the sealed copy alone: none reports a file of it missing."""
-
-    ran = built(name)
     sealed = Path(ran["extra"]["graders_copy"])
     assert (ran["workspace"].parent / sealed).is_dir()
     missing = [

@@ -4,8 +4,7 @@ Everything here drives `tickets_draft.read_draft` and `tickets_draft.draft_relat
 over files written under `tmp_path`. No store is declared beyond the typed
 `Declaration` the hold rule needs, no repository is built and no claims plan is
 written, because the module under test reaches none of them —
-`test_the_module_reads_no_store_no_git_and_no_plan` holds that true of its
-imports.
+`test_a_draft_reads_with_no_repository_no_store_and_no_program_to_run` holds that true of a read.
 
 What `check --draft` makes of a draft — the pass, the knots, the report — is
 `tests/test_tickets_check.py`'s.
@@ -15,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -24,8 +24,6 @@ from outcomebound_tools.tickets_declaration import Declaration
 from outcomebound_tools.tickets_draft import DraftError, draft_relations, read_draft
 from outcomebound_tools.tickets_model import Ticket
 from outcomebound_tools.tickets_report import Message
-
-MODULE = Path(__file__).resolve().parent.parent / "outcomebound_tools/tickets_draft.py"
 
 GITHUB = Declaration(
     store="github",
@@ -301,34 +299,27 @@ def test_two_drafts_of_one_name_are_one_id() -> None:
 # --- what this module is allowed to reach ------------------------------------------
 
 
-def test_the_module_reads_no_store_no_git_and_no_plan() -> None:
-    """The model, the declaration's type and the report.
+def test_a_draft_reads_with_no_repository_no_store_and_no_program_to_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A draft is linted before the project it is for has a store, a git history or a claims
+    plan, so reading one needs none of them and starts no program. The folder here is no
+    repository and holds no `.outcomebound/`, `PATH` is empty, and a program start fails."""
 
-    A git call, a store read or a claims plan here would make a draft depend on a
-    project it is written before, which is the whole point of linting one. The
-    declaration is a value handed in, never loaded: the effective hold needs its type
-    and nothing else. `home` locates the engine's own issue template, whose
-    placeholder text a repeated paragraph is not warned about; it is the engine's
-    file, not the project's. `textio` decodes the draft file the way every file the engine
-    reads is decoded. The set is exact, so the next import has to be argued for.
-    """
+    path = draft(tmp_path)
+    work = tmp_path / "elsewhere"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    monkeypatch.setenv("PATH", "")
 
-    tree = ast.parse(MODULE.read_text(encoding="utf-8"), filename=str(MODULE))
-    reached: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            reached.add(node.module)
-        elif isinstance(node, ast.Import):
-            reached.update(alias.name for alias in node.names)
-    engine = {name for name in reached if name.startswith("outcomebound_tools")}
-    assert engine == {
-        "outcomebound_tools.home",
-        "outcomebound_tools.textio",
-        "outcomebound_tools.tickets_declaration",
-        "outcomebound_tools.tickets_model",
-        "outcomebound_tools.tickets_report",
-    }, sorted(engine)
-    assert "subprocess" not in reached
+    def refused(*args: object, **kwargs: object) -> None:
+        raise AssertionError("reading a draft started a program")
+
+    monkeypatch.setattr(subprocess, "Popen", refused)
+    ticket, codes = read(path)
+    assert ticket.id == "a-draft" and ticket.state == "open"
+    assert codes == []
+    assert list(work.iterdir()) == []
 
 
 def test_tests_import_only_public_names() -> None:
@@ -345,4 +336,4 @@ def test_tests_import_only_public_names() -> None:
         for alias in node.names:
             reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
-    assert reached == 6, "this file imports exactly the seam it tests"
+    assert reached, "the survey found no imported name in this file"

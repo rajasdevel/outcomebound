@@ -97,15 +97,6 @@ def test_the_git_environment_pins_the_locale_and_keeps_the_rest() -> None:
     assert inherited["LC_ALL"] == "C" and inherited["LANGUAGE"] == "C"
 
 
-def test_the_read_prefix_stands_in_every_git_read_of_a_target() -> None:
-    """The five readers of a target's Git state run under the same argv prefix."""
-
-    readers = ("tickets_git", "harness_roots", "finish_check", "floor", "instruction_audit")
-    for name in readers:
-        source = (ROOT / "outcomebound_tools" / f"{name}.py").read_text(encoding="utf-8")
-        assert "*GIT_READ_CONFIGURATION" in source, name
-
-
 def _hostile_repository(tmp_path: Path) -> tuple[Path, Path]:
     """A repository whose own `.git/config` names a `core.fsmonitor` program that leaves a
     marker when it runs."""
@@ -135,7 +126,16 @@ def _hostile_repository(tmp_path: Path) -> tuple[Path, Path]:
 def test_no_read_of_a_target_runs_the_fsmonitor_program_its_git_config_names(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from outcomebound_tools import discovery, finish_check, floor, harness_roots, tickets_git
+    from outcomebound_tools import (
+        adopt,
+        discovery,
+        finish_check,
+        floor,
+        harness_roots,
+        instruction_audit,
+        scaffold,
+        tickets_git,
+    )
 
     root, marker = _hostile_repository(tmp_path)
     # Control: plain Git runs the program, so each check below can fail.
@@ -147,6 +147,9 @@ def test_no_read_of_a_target_runs_the_fsmonitor_program_its_git_config_names(
     harness_roots._tracked(root, ".claude")
     finish_check._git(root, "status", "--porcelain")
     floor._git(root, "status", "--porcelain")
+    adopt._git(root, "status", "--porcelain")
+    instruction_audit._git_status(root, "status", "--porcelain")
+    scaffold._git_listed(root)
     discovery.main([str(root)])
     json.loads(capsys.readouterr().out)
 

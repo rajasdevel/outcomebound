@@ -164,15 +164,6 @@ def test_each_preset_writes_exactly_its_file_set_into_an_empty_repository(
     assert not (root / "docs" / "specs").exists()
 
 
-def test_team_and_organization_get_five_files_on_a_fresh_repository(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    for preset in ("team", "organization"):
-        root = target(tmp_path, preset)
-        accept(capsys, root, preset, "--visibility", "public")
-        assert len(files_of(root)) == 5
-
-
 # 1a. The first design is offered, never written.
 
 
@@ -205,13 +196,18 @@ def test_the_first_design_is_offered_and_the_overlay_rows_are_printed_as_a_block
 # 2. Each overlay on each preset that takes it.
 
 
-@pytest.mark.parametrize("preset", PRESETS)
-@pytest.mark.parametrize("overlay", OVERLAYS)
+@pytest.mark.parametrize(
+    ("preset", "overlay"),
+    [
+        (preset, overlay)
+        for preset in PRESETS
+        for overlay in OVERLAYS
+        if not (preset == "prototype" and overlay in REFUSED_ON_PROTOTYPE)
+    ],
+)
 def test_each_overlay_on_each_base_adds_exactly_its_parts(
     tmp_path: Path, capsys: Capture, preset: str, overlay: str
 ) -> None:
-    if preset == "prototype" and overlay in REFUSED_ON_PROTOTYPE:
-        pytest.skip("the design refuses this overlay on prototype (test 3)")
     visibility = None if preset == "prototype" else "private"
     base, both = target(tmp_path, "base"), target(tmp_path, "both")
 
@@ -609,9 +605,7 @@ def test_accept_twice_writes_nothing_the_second_time(tmp_path: Path, capsys: Cap
 
 
 @needs_symlinks
-def test_accept_refuses_a_link_a_git_path_and_a_file_that_appeared_after_the_plan(
-    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_accept_refuses_a_linked_directory(tmp_path: Path, capsys: Capture) -> None:
     # A linked .github/: the plan reads its paths refused and does not raise; --accept writes none.
     linked = target(tmp_path, "linked")
     (tmp_path / "elsewhere").mkdir()
@@ -624,7 +618,8 @@ def test_accept_refuses_a_link_a_git_path_and_a_file_that_appeared_after_the_pla
     assert code == 1 and out.startswith("FAIL")
     assert not (linked / LOCAL).exists() and os.listdir(tmp_path / "elsewhere") == []
 
-    # A manifest whose path is inside .git: refused, nothing written.
+
+def test_accept_refuses_a_manifest_path_inside_git(tmp_path: Path, capsys: Capture) -> None:
     source = tmp_path / "engine"
     shutil.copytree(ROOT / "templates" / "scaffold", source / "templates" / "scaffold")
     shutil.copytree(ROOT / "schemas", source / "schemas")
@@ -634,10 +629,13 @@ def test_accept_refuses_a_link_a_git_path_and_a_file_that_appeared_after_the_pla
             item["path"] = ".git/hooks/local.md"
     write(source / "templates/scaffold/scaffold.json", json.dumps(manifest))
     inside = target(tmp_path, "inside")
-    code, out, _ = run(capsys, inside, "--lifecycle", "prototype", "--accept", source=source)
+    code, _, _ = run(capsys, inside, "--lifecycle", "prototype", "--accept", source=source)
     assert code == 1 and not (inside / ".git/hooks/local.md").exists()
 
-    # A file that appears after the plan read the target is never overwritten.
+
+def test_accept_never_overwrites_a_file_that_appeared_after_the_plan(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
     late = target(tmp_path, "late")
     real_write = fileplan.write
 

@@ -41,4 +41,5 @@ def test_documented_attributes_are_the_scripts_attributes() -> None:
 def test_NEGATIVE_CONTROL_a_missing_name_is_reported() -> None:
     members = script_members("window.explorable = {\n    ready: ready,\n    show: show\n  };")
     assert members == {"ready", "show"}
-    assert set(DOC_MEMBER.findall("use explorable.nothing here")) - members == {"nothing"}
+    # The document side reads a name the script lacks, so the comparison above would report it.
+    assert set(DOC_MEMBER.findall("use explorable.nothing here")) == {"nothing"}

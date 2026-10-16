@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from outcomebound_tools import finish_check
 from tests.portable import engine
 
@@ -146,22 +148,15 @@ def _detached_runs(root: Path) -> list[str] | None:
 def settle(root: Path, since: datetime, seconds: float = 120) -> dict[str, Any] | None:
     """Wait for the run a codex stop may have started on `root` since `since`, and return its
     record, or None where it started none. Where the process table can be read, the wait is
-    for every such run to be gone, which holds however loaded the machine is; elsewhere a run
-    record is looked for during 3 s."""
+    for every such run to be gone, which holds however loaded the machine is; where it cannot be
+    read, the test is skipped rather than guess from a short window."""
 
     deadline = time.monotonic() + seconds
     while (left := _detached_runs(root)) is not None and left:
         assert time.monotonic() < deadline, f"a detached run did not end: {left}"
         time.sleep(0.05)
     if left is None:
-        look = time.monotonic() + 3
-        while time.monotonic() < look:
-            record = run_record(root)
-            when = started_at(record) if record else None
-            if when is not None and when >= since:
-                return wait_for_run(root, since, seconds=seconds)
-            time.sleep(0.05)
-        return None
+        pytest.skip("the process table cannot be read here, so a detached run cannot be waited for")
     record = run_record(root)
     when = started_at(record) if record else None
     return record if when is not None and when >= since else None

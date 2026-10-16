@@ -18,6 +18,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -140,12 +141,14 @@ def fire(
     timeout: int | None = None,
     transcript: str = "future",
     background: bool = False,
+    remember: float | None = None,
 ) -> Any:
     """Run the stop entry once as `row` fires it, the input's `cwd` naming where the agent works
     unless `stdin` is given. claude-code runs from the checkout its session started in, which its
     root variable still names, while the agent works in `root`, as after it moves into a
     worktree; codex runs from a directory below `root`, the session's `cwd`. With `background`,
-    the process is returned running, its input written and closed."""
+    the process is returned running, its input written and closed. With `remember`, the entry runs
+    with that many seconds as `REMEMBER_SECONDS`, the time its records get beyond its limit."""
 
     environment = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
     if row == "claude-code":
@@ -163,6 +166,25 @@ def fire(
         stdin = stop_input_for(row, root, working, transcript)
     data = stdin if isinstance(stdin, bytes) else json.dumps(stdin).encode()
     words = engine("finish-check", "--constant-time", "--harness", row, "--done", digest)
+    if remember is not None:
+        program = (
+            "import sys; sys.path.insert(0, sys.argv[1]); "
+            "from outcomebound_tools import finish_check as f; "
+            f"f.REMEMBER_SECONDS = {remember!r}; "
+            "sys.exit(f.main(sys.argv[2:]))"
+        )
+        words = [
+            sys.executable,
+            "-I",
+            "-c",
+            program,
+            str(ROOT),
+            "--constant-time",
+            "--harness",
+            row,
+            "--done",
+            digest,
+        ]
     if timeout is not None:
         words += ["--timeout", str(timeout)]
     if background:
@@ -544,9 +566,12 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
     raising the timeout cannot get the same tree checked."""
 
     count = tmp_path / "count"
+    go = tmp_path / "go"
     # Done gets 15 seconds under the short timeout, so that Git's sh on a hosted Windows runner
-    # still starts within it, and a sleep of 25 outlasts it but not the longer timeout.
-    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; sleep 25"])
+    # still starts within it; it waits for `go`, which is made only before the longer run, so
+    # that the short limit is spent and the longer run ends as soon as it starts.
+    wait = f"while [ ! -e {q(go)} ]; do sleep 0.1; done"
+    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; {wait}"])
     short = finish_check.MARGIN_SECONDS + 15
 
     def runs() -> int:
@@ -557,6 +582,7 @@ def test_an_unchanged_tree_that_timed_out_runs_again_only_under_a_longer_timeout
     assert hook("codex", digest, root, timeout=short, run=False)[1] == {} and runs() == 1
     again = finish_helpers.status(root)
     assert "finish-check UNVERIFIED: " in again and runs() == 1
+    write(go, "")
     longer = hook("codex", digest, root, timeout=short + 30)[1]["systemMessage"]
     assert longer.startswith("finish-check PASS: ") and runs() == 2
 
@@ -827,21 +853,17 @@ def test_a_virtual_environments_scripts_folder_is_left_out_as_its_bin_folder_is(
 GIT_IDENTITY = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
 
 
-def test_a_project_script_or_module_the_change_removed_still_holds(tmp_path: Path) -> None:
-    """Breaks if a script or a module of the project that the change removed reads as a tool the
-    hook's environment lacks, so a broken Done reaches the person and not the agent."""
+def test_a_project_script_the_change_removed_still_holds(tmp_path: Path) -> None:
+    """Breaks if a script of the project that the change removed reads as a tool the hook's
+    environment lacks, so a broken Done reaches the person and not the agent."""
 
     if shutil.which("make") is None:
         pytest.skip("make is not installed here")
-    done = ["make test", f"{q(sys.executable)} -m mypkg"]
-    root, digest = target(tmp_path / "t", done)
+    root, digest = target(tmp_path / "t", ["make test"])
     write(root / "Makefile", "test:\n\t./scripts/lint.sh\n")
     (root / "scripts").mkdir()
     write(root / "scripts/lint.sh", "#!/bin/sh\nexit 0\n")
     (root / "scripts/lint.sh").chmod(0o755)
-    (root / "mypkg").mkdir()
-    write(root / "mypkg/__main__.py", "")
-    write(root / "mypkg/__init__.py", "")
     subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
     subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "tools"], check=True)
     (root / "scripts/lint.sh").unlink()
@@ -849,6 +871,25 @@ def test_a_project_script_or_module_the_change_removed_still_holds(tmp_path: Pat
     _, verdict = hook("codex", digest, root)
 
     assert verdict.get("decision") == "block", verdict
+
+
+def test_a_project_script_module_or_tool_the_change_removed_is_the_projects_own(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a script, a module or a tracked executable that HEAD holds and the working tree
+    lacks reads as a tool the environment lacks, or if a tool HEAD never held reads as the
+    project's own."""
+
+    root, _ = target(tmp_path / "t", ["true"])
+    (root / "scripts").mkdir()
+    write(root / "scripts/lint.sh", "#!/bin/sh\nexit 0\n")
+    (root / "mypkg").mkdir()
+    write(root / "mypkg/__main__.py", "")
+    write(root / "mypkg/__init__.py", "")
+    subprocess.run([GIT, "-C", str(root), "add", "."], check=True)
+    subprocess.run([GIT, "-C", str(root), *GIT_IDENTITY, "commit", "-qm", "tools"], check=True)
+    (root / "scripts/lint.sh").unlink()
+
     assert finish_check.project_owned(root, "python -m mypkg")
     shutil.rmtree(root / "mypkg")
     assert finish_check.project_owned(root, "python -m mypkg"), "HEAD still holds it"
@@ -1452,10 +1493,12 @@ def test_a_large_untracked_file_stops_its_hash_at_the_deadline(
     root, _ = target(tmp_path / "t", ["true"])
     with (root / "big.bin").open("wb") as handle:
         handle.truncate(8 * 1024 * 1024)
+    # One tick for each look at the clock: the deadline passes at the second block read, whatever
+    # the block size, and no look at the clock is made after the last block.
     clock = iter(range(1_000_000))
     monkeypatch.setattr(finish_check.time, "monotonic", lambda: float(next(clock)))
 
-    assert finish_check._content(root / "big.bin", 3.0) is None
+    assert finish_check._content(root / "big.bin", 0.5) is None
     assert finish_check._content(root / "big.bin") is not None
 
 
@@ -1482,13 +1525,13 @@ def test_a_command_past_the_limit_is_stopped_with_its_group_and_holds_nothing(
     pid_file = tmp_path / "child.pid"
     line = f"{q(sys.executable)} {q(tmp_path / 'holder.py')} {q(pid_file)}"
     root, digest = target(tmp_path / "t", [line])
-    limit = 15
+    # Long enough that a loaded machine starts the command (Git's shell on a hosted Windows
+    # runner needs the longer limit); the stop at the limit is read from the report below.
+    limit = 15 if WINDOWS else 8
     timeout = finish_check.MARGIN_SECONDS + limit
-    started = time.monotonic()
 
     _, verdict = hook("codex", digest, root, cwd=root, timeout=timeout)
 
-    assert time.monotonic() - started < limit + 25
     assert list(verdict) == ["systemMessage"]
     message = verdict["systemMessage"]
     assert message.startswith(
@@ -1527,14 +1570,14 @@ def test_no_manifest_names_the_directory_searched_and_holds_nothing(
 
 
 @pytest.mark.parametrize(
-    "arguments",
+    ("arguments", "said"),
     [
-        ["--harness", "gemini", "--done", "0" * 64],
-        ["--harness", "codex", "--done", "short"],
-        ["--harness", "codex"],
-        ["--harness", "codex", "--done", "0" * 64, "--timeout", "30"],
-        ["--harness", "codex", "--done", "0" * 64, "--timeout", "ten"],
-        ["--constant-time", "--harness", "claude-code", "--done", "short"],
+        (["--harness", "gemini", "--done", "0" * 64], "not available yet"),
+        (["--harness", "codex", "--done", "short"], "64-character digest"),
+        (["--harness", "codex"], "--done"),
+        (["--harness", "codex", "--done", "0" * 64, "--timeout", "30"], "--timeout"),
+        (["--harness", "codex", "--done", "0" * 64, "--timeout", "ten"], "--timeout"),
+        (["--constant-time", "--harness", "claude-code", "--done", "short"], "64-character digest"),
     ],
     ids=[
         "unavailable-row",
@@ -1545,8 +1588,9 @@ def test_no_manifest_names_the_directory_searched_and_holds_nothing(
         "wake-not-a-digest",
     ],
 )
-def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str]) -> None:
-    """Breaks if a malformed entry exits 2, which both rows read as holding the finish."""
+def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str], said: str) -> None:
+    """Breaks if a malformed entry exits 2, which both rows read as holding the finish, or if
+    a case is refused for another reason than its own: the usage message names it."""
 
     done = subprocess.run(
         engine("finish-check", *arguments),
@@ -1557,6 +1601,8 @@ def test_a_usage_error_exits_1_never_2(tmp_path: Path, arguments: list[str]) -> 
     )
 
     assert done.returncode == 1 and done.stdout == b""
+    assert said in done.stderr.decode("utf-8", "replace")
+    assert "Traceback" not in done.stderr.decode("utf-8", "replace")
 
 
 # --- known failures: what failed when adopt measured Done -------------------------
@@ -1929,10 +1975,11 @@ def test_the_measured_seconds_are_one_run_of_each_command_and_the_rerun_is_named
     monkeypatch.setenv("PATH", environment["PATH"])
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
     # Only the rerun is slow, so the seconds tell one run from two on a runner of any speed: a
-    # slow runner's shell start-up once made one quick run read as two.
+    # slow runner's shell start-up once made one quick run read as two: the rerun takes 6 seconds
+    # and one run is held under 5.
     marker = tmp_path / "ran-once"
     done = [
-        f"if [ -e {q(marker)} ]; then sleep 3; fi; touch {q(marker)}; "
+        f"if [ -e {q(marker)} ]; then sleep 6; fi; touch {q(marker)}; "
         "echo 'FAILED tests/a.py::t'; exit 2"
     ]
     root, digest = target(tmp_path / "t", done)
@@ -1940,9 +1987,9 @@ def test_the_measured_seconds_are_one_run_of_each_command_and_the_rerun_is_named
     measured = finish_check.measure(root, done, 600)
 
     assert measured.reran == (done[0],)
-    assert 0 < measured.seconds < 3, measured.seconds
+    assert 0 < measured.seconds < 5, measured.seconds
     known = finish_check.known_record(root, digest)
-    assert known is not None and known.seconds < 3
+    assert known is not None and known.seconds < 5
 
 
 def test_a_dropped_path_entry_adds_one_run_to_a_stable_failure_only(
@@ -3085,50 +3132,48 @@ def test_the_codex_stop_returns_before_a_slow_done_command_ends(tmp_path: Path) 
     """Breaks if the codex stop waits for Done: the person waited 3 to 5 minutes at each turn
     end that changed the tree. The run it starts names the tree it checks."""
 
-    root, digest = target(tmp_path / "t", ["sleep 60"])
+    started, go, gate = gated(tmp_path)
+    root, digest = target(tmp_path / "t", [gate])
     since = finish_helpers.now()
-    begun = time.monotonic()
 
     printed = stop_json("codex", digest, root)
 
-    assert time.monotonic() - begun < 5 and printed == {}
+    # The stop has returned while Done is still in its gate: it did not wait for it.
+    assert printed == {}
+    wait_for(started)
     record = finish_helpers.wait_for_run(root, since, ended=False)
     assert record["tree"] == finish_check.tree_digest(root, digest) and "ended" not in record
     end_run(root, since)
+    write(go, "")
 
 
 def test_the_codex_stop_prints_its_json_and_closes_stdout_before_the_run_starts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    """Breaks if the stop starts the run before its verdict is out and its output closed: the
-    harness reads the stop's output to its end, and a run holding it open would make the turn
-    end wait for Done."""
+    """Breaks if the run the stop starts keeps the stop's output open: the harness reads the
+    stop's output to its end, and the turn end would wait for Done."""
 
-    root, digest = target(tmp_path / "t", ["true"])
-    seen: list[tuple[str, Any]] = []
+    started, go, gate = gated(tmp_path)
+    root, digest = target(tmp_path / "t", [gate])
+    since = finish_helpers.now()
+    process = fire("codex", digest, root, background=True)
+    stream = process.stdout
+    assert stream is not None
+    read: list[bytes] = []
+    reader = threading.Thread(target=lambda: read.append(stream.read()))
+    reader.start()
 
-    class Out(io.BytesIO):
-        def close(self) -> None:
-            seen.append(("closed", self.getvalue()))
-            super().close()
+    # The output ends while Done waits at its gate, which only this test opens.
+    wait_for(started)
+    reader.join(timeout=60)
+    ended = not reader.is_alive()
+    write(go, "")
+    reader.join()
+    process.communicate(timeout=60)
+    finish_helpers.settle(root, since)
 
-    out = Out()
-    given = json.dumps({**INPUT["codex"], "cwd": str(root), "transcript_path": None}).encode()
-    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(out, encoding="utf-8"))
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
-    monkeypatch.setattr(
-        finish_check.programs,
-        "start_detached",
-        lambda argv, **options: seen.append(("started", out.closed)),
-    )
-    monkeypatch.chdir(root)
-
-    assert finish_check.main(["--constant-time", "--harness", "codex", "--done", digest]) == 0
-
-    assert seen in (
-        [("closed", b"{}\n"), ("started", True)],
-        [("closed", b"{}\r\n"), ("started", True)],
-    )
+    assert ended, "the stop's output stayed open until Done ended"
+    assert read and read[0].strip() == b"{}" and process.returncode == 0
 
 
 class Kept(io.BytesIO):
@@ -3321,11 +3366,14 @@ def test_a_detached_run_outlives_the_codex_stop_that_started_it(tmp_path: Path) 
     every stop would read a dead run."""
 
     ran = tmp_path / "ran"
-    root, digest = target(tmp_path / "t", [f"sleep 3; touch {q(ran)}"])
+    started, go, gate = gated(tmp_path)
+    root, digest = target(tmp_path / "t", [f"{gate}; touch {q(ran)}"])
     since = finish_helpers.now()
 
     assert stop_json("codex", digest, root) == {}
+    wait_for(started)
     assert not ran.exists()
+    write(go, "")
 
     record = finish_helpers.wait_for_run(root, since)
     assert ran.exists() and record["ended"]["outcome"] == "pass"
@@ -3363,20 +3411,6 @@ def test_the_wake_never_exits_2_when_stop_hook_active_is_set(tmp_path: Path) -> 
 
     assert hook(CC, digest, root, stdin=guarded) == (0, {}) and counted(count) == 1
     assert "finish-check FAIL" in finish_helpers.status(root)
-
-
-@pytest.mark.parametrize("waiting", WAITING, ids=["background-tasks", "session-crons"])
-def test_the_wake_never_exits_2_while_the_session_is_paused(
-    tmp_path: Path, waiting: dict[str, Any]
-) -> None:
-    """Breaks if a paused session, whose background work will wake it, is woken for a failure,
-    or if Done is skipped while it waits."""
-
-    count = tmp_path / "count"
-    root, digest = target(tmp_path / "t", [f"echo run >> {q(count)}; echo boom; exit 1"])
-
-    assert hook(CC, digest, root, stdin=paused(root, waiting)) == (0, {})
-    assert counted(count) == 1
 
 
 @pytest.mark.parametrize("how", ["prompt", "same-second", "clock-back"])
@@ -3633,6 +3667,8 @@ def test_a_follower_on_the_running_tree_waits_for_the_holder_and_delivers_under_
     wait_for(started)
 
     follower = fire(CC, digest, root, background=True)
+    # A lower bound only: a follower that has not yet reached the lock proves less, never
+    # nothing wrong; one that exits before the holder's verdict fails here or below.
     time.sleep(1)
     assert follower.poll() is None
     write(go, "")
@@ -3659,7 +3695,8 @@ def outputs(row: str, digest: str, root: Path, **options: Any) -> list[Any]:
     return printed
 
 
-def test_no_path_but_a_hold_writes_to_the_model(tmp_path: Path) -> None:
+@pytest.mark.parametrize("row", ROWS)
+def test_no_path_but_a_hold_writes_to_the_model(tmp_path: Path, row: str) -> None:
     """Breaks if any verdict but a hold reaches the model: a `decision`, a `reason` or context
     from the codex stop, anything on claude-code's streams, or text from either turn-start entry
     but the claude-code person's `systemMessage`."""
@@ -3681,45 +3718,44 @@ def test_no_path_but_a_hold_writes_to_the_model(tmp_path: Path) -> None:
                 held.append("decision" in item)
         assert any(held[-len(printed) :]) == holds, (row, printed)
 
-    for row in ROWS:
-        place = tmp_path / row
-        place.mkdir()
-        root, digest = target(place / "pass", ["true"])
-        judge(row, outputs(row, digest, root), False)
-        judge(row, outputs(row, digest, root), False)  # the tree already checked
-        root, digest = target(place / "hold", ["echo boom; exit 1"])
-        judge(row, outputs(row, digest, root), True)
-        guard = INPUT[row] | {"cwd": str(root), "stop_hook_active": True}
-        write(root / "src.txt", "two\n")
-        judge(row, outputs(row, digest, root, stdin=guard, cwd=root), False)
-        root, digest = target(place / "known", ["echo old; exit 1"])
-        finish_check.measure(root, ["echo old; exit 1"], 600)
-        write(root / "src.txt", "two\n")
-        judge(row, outputs(row, digest, root), False)
-        root, digest = target(place / "missing", ["no-such-tool-here-zz"])
-        judge(row, outputs(row, digest, root), False)
-        root, digest = target(place / "changed", ["echo again >> grows.txt; exit 1"])
-        judge(row, outputs(row, digest, root), False)
-        root, _ = target(place / "digest", ["true"])
-        judge(row, outputs(row, finish_check.done_digest(["make"]), root), False)
-        empty = place / "empty"
-        empty.mkdir()
-        judge(row, outputs(row, digest, empty, cwd=empty), False)
-        root, digest = target(place / "unchanged", ["echo boom; exit 1"])
-        assert turn(row, digest, root) == ""
-        judge(row, outputs(row, digest, root), False)
-        root, digest = target(place / "limit", ["sleep 5"])
-        judge(row, outputs(row, digest, root, timeout=finish_check.MARGIN_SECONDS + 1), False)
-        if row == CC:
-            root, digest = target(place / "paused", ["echo boom; exit 1"])
-            judge(row, outputs(row, digest, root, stdin=paused(root, WAITING[0])), False)
-        # The turn-start entry: codex prints nothing; claude-code only the person's notices.
-        printed = mark(row, digest, root)
-        assert printed.returncode == 0 and printed.stderr == b""
-        if row == "codex":
-            assert printed.stdout == b""
-        elif printed.stdout:
-            assert list(json.loads(printed.stdout)) == ["systemMessage"]
+    place = tmp_path / row
+    place.mkdir()
+    root, digest = target(place / "pass", ["true"])
+    judge(row, outputs(row, digest, root), False)
+    judge(row, outputs(row, digest, root), False)  # the tree already checked
+    root, digest = target(place / "hold", ["echo boom; exit 1"])
+    judge(row, outputs(row, digest, root), True)
+    guard = INPUT[row] | {"cwd": str(root), "stop_hook_active": True}
+    write(root / "src.txt", "two\n")
+    judge(row, outputs(row, digest, root, stdin=guard, cwd=root), False)
+    root, digest = target(place / "known", ["echo old; exit 1"])
+    finish_check.measure(root, ["echo old; exit 1"], 600)
+    write(root / "src.txt", "two\n")
+    judge(row, outputs(row, digest, root), False)
+    root, digest = target(place / "missing", ["no-such-tool-here-zz"])
+    judge(row, outputs(row, digest, root), False)
+    root, digest = target(place / "changed", ["echo again >> grows.txt; exit 1"])
+    judge(row, outputs(row, digest, root), False)
+    root, _ = target(place / "digest", ["true"])
+    judge(row, outputs(row, finish_check.done_digest(["make"]), root), False)
+    empty = place / "empty"
+    empty.mkdir()
+    judge(row, outputs(row, digest, empty, cwd=empty), False)
+    root, digest = target(place / "unchanged", ["echo boom; exit 1"])
+    assert turn(row, digest, root) == ""
+    judge(row, outputs(row, digest, root), False)
+    root, digest = target(place / "limit", ["sleep 5"])
+    judge(row, outputs(row, digest, root, timeout=finish_check.MARGIN_SECONDS + 1), False)
+    if row == CC:
+        root, digest = target(place / "paused", ["echo boom; exit 1"])
+        judge(row, outputs(row, digest, root, stdin=paused(root, WAITING[0])), False)
+    # The turn-start entry: codex prints nothing; claude-code only the person's notices.
+    printed = mark(row, digest, root)
+    assert printed.returncode == 0 and printed.stderr == b""
+    if row == "codex":
+        assert printed.stdout == b""
+    elif printed.stdout:
+        assert list(json.loads(printed.stdout)) == ["systemMessage"]
 
 
 def test_each_notice_is_told_once_for_a_session_tree_and_kind(tmp_path: Path) -> None:
@@ -4114,11 +4150,9 @@ def test_a_run_on_the_running_tree_leaves_the_run(tmp_path: Path) -> None:
 
     assert "decision" not in stop_json("codex", digest, root)
 
-    time.sleep(1)
-    now = finish_helpers.run_record(root)
-    assert now is not None and now["pid"] == record["pid"] and counted(count) == 1
     write(go, "")
-    finish_helpers.wait_for_run(root, since)
+    ended = finish_helpers.wait_for_run(root, since)
+    assert ended["pid"] == record["pid"] and ended["ended"]["outcome"] == "pass"
     assert counted(count) == 1
 
 
@@ -4135,11 +4169,10 @@ def test_a_killed_run_leaves_the_lock_free_for_the_next_run(tmp_path: Path) -> N
     first.communicate(timeout=30)
     write(go, "")
     write(root / "src.txt", "two\n")
-    begun = time.monotonic()
 
     assert hook(CC, digest, root) == (0, {})
 
-    assert time.monotonic() - begun < 20 and counted(count) == 2
+    assert counted(count) == 2
 
 
 @posix_only
@@ -4402,10 +4435,14 @@ def test_a_follower_whose_budget_ended_first_does_not_wake_the_model_a_second_ti
     root, digest = target(tmp_path / "t", [f"{gate}; echo boom; exit 1"])
     holder = fire(CC, digest, root, timeout=600, background=True)
     wait_for(started)
-    follower = fire(CC, digest, root, timeout=31, background=True)
-    # The follower's budget for its records ends 16 s after it starts; the holder ends after.
-    time.sleep(finish_check.REMEMBER_SECONDS + 3)
-    assert follower.poll() is None
+    # The follower's budget for its records ends 4 s after it starts (the limit 31 s, 30 s of
+    # margin and 3 s of records, as `remember` sets); the holder ends after it, and a wait past
+    # it can only make the test stricter, so the wait is a lower bound.
+    spawned = time.monotonic()
+    follower = fire(CC, digest, root, timeout=31, background=True, remember=3)
+    while time.monotonic() < spawned + 10:
+        assert follower.poll() is None
+        time.sleep(0.1)
     write(go, "")
 
     code, out, err = finished(holder)
@@ -4515,28 +4552,43 @@ def test_a_codex_stop_that_raises_prints_nothing_for_the_model_and_exits_0(
 
 
 def test_the_told_file_keeps_only_the_current_sessions_entries(tmp_path: Path) -> None:
-    """Breaks if the file of notices told grows with every session that ever ran."""
+    """Breaks if the file of notices told grows with every session that ever ran: another
+    session's notice, once a session ends the other's, is told again, and the current
+    session's is not."""
 
     root, _digest = target(tmp_path / "t", ["true"])
-    path = root / ".git" / finish_check.TOLD
-    old = [["old-session", "a" * 40, "pass"], ["s", "b" * 40, "pass"]]
-    write(path, json.dumps({"told": old}) + "\n")
+    other = [finish_check.Notice("a" * 40, "pass", "other")]
+    mine = [finish_check.Notice("b" * 40, "pass", "mine")]
 
-    told = finish_check.tell(root, "s", [finish_check.Notice("c" * 40, "fail", "text")])
-
-    assert told == ["text"]
-    kept = json.loads(path.read_text(encoding="utf-8"))["told"]
-    assert sorted(kept) == [["s", "b" * 40, "pass"], ["s", "c" * 40, "fail"]]
+    assert finish_check.tell(root, "old-session", other) == ["other"]
+    assert finish_check.tell(root, "s", mine) == ["mine"]
+    assert finish_check.tell(root, "s", mine) == []
+    assert finish_check.tell(root, "old-session", other) == ["other"]
 
 
 def test_the_detached_runs_command_line_names_no_transcript(tmp_path: Path) -> None:
     """Breaks if the codex run's command line, which `ps` shows to every account, carries the
     transcript path."""
 
-    entry = finish_check.Entry("codex", {"guard": "stop_hook_active"}, "0" * 64, 600)
-    payload = {"session_id": "s", "transcript_path": "/secret/transcript.jsonl", "cwd": "x"}
+    started, go, gate = gated(tmp_path)
+    root, digest = target(tmp_path / "t", [gate])
+    stdin = stop_input_for("codex", root, root, "future")
+    transcript = stdin["transcript_path"]
+    assert transcript and Path(transcript).name == "transcript-codex.jsonl"
+    since = finish_helpers.now()
 
-    argv = finish_check._run_argv(entry, payload, tmp_path, None)
+    assert stop_json("codex", digest, root, stdin=stdin) == {}
+    wait_for(started)
 
-    assert "/secret/transcript.jsonl" not in " ".join(argv)
-    assert json.loads(argv[-1])["session_id"] == "s"
+    # The run is in the process table, held at its gate, with the stop's session in its input.
+    commands = finish_helpers._detached_runs(root)
+    if commands is None:
+        write(go, "")
+        pytest.skip("the process table cannot be read here")
+    try:
+        # Windows escapes the JSON's quotes on a command line, so the key is matched without them.
+        assert len(commands) == 1 and "session_id" in commands[0], commands
+        assert Path(transcript).name not in commands[0] and "transcript" not in commands[0]
+    finally:
+        write(go, "")
+        finish_helpers.settle(root, since)

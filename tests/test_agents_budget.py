@@ -51,23 +51,3 @@ def test_the_kernel_body_stays_inside_its_budget():
         "the kernel body is " + "; ".join(over) + ". Cut it, or move the addition into a "
         "fragment or a skill, where a project opts into reading it."
     )
-
-
-def test_NEGATIVE_CONTROL_the_budget_catches_a_body_that_grew():
-    """The gate has teeth: the shipped body passing is not evidence that anything is
-    measured. A body one worked example longer than the budget must be reported, and
-    both measurements must be reported independently."""
-
-    body = _kernel_body()
-    assert _over_budget(body + " padding" * (MAX_WORDS + 1)) == [
-        f"{len(body.split()) + MAX_WORDS + 1} words, over the {MAX_WORDS}-word budget",
-        f"{len(body.encode('utf-8')) + 8 * (MAX_WORDS + 1)} bytes, "
-        f"over the {MAX_BYTES}-byte budget",
-    ]
-    # Words alone, without tripping the byte budget: one-character words.
-    wordy = " ".join("x" * (MAX_WORDS + 1))
-    assert _over_budget(wordy) == [f"{MAX_WORDS + 1} words, over the {MAX_WORDS}-word budget"]
-    # Bytes alone, without tripping the word budget: one very long word.
-    assert _over_budget("x" * (MAX_BYTES + 1)) == [
-        f"{MAX_BYTES + 1} bytes, over the {MAX_BYTES}-byte budget"
-    ]

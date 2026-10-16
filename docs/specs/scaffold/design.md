@@ -697,7 +697,8 @@ In `tests/test_scaffold.py`, unless a line names another file:
 15. `test_a_route_named_by_a_streams_line_reads_present`, and one named by a line whose path does
     not exist reads absent.
 16. `test_accept_twice_writes_nothing_the_second_time`.
-17. `test_accept_refuses_a_link_a_git_path_and_a_file_that_appeared_after_the_plan`, and the plan
+17. `test_accept_refuses_a_linked_directory`, `test_accept_refuses_a_manifest_path_inside_git` and
+    `test_accept_never_overwrites_a_file_that_appeared_after_the_plan`, and the plan
     reads a planned path across a linked `.github/` as `refused` without raising.
 17a. `test_presence_and_accept_fold_case`: `security.md` and `Contributing.md` read present at
     their own paths, and a `.GitHub/` folder refuses `.github/workflows/ci.yml`.

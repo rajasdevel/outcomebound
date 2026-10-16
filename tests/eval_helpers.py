@@ -12,6 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "evals" / "fixtures"
@@ -29,6 +30,22 @@ def load(name: str, relative: str) -> ModuleType:
 RUN = load("eval_run", "evals/run.py")
 
 
+TIMEOUT = 120
+
+
+def _run_checked(command: list[str], **options: Any) -> None:
+    """A command that must succeed, within `TIMEOUT` seconds, so a hung setup fails the test
+    instead of the job. A failure raises `CalledProcessError` as `check=True` does, after it
+    prints the command's own output, which pytest shows with the failure."""
+
+    done = subprocess.run(
+        command, capture_output=True, text=True, check=False, timeout=TIMEOUT, **options
+    )
+    if done.returncode != 0:
+        print(f"{command} exited {done.returncode}:\n{done.stdout}{done.stderr}", file=sys.stderr)
+        raise subprocess.CalledProcessError(done.returncode, command, done.stdout, done.stderr)
+
+
 def stage_of(target: Path) -> Path:
     """The grading stage of the workspace `target`: a folder beside it, as the runner makes one
     outside the workspace, that the fixture's setup writes its graders to."""
@@ -41,11 +58,8 @@ def run_setup(name: str, target: Path, env: dict[str, str]) -> Path:
     `stage_of(target)`, as the runner runs it."""
 
     stage_of(target).mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["bash", str(FIXTURES / name / "setup.sh"), str(target), str(stage_of(target))],
-        check=True,
-        capture_output=True,
-        env=env,
+    _run_checked(
+        ["bash", str(FIXTURES / name / "setup.sh"), str(target), str(stage_of(target))], env=env
     )
     return target
 
@@ -67,13 +81,7 @@ def copy_built(source: Path, target: Path) -> Path:
 
 
 def act(target: Path, script: str) -> None:
-    subprocess.run(
-        ["bash", "-c", script],
-        cwd=str(target),
-        check=True,
-        capture_output=True,
-        env={**os.environ, **HERMETIC_GIT},
-    )
+    _run_checked(["bash", "-c", script], cwd=str(target), env={**os.environ, **HERMETIC_GIT})
 
 
 def transcript(workdir: Path, *commands: str, final: str = "Done.") -> str:
@@ -97,6 +105,7 @@ def seed(target: Path) -> str:
         cwd=str(target),
         capture_output=True,
         text=True,
+        timeout=TIMEOUT,
         env={**os.environ, **HERMETIC_GIT},
     ).stdout.strip()
 
@@ -137,6 +146,7 @@ def grade(
         text=True,
         cwd=str(ROOT),
         env=env,
+        timeout=TIMEOUT,
     )
     verdicts = {
         found[2]: found[1]

@@ -11,6 +11,7 @@ import pytest
 from outcomebound_tools import sources
 from outcomebound_tools.schemacheck import validate
 from outcomebound_tools.sources_manifest import schema
+from tests.portable import needs_symlinks
 
 NOTES = """Intro line.
 
@@ -226,6 +227,7 @@ def test_a_fence_shaped_line_with_an_info_string_does_not_close_a_fence(work, ca
     assert [i["id"] for i in manifest(work)["items"]] == ["notes:notes:a", "notes:notes:b"]
 
 
+@needs_symlinks
 def test_a_symlinked_default_folder_is_refused_and_nothing_is_written_outside(work, capsys):
     (work / "notes.md").write_text(NOTES)
     outside = work / "outside"

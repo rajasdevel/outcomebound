@@ -31,8 +31,8 @@ from outcomebound_tools.tickets import build_parser, main
 from outcomebound_tools.tickets_check import check, check_loaded
 from outcomebound_tools.tickets_claims import load_claims
 from outcomebound_tools.tickets_declaration import load_declaration
-from outcomebound_tools.tickets_model import ReadResult
 from outcomebound_tools.tickets_store import read_store
+from tests.portable import needs_symlinks
 from tests.tickets_export import LABEL, REPO, export, issue
 
 REPOSITORY = Path(__file__).resolve().parent.parent
@@ -957,6 +957,7 @@ def test_a_plan_at_the_checkout_root_with_no_cwd_is_not_warned(
     assert run_codes(found) == []
 
 
+@needs_symlinks
 def test_claim_cwd_outside_is_an_error(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A plan whose working directory resolves out of the checkout is ERROR."""
 
@@ -1305,49 +1306,32 @@ def test_bounds_findings_reach_the_report(
 # --- the seam, the schema and two runs ---------------------------------------------
 
 
-def test_check_is_the_verbs_own_seam(tmp_path: Path) -> None:
-    """`check(target, declaration, options)` is every verb's signature, and parses no option."""
-
-    root = checkout(tmp_path, document("#1", brief=()))
-    source = str(tmp_path / "export.json")
-    options = build_parser().parse_args(["check", str(root), "--input", source])
-
-    built = check(root, load_declaration(root), options)
-
-    assert built.verb == "check"
-    assert built.store == "github"
-    assert [item.code for item in built.tickets[0].messages] == ["BRIEF_THIN"]
-
-
-def test_a_store_already_read_is_judged_without_being_read_again(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_a_store_already_read_is_judged_without_being_read_again(tmp_path: Path) -> None:
     """`check_loaded` judges the store and the plan a caller already holds.
 
     A verb that reads the store for its own reasons and then wants this verb's
     judgement — `brief` — hands over what it read. Reading it a second time is
     at best two openings of one file and at worst a stream that is empty the
-    second time, so nothing here reads either again.
+    second time, so the files are gone before the judgement: one that read
+    either again would fail. `check` is every verb's seam, with the signature
+    `check(target, declaration, options)`, and builds the same report.
     """
 
     root = checkout(tmp_path, document("#1", brief=()))
     declaration = load_declaration(root)
-    source = str(tmp_path / "export.json")
-    options = build_parser().parse_args(["check", str(root), "--input", source])
-    read = read_store(root, declaration, source)
+    source = tmp_path / "export.json"
+    options = build_parser().parse_args(["check", str(root), "--input", str(source)])
+    read = read_store(root, declaration, str(source))
     plan = load_claims(root, declaration)
     itself = check(root, declaration, options)
-
-    def refuse(*arguments: object, **keys: object) -> ReadResult:
-        raise AssertionError("what the caller handed over was read again")
-
-    monkeypatch.setattr("outcomebound_tools.tickets_check.read_store", refuse)
-    monkeypatch.setattr("outcomebound_tools.tickets_check.load_claims", refuse)
+    source.unlink()
+    (root / CLAIMS_PATH).unlink()
 
     built = check_loaded(root, declaration, options, read, plan)
 
-    assert built.verb == "check"
-    assert [item.code for item in built.tickets[0].messages] == ["BRIEF_THIN"]
+    assert itself.verb == "check"
+    assert itself.store == "github"
+    assert [item.code for item in itself.tickets[0].messages] == ["BRIEF_THIN"]
     assert built == itself, "one verb, whoever read the store"
 
 
@@ -1375,7 +1359,6 @@ def test_tests_import_only_public_names() -> None:
     """Every name this file takes from the engine is one its module declares."""
 
     tree = ast.parse(Path(__file__).read_text(encoding="utf-8"), filename=__file__)
-    reached = 0
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom) or node.module is None:
             continue
@@ -1383,9 +1366,7 @@ def test_tests_import_only_public_names() -> None:
             continue
         public = set(importlib.import_module(node.module).__all__)
         for alias in node.names:
-            reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
-    assert reached == 8, "this file imports exactly the seam it tests"
 
 
 # --- a claim another claim of the ticket already runs ---------------------------------

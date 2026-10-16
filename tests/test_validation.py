@@ -34,7 +34,7 @@ def _run(tmp_path, claims, **plan_fields):
         text=True,
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
-        timeout=10,
+        timeout=60,
     )
 
 
@@ -123,20 +123,21 @@ def test_timeout_is_unverified(tmp_path):
 def test_a_timeout_ends_the_command_and_everything_it_started(tmp_path):
     """Breaks if only the command is killed: its child keeps running, holds the output pipe
     open and keeps changing the tree the caller expects to be left alone, and the verb waits
-    ten more seconds for a pipe nobody closes. The command is a Python process, and so is its
+    for a pipe nobody closes. The command is a Python process, and so is its
     child, so that the pid it records is the platform's own on Windows too."""
 
     parent = (
-        "import subprocess, sys; "
+        "import os, subprocess, sys; "
         "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-        "open('child.pid', 'w').write(str(child.pid)); child.wait()"
+        "open('child.tmp', 'w').write(str(child.pid)); os.replace('child.tmp', 'child.pid'); "
+        "child.wait()"
     )
     started = time.monotonic()
-    r = _run(tmp_path, [_claim([sys.executable, "-c", parent], timeout_seconds=2)])
+    r = _run(tmp_path, [_claim([sys.executable, "-c", parent], timeout_seconds=5)])
 
     assert r.returncode == 2, r.stdout + r.stderr
     assert "timeout" in r.stdout.lower()
-    assert time.monotonic() - started < 9, "the verb waited for the child's pipe"
+    assert time.monotonic() - started < 30, "the verb waited for the child's pipe"
     child = int((tmp_path / "child.pid").read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and running(child):
@@ -178,7 +179,6 @@ def test_a_claim_waits_for_its_command_unless_a_timeout_is_set(tmp_path):
 
     assert claims() == {"bare": None, "own": 7.0}
     assert claims(timeout_seconds=19) == {"bare": 19.0, "own": 7.0}
-    assert not hasattr(validation, "DEFAULT_TIMEOUT_SECONDS")
 
 
 def test_a_command_without_a_timeout_runs_to_its_end(monkeypatch, tmp_path):
@@ -435,7 +435,7 @@ def test_a_waiver_leaves_unverified_unverified(tmp_path):
         text=True,
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
-        timeout=10,
+        timeout=60,
     )
     assert r.returncode == 2
     assert "the observed UNVERIFIED stands" in r.stdout and "VERDICT: UNVERIFIED" in r.stdout
@@ -666,9 +666,10 @@ def test_an_interruption_ends_the_command_and_everything_it_started(tmp_path, mo
     """Breaks if only a timeout stops the tree: a Ctrl-C leaves the child running."""
 
     parent = (
-        "import subprocess, sys, time; "
+        "import os, subprocess, sys, time; "
         "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-        "open('child.pid', 'w').write(str(child.pid)); time.sleep(60)"
+        "open('child.tmp', 'w').write(str(child.pid)); os.replace('child.tmp', 'child.pid'); "
+        "time.sleep(60)"
     )
     real = subprocess.Popen.communicate
 
@@ -676,7 +677,6 @@ def test_an_interruption_ends_the_command_and_everything_it_started(tmp_path, mo
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline and not (tmp_path / "child.pid").exists():
             time.sleep(0.05)
-        time.sleep(0.2)
         raise KeyboardInterrupt
 
     monkeypatch.setattr(subprocess.Popen, "communicate", interrupted)

@@ -17,15 +17,10 @@ pytestmark = needs_posix_bash
 DESIGN = "docs/specs/packing/design.md"
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        "accurate-gap",
-        "equivalent-rule",
-        "narrowed-rule",
-        "wrong-report",
-    ],
-)
+# The two claims are mechanical (a path allowlist and a readable transcript), so what an edit to
+# the design says, or what the report says, changes neither verdict. One edit that adds a note and
+# one report that contradicts the design stand for all of them.
+@pytest.mark.parametrize("change", ["accurate-gap", "wrong-report"])
 def test_scope_checks_do_not_claim_to_judge_design_meaning(tmp_path, change):
     work = build("explain-mismatch", tmp_path / "workspace")
     source = (FIXTURES / "explain-mismatch/design.md").read_bytes()
@@ -33,11 +28,6 @@ def test_scope_checks_do_not_claim_to_judge_design_meaning(tmp_path, change):
     design = source.decode()
     if change == "accurate-gap":
         design += "\nImplementation gap: the strict comparison selects large at 500 grams.\n"
-    elif change == "equivalent-rule":
-        design = design.replace("500 grams or less", "at most 500 grams")
-        design += "\nImplementation gap: the strict comparison selects large at 500 grams.\n"
-    elif change == "narrowed-rule":
-        design = design.replace("500 grams or less", "less than 500 grams")
     (work / DESIGN).write_text(design)
     report = "Large at 500 grams is approved." if change == "wrong-report" else "Control report."
     result = _grade(work, "explain-mismatch", transcript(work, "cat " + DESIGN), report)

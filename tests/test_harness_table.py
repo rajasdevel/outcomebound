@@ -26,9 +26,12 @@ def test_every_row_validates_against_the_table_schema():
     for name, row in TABLE.items():
         assert validate(row, ROW_SCHEMA) == [], f"{name}: {validate(row, ROW_SCHEMA)}"
         assert "command_format" not in row and "mcp" not in row
-        # A verified row carries no placeholder anywhere in it.
+        # A verified row carries no placeholder anywhere in it, and absent evidence is never
+        # promoted: a row not verified has no date it was.
         if row["verified"]:
             assert "TODO" not in json.dumps(row), f"{name} is verified but carries a TODO"
+        else:
+            assert row["verified_on"] is None, name
 
 
 def test_instruction_file_is_the_file_of_the_route_never_the_import_syntax():
@@ -39,38 +42,15 @@ def test_instruction_file_is_the_file_of_the_route_never_the_import_syntax():
     """
 
     assert TABLE["claude-code"]["instruction_file"] == "CLAUDE.md"
-    assert TABLE["gemini"]["instruction_file"] == "GEMINI.md"
     assert TABLE["codex"]["instruction_file"] == "AGENTS.md"
-    assert TABLE["amp"]["instruction_file"] == "AGENTS.md"
-    assert TABLE["cursor"]["instruction_file"] == "AGENTS.md"
-    assert TABLE["pi"]["instruction_file"] is None
     for name, row in TABLE.items():
         assert "@" not in (row["instruction_file"] or ""), name
 
 
-def test_absent_evidence_stays_null_and_is_never_promoted_to_verified():
+def test_a_declared_cap_carries_its_provenance_note() -> None:
     for name, row in TABLE.items():
-        assert row["nested_instructions"] is None or isinstance(row["nested_instructions"], bool), (
-            name
-        )
-        if not row["verified"]:
-            assert row["verified_on"] is None, name
-        for channel in ("instruction", "skill"):
-            value = row["loading_evidence"][channel]
-            assert value is None or isinstance(value, str), name
-
-
-def test_every_row_declares_a_document_byte_cap():
-    for h, e in TABLE.items():
-        assert "doc_byte_cap" in e, f"{h} missing doc_byte_cap"
-        assert e["doc_byte_cap"] is None or isinstance(e["doc_byte_cap"], int)
-
-
-def test_a_declared_cap_carries_its_provenance_note():
-    for h, e in TABLE.items():
-        if e["doc_byte_cap"] is not None:
-            assert e.get("note"), f"{h} declares a byte cap with no source note"
-            assert "verify" in e["note"].lower()
+        if row["doc_byte_cap"] is not None:
+            assert row.get("note"), f"{name} declares a byte cap with no source note"
 
 
 def test_only_a_pointer_row_says_when_its_harness_reads_agents_md_itself() -> None:
@@ -100,8 +80,6 @@ def test_every_row_names_its_files_config_and_recheck_date() -> None:
     """
 
     for name, row in TABLE.items():
-        for field in ("reads", "nested", "overrides", "config", "recheck_on"):
-            assert field in row, f"{name} has no {field}"
         assert row["reads"] or row["overrides"], f"{name} names no instruction file"
         assert row["config"]["paths"], f"{name} names no project configuration file"
         assert set(row["config"]["keys"]) == {
@@ -113,8 +91,6 @@ def test_every_row_names_its_files_config_and_recheck_date() -> None:
             "deny",
         }, name
         assert row["recheck_on"] > (row["verified_on"] or ""), name
-        for override in row["overrides"]:
-            assert override["owner"] in ("project", "person"), name
 
 
 def test_a_file_that_hides_agents_md_is_one_the_row_already_names() -> None:

@@ -20,6 +20,7 @@ import pytest
 
 from outcomebound_tools import identity
 from outcomebound_tools.tickets_links import LinksError, Section, anchor_of, section
+from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
 SPECS = "docs/specs"
@@ -483,12 +484,38 @@ def test_unresolved_and_ambiguous_anchors_raise(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("path", ["../x.md", "/etc/x.md", "a/../b.md", ".git/config", "~/x.md"])
 def test_a_path_outside_the_repository_is_unresolved(tmp_path: Path, path: str) -> None:
-    _spec(tmp_path, "a-spec", requirements=AMBIGUOUS)
+    # A file with the anchor sits where each path would land if the guard let it through,
+    # so only the guard, and not a missing file, can make the section unresolved.
+    root = tmp_path / "repo"
+    _spec(root, "a-spec", requirements=AMBIGUOUS)
+    (tmp_path / "x.md").write_text(AMBIGUOUS, encoding="utf-8")
+    (root / "b.md").write_text(AMBIGUOUS, encoding="utf-8")
+    (root / ".git").mkdir()
+    (root / ".git" / "config").write_text(AMBIGUOUS, encoding="utf-8")
+    (root / "~").mkdir()
+    (root / "~" / "x.md").write_text(AMBIGUOUS, encoding="utf-8")
 
     with pytest.raises(LinksError) as raised:
-        section(tmp_path, path, "only-once")
+        section(root, path, "only-once")
 
     assert raised.value.code == "READS_UNRESOLVED"
+    assert "not a repository-relative path" in str(raised.value)
+
+
+@needs_symlinks
+def test_a_symlink_out_of_the_repository_is_unresolved(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    _spec(root, "a-spec", requirements=AMBIGUOUS)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "x.md").write_text(AMBIGUOUS, encoding="utf-8")
+    (root / "link").symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(LinksError) as raised:
+        section(root, "link/x.md", "only-once")
+
+    assert raised.value.code == "READS_UNRESOLVED"
+    assert "could not be read" in str(raised.value)
 
 
 # --- the seam ----------------------------------------------------------------------
@@ -496,7 +523,6 @@ def test_a_path_outside_the_repository_is_unresolved(tmp_path: Path, path: str) 
 
 def test_tests_import_only_public_names() -> None:
     tree = ast.parse(Path(__file__).read_text(encoding="utf-8"), filename=__file__)
-    reached = 0
     for node in ast.walk(tree):
         if not isinstance(node, ast.ImportFrom) or node.module is None:
             continue
@@ -504,6 +530,4 @@ def test_tests_import_only_public_names() -> None:
             continue
         public = set(importlib.import_module(node.module).__all__)
         for alias in node.names:
-            reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
-    assert reached == 4, "this file imports exactly the seam it tests"
