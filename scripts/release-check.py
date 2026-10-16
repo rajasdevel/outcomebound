@@ -41,8 +41,9 @@ CI = "templates/ci"
 GITHUB_TEMPLATE = f"{CI}/github-actions.yml"
 # The CI workflow the scaffold writes into a new project names its release as the CI templates do.
 SCAFFOLD_CI = "templates/scaffold/common/ci.yml"
-# An install line's release: `…/outcomebound@v1.2.0`, a pre-release `…@v1.2.0-rc.1` too.
-PIN = re.compile(r"/outcomebound@v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)")
+# An install line's release: from PyPI `outcomebound==1.2.0`, or from Git `…/outcomebound@v1.2.0`
+# and a pre-release `…@v1.2.0-rc.1`.
+PIN = re.compile(r"(?:/outcomebound@v|\boutcomebound==)(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)")
 
 
 def _git(root: Path, *arguments: str) -> str | None:
