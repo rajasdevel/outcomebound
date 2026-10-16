@@ -47,7 +47,7 @@ PIN = re.compile(r"/outcomebound@v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)")
 
 def _git(root: Path, *arguments: str) -> str | None:
     done = subprocess.run(
-        ["git", *arguments], cwd=root, capture_output=True, text=True, check=False
+        ["git", *arguments], cwd=root, capture_output=True, text=True, check=False, encoding="utf-8"
     )
     return done.stdout.strip() if done.returncode == 0 else None
 
@@ -189,7 +189,12 @@ def _token() -> str | None:
         return token
     try:
         done = subprocess.run(
-            ["gh", "auth", "token"], capture_output=True, text=True, timeout=30, check=False
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+            encoding="utf-8",
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -222,7 +227,7 @@ def _open_alerts(kind: str) -> list[dict[str, object]]:
         raise OSError(f"GitHub answered {response.status}")
     answer = json.loads(body)
     if not isinstance(answer, list):
-        return []
+        raise OSError("GitHub's answer is not a list of alerts")
     return [alert for alert in answer if isinstance(alert, dict)]
 
 
@@ -253,7 +258,7 @@ def alerts(source: Path | None) -> list[tuple[bool, str]]:
         what = f"no open {label} alert"
         try:
             if source is not None and saved is not None:
-                if kind not in saved:
+                if not isinstance(saved.get(kind), list):
                     raise OSError(f"{source.name} holds no {kind} list")
                 found = [alert for alert in saved[kind] if isinstance(alert, dict)]
             else:

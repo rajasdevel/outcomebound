@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def test_changelog_has_unreleased_and_keepachangelog_shape():
-    t = Path("CHANGELOG.md").read_text()
+    t = Path("CHANGELOG.md").read_text(encoding="utf-8")
     assert "## [Unreleased]" in t
     assert re.search(r"^## \[\d+\.\d+\.\d+\]", t, re.MULTILINE), "no released-version heading"
 

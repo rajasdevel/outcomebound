@@ -78,6 +78,7 @@ def test_make_kits_packs_each_kit_as_its_source(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
     assert done.returncode == 0, done.stdout + done.stderr
 

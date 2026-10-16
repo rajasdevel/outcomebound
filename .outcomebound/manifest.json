@@ -24,10 +24,10 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "3e16e11e2f8b67bcc276859781cf703f4a8492d053f54786518adecef35412aa",
+        ".github/workflows/ci.yml": "c952cb3da3d572099295ed0481dc5705e6b132e60624b063b555a1d286a5d435",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
-        ".outcomebound/floor.json": "a2a44f497451765c5f5eafae05db98937e480931ce0a3568fbdece3f9f8ed57f",
+        ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
         ".outcomebound/fragments/commands.md": "e33d05f98754a90248842083ca8d5a1d7a1757b8bbf3a54abd7bda8fd1be35e5",
         ".outcomebound/fragments/local.md": "fe01d769bbabeee6359900aef1bdd06182dfd98e1b9ed6f55d921568b9ad488c",
         ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
@@ -37,7 +37,7 @@
       "style": [
         "ste"
       ],
-      "sha256": "8bcb6af12031c937b6e043840cfe22e4484454e55787ce76be7a47c8cde5239b"
+      "sha256": "8ac76867af4f7b298b2ce69337110aa174c5c8b39052eea262fa44f3171d793d"
     },
     {
       "kind": "block",

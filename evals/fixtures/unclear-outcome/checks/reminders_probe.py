@@ -59,6 +59,7 @@ def _tool(data: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
         text=True,
         env=env,
         timeout=60,
+        encoding="utf-8",
     )
 
 

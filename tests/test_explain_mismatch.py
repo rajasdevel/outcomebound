@@ -28,7 +28,7 @@ def test_scope_checks_do_not_claim_to_judge_design_meaning(tmp_path, change):
     design = source.decode()
     if change == "accurate-gap":
         design += "\nImplementation gap: the strict comparison selects large at 500 grams.\n"
-    (work / DESIGN).write_text(design)
+    (work / DESIGN).write_text(design, encoding="utf-8")
     report = "Large at 500 grams is approved." if change == "wrong-report" else "Control report."
     result = _grade(work, "explain-mismatch", transcript(work, "cat " + DESIGN), report)
     # All are allowed file edits with readable inputs. Meaning must be judged separately.
@@ -48,6 +48,7 @@ def test_code_repair_is_rejected_and_seed_tests_miss_the_boundary(tmp_path):
         capture_output=True,
         text=True,
         timeout=30,
+        encoding="utf-8",
     )
     assert suite.returncode == 0 and "Ran 2 tests" in suite.stderr
     boundary = subprocess.check_output(
@@ -61,10 +62,11 @@ def test_code_repair_is_rejected_and_seed_tests_miss_the_boundary(tmp_path):
         env=env,
         text=True,
         timeout=30,
+        encoding="utf-8",
     )
     assert boundary.strip() == "['small', 'large', 'large']"
     code = work / "packing.py"
-    code.write_text(code.read_text().replace("< 500", "<= 500"))
+    code.write_text(code.read_text(encoding="utf-8").replace("< 500", "<= 500"), encoding="utf-8")
     assert RUN.check_protected(work, protected)[0] is False
     result = _grade(
         work, "explain-mismatch", transcript(work, "cat packing.py"), "Correct explanation."

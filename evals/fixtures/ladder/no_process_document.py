@@ -16,7 +16,9 @@ NAMED = re.compile(
 
 
 def _lines(*arguments):
-    done = subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     if done.returncode != 0:
         raise SystemExit(f"git {' '.join(arguments)}: {done.stderr.strip()}")
     return [line for line in done.stdout.splitlines() if line]

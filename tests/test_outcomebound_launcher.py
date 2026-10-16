@@ -60,6 +60,7 @@ def launch(
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
 
 
@@ -296,8 +297,11 @@ def test_the_runner_puts_this_checkouts_engine_first_from_anywhere(tmp_path: Pat
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
-    bare = subprocess.run([str(RUNNER)], capture_output=True, text=True, check=False)
+    bare = subprocess.run(
+        [str(RUNNER)], capture_output=True, text=True, check=False, encoding="utf-8"
+    )
 
     assert done.returncode == 0, done.stderr
     assert [Path(line) for line in done.stdout.split()] == [ROOT, ROOT]

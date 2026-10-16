@@ -30,6 +30,7 @@ def git_dir(root: Path) -> Path:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
     return Path(found.stdout.strip()) if found.returncode == 0 else root / ".git"
 
@@ -88,7 +89,11 @@ def _ps_commands() -> list[str] | None:
     if ps is None:
         return None
     listed = subprocess.run(
-        [ps, "-A", "-ww", "-o", "stat=,command="], capture_output=True, text=True, check=False
+        [ps, "-A", "-ww", "-o", "stat=,command="],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     if listed.returncode != 0:
         return None
@@ -117,6 +122,8 @@ def _windows_commands() -> list[str] | None:
         encoding="utf-8",
         errors="replace",
         check=False,
+        # A query that hangs would hold the wait past its own deadline, which cannot stop it.
+        timeout=60,
     )
     return listed.stdout.splitlines() if listed.returncode == 0 else None
 

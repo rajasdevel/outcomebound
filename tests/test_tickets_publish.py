@@ -114,9 +114,18 @@ def run(tmp_path: Path, text: str) -> tuple[subprocess.CompletedProcess[str], li
     shell = shutil.which("sh")
     assert shell is not None
     ran = subprocess.run(
-        [shell, "-c", text], env=environment, capture_output=True, text=True, check=False
+        [shell, "-c", text],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
-    calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
+    calls = (
+        [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+        if log.exists()
+        else []
+    )
     return ran, calls
 
 

@@ -35,6 +35,7 @@ def _run(tmp_path, claims, **plan_fields):
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
         timeout=60,
+        encoding="utf-8",
     )
 
 
@@ -265,6 +266,7 @@ def test_plan_must_be_explicit_file_not_unbound_stdin_projection(tmp_path):
         text=True,
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
+        encoding="utf-8",
     )
     assert r.returncode == 2
 
@@ -298,6 +300,7 @@ def test_relative_cwd_is_bound_to_plan_directory_not_invocation_directory(tmp_pa
         text=True,
         cwd=invocation,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -436,6 +439,7 @@ def test_a_waiver_leaves_unverified_unverified(tmp_path):
         cwd=tmp_path,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
         timeout=60,
+        encoding="utf-8",
     )
     assert r.returncode == 2
     assert "the observed UNVERIFIED stands" in r.stdout and "VERDICT: UNVERIFIED" in r.stdout
@@ -541,17 +545,17 @@ def test_a_nonzero_exit_stays_fail_with_or_without_the_output(tmp_path, when_mis
 
 
 def test_an_untouched_existing_file_is_not_produced(tmp_path):
-    (tmp_path / "out.txt").write_text("old")
+    (tmp_path / "out.txt").write_text("old", encoding="utf-8")
     r = _run(tmp_path, [_claim(produces=_produces("out.txt"))])
     assert r.returncode == 2 and "out.txt" in r.stdout
-    assert (tmp_path / "out.txt").read_text() == "old"
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "old"
 
 
 def test_a_changed_existing_file_counts_as_produced(tmp_path):
-    (tmp_path / "out.txt").write_text("old")
+    (tmp_path / "out.txt").write_text("old", encoding="utf-8")
     claim = _claim([sys.executable, "-c", _writes("out.txt", "new")], produces=_produces("out.txt"))
     assert _run(tmp_path, [claim]).returncode == 0
-    assert (tmp_path / "out.txt").read_text() == "new"
+    assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "new"
 
 
 def test_every_declared_path_must_be_produced(tmp_path):

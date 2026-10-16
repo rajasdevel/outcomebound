@@ -16,6 +16,7 @@ def _run(module, stdin_text, *args):
         input=stdin_text,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
 
 

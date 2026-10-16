@@ -54,7 +54,9 @@ MAX_BYTES = 400_000
 
 
 def _git(*arguments: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    return subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
 
 
 def _seed() -> str:

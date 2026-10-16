@@ -480,6 +480,7 @@ class Engine:
                     errors="replace",
                     stdin=subprocess.DEVNULL,
                     check=False,
+                    encoding="utf-8",
                 )
                 outcome = read(command, done.returncode, done.stdout, done.stderr)
                 outcome.seconds = time.monotonic() - started
@@ -585,7 +586,11 @@ def canary(number: int, project: Path, installed: Engine, candidates: list[Engin
 
 def _git(root: Path, *arguments: str) -> str | None:
     done = subprocess.run(
-        ["git", "-C", str(root), *arguments], capture_output=True, text=True, check=False
+        ["git", "-C", str(root), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     return done.stdout.strip() if done.returncode == 0 else None
 
@@ -651,6 +656,7 @@ def _version(python: str) -> str:
         text=True,
         stdin=subprocess.DEVNULL,
         check=False,
+        encoding="utf-8",
     )
     return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else "unknown"
 
@@ -683,7 +689,11 @@ def _installed_python(command: str) -> str:
 def _oldest() -> str:
     if shutil.which("uv"):
         done = subprocess.run(
-            ["uv", "python", "find", OLDEST], capture_output=True, text=True, check=False
+            ["uv", "python", "find", OLDEST],
+            capture_output=True,
+            text=True,
+            check=False,
+            encoding="utf-8",
         )
         if done.returncode == 0 and done.stdout.strip():
             return done.stdout.strip()
@@ -710,7 +720,12 @@ def engines(installed: str, pythons: list[str]) -> tuple[Engine, list[Engine]]:
 
 def _release(installed: Engine) -> str:
     done = subprocess.run(
-        [*installed.argv, "home"], capture_output=True, text=True, env=installed.env, check=False
+        [*installed.argv, "home"],
+        capture_output=True,
+        text=True,
+        env=installed.env,
+        check=False,
+        encoding="utf-8",
     )
     try:
         return (Path(done.stdout.strip()) / "VERSION").read_text(encoding="utf-8").strip()

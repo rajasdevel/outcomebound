@@ -1411,6 +1411,7 @@ NEW_LEAK = "AKIA" + "ZXCVBNM5ASDFGHJ7"
 
 
 def today() -> str:
+    # real date: apply records the day it runs, which the expected record names
     return datetime.date.today().isoformat()
 
 
@@ -2511,7 +2512,9 @@ def test_an_unwritable_cache_folder_moves_only_its_tool_once_per_run_and_never_a
 
     assert status == 0
     assert sorted(tried) == sorted([root, root / ".ruff_cache"])
-    seen = [line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines()]
+    seen = [
+        line.split("=", 1) for line in (tmp_path / "seen").read_text(encoding="utf-8").splitlines()
+    ]
     caches = {
         tool: sorted(c for name, c in seen if Path(name).name == tool) for tool in floor.CACHES
     }

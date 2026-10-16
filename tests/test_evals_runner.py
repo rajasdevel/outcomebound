@@ -225,6 +225,7 @@ def _invoke(
         cwd=str(ROOT),
         env=environment,
         timeout=300,
+        encoding="utf-8",
     )
     return done, out
 
@@ -269,6 +270,7 @@ def test_help_names_the_arms_and_the_model_rule() -> None:
         capture_output=True,
         text=True,
         check=True,
+        encoding="utf-8",
     ).stdout
     for words in ("earlier", "current", "configured default never runs"):
         assert words in " ".join(shown.split()), words
@@ -428,6 +430,7 @@ def test_the_current_arm_puts_the_launcher_and_its_skills_in_reach_and_no_check_
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.split()
     assert sorted(tracked) == sorted(arm.files)
 
@@ -479,6 +482,7 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
         text=True,
         check=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout
     pointer = "before planning work here"
     if arm in RUN.INSTALLED:
@@ -530,6 +534,7 @@ def test_a_fixture_that_selects_the_tickets_fragment_runs_with_the_ticket_skills
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.split()
     assert sorted(tracked) == sorted(arm.files)
     status = json.loads((out / "STATUS.json").read_text(encoding="utf-8"))
@@ -651,6 +656,7 @@ def test_NEGATIVE_CONTROL_a_forged_grader_or_moved_seed_cannot_pass_the_fixture(
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.strip()
     assert (tag != meta["seed_sha"]) == forgery.endswith("seed-moved")
 
@@ -1005,6 +1011,7 @@ def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
         text=True,
         env=env,
         check=True,
+        encoding="utf-8",
     ).stdout
     assert status == (stage / "checks" / "baseline-status").read_text(encoding="utf-8")
     assert not (workdir / "checks").exists()
@@ -1036,7 +1043,7 @@ def test_bounded_command_keeps_partial_output_and_stops_descendant(
     assert "partial evidence" in caught.value.output
     import time
 
-    pid = int(child_pid.read_text())
+    pid = int(child_pid.read_text(encoding="utf-8"))
     deadline = time.monotonic() + 10
     while running(pid) and time.monotonic() < deadline:
         time.sleep(0.05)
@@ -1047,7 +1054,7 @@ def test_fixture_timeout_still_returns_a_record(tmp_path, monkeypatch):
     fixtures = tmp_path / "definitions"
     fixture = fixtures / "slow"
     fixture.mkdir(parents=True)
-    (fixture / "setup.sh").write_text("echo 'setup partial'; sleep 60\n")
+    (fixture / "setup.sh").write_text("echo 'setup partial'; sleep 60\n", encoding="utf-8")
     monkeypatch.setattr(RUN, "FIXTURES", fixtures)
     monkeypatch.setattr(RUN, "SETUP_TIMEOUT", 3)
     answer, report, code, extra = RUN.run_fixture(
@@ -1172,7 +1179,8 @@ def test_failed_login_output_does_not_authorize_a_model_call(tmp_path):
     assert done.returncode == RUN.PREFLIGHT_EXIT
     assert not (out / "small-fix.meta.json").exists()
     assert not any(
-        line.startswith("exec ") for line in (tmp_path / "calls.txt").read_text().splitlines()
+        line.startswith("exec ")
+        for line in (tmp_path / "calls.txt").read_text(encoding="utf-8").splitlines()
     )
 
 

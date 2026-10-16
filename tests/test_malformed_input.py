@@ -275,7 +275,9 @@ def test_adopt_refuses_a_host_with_a_truncated_sentinel_instead_of_appending(tmp
     (tmp_path / "AGENTS.md").write_text(host, encoding="utf-8")
     before = _tree(tmp_path)
 
-    result = subprocess.run(engine("adopt", tmp_path), capture_output=True, text=True, cwd=ROOT)
+    result = subprocess.run(
+        engine("adopt", tmp_path), capture_output=True, text=True, cwd=ROOT, encoding="utf-8"
+    )
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert "malformed managed block sentinel" in result.stderr

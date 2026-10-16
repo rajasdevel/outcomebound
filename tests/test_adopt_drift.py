@@ -435,7 +435,9 @@ def test_a_mailmap_joins_two_emails_into_one_author(tmp_path: Path) -> None:
     commit(target, ONE, "Alice Doe")
     commit(target, "alice.doe@work.example", "A. Doe")
     assert drift.recent_authors(target) == 2
-    (target / ".mailmap").write_text(f"Alice Doe <{ONE}> <alice.doe@work.example>\n")
+    (target / ".mailmap").write_text(
+        f"Alice Doe <{ONE}> <alice.doe@work.example>\n", encoding="utf-8"
+    )
 
     assert drift.recent_authors(target) == 1
 
@@ -600,7 +602,11 @@ def test_a_tag_that_is_not_utf8_does_not_stop_the_reading(tmp_path: Path) -> Non
     target = repo(tmp_path / "t")
     commit(target, ONE)
     sha = subprocess.run(
-        [GIT, "-C", str(target), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        [GIT, "-C", str(target), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     ).stdout.strip()
     refs = sha.encode() + b" refs/tags/v0.\xff\n" + sha.encode() + b" refs/tags/v1.0.0\n"
     (target / ".git" / "packed-refs").write_bytes(b"# pack-refs with: peeled\n" + refs)

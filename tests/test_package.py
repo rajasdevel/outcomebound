@@ -76,6 +76,7 @@ def installed(tmp_path_factory: pytest.TempPathFactory) -> Path:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
     if made.returncode != 0:
         pytest.skip(f"UNVERIFIED: this Python makes no virtual environment with pip: {made.stderr}")
@@ -83,10 +84,7 @@ def installed(tmp_path_factory: pytest.TempPathFactory) -> Path:
     python = scripts / ("python.exe" if os.name == "nt" else "python")
     pip = [str(python), "-m", "pip", "install", "--no-index", "--no-deps"]
     done = subprocess.run(
-        [*pip, "--quiet", str(ROOT)],
-        capture_output=True,
-        text=True,
-        check=False,
+        [*pip, "--quiet", str(ROOT)], capture_output=True, text=True, check=False, encoding="utf-8"
     )
     assert done.returncode == 0, done.stderr
     return scripts / ("outcomebound.exe" if os.name == "nt" else "outcomebound")
@@ -493,7 +491,12 @@ def test_the_wheel_marks_the_scripts_it_ships_executable_by_their_first_line(
     and a wheel built there must be the wheel built anywhere. Checked against Git's own mode."""
 
     tracked = subprocess.run(
-        ["git", "ls-files", "-s", "-z"], cwd=ROOT, capture_output=True, text=True, check=False
+        ["git", "ls-files", "-s", "-z"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     if tracked.returncode != 0:
         pytest.skip("UNVERIFIED: this tree is not a Git checkout, so Git's modes are unknown")

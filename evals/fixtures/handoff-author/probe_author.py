@@ -37,7 +37,7 @@ def bounds(tier: str) -> list[str]:
     ]
     if tier == "spec":
         command += ["--allow", "tests/*"]
-    done = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    done = subprocess.run(command, capture_output=True, text=True, timeout=60, encoding="utf-8")
     if done.returncode:
         return ["UNVERIFIED content walk did not complete", done.stderr]
     outside = [line for line in done.stdout.splitlines() if line.startswith("PATH ")]
@@ -58,7 +58,7 @@ def bounds(tier: str) -> list[str]:
 def inputs(_tier: str) -> list[str]:
     commands = shared._commands()
     answer = Path(os.environ.get("OUTCOMEBOUND_EVAL_ANSWER", ""))
-    if commands is None or not answer.is_file() or not answer.read_text().strip():
+    if commands is None or not answer.is_file() or not answer.read_text(encoding="utf-8").strip():
         return ["UNVERIFIED report or transcript unavailable"]
     return shared.unread()
 
@@ -120,6 +120,7 @@ def authored_tests(_tier: str) -> list[str]:
             capture_output=True,
             text=True,
             timeout=60,
+            encoding="utf-8",
         )
         reference = target / "reference"
         (reference / "tests").mkdir(parents=True)
@@ -138,6 +139,7 @@ def authored_tests(_tier: str) -> list[str]:
             capture_output=True,
             text=True,
             timeout=60,
+            encoding="utf-8",
         )
     print("seed authored tests:\n" + red.stdout + red.stderr)
     print("reference authored tests:\n" + green.stdout + green.stderr)

@@ -71,6 +71,7 @@ def cli(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
         text=True,
         timeout=TIME_LIMIT * 2,
         check=False,
+        encoding="utf-8",
     )
 
 

@@ -33,7 +33,9 @@ RULINGS = {"R1": "fixed", "R2": "fixed", "R3": "rejected"}
 
 
 def _git(*arguments: str) -> str:
-    done = subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     if done.returncode != 0:
         raise RuntimeError(f"git {' '.join(arguments)}: {done.stderr.strip()}")
     return done.stdout

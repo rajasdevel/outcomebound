@@ -262,7 +262,11 @@ def run_adopt(root: Path, *words: str) -> subprocess.CompletedProcess[str]:
     from tests.portable import engine
 
     return subprocess.run(
-        engine("adopt", str(root), *words), capture_output=True, text=True, check=False
+        engine("adopt", str(root), *words),
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
 
 

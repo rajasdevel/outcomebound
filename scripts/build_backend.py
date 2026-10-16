@@ -321,7 +321,9 @@ def build_sdist(sdist_directory: str, config_settings: dict[str, object] | None 
     with (
         open(Path(sdist_directory) / filename, "wb") as raw,
         gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as zipped,
-        tarfile.open(fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT) as archive,
+        tarfile.open(
+            fileobj=zipped, mode="w", format=tarfile.PAX_FORMAT, encoding="utf-8"
+        ) as archive,
     ):
         for name, data, executable in sorted(members):
             member = tarfile.TarInfo(name)

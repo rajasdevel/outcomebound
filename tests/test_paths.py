@@ -280,6 +280,7 @@ def test_a_real_junction_is_a_way_in_that_a_symlink_is(tmp_path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
     assert made.returncode == 0, made.stdout + made.stderr
 
@@ -306,7 +307,7 @@ def test_printed_word_round_trips_through_its_supported_shell(tmp_path, word):
         argv = [shell, "-NoProfile", "-NonInteractive", "-Command", command]
     else:
         argv = ["/bin/sh", "-c", command]
-    result = subprocess.run(argv, capture_output=True, text=True, check=True)
+    result = subprocess.run(argv, capture_output=True, text=True, check=True, encoding="utf-8")
     assert json.loads(result.stdout) == [word]
 
 
@@ -317,7 +318,7 @@ def test_generated_done_base_reaches_posix_shell_unchanged_on_windows(tmp_path, 
     if shell is None:
         pytest.skip("POSIX Done shell is unavailable")
     (tmp_path / ".outcomebound").mkdir()
-    (tmp_path / ".outcomebound/floor.json").write_text("{}")
+    (tmp_path / ".outcomebound/floor.json").write_text("{}", encoding="utf-8")
     monkeypatch.setattr(paths, "on_windows", lambda: True)
     monkeypatch.setattr(adopt, "default_base", lambda _: "origin/owner's")
     line = adopt._proposal(tmp_path)[0][0]
@@ -330,7 +331,11 @@ def test_generated_done_base_reaches_posix_shell_unchanged_on_windows(tmp_path, 
         ]
     )
     result = subprocess.run(
-        [shell, "-c", capture + " " + line], capture_output=True, text=True, check=True
+        [shell, "-c", capture + " " + line],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     )
     assert json.loads(result.stdout) == [
         "outcomebound",

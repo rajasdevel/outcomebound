@@ -35,6 +35,7 @@ def bounds() -> list[str]:
         capture_output=True,
         text=True,
         timeout=60,
+        encoding="utf-8",
     )
     if done.returncode:
         return ["UNVERIFIED content walk did not complete", done.stderr]

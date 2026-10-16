@@ -88,7 +88,11 @@ def _fingerprint() -> dict:
 
     def git(*arguments: str) -> str:
         done = subprocess.run(
-            ["git", "-C", str(REPO), *arguments], capture_output=True, text=True, timeout=60
+            ["git", "-C", str(REPO), *arguments],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
         )
         return done.stdout if done.returncode == 0 else "unavailable"
 

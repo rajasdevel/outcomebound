@@ -22,5 +22,6 @@ def running(pid: int) -> bool:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
     return f'"{pid}"' in listed.stdout

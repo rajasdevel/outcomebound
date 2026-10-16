@@ -71,7 +71,9 @@ SUBJECTS = {
 
 
 def _git(*arguments: str) -> str:
-    done = subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     if done.returncode != 0:
         raise RuntimeError(f"git {' '.join(arguments)}: {done.stderr.strip()}")
     return done.stdout
@@ -243,6 +245,7 @@ def _repair_problems() -> list[str]:
         text=True,
         timeout=120,
         check=False,
+        encoding="utf-8",
     )
     if tests.returncode != 0:
         lacking.append("the regression tests of parse.py fail")

@@ -29,7 +29,8 @@ def _stub(tmp_path: Path) -> tuple[Path, Path]:
         "#!/bin/sh\n"
         'case "$*" in *version_info*) exit 1 ;; -V) echo "Python 3.9.6"; exit 0 ;; esac\n'
         f'printf "%s\\n" "$*" >> "{log}"\n'
-        "exit 0\n"
+        "exit 0\n",
+        encoding="utf-8",
     )
     stub.chmod(0o755)
     return stub, log
@@ -42,6 +43,7 @@ def _make(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         timeout=120,
+        encoding="utf-8",
     )
 
 

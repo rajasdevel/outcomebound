@@ -47,7 +47,11 @@ def test_check_no_deps_checks_the_root_it_is_given_and_the_current_directory_by_
     gate = str(ROOT / "scripts" / "check-no-deps.py")
 
     given = subprocess.run(
-        [sys.executable, gate, str(tmp_path)], capture_output=True, text=True, check=False
+        [sys.executable, gate, str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     assert given.returncode == 1, given.stdout + given.stderr
     assert f"FAIL: {tmp_path / 'scripts' / 'helper.py'} imports non-stdlib 'yaml'" in given.stdout
@@ -58,14 +62,24 @@ def test_check_no_deps_checks_the_root_it_is_given_and_the_current_directory_by_
     (clean / "scripts").mkdir(parents=True)
     (clean / "scripts" / "helper.py").write_text("import json\n", encoding="utf-8")
     by_default = subprocess.run(
-        [sys.executable, gate], cwd=clean, capture_output=True, text=True, check=False
+        [sys.executable, gate],
+        cwd=clean,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     assert by_default.returncode == 0, by_default.stdout + by_default.stderr
     assert by_default.stdout.startswith("OK: "), by_default.stdout
 
     # The bare run reads the current directory itself, not a default that checks nothing.
     here = subprocess.run(
-        [sys.executable, gate], cwd=tmp_path, capture_output=True, text=True, check=False
+        [sys.executable, gate],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     assert here.returncode == 1, here.stdout + here.stderr
     relative = os.path.join(".", "scripts", "helper.py")

@@ -64,7 +64,11 @@ IMPORT_LINE = "@AGENTS.md"
 
 def target_git(*arguments: str) -> str:
     done = subprocess.run(
-        ["git", "-C", str(TARGET), *arguments], capture_output=True, text=True, timeout=60
+        ["git", "-C", str(TARGET), *arguments],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        encoding="utf-8",
     )
     if done.returncode != 0:
         raise RuntimeError(f"git {' '.join(arguments)}: {done.stderr.strip()}")

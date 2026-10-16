@@ -61,6 +61,7 @@ def check(
         check=False,
         input=given,
         env=environment,
+        encoding="utf-8",
     )
     return done.returncode, done.stdout.splitlines()
 
@@ -98,6 +99,7 @@ def test_a_clean_tree_passes_and_the_range_comes_from_the_environment(tmp_path: 
         text=True,
         check=False,
         env={**{k: v for k, v in os.environ.items() if k != "OB_SCRUB_LIST"}, BASE: "HEAD~1"},
+        encoding="utf-8",
     )
 
     assert done.returncode == 0

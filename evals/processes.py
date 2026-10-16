@@ -27,14 +27,18 @@ def stop_descendants(pid: int) -> None:
         for entry in Path("/proc").iterdir():
             if entry.name.isdigit():
                 try:
-                    fields = (entry / "stat").read_text().rsplit(")", 1)[1].split()
+                    fields = (entry / "stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
                     parents[int(entry.name)] = int(fields[1])
                 except (OSError, ValueError, IndexError):
                     continue  # A process can exit while the table is read.
     else:
         try:
             listed = subprocess.run(
-                ["ps", "-e", "-o", "pid=", "-o", "ppid="], capture_output=True, text=True, timeout=1
+                ["ps", "-e", "-o", "pid=", "-o", "ppid="],
+                capture_output=True,
+                text=True,
+                timeout=1,
+                encoding="utf-8",
             )
             parents = {
                 int(row.split()[0]): int(row.split()[1])

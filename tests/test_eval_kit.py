@@ -154,6 +154,7 @@ def test_the_command_line_reads_the_answer_file_and_exits_by_the_claim(tmp_path:
             text=True,
             env=env,
             check=False,
+            encoding="utf-8",
         )
         assert done.returncode == expected, (name, done.stdout)
     missing = subprocess.run(
@@ -162,6 +163,7 @@ def test_the_command_line_reads_the_answer_file_and_exits_by_the_claim(tmp_path:
         text=True,
         env={**os.environ, "OUTCOMEBOUND_EVAL_ANSWER": str(tmp_path / "none.md")},
         check=False,
+        encoding="utf-8",
     )
     assert missing.returncode == 1
 
@@ -280,6 +282,7 @@ def test_a_wrong_card_fails_by_the_command_line_too(name: str, tmp_path: Path) -
         text=True,
         env={**os.environ, "OUTCOMEBOUND_EVAL_ANSWER": str(answer)},
         check=False,
+        encoding="utf-8",
     )
     assert done.returncode == 1, (name, done.stdout)
 

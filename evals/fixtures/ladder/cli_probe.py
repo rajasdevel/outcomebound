@@ -14,6 +14,7 @@ def run(database, *arguments):
         text=True,
         cwd=str(Path.cwd()),
         timeout=60,
+        encoding="utf-8",
     )
     return done.returncode, done.stdout, done.stderr
 

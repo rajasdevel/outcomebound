@@ -30,7 +30,9 @@ Capture = pytest.CaptureFixture[str]
 
 
 def test_version_prints_the_engine_version_and_exits_0(capsys: Capture) -> None:
-    version = (Path(__file__).resolve().parent.parent / "VERSION").read_text().strip()
+    version = (
+        (Path(__file__).resolve().parent.parent / "VERSION").read_text(encoding="utf-8").strip()
+    )
     for word in ("--version", "-V", "version"):
         assert launcher_main([word]) == 0
         assert capsys.readouterr().out.startswith(f"outcomebound {version}\n")
