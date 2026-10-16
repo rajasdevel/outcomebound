@@ -242,7 +242,9 @@ off under the DCO; the sign-off is that person's certification. An agent may lan
 request once CI is green, unless the pull request carries `needs-maintainer`. Issues are the
 backlog, and a milestone names what a release waits for.
 
-`main` keeps no open alert of GitHub's code scanning, Dependabot or secret scanning. Before a
+`main` keeps no open alert of GitHub's code scanning, Dependabot or secret scanning. The
+ruleset of `main` requires code scanning results: GitHub refuses the merge of a pull request whose
+CodeQL analysis adds an alert of high or higher security severity, or an error. Before a
 merge, and again once the analysis of the merged commit on `main` has run, read them
 (`python3 scripts/release-check.py --alerts`); an alert a merge caused is fixed by the next pull
 request, before anything else lands. Dismiss an alert only where it is a false positive, with
