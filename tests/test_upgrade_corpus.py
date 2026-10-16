@@ -165,6 +165,7 @@ def tag_tree(tag: str) -> str | None:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
     return done.stdout.strip() if done.returncode == 0 and done.stdout.strip() else None
 

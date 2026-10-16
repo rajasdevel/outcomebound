@@ -21,7 +21,7 @@ ALLOWED = {
 
 def git(*args: str) -> str:
     return subprocess.run(
-        ["git", *args], check=True, capture_output=True, text=True, timeout=30
+        ["git", *args], check=True, capture_output=True, text=True, timeout=30, encoding="utf-8"
     ).stdout
 
 
@@ -40,7 +40,7 @@ def scope(name: str) -> list[str]:
     ]
     for path in ALLOWED[name]:
         command += ["--allow", path]
-    done = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    done = subprocess.run(command, capture_output=True, text=True, timeout=60, encoding="utf-8")
     if done.returncode:
         return ["UNVERIFIED content walk did not complete", done.stderr]
     lacking = [line for line in done.stdout.splitlines() if line.startswith("PATH ")]
@@ -55,7 +55,7 @@ def inputs() -> list[str]:
     lacking = []
     for key in ("OUTCOMEBOUND_EVAL_TRANSCRIPT", "OUTCOMEBOUND_EVAL_ANSWER"):
         path = Path(os.environ.get(key, ""))
-        if not path.is_file() or not path.read_text().strip():
+        if not path.is_file() or not path.read_text(encoding="utf-8").strip():
             lacking.append("UNVERIFIED missing readable " + key)
     return lacking
 
@@ -85,7 +85,9 @@ def guard() -> list[str]:
         target = Path(folder)
         shutil.copyfile("test_records.py", target / "test_records.py")
         for revision in (seed(), seed() + "^"):
-            (target / "records.py").write_text(git("show", revision + ":records.py"))
+            (target / "records.py").write_text(
+                git("show", revision + ":records.py"), encoding="utf-8"
+            )
             done = subprocess.run(
                 [sys.executable, "-B", "-c", DRIVER],
                 cwd=target,
@@ -93,6 +95,7 @@ def guard() -> list[str]:
                 text=True,
                 timeout=60,
                 env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                encoding="utf-8",
             )
             if done.returncode:
                 return ["UNVERIFIED test driver did not complete", done.stderr]

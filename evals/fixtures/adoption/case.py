@@ -60,6 +60,7 @@ def engine(root: Path, target: Path, *args: str) -> subprocess.CompletedProcess[
         env={**ENV, "PYTHONPATH": str(root)},
         cwd=root,
         timeout=60,
+        encoding="utf-8",
     )
 
 
@@ -82,11 +83,11 @@ def snapshot(target: Path) -> dict:
     return {
         "files": files,
         "head": git(target, "rev-parse", "HEAD").decode().strip(),
-        "head_reference": (target / ".git/HEAD").read_text(),
+        "head_reference": (target / ".git/HEAD").read_text(encoding="utf-8"),
         "refs": git(target, "for-each-ref", "--format=%(refname) %(objectname)").decode(),
         "index": git(target, "ls-files", "--stage", "-z").decode(),
-        "config": (target / ".git/config").read_text(),
-        "exclude": (target / ".git/info/exclude").read_text(),
+        "config": (target / ".git/config").read_text(encoding="utf-8"),
+        "exclude": (target / ".git/info/exclude").read_text(encoding="utf-8"),
     }
 
 
@@ -109,7 +110,7 @@ def expected_install(target: Path) -> dict[str, str]:
         installed = engine(REPO, copy, "--harness", "codex")
         if installed.returncode:
             raise RuntimeError(installed.stdout + installed.stderr)
-        manifest = json.loads((copy / ".outcomebound/manifest.json").read_text())
+        manifest = json.loads((copy / ".outcomebound/manifest.json").read_text(encoding="utf-8"))
         paths = {row["path"] for row in manifest["artifacts"]} | {".outcomebound/manifest.json"}
         return {
             path: hashlib.sha256((copy / path).read_bytes()).hexdigest() for path in sorted(paths)
@@ -120,10 +121,12 @@ def setup(workdir: Path, variant: str) -> None:
     workdir.mkdir(parents=True, exist_ok=True)
     target = workdir / TARGET
     (target / ".codex").mkdir(parents=True)
-    (target / "AGENTS.md").write_text(PROJECT_NOTE)
-    (target / ".codex/config.toml").write_text("# synthetic native marker; no hooks\n")
-    (target / ".gitignore").write_text(".agents/\nscratch/\n")
-    (target / "draft.txt").write_text("committed A\n")
+    (target / "AGENTS.md").write_text(PROJECT_NOTE, encoding="utf-8")
+    (target / ".codex/config.toml").write_text(
+        "# synthetic native marker; no hooks\n", encoding="utf-8"
+    )
+    (target / ".gitignore").write_text(".agents/\nscratch/\n", encoding="utf-8")
+    (target / "draft.txt").write_text("committed A\n", encoding="utf-8")
     init(target)
     archive = git(REPO, "-c", "core.autocrlf=false", "archive", "--format=zip", "v1.3.0")
     with tempfile.TemporaryDirectory(prefix="ob-older-engine-") as folder:
@@ -136,17 +139,19 @@ def setup(workdir: Path, variant: str) -> None:
     git(target, "add", "-A")
     git(target, "commit", "-qm", "seed target")
     git(target, "tag", "seed")
-    (target / "draft.txt").write_text("staged B\n")
+    (target / "draft.txt").write_text("staged B\n", encoding="utf-8")
     git(target, "add", "--", "draft.txt")
-    (target / "draft.txt").write_text("working C\n")
+    (target / "draft.txt").write_text("working C\n", encoding="utf-8")
     for name, text in LOCAL.items():
         path = target / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+        path.write_text(text, encoding="utf-8")
     expected = expected_install(target)
     if variant == "inspect":
         path = target / ".agents/skills/decision-brief/SKILL.md"
-        path.write_text(path.read_text() + "\nSynthetic user addition.\n")
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\nSynthetic user addition.\n", encoding="utf-8"
+        )
     # Create only empty roots needed by the current upgrade sandbox, in both arms.
     sys.path.insert(0, str(REPO))
     from outcomebound_tools import adopt
@@ -159,17 +164,22 @@ def setup(workdir: Path, variant: str) -> None:
     checked = engine(REPO, target, "--check")
     before["check"] = {"returncode": checked.returncode, "output": checked.stdout + checked.stderr}
     before["older_commit"] = git(REPO, "rev-parse", "v1.3.0^{commit}").decode().strip()
-    (workdir / "target-before.json").write_text(json.dumps(before, indent=2) + "\n")
-    (workdir / "sealed-engine.txt").write_text(str(REPO / "scripts/outcomebound") + "\n")
+    (workdir / "target-before.json").write_text(
+        json.dumps(before, indent=2) + "\n", encoding="utf-8"
+    )
+    (workdir / "sealed-engine.txt").write_text(
+        str(REPO / "scripts/outcomebound") + "\n", encoding="utf-8"
+    )
     (workdir / "AGENTS.md").write_text(
         "# Adoption controller\n\nOnly target/project is the target.\n"
         "sealed-engine.txt names the supplied engine.\n"
         "Use its existing local Python runtime. No network or installation is needed.\n"
         "If .agents/skills/adopt-outcomebound/SKILL.md exists, read that controller skill.\n"
         "The target has a separate Git repository and unrelated staged and working edits.\n"
-        "Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.\n"
+        "Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work here.\n",
+        encoding="utf-8",
     )
-    (workdir / ".gitignore").write_text("target/\n")
+    (workdir / ".gitignore").write_text("target/\n", encoding="utf-8")
     subprocess.run(
         ["bash", str(REPO / "evals/fixtures/core-skill.sh"), str(REPO), "AGENTS.md"],
         cwd=workdir,
@@ -198,7 +208,7 @@ def preserved_work(target: Path, before: dict, after: dict, allowed: set[str]) -
         for name in after["files"].keys() - before["files"].keys()
         if name not in allowed and not any(path.startswith(name + "/") for path in allowed)
     )
-    if unmanaged((target / "AGENTS.md").read_text()) != PROJECT_NOTE.strip():
+    if unmanaged((target / "AGENTS.md").read_text(encoding="utf-8")) != PROJECT_NOTE.strip():
         lacking.append("project-owned instructions changed")
     if git(target, "show", "HEAD:draft.txt") != b"committed A\n":
         lacking.append("commit includes unrelated staged work")
@@ -286,6 +296,7 @@ def controller_scope() -> list[str]:
         text=True,
         env=ENV,
         timeout=60,
+        encoding="utf-8",
     )
     if checked.returncode:
         return ["UNVERIFIED controller content walk did not complete"]
@@ -296,7 +307,7 @@ def controller_scope() -> list[str]:
 
 
 def grade(variant: str) -> list[str]:
-    before = json.loads(Path("target-before.json").read_text())
+    before = json.loads(Path("target-before.json").read_text(encoding="utf-8"))
     after = snapshot(TARGET)
     if variant == "inspect":
         return controller_scope() + (

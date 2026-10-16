@@ -62,6 +62,7 @@ def canary(tmp_path: Path, listed: list[Path], python: Path | str) -> subprocess
         text=True,
         check=False,
         timeout=300,
+        encoding="utf-8",
     )
 
 

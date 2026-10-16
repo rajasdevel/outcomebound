@@ -772,8 +772,10 @@ def test_the_default_day_is_today(
     project: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
 ) -> None:
     arguments = [a for a in GOOD if a not in ("--observed-on", "2026-10-01")]
+    # real date: the default day is today's, read on each side of the run across midnight
     before = datetime.date.today()
     assert run(capsys, *arguments)[0] == 0
+    # real date: as above
     after = datetime.date.today()
     saved = json.loads(inbox(project)[0].read_text(encoding="utf-8"))
     assert saved["observed_on"] in {before.isoformat(), after.isoformat()}
@@ -1050,6 +1052,7 @@ def get_url(environment: dict[str, str], *, cwd: Path | None = None) -> str:
         capture_output=True,
         text=True,
         check=True,
+        encoding="utf-8",
     )
     return done.stdout.strip()
 

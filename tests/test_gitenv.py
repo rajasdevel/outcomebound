@@ -183,7 +183,12 @@ def test_inherited_repository_variables_do_not_redirect_a_read_of_a_target(
             ["rev-parse", "HEAD"],
         ):
             done = subprocess.run(
-                ["git", *arguments], cwd=folder, capture_output=True, text=True, check=True
+                ["git", *arguments],
+                cwd=folder,
+                capture_output=True,
+                text=True,
+                check=True,
+                encoding="utf-8",
             )
         return done.stdout.strip()
 

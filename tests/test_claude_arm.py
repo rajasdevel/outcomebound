@@ -181,7 +181,7 @@ def test_a_tampered_state_is_refused(tmp_path: Path, monkeypatch) -> None:
 
     _state, seal = _prepared(tmp_path, monkeypatch)
     path = tmp_path / "f--current.json"
-    path.write_text(path.read_text().replace('"abc"', '"def"'), encoding="utf-8")
+    path.write_text(path.read_text(encoding="utf-8").replace('"abc"', '"def"'), encoding="utf-8")
     with pytest.raises(SystemExit, match="seal"):
         ARM._load_state("f--current", seal)
 
@@ -433,7 +433,7 @@ def test_ambiguous_claude_event_stream_is_refused(tmp_path, boundary, refusal):
     else:
         lines = [json.dumps({"message": {"role": "assistant", "content": [42]}})]
     path = tmp_path / "ambiguous.jsonl"
-    path.write_text("\n".join(lines))
+    path.write_text("\n".join(lines), encoding="utf-8")
     with pytest.raises(ValueError, match=refusal) if refusal else pytest.raises(ValueError):
         ARM._transcript(path, WORKDIR)
 

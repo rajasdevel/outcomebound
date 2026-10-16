@@ -42,16 +42,18 @@ class Forms(unittest.TestCase):
 def test_spec_authoring_checks_preserve_originals_and_exercise_submitted_tests(tmp_path):
     target = build("handoff-author-spec", tmp_path / "workspace")
     original = (target / "durations.py").read_bytes()
-    (target / "tests/test_authored.py").write_text(AUTHORED_TESTS)
+    (target / "tests/test_authored.py").write_text(AUTHORED_TESTS, encoding="utf-8")
     said = transcript(target, "python3 -B -m unittest discover -s tests")
     result = _grade(target, "handoff-author-spec", said, "Spec tier package for the assigned task.")
     assert result["authoring-scope"] == "PASS", result["_output"]
     assert result["authored-tests-red-and-green"] == "PASS", result["_output"]
     assert (target / "durations.py").read_bytes() == original
-    (target / "tests/test_authored.py").write_text("import no_such_test_dependency\n")
+    (target / "tests/test_authored.py").write_text(
+        "import no_such_test_dependency\n", encoding="utf-8"
+    )
     result = _grade(target, "handoff-author-spec", said, "Package")
     assert result["authored-tests-red-and-green"] == "FAIL"
-    (target / "durations.py").write_text("changed\n")
+    (target / "durations.py").write_text("changed\n", encoding="utf-8")
     result = _grade(target, "handoff-author-spec", said, "Package")
     assert result["authoring-scope"] == "FAIL"
 
@@ -70,28 +72,31 @@ def test_spec_authoring_can_import_seed_helper_without_running_seed_tests(tmp_pa
         "        for form in ('1h30m', '2h', '45m', '90m'):\n"
         "            with self.subTest(form=form), tempfile.TemporaryDirectory() as folder:\n"
         "                result = run(Path(folder) / 'log', 'add', '2026-09-01', 'acme', form)\n"
-        "                self.assertEqual(result[0], 0)\n"
+        "                self.assertEqual(result[0], 0)\n",
+        encoding="utf-8",
     )
     said = transcript(target, "python3 -B -m unittest discover -s tests")
     result = _grade(target, "handoff-author-spec", said, "Spec tier package")
     assert result["authored-tests-red-and-green"] == "PASS", result["_output"]
     assert (target / "tests/test_cli.py").read_bytes() == helpers
     log = Path(result["_grading_dir"]) / ".outcomebound-checks/authored-tests-red-and-green.log"
-    assert log.read_text().count("observed-tests=1\n") == 2
+    assert log.read_text(encoding="utf-8").count("observed-tests=1\n") == 2
     # Passing the reference without all required inputs still lacks acceptance coverage.
     authored.write_text(
-        AUTHORED_TESTS.replace('        self.assertEqual(parse_duration("90m"), 90)\n', "")
+        AUTHORED_TESTS.replace('        self.assertEqual(parse_duration("90m"), 90)\n', ""),
+        encoding="utf-8",
     )
     result = _grade(target, "handoff-author-spec", said, "Spec tier package")
     assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
     # Merely importing the helper cannot borrow seed tests or supply authored coverage.
-    authored.write_text("from test_cli import run\n")
+    authored.write_text("from test_cli import run\n", encoding="utf-8")
     result = _grade(target, "handoff-author-spec", said, "Spec tier package")
     assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
     # A reference failure must not count as a meaningful seed failure.
     authored.write_text(
         AUTHORED_TESTS
-        + "\n    def test_unconditional_failure(self):\n        self.fail('unrelated')\n"
+        + "\n    def test_unconditional_failure(self):\n        self.fail('unrelated')\n",
+        encoding="utf-8",
     )
     result = _grade(target, "handoff-author-spec", said, "Spec tier package")
     assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
@@ -119,7 +124,7 @@ def test_spec_authoring_rejects_borrowed_cases_and_import_time_coverage(tmp_path
         + AUTHORED_TESTS.replace('        self.assertEqual(parse_duration("90m"), 90)\n', ""),
     )
     for control in controls:
-        authored.write_text(control)
+        authored.write_text(control, encoding="utf-8")
         result = _grade(target, "handoff-author-spec", said, "Spec tier package")
         assert result["authored-tests-red-and-green"] == "FAIL", result["_output"]
 
@@ -129,7 +134,7 @@ def test_outcome_authoring_rejects_added_test_work(tmp_path):
     said = transcript(target, "cat AGENTS.md")
     result = _grade(target, "handoff-author-outcome", said, "Outcome tier: carry the plain brief.")
     assert result["authoring-scope"] == "PASS", result["_output"]
-    (target / "tests/test_added.py").write_text(AUTHORED_TESTS)
+    (target / "tests/test_added.py").write_text(AUTHORED_TESTS, encoding="utf-8")
     assert _grade(target, "handoff-author-outcome", said, "Package")["authoring-scope"] == "FAIL"
 
 
@@ -159,7 +164,7 @@ def test_retirement_preparation_keeps_original_data_and_protects_consumers(tmp_p
     assert (
         _grade(target, "lifecycle-retirement", said, "prepared")["restored-file-matches"] == "FAIL"
     )
-    (target / "consumers/monthly-summary.json").write_text("{}\n")
+    (target / "consumers/monthly-summary.json").write_text("{}\n", encoding="utf-8")
     assert (
         _grade(target, "lifecycle-retirement", said, "prepared")["preparation-only-scope"] == "FAIL"
     )
@@ -169,7 +174,7 @@ def test_adoption_inspection_distinguishes_stale_and_edited_without_writes(tmp_p
     import json
 
     target = build("adopt-inspect", tmp_path / "workspace")
-    before = json.loads((target / "target-before.json").read_text())
+    before = json.loads((target / "target-before.json").read_text(encoding="utf-8"))
     assert before["check"]["returncode"] != 0
     assert "edited" in before["check"]["output"].lower()
     assert "decision-brief" in before["check"]["output"]
@@ -179,7 +184,7 @@ def test_adoption_inspection_distinguishes_stale_and_edited_without_writes(tmp_p
     subprocess.run(["git", "checkout", "--detach", "--quiet"], cwd=nested, check=True)
     assert _grade(target, "adopt-inspect", said, "inspected")["target-unchanged"] == "FAIL"
     subprocess.run(["git", "symbolic-ref", "HEAD", "refs/heads/main"], cwd=nested, check=True)
-    (target / "target/project/scratch/local-note.txt").write_text("lost\n")
+    (target / "target/project/scratch/local-note.txt").write_text("lost\n", encoding="utf-8")
     assert _grade(target, "adopt-inspect", said, "Stale")["target-unchanged"] == "FAIL"
 
 
@@ -195,13 +200,14 @@ def test_adoption_requires_committed_owned_bytes_and_preserves_staged_work(tmp_p
         env={**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(repo)},
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     said = transcript(target, "cat sealed-engine.txt")
     assert (
         _grade(target, "adopt-upgrade", said, "installed")["target-state-and-persistence"] == "FAIL"
     )
-    manifest = json.loads((nested / ".outcomebound/manifest.json").read_text())
+    manifest = json.loads((nested / ".outcomebound/manifest.json").read_text(encoding="utf-8"))
     owned = sorted({row["path"] for row in manifest["artifacts"]} | {".outcomebound/manifest.json"})
     subprocess.run(
         ["git", "add", "-f", "--", *owned],
@@ -255,12 +261,12 @@ def test_shared_fixture_close_does_not_copy_grader_bytecode(tmp_path):
     checks = here / "checks"
     (checks / "__pycache__").mkdir(parents=True)
     (checks / "__pycache__/probe.cpython.pyc").write_bytes(b"cached grader")
-    (checks / "probe.py").write_text("print('fixture probe')\n")
+    (checks / "probe.py").write_text("print('fixture probe')\n", encoding="utf-8")
     work = tmp_path / "workspace"
     work.mkdir()
     stage = tmp_path / "stage"
     stage.mkdir()
-    (work / "AGENTS.md").write_text("# Synthetic project\n")
+    (work / "AGENTS.md").write_text("# Synthetic project\n", encoding="utf-8")
     result = subprocess.run(
         [
             "bash",
@@ -276,6 +282,7 @@ def test_shared_fixture_close_does_not_copy_grader_bytecode(tmp_path):
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert (stage / "checks/probe.py").read_bytes() == (checks / "probe.py").read_bytes()
@@ -287,8 +294,8 @@ def test_shared_fixture_close_does_not_copy_grader_bytecode(tmp_path):
 def test_adoption_source_preserves_caller_git_config(tmp_path, monkeypatch, caller_config):
     system = tmp_path / "system-config"
     global_config = tmp_path / "global-config"
-    system.write_text("[fixture-check]\n    marker = system-owned\n")
-    global_config.write_text("[fixture-check]\n    marker = global-owned\n")
+    system.write_text("[fixture-check]\n    marker = system-owned\n", encoding="utf-8")
+    global_config.write_text("[fixture-check]\n    marker = global-owned\n", encoding="utf-8")
     monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(system))
     monkeypatch.setenv(
         "GIT_CONFIG_GLOBAL", str(global_config) if caller_config == "custom-global" else os.devnull
@@ -322,5 +329,7 @@ def test_adoption_source_preserves_caller_git_config(tmp_path, monkeypatch, call
         assert case.git(source, "config", "--get", "fixture-check.marker") == expected.stdout
     with pytest.raises(subprocess.CalledProcessError):
         case.git(fixture, "config", "--get", "fixture-check.marker")
-    assert system.read_text() == "[fixture-check]\n    marker = system-owned\n"
-    assert global_config.read_text() == "[fixture-check]\n    marker = global-owned\n"
+    assert system.read_text(encoding="utf-8") == "[fixture-check]\n    marker = system-owned\n"
+    assert (
+        global_config.read_text(encoding="utf-8") == "[fixture-check]\n    marker = global-owned\n"
+    )

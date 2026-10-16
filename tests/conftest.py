@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import tempfile
 from collections.abc import Iterator
 from datetime import date
@@ -92,6 +93,15 @@ def isolated_home(
     return home
 
 
+# A Python child that a test starts writes its standard streams in UTF-8, as the engine does under
+# the launcher's `-X utf8`, so a test that decodes a child's output as UTF-8 reads what a user's
+# run prints on every platform; the Windows default would be the code page. Only the streams: a
+# child's own files keep their default, so UTF-8 mode, which would silence the encoding guard in
+# pytest's workers, stays off. An isolated child (`-I`), as the engine is started, ignores this and
+# gets `-X utf8` from its own command line.
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
+
 # The instruction audit reads a harness row as verified only until the row's `recheck_on` date,
 # so a verdict that depends on the real day turns red on its own once that day passes. Every
 # test runs on this day, inside the window of every row; a test of the overdue case sets its own.
@@ -102,3 +112,21 @@ AUDIT_DAY = date(2026, 10, 1)
 def audit_day(monkeypatch: pytest.MonkeyPatch) -> date:
     monkeypatch.setattr("outcomebound_tools.instruction_audit._today", lambda: AUDIT_DAY)
     return AUDIT_DAY
+
+
+def pytest_report_header() -> str | None:
+    """Say when the encoding guard cannot fire: with no UTF-8 locale set, Python runs in UTF-8
+    mode, where a call that names no encoding gets UTF-8 and no warning, so a run here passes
+    what Windows fails."""
+
+    if sys.flags.warn_default_encoding and sys.flags.utf8_mode:
+        return (
+            "UNVERIFIED encoding guard: Python runs in UTF-8 mode (no UTF-8 locale is set), which "
+            "hides a call that names no encoding; set LANG to a UTF-8 locale, such as C.UTF-8"
+        )
+    if sys.flags.warn_default_encoding and sys.version_info < (3, 11):
+        return (
+            "encoding guard: Python 3.10 does not warn for a text-mode subprocess; "
+            "`make test-containers` (3.13) and CI on 3.11 and later check it"
+        )
+    return None

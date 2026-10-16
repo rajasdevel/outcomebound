@@ -175,14 +175,18 @@ def test_a_second_import_leaves_a_gitignore_the_person_edited(work, capsys):
         ),
         (lambda p: (p / "a.md").write_bytes(b"a\x00b"), ("a.md", "--name", "n"), "SOURCE_ENCODING"),
         (
-            lambda p: (p / "a.md").write_text("x"),
+            lambda p: (p / "a.md").write_text("x", encoding="utf-8"),
             ("a.md", "--name", "Bad Name"),
             "SOURCE_NAME_INVALID",
         ),
-        (lambda p: (p / "a.md").write_text(" \n\n"), ("a.md", "--name", "n"), "SOURCE_EMPTY"),
+        (
+            lambda p: (p / "a.md").write_text(" \n\n", encoding="utf-8"),
+            ("a.md", "--name", "n"),
+            "SOURCE_EMPTY",
+        ),
         (lambda p: None, ("missing.md", "--name", "n"), "SOURCE_UNREADABLE"),
         (
-            lambda p: (p / "a.md").write_text("x"),
+            lambda p: (p / "a.md").write_text("x", encoding="utf-8"),
             ("a.md", "a.md", "--name", "n"),
             "SOURCE_DUPLICATE",
         ),
@@ -229,7 +233,7 @@ def test_a_fence_shaped_line_with_an_info_string_does_not_close_a_fence(work, ca
 
 @needs_symlinks
 def test_a_symlinked_default_folder_is_refused_and_nothing_is_written_outside(work, capsys):
-    (work / "notes.md").write_text(NOTES)
+    (work / "notes.md").write_text(NOTES, encoding="utf-8")
     outside = work / "outside"
     outside.mkdir()
     (work / ".outcomebound").symlink_to(outside, target_is_directory=True)
@@ -241,7 +245,7 @@ def test_a_symlinked_default_folder_is_refused_and_nothing_is_written_outside(wo
 
 
 def test_an_out_that_names_a_file_is_a_typed_refusal(work, capsys):
-    (work / "notes.md").write_text(NOTES)
+    (work / "notes.md").write_text(NOTES, encoding="utf-8")
     (work / "taken").write_bytes(b"keep")
 
     got, _, err = run(capsys, "notes.md", "--name", "notes", "--out", "taken")

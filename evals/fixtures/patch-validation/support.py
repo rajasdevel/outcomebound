@@ -38,6 +38,7 @@ def git(target: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         timeout=30,
+        encoding="utf-8",
     ).stdout
 
 
@@ -84,7 +85,9 @@ def scope(allowed: list[str]) -> list[str]:
     ]
     for path in [*allowed, ".agents/work/*"]:
         command += ["--allow", path]
-    done = subprocess.run(command, cwd=target, env=ENV, capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        command, cwd=target, env=ENV, capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     if done.returncode:
         return ["UNVERIFIED content walk did not complete: " + done.stderr]
     problems = [line for line in done.stdout.splitlines() if line.startswith("PATH ")]
@@ -180,6 +183,7 @@ def run_tests(test: Path, implementation: str, module: str, functions: list[str]
             capture_output=True,
             text=True,
             timeout=30,
+            encoding="utf-8",
         )
     lines = [line for line in done.stdout.splitlines() if line.startswith("OB_TRIAL_OUTCOME=")]
     if done.returncode or len(lines) != 1:

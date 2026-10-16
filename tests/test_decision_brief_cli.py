@@ -841,7 +841,9 @@ def test_no_shipped_example_shows_a_percentage_confidence() -> None:
         .read_text(encoding="utf-8")
         .split("an older document")[0],
         decision_brief._EXAMPLE,
-        subprocess.run(engine("brief", "--help"), capture_output=True, text=True).stdout,
+        subprocess.run(
+            engine("brief", "--help"), capture_output=True, text=True, encoding="utf-8"
+        ).stdout,
     ]
     for text in shipped:
         assert not re.search(r"confidence\W{0,4}\d+%|NN%", text), text[:200]

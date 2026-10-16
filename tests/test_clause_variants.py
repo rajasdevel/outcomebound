@@ -27,6 +27,7 @@ def probe(work: Path, *args: str) -> subprocess.CompletedProcess[str]:
         text=True,
         env={**os.environ, **HERMETIC_GIT},
         timeout=120,
+        encoding="utf-8",
     )
 
 
@@ -48,7 +49,7 @@ def test_guard_comparison_rejects_earlier_refusal_and_setup_errors(tmp_path):
     assert "no successful authentication" in result.stdout
     assert "does not fail an assertion" in result.stdout
     before = (work / "records.py").read_bytes()
-    (work / "test_records.py").write_text(SOUND_TEST)
+    (work / "test_records.py").write_text(SOUND_TEST, encoding="utf-8")
     result = probe(work, "guard")
     assert result.returncode == 0, result.stdout + result.stderr
     assert (work / "records.py").read_bytes() == before
@@ -59,11 +60,12 @@ def test_guard_comparison_rejects_earlier_refusal_and_setup_errors(tmp_path):
         capture_output=True,
         text=True,
         timeout=120,
+        encoding="utf-8",
     )
     assert kept.returncode == 0, kept.stdout + kept.stderr
-    (work / "test_records.py").write_text("import missing_synthetic_dependency\n")
+    (work / "test_records.py").write_text("import missing_synthetic_dependency\n", encoding="utf-8")
     assert probe(work, "guard").returncode == 1
-    (work / "dates.py").write_text("changed\n")
+    (work / "dates.py").write_text("changed\n", encoding="utf-8")
     assert probe(work, "scope", "guard").returncode == 1
 
 
@@ -82,17 +84,21 @@ def test_clause_scope_preserves_inputs_and_only_grants_requested_artifacts(
     assert probe(work, "scope", case).returncode == 0
     note = work / ".agents/work/note.md"
     note.parent.mkdir(parents=True)
-    note.write_text("A local review or learning working file.\n")
+    note.write_text("A local review or learning working file.\n", encoding="utf-8")
     result = probe(work, "scope", case)
     assert result.returncode == (1 if case == "interview" else 0), result.stdout
     note.unlink()
-    (work / protected).write_text("rewritten input\n")
+    (work / protected).write_text("rewritten input\n", encoding="utf-8")
     result = probe(work, "scope", case)
     assert result.returncode == 1 and protected in result.stdout
-    plan = json.loads((FIXTURES / ("clause-" + case) / "post.plan.json").read_text())
+    plan = json.loads(
+        (FIXTURES / ("clause-" + case) / "post.plan.json").read_text(encoding="utf-8")
+    )
     names = {claim["name"] for claim in plan["claims"]}
     if case == "review":
-        original = json.loads((FIXTURES / "review-findings/post.plan.json").read_text())
+        original = json.loads(
+            (FIXTURES / "review-findings/post.plan.json").read_text(encoding="utf-8")
+        )
         assert all(claim in plan["claims"] for claim in original["claims"])
     if case == "learning":
         assert "brief-for-each-decision" not in names
@@ -106,25 +112,39 @@ def test_review_close_seed_checks_miss_counterexample_and_repaired_unit_test_exe
     work = build(REVIEW_CLOSE_FIXTURE, tmp_path / "workspace")
     protected = RUN.protected_snapshot(FIXTURES / REVIEW_CLOSE_FIXTURE, work)
     command = [sys.executable, "-B", "-m", "unittest"]
-    seed = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=30)
+    seed = subprocess.run(
+        command, cwd=work, capture_output=True, text=True, timeout=30, encoding="utf-8"
+    )
     assert seed.returncode == 0 and "Ran 2 tests" in seed.stderr
     tests = work / "test_pager.py"
     tests.write_text(
-        tests.read_text()
+        tests.read_text(encoding="utf-8")
         + "\n    def test_reported_page(self):\n"
-        + '        self.assertEqual(page_items(["a", "b", "c"], 1, 2), ["a", "b"])\n'
+        + '        self.assertEqual(page_items(["a", "b", "c"], 1, 2), ["a", "b"])\n',
+        encoding="utf-8",
     )
-    red = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=30)
+    red = subprocess.run(
+        command, cwd=work, capture_output=True, text=True, timeout=30, encoding="utf-8"
+    )
     assert red.returncode == 1 and "AssertionError" in red.stderr
     code = work / "pager.py"
-    code.write_text(code.read_text().replace("start = page * size", "start = (page - 1) * size"))
-    green = subprocess.run(command, cwd=work, capture_output=True, text=True, timeout=30)
+    code.write_text(
+        code.read_text(encoding="utf-8").replace(
+            "start = page * size", "start = (page - 1) * size"
+        ),
+        encoding="utf-8",
+    )
+    green = subprocess.run(
+        command, cwd=work, capture_output=True, text=True, timeout=30, encoding="utf-8"
+    )
     assert green.returncode == 0 and "Ran 3 tests" in green.stderr
     review = work / "reviews/pager.md"
-    assert "Reviewed: HEAD\n\n### R1" in review.read_text()
-    assert "Disposition:" not in review.read_text()
+    assert "Reviewed: HEAD\n\n### R1" in review.read_text(encoding="utf-8")
+    assert "Disposition:" not in review.read_text(encoding="utf-8")
     review.write_text(
-        review.read_text() + "\nDisposition: fixed -- pager.py; counterexample passed.\n"
+        review.read_text(encoding="utf-8")
+        + "\nDisposition: fixed -- pager.py; counterexample passed.\n",
+        encoding="utf-8",
     )
     result = _grade(
         work, REVIEW_CLOSE_FIXTURE, transcript(work, "python3 -B -m unittest"), "Fixed after check."
@@ -137,7 +157,7 @@ def test_review_close_seed_checks_miss_counterexample_and_repaired_unit_test_exe
 def test_review_close_contract_change_is_rejected(tmp_path):
     work = build(REVIEW_CLOSE_FIXTURE, tmp_path / "workspace")
     protected = RUN.protected_snapshot(FIXTURES / REVIEW_CLOSE_FIXTURE, work)
-    (work / "README.md").write_text("Page numbers are zero-based.\n")
+    (work / "README.md").write_text("Page numbers are zero-based.\n", encoding="utf-8")
     result = _grade(
         work, REVIEW_CLOSE_FIXTURE, transcript(work, "cat README.md"), "Changed contract."
     )

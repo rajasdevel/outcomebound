@@ -18,6 +18,7 @@ def _check(path):
         text=True,
         cwd=ROOT,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
+        encoding="utf-8",
     )
 
 
@@ -79,6 +80,7 @@ def test_new_spec_defaults_to_design_only_and_scaffold_is_incomplete(tmp_path):
         text=True,
         cwd=tmp_path,
         env={**os.environ, "OUTCOMEBOUND_HOME": ROOT.as_posix()},
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     design = tmp_path / "docs/specs/shape-probe/design.md"
@@ -97,6 +99,7 @@ def test_new_spec_adds_plan_only_when_selected(tmp_path):
         capture_output=True,
         text=True,
         cwd=tmp_path,
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     spec = tmp_path / "docs/specs/planned"
@@ -110,6 +113,7 @@ def _check_dir(path):
         text=True,
         cwd=ROOT,
         env={**os.environ, "PYTHONPATH": str(ROOT)},
+        encoding="utf-8",
     )
 
 
@@ -195,6 +199,7 @@ def test_new_spec_accepts_a_dotted_slug_and_an_explicit_target(tmp_path):
         capture_output=True,
         text=True,
         cwd=tmp_path,
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stderr
     spec = elsewhere / "docs/specs/payments-api-v2.1"
@@ -211,6 +216,7 @@ def test_new_spec_still_rejects_an_unknown_option(tmp_path):
         capture_output=True,
         text=True,
         cwd=tmp_path,
+        encoding="utf-8",
     )
     assert result.returncode == 1
     assert "unknown option" in result.stderr
@@ -227,6 +233,7 @@ def test_new_spec_rejects_more_than_one_target(tmp_path):
         capture_output=True,
         text=True,
         cwd=tmp_path,
+        encoding="utf-8",
     )
     assert result.returncode == 1
     assert "one target" in result.stderr

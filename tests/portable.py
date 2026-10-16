@@ -30,7 +30,7 @@ runpy.run_module("outcomebound_tools", run_name="__main__", alter_sys=True)
 def engine(*arguments: str | Path) -> list[str]:
     """The command line that runs this checkout's engine, isolated as the launcher runs it."""
 
-    return [sys.executable, "-I", "-c", LAUNCH, str(ROOT), *map(str, arguments)]
+    return [sys.executable, "-I", "-X", "utf8", "-c", LAUNCH, str(ROOT), *map(str, arguments)]
 
 
 # What a child process needs from its parent whatever else a test leaves out: where programs and
@@ -184,7 +184,11 @@ def process_alive(pid: int) -> bool:
             return False
         try:
             done = subprocess.run(
-                ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False
+                ["ps", "-o", "stat=", "-p", str(pid)],
+                capture_output=True,
+                text=True,
+                check=False,
+                encoding="utf-8",
             )
         except OSError:
             return True

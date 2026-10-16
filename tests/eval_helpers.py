@@ -39,7 +39,13 @@ def _run_checked(command: list[str], **options: Any) -> None:
     prints the command's own output, which pytest shows with the failure."""
 
     done = subprocess.run(
-        command, capture_output=True, text=True, check=False, timeout=TIMEOUT, **options
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+        timeout=TIMEOUT,
+        **options,
     )
     if done.returncode != 0:
         print(f"{command} exited {done.returncode}:\n{done.stdout}{done.stderr}", file=sys.stderr)
@@ -107,6 +113,7 @@ def seed(target: Path) -> str:
         text=True,
         timeout=TIMEOUT,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.strip()
 
 
@@ -147,6 +154,7 @@ def grade(
         cwd=str(ROOT),
         env=env,
         timeout=TIMEOUT,
+        encoding="utf-8",
     )
     verdicts = {
         found[2]: found[1]

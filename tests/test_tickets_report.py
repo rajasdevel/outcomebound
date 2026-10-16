@@ -225,6 +225,7 @@ def _rendered_elsewhere(subject: str, renderer: str, seed: str) -> str:
         text=True,
         check=True,
         env={**os.environ, "PYTHONHASHSEED": seed},
+        encoding="utf-8",
     ).stdout
 
 

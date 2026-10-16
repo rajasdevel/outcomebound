@@ -50,7 +50,9 @@ transcript_commands = _beside("transcript_commands")
 
 
 def _git(*arguments: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    return subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
 
 
 def _seed() -> str:
@@ -126,7 +128,7 @@ def _any_record(text: str, *patterns: str) -> bool:
 
 
 def _run(*argv: str) -> subprocess.CompletedProcess:
-    return subprocess.run(argv, capture_output=True, text=True, timeout=120)
+    return subprocess.run(argv, capture_output=True, text=True, timeout=120, encoding="utf-8")
 
 
 def _unittest() -> list[str]:

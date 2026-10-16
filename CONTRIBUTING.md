@@ -78,10 +78,22 @@ make test
 - `make check` runs the gate. Then it runs this repository's quality floor against `origin/main`.
   Use `OB_BASE=<ref>` to name another base. The floor runs ruff, mypy, gitleaks, `bash -n`, the
   shell injection scan, `scripts/check-structure.py` and `scripts/check-public-text.py`. The rules
-  are in `ruff.toml` and `mypy.ini`.
+  are in `ruff.toml` and `mypy.ini`. Last, it reads this repository's own install as CI does
+  (`scripts/outcomebound adopt . --check`).
 - `make test` uses xdist to run the suite across CPUs where xdist is installed, else runs it
   serially. If your `python3` has no pytest and `uv` is on `PATH`, the fallback runs the pinned
   pytest and xdist versions from the `Makefile` through uv.
+- `make test-containers` runs the suite in the two container images CI runs
+  (`python:3.13-slim` as root, with no `make` or `ps`, and `python:3.13-alpine`), with Docker, on
+  a clean clone of `HEAD`, through the same `scripts/container-suite.sh` CI runs. Run it before a
+  pull request that touches processes, files, paths, shells or the eval fixtures.
+  `PYTEST_ARGS=<file or test>` narrows a run while you diagnose.
+- Windows runs only in CI. The suite's rules keep its known failure classes visible on any
+  machine: a text read, write or subprocess that names no encoding fails every run
+  (`PYTHONWARNDEFAULTENCODING=1` and `pytest.ini`), and a test waits on a condition, never a
+  fixed time or today's date, unless a `real time:` or `real date:` comment says why
+  (`tests/test_no_fixed_waits.py`). Paths, command lines and quoting differ on Windows: build
+  them with `tests/portable.py` and compare names or parsed values, not one platform's text.
 - Every target first checks that `python3` is 3.10 or later. An older one stops the target at
   once with a line that names its version and path; the uv fallback does not rescue it. Name
   another interpreter with `PYTHON=/path/to/python3`, or put one first on `PATH`.
@@ -241,6 +253,13 @@ branch and never pushes to `main`. A person directs the agent, reviews its commi
 off under the DCO; the sign-off is that person's certification. An agent may land its own pull
 request once CI is green, unless the pull request carries `needs-maintainer`. Issues are the
 backlog, and a milestone names what a release waits for.
+
+One pull request is open at a time, from `main`. CI runs only on pull requests to `main`, so a
+pull request stacked on another branch gets no run, and each fix to the lower one means a rebase
+of every one above it. Work that depends on an open pull request waits for it to land, or goes
+into it. After a push, wait with a command that returns when the checks end
+(`gh pr checks <n> --watch`), and read a failed job at once; a wait for a notification is not a
+check.
 
 `main` keeps no open alert of GitHub's code scanning, Dependabot or secret scanning. The
 ruleset of `main` requires code scanning results: GitHub refuses the merge of a pull request whose

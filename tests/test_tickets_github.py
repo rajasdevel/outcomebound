@@ -717,7 +717,9 @@ def test_input_age_from_a_file_and_from_standard_input(
     )
     assert from_file.input.ids == (numbers[0], numbers[-1]), "the lowest and highest it holds"
 
-    stdin = __import__("io").TextIOWrapper(__import__("io").BytesIO(path.read_bytes()))
+    stdin = __import__("io").TextIOWrapper(
+        __import__("io").BytesIO(path.read_bytes()), encoding="utf-8"
+    )
     monkeypatch.setattr("sys.stdin", stdin)
     piped = read("-")
     assert piped.input is not None

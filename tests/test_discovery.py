@@ -213,6 +213,7 @@ def test_cli_emits_json_and_does_not_change_the_target(tmp_path):
         cwd=ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
 
     assert result.returncode == 0, result.stderr

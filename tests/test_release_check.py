@@ -144,8 +144,8 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
 
     for name, text in release_files(case).items():
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(text)
-    (tmp_path / "VERSION").write_text("1.1.0\n")
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    (tmp_path / "VERSION").write_text("1.1.0\n", encoding="utf-8")
     git("init", "-q")
     git("add", ".")
     git("commit", "-qm", "release")
@@ -157,15 +157,20 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
     if case == "tag-behind":
         git("commit", "--allow-empty", "-qm", "later")
     elif case == "dirty":
-        (tmp_path / "VERSION").write_text("1.1.0\n\n")
+        (tmp_path / "VERSION").write_text("1.1.0\n\n", encoding="utf-8")
 
     tag = "v1.0.0" if case == "wrong-tag" else "v1.1.0"
     runs = tmp_path.parent / f"{tmp_path.name}-runs.json"
     head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=tmp_path, check=True, capture_output=True, text=True
+        ["git", "rev-parse", "HEAD"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     ).stdout.strip()
     answer = [{"head_sha": head, **run} for run in RUNS.get(case, PASSING)]
-    runs.write_text(json.dumps({"workflow_runs": answer}))
+    runs.write_text(json.dumps({"workflow_runs": answer}), encoding="utf-8")
     result = subprocess.run(
         [
             sys.executable,
@@ -179,6 +184,7 @@ def test_each_disagreement_fails_its_own_check(tmp_path: Path, case: str) -> Non
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     lines = result.stdout.splitlines()
     assert lines[-1].startswith("GRANT none covers v1.1.0"), result.stdout
@@ -201,7 +207,9 @@ def test_a_pass_read_from_a_saved_file_says_it_is_a_snapshot(tmp_path: Path) -> 
     spec.loader.exec_module(module)
     head = "a" * 40
     saved = tmp_path / "runs.json"
-    saved.write_text(json.dumps({"workflow_runs": [{"head_sha": head, **PASSING[0]}]}))
+    saved.write_text(
+        json.dumps({"workflow_runs": [{"head_sha": head, **PASSING[0]}]}), encoding="utf-8"
+    )
     passed, what = module.main_ci(head, saved)
     assert passed and "snapshot" in what and "runs.json" in what, what
 
@@ -229,6 +237,10 @@ CODE_ALERT = {
             {"code-scanning": [], "dependabot": []},
             ["no open secret scanning alert: UNVERIFIED"],
         ),
+        (
+            {"code-scanning": {"message": "Not Found"}, "dependabot": [], "secret-scanning": []},
+            ["no open code scanning alert: UNVERIFIED"],
+        ),
     ],
 )
 def test_each_open_or_unreadable_kind_of_alert_fails_its_own_line(
@@ -238,11 +250,12 @@ def test_each_open_or_unreadable_kind_of_alert_fails_its_own_line(
     kind's alert fails another kind's line."""
 
     file = tmp_path / "alerts.json"
-    file.write_text(json.dumps(saved))
+    file.write_text(json.dumps(saved), encoding="utf-8")
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--root", str(SCRIPT.parent.parent), "--alerts", str(file)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     lines = [line for line in result.stdout.splitlines() if " alert" in line]
     assert len(lines) == 3, result.stdout
@@ -269,13 +282,15 @@ def test_the_grant_line_names_a_grant_only_in_scope_and_in_time(
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    (tmp_path / "VERSION").write_text(f"{version}\n")
+    (tmp_path / "VERSION").write_text(f"{version}\n", encoding="utf-8")
     (tmp_path / ".outcomebound").mkdir()
     grants = [
         {"scope": scope, "granted_by": "example-user", "on": "2026-10-01", "until": "2026-10-31"}
         for scope in ("1.4.x", "2.0.0")
     ]
-    (tmp_path / ".outcomebound/tag-grants.json").write_text(json.dumps({"grants": grants}))
+    (tmp_path / ".outcomebound/tag-grants.json").write_text(
+        json.dumps({"grants": grants}), encoding="utf-8"
+    )
     line = module.grant(tmp_path, today)
     assert line.startswith(f"GRANT v{version}:" if covered else f"GRANT none covers v{version}")
 
@@ -294,24 +309,29 @@ def test_the_section_names_each_pull_request_since_the_previous_release(
     files = release_files("agreeing")
     for name, text in files.items():
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(text.replace("1.1.0", "1.0.0"))
-    (tmp_path / "VERSION").write_text("1.0.0\n")
+        (tmp_path / name).write_text(text.replace("1.1.0", "1.0.0"), encoding="utf-8")
+    (tmp_path / "VERSION").write_text("1.0.0\n", encoding="utf-8")
     git("init", "-q")
     git("add", ".")
     git("commit", "-qm", "release: 1.0.0")
     git("tag", "-a", "v1.0.0", "-m", "release")
-    (tmp_path / "src.txt").write_text("x\n")
+    (tmp_path / "src.txt").write_text("x\n", encoding="utf-8")
     git("add", ".")
     git("commit", "-qm", "fix: a change (#5)")
     for name, text in files.items():
         entry = "- A change (#5).\n\n" if named else ""
-        (tmp_path / name).write_text(text.replace(" - 2026-09-28\n\n", f" - 2026-09-28\n\n{entry}"))
-    (tmp_path / "VERSION").write_text("1.1.0\n")
+        (tmp_path / name).write_text(
+            text.replace(" - 2026-09-28\n\n", f" - 2026-09-28\n\n{entry}"), encoding="utf-8"
+        )
+    (tmp_path / "VERSION").write_text("1.1.0\n", encoding="utf-8")
     git("add", ".")
     git("commit", "-qm", "release: 1.1.0 (#6)")
 
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--root", str(tmp_path)], capture_output=True, text=True
+        [sys.executable, str(SCRIPT), "--root", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
 
     line = next(x for x in result.stdout.splitlines() if "names each pull request" in x)
@@ -340,29 +360,34 @@ def test_a_release_cut_again_is_known_by_its_subject(
     files = release_files("agreeing")
     for name, text in files.items():
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / name).write_text(text.replace("1.1.0", "1.0.0"))
-    (tmp_path / "VERSION").write_text("1.0.0\n")
+        (tmp_path / name).write_text(text.replace("1.1.0", "1.0.0"), encoding="utf-8")
+    (tmp_path / "VERSION").write_text("1.0.0\n", encoding="utf-8")
     git("init", "-q")
     git("add", ".")
     git("commit", "-qm", "release: 1.0.0")
     git("tag", "-a", "v1.0.0", "-m", "release")
     for name, text in files.items():
         (tmp_path / name).write_text(
-            text.replace(" - 2026-09-28\n\n", " - 2026-09-28\n\n- First cut (#6).\n\n")
+            text.replace(" - 2026-09-28\n\n", " - 2026-09-28\n\n- First cut (#6).\n\n"),
+            encoding="utf-8",
         )
-    (tmp_path / "VERSION").write_text("1.1.0\n")
+    (tmp_path / "VERSION").write_text("1.1.0\n", encoding="utf-8")
     git("add", ".")
     git("commit", "-qm", "release: 1.1.0 (#6)")
     (tmp_path / "CHANGELOG.md").write_text(
         (tmp_path / "CHANGELOG.md")
-        .read_text()
-        .replace("- First cut (#6).", "- First cut (#6), cut again.")
+        .read_text(encoding="utf-8")
+        .replace("- First cut (#6).", "- First cut (#6), cut again."),
+        encoding="utf-8",
     )
     git("add", ".")
     git("commit", "-qm", subject)
 
     result = subprocess.run(
-        [sys.executable, str(SCRIPT), "--root", str(tmp_path)], capture_output=True, text=True
+        [sys.executable, str(SCRIPT), "--root", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
 
     line = next(x for x in result.stdout.splitlines() if "names each pull request" in x)
@@ -401,9 +426,15 @@ def test_release_tag_is_verified_once_not_in_each_matrix_leg() -> None:
 @pytest.mark.skipif(shutil.which("make") is None, reason="no make on this machine")
 def test_release_check_with_a_tag_leaves_gate_floor_and_suite_to_ci_and_runs_scrub() -> None:
     root = SCRIPT.parent.parent
-    base = subprocess.run(["make", "-n", "release-check"], cwd=root, capture_output=True, text=True)
+    base = subprocess.run(
+        ["make", "-n", "release-check"], cwd=root, capture_output=True, text=True, encoding="utf-8"
+    )
     tagged = subprocess.run(
-        ["make", "-n", "release-check", "TAG=v1.0.0"], cwd=root, capture_output=True, text=True
+        ["make", "-n", "release-check", "TAG=v1.0.0"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     assert base.returncode == 0 and tagged.returncode == 0, base.stderr + tagged.stderr
     for out in (base.stdout, tagged.stdout):

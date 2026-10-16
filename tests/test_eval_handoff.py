@@ -119,6 +119,7 @@ def _seed(target: Path) -> str:
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.strip()
 
 
@@ -145,6 +146,7 @@ def _grade(target: Path, name: str, *commands: str) -> dict[str, str]:
             "OUTCOMEBOUND_EVAL_TRANSCRIPT": str(grading / "transcript.txt"),
             "OUTCOMEBOUND_EVAL_ANSWER": str(grading / "answer.md"),
         },
+        encoding="utf-8",
     )
     verdicts = {
         found[2]: found[1]
@@ -340,6 +342,7 @@ def test_the_package_claim_does_not_read_the_index_where_no_seed_is_known(
         capture_output=True,
         text=True,
         env={**environment, **HERMETIC_GIT},
+        encoding="utf-8",
     )
     assert done.returncode == 1, done.stdout
     assert "no seed commit was supplied" in done.stdout
@@ -447,6 +450,7 @@ def test_every_package_test_fails_on_the_seed_for_the_reason_the_package_names(
             capture_output=True,
             text=True,
             env={**os.environ, "PYTHONPATH": str(target)},
+            encoding="utf-8",
         )
         assert done.returncode != 0, (test, done.stderr)
         assert reason in done.stderr, (test, reason, done.stderr[-1500:])
@@ -477,6 +481,7 @@ def test_the_message_is_the_brief_of_the_seed_then_the_variant_s_package(
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     )
     assert done.returncode == 0, done.stderr
     message = done.stdout

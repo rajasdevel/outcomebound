@@ -59,7 +59,9 @@ with open(sys.argv[1], "w", encoding="utf-8") as handle:
 
 
 def _git(*arguments: str) -> str:
-    done = subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     if done.returncode != 0:
         raise RuntimeError(f"git {' '.join(arguments)}: {done.stderr.strip()}")
     return done.stdout
@@ -90,6 +92,7 @@ def _run(money: str | None) -> dict[str, list[str]]:
             text=True,
             env=env,
             timeout=120,
+            encoding="utf-8",
         )
         if not out.is_file():
             raise RuntimeError(f"the suite did not run: {done.stderr.strip()[-400:]}")

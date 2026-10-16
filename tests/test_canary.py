@@ -111,6 +111,7 @@ def test_without_a_list_it_reads_unverified(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
 
     assert done.returncode == 2

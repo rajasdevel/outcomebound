@@ -73,7 +73,9 @@ EXPECTED = {
 
 
 def _git(*arguments: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    return subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
 
 
 def _seed() -> str:
@@ -162,7 +164,11 @@ def _names(word: str, name: str) -> bool:
 def fix() -> list[str]:
     lacking = []
     done = subprocess.run(
-        [sys.executable, "-B", "-c", READ_SUMMARY], capture_output=True, text=True, timeout=60
+        [sys.executable, "-B", "-c", READ_SUMMARY],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        encoding="utf-8",
     )
     if done.returncode != 0:
         lacking.append(f"the summary could not be read: {done.stderr.strip()[-200:]}")
@@ -176,6 +182,7 @@ def fix() -> list[str]:
         capture_output=True,
         text=True,
         timeout=60,
+        encoding="utf-8",
     )
     if tests.returncode != 0:
         lacking.append(f"the project's tests fail: {tests.stderr.strip()[-200:]}")

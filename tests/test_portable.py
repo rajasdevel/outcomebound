@@ -69,7 +69,9 @@ def test_a_bash_on_path_that_is_not_the_stub_is_used() -> None:
 
 
 def test_the_engine_starts_through_python_with_no_sh_launcher() -> None:
-    done = subprocess.run(engine("home"), capture_output=True, text=True, check=False)
+    done = subprocess.run(
+        engine("home"), capture_output=True, text=True, check=False, encoding="utf-8"
+    )
 
     assert done.returncode == 0, done.stderr
     assert Path(done.stdout.strip()).resolve() == ROOT

@@ -230,7 +230,13 @@ def _run(command: list[str], cwd: Path | None = None) -> tuple[int | None, str, 
 
     try:
         done = subprocess.run(
-            command, capture_output=True, text=True, cwd=cwd, env=child_env(), timeout=60
+            command,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            env=child_env(),
+            timeout=60,
+            encoding="utf-8",
         )
     except (OSError, subprocess.SubprocessError) as problem:
         return None, "", f"{command[0]}: {type(problem).__name__}: {problem}"
@@ -386,7 +392,9 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         ["git", "commit", "-q", "--amend", "--no-edit"],
         ["git", "tag", "-f", "seed"],
     ):
-        done = subprocess.run(command, cwd=workdir, capture_output=True, text=True, env=env)
+        done = subprocess.run(
+            command, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+        )
         if done.returncode != 0:
             return f"the install could not be folded into the seed: {done.stderr.strip()}"
     return ""

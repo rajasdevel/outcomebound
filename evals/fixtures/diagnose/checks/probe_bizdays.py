@@ -46,7 +46,9 @@ NAMED = "2031-05-05  A Day With A Name\n"
 
 
 def _git(*arguments: str) -> str:
-    done = subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     if done.returncode != 0:
         raise RuntimeError(f"git {' '.join(arguments)}: {done.stderr.strip()}")
     return done.stdout
@@ -124,6 +126,7 @@ def suite() -> list[str]:
         capture_output=True,
         text=True,
         timeout=120,
+        encoding="utf-8",
     )
     lacking = [] if done.returncode == 0 else [f"the tests fail: {done.stderr.strip()[-300:]}"]
     now = Path("tests/test_bizdays.py").read_text(encoding="utf-8")

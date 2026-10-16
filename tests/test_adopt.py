@@ -1470,7 +1470,7 @@ def test_detect_names_the_environment_variables_and_never_a_value(
     assert "s3cr3t" not in out
 
 
-WORKFLOW_SECRETS = """\
+WORKFLOW_ENV = """\
 on: push
 env:
   SHARED: ${{ secrets.WORKFLOW_WIDE }}
@@ -1492,7 +1492,7 @@ jobs:
 def test_detect_names_the_secrets_a_workflow_uses_with_their_jobs_and_no_value(
     tmp_path: Path, capsys: Capture
 ) -> None:
-    target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW_SECRETS})
+    target = repo(tmp_path / "t", {".github/workflows/ci.yml": WORKFLOW_ENV})
 
     _, out, _ = run(capsys, str(target), "--detect")
 
@@ -1536,7 +1536,7 @@ def test_a_secret_another_step_uses_does_not_reach_the_test_command(
 def test_detect_names_no_secret_for_a_test_job_that_names_none(
     tmp_path: Path, capsys: Capture
 ) -> None:
-    workflow = WORKFLOW_SECRETS.replace("  SHARED: ${{ secrets.WORKFLOW_WIDE }}\n", "").replace(
+    workflow = WORKFLOW_ENV.replace("  SHARED: ${{ secrets.WORKFLOW_WIDE }}\n", "").replace(
         "      KEY: ${{ secrets.API_KEY }}\n", ""
     )
     target = repo(tmp_path / "t", {".github/workflows/ci.yml": workflow})
@@ -2879,6 +2879,7 @@ def test_a_stopped_measurement_stops_done_keeps_nothing_and_exits_130(tmp_path: 
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
     )
     started = time.monotonic()
     while not (pid.exists() and pid.read_text(encoding="utf-8").strip()):
@@ -3259,6 +3260,7 @@ def test_every_install_keeps_outcomebounds_local_records_out_of_git(
         cwd=target,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout.split()
     assert listed == records
     assert run(capsys, str(target), "--remove")[0] == 0

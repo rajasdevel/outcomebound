@@ -12,7 +12,7 @@ OB_BASE ?= origin/main
 # Where `make kits` writes one <name>.zip and one <name>.md per kit under kits/.
 KITS_OUT ?= dist/kits
 
-.PHONY: python test gate check scrub canary release-check kits
+.PHONY: python test test-containers gate check scrub canary release-check kits
 # A $(PYTHON) that runs but is older than 3.10 stops every target here, by name, before a script
 # fails on it with a raw error. One that is absent is left to fail in the recipe with make's own
 # line. The message is the launcher's, so one phrase means one thing.
@@ -21,7 +21,10 @@ python:
 		echo "outcomebound: no Python 3.10 or later: PYTHON=$(PYTHON) runs $$($(PYTHON) -V 2>&1) at $$(command -v $(PYTHON)); name one with PYTHON=/path/to/python3, or put one first on PATH" >&2; \
 		exit 127; \
 	fi
-test gate check scrub canary release-check kits: python
+test test-containers gate check scrub canary release-check kits: python
+
+# A text read or write that names no encoding warns, and pytest.ini makes the warning an error.
+export PYTHONWARNDEFAULTENCODING = 1
 
 test:
 	@if $(PYTHON) -m pytest --version >/dev/null 2>&1; then \
@@ -34,6 +37,13 @@ test:
 		echo "ERROR: no pytest for $(PYTHON) and no uv on PATH (see requirements-dev.txt)"; \
 		exit 1; \
 	fi
+# The suite in the two container images CI runs (python:3.13-slim as root with no make or ps,
+# python:3.13-alpine), on this machine, before a push: a clean clone of HEAD, so commit first.
+# Needs Docker; PYTEST_ARGS narrows the run to a file or a test. Run it before a pull request
+# that touches processes, files, paths, shells or the eval fixtures.
+test-containers:
+	$(PYTHON) scripts/test-containers.py $(PYTEST_ARGS)
+
 gate:
 	$(PYTHON) scripts/check-no-deps.py
 
@@ -42,6 +52,7 @@ gate:
 # fails the check. The suite is `make test`, never a claim of the floor.
 # Where $(PYTHON) lacks the floor's tools, as in a harness's hook that inherits no activated
 # environment, the floor runs where uv installs requirements-dev.txt, pytest beside mypy.
+# Then this repository's own install is read as CI reads it (`adopt . --check`).
 check: gate
 	@if $(PYTHON) -c "import pytest, mypy" >/dev/null 2>&1 || ! command -v uv >/dev/null 2>&1; then \
 		scripts/outcomebound floor check . --base $(OB_BASE); \
@@ -50,6 +61,7 @@ check: gate
 		uv run --no-project --quiet --with-requirements requirements-dev.txt \
 			scripts/outcomebound floor check . --base $(OB_BASE); \
 	fi
+	scripts/outcomebound adopt . --check
 
 # The public-text check with the local list of private names that OB_SCRUB_LIST names, over
 # the tracked files and the commit messages since OB_BASE. The list stays outside this

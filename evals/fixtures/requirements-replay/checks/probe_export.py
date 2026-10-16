@@ -62,6 +62,7 @@ def _text() -> str | None:
         capture_output=True,
         text=True,
         timeout=60,
+        encoding="utf-8",
     ).stdout.splitlines()
     for path in paths:
         if path.endswith((".md", ".txt")):

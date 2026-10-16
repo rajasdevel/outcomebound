@@ -56,7 +56,12 @@ COMMANDS = ("python3 -B test_datehelp.py", "datelint datehelp.py")
 
 def _git(workdir: Path, *arguments: str) -> str:
     done = subprocess.run(
-        ["git", *arguments], cwd=workdir, capture_output=True, text=True, env=GIT_ENV
+        ["git", *arguments],
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=GIT_ENV,
+        encoding="utf-8",
     )
     return done.stdout if done.returncode == 0 else ""
 

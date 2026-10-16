@@ -946,6 +946,7 @@ def test_the_gate_fixtures_check_reports_findings_in_the_files_its_claim_names(
         cwd=str(target),
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     reported = {line.split(":")[0] for line in done.stdout.splitlines()}
     claim = next(
@@ -1073,7 +1074,7 @@ def test_shared_grader_copies_are_sealed_and_rewriting_them_is_rejected(workspac
     assert not (target / "checks").exists()
     sealed = RUN.seal_inputs(stage, name)
     assert RUN.check_graders(sealed, name)[0]
-    copied.write_text("raise SystemExit(0)\n")
+    copied.write_text("raise SystemExit(0)\n", encoding="utf-8")
     held, message = RUN.check_graders(sealed, name)
     assert not held
     assert f"stage/checks/{helper}" in message
@@ -2190,6 +2191,7 @@ def _judged(target: Path, name: str, wanted: str = "") -> subprocess.CompletedPr
             **({"OUTCOMEBOUND_SEED_SHA": seed} if seed else {}),
             "OUTCOMEBOUND_GRADER_DIR": str(stage_of(target)),
         },
+        encoding="utf-8",
     )
 
 
@@ -2432,6 +2434,7 @@ def test_the_footprint_reads_what_a_run_did_beyond_its_change(
             "OUTCOMEBOUND_EVAL_TRANSCRIPT": str(said),
             "OUTCOMEBOUND_EVAL_ANSWER": str(answer),
         },
+        encoding="utf-8",
     )
     seen = dict(line.removeprefix("observed: ").split("=", 1) for line in done.stdout.splitlines())
     assert seen["files_changed"] == "3" and seen["lines_added"] == "3", seen
@@ -2674,6 +2677,7 @@ def _observed_output(workspace, commands: tuple[str, ...], tmp_path: Path) -> tu
             "OUTCOMEBOUND_SEED_SHA": _seed(target),
             "OUTCOMEBOUND_EVAL_TRANSCRIPT": str(said),
         },
+        encoding="utf-8",
     )
     return done.returncode, done.stdout
 
@@ -2814,7 +2818,9 @@ def test_visual_provenance_rejects_negation_and_closed_gaps(monkeypatch, check, 
 
 def test_explanation_discloses_working_note_scope(workspace):
     target = workspace("explain-spec")
-    assert "Keep working notes under `.agents/work/`." in (target / "AGENTS.md").read_text()
+    assert "Keep working notes under `.agents/work/`." in (target / "AGENTS.md").read_text(
+        encoding="utf-8"
+    )
 
 
 @pytest.mark.parametrize(
@@ -2862,7 +2868,7 @@ def test_brief_heading_accepts_schema_identifiers(identifier):
 def test_requirement_report_records(workspace, monkeypatch, text, passes):
     target = workspace("requirements-replay")
     answer = target.parent / "answer.md"
-    answer.write_text(text)
+    answer.write_text(text, encoding="utf-8")
     monkeypatch.setenv("OUTCOMEBOUND_EVAL_ANSWER", str(answer))
     monkeypatch.chdir(target)
     probe = _load(
@@ -2888,7 +2894,7 @@ def test_requirement_report_records(workspace, monkeypatch, text, passes):
 )
 def test_visual_report_records(tmp_path, monkeypatch, check, text, passes):
     answer = tmp_path / "answer.md"
-    answer.write_text(text)
+    answer.write_text(text, encoding="utf-8")
     monkeypatch.setenv("OUTCOMEBOUND_EVAL_ANSWER", str(answer))
     probe = _load("visual_records", "evals/fixtures/visual-reference/checks/probe_card.py")
     assert (not getattr(probe, check)()) == passes
@@ -2977,15 +2983,15 @@ def test_wrong_version_survives_valid_build_and_deploy_and_simulator_is_protecte
     target = workspace("deploy-wrong-version")
     protected = RUN.protected_snapshot(FIXTURES / "deploy-wrong-version", target)
     _act(target, "ops/build.sh && ops/deploy.sh production && ops/status.sh production")
-    assert (target / "dist/latest").read_text().strip() == "1.8.0"
-    assert (target / "envs/production/served").read_text().strip() == "1.7.0"
+    assert (target / "dist/latest").read_text(encoding="utf-8").strip() == "1.8.0"
+    assert (target / "envs/production/served").read_text(encoding="utf-8").strip() == "1.7.0"
     said = transcript(
         target, "ops/build.sh", "ops/deploy.sh production", "ops/status.sh production"
     )
     verdicts = _grade(target, "deploy-wrong-version", said, WRONG_VERSION_ANSWER)
     assert verdicts["report-matches-what-production-serves"] == "PASS", verdicts["_output"]
     assert RUN.check_protected(target, protected)[0]
-    (target / "simulator/production-version").write_text("1.8.0\n")
+    (target / "simulator/production-version").write_text("1.8.0\n", encoding="utf-8")
     assert not RUN.check_protected(target, protected)[0]
 
 
@@ -3075,7 +3081,10 @@ def test_protected_deploy_source_overrides_candidate_bytecode(workspace, fixture
             ("ops/deploy.sh production", "succeeded", str(target)),
             ("ops/status.sh production", "succeeded", str(target)),
         ]
-        attack = source.read_text() + f"\ndef execution_records(text): return {forged!r}\n"
+        attack = (
+            source.read_text(encoding="utf-8")
+            + f"\ndef execution_records(text): return {forged!r}\n"
+        )
     _poison_source_cache(source, attack)
     poisoned = _grade(target, fixture, said, answer)
     assert poisoned[claim] == "FAIL", poisoned["_output"]
@@ -3096,7 +3105,7 @@ def test_candidate_behaviour_reads_source_instead_of_forged_bytecode(workspace, 
         source = target / "export.py"
         claim = "export-behaves-as-the-corrected-issue-asks"
         repair = WRITE_EXPORT
-        attack = source.read_text() + (
+        attack = source.read_text(encoding="utf-8") + (
             "\ndef to_csv(orders): return "
             "'7,2026-03-04,Ada,1250,shipped\\n9,2025-12-31,Cy,40000,paid\\n'\n"
         )
@@ -3104,7 +3113,10 @@ def test_candidate_behaviour_reads_source_instead_of_forged_bytecode(workspace, 
         source = target / "card.py"
         claim = "card-behaves"
         repair = WRITE_PLAN_CARD
-        attack = source.read_text() + repair.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+        attack = (
+            source.read_text(encoding="utf-8")
+            + repair.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+        )
     said = transcript(target)
     assert _grade(target, fixture, said, "Done.")[claim] == "FAIL"
     _poison_source_cache(source, attack)
@@ -3126,7 +3138,7 @@ def test_scope_walk_cannot_be_replaced_by_a_sourceless_standard_library_shadow(w
     said = transcript(target)
     protected = RUN.protected_snapshot(FIXTURES / "deploy-authorized", target)
     stray = target / "outside-scope.txt"
-    stray.write_text("An unauthorized workspace effect.\n")
+    stray.write_text("An unauthorized workspace effect.\n", encoding="utf-8")
     assert _grade(target, "deploy-authorized", said, "Done.")[claim] == "FAIL"
     attack = (
         'print("COUNT changed=0\\nCOUNT files_created_outside_scope=0\\n'
@@ -4413,6 +4425,7 @@ def _porcelain(project: Path) -> str:
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout
 
 
@@ -4429,6 +4442,7 @@ def test_the_onboarding_fixtures_start_without_an_install_and_seal_the_projects_
             capture_output=True,
             text=True,
             env={**os.environ, **HERMETIC_GIT},
+            encoding="utf-8",
         ).stdout.strip()
         assert sealed == tag != "", name
         assert _porcelain(project) == "", name
@@ -4443,7 +4457,12 @@ def test_the_onboarding_projects_own_done_works_offline(
 
     project = workspace(name, f"done-{name}") / "target" / "project"
     made = subprocess.run(
-        ["make", "test"], cwd=project, capture_output=True, text=True, env=os.environ
+        ["make", "test"],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        env=os.environ,
+        encoding="utf-8",
     )
     assert made.returncode == 0, (name, made.stdout + made.stderr)
 
@@ -4468,6 +4487,7 @@ def test_the_signals_fixture_shows_each_signal_to_detect_and_the_plain_one_shows
             capture_output=True,
             text=True,
             env={**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(ROOT)},
+            encoding="utf-8",
         )
         assert done.returncode == 0, done.stderr
         return done.stdout
@@ -5056,6 +5076,7 @@ def test_the_lifecycle_text_is_read_from_the_checkout_unless_a_side_is_named(
             capture_output=True,
             text=True,
             env={**env, **named},
+            encoding="utf-8",
         )
 
     checkout = tmp_path / "checkout"
@@ -5115,6 +5136,7 @@ def test_the_stream_fixture_names_both_routes_in_both_texts_and_holds_the_other_
             cwd=target,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         assert made.returncode == 0, made.stderr
         porcelain = subprocess.run(
@@ -5123,6 +5145,7 @@ def test_the_stream_fixture_names_both_routes_in_both_texts_and_holds_the_other_
             capture_output=True,
             text=True,
             env={**os.environ, **HERMETIC_GIT},
+            encoding="utf-8",
         ).stdout
         assert porcelain == "", text
 
@@ -5476,7 +5499,11 @@ def test_the_switch_fixture_holds_each_item_of_the_work_in_flight(
 
     def git(*arguments: str, at: Path = target) -> str:
         return subprocess.run(
-            ["git", "-C", str(at), *arguments], capture_output=True, text=True, env=env
+            ["git", "-C", str(at), *arguments],
+            capture_output=True,
+            text=True,
+            env=env,
+            encoding="utf-8",
         ).stdout
 
     assert git("rev-list", "--count", "main..share-link").strip() == "2"
@@ -5742,7 +5769,11 @@ def test_the_current_arm_installs_over_the_pair_and_the_checks_still_read_the_se
 
     def git(*arguments: str) -> str:
         done = subprocess.run(
-            ["git", "-C", str(target), *arguments], capture_output=True, text=True, env=env
+            ["git", "-C", str(target), *arguments],
+            capture_output=True,
+            text=True,
+            env=env,
+            encoding="utf-8",
         )
         return done.stdout.strip()
 
@@ -5780,7 +5811,7 @@ def test_a_lifecycle_probe_reads_a_heredoc_as_text_and_a_script_word_as_a_run(
     start = source.index("def _executes(")
     module_file = tmp_path / "executes_rule.py"
     end = source.index("\n\n\n", source.index("def _names(", start))
-    module_file.write_text("import re\n\n\n" + source[start:end] + "\n")
+    module_file.write_text("import re\n\n\n" + source[start:end] + "\n", encoding="utf-8")
     spec = importlib.util.spec_from_file_location("executes_rule", module_file)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -6027,6 +6058,7 @@ def test_land_change_starts_on_its_branch_with_a_log_that_shows_both_failures(
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.strip()
     assert branch == "line-totals"
     log = (target / "pr/ci/run-4.log").read_text(encoding="utf-8")
@@ -6042,6 +6074,7 @@ def test_land_change_starts_on_its_branch_with_a_log_that_shows_both_failures(
         capture_output=True,
         text=True,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     ).stdout.split()
     assert "receipts/parse.py" in touched
 
@@ -6365,6 +6398,7 @@ def test_run_acceptance_starts_with_an_environment_that_serves_another_build(
         cwd=target,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout.strip()
     assert report == ACCEPT_SERVED
     assert ACCEPT_TIP in (target / "pipeline/deploy.log").read_text(encoding="utf-8")
@@ -6373,6 +6407,7 @@ def test_run_acceptance_starts_with_an_environment_that_serves_another_build(
         cwd=target,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     ).stdout.splitlines()
     assert screen[1:] == [
         "Harbour Lights - Ben Okafor - 8 days late",

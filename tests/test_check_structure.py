@@ -38,7 +38,11 @@ def tracked(path: Path, files: dict[str, str], executable: tuple[str, ...] = ())
 
 def check(root: Path) -> tuple[int, list[str]]:
     done = subprocess.run(
-        [sys.executable, str(SCRIPT), str(root)], capture_output=True, text=True, check=False
+        [sys.executable, str(SCRIPT), str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     return done.returncode, done.stdout.splitlines()
 

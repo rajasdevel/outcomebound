@@ -13,7 +13,12 @@ def _recorded_modes() -> dict[str, str]:
     where Git cannot read the tree (no repository, or a folder another user owns)."""
 
     done = subprocess.run(
-        ["git", "ls-files", "-s", "-z"], cwd=ROOT, capture_output=True, text=True, check=False
+        ["git", "ls-files", "-s", "-z"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        encoding="utf-8",
     )
     modes = {}
     for entry in done.stdout.split("\0") if done.returncode == 0 else ():

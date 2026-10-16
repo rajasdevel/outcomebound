@@ -515,7 +515,11 @@ def test_an_unchanged_tree_reruns_nothing_and_a_changed_one_runs_again(tmp_path:
 
     assert (root / ".git" / finish_check.STATE).is_file()
     status = subprocess.run(
-        [GIT, "-C", str(root), "status", "--porcelain"], capture_output=True, text=True, check=True
+        [GIT, "-C", str(root), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     )
     assert finish_check.STATE not in status.stdout
 
@@ -2073,7 +2077,11 @@ def test_commits_since_counts_the_commits_past_a_measured_one(tmp_path: Path) ->
 
     root, _ = target(tmp_path / "t", ["true"])
     head = subprocess.run(
-        [GIT, "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        [GIT, "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     ).stdout.strip()
     assert finish_check.commits_since(root, head) == 0
     for number in (1, 2):
@@ -2341,7 +2349,11 @@ def test_a_turn_that_changed_nothing_runs_nothing_and_holds_nothing_on_a_failing
     kept = json.loads((root / ".git" / finish_check.MARK).read_text(encoding="utf-8"))
     assert finish_check.stamp(kept.get("ended")) is not None
     status = subprocess.run(
-        [GIT, "-C", str(root), "status", "--porcelain"], capture_output=True, text=True, check=True
+        [GIT, "-C", str(root), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     )
     assert finish_check.MARK not in status.stdout
 
@@ -3204,7 +3216,7 @@ def test_the_delivery_follows_the_wake_field_of_the_row(
 
     def entry(row: str) -> int:
         given = json.dumps({**INPUT[row], "cwd": str(root), "transcript_path": None}).encode()
-        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given), encoding="utf-8"))
         return finish_check.main(["--constant-time", "--harness", row, "--done", digest])
 
     assert entry("codex") == 2
@@ -3228,13 +3240,14 @@ def test_a_slow_tree_read_still_runs_done(tmp_path: Path, monkeypatch: pytest.Mo
     real = finish_check.tree_digest
 
     def slow(*arguments: Any, **options: Any) -> str | None:
+        # real time: the read outlasts the 0.1 s budget below, whatever the machine's speed
         time.sleep(0.5)
         return real(*arguments, **options)
 
     monkeypatch.setattr(finish_check, "STOP_READ_SECONDS", 0.1)
     monkeypatch.setattr(finish_check, "tree_digest", slow)
     given = json.dumps({**INPUT[CC], "cwd": str(root), "transcript_path": None}).encode()
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given), encoding="utf-8"))
     monkeypatch.chdir(root)
 
     assert finish_check.main(["--constant-time", "--harness", CC, "--done", digest]) == 0
@@ -3305,7 +3318,11 @@ def test_a_run_records_the_tree_head_session_and_mark_it_started_with(tmp_path: 
     write(root / "src.txt", "two\n")
     tree = finish_check.tree_digest(root, digest)
     head = subprocess.run(
-        [GIT, "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+        [GIT, "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
     ).stdout.strip()
 
     process = fire(CC, digest, root, background=True)
@@ -3350,7 +3367,7 @@ def test_every_exit_of_the_run_writes_ended(
 
         monkeypatch.setattr(finish_check, "run_all", broken)
         given = json.dumps({**INPUT[CC], "cwd": str(root), "transcript_path": None}).encode()
-        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given), encoding="utf-8"))
         monkeypatch.chdir(root)
         assert finish_check.main(["--constant-time", "--harness", CC, "--done", digest]) == 0
     else:
@@ -3669,6 +3686,7 @@ def test_a_follower_on_the_running_tree_waits_for_the_holder_and_delivers_under_
     follower = fire(CC, digest, root, background=True)
     # A lower bound only: a follower that has not yet reached the lock proves less, never
     # nothing wrong; one that exits before the holder's verdict fails here or below.
+    # real time: a lower bound on how long the follower waits, never a condition
     time.sleep(1)
     assert follower.poll() is None
     write(go, "")
@@ -4211,7 +4229,7 @@ def test_a_lock_still_held_after_30_s_starts_nothing_sends_nothing_more_and_tell
         assert process.stdout is not None and process.stdout.readline() == b"ready\n"
         monkeypatch.setattr(finish_check, "SUPERSEDE_SECONDS", 2)
         given = json.dumps({**INPUT[CC], "cwd": str(root), "transcript_path": None}).encode()
-        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given), encoding="utf-8"))
         monkeypatch.chdir(root)
 
         assert finish_check.main(["--constant-time", "--harness", CC, "--done", digest]) == 0
@@ -4264,7 +4282,7 @@ def test_the_holder_opens_the_lock_file_once_and_a_done_command_does_not_inherit
 
     monkeypatch.setattr(finish_check.os, "open", counting)
     given = json.dumps({**INPUT[CC], "cwd": str(root), "transcript_path": None}).encode()
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given), encoding="utf-8"))
     monkeypatch.chdir(root)
 
     assert finish_check.main(["--constant-time", "--harness", CC, "--done", digest]) == 0
@@ -4287,7 +4305,7 @@ def test_a_codex_stop_whose_tree_read_passes_its_deadline_still_starts_the_run(
     )
     monkeypatch.setattr(finish_check, "STOP_READ_SECONDS", -1)
     given = json.dumps({**INPUT["codex"], "cwd": str(root), "transcript_path": None}).encode()
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given)))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(given), encoding="utf-8"))
     monkeypatch.chdir(root)
 
     assert finish_check.main(["--constant-time", "--harness", "codex", "--done", digest]) == 0
@@ -4412,6 +4430,7 @@ def test_the_run_writes_nothing_outside_the_git_directory(tmp_path: Path, row: s
             capture_output=True,
             text=True,
             check=True,
+            encoding="utf-8",
         ).stdout
         return files, listed
 
@@ -4526,7 +4545,7 @@ def test_the_turn_start_entry_keeps_to_one_budget(
     monkeypatch.setattr(finish_check, "begin_turn", begin)
     monkeypatch.setattr(finish_check, "turn_notices", notices)
     payload = json.dumps({"session_id": "s", "hook_event_name": "UserPromptSubmit"}).encode()
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload)))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(payload), encoding="utf-8"))
     words = ["--mark", "--harness", CC, "--done", "0" * 64]
 
     assert finish_check.main(words) == 0
@@ -4544,7 +4563,7 @@ def test_a_codex_stop_that_raises_prints_nothing_for_the_model_and_exits_0(
 
     monkeypatch.setattr(finish_check, "stop", broken)
     monkeypatch.setattr(finish_check, "_close_stdout", lambda: None)
-    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}")))
+    monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(b"{}"), encoding="utf-8"))
 
     code = finish_check.main(["--harness", "codex", "--done", "0" * 64])
 

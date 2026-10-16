@@ -36,7 +36,9 @@ TEST_WORDS = ("unittest", "pytest", "test_")
 
 
 def _git(*arguments: str) -> str:
-    done = subprocess.run(["git", *arguments], capture_output=True, text=True, timeout=60)
+    done = subprocess.run(
+        ["git", *arguments], capture_output=True, text=True, timeout=60, encoding="utf-8"
+    )
     return done.stdout if done.returncode == 0 else ""
 
 

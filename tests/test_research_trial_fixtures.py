@@ -76,18 +76,21 @@ def probe(work: Path, name: str, mode: str) -> subprocess.CompletedProcess[str]:
         text=True,
         env={**os.environ, **HERMETIC_GIT},
         timeout=120,
+        encoding="utf-8",
     )
 
 
 def reference(work: Path, name: str) -> None:
     if name == "patch-validation":
-        (work / "test_vault.py").write_text(PATCH_TESTS)
-        (work / "assessment.json").write_text(json.dumps(ASSESSMENT))
+        (work / "test_vault.py").write_text(PATCH_TESTS, encoding="utf-8")
+        (work / "assessment.json").write_text(json.dumps(ASSESSMENT), encoding="utf-8")
     elif name == "property-oracles":
-        (work / "test_codec.py").write_text(PROPERTY_TESTS)
+        (work / "test_codec.py").write_text(PROPERTY_TESTS, encoding="utf-8")
     else:
         code = work / "labels.py"
-        code.write_text(code.read_text().replace("count <= 1", "count == 1"))
+        code.write_text(
+            code.read_text(encoding="utf-8").replace("count <= 1", "count == 1"), encoding="utf-8"
+        )
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -95,7 +98,7 @@ def test_fixture_seed_fails_and_reference_passes_plan(tmp_path, name):
     from outcomebound_tools import schemacheck
 
     schema = json.loads(
-        (FIXTURES.parent.parent / "schemas/validation-plan.schema.json").read_text()
+        (FIXTURES.parent.parent / "schemas/validation-plan.schema.json").read_text(encoding="utf-8")
     )
     assert schemacheck.validate(plan(name), schema) == []
     work = build_fixture(name, tmp_path / "workspace")
@@ -134,7 +137,9 @@ def test_patch_probe_rejects_setup_error_and_reported_case_only(tmp_path):
     seeded = probe(work, name, "tests")
     assert seeded.returncode == 1
     assert "submitted tests do not pass" in seeded.stdout
-    (work / "test_vault.py").write_text(PATCH_TESTS.split("    def test_same_root_cause")[0])
+    (work / "test_vault.py").write_text(
+        PATCH_TESTS.split("    def test_same_root_cause")[0], encoding="utf-8"
+    )
     partial = probe(work, name, "tests")
     assert partial.returncode == 1
     assert "partial" in partial.stdout
@@ -152,11 +157,11 @@ def test_patch_assessment_rejects_false_confidence_and_nonboolean_values(tmp_pat
     assert probe(work, name, "assessment").returncode == 0
     assessment = json.loads(json.dumps(ASSESSMENT))
     assessment["supplied_probe"]["security_claim_established"] = True
-    (work / "assessment.json").write_text(json.dumps(assessment))
+    (work / "assessment.json").write_text(json.dumps(assessment), encoding="utf-8")
     assert probe(work, name, "assessment").returncode == 1
     assessment = json.loads(json.dumps(ASSESSMENT))
     assessment["candidates"]["A"]["fix_established"] = 1
-    (work / "assessment.json").write_text(json.dumps(assessment))
+    (work / "assessment.json").write_text(json.dumps(assessment), encoding="utf-8")
     assert probe(work, name, "assessment").returncode == 1
 
 
@@ -181,7 +186,7 @@ class T(unittest.TestCase):
 )
 def test_property_probe_rejects_vacuity_tautology_and_setup_error(tmp_path, submitted):
     work = build_fixture("property-oracles", tmp_path / "workspace")
-    (work / "test_codec.py").write_text(submitted)
+    (work / "test_codec.py").write_text(submitted, encoding="utf-8")
     result = probe(work, "property-oracles", "tests")
     assert result.returncode == 1, result.stdout
 
@@ -193,7 +198,7 @@ def test_roundtrip_only_misses_coupled_representation_defect(tmp_path):
         '        self.assertEqual(decode("7,-2,0"), [7, -2, 0])\n',
         "",
     )
-    (work / "test_codec.py").write_text(tests)
+    (work / "test_codec.py").write_text(tests, encoding="utf-8")
     result = probe(work, "property-oracles", "tests")
     assert result.returncode == 1
     assert "coupled-reversal is not caught" in result.stdout
@@ -210,7 +215,7 @@ def test_roundtrip_only_misses_coupled_representation_defect(tmp_path):
 def test_scope_and_protection_reject_changes_to_inputs(tmp_path, name, forbidden):
     work = build_fixture(name, tmp_path / "workspace")
     protected = RUN.protected_snapshot(FIXTURES / name, work)
-    (work / forbidden).write_text("changed input\n")
+    (work / forbidden).write_text("changed input\n", encoding="utf-8")
     assert probe(work, name, "scope").returncode == 1
     assert not RUN.check_protected(work, protected)[0]
 
@@ -219,7 +224,7 @@ def test_no_work_control_rejects_new_test_even_when_fix_passes(tmp_path):
     work = build_fixture("testing-no-work", tmp_path / "workspace")
     reference(work, "testing-no-work")
     assert probe(work, "testing-no-work", "tests").returncode == 0
-    (work / "test_additional.py").write_text("new unnecessary test\n")
+    (work / "test_additional.py").write_text("new unnecessary test\n", encoding="utf-8")
     assert probe(work, "testing-no-work", "scope").returncode == 1
 
 
@@ -227,7 +232,7 @@ def test_no_work_control_rejects_new_test_even_when_fix_passes(tmp_path):
 def test_none_arm_carries_no_skill_pointer(tmp_path, name, monkeypatch):
     monkeypatch.setenv("OB_EVAL_ARM", "none")
     work = build_fixture(name, tmp_path / "workspace")
-    assert "Read `.outcomebound/skills" not in (work / "AGENTS.md").read_text()
+    assert "Read `.outcomebound/skills" not in (work / "AGENTS.md").read_text(encoding="utf-8")
     assert not (work / ".outcomebound/skills").exists()
     assert RUN.protected_snapshot(FIXTURES / name, work, without_skills=True)
 
@@ -257,7 +262,7 @@ class ReaderTest(unittest.TestCase):
             "                        read_document(path, "
             '{"secret": "private", "hidden": "private"})',
         )
-    (work / "test_vault.py").write_text(submission)
+    (work / "test_vault.py").write_text(submission, encoding="utf-8")
     result = probe(work, "patch-validation", "tests")
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -278,7 +283,8 @@ class ReaderTest(unittest.TestCase):
         "class ReaderTest(unittest.TestCase):\n"
         " def test_setup(self):\n"
         "  with self.subTest(case='setup'):\n"
-        "   raise RuntimeError('synthetic setup failure')\n"
+        "   raise RuntimeError('synthetic setup failure')\n",
+        encoding="utf-8",
     )
     broken = probe(work, "patch-validation", "tests")
     assert broken.returncode == 1
@@ -290,7 +296,8 @@ def test_no_work_control_rejects_skipped_existing_regressions(tmp_path):
     (work / "labels.py").write_text(
         "import unittest\n\n"
         "def item_label(count):\n"
-        "    raise unittest.SkipTest('synthetic skipped regression')\n"
+        "    raise unittest.SkipTest('synthetic skipped regression')\n",
+        encoding="utf-8",
     )
     result = probe(work, "testing-no-work", "tests")
     assert result.returncode == 1, result.stdout + result.stderr
@@ -309,7 +316,7 @@ def test_fixed_replay_rejects_skip_after_valid_assertions(tmp_path, name):
     else:
         submitted = PROPERTY_TESTS + '        self.skipTest("synthetic incomplete property test")\n'
         path = "test_codec.py"
-    (work / path).write_text(submitted)
+    (work / path).write_text(submitted, encoding="utf-8")
     result = probe(work, name, "tests")
     assert result.returncode == 1, result.stdout + result.stderr
 
@@ -347,6 +354,7 @@ print(json.dumps(outcome))
         text=True,
         timeout=30,
         env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout) == expected
@@ -372,6 +380,6 @@ def test_patch_replay_accepts_reentry_or_root_as_only_benign_control(
         "    def test_valid_read(self):\n"
         f"        self.assertEqual(read_document({path!r}, {documents!r}), {expected!r})\n"
     )
-    (work / "test_vault.py").write_text(submitted)
+    (work / "test_vault.py").write_text(submitted, encoding="utf-8")
     result = probe(work, "patch-validation", "tests")
     assert result.returncode == 0, result.stdout + result.stderr

@@ -19,10 +19,10 @@ def main() -> int:
     values = {}
     for key in ("OUTCOMEBOUND_EVAL_ANSWER", "OUTCOMEBOUND_EVAL_TRANSCRIPT"):
         path = Path(os.environ.get(key, ""))
-        if not path.is_file() or not path.read_text().strip():
+        if not path.is_file() or not path.read_text(encoding="utf-8").strip():
             print("UNVERIFIED: missing readable " + key)
             return 1
-        values[key] = path.read_text()
+        values[key] = path.read_text(encoding="utf-8")
     if reader.execution_records(values["OUTCOMEBOUND_EVAL_TRANSCRIPT"]) is None:
         print("UNVERIFIED: execution transcript cannot be parsed")
         return 1

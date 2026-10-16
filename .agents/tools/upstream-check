@@ -105,7 +105,7 @@ def gh_api(endpoint: str) -> object:
     """A read-only GET through the `gh` command; the answer is parsed JSON."""
     done = subprocess.run(
         ["gh", "api", "--method", "GET", endpoint], capture_output=True, text=True, check=False
-    )
+    , encoding="utf-8")
     if done.returncode != 0:
         raise RuntimeError(f"gh api {endpoint.split('?')[0]}: {done.stderr.strip()[-300:]}")
     return json.loads(done.stdout)

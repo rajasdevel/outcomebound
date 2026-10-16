@@ -156,7 +156,7 @@ def bounds(base: str) -> list[str]:
         command += ["--prune", name]
     left = [name for name in TOOL_CACHES if any(Path(".").rglob(name))]
     print(f"observed: tool_caches_ignored={','.join(left) if left else 'none'}")
-    done = subprocess.run(command, capture_output=True, text=True, timeout=120)
+    done = subprocess.run(command, capture_output=True, text=True, timeout=120, encoding="utf-8")
     if done.returncode != 0:
         return [f"the content walk could not run: {done.stderr.strip()}"]
     outside = [
@@ -174,6 +174,7 @@ def accept(base: str) -> list[str]:
         capture_output=True,
         text=True,
         timeout=300,
+        encoding="utf-8",
     )
     sys.stdout.write(done.stdout[-4000:] + done.stderr[-4000:])
     return [] if done.returncode == 0 else [f"the hidden acceptance tests for {base} fail"]
@@ -215,6 +216,7 @@ def suite(base: str) -> list[str]:
         capture_output=True,
         text=True,
         timeout=300,
+        encoding="utf-8",
     )
     sys.stdout.write(done.stdout[-4000:] + done.stderr[-4000:])
     return [] if done.returncode == 0 else ["the project's own tests fail"]
