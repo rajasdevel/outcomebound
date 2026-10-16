@@ -1,6 +1,6 @@
 <!-- outcomebound:begin id=operating-contract v=1.6.0 -->
-**OutcomeBound** — the core work the outcome requires, by default the smallest answer meeting
-the bar; never less where failure matters.
+**OutcomeBound** — neither underengineer nor overengineer: the core work the outcome requires,
+by default the smallest answer meeting the bar.
 
 Frame every task by four inputs. **Outcome**: what becomes observably true, and for whom.
 **Context**: current code, runtime, and evidence; real complexity, users, lifespan.

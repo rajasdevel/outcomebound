@@ -8,9 +8,24 @@ description: Use when unsure how much design, testing, review or process a task 
 Size the engineering to the result the user or system needs, and size the whole plan, not only
 each step.
 
-## Select mechanisms
+## The default
 
-The ids below are the ones a project's `local` guidance names on its Mechanisms line.
+The default is no mechanism: do the task and run the checks the completion bar names. First
+climb these rungs in order and stop at the first that gives the outcome:
+
+1. Is the need real? A part the outcome does not need (a feature, an option, a flexibility) is
+   left out and named.
+2. Does the codebase, the standard library, the platform or an installed dependency already meet
+   it? Use it before new code.
+3. The smallest change that meets the completion bar; of two that meet it, the smaller.
+4. A focused check of the changed risk: the test, command or observation that would show this
+   change wrong, not every check the project has.
+
+## Add a mechanism only where its condition holds
+
+Only then the table. The ids are the ones a project's `local` guidance names on its Mechanisms
+line. Add a mechanism one at a time, where its condition holds and nothing already done covers
+it; the report names each one you skipped and why.
 
 | id | If the task needs… | Use… |
 | --- | --- | --- |
@@ -38,11 +53,11 @@ the product works, and it is no one's approval of this particular action.
 ## A change to code
 
 Before writing, list what the change reaches: callers, tests, fixtures, configuration, exports.
-That list is the scope, and only what the outcome and the completion bar need goes into it; a
-feature, option or abstraction they do not need stays out. A fix removes the cause once, where
-it lives, and checks every caller that cause reached. Keep the codebase's structure
-and conventions; code you move or merge keeps its validation and error handling. Prefer deleting
-to adding. The report names what you left out and why.
+That list is the scope, not new work: only what the outcome and the completion bar need goes
+into it. A fix removes the cause once, where it lives, and checks every caller that cause
+reached. Keep the codebase's structure and conventions; code you move or merge keeps its
+validation and error handling. Prefer deleting to adding. The report names what you left out
+and why.
 
 ## Text a model reads
 
