@@ -3905,3 +3905,32 @@ def test_check_and_detect_name_a_hook_file_they_cannot_read_and_count_nothing(
     assert code == 0
     (note,) = [line for line in notes_of(out) if line.startswith("# UNVERIFIED")]
     assert name in note and reason in note
+
+
+def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A three-harness install writes hundreds of skill files; one summary line per skills
+    folder keeps the warnings and the other files in view, and a dry run does not list each
+    new skill file again."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code,codex,gemini", "--dry-run")
+    lines = out.splitlines()
+    assert len(lines) < 60
+    assert (
+        sum(
+            re.fullmatch(r"create   \.\w+/skills/: \d+ files in 13 skills", x) is not None
+            for x in lines
+        )
+        == 3
+    )
+    assert not any("SKILL.md" in line for line in lines)
+    assert any(line.startswith("create   AGENTS.md") for line in lines)
+
+    run(capsys, str(target), "--harness", "claude-code,codex,gemini")
+    path = target / ".claude" / "skills" / "diagnose" / "SKILL.md"
+    path.write_text("changed\n", encoding="utf-8")
+    _, out, _ = run(capsys, str(target), "--force")
+    assert re.search(r"^update   \.claude/skills/: 1 file in 1 skill$", out, re.MULTILINE)

@@ -3155,12 +3155,55 @@ def _skips(values: Sequence[Sequence[str]]) -> dict[str, list[str]]:
     return skip
 
 
-def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
-    for name in edited:
-        print(f"edited   {name}: overridden by --force")
+def _skill_root(path: str) -> tuple[str, str] | None:
+    """For a file inside a harness's skills folder, that folder and the skill's name:
+    `.claude/skills/diagnose/SKILL.md` gives (`.claude/skills`, `diagnose`)."""
+
+    parts = path.split("/")
+    for index in range(len(parts) - 2):
+        if parts[index] == "skills":
+            return "/".join(parts[: index + 1]), parts[index + 1]
+    return None
+
+
+def _skill_summaries(planned: Planned) -> tuple[list[str], list[str]]:
+    """The planned paths a report names one by one, and one summary line for each verb and skills
+    folder over the skill files: a three-harness install is about 290 files, and a line each
+    buries the warnings that follow."""
+
+    singles: list[str] = []
+    groups: dict[tuple[str, str], list[str]] = {}
     for path, (before, after) in planned.items():
         verb = "create" if before is None else "delete" if after is None else "update"
+        root = _skill_root(path)
+        if root is None:
+            singles.append(path)
+        else:
+            groups.setdefault((verb, root[0]), []).append(root[1])
+    lines = []
+    for (verb, folder), skills in groups.items():
+        count, names = len(skills), len(set(skills))
+        lines.append(
+            f"{verb:<8} {folder}/: {count} file{'s' if count != 1 else ''} "
+            f"in {names} skill{'s' if names != 1 else ''}"
+        )
+    return singles, lines
+
+
+def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
+    """The report: each file that is not a skill file on its own line, one line per verb and
+    skills folder for the skill files (a changed one is also listed by name in a dry run's
+    diffs), then the notes."""
+
+    for name in edited:
+        print(f"edited   {name}: overridden by --force")
+    singles, summaries = _skill_summaries(planned)
+    for path in singles:
+        before, after = planned[path]
+        verb = "create" if before is None else "delete" if after is None else "update"
         print(f"{verb:<8} {path}")
+    for line in summaries:
+        print(line)
     if not planned:
         print("nothing to change")
     for verb, text in notes:
@@ -3172,8 +3215,10 @@ def _diffs(planned: Planned) -> None:
 
     for path, (before, after) in planned.items():
         if before is None and after is not None:
-            # A new file is its whole text, which the install writes as shipped: its size only.
-            print(f"new      {path}: {len(after)} bytes, written as shipped")
+            # A new file is its whole text, which the install writes as shipped: its size only,
+            # and a new skill file is counted in the report's summary line, not named again.
+            if _skill_root(path) is None:
+                print(f"new      {path}: {len(after)} bytes, written as shipped")
             continue
         try:
             old = [] if before is None else before.decode("utf-8").splitlines(keepends=True)
