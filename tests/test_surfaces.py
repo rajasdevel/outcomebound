@@ -65,8 +65,7 @@ def test_every_row_is_in_the_shape_the_module_reads() -> None:
     string or null value; a row selected by nothing is never chosen, so a selector
     malformed here would leave its surface unknown without a word."""
 
-    assert TABLE, "the surface table is empty"
-    assert table() == TABLE
+    assert table(), "the surface table is empty"
     for name, row in TABLE.items():
         selector = row["signals"]["environment"]
         if selector is None:
@@ -122,33 +121,42 @@ def test_the_most_specific_row_wins_and_a_tie_is_unknown() -> None:
 
 
 def test_a_string_value_matches_exactly_and_a_null_one_any_setting_but_empty() -> None:
-    assert session_surface({"CURSOR_AGENT": "1"}) == "cursor-agent-chat"
-    assert session_surface({"CURSOR_AGENT": "yes"}) == "cursor-agent-chat"
-    assert session_surface({"CURSOR_AGENT": ""}) == UNKNOWN
-    assert session_surface({"GEMINI_CLI": "1"}) == "gemini"
-    assert session_surface({"GEMINI_CLI": "true"}) == UNKNOWN
+    rows = {
+        "exact": _row([_variable("A", "1")], mermaid=True),
+        "any": _row([_variable("B", None)], mermaid=True),
+    }
+    assert session_surface({"A": "1"}, rows) == "exact"
+    assert session_surface({"A": "yes"}, rows) == UNKNOWN
+    assert session_surface({"B": "1"}, rows) == "any"
+    assert session_surface({"B": "yes"}, rows) == "any"
+    assert session_surface({"B": ""}, rows) == UNKNOWN
 
 
 @pytest.mark.parametrize(
     "environ",
-    [{}, {"CLAUDECODE": "1"}, {"CODEX_SANDBOX": "seatbelt"}, {"CURSOR_AGENT": "1"}],
+    [{}, {"X": "1"}, {"OTHER": "seatbelt"}, {"Z": "1"}],
     ids=["nothing-set", "one-of-two-variables", "no-row-names-it", "no-rendering-recorded"],
 )
 def test_an_unknown_or_unrecorded_surface_draws_ascii(environ: dict[str, str]) -> None:
     """A session no row identifies, and one whose row records no rendering, draw ASCII."""
 
-    assert diagram_form(environ) == "ascii"
+    rows = {
+        "pair": _row([_variable("X"), _variable("Y")], mermaid=True),
+        "unrecorded": _row([_variable("Z")], mermaid=None),
+    }
+    if environ == {"Z": "1"}:
+        assert session_surface(environ, rows) == "unrecorded"
+    assert diagram_form(environ, rows) == "ascii"
 
 
 def test_a_rendering_counts_only_from_a_row_that_is_selected_and_carries_provenance() -> None:
     """A row that names no variable is never chosen, even one recording Mermaid; and a
     `true` without its provenance is not taken as rendering it."""
 
-    shipped = TABLE["cursor-cli"]
-    assert shipped["mermaid"] is True and shipped["signals"]["environment"] is None
+    nameless = {"n": _row(None, mermaid=True)}
     for environ in ({}, {"Z": "1"}, EDITOR_SESSION):
-        assert session_surface(environ, {"cursor-cli": shipped}) == UNKNOWN
-        assert diagram_form(environ, {"cursor-cli": shipped}) == "ascii"
+        assert session_surface(environ, nameless) == UNKNOWN
+        assert diagram_form(environ, nameless) == "ascii"
 
     selected = {"z": _row([_variable("Z")], mermaid=True)}
     assert diagram_form({"Z": "1"}, selected) == "mermaid"

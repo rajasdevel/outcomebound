@@ -289,16 +289,6 @@ def test_every_install_carries_the_thirteen_working_skills_and_no_fragment_adds_
         parse_fragment(GOOD.replace("version: 1", 'skills: ["a-b"]\nversion: 1'), "x.md")
 
 
-def test_the_same_selection_composes_the_same_bytes(source):
-    """Determinism across independent loads: same inputs, same body, same hash."""
-
-    first = load_all(source)
-    second = load_all(source)
-    one = compose_body([first["python"], first["solo"]])
-    two = compose_body([second["python"], second["solo"]])
-    assert one == two
-
-
 def test_fragment_order_is_the_order_given(source):
     catalog = load_all(source)
     forward = compose_body([catalog["python"], catalog["solo"]])
@@ -477,6 +467,29 @@ def _oversized_local(tmp_path):
     local = tmp_path / "local.md"
     write(local, _fragment("local", family="setup", padding=" " + "detail. " * 5000))
     return local
+
+
+def test_the_same_selection_composes_the_same_bytes_under_any_hash_seed(
+    source, tmp_path, monkeypatch
+):
+    """Separate processes with different hash seeds see different set orders; the composed
+    bytes must not depend on them."""
+
+    outputs = []
+    for seed in ("1", "2", "3"):
+        monkeypatch.setenv("PYTHONHASHSEED", seed)
+        result = _cli(
+            "compose",
+            "--source",
+            str(source),
+            "--target",
+            str(tmp_path),
+            "--fragments",
+            "python,solo",
+        )
+        assert result.returncode == 0, result.stderr
+        outputs.append(result.stdout)
+    assert outputs[0] and outputs[0] == outputs[1] == outputs[2]
 
 
 def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, tmp_path):

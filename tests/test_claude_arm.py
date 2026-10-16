@@ -13,10 +13,11 @@ from pathlib import Path
 import pytest
 
 from tests.eval_helpers import ROOT, load
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, posix_only
 
-# Maintainer tooling beside evals/run.py: skipped, with the reason, where its tests are.
-pytestmark = needs_posix_bash
+# Maintainer tooling beside evals/run.py. The transcript tests read POSIX paths and symlinks, so
+# Windows skips them; only the test that runs a fixture's setup script needs a bash too.
+pytestmark = posix_only
 
 ARM = load("claude_arm", "evals/claude_arm.py")
 WORKDIR = "/work/fixture-repo"
@@ -273,8 +274,7 @@ def test_a_seal_out_inside_the_state_folder_is_refused_and_no_seal_file_is_writt
         ARM.main(
             ["--state", str(tmp_path), "--seal-out", str(tmp_path / "k.seal"), "prepare", "f", "a"]
         )
-    source = (ROOT / "evals" / "claude_arm.py").read_text(encoding="utf-8")
-    assert '.seal"' not in source
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_a_carriage_return_cannot_forge_structure_after_the_graders_read_the_file(
@@ -402,22 +402,31 @@ def test_missing_observed_cwd_is_not_replaced_with_requested_fixture(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "boundary",
-    ["malformed", "reused-id", "duplicate-result", "missing-id", "nonstring-command", "bad-parts"],
+    ("boundary", "refusal"),
+    [
+        ("malformed", None),
+        ("reused-id", "missing or reused tool call id"),
+        ("duplicate-result", "unmatched or repeated tool result"),
+        ("missing-id", "missing or reused tool call id"),
+        ("nonstring-command", "Bash command is not a string"),
+        ("bad-parts", "malformed message parts"),
+    ],
 )
-def test_ambiguous_claude_event_stream_is_refused(tmp_path, boundary):
+def test_ambiguous_claude_event_stream_is_refused(tmp_path, boundary, refusal):
     call = _bash("ops/deploy.sh production")
     result = {"type": "tool_result", "tool_use_id": call["id"], "content": "", "is_error": False}
     lines = [_event(call), _event(result, role="user")]
     if boundary == "malformed":
         lines.append('{"message":')
     elif boundary == "reused-id":
-        lines += [_event(call), _event(result, role="user")]
+        # One id on two calls and a single result: only the id check sees the reuse.
+        lines = [_event(call, call), _event(result, role="user")]
     elif boundary == "duplicate-result":
         lines.append(_event({**result, "is_error": True}, role="user"))
     elif boundary == "missing-id":
-        call["id"] = ""
-        lines = [_event(call)]
+        # The empty id is paired with a result, so only the id check sees it missing.
+        call["id"] = result["tool_use_id"] = ""
+        lines = [_event(call), _event(result, role="user")]
     elif boundary == "nonstring-command":
         call["input"]["command"] = ["echo", "not a string"]
         lines = [_event(call)]
@@ -425,7 +434,7 @@ def test_ambiguous_claude_event_stream_is_refused(tmp_path, boundary):
         lines = [json.dumps({"message": {"role": "assistant", "content": [42]}})]
     path = tmp_path / "ambiguous.jsonl"
     path.write_text("\n".join(lines))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=refusal) if refusal else pytest.raises(ValueError):
         ARM._transcript(path, WORKDIR)
 
 
@@ -549,6 +558,7 @@ def test_known_passive_tool_forms_remain_readable(tmp_path, name):
     assert json.loads(transcript)["commands"] == []
 
 
+@needs_posix_bash
 def test_prepare_keeps_the_graders_in_a_stage_outside_the_state_and_grade_refuses_a_changed_one(
     tmp_path, monkeypatch, capsys
 ):
@@ -567,7 +577,7 @@ def test_prepare_keeps_the_graders_in_a_stage_outside_the_state_and_grade_refuse
     try:
         assert not (Path(state["workdir"]) / "checks").exists()
         assert state_dir.resolve() not in stage.resolve().parents
-        assert {"checks/probe_datehelp.py", "checks/scope.sh"} <= set(state["stage_files"])
+        assert "checks/scope.sh" in state["stage_files"]
         (stage / "checks" / "scope.sh").write_text("exit 0\n", encoding="utf-8")
         done = _write(tmp_path, _event({"type": "text", "text": "Done."}, cwd=state["workdir"]))
         ARM.grade("small-fix--none", str(done), seal)

@@ -440,19 +440,6 @@ def test_a_mailmap_joins_two_emails_into_one_author(tmp_path: Path) -> None:
     assert drift.recent_authors(target) == 1
 
 
-def test_two_people_with_one_display_name_count_as_one_author(tmp_path: Path) -> None:
-    """The chosen trade-off, not a claim that it is right: identities that share a display name
-    are one author. One person under two emails is common, a name collision between two people
-    in the recent history of one repository is rare, and the line is information a person reads;
-    a count one too low costs one missed line, a count one too high prints a false claim."""
-
-    target = repo(tmp_path / "t")
-    commit(target, ONE, "Sam Lee")
-    commit(target, TWO, "Sam Lee")
-
-    assert drift.recent_authors(target) == 1
-
-
 @pytest.mark.parametrize(
     ("mailbox", "counted"),
     [
@@ -593,7 +580,10 @@ def test_one_name_under_two_emails_is_one_author(
 ) -> None:
     """Breaks if one person who commits under two emails with one name counts as two authors, so
     that a project with one maintainer reads as a team, or if two names with two emails count as
-    one."""
+    one. Identities that share a display name are one author, a chosen trade-off and not a claim
+    that it is right: one person under two emails is common, a name collision between two people
+    in the recent history of one repository is rare, and the line is information a person reads;
+    a count one too low costs one missed line, a count one too high prints a false claim."""
 
     target = repo(tmp_path / "one")
     commit(target, ONE, "Alice Doe")
@@ -730,15 +720,6 @@ def all_five(tmp_path: Path, capsys: Capture, bounds: str) -> list[str]:
     two_authors(target)
     installed(target, capsys, "solo,local")
     return drift_lines(run(capsys, str(target), "--check")[1])
-
-
-def test_each_of_the_five_signals_prints_a_line_without_an_acknowledgement(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """Breaks if the five-signal project used by the acknowledgement tests does not print all
-    five lines, which would make those tests prove nothing."""
-
-    assert all_five(tmp_path, capsys, "") == list(ALL_FIVE.values())
 
 
 @pytest.mark.parametrize("signal", list(ALL_FIVE))

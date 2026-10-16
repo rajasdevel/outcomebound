@@ -22,9 +22,10 @@ from tests.canary_helpers import (
 )
 from tests.portable import WINDOWS
 
-# The canary is maintainer tooling: it runs the installed release's sh launcher, and its tests
-# stand in for interpreters and floor tools with sh scripts, which Windows cannot start.
-pytestmark = pytest.mark.skipif(
+# The canary is maintainer tooling: its runs use the installed release's sh launcher, and its
+# tests stand in for interpreters and floor tools with sh scripts, which Windows cannot start.
+# The one test that calls the comparison in process needs none of that and runs everywhere.
+posix_only = pytest.mark.skipif(
     WINDOWS, reason="the canary and its sh stand-ins are POSIX maintainer tooling"
 )
 
@@ -114,6 +115,7 @@ def ticketed(path: Path, drafts: bool, export: bool) -> Path:
     return root
 
 
+@posix_only
 def test_a_floor_claim_that_passes_on_both_engines_keeps_its_cache_out_of_the_tree(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -132,6 +134,7 @@ def test_a_floor_claim_that_passes_on_both_engines_keeps_its_cache_out_of_the_tr
     assert_no_path(done.stdout + done.stderr, tmp_path)
 
 
+@posix_only
 def test_a_candidate_floor_check_that_crashes_fails(tmp_path: Path, monkeypatch) -> None:
     tools = tmp_path / "tools"
     root = floored(tmp_path / "private-alpha", tools)
@@ -155,6 +158,7 @@ def test_a_candidate_floor_check_that_crashes_fails(tmp_path: Path, monkeypatch)
     assert_no_path(done.stdout + done.stderr, tmp_path)
 
 
+@posix_only
 def test_a_candidate_that_makes_a_folder_git_ignores_in_a_project_fails(tmp_path: Path) -> None:
     """A cache folder that ignores itself, as ruff's does, is no change to `git status`."""
 
@@ -175,6 +179,7 @@ def test_a_candidate_that_makes_a_folder_git_ignores_in_a_project_fails(tmp_path
     assert_no_path(done.stdout + done.stderr, tmp_path)
 
 
+@posix_only
 def test_the_drafts_the_claims_plan_names_and_the_export_are_checked(tmp_path: Path) -> None:
     root = ticketed(tmp_path / "private-alpha", drafts=True, export=True)
 
@@ -189,6 +194,7 @@ def test_the_drafts_the_claims_plan_names_and_the_export_are_checked(tmp_path: P
     assert_no_path(done.stdout + done.stderr, tmp_path)
 
 
+@posix_only
 def test_a_candidate_tickets_check_with_no_valid_report_fails(tmp_path: Path) -> None:
     root = ticketed(tmp_path / "private-alpha", drafts=True, export=False)
     refusing = stub(
@@ -203,6 +209,7 @@ def test_a_candidate_tickets_check_with_no_valid_report_fails(tmp_path: Path) ->
     assert "no report: the report has no result PASS, FAIL or UNVERIFIED" in done.stdout
 
 
+@posix_only
 def test_a_project_with_no_floor_and_no_drafts_says_why_each_was_not_run(tmp_path: Path) -> None:
     bare = project(tmp_path / "private-alpha")
     declared = ticketed(tmp_path / "private-beta", drafts=False, export=False)

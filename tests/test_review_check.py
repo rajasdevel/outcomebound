@@ -5,13 +5,13 @@ says what it does not establish; the JSON report matches its schema."""
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 import pytest
 
 from outcomebound_tools import review_check
 from outcomebound_tools.schemacheck import validate
+from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = json.loads((ROOT / "schemas/review-report.schema.json").read_text("utf-8"))
@@ -156,22 +156,25 @@ def test_a_long_whitespace_run_in_a_disposition_is_read_in_linear_time(tmp_path,
 
 
 @pytest.mark.parametrize(
-    "value",
+    ("value", "verdict"),
     [
-        "fixed — x",
-        "fixed -- x",
-        "fixed—x",
-        "fixed — ",
-        "rejected —  ",
-        "fixed",
-        "a — b — c",
-        "fixed\t—\tx",
+        ("fixed — x", None),
+        ("fixed -- x", None),
+        ("fixed\t—\tx", None),
+        ("fixed — x — y", None),
+        ("fixed", "DISPOSITION_EMPTY"),
+        ("fixed — ", "DISPOSITION_EMPTY"),
+        ("rejected —  ", "DISPOSITION_EMPTY"),
+        ("fixed—x", "DISPOSITION_UNKNOWN"),
+        ("a — b — c", "DISPOSITION_UNKNOWN"),
     ],
 )
-def test_the_disposition_separator_splits_as_it_did_before_the_linear_form(value):
-    old = re.compile(r"[ \t]+(?:—|--)(?:[ \t]+|$)").split(value, maxsplit=1)
-    new = review_check._SEPARATOR.split(value, maxsplit=1)
-    assert [new[0].rstrip(), *new[1:]] == old
+def test_the_disposition_separator_splits_on_a_spaced_dash(tmp_path, capsys, value, verdict):
+    code, out = run(tmp_path, capsys, CLEAN + f"\n### F9 · ?\n\nDisposition: {value}\n")
+    if verdict is None:
+        assert code == 0, out
+    else:
+        assert code == 1 and verdict in codes(out), out
 
 
 # --- review sweep: every review file of a work folder -------------------------------------
@@ -236,6 +239,7 @@ def test_sweep_reads_a_file_that_says_it_is_a_review_however_its_headings_read(t
     assert "FINDING_MALFORMED" in out and "brief.md" not in out and "fenced.md" not in out
 
 
+@needs_symlinks
 def test_sweep_enters_no_linked_folder_and_reads_no_linked_or_deeper_file(tmp_path, capsys):
     """NEGATIVE CONTROL: a link out of the folder, and a file five levels down, are not read; a
     linked file is counted as not read."""

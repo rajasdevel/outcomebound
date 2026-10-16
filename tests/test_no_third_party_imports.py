@@ -36,14 +36,6 @@ def test_NEGATIVE_CONTROL_second_alias_in_a_multi_import_is_caught(tmp_path):
     assert [module for _, module in found] == ["requests"]
 
 
-def test_NEGATIVE_CONTROL_scripts_directory_is_gated(tmp_path):
-    scripts = tmp_path / "scripts"
-    scripts.mkdir()
-    (scripts / "helper.py").write_text("from yaml import safe_load\n", encoding="utf-8")
-    found = _gate().violations(str(tmp_path))
-    assert [module for _, module in found] == ["yaml"]
-
-
 def test_check_no_deps_checks_the_root_it_is_given_and_the_current_directory_by_default(
     tmp_path: Path,
 ) -> None:

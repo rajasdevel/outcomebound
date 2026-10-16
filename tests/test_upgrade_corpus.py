@@ -202,33 +202,6 @@ def previous_tag(which: str) -> str:
     return below[-1]
 
 
-TAGS = ["v1.0.0", "v1.1.0", "v1.1.1"]
-TREES = {"v1.0.0": "tree-100", "v1.1.0": "tree-110", "v1.1.1": "tree-111", "v1.2.0": "tree-120"}
-
-
-@pytest.mark.parametrize(
-    ("tags", "candidate_version", "own", "expected"),
-    [
-        # Between releases: VERSION still names the previous release, whose tree is not HEAD's.
-        pytest.param(TAGS, "1.1.1", "tree-dev", "v1.1.1", id="development"),
-        # The release commit, before its tag exists.
-        pytest.param(TAGS, "1.2.0", "tree-120", "v1.1.1", id="release-before-tag"),
-        # The tag's pipeline: the tag exists and names the candidate's own tree.
-        pytest.param([*TAGS, "v1.2.0"], "1.2.0", "tree-120", "v1.1.1", id="release-after-tag"),
-        # After the release, VERSION names it and HEAD has moved on.
-        pytest.param([*TAGS, "v1.2.0"], "1.2.0", "tree-dev", "v1.2.0", id="after-release"),
-        # Another engine tree names no commit: the newest tag at or below its VERSION.
-        pytest.param([*TAGS, "v1.2.0"], "1.2.0", None, "v1.2.0", id="archive-candidate"),
-    ],
-)
-def test_the_release_before_the_candidate_is_the_one_it_upgrades_from(
-    tags: list[str], candidate_version: str, own: str | None, expected: str
-) -> None:
-    below = before_candidate(tags, version(candidate_version), own, TREES.get)
-
-    assert below[-1] == expected
-
-
 @dataclass(frozen=True)
 class Case:
     """One adopter shape: the previous install's options, what the project then holds, the

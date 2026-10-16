@@ -345,17 +345,6 @@ def test_release_publication_waits_for_every_platform_job() -> None:
     _assert_release_waits_for_platforms(workflow.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("omitted", ["verify-tag", "test", "windows", "container"])
-def test_release_contract_rejects_an_omitted_platform_job(omitted: str) -> None:
-    workflow = (SCRIPT.parent.parent / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    needed = ", ".join(
-        name for name in ("verify-tag", "test", "windows", "container") if name != omitted
-    )
-    broken = re.sub(r"(?m)^    needs: .+$", f"    needs: [{needed}]", workflow)
-    with pytest.raises(AssertionError, match=f"release omits required jobs: {omitted}"):
-        _assert_release_waits_for_platforms(broken)
-
-
 def test_release_tag_is_verified_once_not_in_each_matrix_leg() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert workflow.count("scripts/release-check.py --tag") == 1

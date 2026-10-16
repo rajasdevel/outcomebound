@@ -165,7 +165,10 @@ def write(path: Path, text: str) -> None:
 def process_alive(pid: int) -> bool:
     """Whether a POSIX process runs. A stopped child nobody has reaped is a zombie: `kill(pid, 0)`
     still finds it, as it does for every child in a container whose first process reaps none, so
-    a zombie reads as gone. Not for Windows, where `os.kill(pid, 0)` would end the process."""
+    a zombie reads as gone. Where `/proc` is there, an entry that vanishes after `kill` found the
+    process means it was reaped; where it is not (macOS), `ps` tells the state apart, and a
+    system with neither counts a process `kill` finds as running. Not for Windows, where
+    `os.kill(pid, 0)` would end the process."""
 
     assert not WINDOWS, "os.kill(pid, 0) ends a process on Windows"
     try:
@@ -177,8 +180,15 @@ def process_alive(pid: int) -> bool:
     try:
         state = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rpartition(")")[2].split()[0]
     except (OSError, IndexError):
-        done = subprocess.run(
-            ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False
-        )
+        if Path("/proc/self/stat").exists():
+            return False
+        try:
+            done = subprocess.run(
+                ["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True, check=False
+            )
+        except OSError:
+            return True
         state = done.stdout.strip()
+        if not state:
+            return False
     return not state.startswith("Z")

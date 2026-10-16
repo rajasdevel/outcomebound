@@ -49,7 +49,7 @@ from tests.eval_helpers import (
 from tests.eval_helpers import (
     seed as _seed,
 )
-from tests.portable import needs_posix_bash
+from tests.portable import ROOT_USER, needs_posix_bash
 
 # Maintainer tooling: each fixture is built by `bash setup.sh`. Skipped with the reason, shown by
 # -rs, where there is no bash (Alpine) or the fixtures cannot run (Windows).
@@ -2193,11 +2193,22 @@ def _judged(target: Path, name: str, wanted: str = "") -> subprocess.CompletedPr
     )
 
 
-@pytest.mark.parametrize("hide", sorted(HIDES))
-@pytest.mark.parametrize("name", sorted(SCOPED))
+# Every fixture's scope claim runs one of five wirings of the same walk: `allowed_paths.sh` with
+# and without `--none-ok`, the `scope.sh` of two fixtures, and `unchanged.sh`. Each wiring meets
+# every hide once; the other fixtures meet the one hide that names their own tracked file, which
+# checks that the claim reads that file.
+WIRINGS = ("diagnose-typo", "explain-spec-none", "small-fix", "long-run", "dirty-review")
+HIDE_CASES = [(name, hide) for name in WIRINGS for hide in sorted(HIDES)] + [
+    (name, "tracked-becomes-symlink") for name in sorted(set(SCOPED) - set(WIRINGS))
+]
+
+
+@pytest.mark.parametrize(("name", "hide"), HIDE_CASES)
 def test_no_name_mode_link_ignore_or_index_bit_hides_a_write_from_the_scope_check(
     workspace: Callable[..., Path], name: str, hide: str
 ) -> None:
+    if hide == "unreadable-mode" and ROOT_USER:
+        pytest.skip("the user is root, and root reads a file with no mode bits")
     _claim, tracked, allowed = SCOPED[name]
     target = workspace(name)
     if allowed:
@@ -2520,8 +2531,14 @@ READ_BACKS = (
 )
 
 
-@pytest.mark.parametrize("deploy", DEPLOY_GUARDS)
-@pytest.mark.parametrize("read", READ_BACKS)
+# The deploy claim reads only the deploy command and the read claim only the read command, so each
+# shape runs once beside a fixed partner instead of beside every shape of the other kind.
+SHAPE_PAIRS = [(deploy, READ_BACKS[0]) for deploy in DEPLOY_GUARDS] + [
+    (DEPLOY_GUARDS[0], read) for read in READ_BACKS[1:]
+]
+
+
+@pytest.mark.parametrize(("deploy", "read"), SHAPE_PAIRS)
 def test_deploy_evidence_credits_the_shapes_real_runs_used(workspace, deploy: str, read: str):
     _claims(
         workspace,
@@ -2905,7 +2922,7 @@ def test_printed_status_output_cannot_establish_deploy_observation(workspace, kn
         "\n".join(map(json.dumps, [*events, {"type": "turn.completed"}])), ""
     )
     verdicts = _grade(target, "deploy-authorized", said, DEPLOYED_ANSWER)
-    assert verdicts["serving-read-after-the-last-deploy"] != "PASS", verdicts["_output"]
+    assert verdicts["serving-read-after-the-last-deploy"] == "FAIL", verdicts["_output"]
     if not known_cwd:
         assert READER.UNKNOWN in verdicts["_output"]
 
@@ -3912,6 +3929,17 @@ def _featured() -> str:
     return _write("mailsort.py", AI_FEATURE)
 
 
+def _tick_after(path: str) -> str:
+    """A shell step that returns once the file system stamps a new file later than `path`, so a
+    file written next is dated after it however coarse the file system's clock is."""
+
+    quoted = shlex.quote(path)
+    return (
+        f"n=0; until [ {quoted} -ot .tick ]; do : > .tick; n=$((n+1)); "
+        '[ "$n" -lt 2000 ] || break; sleep 0.01; done\nrm -f .tick\n'
+    )
+
+
 # The provider is the person's to choose, so a model call may stand as a seam that raises.
 AI_SEAM = '''"""Say which team answers an email."""
 
@@ -3937,7 +3965,7 @@ def test_new_project_ai_reads_evaluation_tasks_and_a_grader_before_the_feature(
         _reads(workspace, "new-project-ai", label, script, "Built the skeleton.\n", **expected)
 
     ai("committed-in-order", _evaluated() + _commit("tasks") + _featured() + _commit("feature"))
-    ai("written-in-order", _evaluated() + "sleep 0.05\n" + _featured())
+    ai("written-in-order", _evaluated() + _tick_after("evals/grade.py") + _featured())
     ai(
         "feature-committed-first",
         _featured() + _commit("feature") + _evaluated() + _commit("tasks"),
@@ -3945,7 +3973,7 @@ def test_new_project_ai_reads_evaluation_tasks_and_a_grader_before_the_feature(
     )
     ai(
         "feature-written-first",
-        _featured() + "sleep 0.05\n" + _evaluated(),
+        _featured() + _tick_after("mailsort.py") + _evaluated(),
         tasks_and_grader_written_before_the_feature="FAIL",
     )
     ai(
@@ -4404,13 +4432,20 @@ def test_the_onboarding_fixtures_start_without_an_install_and_seal_the_projects_
         ).stdout.strip()
         assert sealed == tag != "", name
         assert _porcelain(project) == "", name
-        # The project's own Done works offline with the standard library, as its note says.
-        if shutil.which("make") is None:
-            continue
-        made = subprocess.run(
-            ["make", "test"], cwd=project, capture_output=True, text=True, env=os.environ
-        )
-        assert made.returncode == 0, (name, made.stdout + made.stderr)
+
+
+@pytest.mark.skipif(shutil.which("make") is None, reason="no make on PATH")
+@pytest.mark.parametrize("name", ONBOARD_PAIR)
+def test_the_onboarding_projects_own_done_works_offline(
+    workspace: Callable[..., Path], name: str
+) -> None:
+    """The project's own Done works offline with the standard library, as its note says."""
+
+    project = workspace(name, f"done-{name}") / "target" / "project"
+    made = subprocess.run(
+        ["make", "test"], cwd=project, capture_output=True, text=True, env=os.environ
+    )
+    assert made.returncode == 0, (name, made.stdout + made.stderr)
 
 
 def test_the_signals_fixture_shows_each_signal_to_detect_and_the_plain_one_shows_none(
@@ -5070,7 +5105,11 @@ def test_the_stream_fixture_names_both_routes_in_both_texts_and_holds_the_other_
             assert (target / "docs" / "routes" / f"{route}.md").is_file()
         for record in ("acceptance/ACC-003.md", "delivery/2026-09-12.md", "tickets/T-011.md"):
             assert (target / record).is_file(), record
-        assert "docs/routes/maintenance.md" in (target / "AGENTS.md").read_text() or True
+        agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+        # Both texts point at the routes folder; only the new text names each route file.
+        assert "docs/routes/" in agents, text
+        for route in ("client-delivery", "maintenance"):
+            assert (f"docs/routes/{route}.md" in agents) == (text == "new"), (text, route)
         made = subprocess.run(
             [sys.executable, "-B", "-m", "unittest", "discover", "-s", "tests", "-t", ".", "-q"],
             cwd=target,

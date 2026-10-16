@@ -156,8 +156,8 @@ def test_every_keyword_the_shipped_schemas_use_is_enforced_not_ignored():
 
 
 def test_shipped_schemas_are_all_readable_in_the_supported_subset():
-    """Discovery is only useful if every discovered schema actually parses and
-    validates its own shape; an unreadable one would otherwise be skipped."""
+    """Discovery is only useful if every discovered schema parses and says something; an
+    unreadable or emptied one would otherwise be skipped, or validate nothing."""
     for name in _shipped_schema_names():
         schema = _schema(name)
         assert isinstance(schema, dict) and schema, name

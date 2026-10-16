@@ -102,11 +102,11 @@ def test_shipped_model_text_sets_no_limit_without_its_evidence() -> None:
 def test_NEGATIVE_CONTROL_a_new_limit_and_a_new_stop_are_reported() -> None:
     text = "---\nname: x\n---\nWork at most ten steps.\n```\nwait 30 seconds\n```\nRetry 3 times "
     text += "within 2 hours, then stop and ask.\n"
-    assert limits(text) == [
+    assert sorted(limits(text)) == [
         (4, "at most"),
         (8, "2 hours"),
-        (8, "within 2"),
         (8, "stop and ask"),
+        (8, "within 2"),
     ]
 
 

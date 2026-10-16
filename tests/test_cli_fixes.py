@@ -49,8 +49,12 @@ def test_floor_json_says_that_no_floor_verb_has_it(capsys: Capture, tmp_path: Pa
     assert "tickets check --json" in capsys.readouterr().err
 
 
-def test_adopt_help_says_omitted_flags_keep_the_recorded_values() -> None:
-    assert "keeps the" in adopt.DESCRIPTION and "manifest records" in adopt.DESCRIPTION
+def test_adopt_help_says_omitted_flags_keep_the_recorded_values(capsys: Capture) -> None:
+    with pytest.raises(SystemExit) as stop:
+        adopt.main(["--help"])
+    assert stop.value.code == 0
+    printed = " ".join(capsys.readouterr().out.split())
+    assert "A flag you omit keeps the value the manifest records" in printed
 
 
 def test_a_dry_run_diffs_each_changed_file_and_sizes_each_new_one(

@@ -315,6 +315,7 @@ def test_a_variable_naming_a_folder_without_an_index_is_not_a_clone(
     monkeypatch.setenv(research.ENVIRONMENT, str(empty))
     status, out, err = run(capsys)
     assert (status, out) == (3, "")
+    assert err.startswith("research: no clone configured: ")
     assert f"{research.ENVIRONMENT} names {empty}, which holds no INDEX.md" in err
     assert f"read it at {BLOB}INDEX.md" in err
 
@@ -771,10 +772,13 @@ def test_the_default_day_is_today(
     project: Path, capsys: pytest.CaptureFixture[str], no_subprocess: None
 ) -> None:
     arguments = [a for a in GOOD if a not in ("--observed-on", "2026-10-01")]
+    before = datetime.date.today()
     assert run(capsys, *arguments)[0] == 0
+    after = datetime.date.today()
     saved = json.loads(inbox(project)[0].read_text(encoding="utf-8"))
-    assert saved["observed_on"] == datetime.date.today().isoformat()
-    assert inbox(project)[0].name.startswith(datetime.date.today().strftime("%Y%m%d"))
+    assert saved["observed_on"] in {before.isoformat(), after.isoformat()}
+    day = datetime.date.fromisoformat(saved["observed_on"])
+    assert inbox(project)[0].name.startswith(day.strftime("%Y%m%d"))
 
 
 @pytest.mark.parametrize(
@@ -1145,6 +1149,10 @@ def test_a_reflog_that_is_not_a_regular_file_is_not_read(
 
 def test_a_reflog_is_read_only_at_its_tail(tmp_path: Path) -> None:
     reflog = tmp_path / "HEAD"
+    reflog.write_bytes(b"first\n" + b"x" * 100_000 + b"\n")
+    line = research._last_line(reflog)
+    assert line is not None and set(line) == {"x"}
+    assert len(line) <= 8192
     reflog.write_bytes(b"x" * 100_000 + b"\nlast\n")
     assert research._last_line(reflog) == "last"
 
@@ -1155,18 +1163,6 @@ def test_a_bad_path_is_refused_before_the_clone_is_looked_for(
     status, out, err = run(capsys, "../../../../other/repo/blob/main/x.md")
     assert (status, out) == (1, "")
     assert "not a bounded relative path" in err
-
-
-def test_a_variable_without_an_index_reports_no_clone_configured(
-    home: Path,
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-    no_subprocess: None,
-) -> None:
-    monkeypatch.setenv(research.ENVIRONMENT, str(tmp_path))
-    err = run(capsys)[2]
-    assert err.startswith(f"research: no clone configured: {research.ENVIRONMENT} names ")
 
 
 @needs_symlinks
@@ -1311,11 +1307,10 @@ def test_the_fragment_and_the_readme_cite_the_commit_and_the_digest() -> None:
     assert "text a person reads cites the path and the day" in fragment
 
 
-def test_no_text_calls_the_inbox_file_a_way_to_send_a_finding() -> None:
-    for path in ("README.md", "CONTRIBUTING.md", "docs/specs/research/design.md"):
-        text = " ".join((ROOT / path).read_text("utf-8").split())
-        assert "for the research maintainer to collect" not in text, path
-        assert "Offline, or" not in text, path
+def test_the_contributing_guide_calls_the_inbox_file_a_local_record_that_nothing_sends() -> None:
+    text = " ".join((ROOT / "CONTRIBUTING.md").read_text("utf-8").split())
+    assert "That file is a local record. Nothing reads or sends it." in text
+    assert "A finding reaches the research repository only by the issue link" in text
 
 
 # --- --find: the index rows that hold every term ---------------------------------------

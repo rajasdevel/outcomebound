@@ -6,6 +6,7 @@ import os
 import shutil
 import tempfile
 from collections.abc import Iterator
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -89,3 +90,15 @@ def isolated_home(
     home = tmp_path_factory.mktemp("home")
     _isolate(monkeypatch, home)
     return home
+
+
+# The instruction audit reads a harness row as verified only until the row's `recheck_on` date,
+# so a verdict that depends on the real day turns red on its own once that day passes. Every
+# test runs on this day, inside the window of every row; a test of the overdue case sets its own.
+AUDIT_DAY = date(2026, 10, 1)
+
+
+@pytest.fixture(autouse=True)
+def audit_day(monkeypatch: pytest.MonkeyPatch) -> date:
+    monkeypatch.setattr("outcomebound_tools.instruction_audit._today", lambda: AUDIT_DAY)
+    return AUDIT_DAY

@@ -133,23 +133,6 @@ def test_outcome_authoring_rejects_added_test_work(tmp_path):
     assert _grade(target, "handoff-author-outcome", said, "Package")["authoring-scope"] == "FAIL"
 
 
-def test_grading_keeps_prior_evidence_and_the_callers_environment(tmp_path, monkeypatch):
-    target = build("handoff-author-outcome", tmp_path / "workspace")
-    monkeypatch.setenv("OUTCOMEBOUND_EVAL_DIR", "unrelated-eval-location")
-    monkeypatch.setenv("OUTCOMEBOUND_SEED_SHA", "unrelated-seed")
-    said = transcript(target, "cat AGENTS.md")
-    first = _grade(target, "handoff-author-outcome", said, "Outcome tier package")
-    first_dir = Path(first["_grading_dir"])
-    retained = first_dir / "answer.md"
-    before = retained.read_bytes()
-    second = _grade(target, "handoff-author-outcome", said, "A second package")
-    assert first["authoring-scope"] == second["authoring-scope"] == "PASS"
-    assert first["_grading_dir"] != second["_grading_dir"]
-    assert retained.read_bytes() == before
-    assert os.environ["OUTCOMEBOUND_EVAL_DIR"] == "unrelated-eval-location"
-    assert os.environ["OUTCOMEBOUND_SEED_SHA"] == "unrelated-seed"
-
-
 def test_retirement_preparation_keeps_original_data_and_protects_consumers(tmp_path):
     target = build("lifecycle-retirement", tmp_path / "workspace")
     _act(

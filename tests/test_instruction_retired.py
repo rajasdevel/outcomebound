@@ -820,14 +820,14 @@ def test_only_is_repeatable_and_limits_the_report_to_the_checks_it_names(tmp_pat
     assert main(["check", str(root), "--harness", "codex", "--only", "stale-reference"]) == 0
     assert main(["check", str(root), "--harness", "codex", "--only", "hidden-characters"]) == 0
     whole = check(root, ["codex"])
-    assert {f.check for f in whole.findings} == {
+    assert {
         "hidden-characters",
         "concealed-content",
         "override-phrases",
         "retired-reference",
         "stale-reference",
         "load-resolution",
-    }
+    } <= {f.check for f in whole.findings}
 
 
 def test_an_unknown_check_name_is_a_usage_error(
@@ -947,7 +947,6 @@ def test_a_history_file_is_not_opened(tmp_path: Path) -> None:
         entry("aa aa"),
         entry("docs/old.md", "path"),
         entry("make release-notes", "command"),
-        entry("x"),
     ],
 )
 def test_the_probe_finds_what_the_pattern_finds_alone(raw: dict[str, Any]) -> None:

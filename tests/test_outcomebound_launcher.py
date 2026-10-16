@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -376,20 +377,57 @@ def test_the_entry_point_waits_for_a_child_and_returns_its_exit_code(
     assert [launcher.main([code]) for code in ("0", "1", "7")] == [0, 1, 7]
 
 
+def _signal_when_the_launcher_waits(
+    tmp_path: Path, number: signal.Signals, then: Path | None = None
+) -> threading.Thread:
+    """A thread that raises `number` in this process once the child has written `ready` and the
+    launcher has put its handler in place, so that no fixed delay decides the order. With
+    `then`, it writes that file afterwards, which lets the child end."""
+
+    ready = tmp_path / "ready"
+    default = signal.getsignal(number)
+
+    def wait_then_signal() -> None:
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if ready.exists() and signal.getsignal(number) != default:
+                break
+            time.sleep(0.01)
+        # A signal sent to the process, not raised in this thread, reaches the main thread's wait.
+        if number == signal.SIGTERM:
+            os.kill(os.getpid(), number)
+        else:
+            signal.raise_signal(number)
+        if then is not None:
+            then.write_text("done", encoding="utf-8")
+
+    thread = threading.Thread(target=wait_then_signal, daemon=True)
+    thread.start()
+    return thread
+
+
 def test_a_ctrl_c_while_the_child_runs_is_left_to_the_child(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The console sends Ctrl-C to the child as well. This process must stay to return the
     child's exit code, and must have its own handler back once the child has ended."""
 
-    code = "import time; time.sleep(0.3); raise SystemExit(130)"
+    done = tmp_path / "done"
+    code = (
+        "import pathlib, sys, time\n"
+        f"pathlib.Path({str(tmp_path / 'ready')!r}).write_text('up')\n"
+        f"done = pathlib.Path({str(done)!r})\n"
+        "end = time.monotonic() + 60\n"
+        "while not done.exists() and time.monotonic() < end:\n"
+        "    time.sleep(0.01)\n"
+        "sys.exit(130 if done.exists() else 1)\n"
+    )
     monkeypatch.setattr(launcher, "command", lambda arguments: [sys.executable, "-c", code])
     before = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
-    timer = threading.Timer(0.1, signal.raise_signal, [signal.SIGINT])
+    thread = _signal_when_the_launcher_waits(tmp_path, signal.SIGINT, then=done)
 
-    timer.start()
     result = launcher.main([])
-    timer.join()
+    thread.join()
 
     assert result == 130
     assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == before
@@ -397,17 +435,20 @@ def test_a_ctrl_c_while_the_child_runs_is_left_to_the_child(
 
 @pytest.mark.skipif(os.name == "nt", reason="`os.kill` with SIGTERM ends a process on Windows")
 def test_a_sigterm_to_the_entry_point_reaches_the_child_and_reads_as_a_shell_reports_it(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A harness that stops a hook with SIGTERM stops the engine, not only this process."""
 
-    code = "import time; time.sleep(30)"
+    code = (
+        "import pathlib, time\n"
+        f"pathlib.Path({str(tmp_path / 'ready')!r}).write_text('up')\n"
+        "time.sleep(60)\n"
+    )
     monkeypatch.setattr(launcher, "command", lambda arguments: [sys.executable, "-c", code])
-    timer = threading.Timer(0.3, os.kill, [os.getpid(), signal.SIGTERM])
+    thread = _signal_when_the_launcher_waits(tmp_path, signal.SIGTERM)
 
-    timer.start()
     result = launcher.main([])
-    timer.join()
+    thread.join()
 
     assert result == 128 + signal.SIGTERM
 

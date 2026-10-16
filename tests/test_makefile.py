@@ -14,7 +14,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-pytestmark = pytest.mark.skipif(
+# Only the tests that run `make` need it and a POSIX shell; those that read the Makefile's text
+# run wherever the suite does.
+needs_make = pytest.mark.skipif(
     os.name == "nt" or shutil.which("make") is None, reason="needs make and a POSIX shell"
 )
 
@@ -43,6 +45,7 @@ def _make(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@needs_make
 def test_make_refuses_a_python_older_than_the_minimum_by_name(tmp_path: Path) -> None:
     stub, log = _stub(tmp_path)
     result = _make("gate", f"PYTHON={stub}")
@@ -52,6 +55,7 @@ def test_make_refuses_a_python_older_than_the_minimum_by_name(tmp_path: Path) ->
     assert not log.exists(), "the gate script ran on the old interpreter"
 
 
+@needs_make
 def test_make_leaves_an_absent_python_to_makes_own_line(tmp_path: Path) -> None:
     result = _make("gate", f"PYTHON={tmp_path / 'absent' / 'python3'}")
     assert result.returncode != 0
@@ -59,6 +63,7 @@ def test_make_leaves_an_absent_python_to_makes_own_line(tmp_path: Path) -> None:
     assert "No such file or directory" in result.stderr
 
 
+@needs_make
 def test_make_runs_under_a_python_that_meets_the_minimum() -> None:
     result = _make("gate", f"PYTHON={sys.executable}")
     assert result.returncode == 0, result.stderr
@@ -66,7 +71,7 @@ def test_make_runs_under_a_python_that_meets_the_minimum() -> None:
 
 def _targets() -> dict[str, tuple[str, str]]:
     """Each target: (its prerequisites, its recipe)."""
-    text = (ROOT / "Makefile").read_text()
+    text = (ROOT / "Makefile").read_text(encoding="utf-8")
     found: dict[str, list[str]] = {}
     prereqs: dict[str, str] = {}
     current = None
@@ -95,17 +100,18 @@ def test_every_make_target_that_runs_python_checks_the_interpreter_first() -> No
 
 
 def test_the_python_minimum_agrees_in_the_makefile_the_launcher_and_the_package() -> None:
-    backend = (ROOT / "scripts/build_backend.py").read_text()
+    backend = (ROOT / "scripts/build_backend.py").read_text(encoding="utf-8")
     assert 'REQUIRES_PYTHON = ">=3.10"' in backend
     for path in ("Makefile", "scripts/outcomebound"):
-        assert "sys.version_info < (3, 10)" in (ROOT / path).read_text(), path
+        assert "sys.version_info < (3, 10)" in (ROOT / path).read_text(encoding="utf-8"), path
 
 
 def test_release_check_sweeps_the_main_checkouts_work_folder_and_ci_does_not() -> None:
-    """Breaks if the release gate stops reading the reviews other sessions left, or reads a
-    worktree's own empty work folder instead of the main checkout's."""
+    """A text check of the recipe, not a run of the sweep: it breaks if the release gate drops
+    the sweep or the main-checkout lookup (`--git-common-dir`), so that it reads a worktree's own
+    empty work folder, or if CI starts to run the sweep, which has no such folder."""
 
     recipe = _targets()["release-check"][1]
     assert "review sweep" in recipe and "--git-common-dir" in recipe
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "review sweep" not in workflow

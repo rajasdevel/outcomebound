@@ -1,6 +1,6 @@
 """The HTML drawing of decision briefs: the example brief's marks, lines and order, its
-escaping, its diagram and order as `data-diagram` blocks, and the same refusals as the markdown
-drawing, which `decision_brief.read_document` shares with `outcomebound brief`."""
+escaping, and its diagram and order as `data-diagram` blocks. The refusals are those of
+`decision_brief.read_document`, which `outcomebound brief` shares, and its tests hold them."""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ import copy
 import json
 from pathlib import Path
 from typing import Any
-
-import pytest
 
 from outcomebound_tools import decision_brief, decision_brief_html
 
@@ -122,25 +120,3 @@ def test_the_configuration_holds_each_brief_with_its_recommended_letter(tmp_path
         "options": [{"letter": "A", "way": "keep it"}, {"letter": "B", "way": "drop it now"}],
     }
     assert config[1]["recommend"] is None and config[1]["options"] == []
-
-
-@pytest.mark.parametrize(
-    "change, fragment",
-    [
-        (lambda d: d["briefs"][0]["options"].pop(), "lays out 1"),
-        (lambda d: d["briefs"][0].pop("recommend"), "Recommend"),
-        (lambda d: d["briefs"][1].pop("not_checked"), "line of evidence"),
-        (lambda d: d["briefs"][0].update(heading="two\nlines"), "does not match pattern"),
-    ],
-)
-def test_the_refusals_are_those_of_the_markdown_drawing(tmp_path, change, fragment):
-    document = copy.deepcopy(DOCUMENT)
-    change(document)
-
-    with pytest.raises(ValueError, match=fragment):
-        decision_brief.read_document(write(tmp_path, document))
-
-
-def test_a_missing_document_is_refused(tmp_path):
-    with pytest.raises(ValueError):
-        decision_brief.read_document(tmp_path / "none.json")

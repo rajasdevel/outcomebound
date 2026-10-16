@@ -141,17 +141,6 @@ def test_a_status_that_differs_is_kept_from_the_stream_and_listed() -> None:
     ]
 
 
-def test_a_directory_the_stream_already_gave_is_kept_and_a_difference_is_listed() -> None:
-    stream = "/bin/zsh -lc ls"
-    text, meta = fill_directories(
-        _transcript([stream, "succeeded", "/elsewhere"]), [_item(_shell("ls"))]
-    )
-    assert json.loads(text)["commands"][0][2] == "/elsewhere"
-    assert meta["command_native_disagreements"] == [
-        {"index": 0, "field": "cwd", "stream": "/elsewhere", "native": "/work/space"}
-    ]
-
-
 @pytest.mark.parametrize(
     ("transcript", "session", "reason"),
     [

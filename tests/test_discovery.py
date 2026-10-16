@@ -223,7 +223,6 @@ def test_cli_emits_json_and_does_not_change_the_target(tmp_path):
     assert after == before
 
 
-@needs_symlinks
 def test_harness_directories_are_observed_and_recommended_not_chosen(tmp_path):
     """Markers are observations; the harness stays an open decision.
 
@@ -270,6 +269,12 @@ def test_harness_directories_are_observed_and_recommended_not_chosen(tmp_path):
     # Observed twice is one observation, and one call is already deduplicated.
     assert harness_markers(several) == markers == harness_markers(several)
 
+    # Nothing about the harness decision is closed by any of this.
+    assert {row["subject"] for row in discover(several)["unknown"]} >= {"harness"}
+
+
+@needs_symlinks
+def test_a_symlinked_marker_directory_credits_no_harness(tmp_path):
     # A file named like a marker is not a directory, and a symlinked directory
     # is never followed — either would credit a harness nothing established.
     files = tmp_path / "files"
@@ -281,9 +286,6 @@ def test_harness_directories_are_observed_and_recommended_not_chosen(tmp_path):
     (files / ".agents").mkdir()
     (files / ".agents/skills").symlink_to(outside / "skills", target_is_directory=True)
     assert discover(files)["observed"]["harness_markers"] == []
-
-    # Nothing about the harness decision is closed by any of this.
-    assert {row["subject"] for row in discover(several)["unknown"]} >= {"harness"}
 
 
 def test_every_recognized_marker_maps_to_known_harness_candidates():
@@ -472,7 +474,6 @@ def test_tox_is_offered_only_for_a_config_that_declares_an_environment(
     assert ("tox" in _test_options(tmp_path)) is offered
 
 
-@needs_symlinks
 def test_unittest_is_offered_only_where_a_tests_directory_exists(tmp_path: Path) -> None:
     """The unittest fallback names `-s tests`; it is offered only where that directory is."""
 
@@ -483,7 +484,11 @@ def test_unittest_is_offered_only_where_a_tests_directory_exists(tmp_path: Path)
     (target / "tests").mkdir()
     assert _test_options(target) == [UNITTEST]
 
-    (target / "tests").rmdir()
+
+@needs_symlinks
+def test_unittest_is_not_offered_for_a_tests_link(tmp_path: Path) -> None:
+    target = tmp_path / "project"
+    _write_files(target, {"pyproject.toml": PYPROJECT})
     (tmp_path / "elsewhere").mkdir()
     (target / "tests").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
     assert _test_options(target) == []

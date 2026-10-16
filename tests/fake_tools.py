@@ -80,7 +80,8 @@ def shell_tool(directory: Path, name: str, script: str) -> Path:
 def python_tool(directory: Path, name: str) -> Path:
     """A tool `name` in `directory` that runs this interpreter with its arguments: a link on
     POSIX, a `.cmd` on Windows, where a copy of `python.exe` outside its installation does not
-    run."""
+    run. A link to a virtual environment's interpreter runs the base interpreter, without the
+    environment's packages: the tool is for programs that import only the standard library."""
 
     directory.mkdir(parents=True, exist_ok=True)
     if WINDOWS:

@@ -114,7 +114,6 @@ Tests, in `tests/test_finish_check.py` unless named.
   job).
 - The wake: `test_the_wake_exits_0_and_prints_nothing_on_a_pass_a_known_failure_and_a_changed_tree`,
   `test_the_wake_never_exits_2_when_stop_hook_active_is_set`,
-  `test_the_wake_never_exits_2_while_the_session_is_paused`,
   `test_a_live_mark_of_the_session_at_the_runs_end_leaves_the_failure_to_the_next_stop`
   (decided by the stamp: a mark written in the same second as the run's end, and a clock moved
   back, both still defer),
@@ -168,14 +167,14 @@ Tests, in `tests/test_finish_check.py` unless named.
   `test_the_detached_runs_command_line_names_no_transcript`. The tests' `hook()` and `outputs()`
   wait, through `tests/finish_helpers.py` `settle`, for every detached run a codex stop started
   to be gone from the process table, so no run of one turn end is still running at the next one
-  however loaded the machine is; where the table cannot be read (Windows), they look for a run
-  record for 3 s.
+  however loaded the machine is. The table is read from `/proc` on Linux, with `ps` elsewhere on
+  POSIX and through PowerShell on Windows; where none of them can be read, the test is skipped.
 - The entry: in `tests/test_adopt.py`,
   `test_claude_code_gets_one_wake_entry_with_the_limit_plus_60_s`,
-  `test_codex_gets_a_stop_entry_with_a_30_s_timeout`,
+  `test_finish_timeout_is_written_kept_and_changed_in_the_one_entry`,
   `test_the_hook_record_timeout_is_the_run_limit`,
   `test_check_reads_an_entry_without_constant_time_stale_and_an_upgrade_rewrites_it`,
-  `test_a_codex_install_that_changes_the_stop_entry_prints_the_trust_line`,
+  `test_a_changed_codex_entry_names_the_new_trust_in_hooks`,
   `test_an_install_with_cursor_selected_warns_of_the_wake_entry`; and in
   `tests/test_harness_table.py`, the `wake` field and its source.
 - Tests this change makes obsolete, each with what replaces it:

@@ -49,7 +49,8 @@ def test_harness_names_are_the_table_keys_sorted():
 
     names = harness_names()
     assert names == sorted(names)
-    assert set(names) == {"claude-code", "codex", "amp", "gemini", "cursor", "pi"}
+    assert {"claude-code", "codex"} <= set(names)
+    assert "generic" not in names
 
 
 def test_native_skill_root_is_the_row_path_without_its_trailing_slash():
@@ -59,11 +60,13 @@ def test_native_skill_root_is_the_row_path_without_its_trailing_slash():
 
     assert native_skill_root("claude-code") == ".claude/skills"
     assert native_skill_root("codex") == native_skill_root("amp") == ".agents/skills"
-    assert native_skill_root("gemini") == ".gemini/skills"
-    assert native_skill_root("cursor") == ".cursor/skills"
-    # An unverified row still reports its candidate path; whether anything is
-    # projected there is the profile's separate acceptance.
-    assert native_skill_root("pi") == ".pi/skills"
+    # Every row, verified or not, reports its candidate path with the one trailing slash dropped;
+    # whether anything is projected there is the profile's separate acceptance.
+    from outcomebound_tools.adapters import harness_names, row
+
+    for name in harness_names():
+        root = native_skill_root(name)
+        assert not root.endswith("/") and row(name)["skill_install_path"] == root + "/", name
 
 
 def test_instruction_file_is_the_route_file_never_the_import_syntax():

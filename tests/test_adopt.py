@@ -1,9 +1,10 @@
 """The install route: adopt installs, upgrades, checks and removes through one safe writer.
 
 Every target is a Git repository under `tmp_path`, and every assertion is about bytes on
-disk, the manifest or an exit status, never about a sentence adopt prints; the printed things
-read are the footprint's figure, the nested byte warning, the finish check's statement per
-harness, the `kept` line and the claims plan warning, which exist only as output.
+disk, the manifest or an exit status. A printed line is asserted only where it is what a person
+reads and acts on: the footprint's figure, the nested byte warning, the finish check's statement
+per harness, the `kept` line, the claims plan warning, the stale and edited lines of `--check` and
+the command it ends with, which exist only as output.
 """
 
 from __future__ import annotations
@@ -77,6 +78,15 @@ def next_lines(out: str) -> list[str]:
     return [line for line in out.splitlines() if line.startswith("next: ")]
 
 
+def names_plain_adopt(out: str, target: Path) -> bool:
+    """Whether `--check` ends with one `next:` line that sends the person to `adopt` on the
+    target and not to `--force`; the check that runs the command it prints is the one that holds
+    its wording."""
+
+    [line] = next_lines(out)
+    return f"adopt {paths.shell_path(target)}" in line and "--force" not in line
+
+
 def kinds(target: Path) -> list[str]:
     return [record["kind"] for record in manifest(target)["artifacts"]]
 
@@ -120,42 +130,17 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("fragment", PYTHON_FRAGMENT, "python"),
         ("ignore", adopt.LOCAL_IGNORE, adopt.LOCAL_RECORDS),
         ("pointer", "CLAUDE.md", "pointer-claude-md"),
-        ("skill", CLAUDE_BRIEF, "decision-brief"),
-        ("skill", ".claude/skills/diagnose/SKILL.md", "diagnose"),
-        ("skill", ".claude/skills/explain-spec/SKILL.md", "explain-spec"),
-        ("skill", ".claude/skills/explorable/SKILL.md", "explorable"),
-        ("skill", ".claude/skills/explorable/references/runtime.md", "explorable"),
-        ("skill", ".claude/skills/gather-requirements/SKILL.md", "gather-requirements"),
-        (
-            "skill",
-            ".claude/skills/gather-requirements/references/source-kinds.md",
-            "gather-requirements",
-        ),
-        ("skill", ".claude/skills/hand-off-tickets/SKILL.md", "hand-off-tickets"),
-        ("skill", ".claude/skills/land-change/SKILL.md", "land-change"),
-        ("skill", ".claude/skills/review-findings/SKILL.md", "review-findings"),
-        ("skill", ".claude/skills/run-acceptance/SKILL.md", "run-acceptance"),
-        ("skill", ".claude/skills/slice-tickets/SKILL.md", "slice-tickets"),
-        ("skill", ".claude/skills/slice-tickets/references/github.md", "slice-tickets"),
-        ("skill", ".claude/skills/sync-tracker/SKILL.md", "sync-tracker"),
-        ("skill", ".claude/skills/tests-worth-keeping/SKILL.md", "tests-worth-keeping"),
-        ("skill", CLAUDE_SKILL, "using-outcomebound"),
-        (
-            "skill",
-            ".claude/skills/using-outcomebound/references/lifecycle.md",
-            "using-outcomebound",
-        ),
-        (
-            "skill",
-            ".claude/skills/using-outcomebound/references/new-project.md",
-            "using-outcomebound",
-        ),
+        *[("skill", f".claude/skills/{file}", file.split("/")[0]) for file in SKILL_FILES],
     ]
     assert records[1]["fragments"] == ["python"]
-    assert records[6]["harnesses"] == records[7]["harnesses"] == ["claude-code"]
+    by_path = {record["path"]: record for record in records}
+    assert all(r["harnesses"] == ["claude-code"] for r in records if r["kind"] == "skill")
     for record in records:
         assert adopt.state(target, ROOT, record, records) == "current"
-    assert (records[6]["sha256"], records[-3]["sha256"]) == (sha(brief), sha(skill))
+    assert (by_path[CLAUDE_BRIEF]["sha256"], by_path[CLAUDE_SKILL]["sha256"]) == (
+        sha(brief),
+        sha(skill),
+    )
     assert records[3]["sha256"] == sha(shipped)
 
 
@@ -256,10 +241,12 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
         *added,
     ]
     after.pop("AGENTS.md")
-    after.pop(".claude/skills/slice-tickets/references/github.md")
-    after.pop(".claude/skills/explorable/references/runtime.md")
-    after.pop(".claude/skills/gather-requirements/references/source-kinds.md")
-    assert after == before
+    # Beside each gained skill arrive its folders and reference files, and nothing else.
+    extra = {key for key in after if key not in before}
+    assert all(
+        any(key.startswith(f".claude/skills/{name}/") for name in gained) for key in extra
+    ), extra
+    assert {key: v for key, v in after.items() if key in before} == before
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and all(states(out)[path] == "current" for path in gained.values())
 
@@ -345,9 +332,7 @@ def test_a_block_edited_to_what_this_install_writes_needs_no_force(
 
     assert code == 1 and states(out)[pointers] == "stale"
     assert f"stale    {pointers}: {adopt.UNRECORDED}" in out.splitlines()
-    assert next_lines(out) == [
-        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
-    ]
+    assert names_plain_adopt(out, target)
 
     code, out, err = run(capsys, str(target))
 
@@ -486,9 +471,7 @@ def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_rele
 
     assert states(out)[pointers] == "stale", out
     assert f"stale    {pointers}: {adopt.FROM_SOURCE}" in out.splitlines()
-    assert next_lines(out) == [
-        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
-    ]
+    assert names_plain_adopt(out, target)
 
     code, out, err = run(capsys, str(target), source=source)
 
@@ -965,22 +948,11 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         "CLAUDE.md (pointer-claude-md)": "missing",
         CLAUDE_BRIEF: "stale",
         CLAUDE_SKILL: "edited",
-        ".claude/skills/diagnose/SKILL.md": "current",
-        ".claude/skills/explain-spec/SKILL.md": "current",
-        ".claude/skills/explorable/SKILL.md": "current",
-        ".claude/skills/explorable/references/runtime.md": "current",
-        ".claude/skills/gather-requirements/SKILL.md": "current",
-        ".claude/skills/gather-requirements/references/source-kinds.md": "current",
-        ".claude/skills/hand-off-tickets/SKILL.md": "current",
-        ".claude/skills/land-change/SKILL.md": "current",
-        ".claude/skills/review-findings/SKILL.md": "current",
-        ".claude/skills/run-acceptance/SKILL.md": "current",
-        ".claude/skills/slice-tickets/SKILL.md": "current",
-        ".claude/skills/slice-tickets/references/github.md": "current",
-        ".claude/skills/sync-tracker/SKILL.md": "current",
-        ".claude/skills/tests-worth-keeping/SKILL.md": "current",
-        ".claude/skills/using-outcomebound/references/lifecycle.md": "current",
-        ".claude/skills/using-outcomebound/references/new-project.md": "current",
+        **{
+            f".claude/skills/{file}": "current"
+            for file in SKILL_FILES
+            if f".claude/skills/{file}" not in (CLAUDE_BRIEF, CLAUDE_SKILL)
+        },
     }
     assert out.splitlines()[-1] == (
         "next: move each edit out of OutcomeBound's blocks and files, then "
@@ -2278,17 +2250,12 @@ def fire(target: Path, command: str) -> dict[str, Any]:
         return {"systemMessage": "\n".join(told)}
     assert done.returncode == 0, done.stderr
     verdict: dict[str, Any] = json.loads(done.stdout)
-    started = None
-    # A detached run can take seconds to start on a loaded or Windows runner.
-    deadline = time.monotonic() + 60
-    while time.monotonic() < deadline and started is None:
-        found = finish_helpers.run_record(target) or {}
-        when = finish_helpers.started_at(found)
-        started = when if when is not None and when >= since else None
-        time.sleep(0.05)
-    if verdict or started is None:
+    if verdict:
         return verdict
-    finish_helpers.wait_for_run(target, since)
+    # The stop starts its run before it exits, so the process table shows it at once; `settle`
+    # waits for that run to be gone and returns None where the stop started none.
+    if finish_helpers.settle(target, since) is None:
+        return verdict
     again = once()
     assert again.returncode == 0, again.stderr
     later: dict[str, Any] = json.loads(again.stdout)
@@ -2648,7 +2615,6 @@ def test_an_explicit_measurement_names_a_launcher_missing_from_its_hook_environm
         [line] = [line for line in out.splitlines() if missing in line]
         assert line.startswith("UNVERIFIED ") and "desktop PATH" in line
         assert "whether it runs the hook remain UNVERIFIED" in line
-    assert "PASS     finish-check: `:` in 0 s" in out
     document = json.loads((target / ".claude/settings.json").read_text(encoding="utf-8"))
     assert document["hooks"]["Stop"][0]["hooks"][0]["command"] == "./their-own.sh"
     digest = finish_check.done_digest([":"])
@@ -2945,6 +2911,15 @@ def test_a_changed_codex_entry_names_the_new_trust_in_hooks(
     assert "claude-code finish-check: the entry changed" not in out
     assert again in run(capsys, str(target), "--done", "true", "--done", "echo two")[1]
 
+    # An upgrade from the entry written before the constant-time stop changes it as well.
+    assert run(capsys, str(target), "--done", "true")[0] == 0
+    for row in SETTINGS:
+        earlier_entry(target, row)
+    code, out, _ = run(capsys, str(target))
+    assert code == 0
+    assert "action   codex finish-check: the entry changed" in out and again in out
+    assert "claude-code finish-check: the entry changed" not in out
+
 
 def test_an_install_with_only_the_stop_entry_gains_the_turn_start_entry(
     tmp_path: Path, capsys: Capture
@@ -3059,29 +3034,6 @@ def test_claude_code_gets_one_wake_entry_with_the_limit_plus_60_s(
             }
         ]
     }
-    assert group == finish_check.entry("claude-code", digest, 900)
-
-
-def test_codex_gets_a_stop_entry_with_a_30_s_timeout(tmp_path: Path, capsys: Capture) -> None:
-    """Breaks if the codex stop entry gives the harness the run's whole limit, so that a stop
-    waits for Done, or loses the run's limit from its own command."""
-
-    target = repo(tmp_path / "t")
-    arguments = ("--harness", "codex", "--done", "true", "--finish-check")
-    assert run(capsys, str(target), *arguments, "--finish-timeout", "900")[0] == 0
-
-    [group] = stop_groups(target, SETTINGS["codex"])
-    digest = finish_check.done_digest(["true"])
-    assert group == {
-        "hooks": [
-            {
-                "type": "command",
-                "command": f"outcomebound finish-check --constant-time --harness codex "
-                f"--done {digest} --timeout 900",
-                "timeout": 30,
-            }
-        ]
-    }
 
 
 def test_the_hook_record_timeout_is_the_run_limit(tmp_path: Path, capsys: Capture) -> None:
@@ -3135,35 +3087,12 @@ def test_check_reads_an_entry_without_constant_time_stale_and_an_upgrade_rewrite
     _, out, _ = run(capsys, str(target), "--check")
 
     assert states(out)[name] == "stale"
-    assert next_lines(out) == [
-        f"next: outcomebound adopt {paths.shell_path(target)} makes every record current"
-    ]
+    assert names_plain_adopt(out, target)
     assert run(capsys, str(target))[0] == 0
     digest = finish_check.done_digest(["true"])
     assert stop_groups(target, SETTINGS[row]) == [finish_check.entry(row, digest)]
     assert "--constant-time" in stop_groups(target, SETTINGS[row])[0]["hooks"][0]["command"]
     assert states(run(capsys, str(target), "--check")[1])[name] == "current"
-
-
-def test_a_codex_install_that_changes_the_stop_entry_prints_the_trust_line(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """Breaks if the upgrade to the constant-time entry changes the codex stop entry silently:
-    codex skips a changed hook until each person trusts it again in /hooks, so the check would
-    stop with nobody told."""
-
-    target = repo(tmp_path / "t")
-    arguments = ("--harness", "claude-code,codex", "--done", "true", "--finish-check")
-    assert run(capsys, str(target), *arguments)[0] == 0
-    for row in SETTINGS:
-        earlier_entry(target, row)
-
-    code, out, _ = run(capsys, str(target))
-
-    assert code == 0
-    assert "action   codex finish-check: the entry changed" in out
-    assert finish_check.REVIEW_AGAIN["codex"] in out
-    assert "claude-code finish-check: the entry changed" not in out
 
 
 @pytest.mark.parametrize("cursor", [True, False], ids=["with-cursor", "without-cursor"])

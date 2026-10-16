@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import builtins
+import copy
 import hashlib
 import json
 import os
@@ -635,7 +636,9 @@ def test_harness_config_names_the_line_of_the_key_itself(tmp_path: Path) -> None
     )
 
 
-def test_unsettled_key_categories_read_once_per_harness(tmp_path: Path) -> None:
+def test_unsettled_key_categories_read_once_per_harness(
+    tmp_path: Path, pi_unverified: None
+) -> None:
     files = {".cursor/mcp.json": "{}", ".cursor/hooks.json": "{}", ".pi/settings.json": "{}"}
     root = _target(tmp_path / "t", files)
     cursor = check(root, ["cursor"])
@@ -699,6 +702,20 @@ def test_instruction_change_with_an_unresolved_base_is_unverified(tmp_path: Path
 # --- load-resolution, rows and selection -----------------------------------------
 
 
+@pytest.fixture
+def pi_unverified(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The table with its `pi` row unverified, whatever the shipped table says of it now."""
+
+    real = adapters.table
+
+    def table() -> dict:
+        rows = copy.deepcopy(real())
+        rows["pi"].update(verified=False, verified_on=None)
+        return rows
+
+    monkeypatch.setattr(adapters, "table", table)
+
+
 def test_an_overdue_row_reads_unverified(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     recheck = date.fromisoformat(adapters.row("claude-code")["recheck_on"])
     monkeypatch.setattr(instruction_audit, "_today", lambda: recheck + timedelta(days=1))
@@ -714,7 +731,7 @@ def test_an_overdue_row_reads_unverified(tmp_path: Path, monkeypatch: pytest.Mon
     assert [f.verdict for f in current.findings if f.check == "load-resolution"] == ["PASS"]
 
 
-def test_an_unverified_row_reads_unverified(tmp_path: Path) -> None:
+def test_an_unverified_row_reads_unverified(tmp_path: Path, pi_unverified: None) -> None:
     report = _audit(tmp_path, {"AGENTS.md": "ok\n"}, "pi")
     assert ["not verified" in f.fact for f in _hits(report, "load-resolution")] == [True]
 
@@ -1371,7 +1388,9 @@ def test_adopts_own_entry_leaves_the_result_while_agents_md_shows_its_done(
     capsys.readouterr()
 
 
-def test_an_unverified_row_the_target_does_not_use_leaves_the_result(tmp_path: Path) -> None:
+def test_an_unverified_row_the_target_does_not_use_leaves_the_result(
+    tmp_path: Path, pi_unverified: None
+) -> None:
     """With no manifest every row is read; a row loading no file of the target that another row
     does not load too, AGENTS.md being one every row loads, is reported and does not decide."""
 

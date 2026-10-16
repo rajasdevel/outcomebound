@@ -13,7 +13,8 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import facts, textio
-from outcomebound_tools.fragments import load_all
+from outcomebound_tools.fragments import Fragment, load_all
+from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -402,15 +403,24 @@ def test_a_cd_earlier_in_a_gitlab_job_leaves_its_later_tests_unsettled(tmp_path:
     assert len(read.unread) == 1 and "`npm test` runs after" in read.unread[0]
 
 
-def test_the_edges_the_shipped_stack_fragments_share_read_once(tmp_path: Path) -> None:
-    catalog = load_all(ROOT)
-    selected = [catalog[name] for name in ("ci-release", "node-typescript", "python")]
+def test_the_edges_the_stack_fragments_share_read_once(tmp_path: Path) -> None:
+    def fragment(name: str, *edges: str) -> Fragment:
+        return Fragment(name, "stack", "", (), 1, "", (), edges=edges)
+
+    shared = "publishing a package to its registry"
+    selected = [
+        fragment("a", shared, "pushing a release tag"),
+        fragment("b", "deploying to production", shared),
+        fragment("c", shared),
+    ]
 
     lines = facts.render(tmp_path, selected, [], ["AGENTS.md"], []).facts.splitlines()
 
     (edges,) = [line for line in lines if line.startswith("- Irreversible edges: ")]
-    acts = edges.removeprefix("- Irreversible edges: ").split("; ")
-    assert len(acts) == len(set(acts)) and sum("publish" in act for act in acts) == 2
+    assert edges == (
+        "- Irreversible edges: publishing a package to its registry; pushing a release tag; "
+        "deploying to production"
+    )
 
 
 def test_a_stack_fragment_alone_adds_no_publishing_edge(tmp_path: Path) -> None:
@@ -463,7 +473,12 @@ def test_a_manifest_with_a_lockfile_beside_it_is_not_reported(tmp_path: Path) ->
     target = project(tmp_path, {"package.json": "{}", "yarn.lock": "", "Cargo.toml": ""})
 
     assert facts.manifests_without_lock(target) == ["Cargo.toml"]
-    assert facts.lockfile_candidates(target) == [("yarn.lock", facts.LOCKFILE_INSTALLS[2][1])]
+    assert facts.lockfile_candidates(target) == [
+        (
+            "yarn.lock",
+            "yarn install --frozen-lockfile (Yarn 1) or yarn install --immutable (Yarn 2+)",
+        )
+    ]
 
 
 def test_setup_names_every_command_in_run_order_between_done_and_ci_test(tmp_path: Path) -> None:
@@ -482,6 +497,7 @@ def test_setup_names_every_command_in_run_order_between_done_and_ci_test(tmp_pat
     assert facts.moved(none.facts, rendered.facts) == ["Setup"]
 
 
+@needs_symlinks
 def test_a_linked_workflow_is_not_followed(tmp_path: Path) -> None:
     outside = project(tmp_path / "outside", {"ci.yml": NODE})
     target = project(tmp_path / "t", {".github/workflows/.keep": ""})

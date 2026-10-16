@@ -372,14 +372,12 @@ def test_a_requirement_cited_only_by_a_reference_is_not_unsourced(shot, capsys):
 
 
 def test_a_reference_row_names_one_item_not_a_range(shot, capsys):
-    cell = item_cell(shot).replace(" #", "..").split("..")[0]
     item = manifest(shot)["items"][0]
     row = f"| {item['id']}..{item['id']} #{item['revision'][:12]} | reference | R1 | by: judgment |"
 
     code, out = check(shot, capsys, row)
 
     assert code == 1 and any("not a range" in line for line in lines(out, "FAIL", "ROW_MALFORMED"))
-    assert cell
 
 
 def test_a_replaced_image_is_source_changed_and_an_edited_manifest_is_manifest_differs(

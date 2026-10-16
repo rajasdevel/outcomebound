@@ -363,7 +363,7 @@ def test_the_page_follows_the_shells_order(tmp_path):
     places = [page.index(mark) for mark in marks]
     assert places == sorted(places)
     assert '<meta name="explorable-kind" content="decision">' in page
-    assert "Built 2026-09-20T" in page or re.search(r"Built \d{4}-\d\d-\d\dT", page)
+    assert "Built 2026-09-21T14:13:20" in page
 
 
 def test_brief_text_with_html_characters_is_escaped_in_the_page(tmp_path):
@@ -469,12 +469,18 @@ def test_a_built_page_passes_with_the_run_named_unverified(tmp_path, capsys):
     }
 
 
+CHART_PIN = json.loads((TEMPLATES / "libraries.json").read_text(encoding="utf-8"))["chart"]
+*_head, _patch = CHART_PIN["version"].split(".")
+CHART_AT = f"{CHART_PIN['package']}@{CHART_PIN['version']}/"
+CHART_BUMPED = f"{CHART_PIN['package']}@{'.'.join([*_head, str(int(_patch) + 1)])}/"
+
+
 @pytest.mark.parametrize(
     "old, new, fragment",
     [
         ("default-src 'none'", "default-src *", "Content-Security-Policy"),
-        ("chart.js@4.5.1/", "chart.js@4.5.2/", "Content-Security-Policy"),
-        ('"global": "Chart"', '"global": "Evil"', "library pins"),
+        (CHART_AT, CHART_BUMPED, "Content-Security-Policy"),
+        (f'"global": "{CHART_PIN["global"]}"', '"global": "Evil"', "library pins"),
         ("<style>", "<style>/* x */", "stylesheet"),
         ('<script type="application/json" id="explorable-config">', "<script>", "frame"),
         (
@@ -762,9 +768,11 @@ def test_a_browser_that_prints_nothing_reads_as_the_limit(fake, tmp_path, monkey
     page = tmp_path / "p.html"
     page.write_text("x", encoding="utf-8")
 
-    ran = explorable_browser.run_page(str(program), page, 1)
+    # The limit is the behaviour under test. It runs from the browser's start, so it must hold
+    # the fake's two interpreter starts on a slow or busy machine before it reads the helper.
+    ran = explorable_browser.run_page(str(program), page, 3)
 
-    assert ran.document is None and "1 s limit" in ran.reason
+    assert ran.document is None and "3 s limit" in ran.reason
     assert gone(int((folder / "helper").read_text(encoding="utf-8")))
 
 

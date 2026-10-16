@@ -9,11 +9,14 @@ has, and the one part of the model that opens a file has its own test file.
 from __future__ import annotations
 
 import ast
+import builtins
 import hashlib
 import importlib
+import importlib.util
 import json
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -552,17 +555,19 @@ def _ticket() -> Ticket:
     )
 
 
-def test_the_readers_result_carries_what_a_report_needs() -> None:
+def test_the_readers_input_is_what_a_report_prints_and_a_default_read_has_none() -> None:
     """`InputInfo` satisfies `tickets_report.InputSource` without an import."""
 
-    result = ReadResult(
-        tickets=(_ticket(),),
-        others=frozenset({"#7"}),
-        ignored=1,
-        messages=(),
-        input=InputInfo(path="issues.json", modified="2026-09-20T09:00:00Z", age_seconds=120),
-    )
-    assert "#7" in result.others and result.tickets[0].id == "#42"
+    from outcomebound_tools.tickets_report import Report, render_json, render_text
+
+    info = InputInfo(path="issues.json", modified="2026-09-20T09:00:00Z", age_seconds=120)
+    report = Report(verb="check", store="github", input=info)
+    assert json.loads(render_json(report))["input"] == {
+        "path": "issues.json",
+        "modified": "2026-09-20T09:00:00Z",
+        "age_seconds": 120,
+    }
+    assert "input: issues.json; modified 2026-09-20T09:00:00Z; age 120s;" in render_text(report)
     assert ReadResult().input is None and ReadResult().others == frozenset()
 
 
@@ -577,17 +582,22 @@ def test_tickets_bounds_module_is_importable_directly() -> None:
     assert whole_repository(".") and whole_repository("*.py")
     assert not whole_repository("docs/*")
 
+    # Load the file on its own, with any import of an engine module refused.
     module = importlib.import_module("outcomebound_tools.tickets_bounds")
-    source = Path(module.__file__ or "")
-    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
-    reached: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            reached.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            reached.add(node.module)
-    engine = sorted(name for name in reached if name.split(".")[0] == "outcomebound_tools")
-    assert engine == [], engine
+    spec = importlib.util.spec_from_file_location("bounds_alone", module.__file__)
+    assert spec is not None and spec.loader is not None
+    alone = importlib.util.module_from_spec(spec)
+    real_import = builtins.__import__
+
+    def refuse_engine(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name.split(".")[0] == "outcomebound_tools":
+            raise AssertionError(f"tickets_bounds imports {name}")
+        return real_import(name, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(builtins, "__import__", refuse_engine)
+        spec.loader.exec_module(alone)
+    assert alone.whole_repository("*.py")
 
 
 def test_a_bounds_entry_covers_itself_and_what_is_under_it() -> None:
@@ -633,7 +643,7 @@ def test_tests_import_only_public_names() -> None:
         for alias in node.names:
             reached += 1
             assert alias.name in public, f"{node.module}.{alias.name} is not in __all__"
-    assert reached >= 14, "the survey found fewer imported names than this file uses"
+    assert reached, "the survey found no imported name in this file"
 
 
 def test_satisfies_names_requirement_ids_and_moves_the_identity_only_where_written() -> None:

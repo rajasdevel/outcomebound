@@ -61,6 +61,7 @@ def canary(tmp_path: Path, listed: list[Path], python: Path | str) -> subprocess
         capture_output=True,
         text=True,
         check=False,
+        timeout=300,
     )
 
 
