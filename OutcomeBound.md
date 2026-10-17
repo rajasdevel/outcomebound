@@ -28,8 +28,11 @@ lifespan, without speculative layers or flexibility.
 | **Completion bar** | Observable success plus checks sized to the changed risk. |
 
 **Decision rule:** satisfy all four inputs completely with the simplest approach that holds for
-the lifespan. Add rigor where consequence or uncertainty is material. Drop machinery that
-changes no decision and reduces no risk — in process and in code alike. Size the whole plan,
+the lifespan. Ask whether the need is real; then whether the codebase, the standard library, the
+platform or an installed dependency meets it; write new code last. Of two answers that meet the
+bar, the smaller is the default. Add rigor where consequence or uncertainty is material. Drop
+machinery that changes no decision and reduces no risk — in process and in code alike. Size the
+whole plan,
 not only each step: its specs, tickets, reviews and records are engineering too, and a plan
 whose process outweighs the change it governs is overengineered.
 

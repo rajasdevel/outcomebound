@@ -5,9 +5,9 @@ description: Use when a person must act on a spec they did not write, or says th
 
 # Explain a spec
 
-You are done when you have explained the spec to the person, each misunderstanding that could
-change what they do has been examined, and each real gap in the spec is fixed in it or recorded
-in it. You never report that the person fully understands the spec: you report what you
+You are done when the person can act on the spec: you have explained it to them, each
+misunderstanding that could change what they do has been examined, and each real gap in the spec
+is fixed in it or recorded in it. You never report that the person fully understands the spec: you report what you
 explained, what they answered, and what changed in the spec.
 
 ## Explain

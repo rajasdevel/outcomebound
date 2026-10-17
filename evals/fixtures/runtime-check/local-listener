@@ -1,0 +1,3 @@
+# This file marks the fixture as needing a local listener: the task asks the model to check the
+# running service, so its commands may bind a local port. The runner then lets a command of this
+# call (and no other fixture's) use the network, and the meta file records it.

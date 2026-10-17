@@ -18,7 +18,9 @@ adopt renders it, at codex's skill path the whole folder of each skill that inst
 (the thirteen every install carries), and this
 checkout's launcher first on the call's PATH; `unsized`, the current arm without the kernel's
 sizing paragraph, which asks whether that paragraph earns its place; and `none`, no kernel,
-skill or launcher, each fixture's note without its pointer to the core skill. The model is
+skill or launcher, each fixture's note without its pointer to the core skill. The `earlier`
+arm can also be the install of a Git ref (`--earlier-ref`) or another guidance set's own files
+(`--earlier-verbatim`), and `--arm-label` names it in the records. The model is
 always named and passed to codex, so codex's configured default never runs.
 
 No run bills an API key from the environment: every credential and endpoint override a
@@ -72,6 +74,9 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "evals" / "fixtures"
 # A fixture's own file naming the fragments its install selects, one id a line.
 FRAGMENTS_FILE = "fragments"
+# A fixture's own empty file (a comment may explain it) that marks it as needing a local listener:
+# the run lets the model's commands bind a port, for this fixture only.
+LISTENER_FILE = "local-listener"
 # A fixture's own script printing its task for the built workspace, in place of a fixed
 # prompt.md: what it prints can name the seed commit, which exists only once the build is done.
 TASK_SCRIPT = "task.sh"
@@ -103,6 +108,16 @@ HARNESSES = (HARNESS,)
 # An earlier wording of the kernel, kept as a file so the arm runs in any checkout.
 EARLIER = "earlier"
 EARLIER_KERNEL = REPO / "evals" / "arms" / "earlier-kernel.md"
+# `--earlier-ref REF` makes the earlier arm a full install of the engine at that Git ref (its
+# kernel, its skills, its fragments), in place of the kernel wording kept in EARLIER_KERNEL.
+EARLIER_REF = ""
+_EARLIER_SOURCE: dict[str, Path] = {}
+# `--earlier-verbatim DIR` makes the earlier arm another guidance set's own files: the AGENTS.md
+# and the skills/ folders of DIR, a folder outside this checkout, installed as they are. The
+# AGENTS.md heads the fixture's own AGENTS.md; nothing of OutcomeBound is added: no kernel, facts
+# block, pointer or launcher.
+EARLIER_VERBATIM = ""
+_VERBATIM: dict[str, tuple[str, dict[str, bytes]]] = {}
 # The kernel-off arm: the task alone, in a fixture that carries no OutcomeBound text.
 NONE = "none"
 # The current arm less the kernel's sizing paragraph, the one that opens with this phrase.
@@ -186,6 +201,12 @@ def selected_fragments(name: str) -> tuple[str, ...]:
     return tuple(item for item in ids if item)
 
 
+def needs_local_listener(name: str) -> bool:
+    """Whether the fixture has a `local-listener` file: its task starts a service on a port."""
+
+    return (FIXTURES / name / LISTENER_FILE).is_file()
+
+
 def evals_dir() -> Path:
     """The `evals/` folder the fixtures and graders are read from."""
 
@@ -243,18 +264,114 @@ def _run(command: list[str], cwd: Path | None = None) -> tuple[int | None, str, 
     return done.returncode, done.stdout, done.stderr
 
 
+def earlier_source() -> Path:
+    """The engine tree at EARLIER_REF, exported once from this checkout's Git objects."""
+
+    if EARLIER_REF in _EARLIER_SOURCE:
+        return _EARLIER_SOURCE[EARLIER_REF]
+    target = Path(tempfile.mkdtemp(prefix="ob-earlier-source-"))
+    archive = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO),
+            "archive",
+            EARLIER_REF,
+            "VERSION",
+            "templates",
+            "skills",
+            "fragments",
+            "adapters",
+        ],
+        capture_output=True,
+    )
+    if archive.returncode != 0:
+        raise SystemExit(
+            f"run: --earlier-ref {EARLIER_REF}: {archive.stderr.decode(errors='replace').strip()}"
+        )
+    unpacked = subprocess.run(
+        ["tar", "-x", "-C", str(target)], input=archive.stdout, capture_output=True
+    )
+    if unpacked.returncode != 0:
+        raise SystemExit(f"run: --earlier-ref {EARLIER_REF}: the export did not unpack")
+    _EARLIER_SOURCE[EARLIER_REF] = target
+    return target
+
+
+def ref_commit(ref: str) -> str:
+    """The commit a Git ref of this checkout names now, for the run's record: a branch moves."""
+
+    done = subprocess.run(
+        ["git", "-C", str(REPO), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if done.returncode != 0 or not done.stdout.strip():
+        raise SystemExit(f"run: --earlier-ref {ref}: not a Git ref of this checkout")
+    return done.stdout.strip()
+
+
+def earlier_commit() -> str | None:
+    """The commit that the earlier arm's ref names, or None where the arm names no ref."""
+
+    return ref_commit(EARLIER_REF) if EARLIER_REF else None
+
+
+def verbatim_guidance() -> tuple[str, dict[str, bytes]]:
+    """The AGENTS.md text of the folder EARLIER_VERBATIM names, and every file under its skills/
+    by its path inside skills/, bytes as they are. Each skill is a folder with a SKILL.md. The
+    folder must lie outside this checkout: another project's files are never committed here."""
+
+    if EARLIER_VERBATIM in _VERBATIM:
+        return _VERBATIM[EARLIER_VERBATIM]
+    root = Path(EARLIER_VERBATIM).resolve()
+    refusal = ""
+    if REPO in (root, *root.parents):
+        refusal = "the folder is inside this checkout"
+    elif not (root / "AGENTS.md").is_file() or not (root / "AGENTS.md").read_bytes().strip():
+        refusal = "no non-empty AGENTS.md"
+    skills: dict[str, bytes] = {}
+    for path in sorted((root / "skills").rglob("*")) if not refusal else ():
+        if path.is_symlink():
+            refusal = f"{path.relative_to(root)} is a link"
+        elif path.is_file():
+            skills[path.relative_to(root / "skills").as_posix()] = path.read_bytes()
+    names = {path.split("/")[0] for path in skills}
+    lacking = sorted(name for name in names if f"{name}/SKILL.md" not in skills)
+    if not refusal and (not names or lacking):
+        refusal = "no skills/<name>/SKILL.md" + (f" for {', '.join(lacking)}" if lacking else "")
+    if refusal:
+        raise SystemExit(f"run: --earlier-verbatim {EARLIER_VERBATIM}: {refusal}")
+    agents = (root / "AGENTS.md").read_bytes().decode("utf-8")
+    _VERBATIM[EARLIER_VERBATIM] = (agents, skills)
+    return _VERBATIM[EARLIER_VERBATIM]
+
+
+def verbatim_install(arm: Arm | str) -> bool:
+    """Whether the arm is the earlier arm as another guidance set's own files."""
+
+    return (arm if isinstance(arm, str) else arm.name) == EARLIER and bool(EARLIER_VERBATIM)
+
+
+def earlier_install(arm: Arm) -> bool:
+    """Whether the arm is the earlier arm as an install of EARLIER_REF."""
+
+    return arm.name == EARLIER and bool(EARLIER_REF)
+
+
 def kernel(arm: str) -> str:
     """The arm's operating-contract block, sentinels included, as the model receives it; the
     kernel-off arm's is empty."""
 
-    if arm == NONE:
+    if arm == NONE or verbatim_install(arm):
         return ""
-    if arm == EARLIER:
+    if arm == EARLIER and not EARLIER_REF:
         return EARLIER_KERNEL.read_text(encoding="utf-8").strip("\n")
     from outcomebound_tools import adopt
 
     try:
-        text = adopt.kernel_block(REPO).strip("\n")
+        text = adopt.kernel_block(earlier_source() if arm == EARLIER else REPO).strip("\n")
     except adopt.AdoptError as error:
         raise SystemExit(f"run: the current arm cannot render its kernel: {error}") from None
     return without_sizing(text) if arm == UNSIZED else text
@@ -285,6 +402,7 @@ class Arm(NamedTuple):
     launcher: Path | None
     selected: tuple[str, ...] = ()
     skills: tuple[tuple[str, str], ...] = ()
+    agents: str = ""
 
     def record(self) -> dict[str, Any]:
         """The arm's contents as the run's metadata keeps them: digests and the launcher."""
@@ -295,7 +413,25 @@ class Arm(NamedTuple):
                 path: hashlib.sha256(data).hexdigest() for path, data in sorted(self.files.items())
             },
             "arm_launcher": str(self.launcher) if self.launcher else None,
+            **({"agents_sha256": sha256_text(self.agents)} if self.agents else {}),
         }
+
+
+def carried_skills(root: Path) -> tuple[str, ...]:
+    """The skills an install of the engine tree `root` carries: the engine's list, less any the
+    tree lacks (a variant may drop one). A skill folder the list does not name is refused, never
+    left out in silence: `--earlier-verbatim` installs a set of other skills."""
+
+    present = {path.parent.name for path in (root / "skills").glob("*/SKILL.md")}
+    from outcomebound_tools import fragments
+
+    extra = sorted(present - set(fragments.SKILLS) - {"adopt-outcomebound"})
+    if extra:
+        raise SystemExit(
+            f"run: the tree holds a skill that no install carries: {', '.join(extra)}; "
+            "--earlier-verbatim installs another set of skills"
+        )
+    return tuple(skill for skill in fragments.SKILLS if skill in present)
 
 
 def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
@@ -306,18 +442,28 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
     nothing, whatever is selected."""
 
     text = kernel(name)
-    if name in (EARLIER, NONE):
+    if verbatim_install(name):
+        from outcomebound_tools import adopt
+
+        try:
+            (route,) = adopt.routes(REPO, [HARNESS])
+        except adopt.AdoptError as error:
+            raise SystemExit(f"run: the skill path of {HARNESS} is unknown: {error}") from None
+        files = {f"{route.skills}/{path}": data for path, data in verbatim_guidance()[1].items()}
+        return Arm(name, text, files, None, agents=verbatim_guidance()[0])
+    if name == NONE or (name == EARLIER and not EARLIER_REF):
         return Arm(name, text, {}, None)
     from outcomebound_tools import adopt, facts, fragments
 
+    root = earlier_source() if name == EARLIER else REPO
     try:
-        (route,) = adopt.routes(REPO, [HARNESS])
-        chosen = fragments.select(fragments.load_all(REPO), selected) if selected else []
-        carried = fragments.SKILLS
+        (route,) = adopt.routes(root, [HARNESS])
+        chosen = fragments.select(fragments.load_all(root), selected) if selected else []
+        carried = carried_skills(root)
         files = {
             f"{route.skills}/{skill}/{relative}": data
             for skill in carried
-            for relative, data in adopt.skill_files(REPO, skill).items()
+            for relative, data in adopt.skill_files(root, skill).items()
         }
         files.update(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
@@ -366,10 +512,11 @@ def as_installed(workdir: Path, arm: Arm) -> str:
 
     The fixture's note keeps its project text and loses its own pointer to the core skill;
     AGENTS.md gains the project facts and the guidance pointers, each skill's with its
-    condition, rendered by the engine as an install renders them.
+    condition, rendered by the engine as an install renders them. An arm that is another guidance
+    set's own files writes that set's AGENTS.md above the note instead, and no facts or pointers.
     """
 
-    if arm.name not in INSTALLED:
+    if arm.name not in INSTALLED and not (arm.name == EARLIER and (EARLIER_REF or arm.agents)):
         return ""
     from outcomebound_tools import facts, fragments
 
@@ -377,12 +524,18 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         path = workdir / note
         if path.is_file():
             path.write_text(NOTE_POINTER.sub("", path.read_text(encoding="utf-8")), "utf-8")
-    chosen = fragments.select(fragments.load_all(REPO), arm.selected) if arm.selected else []
-    rendered = facts.render(workdir, chosen, [], ["AGENTS.md"], list(arm.skills))
     agents = workdir / "AGENTS.md"
-    head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
-    blocks = [rendered.facts, *([rendered.pointers] if rendered.pointers else [])]
-    agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
+    if arm.agents:
+        # Another guidance set's AGENTS.md, as it is, ahead of the fixture's own project note.
+        note = agents.read_text(encoding="utf-8").strip("\n") if agents.is_file() else ""
+        agents.write_text(arm.agents.rstrip("\n") + "\n" + (f"\n{note}\n" if note else ""), "utf-8")
+    else:
+        root = earlier_source() if arm.name == EARLIER else REPO
+        chosen = fragments.select(fragments.load_all(root), arm.selected) if arm.selected else []
+        rendered = facts.render(workdir, chosen, [], ["AGENTS.md"], list(arm.skills))
+        head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
+        blocks = [rendered.facts, *([rendered.pointers] if rendered.pointers else [])]
+        agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
     env = {**child_env(), **HERMETIC_GIT}
     # Only the notes this function wrote join the seed: a fixture's uncommitted edits, such as
     # the work in progress beside a read-only review, stay uncommitted, as setup left them.
@@ -498,19 +651,20 @@ def protected_snapshot(
     `protected.paths` stays beside the fixture's definition, outside the workspace, and the
     digests stay in this process: the model can edit the files, never this baseline. The
     files the arm installed are protected beside them. An arm `without_skills`, the kernel-off
-    arm, protects no skill copy: each the list names must be absent, since that arm has none.
+    arm or another guidance set's own files, protects no OutcomeBound skill copy: each the list
+    names must be absent, since that arm has none; the skills it installs are protected.
     """
 
     snapshot = {}
     lines = (fixture / "protected.paths").read_text(encoding="utf-8").splitlines()
-    for raw in [*lines, *installed_files]:
+    for raw, listed in [*((line, True) for line in lines), *((p, False) for p in installed_files)]:
         name = raw.strip()
         if not name or name.startswith("#"):
             continue
         relative = Path(name)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"protected path is not fixture-relative: {name}")
-        if without_skills and name.startswith(SKILL_ROOTS):
+        if without_skills and listed and name.startswith(SKILL_ROOTS):
             if (workdir / relative).exists():
                 raise ValueError(f"the arm carries no skill, yet the build holds {name}")
             continue
@@ -700,7 +854,12 @@ def build_workspace(
     try:
         built = bounded_command(
             ["bash", str(fixture / "setup.sh"), str(workdir), str(stage)],
-            env={**fixture_setup_env(), "OB_EVAL_ARM": arm.name},
+            env={
+                **fixture_setup_env(),
+                "OB_EVAL_ARM": arm.name,
+                **({"OB_EVAL_SOURCE": str(earlier_source())} if earlier_install(arm) else {}),
+                **({"OB_EVAL_VERBATIM": "1"} if verbatim_install(arm) else {}),
+            },
             timeout=SETUP_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError) as problem:
@@ -716,7 +875,10 @@ def build_workspace(
         return report, {}, None, ""
     try:
         protected = protected_snapshot(
-            fixture, workdir, tuple(arm.files), without_skills=arm.name == NONE
+            fixture,
+            workdir,
+            tuple(arm.files),
+            without_skills=arm.name == NONE or verbatim_install(arm),
         )
     except (OSError, ValueError) as problem:
         extra["error"] = f"protected fixture setup failed: {problem}"
@@ -798,7 +960,12 @@ def _call_and_judge(
     answer, transcript, returncode = "", "", None
     try:
         result = harness.call(
-            prompt, request, workdir, fixture_write_roots(name, workdir), path, keep
+            prompt,
+            request._replace(local_listener=needs_local_listener(name)),
+            workdir,
+            fixture_write_roots(name, workdir),
+            path,
+            keep,
         )
         answer, transcript, returncode = result.answer, result.transcript, result.returncode
         extra.update(result.extras)
@@ -1424,6 +1591,29 @@ def _parser() -> argparse.ArgumentParser:
         f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher",
     )
     parser.add_argument(
+        "--earlier-ref",
+        default="",
+        metavar="REF",
+        help="make the earlier arm a full install of the engine at this Git ref of the "
+        "checkout (kernel, skills, fragments), in place of the kept earlier kernel wording",
+    )
+    parser.add_argument(
+        "--earlier-verbatim",
+        default="",
+        metavar="DIR",
+        help="make the earlier arm another guidance set's own files: the AGENTS.md of DIR, a "
+        "folder outside this checkout, above the fixture's own note, and the skills/ folders of "
+        "DIR at codex's skill path, all as they are, with no kernel, facts block, pointers or "
+        "launcher",
+    )
+    parser.add_argument(
+        "--arm-label",
+        default="",
+        metavar="NAME",
+        help="name the arm NAME in STATUS.json, the metas, INDEX.json and the summary, in place "
+        "of its kind (for a ref that stands for a variant of the guidance)",
+    )
+    parser.add_argument(
         "--harness",
         choices=HARNESSES,
         default=HARNESS,
@@ -1573,6 +1763,29 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
     return 1 if failed else 0
 
 
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def set_earlier_ref(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Apply `--earlier-ref` and `--earlier-verbatim`: each changes the earlier arm only, and
+    only one may name it. Each ref must be in this checkout."""
+
+    global EARLIER_REF, EARLIER_VERBATIM
+    for option in ("earlier_ref", "earlier_verbatim"):
+        if getattr(args, option) and args.arm != EARLIER:
+            parser.error(f"--{option.replace('_', '-')} changes the earlier arm: use --arm earlier")
+    if args.earlier_ref and args.earlier_verbatim:
+        parser.error("name the earlier arm once: --earlier-ref or --earlier-verbatim")
+    if args.arm_label and not LABEL.fullmatch(args.arm_label):
+        parser.error("--arm-label is letters, digits, '.', '_' and '-', from a letter or digit")
+    EARLIER_REF = args.earlier_ref
+    EARLIER_VERBATIM = args.earlier_verbatim
+    if EARLIER_REF:
+        ref_commit(EARLIER_REF)
+    if EARLIER_VERBATIM:
+        verbatim_guidance()
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -1581,6 +1794,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.regrade:
         return regrade(Path(args.regrade), Path(args.out) if args.out else RAW / uuid.uuid4().hex)
     names = checked_fixtures(parser, args)
+    set_earlier_ref(parser, args)
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     root = workspace_root(args.workspace_root)
@@ -1605,7 +1819,11 @@ def _main(argv: list[str] | None = None) -> int:
         "run_id": run_id,
         "date": datetime.date.today().isoformat(),
         "harness": tool.name,
-        "arm": args.arm,
+        "arm": args.arm_label or args.arm,
+        "arm_kind": args.arm,
+        "earlier_ref": EARLIER_REF or None,
+        "earlier_verbatim": EARLIER_VERBATIM or None,
+        "earlier_commit": earlier_commit(),
         "model": args.model,
         "effort": args.effort,
         "repetition": args.repetition,

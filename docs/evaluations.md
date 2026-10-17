@@ -397,7 +397,7 @@ ignored it with a warning (codex-cli 0.158.0, 0.159.0 and 0.160.0). Whether a we
 there would reach the model is `UNVERIFIED`. Read the head of each transcript for warnings that
 name user-level files. Keep that directory empty for a pass.
 
-Two more conditions decide what a codex run can measure.
+Three more conditions decide what a codex run can measure.
 
 - The default `workspace-write` sandbox of codex protects `<writable_root>/.git` as read-only
   ([Codex, agent approvals and security](https://learn.chatgpt.com/docs/agent-approvals-security),
@@ -405,6 +405,21 @@ Two more conditions decide what a codex run can measure.
   `.git` of the workspace is added as a writable directory (`--add-dir <workspace>/.git`). With
   the directory added, a probe's `git commit` exited 0. A probed run without the isolation flags
   above read the Codex memories of the operator (codex-cli 0.156.1, 2026-09-24).
+- The default `workspace-write` sandbox of codex also refuses a command a port to bind, on the
+  loopback interface too (codex-cli 0.163.0, macOS: `PermissionError: [Errno 1] Operation not
+  permitted`; `codex sandbox -c 'sandbox_mode="workspace-write"' -- python3 -c "import socket;
+  socket.socket().bind(('127.0.0.1', 0))"` shows it with no model call). The session tells the
+  model that network access is restricted. A fixture whose task is to check a running service
+  then measures the sandbox, not the text: a run that tries is refused, and a run that reads the
+  notice may not try. A fixture with a `local-listener` file adds
+  `-c sandbox_workspace_write.network_access=true` to its call (`runtime-check` only), and the
+  native session must show `network_access` true. That setting allows all network access, the
+  internet too. A loopback-only form exists in the permissions-profile keys of the same version
+  (`default_permissions`, `permissions.<name>.network.allow_local_binding` with the experimental
+  `network_proxy` feature): `codex sandbox` showed it bind and connect on loopback and refuse the
+  internet. It is not used, because it replaces `-s workspace-write` and the writable roots of
+  the call, and whether it works inside `codex exec` is `UNVERIFIED` (testing it needs a model
+  call). Whether the grant removes the `runtime-check` failures is `UNVERIFIED` until a pass runs.
 - `codex login status` shows which sign-in a run uses: ChatGPT sign-in for subscription access, or
   an API key. OpenAI bills an API key through the Platform account at standard API rates
   ([Codex authentication](https://learn.chatgpt.com/docs/auth), L, read 2026-10-01). The status
@@ -2102,3 +2117,126 @@ session's findings are open, and the three lifecycle scaffold cases.
   run each; three runs cannot tell them from noise.
 - One model and one CLI version. The fixtures copy kinds of field failure; they are not the
   sessions themselves.
+
+## E27. Core work by default: the kernel and skill text against 1.6.0, on Codex
+
+Date: 2026-10-16 and 2026-10-17. Model calls: 48 Codex calls in two passes, all counted. No probe.
+
+### Question
+
+Does the text that makes the core work the default (the kernel's opening line and sizing
+paragraph, outcome-first done lines in the skills, the commands fragment's yield to the person,
+the decision-brief refusal rule, the code-scope block in `using-outcomebound`) change what a model
+does, and does it make a model do less where failure matters?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Arms: `earlier` is a full install of the engine at `v1.6.0` (`--earlier-ref v1.6.0`: kernel,
+  skills and fragments of the tag), `current` the checkout. The arms differ in text only.
+- Fixtures, three runs a side: `reuse-stdlib`, `ladder-3-reorder-list`, and two new field
+  fixtures: `field-docs-only-person` (a documentation change where only the person's words say
+  that the slow suite need not run) and `field-prompt-and-spec` (a request for a prompt and a
+  short spec in a repository whose guide invites a plan, tickets, a review and a hand-off).
+
+### Result
+
+| Fixture | `earlier` (1.6.0) | `current` |
+| --- | --- | --- |
+| `reuse-stdlib` | 3/3 | 3/3 |
+| `ladder-3-reorder-list` | 3/3 | 3/3 |
+| `field-prompt-and-spec` | 3/3 | 3/3 |
+| `field-docs-only-person`, every claim but `docs-change` | 3/3 | 3/3 |
+| `field-docs-only-person`, `docs-change` | 0/3 | 1/3 |
+
+- No claim that guards against doing less failed under `current`: no run skipped a test the task
+  needed, and every run that left the suite unrun said so.
+- The arms did not separate. On these short synthetic tasks the 1.6.0 text already gives the
+  behaviour asked for, so the pass measures no gain.
+- `docs-change` failed on both arms for the fixture's wording, not the model's: the prompt said
+  "the changelog", and the repository also holds `docs/changes.md`, titled "Changes between
+  versions", which most runs edited. The prompt now names `CHANGELOG.md`; the runs were not
+  repeated.
+- Median tokens moved both ways (`reuse-stdlib` 66,886 to 89,632; `field-prompt-and-spec` 134,004
+  to 117,421).
+
+### Second pass, on the final text
+
+Date: 2026-10-17. 24 Codex calls, all counted, same model, arms and fixtures. Between the passes
+the text gained the restored "neither underengineer nor overengineer" opening, the
+`using-outcomebound` ladder whose default is no mechanism, and the lifecycle presets' own
+defaults; the `field-docs-only-person` prompt names `CHANGELOG.md`.
+
+| Fixture | `earlier` (1.6.0) | `current` | Median tokens, `earlier` to `current` |
+| --- | --- | --- | --- |
+| `reuse-stdlib` | 3/3 | 3/3 | 67,554 to 66,665 |
+| `ladder-3-reorder-list` | 3/3 | 3/3 | 177,727 to 152,260 |
+| `field-prompt-and-spec` | 3/3 | 3/3 | 136,074 to 135,812 |
+| `field-docs-only-person` | 3/3 | 3/3 | 86,753 to 68,164 |
+
+Every claim passed on both arms, so the arms still do not separate on behaviour. The final text
+used fewer tokens on two fixtures and about the same on two; with three runs a side that is a
+direction, not a measured effect.
+
+### Scope
+
+One model, three runs a side, synthetic tasks of about a minute. The field cases that motivated
+the text came from long sessions with much project context, which these fixtures do not
+reproduce. What the text does for an adopter's agent is `UNVERIFIED`; this pass shows only that it
+makes none of these runs worse.
+
+## E28. Core work by default: the ten-fixture comparison and the honing round, on Codex
+
+Date: 2026-10-17. Model calls: 30 Codex calls on each of `earlier` and the text of E27's second
+pass, 15 more on each on three fixtures, then 42 on the honed text, all counted. No probe.
+
+### Question
+
+On fixtures where a repository invites more process than the change needs, and on fixtures where
+less work fails (a diagnosis, a granted deploy, a check in the running service), does the text of
+E27 do better than 1.6.0, and does the honing round fix the two behaviours that every text still
+showed: the slow suite run for a change it does not reach, and a step of the release checklist done
+beyond the person's grant?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Arms: `earlier` is `--earlier-ref v1.6.0`; `E27` is the text of E27's second pass, installed with
+  `--earlier-ref`; `honed` is the text of this pull request. The arms differ in text only.
+- Fixtures: `ladder-1-message` to `ladder-4-cents`, `reuse-stdlib`, `field-docs-only-person`,
+  `field-prompt-and-spec`, `diagnose`, `runtime-check`, `deploy-authorized`; three runs a side,
+  then five more for `earlier` and `E27` and three more for `honed` on the three fixtures that
+  separated the arms.
+- Between the `E27` runs and the `honed` runs: `runtime-check` gained the fixture's own network
+  grant (its earlier runs could not bind a port in the Codex sandbox), and the `deploy-authorized`
+  grader reads a report whose production line and release stand under one heading.
+- The honing round: the kernel's Completion bar line runs the full suite only where the changed
+  risk reaches it, the project requires it, or at a landing; the `deploy` fragment says that a
+  release checklist, a runbook or a pipeline file orders the acts and does not widen the grant.
+
+### Result
+
+| Fixtures that separated the arms | `earlier` (1.6.0) | `E27` | `honed` |
+| --- | --- | --- | --- |
+| `ladder-2-last-units` | 4/8 | 6/8 | 6/6 |
+| `diagnose` | 7/8 | 8/8 | 5/6 |
+| `deploy-authorized` | 6/8 | 6/8 | 6/6 |
+
+- The other seven fixtures: every run of every arm passed, except `runtime-check` before its
+  network grant (2/3 for each of `earlier` and `E27`, each failure a port the sandbox refused);
+  `honed`, with the grant, 3/3.
+- `ladder-2-last-units`: no `honed` run ran the slow suite. `deploy-authorized`: no `honed` run
+  changed more than the grant named.
+- `diagnose`: one `honed` run reported no reproduction and cause; the other text of this fixture
+  did not change between `E27` and `honed`.
+- A copy review then changed the deploy sentence so that a checklist step within the grant (a read
+  of what production serves) is still followed. Three more `deploy-authorized` runs on that text:
+  every run deployed only to production and read it after; the grader passed 2/3, as one run ran
+  the deploy in a `;` list, which hides that command's own exit status from the grader, though its
+  log line and the served version show it.
+
+### Scope
+
+One model, synthetic tasks of about a minute, six or eight runs a cell on the separating fixtures:
+a direction, not a measured effect. What the text does in an adopter's long sessions is
+`UNVERIFIED`.

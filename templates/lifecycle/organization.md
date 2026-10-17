@@ -27,8 +27,8 @@ Exposure — <stream>: who can be hurt: <the users, the other teams, the holders
   [assumed].
 Streams — <stream>: route in <the document the next person can open>; takes <kind of change>.
 Gates — review: owner one human who is neither the author nor the person who directed the agent,
-  evidence their approval in the platform; an AI review runs first and never counts as that
-  approval; no one, admins included, bypasses it.
+  evidence their approval in the platform; an AI review, where the change warrants one, runs
+  before it and never counts as that approval; no one, admins included, bypasses it.
 Gates — code-owner review: owner <the owners of each area, or UNVERIFIED (no file names them)>,
   where a branch rule enforces it.
 Agents act under their own identity with a scoped token, never an admin token, and their actions

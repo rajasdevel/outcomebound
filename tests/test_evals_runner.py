@@ -55,7 +55,9 @@ METERED = (
 # as the shell-quoted argv of a `zsh -lc` call with no working directory, as 0.162.1 does, and
 # the session record each command's `CommandExecution` item with its `cwd`: `exact`; `workdir`
 # (the first command ran in a subfolder of the session's cwd); `count` (one item missing);
-# `text` (the first item's script differs).
+# `text` (the first item's script differs). The record's sandbox policy allows network access
+# where the argv carries `sandbox_workspace_write.network_access=true`; $OB_FAKE_NETWORK (`true`
+# or `false`) sets it to the opposite of what the argv asked for, for a test of the check.
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
@@ -120,7 +122,11 @@ if mode != "none" and os.environ.get("CODEX_HOME"):
           "cwd":cwd,"cli_version":"0.162.1","originator":"codex_exec","source":"exec"}
     if mode=="no-version":
         del meta["cli_version"]
-    context={"cwd":cwd,"model":model,"effort":effort,"approval_policy":"never"}
+    allowed="sandbox_workspace_write.network_access=true" in argv
+    if os.environ.get("OB_FAKE_NETWORK"):
+        allowed=not allowed
+    context={"cwd":cwd,"model":model,"effort":effort,"approval_policy":"never",
+             "sandbox_policy":{"type":"workspace-write","network_access":allowed}}
     records=[{"type":"session_meta","payload":meta}]
     if mode!="no-turn-context":
         records.append({"type":"turn_context","payload":context})
@@ -541,6 +547,254 @@ def test_a_fixture_that_selects_the_tickets_fragment_runs_with_the_ticket_skills
     assert status["arm_files"] == RUN.load_arm("current").record()["arm_files"]
 
 
+def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_path: Path) -> None:
+    """`--earlier-ref REF` replaces the kept kernel wording with an install of the engine at REF:
+    its kernel, its ten skills (in the arm files and in the fixture's note path) and the pointers,
+    while the launcher stays this checkout's. Checked on HEAD, which every clone has."""
+
+    def at_head(path: str) -> bytes:
+        return subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+        ).stdout
+
+    done, out = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", "HEAD", *SMALL_FIX[2:]))
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    status = json.loads((out / "STATUS.json").read_text(encoding="utf-8"))
+    assert (status["arm"], status["earlier_ref"]) == ("earlier", "HEAD")
+    assert meta["arm_files"] and meta["arm_launcher"] == str(ROOT / LAUNCHER)
+    repo = Path(meta["fixture_repo"])
+    skill = at_head("skills/using-outcomebound/SKILL.md")
+    for root in (".agents/skills", ".outcomebound/skills"):
+        assert (repo / root / "using-outcomebound" / "SKILL.md").read_bytes() == skill
+    assert (repo / ".agents/skills/decision-brief/SKILL.md").is_file()
+    prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
+    assert "Task:" in prompt and "id=operating-contract" in prompt
+    assert hashlib.sha256(RUN.kernel("current").encode()).hexdigest() == meta["kernel_sha256"]
+
+
+def test_the_earlier_ref_is_refused_for_another_arm_and_for_an_unknown_ref(tmp_path: Path) -> None:
+    done, _ = _invoke(tmp_path, ("--earlier-ref", "HEAD", *SMALL_FIX))
+    assert done.returncode == 2 and "--earlier-ref changes the earlier arm" in done.stderr
+    done, _ = _invoke(
+        tmp_path, ("--arm", "earlier", "--earlier-ref", "no-such-ref", *SMALL_FIX[2:])
+    )
+    assert done.returncode != 0 and "--earlier-ref no-such-ref" in done.stderr
+
+
+def _commit_of(changes: dict[str, bytes | None], base: str | None = None) -> str:
+    """A commit made of `base`'s tree (an empty tree without it) with `changes` applied, a path
+    mapped to None removed, in this checkout's object store and on no branch: a ref for the
+    runner to read that moves no branch of the checkout and is collected with the other
+    unreferenced objects."""
+
+    index = Path(tempfile.mkdtemp(prefix="ob-index-")) / "index"
+    env = {**os.environ, **HERMETIC_GIT, "GIT_INDEX_FILE": str(index)}
+
+    def git(*arguments: str, data: bytes | None = None) -> str:
+        done = subprocess.run(
+            # The hermetic config drops a container's global `safe.directory`; name this checkout.
+            ["git", "-c", f"safe.directory={ROOT}", "-C", str(ROOT), *arguments],
+            input=data,
+            capture_output=True,
+            env=env,
+        )
+        assert done.returncode == 0, done.stderr.decode()
+        return done.stdout.decode().strip()
+
+    try:
+        if base:
+            git("read-tree", base)
+        for path, data in changes.items():
+            if data is None:
+                git("update-index", "--force-remove", path)
+                continue
+            blob = git("hash-object", "-w", "--stdin", data=data)
+            git("update-index", "--add", "--cacheinfo", f"100644,{blob},{path}")
+        tree = git("write-tree")
+        return git(
+            "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit-tree", tree,
+            "-m", "a guidance set",
+        )  # fmt: skip
+    finally:
+        shutil.rmtree(index.parent, ignore_errors=True)
+
+
+def _guidance_set(folder: Path, files: dict[str, bytes]) -> Path:
+    for path, data in files.items():
+        (folder / path).parent.mkdir(parents=True, exist_ok=True)
+        (folder / path).write_bytes(data)
+    return folder
+
+
+def test_the_earlier_verbatim_arm_installs_another_guidance_sets_own_files(tmp_path: Path) -> None:
+    """`--earlier-verbatim DIR`: the set's AGENTS.md heads the fixture's own note, and every file
+    of its skills/ is at codex's skill path, byte for byte; none of OutcomeBound's reaches the
+    fixture (no kernel in the prompt, core skill, facts block, pointer or launcher);
+    `--arm-label` names the arm in the status, the meta, INDEX.json and the summary."""
+
+    agents = b"Be lazy about the solution.\r\nNever lazy about the change.\n"
+    skill = b"---\nname: lazy\ndescription: Use always.\n---\nCut first.\n"
+    note = b"A note beside the skill.\n\xff\n"
+    folder = _guidance_set(
+        tmp_path / "set",
+        {
+            "AGENTS.md": agents,
+            "skills/lazy/SKILL.md": skill,
+            "skills/lazy/notes/more.md": note,
+            "skills/other/SKILL.md": b"Another.\n",
+        },
+    )
+    arguments = (
+        *("--arm", "earlier", "--earlier-verbatim", str(folder), "--arm-label", "V4-set"),
+        *SMALL_FIX[2:],
+    )
+    done, out = _invoke(tmp_path, arguments)
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    assert (meta["arm"], meta["arm_kind"], meta["earlier_verbatim"]) == (
+        "V4-set",
+        "earlier",
+        str(folder),
+    )
+    assert meta["earlier_ref"] is None and meta["earlier_commit"] is None
+    assert meta["arm_launcher"] is None
+    assert meta["agents_sha256"] == hashlib.sha256(agents.decode().encode()).hexdigest()
+    assert set(meta["arm_files"]) == {
+        ".agents/skills/lazy/SKILL.md",
+        ".agents/skills/lazy/notes/more.md",
+        ".agents/skills/other/SKILL.md",
+    }
+    prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
+    assert prompt.startswith("Task:\n") and "lazy" not in prompt
+    repo = Path(meta["fixture_repo"])
+    assert (repo / ".agents/skills/lazy/SKILL.md").read_bytes() == skill
+    assert (repo / ".agents/skills/lazy/notes/more.md").read_bytes() == note
+    assert not (repo / ".agents/skills/using-outcomebound").exists()
+    assert not (repo / ".outcomebound").exists()
+    raw = (repo / "AGENTS.md").read_bytes()
+    assert raw.startswith(agents), "the set's AGENTS.md heads the file, byte for byte"
+    assert len(raw) > len(agents) + 20, "the project note stays below it"
+    text = raw.decode()
+    assert "outcomebound:begin" not in text and "using-outcomebound" not in text
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", ".agents/skills", "AGENTS.md"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
+    ).stdout.split()
+    assert sorted(tracked) == sorted([*meta["arm_files"], "AGENTS.md"])
+    for name in ("STATUS.json", "INDEX.json"):
+        assert '"arm": "V4-set"' in (out / name).read_text(encoding="utf-8"), name
+    summary = subprocess.run(
+        [sys.executable, str(ROOT / "evals" / "run.py"), "--summary", str(out)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout
+    assert "small-fix | codex | V4-set | gpt-6-sol medium: PASS 1/1" in summary
+
+
+def test_the_earlier_verbatim_arm_is_refused_unless_the_set_is_whole(tmp_path: Path) -> None:
+    rules, skill = b"Rules.\n", b"One.\n"
+    whole = _guidance_set(tmp_path / "whole", {"AGENTS.md": rules, "skills/one/SKILL.md": skill})
+    cases = {
+        "another arm": (("--arm", "current", "--earlier-verbatim", str(whole)), "earlier arm"),
+        "two sources": (
+            ("--arm", "earlier", "--earlier-verbatim", str(whole), "--earlier-ref", "HEAD"),
+            "name the earlier arm once",
+        ),
+        "no folder": (("--arm", "earlier", "--earlier-verbatim", str(tmp_path / "none")), "AGENTS"),
+        "inside the checkout": (
+            ("--arm", "earlier", "--earlier-verbatim", str(ROOT / "evals")),
+            "inside this checkout",
+        ),
+        "no AGENTS.md": (
+            (
+                *("--arm", "earlier", "--earlier-verbatim"),
+                str(_guidance_set(tmp_path / "a", {"skills/a/SKILL.md": skill})),
+            ),
+            "no non-empty AGENTS.md",
+        ),
+        "no skills": (
+            (
+                *("--arm", "earlier", "--earlier-verbatim"),
+                str(_guidance_set(tmp_path / "b", {"AGENTS.md": rules})),
+            ),
+            "no skills/<name>/SKILL.md",
+        ),
+        "a skill with no SKILL.md": (
+            (
+                *("--arm", "earlier", "--earlier-verbatim"),
+                str(_guidance_set(tmp_path / "c", {"AGENTS.md": rules, "skills/a/n.md": b"N.\n"})),
+            ),
+            "for a",
+        ),
+        "a bad label": (
+            ("--arm", "earlier", "--arm-label", "a b", "--earlier-ref", "HEAD"),
+            "--arm-label",
+        ),
+    }
+    for name, (arguments, message) in cases.items():
+        done, out = _invoke(tmp_path, (*arguments, *SMALL_FIX[2:]))
+        assert done.returncode != 0 and message in done.stderr, (name, done.stderr)
+        assert not out.exists(), f"{name}: a refused run created its directory"
+    assert not (tmp_path / "calls.txt").exists(), "a refused run called codex"
+
+
+def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills(
+    tmp_path: Path,
+) -> None:
+    """A ref that is no tag and no branch: its kernel text reaches the prompt, a skill it drops
+    is not installed (and not pointed at), and a skill folder the engine's list does not name is
+    refused in place of being left out. `--arm-label` and the commit are recorded."""
+
+    template = subprocess.run(
+        ["git", "-C", str(ROOT), "show", "HEAD:templates/managed-block.agents.md.tmpl"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    changed = template.replace(
+        b"neither underengineer nor overengineer", b"a variant's own words", 1
+    )
+    assert changed != template
+    # The whole folder of a skill goes, as a variant would drop it.
+    tree = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", "HEAD", "skills/sync-tracker"],
+        capture_output=True,
+        text=True,
+        check=True,
+        encoding="utf-8",
+    ).stdout.split()
+    commit = _commit_of(
+        {"templates/managed-block.agents.md.tmpl": changed, **dict.fromkeys(tree)}, base="HEAD"
+    )
+    arguments = (
+        *("--arm", "earlier", "--earlier-ref", commit, "--arm-label", "V1-edited"),
+        *SMALL_FIX[2:],
+    )
+    done, out = _invoke(tmp_path, arguments)
+    assert done.returncode == 0, done.stdout + done.stderr
+    meta = _meta(out)
+    assert (meta["arm"], meta["earlier_ref"], meta["earlier_commit"]) == (
+        "V1-edited",
+        commit,
+        commit,
+    )
+    prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
+    assert "a variant's own words" in prompt
+    assert not [path for path in meta["arm_files"] if "/sync-tracker/" in path]
+    assert any("/diagnose/SKILL.md" in path for path in meta["arm_files"])
+    notes = (Path(meta["fixture_repo"]) / "AGENTS.md").read_text(encoding="utf-8")
+    assert "diagnose/SKILL.md" in notes and "sync-tracker" not in notes
+    stray = _commit_of({"skills/stray/SKILL.md": b"Not in the list.\n"}, base="HEAD")
+    done, _ = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", stray, *SMALL_FIX[2:]))
+    assert done.returncode != 0 and "no install carries: stray" in done.stderr
+
+
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:
     """End to end on small-fix: the keys never reach codex or the commands it runs, codex
     reads the arm's kernel ahead of the task and is named the model, and the post-checks
@@ -576,6 +830,52 @@ def test_NEGATIVE_CONTROL_a_run_whose_codex_reports_another_model_does_not_count
     assert done.returncode == 1, done.stdout + done.stderr
     error = "the native session reports model gpt-6-astra, not gpt-6-sol"
     assert _meta(out)["error"] == error
+
+
+def _folder(parent: Path, name: str) -> Path:
+    (parent / name).mkdir()
+    return parent / name
+
+
+LISTENER = "sandbox_workspace_write.network_access=true"
+RUNTIME_CHECK = ("--arm", "current", "--model", "gpt-6-sol", "--fixtures", "runtime-check")
+
+
+def test_only_the_fixture_that_asks_gets_a_local_listener(tmp_path: Path) -> None:
+    """A call keeps the default sandbox, a port refused, unless its fixture has a
+    `local-listener` file; the meta file says which, and the session shows the same."""
+
+    done, out = _invoke(tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert LISTENER not in (tmp_path / "argv.txt").read_text(encoding="utf-8").splitlines()
+    meta = _meta(out)
+    assert (meta["local_listener"], meta["sandbox_network_access"]) == (False, False), meta
+
+    asking = {name for name in RUN.fixture_names() if RUN.needs_local_listener(name)}
+    assert asking == {"runtime-check"}, "a fixture that needs no listener must not be granted one"
+
+    done, out = _invoke(_folder(tmp_path, "listener"), RUNTIME_CHECK)
+    assert done.returncode == 0, done.stdout + done.stderr
+    argv = (tmp_path / "listener" / "argv.txt").read_text(encoding="utf-8").splitlines()
+    assert argv.count(LISTENER) == 1 and argv[argv.index(LISTENER) - 1] == "-c"
+    assert argv[argv.index("-s") + 1] == "workspace-write"
+    meta = _meta(out, "runtime-check")
+    assert meta["error"] == "" and meta["identity_error"] == "", meta
+    assert (meta["local_listener"], meta["sandbox_network_access"]) == (True, True), meta
+
+
+def test_NEGATIVE_CONTROL_a_session_whose_sandbox_differs_from_the_request_does_not_count(
+    tmp_path: Path,
+) -> None:
+    done, out = _invoke(
+        _folder(tmp_path, "listener"), RUNTIME_CHECK, env={"OB_FAKE_NETWORK": "flip"}
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    error = "the native session reports network_access False, not True"
+    assert _meta(out, "runtime-check")["error"] == error
+    done, out = _invoke(_folder(tmp_path, "default"), env={"OB_FAKE_NETWORK": "flip"})
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert _meta(out)["error"] == "the native session reports network_access True, not False"
 
 
 def test_a_preflight_that_observes_no_login_exits_3_before_any_call(tmp_path: Path) -> None:
@@ -675,9 +975,11 @@ def test_specialized_fixtures_run_only_when_named() -> None:
     assert {
         "field-commands-hazards",
         "field-docs-only-done",
+        "field-docs-only-person",
         "field-goal-person-items",
         "field-order-class",
         "field-parallel-report",
+        "field-prompt-and-spec",
         "field-report-gap",
         "field-review-verdict",
         "scaffold-client",

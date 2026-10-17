@@ -50,6 +50,10 @@ ISOLATION = (
 )
 # The thread table of codex's state database keeps whether the thread could read memories.
 STATE_DATABASE = "state_5.sqlite"
+# What a fixture that needs a local listener adds: the `workspace-write` option of codex that lets
+# a command bind a port. codex-cli 0.163.0 offers it as one switch for all network access, the
+# loopback interface and the internet alike; the sandbox refuses a bind without it.
+LISTENER_SETTING = "sandbox_workspace_write.network_access=true"
 Run = Callable[..., Any]
 
 
@@ -94,6 +98,7 @@ class CodexHarness:
         cwd: Path,
         last_message: Path,
         write_roots: tuple[Path, ...] = (),
+        local_listener: bool = False,
     ) -> list[str]:
         """The `codex exec` argv for one call: the model named, the operator's setup left out.
 
@@ -101,6 +106,10 @@ class CodexHarness:
         `workspace-write` otherwise keeps read-only: a fixture would measure the sandbox, not
         the model, if a commit were impossible. Only `.agents/work` is added for task notes;
         the installed skills and the rest of `.agents` retain their default protection.
+
+        `workspace-write` also refuses a command a port to listen on. Only where the fixture
+        needs a local listener (`local_listener`) is `LISTENER_SETTING` added; every other call
+        keeps the default.
         """
 
         if not model:
@@ -122,6 +131,8 @@ class CodexHarness:
             "--output-last-message",
             str(last_message),
         ]
+        if local_listener:
+            argv += ["-c", LISTENER_SETTING]
         if (Path(cwd) / ".git").is_dir():
             argv += ["--add-dir", str(Path(cwd) / ".git")]
         argv += ["--add-dir", str(Path(cwd) / ".agents" / "work")]
@@ -139,7 +150,9 @@ class CodexHarness:
         keep: Path,
     ) -> CallResult:
         """One call. ValueError, before the model runs, where the sessions folder or `keep` is
-        within the model's reach; otherwise the result, whose `error` names a mismatch."""
+        within the model's reach; otherwise the result, whose `error` names a mismatch. Where
+        `request.local_listener` is set the sandbox lets a command bind a port, and the native
+        session must show it."""
 
         sessions = self.home() / "sessions"
         NativeCapture(sessions, keep).check_roots((cwd, *write_roots))
@@ -148,7 +161,14 @@ class CodexHarness:
         try:
             try:
                 done = bounded_command(
-                    self.command(request.model, request.effort, cwd, last_message, write_roots),
+                    self.command(
+                        request.model,
+                        request.effort,
+                        cwd,
+                        last_message,
+                        write_roots,
+                        request.local_listener,
+                    ),
                     input=prompt,
                     env={**self._env(), "PATH": path},
                     cwd=str(cwd),
@@ -173,6 +193,7 @@ class CodexHarness:
             unknown_item_types=unknown_types(events),
             tokens_used=tokens_used(transcript),
             identity_checks=checks,
+            local_listener=request.local_listener,
         )
         failed = next((check[2] for check in checks if check[1] == "FAIL"), "")
         return CallResult(answer, transcript, code, observed, extras, failed, checks)
@@ -219,6 +240,23 @@ def _agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]
 Records = list[dict[str, Any]]
 
 
+def _network_access(records: list[dict[str, Any]]) -> tuple[bool | None, str]:
+    """Whether the sandbox policy of the session allows network access, as every `turn_context`
+    record gives it, and the problem where the records give none or disagree."""
+
+    values = []
+    for record in records:
+        if record.get("type") != "turn_context" or not isinstance(record.get("payload"), dict):
+            continue
+        policy = record["payload"].get("sandbox_policy")
+        values.append(policy.get("network_access") if isinstance(policy, dict) else None)
+    if not values or any(not isinstance(value, bool) for value in values):
+        return None, "the native session gives no sandbox network_access"
+    if len(set(values)) != 1:
+        return None, f"the native session gives conflicting network_access values: {values}"
+    return values[0], ""
+
+
 def identify(
     stdout: str, sessions: Path, keep: Path, request: Request, cwd: Path
 ) -> tuple[dict[str, str | None] | None, dict[str, Any], list[list[str]], Records | None]:
@@ -226,9 +264,10 @@ def identify(
 
     Returns the observed identity (None where no session was read), the meta entries for the
     session, one check per item, and the session's records (None where none were read). A check
-    that fails carries, as its detail, the text of the call error."""
+    that fails carries, as its detail, the text of the call error. The sandbox must allow
+    network access exactly where the fixture asked for a local listener."""
 
-    model, effort = request
+    model, effort, local_listener = request
     events = parse_events(stdout) or []
     checks: list[list[str]] = []
 
@@ -293,6 +332,15 @@ def identify(
         same,
         f"{seen_cwd} == workspace",
         cwd_problem or f"the native session reports working directory {seen_cwd}, not {wanted}",
+    )
+    network, network_problem = _network_access(records)
+    extras["sandbox_network_access"] = network
+    check(
+        "native-sandbox-network",
+        network is local_listener,
+        f"network_access {network} == requested",
+        network_problem
+        or f"the native session reports network_access {network}, not {local_listener}",
     )
     named = stream_models(events)
     if named:

@@ -10,9 +10,11 @@ runner, the fixtures or the graders names a CLI.
     version() -> str      the tool's own version line, or "unknown".
     call(prompt, request, cwd, write_roots, path, keep) -> CallResult
                           one model call, never retried. `request` names the model and effort
-                          asked for, `cwd` is the workspace, `write_roots` the extra paths the
-                          model may write, `path` the call's PATH, `keep` a new file the harness
-                          copies the tool's own session record to.
+                          asked for, and whether the model's commands may bind a local port
+                          (`local_listener`, false: the tool's default sandbox); `cwd` is the
+                          workspace, `write_roots` the extra paths the model may write, `path`
+                          the call's PATH, `keep` a new file the harness copies the tool's own
+                          session record to.
 
 `evals/README.md`, "Adding a harness", states what a harness must meet.
 """
@@ -23,10 +25,13 @@ from typing import Any, NamedTuple
 
 
 class Request(NamedTuple):
-    """The identity a run asks for; a call counts only where the tool's own record shows it."""
+    """What a run asks for; a call counts only where the tool's own record shows it. `model` and
+    `effort` are the identity. `local_listener` lets the model's commands bind a local port,
+    which the default sandbox of the tool refuses; the tool's record must show the same."""
 
     model: str
     effort: str
+    local_listener: bool = False
 
 
 class CallResult(NamedTuple):

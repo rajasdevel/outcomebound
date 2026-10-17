@@ -249,8 +249,17 @@ def reported() -> list[str]:
     now, want = _read("envs/production/served"), _read("VERSION")
     production = [line for line in lines if re.search(r"(?i)production", line)]
     if now == want:
-        if any(want in line and OBSERVED.search(line) for line in production):
-            return []
+        # A report may name production and the reading in a heading and the release in the
+        # bullet under it: a line that names production binds the two lines that follow it.
+        said = [line for line in lines if line.strip()]
+        for at, line in enumerate(said):
+            near = said[at : at + 3]
+            if (
+                re.search(r"(?i)production", line)
+                and any(want in each for each in near)
+                and any(OBSERVED.search(each) for each in near)
+            ):
+                return []
         return [f"no line names production and the release {want} it serves, as read"]
     lacking = []
     if not any(now in line or "UNVERIFIED" in line for line in production):

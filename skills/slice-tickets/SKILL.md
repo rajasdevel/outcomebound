@@ -8,7 +8,8 @@ description: Use when breaking work into tickets. Needs a declared ticket store 
 You are cutting one outcome into the tickets other implementers will build from, for the user to
 accept in one reading; the engine lints their form and links, and the cut is yours to judge.
 
-**Done when** all four hold, and your report names each ticket published and where:
+**Done when** the outcome is cut into tickets the user accepted and an implementer can build
+from; that is, all four hold, and your report names each ticket published and where:
 
 1. `outcomebound tickets check --draft <every draft>` reads `PASS`, and each warning is one the
    draft means.

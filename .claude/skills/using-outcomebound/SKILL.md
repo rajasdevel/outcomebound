@@ -8,9 +8,27 @@ description: Use when unsure how much design, testing, review or process a task 
 Size the engineering to the result the user or system needs, and size the whole plan, not only
 each step.
 
-## Select mechanisms
+## The default
 
-The ids below are the ones a project's `local` guidance names on its Mechanisms line.
+The default is no mechanism: do the task and run the checks the completion bar names. Try these
+approaches in order; the work is done when all four inputs hold, the checks and gates the bar
+names included, and not before:
+
+1. Is the need real? A part the outcome does not need (a feature, an option, a flexibility) is
+   left out.
+2. Does the codebase, the standard library, the platform or an installed dependency already meet
+   it? Use it before new code.
+3. The smallest change that meets the completion bar.
+
+Check the approach you take with the smallest test, command or observation that settles its
+changed risk, not every check the project has. Report an omission only where it changes a
+decision or leaves a risk.
+
+## Add a mechanism only where its condition holds
+
+The ids are the ones a project's `local` guidance names on its Mechanisms line. Add a mechanism
+one at a time, where its condition holds and nothing already done covers it, and before the
+action that needs it: a failing test before the code, a spec before the interface it settles.
 
 | id | If the task needs… | Use… |
 | --- | --- | --- |
@@ -26,14 +44,22 @@ The ids below are the ones a project's `local` guidance names on its Mechanisms 
 
 Skip a mechanism whose only justification is habit, diff size, or generic caution. A project
 document that suggests a note, a record, the full suite or a review for every change sets no
-floor: follow what it requires, and apply what it only suggests where the change warrants it,
-saying in the report what you left out and why. A step is required where a check, hook, CI job or
+floor: follow what it requires, and apply what it only suggests where the change warrants it.
+A step is required where a check, hook, CI job or
 ruleset enforces it, or where the text says it is required; it is suggested where the text
 recommends it, such as "should", "recommended" or "consider". A change that is only text for
 people, or mechanical (a format fix, a rename), meets no row above by its size: it needs no
 independent review and no full suite unless a row's condition holds or the project requires them.
 A policy gate that passes shows a match with a rule the project configured; it does not show that
 the product works, and it is no one's approval of this particular action.
+
+## A change to code
+
+Before writing, list what the change reaches: callers, tests, fixtures, configuration, exports.
+That list is the scope, not new work: only what the outcome and the completion bar need goes
+into it. A fix removes the cause once, where it lives, and checks every caller that cause
+reached. Keep the codebase's structure and conventions; code you move or merge keeps its
+validation and error handling. Prefer deleting to adding.
 
 ## Text a model reads
 
