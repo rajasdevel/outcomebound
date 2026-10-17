@@ -93,8 +93,8 @@ design.
   that runs. In CI, run them with a read-only token and no secrets
   ([floor design](docs/specs/floor/design.md)).
 - **A hook is a committed file that runs with your privileges.** OutcomeBound installs none. A
-  review must read every hook a pull request adds, and `outcomebound instructions check` reports
-  each one on every run.
+  review must read every hook a pull request adds. `outcomebound instructions check` reports the
+  hook entries in the harness configuration files it reads.
 - **A write can race a local writer.** The promise that `adopt` and `research ingest` never write
   through a symlink holds against the files in the target. It does not hold against another local
   process that swaps a directory for a symlink between the check and the write.
