@@ -1110,8 +1110,15 @@ def test_each_new_rule_refuses_with_exit_two_naming_where(
 
 @pytest.mark.parametrize(
     "text",
-    ["3.12 is the minimum", "#3 needs a rebase", "-5 degrees", "| a pipe", "=== a line",
-     "--- then words", "*.bak files stay"],
+    [
+        "3.12 is the minimum",
+        "#3 needs a rebase",
+        "-5 degrees",
+        "| a pipe",
+        "=== a line",
+        "--- then words",
+        "*.bak files stay",
+    ],
 )
 def test_text_that_opens_no_markdown_block_is_drawn(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], text: str

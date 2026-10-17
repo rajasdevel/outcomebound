@@ -101,7 +101,7 @@ def _nested_under_option(lines: list[str], index: int, options: dict[str, str]) 
             return False
         if _indent(line) < own:
             match = _OPTION.match(line) if above in candidates else None
-            return bool(match) and match["letter"] in options
+            return match is not None and match["letter"] in options
     return False
 
 
