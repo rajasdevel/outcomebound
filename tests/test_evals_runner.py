@@ -593,7 +593,11 @@ def _commit_of(changes: dict[str, bytes | None], base: str | None = None) -> str
 
     def git(*arguments: str, data: bytes | None = None) -> str:
         done = subprocess.run(
-            ["git", "-C", str(ROOT), *arguments], input=data, capture_output=True, env=env
+            # The hermetic config drops a container's global `safe.directory`; name this checkout.
+            ["git", "-c", f"safe.directory={ROOT}", "-C", str(ROOT), *arguments],
+            input=data,
+            capture_output=True,
+            env=env,
         )
         assert done.returncode == 0, done.stderr.decode()
         return done.stdout.decode().strip()
