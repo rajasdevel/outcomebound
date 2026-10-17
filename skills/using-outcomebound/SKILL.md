@@ -27,7 +27,10 @@ changed risk, not every check the project has. Run a check once for a set of cha
 long output in a file, and read each failure from that output rather than running the check
 again to see more; a result stands until something it covers changes. Before a pass or fail bar you did not set judges
 the change (a threshold, a monitor, a limit), see whether the unchanged base meets it: a bar the
-base already fails shows no regression, and goes to the person as a finding. Make independent reads and
+base already fails shows no regression, and goes to the person as a finding. On work that spans many changes,
+`outcomebound size --base <ref>` shows how far the change has grown against the base that matters
+(for stability work, the release in production) and how much of it is tests, docs or records; read
+it at each landing, and size again where what grew is not what the outcome needs. Make independent reads and
 checks in one step where the tools allow it. Report an omission only where it changes a decision
 or leaves a risk.
 

@@ -34,13 +34,6 @@ Do these steps first:
 5. A project that used `--done-skip` has its `Done` fact without the "is not run when" clause
    after the install. The Done commands are the same.
 
-### Added
-
-- `outcomebound size [<target>] [--base REF] [--json]`: how big a change is against a base, and
-  what kind of lines it holds (code, tests, docs, config, records). The default base is the merge
-  base of `HEAD` with the upstream of the branch, else with `origin/HEAD`. For stability work, name
-  the release tag in production with `--base`. The verb runs no project command and writes nothing.
-
 ### Removed
 
 - The finish check: the stop and prompt hook entries, the measurement of Done at install, the

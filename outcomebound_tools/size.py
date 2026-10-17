@@ -2,9 +2,10 @@
 (`docs/specs/size/design.md`).
 
 What this module decides: the base (`--base REF`, else the merge base of HEAD with the upstream of
-the current branch, else with `origin/HEAD`, else a refusal that names `--base`); the count (what
-`git diff --numstat` reports for the work tree against the base, plus the lines of each untracked
-file that Git does not ignore, read up to `UNTRACKED_BYTES`); and the kind of each path (`kind_of`,
+the current branch, else with `origin/HEAD`, else a refusal that names `--base`); the count
+(what `git diff-index --numstat` reports for the work tree against the base, plus the lines of
+each untracked file that Git does not ignore, read up to `UNTRACKED_BYTES`); and the kind of
+each path (`kind_of`,
 first match wins). The report is one line per kind, a total, and the share of added lines that are
 not `code`. Exits: 0 a report; 1 Git failed or the base cannot be found; 2 a usage error.
 
