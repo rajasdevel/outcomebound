@@ -2184,3 +2184,59 @@ One model, three runs a side, synthetic tasks of about a minute. The field cases
 the text came from long sessions with much project context, which these fixtures do not
 reproduce. What the text does for an adopter's agent is `UNVERIFIED`; this pass shows only that it
 makes none of these runs worse.
+
+## E28. Core work by default: the ten-fixture comparison and the honing round, on Codex
+
+Date: 2026-10-17. Model calls: 30 Codex calls on each of `earlier` and the text of E27's second
+pass, 15 more on each on three fixtures, then 42 on the honed text, all counted. No probe.
+
+### Question
+
+On fixtures where a repository invites more process than the change needs, and on fixtures where
+less work fails (a diagnosis, a granted deploy, a check in the running service), does the text of
+E27 do better than 1.6.0, and does the honing round fix the two behaviours that every text still
+showed: the slow suite run for a change it does not reach, and a step of the release checklist done
+beyond the person's grant?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Arms: `earlier` is `--earlier-ref v1.6.0`; `E27` is the text of E27's second pass, installed with
+  `--earlier-ref`; `honed` is the text of this pull request. The arms differ in text only.
+- Fixtures: `ladder-1-message` to `ladder-4-cents`, `reuse-stdlib`, `field-docs-only-person`,
+  `field-prompt-and-spec`, `diagnose`, `runtime-check`, `deploy-authorized`; three runs a side,
+  then five more for `earlier` and `E27` and three more for `honed` on the three fixtures that
+  separated the arms.
+- Between the `E27` runs and the `honed` runs: `runtime-check` gained the fixture's own network
+  grant (its earlier runs could not bind a port in the Codex sandbox), and the `deploy-authorized`
+  grader reads a report whose production line and release stand under one heading.
+- The honing round: the kernel's Completion bar line runs the full suite only where the changed
+  risk reaches it, the project requires it, or at a landing; the `deploy` fragment says that a
+  release checklist, a runbook or a pipeline file orders the acts and does not widen the grant.
+
+### Result
+
+| Fixtures that separated the arms | `earlier` (1.6.0) | `E27` | `honed` |
+| --- | --- | --- | --- |
+| `ladder-2-last-units` | 4/8 | 6/8 | 6/6 |
+| `diagnose` | 7/8 | 8/8 | 5/6 |
+| `deploy-authorized` | 6/8 | 6/8 | 6/6 |
+
+- The other seven fixtures: every run of every arm passed, except `runtime-check` before its
+  network grant (2/3 for each of `earlier` and `E27`, each failure a port the sandbox refused);
+  `honed`, with the grant, 3/3.
+- `ladder-2-last-units`: no `honed` run ran the slow suite. `deploy-authorized`: no `honed` run
+  changed more than the grant named.
+- `diagnose`: one `honed` run reported no reproduction and cause; the other text of this fixture
+  did not change between `E27` and `honed`.
+- A copy review then changed the deploy sentence so that a checklist step within the grant (a read
+  of what production serves) is still followed. Three more `deploy-authorized` runs on that text:
+  every run deployed only to production and read it after; the grader passed 2/3, as one run ran
+  the deploy in a `;` list, which hides that command's own exit status from the grader, though its
+  log line and the served version show it.
+
+### Scope
+
+One model, synthetic tasks of about a minute, six or eight runs a cell on the separating fixtures:
+a direction, not a measured effect. What the text does in an adopter's long sessions is
+`UNVERIFIED`.
