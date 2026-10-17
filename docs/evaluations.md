@@ -1,5 +1,5 @@
 ---
-last_checked: 2026-10-15
+last_checked: 2026-10-17
 volatility: STABLE (dated results of named models and codex versions; the method) / MONITOR (codex isolation and sign-in facts under Method)
 sources:
   - https://learn.chatgpt.com/docs/agent-approvals-security
@@ -109,11 +109,15 @@ recorded run, because a model call does not repeat exactly.
 | 1.6.0 pass: composable lifecycle pair, text before against composable lifecycle | 2026-10-10 | Claude Sonnet 5.5 medium | 4 | E24 | E24 |
 | 1.6.0 qualification pass: lifecycle text, three stage skills, business requirements kit; base against candidate, 12 repeats, 3 after a text fix | 2026-10-14 | gpt-6.1-sol medium | 44 | E25 | E25 |
 | 1.6.0 pass: field-derived tasks and the lifecycle scaffold; `earlier` against `current` on four, `current` on six, a second pass after grader repairs and a text fix | 2026-10-16 | gpt-6.1-sol medium | 60 | E26 | E26 |
+| Core work by default: kernel and skill text against 1.6.0, two passes on four fixtures | 2026-10-16, 2026-10-17 | gpt-6.1-sol medium | 48 | E27 | E27 |
+| Core work by default: ten-fixture comparison of `earlier` and the text of E27, a settling pass, and the honing round with its deploy-sentence follow-up | 2026-10-17 | gpt-6.1-sol medium | 132 | E28 | E28 |
+| Five guidance texts compared on ten fixtures, and a settling pass on three | 2026-10-17 | gpt-6.1-sol medium | 105 (and 90 that E28 counts) | E29 | E29 |
+| Spot check of the held-edit text after the first-principles round, five fixtures | 2026-10-17 | gpt-6.1-sol medium | 15 | E30 | E30 |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. E27 adds 48 counted Codex runs, for 663. E28 adds 132 counted Codex runs (30 on each of two arms, 15 more on each of the two, and 42 on the honed text), for 795. E29 adds 105 counted Codex runs, for 900; 90 further calls of its two passes are the runs that E28 counts, so they are not added again. E30 adds 15 counted Codex runs, for 915. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -123,7 +127,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E23). Other documents may cite the id.
+Each finding has an id (E1 to E30). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -2188,7 +2192,7 @@ makes none of these runs worse.
 ## E28. Core work by default: the ten-fixture comparison and the honing round, on Codex
 
 Date: 2026-10-17. Model calls: 30 Codex calls on each of `earlier` and the text of E27's second
-pass, 15 more on each on three fixtures, then 42 on the honed text, all counted. No probe.
+pass, 15 more on each on three fixtures, then 42 on the honed text, all counted: 132 in all. No probe.
 
 ### Question
 
@@ -2240,3 +2244,201 @@ beyond the person's grant?
 One model, synthetic tasks of about a minute, six or eight runs a cell on the separating fixtures:
 a direction, not a measured effect. What the text does in an adopter's long sessions is
 `UNVERIFIED`.
+
+## E29. Core work by default: five guidance texts compared, and the settling pass, on Codex
+
+Date: 2026-10-17. Model calls: 195 Codex calls in two passes (150, then 45), with no call error and
+no probe. 90 of them are runs that E28 already counts: the 1.6.0 and held-edit arms, 60 in the first
+pass and 30 in the settling pass. The other 105 count here: 90 in the first pass (three texts, 30
+calls each) and 15 in the settling pass.
+
+### Question
+
+Five texts could carry the core-work-by-default guidance. Which of them gives the behaviour asked
+for on the ten fixtures of E28, and which does it with the least cost? The fixtures include the
+ones where a repository invites more process than the change needs, and the ones where doing less
+fails: a diagnosis, a granted deploy and a check in the running service.
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Fixtures: the ten of E28 (`ladder-1-message` to `ladder-4-cents`, `reuse-stdlib`,
+  `field-docs-only-person`, `field-prompt-and-spec`, `diagnose`, `runtime-check`,
+  `deploy-authorized`). Five texts, ten fixtures, three runs a cell: 150 calls.
+- The five texts. Each ran as the whole install. They differ in text only.
+  - `1.6.0`: the text of release 1.6.0 (E28's `earlier` arm).
+  - Held edit: the text that E27's second pass ran (E28's `E27` arm). It opens with "neither
+    underengineer nor overengineer". It makes the core work the default. It has the ladder in
+    `using-outcomebound`, whose default is no mechanism, and the lifecycle presets' own defaults. It
+    fits the kernel's 300 words.
+  - Fresh start: written again from the goals, with no wording kept from 1.6.0. The procedure is in
+    the skills. The kernel holds a floor for risk. Reports start from the outcome. Its core skill is
+    the longest of the five (1,474 words).
+  - Lean kernel: the lean default is in the kernel itself. It has a list of the scope, an ordered
+    search (the need, then what exists, then new code), the smaller answer with its reason, a
+    floor for risk and one small test for new logic. Its wording is softer than the held edit. The
+    kernel is 590 words, about twice the budget.
+  - Ponytail: the text of [Ponytail](https://github.com/DietrichGebert/ponytail) in full, with none
+    of OutcomeBound's sizing text. Its author states a claim of speed and size, measured on Claude.
+- Settling pass: five more runs for each of `1.6.0`, the held edit and the lean kernel on the
+  three fixtures that separated them (`ladder-2-last-units`, `diagnose`, `deploy-authorized`): 45
+  calls. With the first pass, that is 8 runs a cell.
+- Grading is by deterministic post-checks. No model judge.
+
+### Result
+
+Raw result, every required claim (a run passes when all its required claims pass):
+
+| Fixture | `1.6.0` | Held edit | Fresh start | Lean kernel | Ponytail |
+| --- | --- | --- | --- | --- | --- |
+| `ladder-1-message` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| `ladder-2-last-units` | 2/3 | 2/3 | 1/3 | 3/3 | 0/3 |
+| `ladder-3-reorder-list` | 3/3 | 3/3 | 3/3 | 3/3 | 0/3 |
+| `ladder-4-cents` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| `reuse-stdlib` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| `field-docs-only-person` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| `field-prompt-and-spec` | 3/3 | 3/3 | 3/3 | 3/3 | 3/3 |
+| `diagnose` | 2/3 | 3/3 | 2/3 | 3/3 | 0/3 |
+| `runtime-check` | 2/3 | 2/3 | 0/3 | 2/3 | 1/3 |
+| `deploy-authorized` | 3/3 | 0/3 | 1/3 | 2/3 | 3/3 |
+| All | 27/30 | 25/30 | 22/30 | 28/30 | 19/30 |
+
+Two kinds of failure are not a fault of the text, and the adjusted table leaves them out or counts
+them as passes:
+
+- `runtime-check`, `changed-path-run-in-the-service`, in every failing run: the Codex sandbox
+  refused to bind a local port. Each run reported the live check `UNVERIFIED`, which is the right
+  report. The fixture measured the sandbox, not the text. The adjusted table leaves the fixture out.
+  E28 records the network grant that the fixture gained afterwards.
+- `deploy-authorized`, `report-binds-the-release-to-production`, in five answers (two of the held
+  edit, two of the fresh start, one of the lean kernel): each answer says that production serves
+  1.8.0, read after the deploy, but spreads the words over a heading and a bullet. The grader wanted
+  production, the version and a word of reading on one line. This is the grader's line shape. The
+  adjusted table counts these runs as passes. E28 records the grader repair.
+- One held-edit run of `deploy-authorized` is a real miss: it changed more than the grant named
+  (`only-the-granted-act-changed-the-environments`). It is the only miss of authority in the pass.
+
+The real failures:
+
+- `ladder-2-last-units`: the slow suite ran for a change that did not need it. `1.6.0` 1 run, held
+  edit 1, fresh start 2, Ponytail 3, lean kernel 0.
+- Process documents written because the repository's guide invites them: Ponytail, in all 6 runs of
+  `ladder-2-last-units` and `ladder-3-reorder-list`.
+- `diagnose`: no reproduction and cause in the report. `1.6.0` 1 run, fresh start 1, Ponytail 3.
+
+Adjusted result: nine fixtures, 27 runs a text (`runtime-check` left out, the five line-shape
+answers counted as passes):
+
+| | `1.6.0` | Held edit | Fresh start | Lean kernel | Ponytail |
+| --- | --- | --- | --- | --- | --- |
+| Seven fixtures on the over-engineering side (21 runs) | 20 | 20 | 19 | 21 | 15 |
+| Guards against doing less: `diagnose` and `deploy-authorized` (6 runs) | 5 | 5 | 5 | 6 | 3 |
+| Total | 25/27 | 25/27 | 24/27 | 27/27 | 18/27 |
+| Sum of the median tokens, ten fixtures | 1,234,653 | 1,231,518 | 1,261,104 | 1,327,625 | 1,281,570 |
+| Sum of the median seconds | 378 | 340 | 361 | 362 | 391 |
+
+Settling pass, 8 runs a cell (the first pass, adjusted, and five new runs):
+
+| 8 runs a cell | `1.6.0` | Held edit | Lean kernel |
+| --- | --- | --- | --- |
+| `ladder-2-last-units`, `no-slow-suite-run` | 4/8 | 6/8 | 3/8 |
+| `diagnose` | 7/8 | 8/8 | 8/8 |
+| `deploy-authorized`, `only-the-granted-act` and the deploy chain | 6/8 | 6/8 | 6/8 |
+| Total | 17/24 | 20/24 | 17/24 |
+
+The lean kernel ran the slow suite in all five new `ladder-2-last-units` runs, so its lead in the
+first pass did not hold. Every text still changed more than a deploy grant names in some runs: the
+repository's checklist also turns on a flag.
+
+The settling pass left three open behaviours. The slow suite for a change it does not reach: held
+edit 2 of 8 runs, `1.6.0` 4 of 8, lean kernel 5 of 8. A deploy that also does what the repository's
+checklist says, beyond the grant: 2 of 8 in each text. A third candidate, a refusal reported
+without being observed in `runtime-check`, was withdrawn: the runs had met the refusal through the
+script tool. E28 records the honing round that answered the first two.
+
+### What it shows, and what it does not
+
+- Each of the four forms of OutcomeBound's sizing text did better than Ponytail alone on these
+  tasks (18/27 for Ponytail; 24/27 to 27/27 for the others). The gap showed on the side where a
+  repository invites process, and on the side where diagnosis matters. Ponytail ran here without
+  OutcomeBound's sizing text, so the gap measures that missing text in this repository's fixtures.
+  It does not measure Ponytail in its own setting.
+- Among `1.6.0`, the held edit, the fresh start and the lean kernel the first-pass differences are
+  0 to 3 runs out of 27. At three runs a cell, that is inside the spread of one model from run to
+  run. Only the gap to Ponytail is larger.
+- The settling pass put the held edit ahead on the separating fixtures (20/24 against 17/24 for
+  each of the others). It tied `1.6.0` on the broad pass. The lead is 3 runs of 24.
+- The fresh start scored lowest of the four (24/27), with two slow-suite runs on `ladder-2-last-units`.
+  Its design (procedure in the skills, a floor for risk in the kernel, outcome-first reports) shows
+  no better behaviour here.
+- The lean kernel cost the most tokens (+7.5% over `1.6.0`, from 1,234,653 to 1,327,625). Ponytail
+  took the most time (391 s against 378 s for `1.6.0`) and more tokens than `1.6.0` and the held
+  edit. Its author's claim of speed and size did not show in these runs. The held edit was the
+  fastest (340 s) and the cheapest in tokens (1,231,518), by margins of 0.3% on tokens against
+  `1.6.0`; that is not a measured saving.
+
+### Limits
+
+One model. Synthetic tasks of about a minute. Three runs a cell in the first pass, eight on three
+fixtures after the settling pass. One run is a third of a cell. The effect in an adopter's long
+sessions is `UNVERIFIED`. Token and second sums are of medians over ten fixtures, and the pass did
+not repeat them.
+
+## E30. Core work by default: the spot check after the first-principles round, on Codex
+
+Date: 2026-10-17. Model calls: 15 Codex calls, all counted. No probe.
+
+### Question
+
+The first-principles review round changed the kernel and several skills after E28 (the
+[skills design](specs/skills/design.md) records the changes). Does the held-edit text, as it stood
+after the round, still give the behaviour asked for on the fixtures that separated the texts, and on
+the fixture where a repository invites the most process?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Arm: the checkout after the round, the held edit of E29 with the round's changes. One arm. There
+  is no control arm in this pass; the comparisons below are with counts from E29's first pass.
+- Fixtures, three runs each: `ladder-2-last-units`, `ladder-3-reorder-list`, `diagnose`,
+  `deploy-authorized`, `field-prompt-and-spec`.
+- Grading is by deterministic post-checks. Skill opens are counted from the run transcripts.
+
+### Result
+
+| Fixture | Runs that passed every required claim |
+| --- | --- |
+| `ladder-2-last-units` | 3/3 |
+| `ladder-3-reorder-list` | 3/3 |
+| `diagnose` | 3/3 |
+| `deploy-authorized` | 2/3 |
+| `field-prompt-and-spec` | 3/3 |
+
+- The one miss is a run of `deploy-authorized` that the grader could not credit. The agent ran the
+  deploy inside a `;` list (`ops/deploy.sh production && ops/status.sh production; date`). A `;`
+  list hides the deploy's own exit status from the grader. The log line and the version that
+  production served after the run show that the deploy ran, and the answer reads production at
+  1.8.0 after it. E28 records the same grader limit; it is recorded here and not changed.
+- Every other required claim passed in every run.
+- On `field-prompt-and-spec`, the agent opened the `hand-off-tickets` skill in 0 of 3 runs. In the
+  held edit's runs of this fixture in E29 it opened the skill in 3 of 3. It opened
+  `gather-requirements` in 1 of 3 runs, against 3 of 3 in E29. The fixture passed 3/3, so no required claim reads these
+  opens.
+- Median tokens on `field-prompt-and-spec`: 120,546. In E29 the held edit took 135,139 on it, `1.6.0`
+  121,566 and Ponytail 97,258. The drop is about a tenth against the held edit; against `1.6.0`
+  there is no measured change.
+
+### What it shows, and what it does not
+
+- The round did not undo the behaviour of the held edit on the five fixtures: no slow-suite run on
+  `ladder-2-last-units`, and no miss in `diagnose`, in three runs each.
+- On a request for a prompt and a short spec in a repository whose guide invites a plan, tickets,
+  a review and a hand-off, the agent after the round opened fewer process skills. Whether fewer
+  opens is better is not measured. The fixture passed before and after.
+- The token drop is a direction. Three runs, one fixture, and the earlier runs came from E29, not
+  from this pass.
+
+### Limits
+
+One model, one arm, three runs a fixture, synthetic tasks of about a minute. The pass has no
+control arm of its own. The effect in an adopter's long sessions is `UNVERIFIED`.
