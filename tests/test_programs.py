@@ -4,8 +4,7 @@ The Windows branch runs here beside scratch folders (`windows=True`, a `PATHEXT`
 laid out as Git for Windows lays it out), and with job calls a test supplies (`FakeJobs`); what
 only a Windows process shows, that a job object ends a real tree, that `taskkill` does where
 there is no job, and that `sh.exe` runs a line, is settled by the Windows CI job, which runs the
-tests below that need Windows, `tests/test_finish_check.py` and the floor's tests against the
-real thing.
+tests below that need Windows and the floor's tests against the real thing.
 """
 
 from __future__ import annotations
@@ -25,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from outcomebound_tools import explorable_browser, finish_check, programs, validation
+from outcomebound_tools import explorable_browser, programs, validation
 from tests.portable import WINDOWS
 from tests.processes import running
 
@@ -785,10 +784,6 @@ def test_off_windows_a_command_starts_in_its_session_with_no_job_call(starts: St
     assert process.poll() is None
 
 
-def run_one_command(tmp_path: Path) -> None:
-    finish_check.run_one(tmp_path, "exit 0", 30)
-
-
 def run_one_claim(tmp_path: Path) -> None:
     validation._execute([sys.executable, "-c", "pass"], tmp_path, 30)
 
@@ -807,8 +802,8 @@ def run_one_eval_command(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "start",
-    [run_one_command, run_one_claim, run_one_page, run_one_eval_command],
-    ids=["finish-check", "validation", "explorable-browser", "eval-command"],
+    [run_one_claim, run_one_page, run_one_eval_command],
+    ids=["validation", "explorable-browser", "eval-command"],
 )
 def test_every_caller_that_starts_a_command_puts_it_in_a_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, start: Callable[[Path], None]
@@ -817,8 +812,6 @@ def test_every_caller_that_starts_a_command_puts_it_in_a_job(
     joined to a job and resumed: nothing else fails then, since a command without a job is
     stopped by `taskkill`, which only a loaded Windows machine shows to miss a process."""
 
-    if start is run_one_command and programs.posix_shell() is None:
-        pytest.skip("no POSIX shell to run a Done line")
     started: list[subprocess.Popen[bytes]] = []
     real = programs.start_tree
 
@@ -1021,94 +1014,3 @@ def test_a_real_command_is_in_its_job_and_has_run_nothing_when_it_is_resumed(
         programs.stop_tree(process)
         process.kill()
         process.wait()
-
-
-def test_alive_and_terminate_name_a_process_by_its_id() -> None:
-    """Breaks if a run that a record names reads as alive after it has ended, or as gone while
-    it runs, or if the ask to stop it does not reach it: the finish check's dead-run rule and
-    its superseding run rest on these two calls."""
-
-    process = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
-    try:
-        assert programs.alive(process.pid)
-        assert programs.terminate(process.pid)
-        process.wait(timeout=30)
-    finally:
-        with contextlib.suppress(OSError):
-            process.kill()
-    assert not programs.alive(process.pid)
-    assert not programs.alive(0) and not programs.alive(-1)
-    assert not programs.terminate(0)
-
-
-@pytest.mark.skipif(WINDOWS, reason="a new session and its id are POSIX")
-def test_a_detached_start_holds_none_of_the_starters_streams_and_leads_its_own_session(
-    tmp_path: Path,
-) -> None:
-    """Breaks if the run a codex stop starts keeps the stop's output open, so that the harness
-    waits for Done, or stays in the stop's session, which the harness may end with the hook."""
-
-    seen = tmp_path / "seen"
-    probe = (
-        "import os, stat, sys\n"
-        "null = os.stat(os.devnull)\n"
-        "streams = [os.fstat(n) for n in range(3)]\n"
-        "nulls = [stat.S_ISCHR(s.st_mode) and s.st_rdev == null.st_rdev for s in streams]\n"
-        "open(sys.argv[1], 'w').write(f'{os.getsid(0)} {os.getpid()} {all(nulls)}')\n"
-    )
-    process = programs.start_detached([sys.executable, "-c", probe, str(seen)])
-    process.wait(timeout=30)
-
-    session, pid, nulls = seen.read_text(encoding="utf-8").split(" ")
-    assert session == pid and int(session) != os.getsid(0)
-    assert nulls == "True"
-
-
-def test_a_detached_start_on_windows_has_no_console_its_own_group_and_leaves_the_job_where_it_may(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Breaks if the Windows start gives the run a console, keeps it in the stop's process
-    group, or fails where the stop's job refuses a breakaway instead of starting it inside the
-    job. Laid out with a `Popen` the test records, on any platform."""
-
-    calls: list[dict[str, Any]] = []
-
-    class Refusing:
-        def __init__(self, argv: list[str], **options: Any) -> None:
-            calls.append(options)
-            if options["creationflags"] & programs.CREATE_BREAKAWAY_FROM_JOB:
-                raise PermissionError("the job allows no breakaway")
-
-    monkeypatch.setattr(programs.subprocess, "Popen", Refusing)
-
-    programs.start_detached(["run"], windows=True, cwd="here")
-
-    group = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
-    flags = programs.DETACHED_PROCESS | group
-    assert [call["creationflags"] for call in calls] == [
-        flags | programs.CREATE_BREAKAWAY_FROM_JOB,
-        flags,
-    ]
-    for call in calls:
-        assert call["stdin"] == call["stdout"] == call["stderr"] == subprocess.DEVNULL
-        assert call["close_fds"] is True and call["cwd"] == "here"
-        assert "start_new_session" not in call
-
-
-@pytest.mark.skipif(
-    not Path("/proc/self/stat").exists(), reason="a zombie's state is read in /proc"
-)
-def test_an_ended_child_not_yet_reaped_is_not_alive() -> None:
-    """Breaks if a zombie reads as running: in a container with no init, an ended background run
-    stays a zombie, and a hook that reads it as alive waits on it for ever."""
-
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
-    deadline = time.monotonic() + 30
-    while Path(f"/proc/{child.pid}/stat").read_bytes().rpartition(b")")[2].split()[0] != b"Z":
-        assert time.monotonic() < deadline, "the child never ended"
-        time.sleep(0.05)
-
-    try:
-        assert not programs.alive(child.pid)
-    finally:
-        child.wait()

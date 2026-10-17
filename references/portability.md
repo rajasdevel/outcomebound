@@ -7,14 +7,13 @@ for your harness. Then read the notes under the table.
 ## Machine requirements
 
 The installed engine needs Python 3.10 or later and Git for repository operations. Its Python
-imports and build backend use only the standard library. A finish check also needs a POSIX
-shell: `/bin/sh` on macOS and Linux, or the `sh.exe` supplied by Git for Windows. Its Done
-commands need the project's own check tools. The installed command uses Python; the checkout
-launcher uses `sh`.
+imports and build backend use only the standard library. The project's Done commands need the
+project's own check tools. The installed command uses Python; the checkout launcher uses `sh`,
+which Git for Windows supplies on Windows.
 
 Charts and diagrams on an explorable page load pinned libraries from a CDN. Automatic browser
 checks need a Chromium-family browser. These are feature requirements. They are not required
-to adopt the contract or run the finish hook. The [dependency inventory](../docs/dependencies.md)
+to adopt the contract. The [dependency inventory](../docs/dependencies.md)
 lists installation, feature, development, evaluation and CI requirements, including the current
 limits of the Git and offline-browser evidence.
 
@@ -26,22 +25,22 @@ limits of the Git and offline-browser evidence.
   import block into that file.
 - `adapters/harnesses.json` is the harness table. It is the source of record for this page.
   `adopt` reads these fields of each row: `skill_install_path`, `pointer_mechanism`, `verified`,
-  `reads_agents_md` and `finish_hook`. `outcomebound instructions check` reads what each row says
+  and `reads_agents_md`. `outcomebound instructions check` reads what each row says
   the harness loads (`reads`, `nested`, `overrides` and `config`) and its `recheck_on` date.
 
 ## The harnesses
 
-| Harness | `--harness` | Skills folder | Reaches `AGENTS.md` through | Finish hook | Verified |
-| --- | --- | --- | --- | --- | --- |
-| Claude Code | `claude-code` | `.claude/skills/` | `CLAUDE.md` with `@AGENTS.md` | `Stop` and `UserPromptSubmit`, in `.claude/settings.json` | 2026-08 |
-| Codex | `codex` | `.agents/skills/` | `AGENTS.md` | `Stop` and `UserPromptSubmit`, in `.codex/hooks.json` | 2026-09 |
-| Amp | `amp` | `.agents/skills/` | `AGENTS.md` | none | 2026-08 |
-| Gemini CLI | `gemini` | `.gemini/skills/` | `GEMINI.md` with `@AGENTS.md` | none | 2026-08-23 |
-| Cursor | `cursor` | `.cursor/skills/` | `AGENTS.md` | none | 2026-08-23 |
+| Harness | `--harness` | Skills folder | Reaches `AGENTS.md` through | Verified |
+| --- | --- | --- | --- | --- |
+| Claude Code | `claude-code` | `.claude/skills/` | `CLAUDE.md` with `@AGENTS.md` | 2026-08 |
+| Codex | `codex` | `.agents/skills/` | `AGENTS.md` | 2026-09 |
+| Amp | `amp` | `.agents/skills/` | `AGENTS.md` | 2026-08 |
+| Gemini CLI | `gemini` | `.gemini/skills/` | `GEMINI.md` with `@AGENTS.md` | 2026-08-23 |
+| Cursor | `cursor` | `.cursor/skills/` | `AGENTS.md` | 2026-08-23 |
 
-"None" in the finish-hook column means that `adopt --finish-check` has no entry for that
-harness. The [finish-check design](../docs/specs/finish-check/design.md) says why for each
-harness.
+`adopt` installs no hook for any harness. Versions before 1.7.0 wrote finish-check entries into
+`.claude/settings.json` and `.codex/hooks.json`; the next `adopt` takes them out (the
+[finish-check design](../docs/specs/finish-check/design.md)).
 
 Before `adopt` writes anything, it refuses a harness that the table does not name, `generic`
 aside. It also refuses a row that is not verified, and a row whose route cannot load `AGENTS.md`.
@@ -54,9 +53,6 @@ The refusal lists the harnesses that can.
   already imports `@AGENTS.md` or is a link to `AGENTS.md`.
 - With none of those files, Claude Code reads `AGENTS.md` itself. It does this from v2.1.277.
   `adopt` relies on it from v2.1.281, the version from which every session reads `AGENTS.md`.
-- The finish check is observed in a finite native CLI sequence with Claude Code 2.1.292.
-  [The evaluation record](../docs/evaluations.md#separate-native-hook-observations) states its
-  cases and limits. This does not establish every harness version or desktop environment.
 
 ### Codex
 
@@ -65,25 +61,6 @@ The refusal lists the harnesses that can.
   edit them, and it cannot write the `.agents/` folders of the workspace fragment.
 - With `--add-dir <repository>/.agents`, a session can write them. This is observed with
   codex-cli 0.159.2 on 2026-10-01. To commit, add `--add-dir <repository>/.git` as well.
-- The finish check is observed in a finite native CLI sequence with Codex CLI 0.160.1.
-  [The evaluation record](../docs/evaluations.md#separate-native-hook-observations) states its
-  cases and limits, including the later installed-wheel hook check. Desktop behavior and
-  native Windows/Linux hook behavior remain UNVERIFIED.
-- The 1.6.0 background finish check is observed with codex-cli 0.162.1 on macOS on 2026-10-16:
-  in two `codex exec` turns of one session, run with `--dangerously-bypass-hook-trust` on a
-  throw-away project, the turn-start entry wrote its mark and each stop started the run, which
-  recorded `FAIL` after the first turn broke the tests and `PASS` after the second fixed them; no
-  hold reached the model, because the second turn fixed the failure before its stop. Hooks a person
-  trusts in `/hooks`, and the desktop app, are not observed.
-- The hooks page says that the `reason` of a hold becomes a new user prompt, which the model sees,
-  and that a `systemMessage` is shown as a warning in the UI or event stream. Thus the model sees a
-  hold, and only the person sees a PASS, a known failure or an `UNVERIFIED`.
-- Codex keeps the trust of a hook against the hash of the hook, and it skips a new or changed hook
-  until a person trusts it in `/hooks`. A change to Done or to `--finish-timeout` changes the
-  entry, and `adopt` then tells you to trust the entry again. Which fields the hash covers is
-  `UNVERIFIED`. Whether a trust carries to a worktree path is `UNVERIFIED`.
-- A Codex hook runs in the working directory of the session. If the session starts in the main
-  checkout and the agent works in a worktree, the hook checks the main checkout, not the worktree.
 
 ### Amp
 
@@ -96,12 +73,6 @@ Gemini CLI reads `GEMINI.md`, not `AGENTS.md`. The import block in `GEMINI.md` b
 
 ### Cursor
 
-- Cursor also reads `CLAUDE.md`. By default it runs the hooks of Claude Code from
-  `.claude/settings*.json`, with no loop limit. Only the `.cursor/hooks.json` format of Cursor can
-  set a limit (hooks and third-party hooks pages, read 2026-10-01).
-- So a finish-check entry that you installed for Claude Code also runs in Cursor. The entry holds
-  a finish only when its input says `stop_hook_active` is false. Cursor does not document that it
-  sends this field. Whether the entry works in Cursor is `UNVERIFIED`.
 - Cursor also reads `.agents/skills/` and `.claude/skills/`. If you adopt Codex or Claude Code
   beside Cursor, a skill sits in two folders that Cursor reads. Whether Cursor lists that skill
   twice is `UNVERIFIED`.

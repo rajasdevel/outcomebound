@@ -42,7 +42,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | A test-first hand-off took a smaller model from 6 to 9 of 9 | E17, the hand-off comparison, and E18, its rerun | gpt-6-luna at xhigh, three small tasks, 9 runs a cell. The whole gain is one row of one ticket, in both passes |
 | Efficiency is an aim, not a measured result | E6, E9, and the token columns of the ladder | Cost per finished task is not measured |
 | OpenAI models through Codex; Claude Code controller passes | Model choice, E19, E20, E23, E24, Runs per cell and power | Most Codex comparisons have three runs a cell; hand-off has nine. E19 and E20 have one run per case and arm; E23 has three runs a side |
-| The floor, the finish check and the instruction check | The engine's test suite | Not measured by these evals |
+| The floor and the instruction check | The engine's test suite | Not measured by these evals |
 | The new-project reference changes what an agent does with an idea: on the weak idea 0 of 3 to 3 of 3, on the spike that misses its bar 0 of 3 to 3 of 3, on the idea that needs real people 0 of 3 to 2 of 3 | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side; the final text ran on three fixtures. No run read the reference for a one-off script, and the planted-defect claim of `new-project-skeleton` cannot be seen on the Claude arm |
 | An agent onboards a repository with the guide `--detect` names: on `onboard-signals` 0 of 3 to 2 of 3, and the control `onboard-plain` 3 of 3 on both sides | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side. The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite |
 
@@ -1088,7 +1088,7 @@ one small repository for each fixture.
 
 - **Underengineering.** No fixture yet separates the arms (E8). The model sized the one planted
   risk right on its own. Whether the text of OutcomeBound prevents fragile or unchecked work is
-  not measured. The suite tests the deterministic checks of the engine (the floor, the finish
+  not measured. The suite tests the deterministic checks of the engine (the floor, the instruction
   check). These evals do not.
 - **The sizing paragraph.** Its effect is `UNVERIFIED` (E9). Three runs a cell cannot show a small
   effect, and it ran on one model.

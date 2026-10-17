@@ -31,7 +31,7 @@ definitions where the harness has them.
 **Mechanisms** — `spec` when a wire format or block schema changes; `review` when a change alters
 what the kernel, the contract, a skill, a fragment or a template tells a model to do, and when a
 change adds an exemption to a gate or narrows what a gate counts (the floor, the instruction
-audit, the finish check, a tickets refusal): that review tries to pass the gate without the ruling
+audit, a tickets refusal): that review tries to pass the gate without the ruling
 it requires, and the pull request links it; `broad-suite` once at each landing, never inside a
 delegate.
 **Completion bar** — `make gate`, `make check` and `make test`, green at the tip that lands;

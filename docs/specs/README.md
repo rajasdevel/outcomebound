@@ -18,10 +18,11 @@ the same change.
   `outcomebound explorable`.
 - [instructions](instructions/design.md): read-only checks on the instruction files of a project,
   `outcomebound instructions`.
-- [finish-check](finish-check/design.md): at the stop hook of `claude-code` and `codex`, the
-  recorded Done commands run, and a failure goes back to the agent. The verb is
-  `outcomebound finish-check`. It also holds the result contract of `outcomebound validation`
-  (`outcomebound_tools/validation.py`, plan schema `schemas/validation-plan.schema.json`).
+- [finish-check](finish-check/design.md): retired in 1.7.0. `adopt` installs no hook; the design
+  holds the reason, the way an install takes out the entries that 1.6.0 wrote, and the stub that
+  the verb `outcomebound finish-check` is now. The result contract of `outcomebound validation`
+  (`outcomebound_tools/validation.py`, plan schema `schemas/validation-plan.schema.json`) and the
+  process control of `programs.py` are in the [floor](floor/design.md) design.
 - [sources](sources/design.md): requirement sources, `outcomebound sources`. Import a markdown or
   text source into items, and check the ledger that disposes of each item.
 - [review](review/design.md): the review file and `outcomebound review check`: every finding ends in a disposition.
@@ -48,8 +49,10 @@ These rules are for the maintainers of this repository and its own designs only.
   restate that file.
 - A draft has `status: draft`. The top of a draft says what must happen before it lands. The rules
   above do not bind a draft until it lands.
+- A retired design has `status: retired`. It keeps why the area went, what an upgrade from it does,
+  and what remains of it in the engine.
 - A design for a gate (a check whose verdict holds a turn, fails a run or refuses a write: the
-  floor, the instruction audit, the finish check, a tickets refusal) states in its Outcome the
+  floor, the instruction audit, a tickets refusal) states in its Outcome the
   one invariant the gate holds, in one sentence, and lists in its Edges the data each verdict
   reads and who can write it. A verdict rests on data the gated change can write only where the
   Edges say so. An exemption names what it exempts by its exact bytes or identity, never by one

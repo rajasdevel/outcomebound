@@ -1,6 +1,6 @@
 ---
 name: adopt-outcomebound
-description: Use when onboarding a repository to OutcomeBound, upgrading its install, or checking whether an install is current. Installs the contract and skills, measures the project's Done commands on the person's yes, and proposes only the project facts an agent would get wrong, each with the file that shows it.
+description: Use when onboarding a repository to OutcomeBound, upgrading its install, or checking whether an install is current. Installs the contract and skills, records the project's Done commands, and proposes only the project facts an agent would get wrong, each with the file that shows it.
 ---
 
 # Onboard a repository
@@ -10,8 +10,8 @@ checkout. Read the target's existing agent instructions and its dirty state firs
 preserved.
 
 You are done when the install is current (an install that exits 0 wrote and checked every record;
-`outcomebound adopt <target> --check` is for a later day or another clone), Done was
-measured or the report says why not, each line you proposed for the project's `local` guidance
+`outcomebound adopt <target> --check` is for a later day or another clone), each Done command
+was run once or the report says why not, each line you proposed for the project's `local` guidance
 cites the file that shows it, each fact the install reports `UNVERIFIED` is named, and what only the
 person can answer has gone to them as one decision brief. Write no overview of the repository: an
 agent reads the code, and a summary of it adds text without adding a fact.
@@ -23,10 +23,9 @@ agent reads the code, and a summary of it adds text without adding a fact.
    proposes `generic`. Each following line starts with `#`: a candidate it did not put in the
    command, an onboarding signal, a readiness line, and where this guide lives. Change the proposal
    only where the target shows it is wrong; the `--done` commands are the ones that settle done
-   here, in the order they run. Where the project's own text says a kind of change needs no Done
-   command (documentation only, say), record it with `--done-skip CMD GLOBS`, with the check those
-   changes do need as a Done command; propose none its text does not name. Outside a Git work tree
-   it refuses and names `git init`; on an empty repository it names the new-project route.
+   here, in the order they run. Propose no Done command that the project's own text does not name.
+   Outside a Git work tree it refuses and names `git init`; on an empty repository it names the
+   new-project route.
 2. Run that command. It writes three blocks into `AGENTS.md`: the contract; the project facts
    (Done, Setup, the CI test command, irreversible edges, precedence); and the pointers, the `local`
    fragment in full and a `- <condition>: read <path>` line per fragment and skill. It copies the
@@ -34,7 +33,9 @@ agent reads the code, and a summary of it adds text without adding a fact.
    the thirteen every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
    import a harness needs to load it, and `.outcomebound/manifest.json` last. It refuses a harness
    that would not load the contract. It also refuses to overwrite an owned file someone edited,
-   unless `--force` is given. Running it again from a newer release or checkout is the upgrade.
+   unless `--force` is given. Running it again from a newer release or checkout is the upgrade. An upgrade
+   from 1.6.0 also takes out the stop and prompt entries that the finish check wrote into
+   `.claude/settings.json` and `.codex/hooks.json`; since 1.7.0 `adopt` writes no hook.
 3. Report `outcomebound instructions check <target>`, which reads what each selected harness loads
    there as untrusted data, and what you read in those files' prose (the ones
    `adapters/harnesses.json` lists for the selected harnesses): what contradicts the contract, what
@@ -42,10 +43,10 @@ agent reads the code, and a summary of it adds text without adding a fact.
    check lists.
    Edit none of them. A review hit the person judges safe, they record themselves with
    `outcomebound instructions rule <target> <id>` at a terminal; never run that verb yourself.
-4. With the person's yes, and only after step 3, since it runs the repository's own code:
-   `outcomebound adopt <target> --verify` measures each Done command once, runs a failing one again
-   to tell a stable failure from a flake, and keeps a stable failure as a known failure. A Done that
-   needs a secret or a service reads as its command reads; say which.
+4. With the person's yes, and only after step 3, since it runs the repository's own code: run each
+   Done command once, and a failing one again to tell a stable failure from a flake. `adopt` runs
+   none. Report each as `PASS`, `FAIL` or `UNVERIFIED`. A Done that needs a secret or a service
+   reads as its command reads; say which.
 5. For a shared installation, check that the files it needs will survive the target's normal
    commit and checkout workflow. Use the manifest and the ignored-path warnings to inspect the
    intended shared paths; an unchanged repeat install can still have this problem. Review complete
@@ -64,7 +65,7 @@ agent reads the code, and a summary of it adds text without adding a fact.
 
 Propose lines for the project's `local` guidance (`.outcomebound/fragments/local.md`, from
 `$(outcomebound home)/templates/fragment-local.md`, selected with `--fragments local`) only from what
-the target shows: the signals `--detect` printed, a measurement's result, the CI and build files, and
+the target shows: the signals `--detect` printed, the result of a Done run, the CI and build files, and
 the history of fixes and reverts. Each line names the file or commit that shows it and goes in the
 slot the signal names. Keep a line only where an agent without it would make a mistake; leave out
 what a reader finds by opening the code or the README. Where a check can hold the fact, offer the
@@ -147,22 +148,13 @@ you take without an answer, and the work that does not wait on it goes on.
   reach the network.
 - A CI line that fails when the install drifts: `outcomebound adopt . --check` (`templates/ci/` has
   snippets). Never change CI, hooks, credentials or harness settings without the yes.
-- A finish check, for `claude-code` and `codex` only: `outcomebound adopt <target> --finish-check`
-  adds a stop-hook entry and a prompt-hook entry to that harness's settings, so that when the agent
-  ends a turn on a changed tree the Done commands run and a failure the turn caused goes back to it.
-  `outcomebound adopt --help` gives its timeout, its known failures and the environment it measures
-  in. It needs a Done command that names the project's interpreter or runner
-  (`.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the harness process's PATH),
-  and `outcomebound` on the harness process's PATH, which a harness launched from a desktop may not
-  share with the shell. Each person accepts the entry once in their harness, which the install
-  report names; when an install changes the `codex` entry, each person trusts it again in Codex
-  `/hooks`.
 
 ## Check and remove
 
 `outcomebound adopt <target> --check` reads each owned file as current, edited, stale or missing,
-exits with the count that is not current, and prints the Done measurement note apart from that
-count. `outcomebound adopt <target> --remove` takes out the owned blocks, files and imports, the
+exits with the count that is not current. A `hook` record that 1.6.0 wrote reads `stale` where its
+entry is unchanged, `edited` where a person changed it, or `missing` where it is gone, and names the
+entry; the next install takes an unchanged entry out. `outcomebound adopt <target> --remove` takes out the owned blocks, files and imports, the
 manifest last.
 
 ## Report

@@ -36,13 +36,11 @@ that may resume it needs it, and remove it only when the task is finished, its c
 from a kept branch, and nothing uncommitted or ignored in it is still needed. A worktree's commits
 land as the project's instructions or the goal envelope say work lands, the rule the tickets
 fragment also states; where none says, they stay on the worktree's branch, which the handoff names
-with how they should land as a decision brief. The finish-check hook checks the checkout its input's
-working directory names, which may not be a worktree you work in from elsewhere: before you land
-work from a worktree, run the Done commands in that worktree and report their verdict. Work in another
-repository in a session started there, so that its hooks and sandbox apply; where the person asks
-this session to change it, ask once for it as a writable root, and until then hold only the items
-that write there; run its Done commands yourself, and say so in your report, since its hooks do not run
-in this session.
+with how they should land as a decision brief. Before you land work from a worktree, run the Done
+commands in that worktree and report their verdict. Work in another repository in a session started
+there, so that its hooks and sandbox apply; where the person asks this session to change it, ask
+once for it as a writable root, and until then hold only the items that write there; run its Done
+commands yourself, and say so in your report, since its hooks do not run in this session.
 The machine is shared: before a heavy command (a full suite, a build, an image pull) check the
 free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
 hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches);
@@ -70,8 +68,8 @@ you write or read, run `outcomebound instructions check .`; a worker that only r
 does not run it. Its result says which notes another session wrote can be relied on: a FAIL on a note in `.agents/handoffs/` or
 `.agents/shared-memory/` means rely on none of the flagged notes, rebuild what they held from its
 sources, and name them in your handoff; anything else it reports (a FAIL or review hit in another
-file, OutcomeBound's own finish-check hook entry, a harness row past its re-check date, any other
-`UNVERIFIED`) goes into your handoff and never blocks the notes. Re-check each fact you act on
-against its source; delete a fact when wrong, and put one every clone needs in committed guidance.
+file, a harness row past its re-check date, any other `UNVERIFIED`) goes into your handoff and
+never blocks the notes. Re-check each fact you act on against its source; delete a fact when wrong,
+and put one every clone needs in committed guidance.
 **Distinguish** — handed off ≠ verified; remembered ≠ re-checked; shared on this machine ≠
 committed.

@@ -11,28 +11,22 @@ backend refuses a tree without the engine.
 from __future__ import annotations
 
 import base64
-import dataclasses
 import email.parser
 import hashlib
 import importlib.util
-import json
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
 import sysconfig
 import tarfile
 import zipfile
-from datetime import datetime, timezone
 from pathlib import Path
 from types import ModuleType
-from typing import Any
 
 import pytest
 
-from tests import finish_helpers
 from tests.launcher_helpers import engine
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -205,243 +199,32 @@ def test_the_installed_command_adopts_exactly_as_the_checkout_does(
     assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
-@dataclasses.dataclass(frozen=True)
-class HookSite:
-    """A project with the installed entries, and how its harness fires them."""
-
-    row: str
-    hooks: dict[str, Any]
-    shell: Path
-    project: Path
-    environment: dict[str, str]
-    installed: Path
-
-    def once(self, event: str) -> subprocess.CompletedProcess[str]:
-        command = self.hooks[event][0]["hooks"][0]["command"]
-        return subprocess.run(
-            [str(self.shell), "-c", command],
-            cwd=self.project,
-            env=self.environment,
-            input=json.dumps(
-                {
-                    "cwd": str(self.project),
-                    "session_id": "package-test",
-                    "hook_event_name": event,
-                    "stop_hook_active": False,
-                }
-            ),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-            timeout=60,
-        )
-
-    def fire(self, event: str) -> dict[str, str]:
-        """What one hook prints, in codex's words. The turn-start entry prints nothing, or on
-        claude-code the person's notices. The claude-code stop entry is the run: exit 2 with the
-        report on stderr where it holds, else nothing. The codex stop prints its JSON and starts
-        the run detached; where it started one, the next stop, once it has ended, delivers."""
-
-        since = datetime.now(timezone.utc)
-        result = self.once(event)
-        if event == "UserPromptSubmit":
-            assert result.returncode == 0 and result.stderr == "", result.stderr
-            if self.row == "codex" or not result.stdout:
-                assert result.stdout == ""  # codex marks a turn silently
-                return {}
-            printed: dict[str, str] = json.loads(result.stdout)
-            assert list(printed) == ["systemMessage"]
-            return printed
-        if self.row == "claude-code":
-            if result.returncode == 2:
-                assert result.stdout == ""
-                return {"decision": "block", "reason": result.stderr}
-            assert (result.returncode, result.stdout, result.stderr) == (0, "", ""), result
-            return {}
-        assert result.returncode == 0, result.stdout + result.stderr
-        verdict: dict[str, str] = json.loads(result.stdout)
-        if finish_helpers.settle(self.project, since) is None or "decision" in verdict:
-            return verdict
-        since = datetime.now(timezone.utc)
-        again = self.once(event)
-        assert again.returncode == 0, again.stdout + again.stderr
-        # The delivering stop starts a run of its own where the tree's record never repeats (a
-        # tool the hook's environment lacks); it ends before the test reads the count.
-        finish_helpers.settle(self.project, since)
-        later: dict[str, str] = json.loads(again.stdout)
-        return later
-
-    def person(self, stop: dict[str, str]) -> str:
-        """What the person reads of a turn end that did not hold: codex's message at the stop;
-        on claude-code, whose entry prints nothing, `--status`."""
-
-        if self.row == "codex":
-            assert list(stop) == ["systemMessage"], stop
-            return stop["systemMessage"]
-        assert stop == {}
-        status = subprocess.run(
-            [str(self.installed), "finish-check", "--status", str(self.project)],
-            env=self.environment,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=True,
-            timeout=60,
-        )
-        return status.stdout
-
-
 @pytest.mark.parametrize(
-    ("row", "settings"),
-    [("claude-code", ".claude/settings.json"), ("codex", ".codex/hooks.json")],
+    ("arguments", "printed"),
+    [
+        (
+            ("--constant-time", "--harness", "claude-code", "--done", "d" * 64, "--timeout", "600"),
+            "",
+        ),
+        (("--mark", "--harness", "claude-code", "--done", "d" * 64), ""),
+        (("--constant-time", "--harness", "codex", "--done", "d" * 64, "--timeout", "600"), "{}\n"),
+        (("--mark", "--harness", "codex", "--done", "d" * 64), ""),
+    ],
+    ids=["claude-code-stop", "claude-code-mark", "codex-stop", "codex-mark"],
 )
-def test_the_installed_hooks_run_done_without_development_tools(
-    installed: Path, tmp_path: Path, row: str, settings: str
+def test_the_installed_command_answers_an_entry_that_1_6_0_wrote_with_nothing(
+    installed: Path, tmp_path: Path, arguments: tuple[str, ...], printed: str
 ) -> None:
-    """The saved entries run the installed wheel on a path with spaces, hold a new failure,
-    and retry an unavailable project tool. POSIX PATH holds only OutcomeBound and real Git;
-    native Windows also needs Git's own folders for its executable and POSIX shell."""
+    """Breaks if the wheel lacks the retired verb, or the verb prints, fails or writes: a harness
+    still runs the old entry between `pip install -U` and the next `adopt`."""
 
-    found = shutil.which("git")
-    assert found is not None, "this package test needs real Git"
-    git = Path(found).resolve()
-    tools = tmp_path / "hook tools"
-    tools.mkdir()
-    if os.name == "nt":
-        # Copy the installed entry point, which embeds its environment's Python path. Keep
-        # Git in its install: relocating its executable can separate it from its DLLs.
-        shutil.copy2(installed, tools / installed.name)
-        shells = [
-            parent / relative / "sh.exe"
-            for parent in git.parents[:3]
-            for relative in ("bin", "usr/bin")
-        ]
-        shell = next((candidate for candidate in shells if candidate.is_file()), None)
-        assert shell is not None, "native Windows finish hooks need Git for Windows' sh.exe"
-        entries = [tools, git.parent, shell.parent]
-    else:
-        shell = Path("/bin/sh")
-        assert shell.is_file(), "POSIX finish hooks need /bin/sh"
-        (tools / installed.name).symlink_to(installed)
-        (tools / "git").symlink_to(git)
-        entries = [tools]
-    restricted = os.pathsep.join(map(str, entries))
-    if os.name != "nt":
-        for absent in ("uv", "pipx", "make", "sg", "rg", "ps", "curl", "node", "docker"):
-            assert shutil.which(absent, path=restricted) is None
-    environment = {key: value for key, value in os.environ.items() if key.upper() != "PATH"}
-    environment["PATH"] = restricted
+    project = repository(tmp_path / "project")
+    before = tree(project)
 
-    project = repository(tmp_path / "project with spaces")
-    state = project / "check state.txt"
-    state.write_text("accepted\n", encoding="utf-8")
-    counter = tmp_path / "done invocations.txt"  # outside the tree the hook checks
-    checker = project / "done check.py"
-    checker.write_text(
-        "from pathlib import Path\n"
-        "import subprocess\n"
-        "import sys\n"
-        "with Path(sys.argv[1]).open('a', encoding='utf-8') as count:\n"
-        "    count.write('run\\n')\n"
-        "state = Path('check state.txt').read_text(encoding='utf-8').strip()\n"
-        "if state == 'unsupported':\n"
-        "    print('synthetic-project-check-tool is unavailable')\n"
-        "    raise SystemExit(127)\n"
-        "if state == 'missing':\n"
-        "    result = subprocess.run([sys.argv[2], '-c', 'synthetic-project-check-tool'])\n"
-        "    raise SystemExit(result.returncode)\n"
-        "if state != 'accepted':\n"
-        "    print('project check failed: expected accepted, got ' + state)\n"
-        "    raise SystemExit(3)\n",
-        encoding="utf-8",
-    )
-    python = installed.parent / ("python.exe" if os.name == "nt" else "python")
-    done = " ".join(shlex.quote(path.as_posix()) for path in (python, checker, counter, shell))
-    adopted = run(
-        installed,
-        "adopt",
-        str(project),
-        "--harness",
-        row,
-        "--done",
-        done,
-        "--finish-check",
-        cwd=tmp_path,
-        PATH=restricted,
-    )
-    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
-    assert "PASS     finish-check:" in adopted.stdout
-    subprocess.run([str(git), "-C", str(project), "add", "."], check=True)
-    subprocess.run(
-        [
-            str(git),
-            "-C",
-            str(project),
-            "-c",
-            "user.name=Package test",
-            "-c",
-            "user.email=package-test@example.com",
-            "commit",
-            "-qm",
-            "Initial project",
-        ],
-        check=True,
-    )
-    hooks = json.loads((project / settings).read_text(encoding="utf-8"))["hooks"]
-    site = HookSite(row, hooks, shell, project, environment, installed)
+    result = run(installed, "finish-check", *arguments, cwd=project)
 
-    def fire(event: str) -> dict[str, str]:
-        return site.fire(event)
-
-    def runs() -> int:
-        return len(counter.read_text(encoding="utf-8").splitlines())
-
-    def person(stop: dict[str, str]) -> str:
-        return site.person(stop)
-
-    measured = runs()
-    assert measured == 1
-    assert fire("UserPromptSubmit") == {}
-    unchanged = person(fire("Stop"))
-    assert "finish-check: the tree is the one this turn" in unchanged
-    assert runs() == measured
-
-    fire("UserPromptSubmit")
-    (project / "README.md").write_text("# Changed project\n", encoding="utf-8")
-    passed = person(fire("Stop"))
-    assert "finish-check PASS: " in passed
-    assert runs() == measured + 1
-    assert fire("Stop") == {} and runs() == measured + 1
-
-    fire("UserPromptSubmit")
-    state.write_text("rejected\n", encoding="utf-8")
-    failed = fire("Stop")
-    assert failed["decision"] == "block" and "systemMessage" not in failed
-    assert failed["reason"].startswith("finish-check FAIL: ")
-    assert "exit 3" in failed["reason"]
-    assert "project check failed: expected accepted, got rejected" in failed["reason"]
-    assert runs() == measured + 2
-
-    state.write_text("unsupported\n", encoding="utf-8")
-    unsupported = fire("Stop")
-    assert unsupported["decision"] == "block"
-    assert "exit 127" in unsupported["reason"]
-    assert "synthetic-project-check-tool is unavailable" in unsupported["reason"]
-    assert runs() == measured + 3
-
-    state.write_text("missing\n", encoding="utf-8")
-    unavailable = person(fire("Stop"))
-    assert "finish-check UNVERIFIED: " in unavailable
-    assert "could not run in the hook's environment" in unavailable
-    assert "synthetic-project-check-tool" in unavailable
-    # On codex, the run and the run the delivering stop starts: the record of a tool the hook's
-    # environment lacks never repeats.
-    again = 2 if row == "codex" else 1
-    assert runs() == measured + 3 + again
-    # Same tree, the same again; the person was told once for this tree.
-    assert "decision" not in fire("Stop")
-    assert runs() == measured + 3 + 2 * again
+    assert (result.returncode, result.stdout, result.stderr) == (0, printed, "")
+    assert tree(project) == before
 
 
 def test_home_holds_every_file_the_shipped_skills_name(installed: Path, tmp_path: Path) -> None:
