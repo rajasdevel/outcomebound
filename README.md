@@ -148,6 +148,9 @@ harness trust and branch protection enforce authority; OutcomeBound's checks inf
   `outcomebound floor apply . --floor floor.json --accept`; see the [floor design](docs/specs/floor/design.md).
 - **Review and source checks:** `outcomebound review check <file>` and `outcomebound sources check`
   check accounting (a disposition for each finding, a digest for each source), not correctness.
+- **Size of a change:** `outcomebound size [--base REF]` says how many lines the work tree adds and
+  removes against a base (for stability work, the release tag in production), and how many of them
+  are code, tests, docs, config or records; see the [size design](docs/specs/size/design.md).
 - **Text for people:** `adopt --human-style ste` asks for ASD-STE100 Simplified Technical English
   in reports and commit messages.
 - **Workspace and commands:** the [workspace guide](docs/workspace.md) and the
