@@ -1,6 +1,6 @@
 ---
 name: gather-requirements
-description: Use when a request's outcome or completion bar is unclear, or requirements arrive from an existing source. Unclear means two readings give different observable results and nothing readable chooses; a source is an issue, a document, an export or a picture. Not for a ticket the project's store has accepted, whose brief has settled them.
+description: Use when a request's outcome or completion bar is unclear, or requirements arrive from an existing source. Unclear means two readings give different observable results and nothing readable chooses; a source is an issue, a document, an export or a picture. Not for a request that states its outcome and checks, even one asking for a spec, nor for an accepted ticket, whose brief settled them.
 ---
 
 # Gather requirements

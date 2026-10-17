@@ -8,12 +8,16 @@ description: Use when writing, changing or judging a test, or when the project's
 A test is worth keeping when some change to the code it covers would make it fail. Which tests
 to write, and when to run them, is yours, except the tests a hand-off package fixes, which stay
 as written; this is the bar a test you keep meets, and what your
-report keeps apart.
+report keeps apart. New logic that decides something (a branch, a parse, money, access) leaves one
+small test that would fail if it broke, unless an existing test already does; a change with no such
+logic needs none.
 
 ## In a project that already fails
 
-Before changing anything, run the tests relevant to the change and note which already fail and
-why. Report new failures apart from those. A pre-existing failure is left as found unless fixing
+Where the tests may already fail (CI is red, the person says so, or a run before your change
+showed it), note which fail and why before you change anything. Where a test fails after your
+change for a reason the change may not explain, run it on the unchanged code before you treat it
+as yours. Report new failures apart from those that were already there. A pre-existing failure is left as found unless fixing
 it is the task: not skipped, not marked expected, not loosened until it passes. A test that fails
 on one run and passes on the next is flaky: report it as flaky with both results; a rerun that
 passes is not its verdict.

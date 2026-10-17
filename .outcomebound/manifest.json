@@ -28,23 +28,23 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "8d7c2f4f52488aaccaed19861e47d31a5ee6496f2c0817ddd7cfaab8503d8baa",
+        ".outcomebound/fragments/commands.md": "2873500fdf3ab227a664b3bb3c073449619ec38ab478f41a267e6b1341c23981",
         ".outcomebound/fragments/local.md": "89059ed082b738290753e98bdcbc7e8be4d3f4a2e3ef0f14744a3ea55a05c0f3",
         ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "ca79a11fcf324603b6e1b3c20e7c0fdc83c4decd921e0d4fb0d2cd73be06636e"
+        ".outcomebound/fragments/workspace.md": "52523532923a61da59f9334fdf764cbe8c1217dc37ede4f8552784bb59e3f194"
       },
       "style": [
         "ste"
       ],
-      "sha256": "8ac76867af4f7b298b2ce69337110aa174c5c8b39052eea262fa44f3171d793d"
+      "sha256": "faff3cad6eb1d9bf6685595775833cf4f28fbccd1f5ee072e22a7c79fb9ab646"
     },
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "3533efd64dfc142970dfa5841af8d102223e5673466ed1d2da30d689d3d1812c",
-      "sha256": "79bdcc75dadcadaf9a1c2a409bfceee2a596a9d123a38aa768a258d86e28e34c"
+      "frame": "dfc5a69a1f31ea54515ea8bad625884ec31d2b32ff6e03cfa13dc2234a9bba4a",
+      "sha256": "daad88f1eaa6bcc4ad91c9a59a1c345c4f829520094364bf707b17ee160a715c"
     },
     {
       "kind": "fragment",
@@ -56,7 +56,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "ca79a11fcf324603b6e1b3c20e7c0fdc83c4decd921e0d4fb0d2cd73be06636e"
+      "sha256": "52523532923a61da59f9334fdf764cbe8c1217dc37ede4f8552784bb59e3f194"
     },
     {
       "kind": "fragment",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "8d7c2f4f52488aaccaed19861e47d31a5ee6496f2c0817ddd7cfaab8503d8baa"
+      "sha256": "2873500fdf3ab227a664b3bb3c073449619ec38ab478f41a267e6b1341c23981"
     },
     {
       "kind": "ignore",
@@ -98,7 +98,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "48bb7eb369a7a6049ac7c846185b9e604123ad4883e9119e9b3a5a3cdc7b8bf6"
+      "sha256": "beac5b7c4ba4258764442661640de6b2f501609f45094477b88d0acec5040d46"
     },
     {
       "kind": "skill",
@@ -134,7 +134,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "6e8d849013ed11d6eb47ee4c46aba5ce373db0c056db929fb4b7e1848349b7a4"
+      "sha256": "2817a5dd20b2e03b8e37fb84c763b843ce68ff95a3214f7ea9e2d84081d8d500"
     },
     {
       "kind": "skill",
@@ -152,7 +152,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e8f715fcfd281086d5718528a03a16cc442ae51e6b094f09e2ae04c8031dede9"
+      "sha256": "066248664d1c1828686495b2ae4b683440d0b62ebcfba1c095238223cd5ff03e"
     },
     {
       "kind": "skill",
@@ -215,7 +215,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "8e344329bb7f78b28ef2c209b0510da418a7ed792896a9ba778a32d2e57ccbda"
+      "sha256": "92002588dcfdf38ebe1dd6ce966a130c9aaa6f7613713519df53f62637d3b708"
     },
     {
       "kind": "skill",
@@ -224,7 +224,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "56aa5ea867995b4ce4b256b9591e3bc6b4611268552be46af8c703bae53a7c8f"
+      "sha256": "3c75b06efdbc218123f52c0330550660dd8c93510d5ebb537c8faa667a81d1a9"
     },
     {
       "kind": "skill",
@@ -242,7 +242,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "946c17df20fd54a17915d33bd62e50877f7a57b2c2ae0e888137a199678c8bfb"
+      "sha256": "26e8e6ea44958354ca2972d54a110e20e4f6db3561ff4c0e4ed482be0088c299"
     }
   ]
 }

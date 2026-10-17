@@ -32,7 +32,7 @@ observation never stands in for another.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
-- Done: `make check` and `make test`
+- Done: `make check` and `make test` (the full suite)
 - CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --durations=25 --basetemp="$env:PYTEST_BASETEMP"` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not
@@ -89,7 +89,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
-- when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
+- when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
 - when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it: read .claude/skills/explorable/SKILL.md
 - when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
 - when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md

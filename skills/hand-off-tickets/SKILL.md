@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket to the agent or model that will build it. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing work into tickets.
+description: Use when handing an accepted ticket from the ticket store to the agent or model that will build it. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing, nor for a prompt or spec asked for outside the ticket store.
 ---
 
 # Hand a ticket to its implementer
@@ -58,7 +58,7 @@ handover. Where neither the table nor those instructions place the model, the ha
 the table does not list it, names any project rule that routes work to it, and starts with the
 spec tier's package, in full detail (the `--detail full` brief), while the question below is open.
 
-Ask the person one plain question, batched with the other questions: is the model that will build this a frontier model (the
+Where the model is still unplaced, ask the person one plain question, batched with the other questions: is the model that will build this a frontier model (the
 provider's most capable tier) or a smaller, faster model? Shape the hand-off from the answer: a
 frontier model takes the outcome tier, a smaller, faster model the spec tier, and where the person
 says it sits between them, the design tier. The handover says that the question is open until then.

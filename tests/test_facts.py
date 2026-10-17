@@ -438,9 +438,9 @@ def test_a_stack_fragment_alone_adds_no_publishing_edge(tmp_path: Path) -> None:
 
 def test_done_names_every_command_in_run_order(tmp_path: Path) -> None:
     for done, line in [
-        (["make test"], "- Done: `make test`"),
-        (["make check", "make test"], "- Done: `make check` and `make test`"),
-        (["a", "b", "c"], "- Done: `a`, `b` and `c`"),
+        (["make test"], "- Done: `make test` (the full suite)"),
+        (["make check", "make test"], "- Done: `make check` and `make test` (the full suite)"),
+        (["a", "b", "c"], "- Done: `a`, `b` and `c` (the full suite)"),
     ]:
         assert line in facts.render(tmp_path, [], done, ["AGENTS.md"], []).facts.splitlines()
 

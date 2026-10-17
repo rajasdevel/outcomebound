@@ -20,8 +20,9 @@ Between `pip install -U outcomebound` and that run, the harness still calls
 command, writes nothing and exits 0 at once; whether a native session accepts its output is
 `UNVERIFIED` (see Edges).
 
-The agent runs the Done commands, as the person does. The kernel names them in the project facts,
-and the agent's report says which of them ran.
+The agent runs the Done commands, as the person does: the project facts name them as the full
+suite, which the kernel's completion bar runs where the changed risk reaches it, the project
+requires it, or at a landing, and the agent's report gives each check it ran.
 
 Why the hook went:
 

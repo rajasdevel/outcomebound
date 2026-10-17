@@ -4,7 +4,7 @@ family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 10
+version: 11
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -38,9 +38,9 @@ land as the project's instructions or the goal envelope say work lands, the rule
 fragment also states; where none says, they stay on the worktree's branch, which the handoff names
 with how they should land as a decision brief. Before you land work from a worktree, run the Done
 commands in that worktree and report their verdict. Work in another repository in a session started
-there, so that its hooks and sandbox apply; where the person asks this session to change it, ask
-once for it as a writable root, and until then hold only the items that write there; run its Done
-commands yourself, and say so in your report, since its hooks do not run in this session.
+there, so that its own instructions and sandbox apply; where the person asks this session to change
+it, ask once for it as a writable root, and until then hold only the items that write there; run
+its Done commands yourself, and say so in your report.
 The machine is shared: before a heavy command (a full suite, a build, an image pull) check the
 free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
 hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches);

@@ -94,8 +94,7 @@ write: each row that loads a file the target holds and no row so far covers is a
 read. The retired list is the target's own data too: a change can remove an entry or widen its
 `history` or `allowed_in` patterns, and so pass `retired-reference`. That is accepted, since the
 check keeps a project's own prose in line with its own decision and guards no secret; with
-`--base`, `instruction-change` names each change to the list, so a reviewer sees an entry go. The manifest's Done commands decide only whether adopt's own entry's review hit changes
-the result, and only while they equal the `Done` line of `AGENTS.md`, which every check reads.
+`--base`, `instruction-change` names each change to the list, so a reviewer sees an entry go.
 A person's rulings decide only whether the review hits they name change the result: the person
 writes them, outside the target, and a change to a hit's file makes its ruling match nothing.
 The harness table and the rule ids are the engine's (`adapters/harnesses.json`,

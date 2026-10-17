@@ -47,6 +47,5 @@ assumption. Do not try another variation of the same fix.
 ## The report
 
 Whether you reproduced the failure, and by what command; the cause and the evidence for it; each
-hypothesis you refuted and the observation that refuted it, so that a later session does not test it
-again; what the fix changed; and the check the fix passed. Mark the reproduction, the cause and the check
+hypothesis you refuted that a later session might test again, and the observation that refuted it; what the fix changed; and the check the fix passed. Mark the reproduction, the cause and the check
 `UNVERIFIED` where nothing you ran shows it.
