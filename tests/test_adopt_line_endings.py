@@ -10,7 +10,6 @@ one with LF. Every assertion is about bytes on disk or an exit status.
 
 from __future__ import annotations
 
-import json
 import re
 import shutil
 from pathlib import Path
@@ -181,27 +180,3 @@ def test_a_local_fragment_with_crlf_and_a_byte_order_mark_installs_as_one_withou
             adopt.block_text((target / "AGENTS.md").read_text(encoding="utf-8"), adopt.POINTERS)
         )
     assert results[0] == results[1] == results[2]
-
-
-def test_a_settings_file_with_a_byte_order_mark_and_crlf_keeps_both_when_the_hook_goes_in(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """A harness settings file saved by Windows PowerShell 5.1 has a mark; `json.loads` refuses
-    text that starts with one, and a rewrite would drop it."""
-
-    target = repo(tmp_path / "t")
-    settings = target / ".claude" / "settings.json"
-    settings.parent.mkdir()
-    original = textio.UTF8_BOM + b'{\r\n  "permissions": {}\r\n}\r\n'
-    settings.write_bytes(original)
-
-    arguments = (str(target), "--harness", "claude-code", "--done", ":", "--finish-check")
-    code, _, err = run(capsys, *arguments)
-
-    assert code == 0, err
-    written = settings.read_bytes()
-    assert written.startswith(textio.UTF8_BOM + b"{") and written.count(textio.UTF8_BOM) == 1
-    assert not BARE_LF.search(written)
-    assert "Stop" in json.loads(textio.decode(written))["hooks"]
-    code, out, _ = run(capsys, str(target), "--check")
-    assert code == 0 and set(states(out).values()) == {"current"}

@@ -2029,7 +2029,7 @@ def _noted(outcome: Outcome, claim: Claim, context: Context) -> Outcome:
 def check(root: Path, base: str | None, only: str | None, verbose: bool = False) -> int:
     """Each claim's outcome as soon as it is known, so a long run shows progress, then the
     loosening with `--base`, then one verdict line last, where a reader of the output's tail,
-    such as a finish-check hold, finds it."""
+    such as a CI log's tail, finds it."""
 
     floor = load_floor(root)
     claims = [claim for claim in floor.claims if only is None or claim.name == only]

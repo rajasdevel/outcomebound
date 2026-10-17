@@ -8,7 +8,8 @@ name as `argv[0]`.
 Every verb's text leaves as UTF-8 with LF line endings, whatever the platform's console code
 page and newline are, so a script, a path or a JSON document the engine prints reads the same
 through a pipe or a redirect everywhere. A word this table cannot run, or no word, exits 1,
-never 2: a harness's stop hook reads exit 2 as holding the turn.
+never 2: a harness's stop hook reads exit 2 as holding the turn. `finish-check` is retired: the
+entries that 1.6.0 and earlier wrote into a project still call it, and it exits 0 quietly.
 """
 
 from __future__ import annotations
@@ -34,9 +35,12 @@ VERBS = {
     "explorable": "explorable",
     "scaffold": "scaffold",
 }
+# Verbs that earlier versions wrote into a project's files and that do nothing now: routed, so that
+# an entry an earlier `adopt` wrote still runs to a quiet exit 0, and listed nowhere.
+RETIRED = frozenset({"finish-check"})
 USAGE = (
     "usage: outcomebound <verb> [argument ...]\nverbs: home version "
-    + " ".join(VERBS)
+    + " ".join(verb for verb in VERBS if verb not in RETIRED)
     + "\nPrinted commands use POSIX shell syntax; on Windows they use PowerShell syntax."
 )
 

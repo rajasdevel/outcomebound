@@ -41,7 +41,6 @@ VERBS = (
     "fragments",
     "discovery",
     "instructions",
-    "finish-check",
     "sources",
     "review",
     "explorable",
@@ -236,6 +235,17 @@ def test_an_unknown_verb_lists_the_verbs_and_exits_1_never_2(
 
     assert result.returncode == 1
     assert all(verb in result.stderr.split() for verb in ("home", *VERBS))
+
+
+def test_the_usage_lists_no_retired_verb_and_the_verb_still_runs_quietly(tmp_path: Path) -> None:
+    """Breaks if `--help` offers `finish-check`, which does nothing since 1.7.0, or if the table
+    drops it: an entry that 1.6.0 wrote calls it until the next `adopt`."""
+
+    usage = engine("--help", cwd=tmp_path)
+    retired = engine("finish-check", "--mark", "--harness", "claude-code", cwd=tmp_path)
+
+    assert usage.returncode == 0 and "finish-check" not in usage.stdout
+    assert (retired.returncode, retired.stdout, retired.stderr) == (0, "", "")
 
 
 def test_a_command_the_engine_runs_inherits_the_callers_environment(tmp_path: Path) -> None:

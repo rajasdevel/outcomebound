@@ -44,7 +44,7 @@ def shell_word(word: str) -> str:
 
     POSIX output uses `shlex.quote`. Windows output is for PowerShell: it doubles an
     apostrophe inside single quotes. It is not Git Bash or cmd syntax. This is printed
-    command text, not a Done line, which the finish check runs under a POSIX shell.
+    command text, not a Done line, which a POSIX shell runs.
     """
 
     if not on_windows():

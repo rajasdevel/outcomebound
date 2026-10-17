@@ -129,7 +129,6 @@ def test_no_read_of_a_target_runs_the_fsmonitor_program_its_git_config_names(
     from outcomebound_tools import (
         adopt,
         discovery,
-        finish_check,
         floor,
         harness_roots,
         instruction_audit,
@@ -145,7 +144,6 @@ def test_no_read_of_a_target_runs_the_fsmonitor_program_its_git_config_names(
 
     tickets_git.git(root, "status", "--porcelain")
     harness_roots._tracked(root, ".claude")
-    finish_check._git(root, "status", "--porcelain")
     floor._git(root, "status", "--porcelain")
     adopt._git(root, "status", "--porcelain")
     instruction_audit._git_status(root, "status", "--porcelain")

@@ -102,42 +102,19 @@ def test_a_file_that_hides_agents_md_is_one_the_row_already_names() -> None:
         assert hiding <= unless, name
 
 
-def test_a_finish_hook_is_claude_code_and_codex_only_in_a_file_the_audit_reads() -> None:
-    """The finish check is available for these two rows, and the settings document its
-    entry goes into is one the instruction audit reads as the row's configuration.
+def test_the_table_holds_no_finish_hook_and_the_audit_still_reads_each_hook_file() -> None:
+    """The finish check is retired, so no row names a hook entry adopt writes, and the schema
+    admits none; a committed hook is still read by `outcomebound instructions check` in the two
+    settings documents that 1.6.0 wrote entries into.
 
-    Breaks if another row gains a finish hook, or if the entry's file drops out of
-    `config.paths`, so a committed hook would run unread by `outcomebound instructions check`.
+    Breaks if a row or the schema gains a `finish_hook` again, or if either settings document
+    drops out of `config.paths`, so a committed hook would run unread.
     """
 
-    hooked = {name for name, row in TABLE.items() if row["finish_hook"] is not None}
-    assert hooked == {"claude-code", "codex"}
-    for name in hooked:
-        config = TABLE[name]["config"]
-        assert TABLE[name]["finish_hook"]["file"] in config["paths"], name
-        assert "hooks" in config["keys"]["hooks"], name
-
-
-def test_the_wake_field_names_async_rewake_on_claude_code_with_its_source_and_none_on_codex():
-    """The finish check's delivery is the row's `wake` field: `asyncRewake`, with the dated
-    source and the observation it rests on, on claude-code; none on codex, whose stop delivers
-    at a later stop.
-
-    Breaks if the field is dropped, which turns claude-code's entry back into a stop that waits
-    for Done, or if it loses the source a reader re-checks it against.
-    """
-
-    hook = TABLE["claude-code"]["finish_hook"]
-    assert hook["wake"]["key"] == "asyncRewake"
-    source = hook["wake"]["source"]
-    assert source.startswith("https://code.claude.com/docs/en/hooks, read 2026-10-15: ")
-    for fact in (
-        "wakes Claude on exit code 2 with its stderr",
-        "its timeout is enforced",
-        "not to the user",
-        "observed on Claude Code 2.1.300 on macOS on 2026-10-15",
-        "stop_hook_active true",
-    ):
-        assert fact in source, fact
-    assert TABLE["codex"]["finish_hook"]["wake"] is None
-    assert "wake" in ROW_SCHEMA["properties"]["finish_hook"]["required"]
+    assert all("finish_hook" not in row for row in TABLE.values())
+    assert "finish_hook" not in ROW_SCHEMA["properties"]
+    assert "finish_hook" not in ROW_SCHEMA["required"]
+    assert ".claude/settings.json" in TABLE["claude-code"]["config"]["paths"]
+    assert ".codex/hooks.json" in TABLE["codex"]["config"]["paths"]
+    for name in ("claude-code", "codex"):
+        assert "hooks" in TABLE[name]["config"]["keys"]["hooks"], name
