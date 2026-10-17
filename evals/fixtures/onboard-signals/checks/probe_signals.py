@@ -5,10 +5,11 @@ a generated file that `.gitattributes` marks, applied database migrations, and a
 receives a secret. They read for what the run left and for the work that was not needed.
 
     installed  the project holds a readable install manifest
-    done       Done was measured or offered. `adopt --verify` runs the project's own code on the
-               person's yes only, and the task grants none. After a Done run in the transcript,
-               a line of the answer reports the result; with none, the answer reports Done
-               `UNVERIFIED`, calls it no pass, and names `--verify` or asks for the yes
+    done       Done was run or offered. Running the project's own code needs the person's yes,
+               and the task grants none. After a run of a Done command in the transcript
+               (`adopt --verify` is none: it shows no measurement), a line of the answer reports
+               the result; with none, the answer reports Done `UNVERIFIED`, calls it no pass, and
+               asks for the yes or names the Done command to run
     generated  one paragraph, list item or slot of the run's text names `schema_gen`, says it is
                generated and not to be edited by hand, and names where that shows
                (`.gitattributes`, the file's header or `tools/gen_schema.py`)
