@@ -299,9 +299,10 @@ The command refuses what it can detect — an option without its downside, a sin
 or more options with no recommendation, a brief with no evidence line, a mark's glyph inside
 given text, a line break inside a field, a diagram label that would end or split an edge, an
 option object missing its way, what it leads to or its downside, an empty context block or
-list, two context lists in a row, a context paragraph or item that starts with a markdown block
-opener (`-`, `*`, `+`, `#`, `>`, a number and `.` or `)`, `|`, three backticks or tildes,
-`---`, `===`), `*` or `_` at either edge of a way or a term, a `terms` pair that is not exactly
+list, two context lists in a row, a context paragraph or item that a CommonMark view would read as a
+block of its own (a bullet, a number with `.` or `)`, or a heading mark, each followed by a space
+or the end; a quote; a fence; a whole line that is a rule), while text such as `3.12 is the
+minimum` is drawn, `*` or `_` at either edge of a way or a term, a `terms` pair that is not exactly
 two, a `picture` with no caption or only empty lines, a `picture` line holding three backticks or
 a character of East Asian width W or F, U+FE0F or U+20E3 (an emoji drawn by default as text,
 which many fonts still draw two columns wide, is not detected), and a `facts` label that takes a

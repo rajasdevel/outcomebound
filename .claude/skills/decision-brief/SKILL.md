@@ -52,28 +52,44 @@ what its downside is, so the evidence chooses your recommendation.
 
 ## Write each brief
 
-- an id and the question in one line;
-- each credible way forward, when there are two or more, lettered A, B and on, each with what it leads to
-  and its downside;
-- your recommendation first, with why;
-- at least one line of evidence: what you checked, what you could not check (why, and what
-  would settle it), or a fact;
-- whether it can be undone;
-- what happens if no answer comes, and the state the held work waits in: the side of the held act
-  that is easiest to stay in, never half done; give it as a `facts` pair labelled
-  `If unanswered`. A brief that holds work says which: it names a default and its expiry, the moment the
-  default applies, so the work that waits on it can go on; or it says plainly that the work waits
-  for the person, with no expiry. The expiry is a moment the person or the project already named (a
-  handoff, a release, a date in the ticket or the grant); where none exists, the work waits, and
-  the moment is one more question. Never invent a time limit;
-- a diagram only when order, dependency, flow or before/after is the point.
+Write it in the order the person decides, so they know what is at stake before they meet your
+pick:
 
-A question in prose, a table of options, or a list without a recommendation and an undo line is not
-a brief: the person cannot act on it in one reading.
+- **The question**, after its id, in one line. It names the choice, not the answer you favour:
+  one decision, in the person's words, asked so that each option answers it (`How should…`,
+  `Which…`, `When…`). A yes-or-no question about your own pick leads the reader.
+- **What waits on it** (`why_now`): the work the answer holds and the state it waits in, the side
+  of the held act that is easiest to stay in, never half done. Say whether a default applies and
+  when: a moment the person or the project already named (a handoff, a release, a date in the
+  ticket or the grant). Where none exists, the work waits for the person, and that moment is one
+  more question. Never invent a time limit.
+- **The context** (`context`, `terms`): only what the person needs to judge: what the decision is
+  about, what it touches, and how the mechanism works where that changes the choice. Make it easy
+  to skim: a lead-in sentence, then a short list for parallel points; bold only the few words a
+  skimmer needs; `code` for commands and paths. Define each term the person may not know. Leave
+  out history they already know; background several briefs share goes once, above them.
+- **A picture** (`diagram`, `picture`) where order, dependency, flow or before and after is the
+  point, with a caption that says what to look at; never as decoration.
+- **An offer to explore** (`explore`) when the decision is not simple: the options trade off
+  things the person may value differently, turn on numbers they may want to try, or rest on a
+  mechanism easier to see moving. Say what an interactive page would let them try. A simple
+  decision carries none.
+- **Each credible way forward**, when there are two or more: what it leads to, when a reasonable
+  person would choose it (`choose_if`: the condition, or what matters most to them), and its
+  downside. Each is a way someone could sensibly pick; waiting is one where it is a real choice;
+  no option is there to make another look good.
+- **Your recommendation** (`recommend`, `recommend_way`), drawn on the option it names: why, the
+  deciding factor, and what would change your mind.
+- **At least one line of evidence**: what you checked, what you could not check (why, and what
+  would settle it), or a fact.
+- **Whether it can be undone.**
 
-Where the answer turns on values the person may judge differently from you, or on how the options
-work in ways text compares poorly, also give them a decision explorable (the `explorable` skill):
-the brief stays in the text, and the page's path goes beside it.
+An emoji in your own text earns its place only where it says what a word would (❌ for missing),
+never as decoration. A question in prose, a table of options, or a list without a recommendation
+and an undo line is not a brief: the person cannot act on it in one reading.
+
+When the person asks to explore a brief, build the page with the `explorable` skill: the brief
+stays in the text, and the page's path goes beside it.
 
 Give each brief an id no other session or record can take. Where the project's instructions keep one
 numbering for briefs, take the next id from it; otherwise put your task's or worktree's name, in
@@ -96,15 +112,22 @@ brief. A refused brief is fixed and drawn again, never hand-written. Without `ou
 write the same shape by hand, options lettered.
 
 A short input for one brief with two options. `recommend_way` is the words of a way, never its
-letter, since the command writes the letters; `facts` carries the `If unanswered` pair:
+letter, since the command writes the letters; `why_now` says what waits and what happens if no
+answer comes:
 
 ```json
-{"briefs": [{"id": "flag-D1", "heading": "Keep the old flag for one release?",
+{"briefs": [{"id": "flag-D1", "heading": "Keep the old flag for one more release, or drop it now?",
+  "why_now": "the release notes for 2.0; until you answer, the flag stays and only the notes wait",
+  "context": ["The old `--legacy` flag switches the parser back to its 1.x behaviour. Two adopters still set it."],
+  "terms": [["code path", "the branch of the parser that runs only when the flag is set"]],
   "recommend": "two adopters still set it", "recommend_way": "keep it",
-  "options": [["keep it", "adopters get a warning first", "one more release carries the old code path"],
-              ["drop it now", "the code path goes today", "an adopter who sets it is refused on upgrade"]],
+  "options": [{"way": "keep it", "leads_to": "adopters get a warning first",
+               "choose_if": "no adopter should break on upgrade",
+               "downside": "one more release carries the old code path"},
+              {"way": "drop it now", "leads_to": "the code path goes today",
+               "choose_if": "a smaller 2.0 matters more than a warning period",
+               "downside": "an adopter who sets it is refused on upgrade"}],
   "checked": {"verdicts": ["PASS"], "text": "`grep -r old_flag` finds two adopter configs"},
-  "facts": [["If unanswered", "the flag stays; only this item waits"]],
   "undo": {"can_be_undone": true, "text": "revert the commit"}}]}
 ```
 
@@ -112,21 +135,27 @@ A drawn brief, fenced here only to show its lines; its bare `D1` is right only w
 project's instructions number briefs:
 
 ````markdown
-### D1 · Keep the old flag for one release?
-- 👉 Recommend: A — two adopters still set it
-- Options:
-  - A keep it — adopters get a warning first
-    - 🔻 Downside: one more release carries the old code path
-  - B drop it now — the code path goes today
-    - 🔻 Downside: an adopter who sets it is refused on upgrade
-- ✅ Checked: `grep -r old_flag` finds two adopter configs
-- If unanswered: the flag stays; only this item waits
-- ↩️ Undo: revert the commit
+### D1 · Keep the old flag for one more release, or drop it now?
 
-How an upgrade reads the flag
-```text
-config --old_flag--> warning --> new flag
-```
+⏳ Waiting on this: the release notes for 2.0; until you answer, the flag stays and only the notes wait
+
+The old `--legacy` flag switches the parser back to its 1.x behaviour. Two adopters still set it.
+
+📖 *code path*: the branch of the parser that runs only when the flag is set
+
+**Options**
+
+- **A · keep it** — adopters get a warning first
+  - ⭐ Recommended: two adopters still set it
+  - ⚖️ Choose if: no adopter should break on upgrade
+  - 🔻 Downside: one more release carries the old code path
+- **B · drop it now** — the code path goes today
+  - ⚖️ Choose if: a smaller 2.0 matters more than a warning period
+  - 🔻 Downside: an adopter who sets it is refused on upgrade
+
+✅ Checked: `grep -r old_flag` finds two adopter configs
+
+↩️ Undo: revert the commit
 ````
 
 Several decisions go in one message; where one waits on another, the document's `order` draws
@@ -139,4 +168,5 @@ label and description, or its `line` where the tool takes options as plain strin
 drawn brief's lines into the tool's fields; the tool shows each field as one line. Where the tool
 refuses the number of options a brief carries, or the brief has none and the tool needs some, the
 drawn brief in your message is the ask: put no question for that brief, and the user answers in
-words.
+words. A brief with `explore` carries a last choice, `Explore it first`; where the tool refuses
+that many choices, leave it out, and the drawn brief's offer stands.

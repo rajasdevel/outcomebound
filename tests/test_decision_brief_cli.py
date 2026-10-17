@@ -1029,7 +1029,14 @@ def test_every_new_field_is_drawn_and_no_lines_or_lists_run_together(
                 {"context": [f"{opener} then words"]},
                 "$.briefs[0].context[0] starts with a markdown block opener",
             )
-            for opener in ("-", "*", "+", "#", ">", "1.", "2)", "|", "```", "~~~", "---", "===")
+            for opener in ("-", "*", "+", "#", "###", ">", "1.", "2)", "```", "~~~")
+        ),
+        *(
+            (
+                {"context": [rule]},
+                "$.briefs[0].context[0] starts with a markdown block opener",
+            )
+            for rule in ("---", "***", "_ _ _", "#", "-")
         ),
         (
             {"context": ["fine", ["fine", "# a heading"]]},
@@ -1099,6 +1106,26 @@ def test_each_new_rule_refuses_with_exit_two_naming_where(
 
     assert (code, out) == (2, "")
     assert reason in err
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["3.12 is the minimum", "#3 needs a rebase", "-5 degrees", "| a pipe", "=== a line",
+     "--- then words", "*.bak files stay"],
+)
+def test_text_that_opens_no_markdown_block_is_drawn(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], text: str
+) -> None:
+    """A one-line paragraph that a CommonMark view reads as a paragraph is not refused: a number
+    without a following space, a heading mark without one, a pipe or an underline with no second
+    line, and a rule mark followed by words."""
+
+    code, out, _ = _main(
+        capsys, str(_write(tmp_path, _document({"context": [text]}))), "--symbols", "emoji"
+    )
+
+    assert code == 0
+    assert f"\n\n{text}\n\n" in out
 
 
 def test_a_picture_may_hold_an_empty_line_and_a_narrow_ambiguous_character(

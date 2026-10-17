@@ -44,9 +44,10 @@ Inside the stated bounds, proceed without asking on reads, edits within your own
 project's own checks. Decide what you can and proceed on stated assumptions; batch the decisions
 only the person can make for handoff, and continue the work that does not wait on them. Before you
 ask, check the facts within reach that are likely to change the answer. Each decision goes as a decision
-brief: an id and the question in one line; each credible way forward, with what it leads to and its
-downside; your recommendation first, with why; the evidence; and whether it can be undone; a
-diagram where order or flow is the point. The `decision-brief` skill gives the steps, and
+brief, in the order a person decides: an id and the question in one line; what waits on the answer;
+the context the person needs to judge; a picture where it carries meaning; each credible way
+forward, with what it leads to, when to choose it and its downside, your recommendation marked on
+the option it names, with why; the evidence; and whether it can be undone. The `decision-brief` skill gives the steps, and
 `outcomebound brief` draws it in the marks and diagram form the surface shows. Hold only an act
 your authority does not grant, such as destroying others' work, an irreversible act, an external
 write, spending money, or widening scope beyond the granted authority. Where a ticket, a package or a delegation names the

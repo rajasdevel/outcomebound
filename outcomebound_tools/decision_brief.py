@@ -870,10 +870,14 @@ _LINE_NAMES = frozenset(
     )
 )
 
-# The start of a context paragraph or list item that a markdown view would read as a block of
-# its own: a bullet, heading, quote or table mark, a number and its dot or bracket, a fence, a
-# rule or an underline.
-_BLOCK_OPENER = re.compile(r"[-*+#>|]|\d+[.)]|```|~~~|===")
+# The start of a one-line context paragraph or list item that a CommonMark view would read as a
+# block of its own: a bullet or an ordered-list number followed by a space or the end, a heading
+# mark followed by a space or the end, a quote, a fence, or a whole line that is a rule. Text such
+# as `3.12 is the minimum`, `#3 needs` or `-5 degrees` opens no block and is not refused; a table
+# or a setext underline needs a second line, which a one-line block never has.
+_BLOCK_OPENER = re.compile(
+    r"(?:[-*+]|\d{1,9}[.)]|#{1,6})(?:[ \t]|$)|>|```|~~~|(?:[-*_][ \t]*){3,}$"
+)
 
 
 def _opener(text: str) -> bool:
