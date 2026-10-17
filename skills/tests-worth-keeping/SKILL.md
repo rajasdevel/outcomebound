@@ -37,6 +37,8 @@ prevented `UNVERIFIED`, and before another long run, fix the prerequisite the la
   every test needs. For a refusal or a deliberate break, check that the case reaches the
   behaviour it names. A setup error or an earlier guard rejecting it is not evidence for
   that behaviour.
+- **A snapshot that earns its upkeep.** For a snapshot or golden file that is routinely
+  restamped, name the unwanted behaviour it detects and whether another check already covers it.
 - **Observable behaviour.** Assert through the interface a caller uses, against an expected value
   the code did not produce: a known-good literal, a worked example, the spec. A test that pins how
   the code is written, such as the order of calls on collaborators, private state or the exact

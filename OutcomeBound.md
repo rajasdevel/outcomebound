@@ -109,7 +109,9 @@ implementer.
 
 A spec records what the code cannot show: the outcome, the chosen design and the alternative
 it rejected, and the edges that cannot be undone. Keep one current spec per area and edit it in
-place when a decision changes; version control is its history.
+place when a decision changes; version control is its history. Keep each current decision in one
+place, which other documents link to, and give a count in a spec with the command that produced
+it.
 
 A goal envelope is optional. It records the outcome, the checks that end it, the actions it
 authorizes and those it excludes, the follow-ups it accepts, and the judgments the person

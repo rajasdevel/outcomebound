@@ -23,7 +23,10 @@ the work that waits on it, so every other item goes on. Some harnesses honor aut
 the user's own words: for an act a permission check guards, such as a deletion or a write outside
 the project, the brief names the act so the user's reply can state it, not only a letter.
 
-A question the person already settled is not asked again: their launch block, a grant a project
+Apply an existing ruling within its stated scope, and record a clear new instruction without
+asking the person to confirm it. Where another case needs a choice the person already made for a
+similar one, propose one bounded standing rule, with its exclusions, instead of another one-case
+question. A question the person already settled is not asked again: their launch block, a grant a project
 file records (a tickets declaration), their standing order and their earlier answer stand. An order
 that names a class of acts, such as clearing what is not needed, grants each item your check shows
 is in that class and that a tool rebuilds or a copy you verified restores; hold an item you did not

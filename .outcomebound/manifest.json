@@ -30,7 +30,7 @@
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
         ".outcomebound/fragments/commands.md": "6db58f7778659d65321ab77354c6ba69f37e4a8a41ac3bd9921b3b9d9bf89d49",
         ".outcomebound/fragments/local.md": "89059ed082b738290753e98bdcbc7e8be4d3f4a2e3ef0f14744a3ea55a05c0f3",
-        ".outcomebound/fragments/multi-agent.md": "ae5919b5f9dd726267f277ca9343154e3db844c41b1d03893c6292c6c12a7edd",
+        ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
         ".outcomebound/fragments/workspace.md": "7e9fffd6f583b3ec90f70bf55eef3aee953f6ed27ffa42566b23d3541e40d198"
       },
@@ -50,7 +50,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "ae5919b5f9dd726267f277ca9343154e3db844c41b1d03893c6292c6c12a7edd"
+      "sha256": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1"
     },
     {
       "kind": "fragment",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "333481b9d461e65cf398eda3c94ed7c7953c2a5b9ed49099fe5b65e36e96ef67"
+      "sha256": "ac18038526002ba19c3075dbe5a3ff201140ecb353cc409b87616c77032051db"
     },
     {
       "kind": "skill",
@@ -170,7 +170,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "30aeb20da6328cb472331b9cafbe17d9de2353363f162e0dd0e0c76281686a27"
+      "sha256": "77f82e67ce35e860354eb376ffffe5192344b40b6c26d8c23939f320c483e9d0"
     },
     {
       "kind": "skill",
@@ -215,7 +215,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "07b45416f16a22798eb1f3bf5eb158363fb5e9d2ae368b249f707855410cb8c5"
+      "sha256": "cdca576d52d224671d83b2127ad54938fdfde76c5c4d33edf7f7c71a0456182e"
     },
     {
       "kind": "skill",
@@ -224,7 +224,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e9696bb49b1520aadce143df9b742433befcec4ab482935541eb97a517674b0b"
+      "sha256": "a3b143c7576d3d5e5c04d139f3b43ee2ecc7218e5638a29762a2cd36a3462020"
     },
     {
       "kind": "skill",

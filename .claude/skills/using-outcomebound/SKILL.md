@@ -18,8 +18,9 @@ names included, and not before:
    for a later need) is left out. Where the request leaves the size open, build the smallest
    version that does the core job, and name what you left out in one line of the report.
 2. Does the codebase, the standard library, the platform or an installed dependency already meet
-   it? Use it before new code; where a few lines of your own do the job, they come before a new
-   dependency.
+   it? Use it before new code. Between your own code and a new dependency, compare the whole
+   implementation and its upkeep, edge cases and tests included; few dependencies alone do not make
+   a design simpler.
 3. The smallest change that meets the completion bar.
 
 Check the approach you take with the smallest test, command or observation that settles its
@@ -31,7 +32,9 @@ the unchanged base under the same conditions: failing on both does not by itself
 change got worse, so report the comparison; a bar the project requires still applies. On work that spans many changes,
 `outcomebound size --base <ref>` shows how far the change has grown against the base that matters
 (for stability work, the release in production) and how its lines fall by path kind; read it where
-the change's growth is in doubt, and size again where what grew is not what the outcome needs. Make independent reads and
+the change's growth is in doubt, and size again where what grew is not what the outcome needs. A forecast of time rests on cycles of
+build, review and repair already completed, with any speed-up from parallel work named as an
+assumption. Make independent reads and
 checks in one step where the tools allow it. Report an omission only where it changes a decision
 or leaves a risk.
 
