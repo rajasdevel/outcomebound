@@ -1847,6 +1847,7 @@ def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
     inline, pointers = body.rsplit("\n\n", 1)
     assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
     assert pointers.splitlines() == [
+        facts.ONCE,
         f"- {shipped.condition}: read {PYTHON_FRAGMENT}",
         *(
             f"- {adopt.CONDITIONS[name]}: read .agents/skills/{name}/SKILL.md"
@@ -2126,7 +2127,8 @@ def test_no_harness_installs_the_skills_where_the_pointers_name_them(
 
     assert code == 0, err
     generic = {name: f".outcomebound/skills/{name}/SKILL.md" for name in adopt.SKILLS}
-    lines = [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in generic.items()]
+    lines = [facts.ONCE]
+    lines += [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in generic.items()]
     for name, path in generic.items():
         assert (target / path).read_bytes() == (ROOT / f"skills/{name}/SKILL.md").read_bytes()
     assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == lines

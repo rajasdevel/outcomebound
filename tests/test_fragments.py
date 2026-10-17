@@ -518,7 +518,7 @@ def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, 
     assert result.returncode == 0, result.stderr
     blocks = parse_managed_blocks(result.stdout)
     assert list(blocks) == ["project-facts", "guidance-pointers"]
-    assert blocks["guidance-pointers"].body.splitlines()[0] == (
+    assert blocks["guidance-pointers"].body.splitlines()[1] == (
         "- for python projects: read .outcomebound/fragments/python.md"
     )
     assert "the runtime is the evidence" not in result.stdout

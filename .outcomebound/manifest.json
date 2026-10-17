@@ -28,7 +28,7 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "2873500fdf3ab227a664b3bb3c073449619ec38ab478f41a267e6b1341c23981",
+        ".outcomebound/fragments/commands.md": "c6128601922f4d7db2b8b2f512794a2d24fb8fb0809943925ba962dcb7d8f650",
         ".outcomebound/fragments/local.md": "89059ed082b738290753e98bdcbc7e8be4d3f4a2e3ef0f14744a3ea55a05c0f3",
         ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
@@ -43,8 +43,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "dfc5a69a1f31ea54515ea8bad625884ec31d2b32ff6e03cfa13dc2234a9bba4a",
-      "sha256": "daad88f1eaa6bcc4ad91c9a59a1c345c4f829520094364bf707b17ee160a715c"
+      "frame": "4807ac6aed81b0abe62ee2bbafb056b273f2bb34e01494e3b7748de415a14580",
+      "sha256": "3bc7c0086b855971accee42ca8ced5f86a7ca22e14fa831f446ecccb549b7acf"
     },
     {
       "kind": "fragment",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "2873500fdf3ab227a664b3bb3c073449619ec38ab478f41a267e6b1341c23981"
+      "sha256": "c6128601922f4d7db2b8b2f512794a2d24fb8fb0809943925ba962dcb7d8f650"
     },
     {
       "kind": "ignore",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "801354bb1e469d5838ab762a5501482b62e7a0120c41d9e6770341ee8889f9a4"
+      "sha256": "8d005818c704bccc5e64ddb89f7f0ab353f70859ce92ed2caa24ad32ab99091f"
     },
     {
       "kind": "skill",
@@ -152,7 +152,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "066248664d1c1828686495b2ae4b683440d0b62ebcfba1c095238223cd5ff03e"
+      "sha256": "c9332a57a004d116c81bbe46cc9248596c4ae934e22894def0fe33a60012fded"
     },
     {
       "kind": "skill",
@@ -170,7 +170,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "3145cd40ea3d6ebdd5ae9b819c1c7b29787265cae6ac9174dae261300b2e2561"
+      "sha256": "ff4ed7d05ef65f1715060af0bc9b3e2366e6772353d3aeeb3b5738574dc976d6"
     },
     {
       "kind": "skill",
@@ -215,7 +215,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "92002588dcfdf38ebe1dd6ce966a130c9aaa6f7613713519df53f62637d3b708"
+      "sha256": "52c05432f39896d63a77aead28c9c06e15dfbe472ee8a30259e088d0aa2d5f1c"
     },
     {
       "kind": "skill",
@@ -224,7 +224,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "6fbf7b4965032bb7976b5ed1c426695aad0908f3fc3e456039a3e1e85836e1ea"
+      "sha256": "455f8dd6a628e0cfef10de2e06d5789a42abf40787e242bb7d23d1db1903b2d5"
     },
     {
       "kind": "skill",

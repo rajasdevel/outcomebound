@@ -14,7 +14,8 @@ it: the brief itself is in the text.
 
 ## Decide what is yours
 
-Decide every reversible choice inside your granted authority yourself. Ask the user only what is
+Decide every reversible choice inside your granted authority yourself. An act the outcome does not
+need is left out, not asked about. Ask the user only what is
 theirs — an act your authority does not grant, such as an irreversible edge, an external write,
 spending, or widening scope — batched into one message, and continue the work that does not wait
 on the answer. A brief never ends your turn: a run starts without answers, and a brief holds only

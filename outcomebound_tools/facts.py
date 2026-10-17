@@ -593,6 +593,12 @@ def inline(fragment: Fragment) -> str:
     return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
 
 
+ONCE = (
+    "Read each file below when its condition first holds; it stays in force for the session, "
+    "so read it again only after the context was compacted."
+)
+
+
 def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) -> str | None:
     """The `local` fragment inline, then one pointer line per fragment and skill; None if empty."""
 
@@ -603,6 +609,8 @@ def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) ->
         if item.id != LOCAL
     ]
     lines += [f"- {condition}: read {path}" for condition, path in skills]
+    # Read once: session records showed one fragment read again dozens of times in one session.
+    lines = [ONCE, *lines] if lines else []
     parts += ["\n".join(lines)] if lines else []
     if not parts:
         return None

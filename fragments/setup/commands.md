@@ -4,7 +4,7 @@ family: setup
 applies: any repository where an agent runs commands
 condition: when running a command whose output you read
 detect: ["."]
-version: 7
+version: 8
 ---
 **Context** — a harness may give a command a terminal, and all it prints is context spent. A pager
 waits for a key: `git --no-pager`, a tool's `--no-pager`, else `PAGER=cat`. An editor waits:
@@ -27,6 +27,9 @@ are written for a POSIX shell; in PowerShell or cmd, use the shell's own form of
 outside the tree) is `UNVERIFIED`, never a fact about the target. A job that is still running when
 the task ends (a scheduled run, a service you do not stop) needs the person's grant, which names what it runs and how it stops. Quiet comes from a tool's own flags, never from hiding an error or disabling a check.
 Slow is not hung: do not shorten, skip or kill a check because it takes long; let it run to its end.
+Wait for its exit once, by a blocking wait or the harness's notice, not by a loop of short status
+reads; where it prints nothing long past its usual time, look at what it is doing or what holds it
+before you wait again.
 The person's own instruction to stop or skip a check outranks that line: stop it, and report the
 check `UNVERIFIED`. A command that was stopped can leave a lock or a half-done change: look before
 the next run.

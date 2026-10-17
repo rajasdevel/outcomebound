@@ -25,7 +25,9 @@ names included, and not before:
 Check the approach you take with the smallest test, command or observation that settles its
 changed risk, not every check the project has. Run a check once for a set of changes, keeping
 long output in a file, and read each failure from that output rather than running the check
-again to see more; a result stands until something it covers changes. Make independent reads and
+again to see more; a result stands until something it covers changes. Before a pass or fail bar you did not set judges
+the change (a threshold, a monitor, a limit), see whether the unchanged base meets it: a bar the
+base already fails shows no regression, and goes to the person as a finding. Make independent reads and
 checks in one step where the tools allow it. Report an omission only where it changes a decision
 or leaves a risk.
 

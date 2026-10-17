@@ -35,7 +35,9 @@ it.
 
 A reviewer you dispatch reads again only where a fix changes a claim its finding rests on or a
 result a user can observe, and then reads that change alone. A finding that changes neither takes
-its disposition in this round and starts no other.
+its disposition in this round and starts no other. Where rounds go on finding only test, fixture or
+wording issues, tell the person how many rounds ran and what the last ones changed in shipped
+behaviour; they decide whether review goes on.
 
 ## Writing a review
 

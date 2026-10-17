@@ -79,4 +79,6 @@ def test_it_is_reached_through_a_pointer_with_its_condition() -> None:
     block = facts.pointers([fragment], [])
     assert block is not None
     parsed = parse_managed_block(block, facts.POINTERS)
-    assert parsed.body == f"- {fragment.condition}: read .outcomebound/fragments/tickets.md"
+    assert parsed.body == (
+        f"{facts.ONCE}\n- {fragment.condition}: read .outcomebound/fragments/tickets.md"
+    )
