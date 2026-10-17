@@ -12,45 +12,175 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
-The finish check is retired. `adopt` installs no hook and runs no Done command. A hook costs time at
-every turn end, and the tests belong to the agent and to the person.
+## [1.7.0] - 2026-10-17
+
+A minor release. The finish check is retired: `adopt` installs no hook and runs no Done command,
+and it takes out the hook entries that 1.6.0 wrote (#134). A hook costs time at every turn end,
+and the tests belong to the agent and to the person. The guidance does the core work the outcome
+requires by default, neither underengineered nor overengineered (#135), and says one thing for
+each situation: one rule for the full suite, checks run once and kept until something they cover
+changes, lean defaults, and lessons from adopters' long sessions (#136). A new verb,
+`outcomebound size`, gives an agent the size of its change against a base (#136). The README and
+the CI templates install from PyPI (#130). `adopt` and `instructions check` have five fixes found
+when projects upgraded to 1.6.0 (#132), and a test of the suite has a wider wait (#131). The engine
+remains Python standard library only.
 
 Do these steps first:
 
-1. Install the new release. Until a project runs `adopt`, its old entries call
-   `outcomebound finish-check`, which now runs no Done command and exits 0 at once.
-2. In each project that has the hook, run `outcomebound adopt . --check`, then
-   `outcomebound adopt .`. The check shows each `hook` record as `stale` where its entry is
-   unchanged, `edited` where a person changed it, or `missing` where it is gone, with the event
-   and the command of the entry. The install takes out the stop entry
-   and the prompt entry from `.claude/settings.json` and `.codex/hooks.json`, and their records.
-   It keeps every other key and entry of those files, and it deletes a file that an earlier
-   `adopt` created and that now holds nothing. Review the diff and commit it.
-3. If you edited one of those entries, `adopt` stops and names it. Restore the entry or pass
-   `--force`. If the file has comments, `adopt` cannot rewrite it: remove the entry by hand, then
-   run `adopt` again.
-4. A CI job that runs `adopt --check` reports the hook records as not current until the install of
-   step 2 is committed.
-5. A project that used `--done-skip` has its `Done` fact without the "is not run when" clause
-   after the install. The Done commands are the same.
+1. If you upgrade from 1.5.0 or earlier, do the steps of the 1.6.0 section first. Use Python 3.10
+   or later and Git 2.52.0 or later. These minimums do not change.
+2. Install the release: `uv tool install --force outcomebound==1.7.0`. The tagged Git URL
+   (`git+https://github.com/rajasdevel/outcomebound@v1.7.0`) installs the same release (#130).
+   Until a project runs `adopt`, its old hook entries call `outcomebound finish-check`, which now
+   runs no Done command and exits 0 at once (#134).
+3. In each project, run `outcomebound adopt . --check`, then `outcomebound adopt .`. Review the
+   diff and commit it with the project's own checks (#134, #135, #136):
+   - Where the finish check is installed, the check shows each `hook` record as `stale` where its
+     entry is unchanged, `edited` where a person changed it, or `missing` where it is gone, with
+     the event and the command of the entry. The install takes out the stop entry and the prompt
+     entry from `.claude/settings.json` and `.codex/hooks.json`, and their records. It keeps every
+     other key and entry of those files, and it deletes a file that an earlier `adopt` created and
+     that now holds nothing.
+   - The install changes the kernel, the skills and the fragments `commands` (8), `workspace` (11),
+     `tickets` (14), `deploy` (6), `python` (8), `runtime` (3) and `multi-agent` (11). The `Done`
+     fact ends with `(the full suite)`, and the list of pointers opens with one line about when to
+     read each file.
+4. If you edited a hook entry, `adopt` stops and names it. Restore the entry or pass `--force`. If
+   the file has comments, `adopt` cannot rewrite it: remove the entry by hand, then run `adopt`
+   again (#134).
+5. If your CI installs a pinned release, change the pin to `1.7.0` in the same change as the
+   managed install. A CI job that runs `adopt --check` reports the managed files and the hook
+   records as not current until the install of step 3 is committed.
+6. A project that used `--done-skip` has its `Done` fact without the "is not run when" clause after
+   the install. The Done commands are the same (#134).
+7. If a script reads the install report of `adopt`, it now gets one line for each verb and skills
+   folder (for example `create   .claude/skills/: 21 files in 13 skills`) in place of one line for
+   each skill file (#132).
+
+### Added
+
+- `outcomebound size [<target>] [--base REF] [--json]` reports the files and lines of a change
+  against a base, by path kind (code, tests, docs, config, records), and the share that is not
+  code. It reads the work tree with Git, runs nothing and decides nothing. The design is
+  `docs/specs/size/design.md` (#136).
+- The guidance (#135, #136):
+  - The kernel asks whether the need is real, then whether the codebase, the standard library, the
+    platform or an installed dependency meets it, and puts new code last. Of two answers that meet
+    the bar, the smaller is the default. Overengineered means anything worth less to the outcome
+    than its work and upkeep.
+  - `using-outcomebound` is a ladder whose default is no mechanism. It says how to batch: run a
+    check once for a set of changes, keep long output in a file, read failures from that output,
+    keep a result until something it covers changes, and make independent reads and checks in one
+    step. Where the request leaves the size open, the default is the smallest version that does
+    the core job, and the one line of the report names what was left out. Own code against a new
+    dependency is compared by the whole work and upkeep. `outcomebound size` is used where the
+    growth of a change is in doubt. A forecast rests on completed cycles.
+  - `tests-worth-keeping`: one small test for new deciding logic; a baseline only where a failure
+    may predate the change; regressions are judged against the release in production where the
+    outcome is stability against it; failures are compared by cause; a test is flaky only under
+    the same inputs; a failed bar that the agent did not set is compared with the unchanged base.
+  - `review-findings` keeps findings that stop the outcome apart from optional ones, checks a rule
+    across the surface that the change affects and reports the cases together, and re-reads the
+    changed claims with the context needed to check them.
+  - `decision-brief`: an act that the outcome does not need is left out; an existing ruling applies
+    within its scope; a clear new instruction is recorded with no confirming question; a recurring
+    choice gets one bounded standing rule. A cover is authority for the act, and never passes a
+    refusal by another route.
+  - The contract keeps one authoritative record of each current decision; other documents link to
+    it and repeat the decisions their reader needs. A count in a spec comes with the command that
+    produced it.
+- Evaluations: an earlier arm from any Git ref, a verbatim arm, named arms, a grant of a local
+  listener for each fixture, the deploy report check across a heading, and four fixtures. E27 and
+  E28 in `docs/evaluations.md` record the results (#135).
+
+### Changed
+
+- The full suite runs where the changed risk reaches it or the project requires it, its landing
+  gate included; it no longer runs at every landing as such (#135, #136).
+- Fragments (#135, #136):
+  - `commands` 8: long output goes to a file, not only through a `tail` or `grep` pipe; a slow
+    check runs again after a change that it covers, not to see more of its output; a wait uses the
+    harness's notice or its longest supported wait; a check that the task started may stop where it
+    can no longer answer. The person's instruction to stop or skip a check outranks the
+    slow-is-not-hung line.
+  - `deploy` 6: missing evidence withholds the claim and does not by itself stop a running
+    service; an added observer stays advisory until it is checked; a release checklist, runbook or
+    pipeline file orders the acts and does not widen the grant.
+  - `multi-agent` 11: the brief says who runs the heavy checks and where their output goes, and
+    the orchestrator schedules them across its delegates.
+  - `workspace` 11, `tickets` 14, `python` 8 and `runtime` 3 have smaller fixes.
+- `hand-off-tickets` estimates an oversized `done-when` and asks before it builds it.
+  `hand-off-tickets` and `gather-requirements` no longer load for a prompt or a spec asked for
+  outside the ticket store (#136).
+- Each skill's done line names the outcome first (#135). `slice-tickets`, `sync-tracker`,
+  `diagnose`, the adopt skill, the new-project reference and the client scaffold have smaller
+  fixes (#136).
+- The lifecycle presets each size their own default, and AI review is conditional (#135).
+- The README, the CI templates and the scaffold's CI workflow install `outcomebound==<version>`
+  from PyPI. The tagged Git URL stays documented; it installs the same release and the releases
+  before 1.6.0. `release-check` reads an install pin in both forms (#130).
+- `adopt --finish-check`, `--no-finish-check`, `--finish-timeout`, `--verify` and `--done-skip`
+  stay accepted, are hidden from `--help`, and each prints one `note` line (#134).
+- A hook entry in a harness's settings is a review hit for `instructions check`, like any other
+  hook. The engine no longer exempts the entries that 1.6.0 wrote (#134).
+- The adopt skill, the workspace and Python fragments and the portability guide no longer describe
+  a hook. The skill tells the agent to run the Done commands itself (#134).
+- The install report counts skill files: one line for each verb and skills folder in place of
+  about 280 lines (#132).
+- `instructions check` says when nothing failed: a text report with `UNVERIFIED` results and no
+  `FAIL` says so, and says that `--strict` counts `UNVERIFIED` as a failure. The exit code 2 is the
+  same (#132).
 
 ### Removed
 
 - The finish check: the stop and prompt hook entries, the measurement of Done at install, the
   record of known failures and `finish-check --status`. The `finish-check` verb stays as a stub
   until a later major release: it accepts any arguments, writes nothing and exits 0 at once. For
-  the `codex` stop it prints `{}`, as 1.6.0 did when it had nothing to report.
-- The `finish_hook` field of the harness table and its schema.
-- The `unmanaged` state of `adopt --check` and the readiness lines about a measured Done.
+  the `codex` stop it prints `{}`, as 1.6.0 did when it had nothing to report (#134).
+- The `finish_hook` field of the harness table and its schema (#134).
+- The `unmanaged` state of `adopt --check` and the readiness lines about a measured Done (#134).
 
-### Changed
+### Fixed
 
-- `adopt --finish-check`, `--no-finish-check`, `--finish-timeout`, `--verify` and `--done-skip`
-  stay accepted, are hidden from `--help`, and each prints one `note` line.
-- A hook entry in a harness's settings is a review hit for `instructions check`, like any other
-  hook. The engine no longer exempts the entries that 1.6.0 wrote.
-- The adopt skill, the workspace and Python fragments and the portability guide no longer describe
-  a hook. The skill tells the agent to run the Done commands itself.
+- A worktree under the project's own `.agents/worktrees` no longer warns about the project's
+  instruction file in `adopt` and `instructions check`. A foreign folder above still gets the
+  warning (#132).
+- `adopt --check` no longer walks what Git ignores. It makes one pruned walk that skips Git-ignored
+  folders, nested repositories, vendored trees and hidden folders that no pattern names. A pattern
+  that names a path from the root is still checked directly. On a synthetic repository of about
+  45,000 files, `adopt --check` took 4.19 s before and 0.31 s after (#132).
+- The test of a bounded command that stops a descendant waits up to 60 s for the killed child, and
+  its failure message names the process state. It had failed once on a loaded hosted runner
+  (#131).
+
+### Verification limits
+
+- E28 (one model, short synthetic tasks) measured the core-work guidance: on the fixtures that
+  separated the texts, the new text passed 6 of 6 where 1.6.0 ran a slow suite it did not need
+  (1.6.0: 4 of 8), and 6 of 6 on a granted deploy (1.6.0: 6 of 8); a diagnosis fixture passed 5 of
+  6 (1.6.0: 7 of 8). This is a direction, not a measured effect (#135).
+- The changes of #136 had a spot check of 15 runs on five fixtures after the kernel change, and no
+  full evaluation pass. Every claim passed except one deploy run, which the grader could not credit
+  because its deploy ran inside a `;` list (#136).
+- What the guidance does in an adopter's long sessions is `UNVERIFIED` (#135, #136).
+- The platform limits of 1.5.0 stay: native Windows and Linux sessions, Codex desktop and Git for
+  Windows at the exact minimum are `UNVERIFIED`, and CI runs no models.
+
+### Known issues
+
+- `outcomebound size` counts path kinds, not what a line does, and it does not count files that Git
+  ignores. A binary file, and an untracked file over 2 MB, count as files with no lines; a note
+  names the large file (#136).
+- The fragments `client`, `explore`, `solo`, `team`, `workspace` and `ci-release` have no
+  evaluation fixture of their own. Their effect is `UNVERIFIED`.
+- The graders of a fixture are sealed outside its workspace and kept with the run, so `--regrade`
+  uses the graders that the run had. A grader fix applies only to new runs.
+- `outcomebound validation` matches a claim's `ran_output` pattern after the command has ended,
+  outside the claim's timeout, so a slow pattern on a long output can run past it.
+- `make ob-validate` from `templates/outcomebound.mk` passes no `--waive`; run
+  `outcomebound validation <plan> --waive NAME=REASON` directly to waive a claim.
+- `outcomebound validation` keeps a command's whole output in memory while it reads it, so a check
+  that prints hundreds of megabytes needs memory of about twice that size.
 
 ## [1.6.0] - 2026-10-16
 
@@ -1273,7 +1403,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.7.0
 [1.6.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.6.0
 [1.5.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.5.0
 [1.4.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.4.0
