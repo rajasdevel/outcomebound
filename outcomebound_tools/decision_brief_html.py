@@ -1,11 +1,14 @@
 """The HTML drawing of decision briefs, for a decision explorable.
 
 What this module decides: how the briefs `decision_brief.read_document` accepts are drawn as
-HTML: the marks, the line names and the line order of the markdown drawing in its emoji form, with
-classes the shared stylesheet styles; each brief's own diagram, and the order among the briefs,
-as `data-diagram` blocks (Mermaid source) with the ASCII chain form as their fallback text; every
-text escaped; and a `code` element for each backtick span. It also fixes the shape of each brief
-in the page's configuration, which is what the runtime builds the reply from.
+HTML: the marks, the line names and the block order of the markdown drawing in its emoji form (what
+waits on the answer, the context, the terms, the picture, the offer to explore, the options with
+the recommendation on the option it names, the evidence), with classes the shared stylesheet
+styles; each brief's own diagram, and the order among the briefs, as `data-diagram` blocks
+(Mermaid source) with the ASCII chain form as their fallback text, and a picture as a `figure`
+holding a `pre`; every text escaped; and a `code` element for each backtick span. It also fixes
+the shape of each brief in the page's configuration, which is what the runtime builds the reply
+from.
 
 What it does not decide: which brief is accepted, which is `decision_brief`'s reading and
 refusals, or what the page around the drawing holds. The markdown drawing stays the one way a
@@ -26,6 +29,8 @@ __all__ = ["config_briefs", "render_html"]
 
 _SYMBOLS = "emoji"
 _CODE_SPAN = re.compile(r"`([^`]+)`")
+# A strong span, `**words**`, as a markdown view reads it: the stars touch the words they bracket.
+_STRONG = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*")
 
 
 def _escape(text: str) -> str:
@@ -35,9 +40,16 @@ def _escape(text: str) -> str:
 
 
 def _inline(text: str) -> str:
-    """`text` escaped, a backtick span as a `code` element."""
+    """`text` escaped, a backtick span as a `code` element and, outside code spans, a
+    `**strong**` span as a `strong` element, as the text form shows them in a markdown view."""
 
-    return _CODE_SPAN.sub(r"<code>\1</code>", _escape(text))
+    parts = _CODE_SPAN.split(text)
+    return "".join(
+        f"<code>{_escape(part)}</code>"
+        if index % 2
+        else _STRONG.sub(r"<strong>\1</strong>", _escape(part))
+        for index, part in enumerate(parts)
+    )
 
 
 def _fence(markdown: str, language: str) -> str:
@@ -56,8 +68,14 @@ def _diagram_pair(mermaid: str, fallback: str) -> str:
     )
 
 
-def _figure(caption: str, mermaid: str, fallback: str, note: str = "", extra: str = "") -> str:
-    title = f"<figcaption>{_inline(caption)}</figcaption>\n" if caption else ""
+def _mark(key: str) -> str:
+    return f'<span class="xp-mark">{MARKS[_SYMBOLS][key]}</span>'
+
+
+def _figure(
+    caption: str, mermaid: str, fallback: str, note: str = "", extra: str = "", mark: str = ""
+) -> str:
+    title = f"<figcaption>{mark}{_inline(caption)}</figcaption>\n" if caption else ""
     tail = f'\n<p class="xp-note">{_inline(note)}</p>' if note else ""
     return (
         f'<figure class="xp-figure{extra}">{title}{_diagram_pair(mermaid, fallback)}{tail}</figure>'
@@ -71,7 +89,20 @@ def _brief_figure(brief: Brief) -> str:
     stub = Brief(heading="x", diagram=drawn)
     mermaid = _fence(decision_brief.render([stub], _SYMBOLS, (), "mermaid"), "mermaid")
     fallback = _fence(decision_brief.render([stub], _SYMBOLS, (), "ascii"), "text")
-    return _figure(drawn.caption, mermaid, fallback)
+    mark = _mark("picture") + " " if drawn.caption else ""
+    return _figure(drawn.caption, mermaid, fallback, mark=mark)
+
+
+def _picture_figure(brief: Brief) -> str:
+    picture = brief.picture
+    if picture is None:
+        return ""
+    return (
+        '<figure class="xp-figure xp-picture">'
+        f"<figcaption>{_mark('picture')} {_inline(picture.caption)}</figcaption>\n"
+        f'<pre class="xp-picture-lines">{html.escape(chr(10).join(picture.lines), quote=False)}'
+        "</pre></figure>"
+    )
 
 
 def _heading_text(brief_id: str, brief: Brief) -> str:
@@ -81,82 +112,128 @@ def _heading_text(brief_id: str, brief: Brief) -> str:
     return brief.heading[len(brief_id) + len(sep) :]
 
 
-def _recommend(brief: Brief, ways: Sequence[str]) -> str:
-    sep, dash = SEPARATORS[_SYMBOLS]
-    letter = ""
-    if brief.recommend_way:
-        letter = f"{decision_brief.letter(ways.index(brief.recommend_way))}{dash}"
-    confidence = f"{sep}confidence {brief.confidence}" if brief.confidence else ""
-    mark = MARKS[_SYMBOLS]["recommend"]
+def _recommend(brief: Brief, css: str) -> str:
+    """The recommendation: the mark, `Recommended:`, the reason, the confidence in words."""
+
+    sep, _ = SEPARATORS[_SYMBOLS]
+    confidence = decision_brief.confidence_words(brief.confidence)
+    tail = f"{sep}{confidence}" if confidence else ""
     return (
-        f'<li class="xp-line xp-recommend"><span class="xp-mark">{mark}</span> '
-        f"Recommend: {_escape(letter)}{_inline(brief.recommend)}{_escape(confidence)}</li>"
+        f'<p class="{css}">{_mark("recommended")} '
+        f"Recommended: {_inline(brief.recommend)}{_escape(tail)}</p>"
     )
 
 
 def _options(brief: Brief) -> str:
+    """The `Options` lead-in and the lettered list; the recommendation sits inside the option it
+    names, before its `Choose if` and `Downside` lines."""
+
     _, dash = SEPARATORS[_SYMBOLS]
+    ways = [option[0] for option in brief.options]
+    recommended = ways.index(brief.recommend_way) if brief.recommend and brief.recommend_way else -1
     items = []
-    for index, (way, leads_to, *downside) in enumerate(brief.options):
+    for index, option in enumerate(brief.options):
+        way, leads_to, downside, choose_if = decision_brief.option_parts(option)
         letter = decision_brief.letter(index)
-        risk = "".join(
-            '\n    <p class="xp-downside"><span class="xp-mark">'
-            f"{MARKS[_SYMBOLS]['downside']}</span> Downside: {_inline(text)}</p>"
-            for text in downside
-        )
+        nested = []
+        if index == recommended:
+            nested.append(_recommend(brief, "xp-rec-inline"))
+        if choose_if:
+            nested.append(
+                f'<p class="xp-choose">{_mark("choose_if")} Choose if: {_inline(choose_if)}</p>'
+            )
+        if downside:
+            nested.append(
+                f'<p class="xp-downside">{_mark("downside")} Downside: {_inline(downside)}</p>'
+            )
+        inner = "".join(f"\n    {line}" for line in nested)
         items.append(
             f'  <li class="xp-option" data-letter="{letter}"><span class="xp-letter">{letter}'
             f'</span> <span class="xp-way">{_inline(way)}</span>{_escape(dash)}'
-            f"{_inline(leads_to)}{risk}</li>"
+            f"{_inline(leads_to)}{inner}</li>"
         )
     return (
-        '<li class="xp-line xp-options">Options:\n<ol class="xp-option-list">\n'
-        + "\n".join(items)
-        + "\n</ol></li>"
+        '<p class="xp-line xp-options"><strong>Options</strong></p>\n'
+        '<ol class="xp-option-list">\n' + "\n".join(items) + "\n</ol>"
     )
 
 
-def _lines(brief: Brief) -> list[str]:
-    """The brief's list items, in the order the markdown drawing writes them."""
+def _context(brief: Brief) -> list[str]:
+    """Each context block: a paragraph for a string, a list for a list of strings."""
+
+    blocks: list[str] = []
+    for block in brief.context:
+        if isinstance(block, str):
+            blocks.append(f'<p class="xp-context">{_inline(block)}</p>')
+        else:
+            items = "".join(f"<li>{_inline(item)}</li>" for item in block)
+            blocks.append(f'<ul class="xp-context-list">{items}</ul>')
+    return blocks
+
+
+def _lead_blocks(brief: Brief) -> list[str]:
+    """What waits on the answer, the context, the terms, the pictures and the offer to explore."""
+
+    blocks: list[str] = []
+    if brief.why_now:
+        blocks.append(
+            f'<p class="xp-line xp-why">{_mark("waiting")} Waiting on this: '
+            f"{_inline(brief.why_now)}</p>"
+        )
+    blocks.extend(_context(brief))
+    blocks.extend(
+        f'<p class="xp-line xp-term">{_mark("term")} <em>{_escape(term)}</em>: '
+        f"{_inline(meaning)}</p>"
+        for term, meaning in brief.terms
+    )
+    blocks.extend(figure for figure in (_brief_figure(brief), _picture_figure(brief)) if figure)
+    if brief.explore:
+        blocks.append(
+            f'<p class="xp-line xp-explore">{_mark("explore")} Explore: '
+            f"{_inline(brief.explore)}</p>"
+        )
+    return blocks
+
+
+def _evidence_blocks(brief: Brief) -> list[str]:
+    """The evidence, one paragraph each, in the order the markdown drawing writes it."""
 
     marks = MARKS[_SYMBOLS]
-    ways = [option[0] for option in brief.options]
-    lines: list[str] = []
-    if brief.recommend:
-        lines.append(_recommend(brief, ways))
-    if brief.options:
-        lines.append(_options(brief))
-    if brief.why_now:
-        lines.append(f'<li class="xp-line xp-why">Why now: {_inline(brief.why_now)}</li>')
-    lines.extend(
-        f'<li class="xp-line xp-asked">Asked: {_inline(text)}</li>' for text in brief.asked
-    )
+    blocks = [f'<p class="xp-line xp-asked">Asked: {_inline(text)}</p>' for text in brief.asked]
     if brief.checked:
-        lines.append(
-            f'<li class="xp-line xp-checked"><span class="xp-mark">{marks[brief.checked[0]]}'
-            f"</span> Checked: {_inline(brief.checked[1])}</li>"
+        blocks.append(
+            f'<p class="xp-line xp-checked"><span class="xp-mark">{marks[brief.checked[0]]}'
+            f"</span> Checked: {_inline(brief.checked[1])}</p>"
         )
     if brief.not_checked:
-        lines.append(
-            f'<li class="xp-line xp-not-checked"><span class="xp-mark">{marks["unchecked"]}'
-            f"</span> Not checked: {_inline(brief.not_checked)}</li>"
+        blocks.append(
+            f'<p class="xp-line xp-not-checked">{_mark("unchecked")} '
+            f"Not checked: {_inline(brief.not_checked)}</p>"
         )
-    lines.extend(
-        f'<li class="xp-line xp-fact"><span class="xp-label">{_escape(label)}</span>: '
-        f"{_inline(text)}</li>"
+    blocks.extend(
+        f'<p class="xp-line xp-fact"><span class="xp-label">{_escape(label)}</span>: '
+        f"{_inline(text)}</p>"
         for label, text in brief.facts
     )
     if brief.debt:
-        lines.append(
-            f'<li class="xp-line xp-debt"><span class="xp-mark">{marks["debt"]}</span> '
-            f"Debt: {_inline(brief.debt)}</li>"
-        )
+        blocks.append(f'<p class="xp-line xp-debt">{_mark("debt")} Debt: {_inline(brief.debt)}</p>')
     if brief.undo:
-        lines.append(
-            f'<li class="xp-line xp-undo"><span class="xp-mark">{marks[brief.undo[0]]}</span> '
-            f"Undo: {_inline(brief.undo[1])}</li>"
+        blocks.append(
+            f'<p class="xp-line xp-undo"><span class="xp-mark">{marks[brief.undo[0]]}</span> '
+            f"Undo: {_inline(brief.undo[1])}</p>"
         )
-    return lines
+    return blocks
+
+
+def _blocks(brief: Brief) -> list[str]:
+    """The brief's blocks after its heading, in the order the markdown drawing writes them."""
+
+    blocks = _lead_blocks(brief)
+    if brief.options:
+        blocks.append(_options(brief))
+    if brief.recommend and not (brief.options and brief.recommend_way):
+        blocks.append(_recommend(brief, "xp-line xp-recommend"))
+    return [*blocks, *_evidence_blocks(brief)]
 
 
 def _article(brief_id: str, brief: Brief) -> str:
@@ -165,10 +242,7 @@ def _article(brief_id: str, brief: Brief) -> str:
         f'<h2><span class="xp-brief-id">{_escape(brief_id)}</span>{_escape(sep)}'
         f"{_inline(_heading_text(brief_id, brief))}</h2>"
     )
-    figure = _brief_figure(brief)
-    body = "\n".join([head, '<ul class="xp-lines">', *_lines(brief), "</ul>"])
-    if figure:
-        body += "\n" + figure
+    body = "\n".join([head, *_blocks(brief)])
     return (
         f'<article class="xp-brief" id="brief-{_escape(brief_id)}" '
         f'data-brief="{_escape(brief_id)}">\n{body}\n</article>'

@@ -3,14 +3,24 @@
     {
       "id": "D1",
       "heading": "Where should the reports API keep its cache?",
+      "why_now": "the reports API ships next week; until you answer, it ships with no cache",
+      "context": [
+        "The reports API reads the same few rows many times a second at the busy hour.",
+        "A cache saves those reads, and where it lives decides what it costs to run."
+      ],
+      "terms": [["hit rate", "the share of reads the cache answers without asking the database"]],
       "recommend": "the hit rate is still a guess, and the in-process cache needs no new service",
       "recommend_way": "in-process cache",
-      "confidence": "70% (inferred)",
+      "confidence": "inferred",
       "options": [
-        ["in-process cache", "each server keeps its own copy, so there is nothing new to run",
-         "each server warms up alone, so a restart sends a burst of reads to the database"],
-        ["shared cache service", "all servers read one copy, so the hit rate is higher",
-         "one more service to run, and every read crosses the network"]
+        {"way": "in-process cache",
+         "leads_to": "each server keeps its own copy, so there is nothing new to run",
+         "choose_if": "running fewer services matters more than the highest hit rate",
+         "downside": "each server warms up alone, so a restart sends a burst of reads to the database"},
+        {"way": "shared cache service",
+         "leads_to": "all servers read one copy, so the hit rate is higher",
+         "choose_if": "the highest hit rate matters more than one more service to run",
+         "downside": "one more service to run, and every read crosses the network"}
       ],
       "checked": {"verdicts": ["PASS"],
                   "text": "`reports.log` shows 120 requests per second at the busy hour"},

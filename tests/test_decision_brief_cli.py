@@ -23,6 +23,7 @@ from outcomebound_tools import decision_brief, surfaces
 from outcomebound_tools.decision_brief import Brief
 from outcomebound_tools.textio import universal
 from tests.portable import carried_environment, engine
+from tests.test_decision_brief import _unmerged as unmerged
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "schemas" / "decision-briefs.schema.json"
@@ -85,26 +86,36 @@ TWO_WAYS = [["x", "one place", "a cost"], ["y", "another", "another cost"]]
 
 EMOJI_ASCII = """\
 ### D1 · Keep the old flag for one release?
-- 👉 Recommend: B — two adopters still set it · confidence 80% (inferred)
-- Options:
-  - A drop it now — the code path goes today
-    - 🔻 Downside: an adopter setting it is refused on upgrade
-  - B keep it one release — adopters get a warning first
-    - 🔻 Downside: one more release carries the old code path
-- ✅ Checked: `grep -r old_flag` finds two adopters' configs
-- ↩️ Undo: revert the commit
 
-How an upgrade reads the flag
+🗺️ How an upgrade reads the flag
+
 ```text
 config --old_flag--> warning --> new flag
 ```
 
+**Options**
+
+- **A · drop it now** — the code path goes today
+  - 🔻 Downside: an adopter setting it is refused on upgrade
+- **B · keep it one release** — adopters get a warning first
+  - ⭐ Recommended: two adopters still set it · 80% (inferred)
+  - 🔻 Downside: one more release carries the old code path
+
+✅ Checked: `grep -r old_flag` finds two adopters' configs
+
+↩️ Undo: revert the commit
+
 ### D2 · Tag the release once D1 is settled?
-- 👉 Recommend: tag it, since every release check passes
-- Why now: the release waits on it
-- ⚠️ Checked: make test PASS, hosted CI UNVERIFIED
-- ⚠️ Not checked: the hosted run, which needs your login
-- ⛔ Undo: a pushed tag cannot be taken back
+
+⏳ Waiting on this: the release waits on it
+
+⭐ Recommended: tag it, since every release check passes
+
+⚠️ Checked: make test PASS, hosted CI UNVERIFIED
+
+⚠️ Not checked: the hosted run, which needs your login
+
+⛔ Undo: a pushed tag cannot be taken back
 
 ### Order — an arrow points at what waits on it
 ```text
@@ -114,28 +125,38 @@ D1 --> D2
 
 ASCII_MERMAID = """\
 ### D1 | Keep the old flag for one release?
-- [>] Recommend: B - two adopters still set it | confidence 80% (inferred)
-- Options:
-  - A drop it now - the code path goes today
-    - [-] Downside: an adopter setting it is refused on upgrade
-  - B keep it one release - adopters get a warning first
-    - [-] Downside: one more release carries the old code path
-- [ok] Checked: `grep -r old_flag` finds two adopters' configs
-- [undo] Undo: revert the commit
 
-How an upgrade reads the flag
+[pic] How an upgrade reads the flag
+
 ```mermaid
 flowchart LR
   n1["config"] -->|old_flag| n2["warning"]
   n2["warning"] --> n3["new flag"]
 ```
 
+**Options**
+
+- **A | drop it now** - the code path goes today
+  - [-] Downside: an adopter setting it is refused on upgrade
+- **B | keep it one release** - adopters get a warning first
+  - [rec] Recommended: two adopters still set it | 80% (inferred)
+  - [-] Downside: one more release carries the old code path
+
+[ok] Checked: `grep -r old_flag` finds two adopters' configs
+
+[undo] Undo: revert the commit
+
 ### D2 | Tag the release once D1 is settled?
-- [>] Recommend: tag it, since every release check passes
-- Why now: the release waits on it
-- [!] Checked: make test PASS, hosted CI UNVERIFIED
-- [!] Not checked: the hosted run, which needs your login
-- [!!] Undo: a pushed tag cannot be taken back
+
+[wait] Waiting on this: the release waits on it
+
+[rec] Recommended: tag it, since every release check passes
+
+[!] Checked: make test PASS, hosted CI UNVERIFIED
+
+[!] Not checked: the hosted run, which needs your login
+
+[!!] Undo: a pushed tag cannot be taken back
 
 ### Order - an arrow points at what waits on it
 ```mermaid
@@ -147,7 +168,9 @@ flowchart LR
 # Each diagram's fence in each form, as the two goldens draw it, and the ASCII marks
 # with ASCII diagrams.
 ASCII_FLAG = "```text\nconfig --old_flag--> warning --> new flag\n```"
-MERMAID_FLAG = ASCII_MERMAID.split("How an upgrade reads the flag\n", 1)[1].split("\n\n", 1)[0]
+MERMAID_FLAG = ASCII_MERMAID.split("[pic] How an upgrade reads the flag\n\n", 1)[1].split(
+    "\n\n", 1
+)[0]
 ASCII_ORDER = "```text\nD1 --> D2\n```"
 MERMAID_ORDER = '```mermaid\nflowchart LR\n  n1["D1"] --> n2["D2"]\n```'
 ASCII_ASCII = ASCII_MERMAID.replace(MERMAID_FLAG, ASCII_FLAG).replace(MERMAID_ORDER, ASCII_ORDER)
@@ -354,7 +377,7 @@ def test_nothing_to_put_says_nothing_waits(
         ),
         (
             {"confidence": "fact", **EVIDENCE},
-            "a brief's confidence belongs to its Recommend line, and this one has none",
+            "a brief's confidence belongs to its recommendation, and this one has none",
         ),
         (
             {"recommend": "R", "recommend_way": "z", "options": TWO_WAYS, **EVIDENCE},
@@ -363,7 +386,7 @@ def test_nothing_to_put_says_nothing_waits(
         (
             {"options": TWO_WAYS, **EVIDENCE},
             "a brief that lays out 2 Options recommends one of them, "
-            "and this one has no Recommend line",
+            "and this one has no recommendation",
         ),
         (
             {"recommend": "it is cheaper", "options": TWO_WAYS, **EVIDENCE},
@@ -588,7 +611,7 @@ def test_a_fail_verdict_never_reaches_the_passed_mark(
     code, out, _ = _main(capsys, str(path), "--symbols", "emoji")
     assert (code, out) == (
         0,
-        "### D1 · Q\n- ⚠️ Checked: make test FAIL\n- ↩️ Undo: revert the commit\n",
+        "### D1 · Q\n\n⚠️ Checked: make test FAIL\n\n↩️ Undo: revert the commit\n",
     )
     assert "✅" not in out
 
@@ -637,22 +660,30 @@ def test_help_names_the_input_shape_with_a_worked_example(
 def test_the_help_example_passes_every_rule_and_shows_what_a_brief_carries(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], symbols: str, form: str
 ) -> None:
-    """The example an agent copies is drawn, not refused, in both forms, and carries a
-    downside under each Option, a Checked line, and a diagram of its own."""
+    """The example an agent copies is drawn, not refused, in both forms, and carries what waits
+    on the answer, context in a paragraph and a list, a term, a condition for choosing, a
+    downside under each Option, the recommendation under the Option it names, a Checked line,
+    and a diagram of its own."""
 
     path = tmp_path / "example.json"
     path.write_text(decision_brief._EXAMPLE, encoding="utf-8")
     code, out, err = _main(capsys, str(path), "--symbols", symbols, "--form", form)
     marks = decision_brief.MARKS[symbols]
     lines = out.splitlines()
-
-    options = [at for at, line in enumerate(lines) if line.startswith("  - ")]
-    downside = f"    - {marks['downside']} Downside: "
-    downsides = [at for at, line in enumerate(lines) if line.startswith(downside)]
+    first = lines[: lines.index(next(line for line in lines if line.startswith("### D2")))]
 
     assert (code, err) == (0, "")
-    assert len(options) == 2 and downsides == [at + 1 for at in options]
-    assert any(line.startswith(f"- {marks['checked']} Checked: ") for line in lines)
+    assert first[2].startswith(f"{marks['waiting']} Waiting on this: ")
+    assert [line for line in first if line.startswith("- ") and "Keeping it" in line]
+    assert any(line.startswith(f"{marks['term']} *code path*: ") for line in first)
+    options = [at for at, line in enumerate(first) if line.startswith("- **")]
+    assert len(options) == 2
+    assert first[options[0] + 1].startswith(f"  - {marks['recommended']} Recommended: ")
+    assert first[options[0] + 1].endswith("a check shows this")
+    assert first[options[0] + 2].startswith(f"  - {marks['choose_if']} Choose if: ")
+    assert first[options[0] + 3].startswith(f"  - {marks['downside']} Downside: ")
+    assert first[options[1] + 1].startswith(f"  - {marks['downside']} Downside: ")
+    assert any(line.startswith(f"{marks['checked']} Checked: ") for line in first)
     assert lines.count("```mermaid" if form == "mermaid" else "```text") == 2, "D1's and the order"
 
 
@@ -723,8 +754,10 @@ def test_every_line_break_control_and_format_character_is_refused(
 @pytest.mark.parametrize(
     "glyph",
     [
-        *("⚠", "↩", "⚠️", "↩️", "✅", "👉", "🔻", "🧱", "⛔"),
-        *("[>]", "[ok]", "[!]", "[-]", "[debt]", "[undo]", "[!!]"),
+        *("⚠", "↩", "⚠️", "↩️", "✅", "🔻", "🧱", "⛔"),
+        *("⏳", "📖", "🗺", "🗺️", "🧪", "⭐", "⚖", "⚖️"),
+        *("[ok]", "[!]", "[-]", "[debt]", "[undo]", "[!!]"),
+        *("[wait]", "[term]", "[pic]", "[explore]", "[rec]", "[choose]"),
     ],
 )
 def test_a_marks_own_glyph_is_refused_bare_or_whole(
@@ -735,7 +768,11 @@ def test_a_marks_own_glyph_is_refused_bare_or_whole(
 
 
 @pytest.mark.parametrize(
-    "label", ["Checked", "not checked", " UNDO ", "Why Now", "confidence", "Downside"]
+    "label",
+    [
+        *("Checked", "not checked", " UNDO ", "Why Now", "confidence", "Downside"),
+        *("Recommend", "recommended", "Waiting on this", "choose IF", "Explore", "Options"),
+    ],
 )
 def test_a_fact_may_not_take_a_lines_name(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], label: str
@@ -752,7 +789,7 @@ def test_a_fact_with_its_own_label_is_drawn(
         {"briefs": [{"id": "D1", "heading": "Q", "facts": [["Grant", "none"]], "undo": UNDO}]},
     )
     code, out, _ = _main(capsys, str(path), "--symbols", "emoji")
-    assert (code, out) == (0, "### D1 · Q\n- Grant: none\n- ↩️ Undo: revert the commit\n")
+    assert (code, out) == (0, "### D1 · Q\n\nGrant: none\n\n↩️ Undo: revert the commit\n")
 
 
 def test_ask_prints_each_brief_as_one_line_fields_for_a_question_tool(
@@ -772,7 +809,7 @@ def test_ask_prints_each_brief_as_one_line_fields_for_a_question_tool(
     assert (
         first["question"]
         == first["title"]
-        == ("D1 · Keep the old flag for one release? · Recommend: B — two adopters still set it")
+        == ("D1 · Keep the old flag for one release? · Recommended: B — two adopters still set it")
     )
     assert first["options"] == [
         {
@@ -847,3 +884,341 @@ def test_no_shipped_example_shows_a_percentage_confidence() -> None:
     ]
     for text in shipped:
         assert not re.search(r"confidence\W{0,4}\d+%|NN%", text), text[:200]
+
+
+def _document(brief: dict[str, object]) -> dict[str, object]:
+    return {"briefs": [{"id": "D1", "heading": "Q", "undo": UNDO, **EVIDENCE, **brief}]}
+
+
+# The starter of 1.7.0, whose fields every later release still draws.
+OLD_SHAPE = {
+    "briefs": [
+        {
+            "id": "D1",
+            "heading": "Where should the reports API keep its cache?",
+            "recommend": "the hit rate is still a guess",
+            "recommend_way": "in-process cache",
+            "confidence": "70% (inferred)",
+            "why_now": "the API ships next week",
+            "options": [
+                [
+                    "in-process cache",
+                    "each server keeps its own copy",
+                    "each server warms up alone",
+                ],
+                ["shared cache service", "all servers read one copy", "one more service to run"],
+            ],
+            "checked": {"verdicts": ["PASS"], "text": "`reports.log` shows 120 requests a second"},
+            "facts": [["If unanswered", "the API ships with no cache"]],
+            "undo": {"can_be_undone": True, "text": "switch the cache flag back"},
+            "diagram": {"caption": "How a request is served", "edges": [["request", "cache"]]},
+        }
+    ]
+}
+
+
+def test_a_document_written_for_1_7_0_is_drawn_in_the_new_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Three-string options, a percentage confidence, `why_now` and a `If unanswered` fact
+    draw without a refusal: the waiting line first, the confidence as given, the fact as a
+    paragraph among the evidence."""
+
+    path = _write(tmp_path, OLD_SHAPE)
+
+    code, out, err = _main(capsys, str(path), "--symbols", "emoji", "--form", "ascii")
+
+    assert (code, err) == (0, "")
+    assert out.split("\n\n")[:2] == [
+        "### D1 · Where should the reports API keep its cache?",
+        "⏳ Waiting on this: the API ships next week",
+    ]
+    assert "  - ⭐ Recommended: the hit rate is still a guess · 70% (inferred)\n" in out
+    assert "\nIf unanswered: the API ships with no cache\n" in out
+    assert unmerged(out) == []
+
+
+# Every new field in one document, with an option as an object and as a list.
+NEW_SHAPE = _document(
+    {
+        "why_now": "the release notes wait",
+        "context": ["The flag switches the parser.", ["Two adopters set it."], "Nothing else."],
+        "terms": [["code path", "the branch the flag selects"]],
+        "picture": {"caption": "Before and after", "lines": ["old: a", "", "new: b"]},
+        "explore": "try how many adopters break",
+        "recommend": "two adopters set it",
+        "recommend_way": "keep it",
+        "confidence": "inferred",
+        "options": [
+            {
+                "way": "keep it",
+                "leads_to": "a warning first",
+                "downside": "one more release",
+                "choose_if": "no adopter may break",
+            },
+            ["drop it", "the code path goes", "an adopter is refused"],
+        ],
+    }
+)
+
+
+@pytest.mark.parametrize(("symbols", "form"), [("emoji", "ascii"), ("ascii", "mermaid")])
+def test_every_new_field_is_drawn_and_no_lines_or_lists_run_together(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], symbols: str, form: str
+) -> None:
+    code, out, err = _main(
+        capsys, str(_write(tmp_path, NEW_SHAPE)), "--symbols", symbols, "--form", form
+    )
+    marks = decision_brief.MARKS[symbols]
+
+    assert (code, err) == (0, "")
+    assert unmerged(out) == []
+    blocks = out.split("\n\n")
+    heads = [block.split(" ")[0] for block in blocks]
+    # The order of the design: waiting, context, term, picture, explore, options, evidence.
+    assert heads.index(marks["waiting"]) < heads.index("The") < heads.index(marks["term"])
+    assert (
+        heads.index(marks["term"]) < heads.index(marks["picture"]) < heads.index(marks["explore"])
+    )
+    assert (
+        heads.index(marks["explore"]) < heads.index("**Options**") < heads.index(marks["unchecked"])
+    )
+    assert f"  - {marks['choose_if']} Choose if: no adopter may break\n" in out
+    assert f"  - {marks['recommended']} Recommended: two adopters set it" in out
+    assert out.count("Recommended:") == 1, "named, so not also a paragraph"
+    assert "my judgment" in out
+
+
+@pytest.mark.parametrize(
+    ("brief", "reason"),
+    [
+        (
+            {"options": [{"leads_to": "b", "downside": "c"}, ["d", "e", "f"]]},
+            "$.briefs[0].options[0] is missing required field 'way'",
+        ),
+        (
+            {"options": [{"way": "a", "downside": "c"}, ["d", "e", "f"]]},
+            "$.briefs[0].options[0] is missing required field 'leads_to'",
+        ),
+        (
+            {"options": [{"way": "a", "leads_to": "b"}, ["d", "e", "f"]]},
+            "$.briefs[0].options[0] is missing required field 'downside'",
+        ),
+        (
+            {
+                "options": [
+                    {"way": "a", "leads_to": "b", "downside": "c", "cost": "d"},
+                    ["d", "e", "f"],
+                ]
+            },
+            "$.briefs[0].options[0] has unknown field(s): cost",
+        ),
+        ({"context": [""]}, "$.briefs[0].context[0] must be at least 1 character(s)"),
+        ({"context": [[]]}, "$.briefs[0].context[0] must have at least 1 item(s)"),
+        ({"context": [["a", ""]]}, "$.briefs[0].context[0][1] must be at least 1 character(s)"),
+        (
+            {"context": ["intro", ["a"], ["b"]]},
+            "$.briefs[0].context[2] is a list directly after another list",
+        ),
+        (
+            {"context": [["a"], ["b"]]},
+            "$.briefs[0].context[1] is a list directly after another list",
+        ),
+        *(
+            (
+                {"context": [f"{opener} then words"]},
+                "$.briefs[0].context[0] starts with a markdown block opener",
+            )
+            for opener in ("-", "*", "+", "#", "###", ">", "1.", "2)", "```", "~~~")
+        ),
+        *(
+            (
+                {"context": [rule]},
+                "$.briefs[0].context[0] starts with a markdown block opener",
+            )
+            for rule in ("---", "***", "_ _ _", "#", "-")
+        ),
+        (
+            {"context": ["fine", ["fine", "# a heading"]]},
+            "$.briefs[0].context[1][1] starts with a markdown block opener",
+        ),
+        (
+            {"options": [["*loud*", "b", "c"], ["d", "e", "f"]], "recommend": "r"},
+            "$.briefs[0].options[0] has a way that starts or ends with * or _",
+        ),
+        (
+            {"options": [{"way": "snake_", "leads_to": "b", "downside": "c"}, ["d", "e", "f"]]},
+            "$.briefs[0].options[0] has a way that starts or ends with * or _",
+        ),
+        (
+            {"terms": [["_term", "meaning"]]},
+            "$.briefs[0].terms[0][0] starts or ends with * or _",
+        ),
+        ({"terms": [["term"]]}, "$.briefs[0].terms[0] must have at least 2 item(s)"),
+        (
+            {"terms": [["term", "meaning", "extra"]]},
+            "$.briefs[0].terms[0] must hold exactly two strings",
+        ),
+        ({"picture": {"lines": ["a"]}}, "$.briefs[0].picture is missing required field 'caption'"),
+        (
+            {"picture": {"caption": "", "lines": ["a"]}},
+            "$.briefs[0].picture.caption must be at least 1 character(s)",
+        ),
+        (
+            {"picture": {"caption": "c", "lines": ["", ""]}},
+            "$.briefs[0].picture.lines holds only empty lines",
+        ),
+        (
+            {"picture": {"caption": "c", "lines": ["ok", "a ``` b"]}},
+            "$.briefs[0].picture.lines[1] holds three backticks",
+        ),
+        (
+            {"picture": {"caption": "c", "lines": ["ok", "全角"]}},
+            "$.briefs[0].picture.lines[1] holds the character U+5168",
+        ),
+        (
+            {"picture": {"caption": "c", "lines": ["ok", "\uff26"]}},
+            "$.briefs[0].picture.lines[1] holds the character U+FF26",
+        ),
+        (
+            {"picture": {"caption": "c", "lines": ["ok", "a\ufe0f"]}},
+            "$.briefs[0].picture.lines[1] holds the character U+FE0F",
+        ),
+        (
+            {"picture": {"caption": "c", "lines": ["ok", "1\u20e3"]}},
+            "$.briefs[0].picture.lines[1] holds the character U+20E3",
+        ),
+        ({"explore": "two\nlines"}, "$.briefs[0].explore does not match pattern"),
+        ({"context": ["see ⭐ here"]}, "holds the mark '⭐'"),
+        ({"picture": {"caption": "c", "lines": ["[rec]"]}}, "holds the mark '[rec]'"),
+        ({"terms": [["t", "[term] x"]]}, "holds the mark '[term]'"),
+    ],
+)
+def test_each_new_rule_refuses_with_exit_two_naming_where(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], brief: dict[str, object], reason: str
+) -> None:
+    """Each rule the new fields add refuses the whole document, with the path of the offending
+    string: the schema's own (a missing or unknown field, an empty block), and the command's
+    (adjacent lists, a block opener, an edge of `*` or `_`, a picture a fence cannot hold)."""
+
+    path = _write(tmp_path, _document(brief))
+    code, out, err = _main(capsys, str(path), "--symbols", "emoji")
+
+    assert (code, out) == (2, "")
+    assert reason in err
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "3.12 is the minimum",
+        "#3 needs a rebase",
+        "-5 degrees",
+        "| a pipe",
+        "=== a line",
+        "--- then words",
+        "*.bak files stay",
+    ],
+)
+def test_text_that_opens_no_markdown_block_is_drawn(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], text: str
+) -> None:
+    """A one-line paragraph that a CommonMark view reads as a paragraph is not refused: a number
+    without a following space, a heading mark without one, a pipe or an underline with no second
+    line, and a rule mark followed by words."""
+
+    code, out, _ = _main(
+        capsys, str(_write(tmp_path, _document({"context": [text]}))), "--symbols", "emoji"
+    )
+
+    assert code == 0
+    assert f"\n\n{text}\n\n" in out
+
+
+@pytest.mark.parametrize(
+    ("symbols", "line"),
+    [
+        ("emoji", "🧪 Explore: try your own numbers · reply `explore D1` for an interactive page"),
+        (
+            "ascii",
+            "[explore] Explore: try your own numbers | reply `explore D1` for an interactive page",
+        ),
+    ],
+)
+def test_the_offer_to_explore_names_the_reply_that_asks_for_the_page(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], symbols: str, line: str
+) -> None:
+    """The person takes the offer by replying with the brief's id, so the drawn line says how."""
+
+    path = _write(tmp_path, _document({"explore": "try your own numbers"}))
+    code, out, _ = _main(capsys, str(path), "--symbols", symbols)
+
+    assert code == 0
+    assert f"\n\n{line}\n" in out
+
+
+def test_a_picture_may_hold_an_empty_line_and_a_narrow_ambiguous_character(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Width A characters (the box-drawing ones) and empty lines are drawn; only W and F widths
+    are refused."""
+
+    picture = {"caption": "Boxes", "lines": ["┌─┐", "", "└─┘"]}
+    code, out, _ = _main(
+        capsys, str(_write(tmp_path, _document({"picture": picture}))), "--symbols", "emoji"
+    )
+
+    assert code == 0
+    assert "```text\n┌─┐\n\n└─┘\n```" in out
+
+
+def test_ask_gives_the_condition_between_what_it_leads_to_and_the_downside_and_an_explore_choice(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The description reads what the option leads to, then `choose if:`, then `downside:`; the
+    recommended option is first and marked; a brief with `explore` ends with `Explore it first`,
+    and one without it does not."""
+
+    path = _write(tmp_path, NEW_SHAPE)
+    code, out, err = _main(capsys, str(path), "--ask", "--symbols", "emoji")
+
+    assert (code, err) == (0, "")
+    (question,) = json.loads(out)["questions"]
+    assert question["question"] == "D1 · Q · Recommended: A — two adopters set it"
+    assert question["options"] == [
+        {
+            "label": "A keep it (Recommended)",
+            "description": "a warning first; choose if: no adopter may break; "
+            "downside: one more release",
+            "line": "A keep it (Recommended) — a warning first",
+        },
+        {
+            "label": "B drop it",
+            "description": "the code path goes; downside: an adopter is refused",
+            "line": "B drop it — the code path goes",
+        },
+        {
+            "label": "Explore it first",
+            "description": "try how many adopters break",
+            "line": "Explore it first — try how many adopters break",
+        },
+    ]
+    plain = json.loads(json.dumps(NEW_SHAPE))
+    del plain["briefs"][0]["explore"]
+    _, out, _ = _main(capsys, str(_write(tmp_path, plain, "plain.json")), "--ask")
+    assert [o["label"] for o in json.loads(out)["questions"][0]["options"]][-1] == "B drop it"
+
+
+def test_the_starter_decision_document_is_drawn_in_the_new_shape(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The decision starter an explorable ships draws without a refusal and shows the waiting
+    line, the context, a term, a condition for choosing and the inline recommendation."""
+
+    starter = ROOT / "templates" / "explorable" / "starters" / "decision.briefs.json"
+    code, out, err = _main(capsys, str(starter), "--symbols", "emoji", "--form", "ascii")
+
+    assert (code, err) == (0, "")
+    assert "⏳ Waiting on this: " in out and "📖 *hit rate*: " in out
+    assert "  - ⚖️ Choose if: " in out and "  - ⭐ Recommended: " in out
+    assert unmerged(out) == []

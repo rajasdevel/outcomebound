@@ -349,6 +349,77 @@ def test_the_brief_check_takes_either_mark_set_and_requires_only_the_floor(
     assert "missing: whether it can be undone" in capsys.readouterr().out
 
 
+SHAPE_BRIEF = """### D1 · Should 1.5.0 raise the default timeout to 60 seconds?
+
+⏳ Waiting on this: the 1.5.0 notes; until you answer, the default stays 30
+
+- A longer default breaks no caller.
+- B (the gateway) closes connections at 45 seconds.
+
+📖 *default*: the timeout a call uses when the caller sets none
+
+**Options**
+
+- **A · raise to 60** — the default changes in a minor release
+  - ⚖️ Choose if: callers must wait longer
+  - 🔻 Downside: it breaks the compatibility policy
+- **B · keep 30** — users pass a longer timeout
+  - ⭐ Recommended: a default changes only in a major release · a check shows this
+  - 🔻 Downside: a user with a slow endpoint passes it themselves
+
+✅ Checked: `docs/compatibility.md`
+
+↩️ Undo: a documentation change is reverted with one commit
+"""
+SHAPE_BRIEF_ASCII = (
+    SHAPE_BRIEF.replace("⏳", "[wait]")
+    .replace("📖", "[term]")
+    .replace("⚖️", "[choose]")
+    .replace("🔻", "[-]")
+    .replace("⭐", "[rec]")
+    .replace("✅", "[ok]")
+    .replace("↩️", "[undo]")
+    .replace(" · ", " | ")
+    .replace(" — ", " - ")
+)
+
+
+def test_the_brief_check_reads_the_order_a_person_decides(tmp_path: Path) -> None:
+    """The newer shape: a `Recommended` line nested under an option names that option, and option
+    letters are read only under the `**Options**` lead-in, so a context list item that starts
+    with a capital letter is not an option. The older shape's cases above still pass."""
+
+    for brief in (SHAPE_BRIEF, SHAPE_BRIEF_ASCII):
+        assert BRIEF.missing(brief) == []
+        assert BRIEF.observed(brief) == [
+            "observed: 2 line(s) name a downside, for 2 option(s)",
+            "observed: no diagram",
+        ]
+    # The real option B is gone: the context's "B (the gateway)" is not read as an option.
+    one_option = SHAPE_BRIEF.replace("- **B · keep 30** — users pass a longer timeout\n", "")
+    assert BRIEF.missing(one_option) == ["lettered options A and B"]
+    # The recommendation, as a paragraph that names no option, names none.
+    unnamed = SHAPE_BRIEF.replace(
+        "  - ⭐ Recommended: a default changes only in a major release · a check shows this\n", ""
+    ).replace(
+        "✅ Checked", "⭐ Recommended: a default changes only in a major release\n\n✅ Checked"
+    )
+    assert BRIEF.missing(unnamed) == ["a recommendation naming an option"]
+    # Moved under option A, the same line names A.
+    under_a = SHAPE_BRIEF.replace(
+        "  - ⭐ Recommended: a default changes only in a major release · a check shows this\n", ""
+    )
+    under_a = under_a.replace(
+        "- **A · raise to 60** — the default changes in a minor release\n",
+        "- **A · raise to 60** — the default changes in a minor release\n"
+        "  - ⭐ Recommended: a default changes only in a major release\n",
+    )
+    assert BRIEF.missing(under_a) == []
+    answer = tmp_path / "answer.md"
+    answer.write_text(SHAPE_BRIEF, "utf-8")
+    assert BRIEF._main([str(answer)]) == 0
+
+
 # --- the skills' fixtures --------------------------------------------------------------------
 
 

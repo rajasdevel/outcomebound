@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:outcomebound:schema:decision-briefs:1",
   "title": "OutcomeBound decision briefs v1",
-  "description": "The input of `outcomebound brief`: the decision briefs an agent puts to a person, and the order among them. Every brief carries `id`, `heading` and `undo`; any other field may be left out, and a field left out writes no line. The command writes marks only from these fields, and also refuses what this schema cannot say: an option that is not exactly three strings, a pair in `facts` or `order` that is not exactly two, a diagram edge that is not two or three, a string holding a line break, a control or format character or a mark's own glyph, a diagram label holding a double quote or an edge label holding a |, a `facts` label naming a line the renderer writes, a repeated id, and an `order` label that is no brief's id. It refuses with exit 1, naming the brief, a brief with two or more options and no `recommend` or no `recommend_way`, and a brief with none of `checked`, `not_checked` and `facts`. It does not vouch for what the text says: the verdicts under `checked` are the agent's own report of commands it ran, and the passed mark means only that every verdict given is PASS.",
+  "description": "The input of `outcomebound brief`: the decision briefs an agent puts to a person, and the order among them. Every brief carries `id`, `heading` and `undo`; any other field may be left out, and a field left out writes nothing. A brief is drawn in the order a person decides: the question, `why_now`, `context`, `terms`, `diagram` and `picture`, `explore`, the `options` with the recommendation on the option it names, then the evidence. The command writes marks only from these fields, and also refuses what this schema cannot say: an option given as a list that is not exactly three strings, a pair in `facts`, `terms` or `order` that is not exactly two, a diagram edge that is not two or three, a string holding a line break, a control or format character or a mark's own glyph, a diagram label holding a double quote or an edge label holding a |, a `facts` label naming a line the renderer writes, a repeated id, an `order` label that is no brief's id, two `context` lists in a row, a `context` paragraph or item that starts with a markdown block opener, a way or a term with `*` or `_` at either edge, and a `picture` of only empty lines or with a line holding three backticks, a wide East Asian character, U+FE0F or U+20E3. It refuses with exit 1, naming the brief, a brief with two or more options and no `recommend` or no `recommend_way`, and a brief with none of `checked`, `not_checked` and `facts`. It does not vouch for what the text says: the verdicts under `checked` are the agent's own report of commands it ran, and the passed mark means only that every verdict given is PASS. A document written for an earlier release, with options as three-string lists and none of the newer fields, is still read.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -35,22 +35,93 @@
           },
           "recommend": {
             "type": "string",
-            "description": "Why the recommendation is what it is; required where there are two or more `options`, and written after the recommended Option's letter.",
+            "description": "Why the recommendation is what it is; required where there are two or more `options`. Drawn under the option `recommend_way` names, behind the recommended mark; with no options or no named way, drawn as a paragraph of its own after the options.",
             "pattern": "^[^\\r\\n]*$"
           },
           "recommend_way": {
             "type": "string",
-            "description": "The way of `options` that is recommended, spelled as it is there; required where there are two or more, and the renderer writes its letter.",
+            "description": "The way of `options` that is recommended, spelled as it is there; required where there are two or more, and the recommendation is drawn under that option.",
             "pattern": "^[^\\r\\n]*$"
           },
           "confidence": {
             "type": "string",
-            "description": "`fact` where a command the agent ran shows it, else `inferred`; an older document may hold a whole percentage followed by `(inferred)`; written only with `recommend`.",
+            "description": "`fact` where a command the agent ran shows it, drawn as `a check shows this`, else `inferred`, drawn as `my judgment`; any other value, such as an older document's whole percentage followed by `(inferred)`, is drawn as given. Written only with `recommend`, at its end.",
             "pattern": "^[^\\r\\n]*$"
           },
           "options": {
             "type": "array",
-            "description": "Every way forward, as exactly three strings, [the way, what it leads to, its downside], which the command checks; the downside is written under its Option behind a mark of its own. The command refuses a single one, since a brief lays out Options only where there are two or more.",
+            "description": "Every way forward, each either exactly three strings, [the way, what it leads to, its downside], or an object {way, leads_to, downside, choose_if} whose `choose_if` is optional: the condition, or what matters most to the person, under which a reasonable person picks it. The downside and the condition are written under their option behind marks of their own. The command refuses a single option, since a brief lays out options only where there are two or more.",
+            "items": {
+              "type": [
+                "array",
+                "object"
+              ],
+              "minItems": 2,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$"
+              },
+              "additionalProperties": false,
+              "required": [
+                "way",
+                "leads_to",
+                "downside"
+              ],
+              "properties": {
+                "way": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]*$",
+                  "description": "The way forward in a few words; `*` or `_` at either edge is refused."
+                },
+                "leads_to": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]*$",
+                  "description": "What the way leads to."
+                },
+                "downside": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]*$",
+                  "description": "What the way costs."
+                },
+                "choose_if": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "^[^\\r\\n]*$",
+                  "description": "When a reasonable person picks this way."
+                }
+              }
+            }
+          },
+          "why_now": {
+            "type": "string",
+            "pattern": "^[^\\r\\n]*$",
+            "description": "What waits on the answer, the state it waits in and what happens if no answer comes; drawn first after the question, as `Waiting on this`."
+          },
+          "context": {
+            "type": "array",
+            "description": "The context the person needs to judge, in short blocks. A block is a string, drawn as a paragraph, or a list of strings, drawn as a list. The command refuses an empty block or list, two lists in a row (a markdown view joins them into one; put a paragraph between), and a paragraph or item that starts with a markdown block opener.",
+            "items": {
+              "type": [
+                "string",
+                "array"
+              ],
+              "minLength": 1,
+              "minItems": 1,
+              "pattern": "^[^\\r\\n]*$",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$"
+              }
+            }
+          },
+          "terms": {
+            "type": "array",
+            "description": "Each term the person may not know, as [term, meaning], drawn as a paragraph after the context. A term may not start or end with `*` or `_`.",
             "items": {
               "type": "array",
               "minItems": 2,
@@ -61,9 +132,36 @@
               }
             }
           },
-          "why_now": {
+          "picture": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "caption",
+              "lines"
+            ],
+            "description": "A small fixed-width figure for a before and after that edges show badly, drawn in a text fence after the diagram. The caption says what to look at. A line may be empty, and the lines may not all be empty; no line holds three backticks, a character of East Asian width W or F, U+FE0F or U+20E3 (an emoji drawn by default as text, which many fonts still draw two columns wide, is not detected).",
+            "properties": {
+              "caption": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\r\\n]*$",
+                "description": "What to look at."
+              },
+              "lines": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[^\\r\\n]*$"
+                }
+              }
+            }
+          },
+          "explore": {
             "type": "string",
-            "pattern": "^[^\\r\\n]*$"
+            "minLength": 1,
+            "pattern": "^[^\\r\\n]*$",
+            "description": "For a decision that is not simple, one line on what an interactive page would let the person try. The brief says the person can ask for it by the brief's id; with a question tool, the options gain a last choice, `Explore it first`."
           },
           "asked": {
             "type": "array",
@@ -103,7 +201,7 @@
           },
           "facts": {
             "type": "array",
-            "description": "Facts the agent knows that bear on the answer, as [label, text] pairs, each written as its own unmarked line after Not checked; a label may not take the name of a line the renderer writes.",
+            "description": "Facts the agent knows that bear on the answer, as [label, text] pairs, each written as its own paragraph after Not checked; a label may not take the name of a line the renderer writes.",
             "items": {
               "type": "array",
               "minItems": 2,
@@ -143,12 +241,12 @@
             "required": [
               "edges"
             ],
-            "description": "Drawn after the brief's list where order, dependency, flow or before/after is the point: a Mermaid flowchart where the surface renders Mermaid, and ASCII chains otherwise; every edge is drawn as given, and none is reduced away.",
+            "description": "Drawn after the context and terms where order, dependency, flow or before/after is the point: a Mermaid flowchart where the surface renders Mermaid, and ASCII chains otherwise; every edge is drawn as given, and none is reduced away.",
             "properties": {
               "caption": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The line written above the diagram.",
+                "description": "The line written above the diagram, behind the picture mark; the mark is drawn only with a caption.",
                 "pattern": "^[^\\r\\n]*$"
               },
               "edges": {

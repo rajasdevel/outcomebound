@@ -585,9 +585,12 @@ the runtime fixture starts only its own server on the loopback interface. `allow
   retain the raw result beside the source-based judgment.
 
 The brief check requires only an id and the question in one line, options A and B, a
-recommendation that names one, and whether it can be undone, in emoji or ASCII marks. Downsides
-and a diagram print as `observed:` lines and never fail a run. The kernel of the `earlier` arm
-does not ask for them.
+recommendation that names one, and whether it can be undone, in emoji or ASCII marks. It reads
+option letters under an `**Options**` or `Options:` lead-in when the text has one, so a context
+list that starts with a capital letter is not an option, and reads a `Recommended` line nested
+under an option as naming that option, as the brief is drawn since 1.8.0. A brief drawn in the
+earlier shape passes too. Downsides and a diagram print as `observed:` lines and never fail a
+run. The kernel of the `earlier` arm does not ask for them.
 
 The ladder asks whether the work of a run follows what its task needs. Its four fixtures share
 one repository, `evals/fixtures/ladder/base.sh`. It is the stock list of a small shop over SQLite,
