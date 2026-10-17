@@ -1,14 +1,17 @@
 """The one place a decision brief is drawn.
 
 What this module decides: the shape a brief put to a person is drawn in — a
-`###` heading and a list, so it reads line by line in a terminal and in a
-markdown view alike; the seven marks and the two separators under `emoji` and
-`ascii`; which of the two marks a `Checked` line carries; the letter each
-Option and a recommended way carries; the order in which a brief's lines are
-written, each Option's downside nested under it; and how a brief's own diagram
-and the order among waiting items are drawn, as Mermaid or as fenced ASCII. A
-brief is a floor, not a form: every line but the heading is written only where
-its field holds something, so a surface prints what it knows and no
+`###` heading, then blocks a person reads in the order they decide, each block a
+paragraph, a list or a fence, every block separated from the next by exactly one
+blank line, so it reads line by line in a terminal and in a markdown view alike;
+the twelve marks and the two separators under `emoji` and `ascii`; which of the
+two marks a `Checked` line carries; the letter each Option and a recommended way
+carries; the order in which a brief's blocks are written (what waits on the
+answer, the context, the terms, the picture, the offer to explore, the Options
+with the recommendation on the Option it names, the evidence); and how a brief's
+own diagram and the order among waiting items are drawn, as Mermaid or as fenced
+ASCII. A brief is a floor, not a form: every block but the heading is written
+only where its field holds something, so a surface prints what it knows and no
 placeholder.
 
 Its command line, `outcomebound brief`, draws the
@@ -34,6 +37,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import string
 import sys
 import textwrap
@@ -52,26 +56,35 @@ __all__ = [
     "SEPARATORS",
     "Brief",
     "Diagram",
+    "Picture",
     "checked_mark",
+    "confidence_words",
     "diagram",
     "letter",
     "main",
+    "option_parts",
     "read_document",
     "render",
     "symbols_for",
 ]
 
-# The seven marks, in the design's own order, as `emoji` and as `ascii`; each is
-# followed by its word wherever it is written. No `ascii` mark is `[ ]`, `[x]`
-# or `[X]`, which a markdown view draws at a list item's head as a checkbox.
+# The twelve marks, in the order a brief writes them, as `emoji` and as `ascii`; each is
+# followed by its word wherever it is written. No `ascii` mark is `[ ]`, `[x]` or `[X]`,
+# which a markdown view draws at a list item's head as a checkbox, and each is a word, so
+# ordinary text in brackets is not mistaken for one.
 MARKS: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "emoji": MappingProxyType(
             {
-                "recommend": "👉",
+                "waiting": "⏳",
+                "term": "📖",
+                "picture": "🗺️",
+                "explore": "🧪",
+                "recommended": "⭐",
+                "choose_if": "⚖️",
+                "downside": "🔻",
                 "checked": "✅",
                 "unchecked": "⚠️",
-                "downside": "🔻",
                 "debt": "🧱",
                 "undo": "↩️",
                 "cannot_be_undone": "⛔",
@@ -79,10 +92,15 @@ MARKS: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "ascii": MappingProxyType(
             {
-                "recommend": "[>]",
+                "waiting": "[wait]",
+                "term": "[term]",
+                "picture": "[pic]",
+                "explore": "[explore]",
+                "recommended": "[rec]",
+                "choose_if": "[choose]",
+                "downside": "[-]",
                 "checked": "[ok]",
                 "unchecked": "[!]",
-                "downside": "[-]",
                 "debt": "[debt]",
                 "undo": "[undo]",
                 "cannot_be_undone": "[!!]",
@@ -104,12 +122,13 @@ NOTHING_WAITS = "nothing waits on a person\n"
 
 @dataclass(frozen=True, slots=True)
 class Diagram:
-    """A brief's own diagram, drawn after its list where order, dependency, flow
-    or before/after is the point.
+    """A brief's own diagram, drawn after its context and terms where order,
+    dependency, flow or before/after is the point.
 
     `edges` hold `(from, to, label)` in the order they are drawn, an empty label
     drawing an unlabelled edge; every edge is drawn, and none is reduced away.
-    `caption`, where set, is the line written above the fence.
+    `caption`, where set, is the line written above the fence, behind the picture
+    mark; without one the fence stands alone.
     """
 
     edges: tuple[tuple[str, str, str], ...]
@@ -117,27 +136,42 @@ class Diagram:
 
 
 @dataclass(frozen=True, slots=True)
+class Picture:
+    """A small fixed-width figure the agent gives line by line, drawn in a `text` fence
+    under its caption, for a before and after that edges show badly. `lines` may hold
+    an empty line but not only empty lines."""
+
+    caption: str
+    lines: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Brief:
     """One decision brief, holding only what its surface knows.
 
-    Only `heading` is required; an empty field writes no line. Each of `options`
-    is `(way, leads_to)` or `(way, leads_to, downside)`, a downside written on a
-    line of its own under its Option, behind the `downside` mark. `checked` and
-    `undo` pair a `MARKS` key with the line's text: `checked` or `unchecked`,
-    and `undo` or `cannot_be_undone`. A surface reaches the key `checked` only
-    through `checked_mark`. `recommend_way` names the Option the surface
-    recommends, by its way, and the renderer writes that Option's letter and the
-    dash at the head of the `Recommend` line; unset, the line is written as
-    given. `facts` holds `(label, text)` pairs, each a fact the surface knows
-    that bears on the answer, written `- <label>: <text>` after `Not checked`
-    and before `Debt`. `diagram`, where set, is drawn after the brief's list as
-    a block of its own.
+    Only `heading` is required; an empty field writes nothing. Each of `options`
+    is `(way, leads_to)`, `(way, leads_to, downside)` or `(way, leads_to, downside,
+    choose_if)`: the downside and the condition under which a reasonable person picks
+    the Option are each written on a line of their own under it. `context` holds
+    blocks, each a string (a paragraph) or a tuple of strings (a list); `terms` holds
+    `(term, meaning)` pairs, each a paragraph of its own. `checked` and `undo` pair a
+    `MARKS` key with the line's text: `checked` or `unchecked`, and `undo` or
+    `cannot_be_undone`. A surface reaches the key `checked` only through
+    `checked_mark`. `recommend_way` names the Option the surface recommends, by its
+    way, and the renderer writes `recommend` under that Option, behind the
+    recommended mark, and ends it with `confidence` in words; unset, the
+    recommendation is a paragraph of its own after the Options. `facts` holds
+    `(label, text)` pairs, each a fact the surface knows that bears on the answer,
+    written as a paragraph `<label>: <text>` after `Not checked` and before `Debt`.
+    `diagram`, where set, is drawn after the terms and `picture` after it. `why_now`
+    is written first, as what waits on the answer, and `explore` right before the
+    Options.
     """
 
     heading: str
     recommend: str = ""
     confidence: str = ""
-    options: tuple[tuple[str, str] | tuple[str, str, str], ...] = ()
+    options: tuple[tuple[str, ...], ...] = ()
     why_now: str = ""
     asked: tuple[str, ...] = ()
     checked: tuple[str, str] | None = None
@@ -147,6 +181,10 @@ class Brief:
     recommend_way: str = ""
     facts: tuple[tuple[str, str], ...] = ()
     diagram: Diagram | None = None
+    context: tuple[str | tuple[str, ...], ...] = ()
+    terms: tuple[tuple[str, str], ...] = ()
+    picture: Picture | None = None
+    explore: str = ""
 
 
 def checked_mark(verdicts: Sequence[str]) -> str:
@@ -187,9 +225,9 @@ def _refused(brief: Brief) -> str:
             f"{len(string.ascii_uppercase)}; this one lays out {len(brief.options)}"
         )
     if brief.confidence and not brief.recommend:
-        return "a brief's confidence belongs to its Recommend line, and this one has none"
+        return "a brief's confidence belongs to its recommendation, and this one has none"
     if brief.recommend_way and not brief.recommend:
-        return "a brief's recommended way belongs to its Recommend line, and this one has none"
+        return "a brief's recommended way belongs to its recommendation, and this one has none"
     if brief.recommend_way and brief.recommend_way not in _ways(brief):
         return (
             f"a brief letters only a way it lays out, and {brief.recommend_way!r} "
@@ -208,7 +246,7 @@ def _below_floor(brief: Brief) -> str:
     if count >= 2 and not brief.recommend:
         return (
             f"a brief that lays out {count} Options recommends one of them, "
-            "and this one has no Recommend line"
+            "and this one has no recommendation"
         )
     if count >= 2 and not brief.recommend_way:
         return (
@@ -223,48 +261,110 @@ def _below_floor(brief: Brief) -> str:
     return ""
 
 
-def _recommend_line(brief: Brief, marks: Mapping[str, str], sep: str, dash: str) -> str:
-    """The `Recommend` line: the recommended Option's letter and the dash, where a way
-    is named, then the text as given and its confidence."""
-
-    confidence = f"{sep}confidence {brief.confidence}" if brief.confidence else ""
-    letter = ""
-    if brief.recommend_way:
-        letter = f"{string.ascii_uppercase[_ways(brief).index(brief.recommend_way)]}{dash}"
-    return f"- {marks['recommend']} Recommend: {letter}{brief.recommend}{confidence}"
+# What the `confidence` field is drawn as: the two values the skill names, in words; any
+# other value, such as an older document's percentage, as given.
+_CONFIDENCE_WORDS = MappingProxyType({"fact": "a check shows this", "inferred": "my judgment"})
 
 
-def _option_lines(brief: Brief, marks: Mapping[str, str], dash: str) -> list[str]:
-    """The `Options` line and each lettered Option, its downside nested under it."""
+def confidence_words(confidence: str) -> str:
+    """`confidence` as the brief draws it: `fact` and `inferred` in words, else as given."""
 
-    lines = ["- Options:"]
-    for index, (way, leads_to, *downside) in enumerate(brief.options):
-        lines.append(f"  - {string.ascii_uppercase[index]} {way}{dash}{leads_to}")
-        lines.extend(f"    - {marks['downside']} Downside: {text}" for text in downside)
-    return lines
+    return _CONFIDENCE_WORDS.get(confidence, confidence)
 
 
-def _lines(brief: Brief, marks: Mapping[str, str], sep: str, dash: str) -> list[str]:
-    """One brief's lines, in order, each written only where its field is set."""
+def _recommendation(brief: Brief, marks: Mapping[str, str], sep: str) -> str:
+    """The recommended mark, its word, the reason as given and the confidence in words."""
 
-    lines = [f"### {brief.heading}"]
-    if brief.recommend:
-        lines.append(_recommend_line(brief, marks, sep, dash))
-    if brief.options:
-        lines.extend(_option_lines(brief, marks, dash))
+    confidence = confidence_words(brief.confidence)
+    tail = f"{sep}{confidence}" if confidence else ""
+    return f"{marks['recommended']} Recommended: {brief.recommend}{tail}"
+
+
+def option_parts(option: Sequence[str]) -> tuple[str, str, str, str]:
+    """An Option as `(way, leads_to, downside, choose_if)`, an empty string for each it lacks."""
+
+    way, leads_to, *rest = option
+    return way, leads_to, rest[0] if rest else "", rest[1] if len(rest) > 1 else ""
+
+
+def _option_list(brief: Brief, marks: Mapping[str, str], sep: str, dash: str) -> str:
+    """The Options as one list: each Option's letter, way and what it leads to, then, nested
+    under it, the recommendation where it names this Option, the condition for choosing it
+    and its downside."""
+
+    ways = _ways(brief)
+    recommended = ways.index(brief.recommend_way) if brief.recommend and brief.recommend_way else -1
+    lines: list[str] = []
+    for index, option in enumerate(brief.options):
+        way, leads_to, downside, choose_if = option_parts(option)
+        lines.append(f"- **{string.ascii_uppercase[index]}{sep}{way}**{dash}{leads_to}")
+        if index == recommended:
+            lines.append(f"  - {_recommendation(brief, marks, sep)}")
+        if choose_if:
+            lines.append(f"  - {marks['choose_if']} Choose if: {choose_if}")
+        if downside:
+            lines.append(f"  - {marks['downside']} Downside: {downside}")
+    return "\n".join(lines)
+
+
+def _fence(lines: Sequence[str]) -> str:
+    return "\n".join(["```text", *lines, "```"])
+
+
+def _lead_blocks(brief: Brief, symbols: str, form: str) -> list[str]:
+    """What waits on the answer, the context, the terms, the picture and the offer to explore."""
+
+    marks = MARKS[symbols]
+    blocks: list[str] = []
     if brief.why_now:
-        lines.append(f"- Why now: {brief.why_now}")
-    lines.extend(f"- Asked: {text}" for text in brief.asked)
+        blocks.append(f"{marks['waiting']} Waiting on this: {brief.why_now}")
+    blocks.extend(
+        block if isinstance(block, str) else "\n".join(f"- {item}" for item in block)
+        for block in brief.context
+    )
+    blocks.extend(f"{marks['term']} *{term}*: {meaning}" for term, meaning in brief.terms)
+    if brief.diagram is not None:
+        if brief.diagram.caption:
+            blocks.append(f"{marks['picture']} {brief.diagram.caption}")
+        blocks.append(_drawing(brief.diagram, form))
+    if brief.picture is not None:
+        blocks.append(f"{marks['picture']} {brief.picture.caption}")
+        blocks.append(_fence(brief.picture.lines))
+    if brief.explore:
+        blocks.append(f"{marks['explore']} Explore: {brief.explore}")
+    return blocks
+
+
+def _evidence_blocks(brief: Brief, symbols: str) -> list[str]:
+    """The evidence, one paragraph each, in the order `Asked`, `Checked`, `Not checked`, the
+    facts, `Debt`, `Undo`."""
+
+    marks = MARKS[symbols]
+    blocks = [f"Asked: {text}" for text in brief.asked]
     if brief.checked:
-        lines.append(f"- {marks[brief.checked[0]]} Checked: {brief.checked[1]}")
+        blocks.append(f"{marks[brief.checked[0]]} Checked: {brief.checked[1]}")
     if brief.not_checked:
-        lines.append(f"- {marks['unchecked']} Not checked: {brief.not_checked}")
-    lines.extend(f"- {label}: {text}" for label, text in brief.facts)
+        blocks.append(f"{marks['unchecked']} Not checked: {brief.not_checked}")
+    blocks.extend(f"{label}: {text}" for label, text in brief.facts)
     if brief.debt:
-        lines.append(f"- {marks['debt']} Debt: {brief.debt}")
+        blocks.append(f"{marks['debt']} Debt: {brief.debt}")
     if brief.undo:
-        lines.append(f"- {marks[brief.undo[0]]} Undo: {brief.undo[1]}")
-    return lines
+        blocks.append(f"{marks[brief.undo[0]]} Undo: {brief.undo[1]}")
+    return blocks
+
+
+def _blocks(brief: Brief, symbols: str, form: str) -> list[str]:
+    """One brief's blocks, in the order a person decides, each written only where its field
+    is set; the caller separates them by one blank line."""
+
+    marks = MARKS[symbols]
+    sep, dash = SEPARATORS[symbols]
+    blocks = [f"### {brief.heading}", *_lead_blocks(brief, symbols, form)]
+    if brief.options:
+        blocks.extend(["**Options**", _option_list(brief, marks, sep, dash)])
+    if brief.recommend and not (brief.options and brief.recommend_way):
+        blocks.append(_recommendation(brief, marks, sep))
+    return [*blocks, *_evidence_blocks(brief, symbols)]
 
 
 # The list item after the fence of an order holding a circle; `{circles}` names
@@ -366,17 +466,13 @@ def _labels(edges: Sequence[Sequence[str]]) -> list[str]:
 
 
 def _drawing(drawn: Diagram, form: str) -> str:
-    """A brief's own diagram, without a trailing newline: its caption line, where it
-    has one, then every edge in the order given, none reduced, as a Mermaid
-    flowchart under `mermaid` and as ASCII chains in a `text` fence under any
-    other form."""
+    """A brief's own diagram's fence, without a trailing newline: every edge in the order
+    given, none reduced, as a Mermaid flowchart under `mermaid` and as ASCII chains in a
+    `text` fence under any other form."""
 
-    lines = [drawn.caption] if drawn.caption else []
     if form == "mermaid":
-        lines.extend(_mermaid(drawn.edges, _labels(drawn.edges)))
-    else:
-        lines += ["```text", *_chains(drawn.edges), "```"]
-    return "\n".join(lines)
+        return "\n".join(_mermaid(drawn.edges, _labels(drawn.edges)))
+    return _fence(_chains(drawn.edges))
 
 
 def diagram(order: Sequence[tuple[str, str]], symbols: str, form: str = "ascii") -> str:
@@ -424,15 +520,16 @@ def render(
     order: Sequence[tuple[str, str]] = (),
     form: str = "ascii",
 ) -> str:
-    """Every brief as a `###` heading and a list, its own diagram, where it has one,
-    as the next block, one blank line between blocks, and, where `order` is given,
-    the order's diagram after the last brief; every diagram in `form`.
+    """Every brief as a `###` heading and the blocks of its fields, in the order a person
+    decides, and, where `order` is given, the order's diagram after the last brief; every
+    diagram in `form`.
 
-    Nothing is padded or wrapped, and nothing is fenced but a diagram; an empty
-    `briefs` is `NOTHING_WAITS`. A brief with one option or more than there are
-    letters, with a confidence and no recommendation, or with a recommended way
-    it has no Recommend line for or does not lay out, is refused by `ValueError`
-    before anything is drawn.
+    Every block is separated from the next by exactly one blank line, so no markdown view
+    runs two lines into one paragraph or two lists into one. Nothing is padded or wrapped,
+    and nothing is fenced but a diagram and a picture; an empty `briefs` is
+    `NOTHING_WAITS`. A brief with one option or more than there are letters, with a
+    confidence and no recommendation, or with a recommended way it has no recommendation
+    for or does not lay out, is refused by `ValueError` before anything is drawn.
     """
 
     if not briefs:
@@ -441,13 +538,9 @@ def render(
         refused = _refused(brief)
         if refused:
             raise ValueError(refused)
-    marks = MARKS[symbols]
-    sep, dash = SEPARATORS[symbols]
     blocks: list[str] = []
     for brief in briefs:
-        blocks.append("\n".join(_lines(brief, marks, sep, dash)))
-        if brief.diagram is not None:
-            blocks.append(_drawing(brief.diagram, form))
+        blocks.extend(_blocks(brief, symbols, form))
     if order:
         blocks.append(diagram(order, symbols, form))
     return "\n\n".join(blocks) + "\n"
@@ -465,13 +558,14 @@ def questions(briefs: Sequence[Brief], ids: Sequence[str], symbols: str) -> dict
 
     A question holds `id`, the brief's id; `header`, the id where it fits a tool's short header,
     else empty; `question` and `title`, the same text, the heading and then the recommended
-    Option's letter and why; and `options`, the recommended Option first, as the tools ask, then
-    the rest in letter order. Each option holds `label`, its letter and way, with
-    " (Recommended)" on the recommended one; `description`, what it leads to and its downside;
-    and `line`, the label and what it leads to, for a tool whose options are plain strings. A
-    brief with no Options has an empty `options`. The drawn brief, with its evidence, goes in the
-    message before the question. A brief `render` refuses is refused here by the same
-    `ValueError`.
+    Option's letter and why, behind `Recommended:`; and `options`, the recommended Option first,
+    as the tools ask, then the rest in letter order, and, for a brief with `explore`, a last
+    choice, `Explore it first`. Each option holds `label`, its letter and way, with
+    " (Recommended)" on the recommended one; `description`, what it leads to, then `choose if:`
+    its condition and `downside:` its downside, each where given; and `line`, the label and what
+    it leads to, for a tool whose options are plain strings. A brief with no Options has an empty
+    `options`. The drawn brief, with its context and evidence, goes in the message before the
+    question. A brief `render` refuses is refused here by the same `ValueError`.
     """
 
     sep, dash = SEPARATORS[symbols]
@@ -484,18 +578,31 @@ def questions(briefs: Sequence[Brief], ids: Sequence[str], symbols: str) -> dict
         recommended = _ways(brief).index(brief.recommend_way) if brief.recommend_way else None
         if brief.recommend:
             letter = "" if recommended is None else f"{string.ascii_uppercase[recommended]}{dash}"
-            text += f"{sep}Recommend: {letter}{brief.recommend}"
+            text += f"{sep}Recommended: {letter}{brief.recommend}"
         options = []
-        for index, (way, leads_to, *downside) in enumerate(brief.options):
+        for index, option in enumerate(brief.options):
+            way, leads_to, downside, choose_if = option_parts(option)
             label = f"{string.ascii_uppercase[index]} {way}"
             if index == recommended:
                 label += " (Recommended)"
-            description = leads_to + "".join(f"; downside: {risk}" for risk in downside)
+            description = leads_to
+            if choose_if:
+                description += f"; choose if: {choose_if}"
+            if downside:
+                description += f"; downside: {downside}"
             options.append(
                 {"label": label, "description": description, "line": f"{label}{dash}{leads_to}"}
             )
         if recommended is not None:
             options.insert(0, options.pop(recommended))
+        if brief.explore and options:
+            options.append(
+                {
+                    "label": "Explore it first",
+                    "description": brief.explore,
+                    "line": f"Explore it first{dash}{brief.explore}",
+                }
+            )
         asked.append(
             {
                 "id": brief_id,
@@ -533,13 +640,22 @@ _EXAMPLE = """\
   "briefs": [
     {
       "id": "D1",
-      "heading": "Keep the old flag for one release?",
+      "heading": "Should the old flag stay for one more release?",
+      "why_now": "the release notes for 2.0; until you answer, the flag stays",
+      "context": [
+        "The old `--legacy` flag switches the parser back to its 1.x behaviour.",
+        "Two adopters still set it.",
+        ["Keeping it: those adopters see a warning for one release before it goes.",
+         "Dropping it: the code path goes in 2.0."]
+      ],
+      "terms": [["code path", "the branch of the parser that runs only when the flag is set"]],
       "recommend": "two adopters still set it",
       "recommend_way": "keep it",
       "confidence": "fact",
       "options": [
-        ["keep it", "adopters get a warning first",
-         "one more release carries the old code path"],
+        {"way": "keep it", "leads_to": "adopters get a warning first",
+         "choose_if": "no adopter should break on upgrade",
+         "downside": "one more release carries the old code path"},
         ["drop it now", "the code path goes today",
          "an adopter who sets it is refused on upgrade"]
       ],
@@ -572,23 +688,45 @@ The document is one JSON object (schemas/decision-briefs.schema.json):
            ({{"verdicts": [...], "text": ...}}), not_checked (what could not
            be checked, why, and what would settle it) or facts ([label, text]
            pairs, no label naming a line the renderer writes); and, where it
-           changes the answer: options ([way, what it leads to, its downside]
-           triples, two or more), recommend (why; required with options),
-           recommend_way (the way of options recommended, required with
-           options; its letter is written), confidence (`fact` where a
-           command you ran shows it, else `inferred`), why_now, asked (a list), debt, and diagram
+           changes the answer: why_now (what waits on the answer and what
+           happens if none comes; drawn first, after the question),
+           context (blocks, each a string, drawn as a paragraph, or a list of
+           strings, drawn as a list; two lists never in a row; no block or
+           item starts with a markdown opener such as - * + # > 1. | ``` ---),
+           terms ([term, meaning] pairs, each drawn as a paragraph after the
+           context; no term starts or ends with * or _), diagram
            ({{"caption": ..., "edges": [[from, to] or [from, to, label],
-           ...]}}, drawn after the brief where order, dependency, flow or
-           before/after is the point)
+           ...]}}, drawn where order, dependency, flow or before/after is the
+           point), picture ({{"caption": ..., "lines": [...]}}: a small
+           fixed-width figure drawn in a text fence; the caption is required,
+           a line may be empty but not all of them; no line holds three
+           backticks, a wide East Asian character, U+FE0F or U+20E3),
+           explore (one line: what an interactive page would let the person
+           try, for a decision that is not simple; the person can ask for it
+           by the brief's id), options (two or more: [way, what it leads to,
+           its downside] triples, or {{"way", "leads_to", "downside",
+           "choose_if"}} objects, choose_if optional: when a reasonable person
+           picks it; no way starts or ends with * or _), recommend (why;
+           required with options), recommend_way (the way of options
+           recommended, required with options; the recommendation is drawn
+           under that option), confidence (`fact` where a command you ran
+           shows it, drawn as "a check shows this", else `inferred`, drawn as
+           "my judgment"), asked (a list), debt (what the choice leaves owed)
   order    optional [before, after] pairs of brief ids: after waits on
            before; drawn after the last brief
+
+A brief reads in the order a person decides: the question, what waits on it,
+the context, the terms, the picture, the offer to explore, each option with
+its recommendation, when to choose it and its downside, then the evidence.
+Every block is separated from the next by one blank line.
 
 Every string is one line. The command writes marks only from these fields:
 the passed mark where every verdict given is PASS. It refuses a string
 holding a line break, a control or format character, or a mark's own glyph;
-an id that is not a letter followed by letters, digits and hyphens; and a
+an id that is not a letter followed by letters, digits and hyphens; a
 diagram label holding a double quote, or an edge label holding a |, which
-would break a Mermaid diagram. It does not vouch for what your text says:
+would break a Mermaid diagram; and the context, term, option and picture
+rules above. It does not vouch for what your text says:
 the verdicts are your own report of commands you ran.
 
 Example, drawn as the briefs D1 and D2, D1's diagram and their order:
@@ -603,18 +741,24 @@ Mermaid; they are ASCII everywhere else, an unknown surface included; --form
 names them. With --ask, the command prints instead one JSON object for a harness's
 question tool, {{"questions": [{{"id", "header", "question", "title", "options":
 [{{"label", "description", "line"}}]}}]}}, each field on one line: the question (also
-as title) is the heading and the recommendation; the recommended option comes first,
-its label ending (Recommended); line is the label and what it leads to, for a tool
-whose options are plain strings; header is the id where it has 12 characters or
-fewer. The order is not printed. Fill the tool's fields by name, after the drawn
-brief in the message. Posting to a GitHub issue, discussion or pull request, or from
-the Codex app, pass --form mermaid: those surfaces set no variable. Show the output
-as markdown, never inside a code block. Exit 0 when drawn; exit 1 when a brief
-is refused, naming which: one option or more than 26, two or more options with
-no recommend or recommend_way, a confidence or a recommended way with no
-Recommend line, a recommended way it does not lay out, or no checked,
-not_checked or facts; exit 2 when the document cannot be read or breaks a rule
-above, naming why, and on a usage error.
+as title) is the heading and the recommendation, behind Recommended:; the recommended
+option comes first, its label ending (Recommended); a description is what the option
+leads to, then choose if: and downside:; a brief with explore gets a last option,
+Explore it first; line is the label and what it leads to, for a tool whose options
+are plain strings; header is the id where it has 12 characters or fewer. The order is
+not printed. Fill the tool's fields by name, after the drawn brief in the message.
+Posting to a GitHub issue, discussion or pull request, or from the Codex app, pass
+--form mermaid: those surfaces set no variable. Show the output as markdown, never
+inside a code block. Exit 0 when drawn; exit 1 when a brief is refused, naming
+which: one option or more than 26, two or more options with no recommend or
+recommend_way, a confidence or a recommended way with no recommendation, a
+recommended way it does not lay out, or no checked, not_checked or facts; exit 2 when
+the document cannot be read or breaks a rule above (an option object missing its way,
+what it leads to or its downside; an empty context block or list; two context lists in
+a row; a context block or item starting with a markdown opener; a term or a way
+starting or ending with * or _; a terms pair that is not exactly two; a picture with no
+caption or only empty lines, or a picture line holding what is refused above), naming
+why, and on a usage error.
 """
 
 # Every character `str.splitlines` breaks a line at: a string holding one could
@@ -644,17 +788,27 @@ def _pairs(values: Sequence[Sequence[str]], where: str) -> tuple[tuple[str, str]
     return tuple((value[0], value[1]) for value in values)
 
 
-def _options(values: Sequence[Sequence[str]], where: str) -> tuple[tuple[str, str, str], ...]:
-    """Each Option as `(way, leads_to, downside)`; one holding other than three strings
-    is refused by its path, naming the downside it lacks."""
+def _options(values: Sequence[Any], where: str) -> tuple[tuple[str, ...], ...]:
+    """Each Option as `(way, leads_to, downside)`, with `choose_if` after them where given.
 
+    An Option given as a list holding other than three strings is refused by its path,
+    naming the downside it lacks; one given as an object has been checked by the schema
+    for its way, what it leads to and its downside.
+    """
+
+    options: list[tuple[str, ...]] = []
     for index, value in enumerate(values):
-        if len(value) != 3:
+        if isinstance(value, Mapping):
+            parts = (value["way"], value["leads_to"], value["downside"])
+            options.append(parts + ((value["choose_if"],) if "choose_if" in value else ()))
+        elif len(value) != 3:
             raise _Unreadable(
                 f"{where}[{index}] must hold exactly three strings: the way, what it leads to, "
                 "and its downside"
             )
-    return tuple((value[0], value[1], value[2]) for value in values)
+        else:
+            options.append((value[0], value[1], value[2]))
+    return tuple(options)
 
 
 def _diagram(value: Mapping[str, Any] | None, where: str) -> Diagram | None:
@@ -700,9 +854,13 @@ _LINE_NAMES = frozenset(
     name.casefold()
     for name in (
         "Recommend",
+        "Recommended",
         "Options",
         "Downside",
+        "Choose if",
+        "Explore",
         "Why now",
+        "Waiting on this",
         "Asked",
         "Checked",
         "Not checked",
@@ -711,6 +869,94 @@ _LINE_NAMES = frozenset(
         "Confidence",
     )
 )
+
+# The start of a context paragraph or list item that a markdown view would read as a block of
+# its own: a bullet, heading, quote or table mark, a number and its dot or bracket, a fence, a
+# rule or an underline.
+_BLOCK_OPENER = re.compile(r"[-*+#>|]|\d+[.)]|```|~~~|===")
+
+
+def _opener(text: str) -> bool:
+    return _BLOCK_OPENER.match(text.lstrip()) is not None
+
+
+def _edge(text: str) -> bool:
+    """Whether `*` or `_` stands at either edge of `text`, which would open or close emphasis
+    around the mark and the word that bracket it."""
+
+    return text[:1] in ("*", "_") or text[-1:] in ("*", "_")
+
+
+# Characters a fixed-width figure cannot rely on: the emoji presentation selector and the
+# keycap, and the East Asian widths W and F, which a terminal draws two columns wide.
+_NO_COMBINING = ("\ufe0f", "\u20e3")
+_WIDE = ("W", "F")
+
+
+def _picture_defect(line: str) -> str:
+    """Why a picture line cannot be drawn in a fence at a fixed width, or the empty string."""
+
+    if "```" in line:
+        return "holds three backticks, which end its fence"
+    for character in line:
+        if character in _NO_COMBINING or unicodedata.east_asian_width(character) in _WIDE:
+            return (
+                f"holds the character U+{ord(character):04X}, which is drawn two columns wide "
+                "or changes how its neighbour is drawn"
+            )
+    return ""
+
+
+def _checked_context(blocks: Sequence[Any], at: str) -> None:
+    """Two lists in a row, and a paragraph or item that starts a block of its own."""
+
+    after_list = False
+    for number, block in enumerate(blocks):
+        where = f"{at}.context[{number}]"
+        items = block if isinstance(block, list) else None
+        if items is not None and after_list:
+            raise _Unreadable(
+                f"{where} is a list directly after another list, which a markdown view joins "
+                "into one; put a paragraph between them"
+            )
+        after_list = items is not None
+        for position, text in enumerate(items if items is not None else [block]):
+            if _opener(text):
+                at_item = where if items is None else f"{where}[{position}]"
+                raise _Unreadable(
+                    f"{at_item} starts with a markdown block opener, which a markdown view "
+                    "reads as a block of its own; start with a word"
+                )
+
+
+def _checked_picture(picture: Mapping[str, Any], at: str) -> None:
+    """A picture of only empty lines, and a line a fence cannot hold at a fixed width."""
+
+    if not any(picture["lines"]):
+        raise _Unreadable(f"{at}.picture.lines holds only empty lines")
+    for number, line in enumerate(picture["lines"]):
+        defect = _picture_defect(line)
+        if defect:
+            raise _Unreadable(f"{at}.picture.lines[{number}] {defect}")
+
+
+def _checked_blocks(entry: Mapping[str, Any], index: int) -> None:
+    """Refuse what would make a markdown view run the brief's blocks together or draw a
+    figure out of line: two context lists in a row, a context paragraph or item that starts a
+    block of its own, `*` or `_` at an edge of a way or a term, and a picture of only empty
+    lines or with a line a fence cannot hold. An empty block, list or item is the schema's."""
+
+    at = f"$.briefs[{index}]"
+    _checked_context(entry.get("context", ()), at)
+    for number, term in enumerate(entry.get("terms", ())):
+        if _edge(term[0]):
+            raise _Unreadable(f"{at}.terms[{number}][0] starts or ends with * or _")
+    for number, option in enumerate(entry.get("options", ())):
+        way = option["way"] if isinstance(option, Mapping) else option[0]
+        if _edge(way):
+            raise _Unreadable(f"{at}.options[{number}] has a way that starts or ends with * or _")
+    if "picture" in entry:
+        _checked_picture(entry["picture"], at)
 
 
 def _checked_text(document: Mapping[str, Any]) -> None:
@@ -731,6 +977,7 @@ def _checked_text(document: Mapping[str, Any]) -> None:
         if glyph:
             raise _Unreadable(f"{where} holds the mark {glyph!r}, which only the renderer writes")
     for index, entry in enumerate(document["briefs"]):
+        _checked_blocks(entry, index)
         for number, fact in enumerate(entry.get("facts", ())):
             if fact and fact[0].strip().casefold() in _LINE_NAMES:
                 raise _Unreadable(
@@ -763,6 +1010,16 @@ def _brief(entry: Mapping[str, Any], index: int, sep: str) -> Brief:
         recommend_way=entry.get("recommend_way", ""),
         facts=_pairs(entry.get("facts", ()), f"$.briefs[{index}].facts"),
         diagram=_diagram(entry.get("diagram"), f"$.briefs[{index}].diagram"),
+        context=tuple(
+            block if isinstance(block, str) else tuple(block) for block in entry.get("context", ())
+        ),
+        terms=_pairs(entry.get("terms", ()), f"$.briefs[{index}].terms"),
+        picture=(
+            Picture(entry["picture"]["caption"], tuple(entry["picture"]["lines"]))
+            if "picture" in entry
+            else None
+        ),
+        explore=entry.get("explore", ""),
     )
 
 

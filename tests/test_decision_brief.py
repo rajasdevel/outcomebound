@@ -21,7 +21,9 @@ from outcomebound_tools.decision_brief import (
     SEPARATORS,
     Brief,
     Diagram,
+    Picture,
     checked_mark,
+    confidence_words,
     diagram,
     render,
     symbols_for,
@@ -96,41 +98,164 @@ def _contributing(symbols: str) -> Brief:
     )
 
 
-# The worked example as the renderer draws it under `emoji`, byte for byte.
+# The worked example as the renderer draws it under `emoji`, byte for byte: the options lead-in,
+# the recommendation under the option it names (a 1.7.0 confidence is drawn as given), then the
+# evidence, one paragraph each.
 CONTRIBUTING_DRAWN = (
     "### D1 · CONTRIBUTING says no merge commits, and the last release landed as one: which"
-    " gives way?\n"
-    "- 👉 Recommend: A — the rule then says what this project already does, and the next"
-    " integration branch needs no exception · confidence 80% (inferred)\n"
-    "- Options:\n"
-    "  - A amend CONTRIBUTING so a long-lived integration branch lands by one merge commit"
+    " gives way?\n\n"
+    "**Options**\n\n"
+    "- **A · amend CONTRIBUTING so a long-lived integration branch lands by one merge commit**"
     " — the rule matches how the last release landed\n"
-    "    - 🔻 Downside: a reviewer does not flag a merge commit on main\n"
-    "  - B keep the rule and record the last release as its one exception"
+    "  - ⭐ Recommended: the rule then says what this project already does, and the next"
+    " integration branch needs no exception · 80% (inferred)\n"
+    "  - 🔻 Downside: a reviewer does not flag a merge commit on main\n"
+    "- **B · keep the rule and record the last release as its one exception**"
     " — the rule stays strict\n"
-    "    - 🔻 Downside: every later integration branch asks again\n"
-    "- ✅ Checked: `git log --merges main` shows the last release as a merge commit\n"
-    "- ⚠️ Not checked: whether another contributor relies on the rule as written\n"
+    "  - 🔻 Downside: every later integration branch asks again\n\n"
+    "✅ Checked: `git log --merges main` shows the last release as a merge commit\n\n"
+    "⚠️ Not checked: whether another contributor relies on the rule as written\n"
 )
 
 
 def _every_field(heading: str) -> Brief:
+    """A brief with every field: a list among the context blocks, a gap in the picture."""
+
     return Brief(
         heading=heading,
+        why_now="unblocks #4; until you answer, the fix stays on its branch",
+        context=(
+            "The fix touches the parser.",
+            ("It lands behind a flag.", "It was reviewed twice."),
+            "Nothing else reads the flag.",
+        ),
+        terms=(("flag", "the switch that turns the fix on"),),
+        diagram=Diagram(edges=(("branch", "main", "merge"),), caption="Where the fix goes"),
+        picture=Picture("Before and after", ("old: a -> b", "", "new: a -> c")),
+        explore="try how long the fix waits for each release date",
         recommend="it is reverted in one step",
         recommend_way="take it",
         confidence="fact",
         options=(
-            ("take it", "it lands today", "the release notes lag a day"),
+            ("take it", "it lands today", "the release notes lag a day", "the fix should not wait"),
             ("leave it", "it waits a week", "the fix waits with it"),
         ),
-        why_now="unblocks #4",
         asked=("the reviewer signs off", "the owner signs off"),
         checked=("checked", "build PASS"),
         not_checked="the release notes",
+        facts=(("Grant", "none"),),
         debt="one test marked slow",
         undo=("cannot_be_undone", "the tag is pushed"),
     )
+
+
+# Every field drawn under each symbol set, byte for byte. The graph is ASCII in both.
+EVERY_FIELD_EMOJI = """\
+### X1
+
+⏳ Waiting on this: unblocks #4; until you answer, the fix stays on its branch
+
+The fix touches the parser.
+
+- It lands behind a flag.
+- It was reviewed twice.
+
+Nothing else reads the flag.
+
+📖 *flag*: the switch that turns the fix on
+
+🗺️ Where the fix goes
+
+```text
+branch --merge--> main
+```
+
+🗺️ Before and after
+
+```text
+old: a -> b
+
+new: a -> c
+```
+
+🧪 Explore: try how long the fix waits for each release date
+
+**Options**
+
+- **A · take it** — it lands today
+  - ⭐ Recommended: it is reverted in one step · a check shows this
+  - ⚖️ Choose if: the fix should not wait
+  - 🔻 Downside: the release notes lag a day
+- **B · leave it** — it waits a week
+  - 🔻 Downside: the fix waits with it
+
+Asked: the reviewer signs off
+
+Asked: the owner signs off
+
+✅ Checked: build PASS
+
+⚠️ Not checked: the release notes
+
+Grant: none
+
+🧱 Debt: one test marked slow
+
+⛔ Undo: the tag is pushed
+"""
+EVERY_FIELD_ASCII = """\
+### X1
+
+[wait] Waiting on this: unblocks #4; until you answer, the fix stays on its branch
+
+The fix touches the parser.
+
+- It lands behind a flag.
+- It was reviewed twice.
+
+Nothing else reads the flag.
+
+[term] *flag*: the switch that turns the fix on
+
+[pic] Where the fix goes
+
+```text
+branch --merge--> main
+```
+
+[pic] Before and after
+
+```text
+old: a -> b
+
+new: a -> c
+```
+
+[explore] Explore: try how long the fix waits for each release date
+
+**Options**
+
+- **A | take it** - it lands today
+  - [rec] Recommended: it is reverted in one step | a check shows this
+  - [choose] Choose if: the fix should not wait
+  - [-] Downside: the release notes lag a day
+- **B | leave it** - it waits a week
+  - [-] Downside: the fix waits with it
+
+Asked: the reviewer signs off
+
+Asked: the owner signs off
+
+[ok] Checked: build PASS
+
+[!] Not checked: the release notes
+
+Grant: none
+
+[debt] Debt: one test marked slow
+
+[!!] Undo: the tag is pushed
+"""
 
 
 def test_the_worked_example_is_what_the_renderer_prints() -> None:
@@ -201,23 +326,93 @@ def test_no_surface_letters_an_option_itself() -> None:
     assert lettering == []
 
 
-@pytest.mark.parametrize("symbols", ["emoji", "ascii"])
-def test_briefs_are_headings_and_lists_separated_by_one_blank_line(symbols: str) -> None:
-    """Every line a markdown view could join to the one above is a list item, and
-    nothing is fenced; only a downside, a list item nested under its Option, is
-    indented four spaces."""
+@pytest.mark.parametrize(
+    ("symbols", "golden"), [("emoji", EVERY_FIELD_EMOJI), ("ascii", EVERY_FIELD_ASCII)]
+)
+def test_a_brief_holding_every_field_is_drawn_in_the_order_a_person_decides(
+    symbols: str, golden: str
+) -> None:
+    """Every field in both symbol sets: the waiting line, the context, the terms, the picture,
+    the offer to explore, the options with the recommendation on the option it names, then the
+    evidence, one paragraph each, a blank line between all of them."""
 
-    text = render([_every_field("X1"), Brief(heading="X2")], symbols)
+    assert render([_every_field("X1")], symbols) == golden
+
+
+def _kinds(lines: list[str]) -> list[str]:
+    """What each drawn line is: blank, heading, item, open or close (a fence's own lines), inside
+    (a line a fence holds) or paragraph."""
+
+    kinds: list[str] = []
+    inside = False
+    for line in lines:
+        if line.startswith("```"):
+            kinds.append("close" if inside else "open")
+            inside = not inside
+        elif inside:
+            kinds.append("inside")
+        elif not line.strip():
+            kinds.append("blank")
+        elif line.startswith("### "):
+            kinds.append("heading")
+        elif line.startswith(("- ", "  - ")):
+            kinds.append("item")
+        else:
+            kinds.append("paragraph")
+    return kinds
+
+
+# What may stand directly above and below each kind of line (`""` is the edge of the text). A
+# heading may run into a fence, as the order's does, and a list item may follow a closing fence,
+# as the order's circle item does; nothing else shares a line's neighbourhood.
+ABOVE = {
+    "paragraph": {"blank", ""},
+    "heading": {"blank", ""},
+    "open": {"blank", "heading", ""},
+    "item": {"blank", "item", "close", ""},
+}
+BELOW = {
+    "paragraph": {"blank", ""},
+    "heading": {"blank", "open", ""},
+    "close": {"blank", "item", ""},
+    "item": {"blank", "item", ""},
+}
+
+
+def _unmerged(text: str) -> list[str]:
+    """What stops a markdown view reading `text` as written: a line that is not a heading, a
+    list item, a line inside a fence or a paragraph with a blank line on each side, two blank
+    lines in a row, and a list that stands next to another."""
+
+    lines = text.split("\n")
+    kinds = _kinds(lines)
+    problems: list[str] = []
+    for at, (line, kind) in enumerate(zip(lines, kinds, strict=True)):
+        above = kinds[at - 1] if at else ""
+        below = kinds[at + 1] if at + 1 < len(kinds) else ""
+        if above not in ABOVE.get(kind, {above}) or below not in BELOW.get(kind, {below}):
+            problems.append(f"{line!r} runs into a neighbouring line")
+        if kind == "blank" and above == "blank":
+            problems.append("two blank lines in a row")
+        starts = kind == "item" and above != "item"
+        before = next((k for k in reversed(kinds[:at]) if k != "blank"), "")
+        if starts and above == "blank" and before == "item":
+            problems.append(f"two lists stand next to each other at {line!r}")
+    return problems
+
+
+@pytest.mark.parametrize("symbols", ["emoji", "ascii"])
+@pytest.mark.parametrize("form", ["ascii", "mermaid"])
+def test_no_two_lines_run_together_and_no_two_lists_stand_together(symbols: str, form: str) -> None:
+    """Each drawn line of a brief with every field, a second brief and the order is a heading, a
+    list item, a fence line or a paragraph with a blank line on each side; the text ends in one
+    newline; and two lists are never adjacent, since a markdown view would join them."""
+
+    text = render([_every_field("X1"), Brief(heading="X2")], symbols, (("X1", "X2"),), form)
 
     assert text.endswith("\n") and not text.endswith("\n\n")
-    blocks = text[:-1].split("\n\n")
-    assert len(blocks) == 2
-    for block in blocks:
-        first, *rest = block.split("\n")
-        assert first.startswith("### ")
-        for line in rest:
-            assert line.startswith(("- ", "  - ", f"    - {MARKS[symbols]['downside']} ")), line
-    assert len(blocks[0].split("\n")) == 14, "every field of the first brief is written"
+    assert _unmerged(text[:-1]) == []
+    assert _unmerged("- a\n\n- b") != [], "the check itself sees two lists in a row"
 
 
 def test_the_ascii_spelling_differs_only_in_marks_and_separators() -> None:
@@ -231,8 +426,8 @@ def test_the_ascii_spelling_differs_only_in_marks_and_separators() -> None:
 
     respelled = []
     for line in plain:
-        lead = re.match(r"### |- |  - |    - ", line)
-        assert lead is not None, line
+        lead = re.match(r"(?: *- )?", line)
+        assert lead is not None
         rest = line[lead.end() :]
         for spelled, symbol in twins:
             rest = rest.replace(spelled, symbol)
@@ -241,32 +436,32 @@ def test_the_ascii_spelling_differs_only_in_marks_and_separators() -> None:
     assert "\n".join(plain).isascii()
 
 
-def test_a_brief_writes_only_the_lines_it_is_given() -> None:
-    """An empty field writes no line: no placeholder, and no ` · confidence` alone."""
+def test_a_brief_writes_only_the_blocks_it_is_given() -> None:
+    """An empty field writes nothing: no placeholder, no mark alone, no stray blank line."""
 
     assert render([Brief(heading="X")], "ascii") == "### X\n"
     assert render([Brief(heading="X", recommend="do it", debt="d")], "ascii") == (
-        "### X\n- [>] Recommend: do it\n- [debt] Debt: d\n"
+        "### X\n\n[rec] Recommended: do it\n\n[debt] Debt: d\n"
     )
 
 
 @pytest.mark.parametrize("symbols", ["emoji", "ascii"])
-def test_each_downside_is_nested_under_its_option_behind_its_own_mark(symbols: str) -> None:
-    """An Option given with its downside is followed by the downside, nested under it
-    and behind the `downside` mark; one given without a downside, as a surface that
-    knows none gives it, writes no downside line."""
+def test_each_option_nests_its_condition_and_downside_under_it(symbols: str) -> None:
+    """An Option's condition and downside are written under it behind marks of their own,
+    the condition first; an Option given without them writes neither."""
 
-    _, dash = SEPARATORS[symbols]
-    mark = MARKS[symbols]["downside"]
-    options = (("x", "one place", "it costs a day"), ("y", "another"))
+    sep, dash = SEPARATORS[symbols]
+    marks = MARKS[symbols]
+    options = (("x", "one place", "it costs a day", "a day is cheap"), ("y", "another"))
 
-    lines = render([Brief(heading="X", options=options)], symbols).splitlines()
+    text = render([Brief(heading="X", options=options)], symbols)
 
-    assert lines[1:] == [
-        "- Options:",
-        f"  - A x{dash}one place",
-        f"    - {mark} Downside: it costs a day",
-        f"  - B y{dash}another",
+    assert text.split("\n\n")[1:] == [
+        "**Options**",
+        f"- **A{sep}x**{dash}one place\n"
+        f"  - {marks['choose_if']} Choose if: a day is cheap\n"
+        f"  - {marks['downside']} Downside: it costs a day\n"
+        f"- **B{sep}y**{dash}another\n",
     ]
 
 
@@ -286,7 +481,7 @@ def test_more_options_than_letters_are_refused() -> None:
     options = tuple((f"way {index}", "somewhere") for index in range(27))
 
     assert render([Brief(heading="X", options=options[:26])], "ascii").endswith(
-        "  - Z way 25 - somewhere\n"
+        "- **Z | way 25** - somewhere\n"
     )
     with pytest.raises(ValueError) as refused:
         render([Brief(heading="X", options=options)], "ascii")
@@ -303,7 +498,7 @@ def test_a_confidence_without_a_recommendation_is_refused() -> None:
         render([Brief(heading="X", confidence="fact")], "ascii")
 
     assert str(refused.value) == (
-        "a brief's confidence belongs to its Recommend line, and this one has none"
+        "a brief's confidence belongs to its recommendation, and this one has none"
     )
 
 
@@ -312,18 +507,63 @@ TWO_WAYS = (("x", "one place"), ("y", "another"))
 
 
 @pytest.mark.parametrize("symbols", ["emoji", "ascii"])
-def test_a_recommended_way_is_lettered_by_the_renderer(symbols: str) -> None:
-    """The renderer writes the letter of the Option whose way the surface names,
-    and the surface's text after it, as given."""
+def test_the_recommendation_is_drawn_under_the_option_it_names(symbols: str) -> None:
+    """The recommendation sits under the option whose way the surface names, before that
+    option's other lines, and the options keep the order they were given: the recommended one
+    is not moved to the top."""
 
+    sep, dash = SEPARATORS[symbols]
     text = render(
         [Brief(heading="X", recommend="y, since R", options=TWO_WAYS, recommend_way="y")],
         symbols,
     )
 
-    _, dash = SEPARATORS[symbols]
-    recommend = f"- {MARKS[symbols]['recommend']} Recommend: B{dash}y, since R"
-    assert text.splitlines()[1] == recommend
+    assert text.split("\n\n")[2] == (
+        f"- **A{sep}x**{dash}one place\n"
+        f"- **B{sep}y**{dash}another\n"
+        f"  - {MARKS[symbols]['recommended']} Recommended: y, since R\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "brief",
+    [
+        Brief(heading="X", recommend="do it", debt="d"),
+        Brief(heading="X", recommend="do it", options=TWO_WAYS),
+    ],
+    ids=["no-options", "options-and-no-named-way"],
+)
+def test_a_recommendation_with_no_option_to_sit_under_is_a_paragraph_after_the_options(
+    brief: Brief,
+) -> None:
+    """With no options, or with options but no named way, `Recommended` is a paragraph of
+    its own after the options and before the evidence, never nested under an option."""
+
+    blocks = render([brief], "ascii").rstrip("\n").split("\n\n")
+
+    assert "[rec] Recommended: do it" in blocks
+    assert not [line for line in "\n".join(blocks).split("\n") if line.startswith("  - [rec]")]
+    at = blocks.index("[rec] Recommended: do it")
+    assert blocks[at - 1].startswith("- **A") or len(brief.options) == 0
+
+
+@pytest.mark.parametrize(
+    ("given", "words"),
+    [
+        ("fact", "a check shows this"),
+        ("inferred", "my judgment"),
+        ("80% (inferred)", "80% (inferred)"),
+        ("a guess", "a guess"),
+        ("", ""),
+    ],
+)
+def test_the_confidence_is_drawn_in_words_at_the_end_of_the_recommendation(
+    given: str, words: str
+) -> None:
+    assert confidence_words(given) == words
+    drawn = render([Brief(heading="X", recommend="why", confidence=given)], "emoji")
+    expected = f"⭐ Recommended: why · {words}" if words else "⭐ Recommended: why"
+    assert drawn == f"### X\n\n{expected}\n"
 
 
 def test_a_recommended_way_not_among_the_options_is_refused() -> None:
@@ -357,25 +597,25 @@ def test_an_options_leads_to_text_is_not_a_way_it_lays_out() -> None:
 
 
 def test_a_recommended_way_without_a_recommendation_is_refused() -> None:
-    """A recommended way belongs to a Recommend line, and is never drawn without one."""
+    """A recommended way belongs to a recommendation, and is never drawn without one."""
 
     with pytest.raises(ValueError) as refused:
         render([Brief(heading="X", options=TWO_WAYS, recommend_way="y")], "ascii")
 
     assert str(refused.value) == (
-        "a brief's recommended way belongs to its Recommend line, and this one has none"
+        "a brief's recommended way belongs to its recommendation, and this one has none"
     )
 
 
 def test_a_missing_recommendation_is_refused_before_an_unknown_way() -> None:
-    """A brief wrong on both counts is refused for the missing Recommend line first,
+    """A brief wrong on both counts is refused for the missing recommendation first,
     in the order the refusals are listed."""
 
     with pytest.raises(ValueError) as refused:
         render([Brief(heading="X", options=TWO_WAYS, recommend_way="z")], "ascii")
 
     assert str(refused.value) == (
-        "a brief's recommended way belongs to its Recommend line, and this one has none"
+        "a brief's recommended way belongs to its recommendation, and this one has none"
     )
 
 
@@ -535,30 +775,35 @@ FLAG = Diagram(
     edges=(("config", "warning", "old_flag"), ("warning", "new flag", "")),
     caption="How an upgrade reads the flag",
 )
-FLAG_MERMAID = """How an upgrade reads the flag
-```mermaid
+FLAG_MERMAID = """```mermaid
 flowchart LR
   n1["config"] -->|old_flag| n2["warning"]
   n2["warning"] --> n3["new flag"]
 ```"""
-FLAG_ASCII = """How an upgrade reads the flag
-```text
+FLAG_ASCII = """```text
 config --old_flag--> warning --> new flag
 ```"""
 
 
 @pytest.mark.parametrize(("form", "drawn"), [("mermaid", FLAG_MERMAID), ("ascii", FLAG_ASCII)])
-def test_a_briefs_diagram_is_its_own_block_after_its_list(form: str, drawn: str) -> None:
-    """A brief's diagram follows its list as a block of its own, caption first, and
-    comes before the next brief and before the order, all in the one form."""
+def test_a_briefs_diagram_is_a_captioned_picture_after_its_context(form: str, drawn: str) -> None:
+    """A brief's diagram follows the heading and the context as a picture mark and its caption,
+    then the fence, each a block of its own, before the next brief and before the order, all in
+    the one form."""
 
-    briefs = [Brief(heading="D1", diagram=FLAG), Brief(heading="D2")]
+    briefs = [Brief(heading="D1", diagram=FLAG, context=("About the flag.",)), Brief(heading="D2")]
     order = (("D1", "D2"),)
 
     blocks = render(briefs, "emoji", order, form)[:-1].split("\n\n")
 
-    assert blocks[:3] == ["### D1", drawn, "### D2"]
-    assert blocks[3] == diagram(order, "emoji", form)
+    assert blocks[:5] == [
+        "### D1",
+        "About the flag.",
+        "🗺️ How an upgrade reads the flag",
+        drawn,
+        "### D2",
+    ]
+    assert blocks[5] == diagram(order, "emoji", form)
 
 
 def test_a_diagram_without_a_caption_opens_with_its_fence() -> None:
