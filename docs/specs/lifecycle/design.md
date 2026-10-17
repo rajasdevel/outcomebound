@@ -38,7 +38,7 @@ R7. Target v1.5.0 for all known in-scope defects and justified improvements; res
 R8. Keep supported install and command contracts compatible, preserve project gates, and qualify the exact release tree before publication and downstream adoption.
 R9. Include security, privacy, accessibility, reliability, performance, compatibility and recovery where the project's outcome or changed risk requires them.
 R10. When this work establishes a new general lesson, return it to research through the existing contribution route. Otherwise retain the existing research. Keep product evaluation results in this repository.
-R11. Keep hook installation and execution portable with no unnecessary external tooling; distinguish the engine runtime from a project's genuine check dependencies and make missing setup explicit without weakening checks.
+R11. (The hook it names is retired in 1.7.0.) Keep hook installation and execution portable with no unnecessary external tooling; distinguish the engine runtime from a project's genuine check dependencies and make missing setup explicit without weakening checks.
 R12. Adapt to the project's own lifecycle at adoption: record what the project does now, with the source of each fact, and offer the nearest shipped template only as a comparison.
 R13. Select the obligations of each stream of work from a few exposure facts (who can be hurt, who accepts the work, which acts cannot be undone, the expected life, who maintains it, and how much of the work agents write against the review capacity), never from a count of lines, files, commits or users.
 R14. Keep one copy of each route: the project's own document. OutcomeBound points to it and does not restate its stages.
@@ -205,7 +205,7 @@ another act (deleting a deployment cache, releasing a database lock) leaves the 
 | Evaluation outcomes, fixture contracts, skill coverage and behavior evidence | [skills](../skills/design.md), `evals/README.md`, `docs/evaluations.md` |
 | Provenance and semantic coverage limits | [sources](../sources/design.md), [tickets](../tickets/design.md) |
 | Portable adoption and native surfaces | [install](../install/design.md) |
-| Native prompt, Stop and retry observations | [finish-check](../finish-check/design.md) |
+| Native prompt, Stop and retry observations (1.5.0 and 1.6.0; the hook is retired) | [E21](../../evaluations.md#separate-native-hook-observations), [finish-check](../finish-check/design.md) |
 | Release identity, packaging and publication | [distribution](../distribution/design.md), `docs/VERSIONING.md` |
 | General lessons and product-specific evaluation records | [research](../research/design.md) |
 

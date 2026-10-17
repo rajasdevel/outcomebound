@@ -12,6 +12,46 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+The finish check is retired. `adopt` installs no hook and runs no Done command. A hook costs time at
+every turn end, and the tests belong to the agent and to the person.
+
+Do these steps first:
+
+1. Install the new release. Until a project runs `adopt`, its old entries call
+   `outcomebound finish-check`, which now runs no Done command and exits 0 at once.
+2. In each project that has the hook, run `outcomebound adopt . --check`, then
+   `outcomebound adopt .`. The check shows each `hook` record as `stale` where its entry is
+   unchanged, `edited` where a person changed it, or `missing` where it is gone, with the event
+   and the command of the entry. The install takes out the stop entry
+   and the prompt entry from `.claude/settings.json` and `.codex/hooks.json`, and their records.
+   It keeps every other key and entry of those files, and it deletes a file that an earlier
+   `adopt` created and that now holds nothing. Review the diff and commit it.
+3. If you edited one of those entries, `adopt` stops and names it. Restore the entry or pass
+   `--force`. If the file has comments, `adopt` cannot rewrite it: remove the entry by hand, then
+   run `adopt` again.
+4. A CI job that runs `adopt --check` reports the hook records as not current until the install of
+   step 2 is committed.
+5. A project that used `--done-skip` has its `Done` fact without the "is not run when" clause
+   after the install. The Done commands are the same.
+
+### Removed
+
+- The finish check: the stop and prompt hook entries, the measurement of Done at install, the
+  record of known failures and `finish-check --status`. The `finish-check` verb stays as a stub
+  until a later major release: it accepts any arguments, writes nothing and exits 0 at once. For
+  the `codex` stop it prints `{}`, as 1.6.0 did when it had nothing to report.
+- The `finish_hook` field of the harness table and its schema.
+- The `unmanaged` state of `adopt --check` and the readiness lines about a measured Done.
+
+### Changed
+
+- `adopt --finish-check`, `--no-finish-check`, `--finish-timeout`, `--verify` and `--done-skip`
+  stay accepted, are hidden from `--help`, and each prints one `note` line.
+- A hook entry in a harness's settings is a review hit for `instructions check`, like any other
+  hook. The engine no longer exempts the entries that 1.6.0 wrote.
+- The adopt skill, the workspace and Python fragments and the portability guide no longer describe
+  a hook. The skill tells the agent to run the Done commands itself.
+
 ## [1.6.0] - 2026-10-16
 
 A minor release. A new project gets a route from an idea to a walking skeleton (#104).

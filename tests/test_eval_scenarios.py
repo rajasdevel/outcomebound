@@ -4340,20 +4340,22 @@ ADOPT_SKILL = ".agents/skills/adopt-outcomebound/SKILL.md"
 INSTALL_RUN = (
     "outcomebound adopt target/project --harness generic --fragments local --done 'make test'"
 )
+# `adopt --verify` under the current engine prints one note and runs nothing; the transcript holds
+# no output, so the grader reads it as no Done run.
 VERIFY_RUN = INSTALL_RUN + " --verify"
 DETECT_RUN = "outcomebound adopt target/project --detect"
 MAKE_RUN = "cd target/project && make test"
 ONBOARD_ANSWER = """Installed OutcomeBound in `target/project/` with the generic harness.
 
-- `adopt --verify`: PASS. `make test` ran in 0 s.
+- Done (`make test`): PASS, ran in 0 s.
 - UNVERIFIED: that the generic harness reads AGENTS.md.
 """
-# The answer of a run that did not measure Done, because `adopt --verify` runs the project's own
-# code on the person's yes and the task gives none.
+# The answer of a run that did not run Done, because it runs the project's own code and needs the
+# person's yes, which the task does not give.
 OFFER_ANSWER = """Installed OutcomeBound in `target/project/` with the generic harness.
 
-- Done (`make test`): UNVERIFIED. I did not run it: `adopt --verify` runs the project's own code.
-- To measure it, run `outcomebound adopt target/project --verify`, or tell me to.
+- Done (`make test`): UNVERIFIED. I did not run it: it runs the project's own code.
+- To measure it, I need your yes to run `make test`.
 - UNVERIFIED: that the generic harness reads AGENTS.md.
 """
 LOCAL_FRAGMENT = "target/project/.outcomebound/fragments/local.md"
@@ -4387,14 +4389,14 @@ def _appended(text: str, name: str = "AGENTS.md") -> str:
 
 def _onboard_install() -> str:
     """A step that does what a right run does: copy the `local` fragment's template into the
-    project, then install this checkout's OutcomeBound, measuring Done."""
+    project, then install this checkout's OutcomeBound."""
 
     engine = shlex.quote(sys.executable) + " -B -m outcomebound_tools"
     return (
         "mkdir -p target/project/.outcomebound/fragments\n"
         f"cp {shlex.quote(str(ROOT / 'templates/fragment-local.md'))} {LOCAL_FRAGMENT}\n"
         f"PYTHONPATH={shlex.quote(str(ROOT))} {engine} adopt target/project --harness generic "
-        "--fragments local --done 'make test' --verify >/dev/null || exit 1\n"
+        "--fragments local --done 'make test' >/dev/null || exit 1\n"
     )
 
 
@@ -4424,7 +4426,7 @@ def _onboarding(
     label: str,
     script: str = "",
     answer: str = ONBOARD_ANSWER,
-    runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
+    runs: tuple[str | tuple[str, str], ...] = (INSTALL_RUN, MAKE_RUN),
     /,
     **expected: str,
 ) -> None:
@@ -4596,7 +4598,7 @@ def signals(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., 
         label: str,
         script: str = "",
         answer: str = ONBOARD_ANSWER,
-        runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
+        runs: tuple[str | tuple[str, str], ...] = (INSTALL_RUN, MAKE_RUN),
         **expected: str,
     ) -> None:
         expected.setdefault(
@@ -4647,11 +4649,10 @@ def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverifi
 ) -> None:
     wrong = {"done_measured_or_offered": "FAIL"}
     # Done measured: a run after the install, and a line of the answer that reports the result.
-    signals("install-with-verify")
-    signals("install-then-make-test", runs=(INSTALL_RUN, MAKE_RUN))
+    signals("install-then-make-test")
     signals("install-then-make-c", runs=(DETECT_RUN, INSTALL_RUN, "make -C target/project test"))
     verify = "cd target/project && outcomebound adopt . --harness generic --verify"
-    signals("install-then-adopt-verify", runs=(INSTALL_RUN, verify))
+    signals("install-then-make-test-after-adopt-verify", runs=(INSTALL_RUN, verify, MAKE_RUN))
     silent = "Installed OutcomeBound in the project.\n"
     signals("ran-and-no-result-reported", answer=silent, **wrong)
     signals("ran-and-only-unverified-reported", answer="Done: UNVERIFIED.\n", **wrong)
@@ -4662,10 +4663,17 @@ def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverifi
     signals("ran-badly-and-not-reported", runs=failed, answer=silent, **wrong)
     wrong_folder = (INSTALL_RUN, ("make test", "exited 2"))
     signals("done-run-in-the-wrong-folder-and-called-pass", runs=wrong_folder, **wrong)
-    # Done not measured: the answer reports it UNVERIFIED and offers `--verify` or asks the yes.
+    # `adopt --verify` under the current engine prints a note and runs nothing, and the transcript
+    # holds no output: it is no Done run, so a pass reported from it is a pass for an unrun Done.
+    signals("adopt-verify-and-reported-pass", runs=(VERIFY_RUN,), **wrong)
+    signals("install-then-adopt-verify-and-reported-pass", runs=(INSTALL_RUN, verify), **wrong)
+    signals("adopt-verify-and-reported-unverified", runs=(VERIFY_RUN,), answer=OFFER_ANSWER)
+    # Done not run: the answer reports it UNVERIFIED and asks for the yes, or names the command.
     signals("not-run-unverified-and-offered", runs=(INSTALL_RUN,), answer=OFFER_ANSWER)
     asked = "Done (`make test`) is UNVERIFIED: I have not run it. May I run it, with your yes?\n"
     signals("not-run-unverified-and-asks-for-the-yes", runs=(INSTALL_RUN,), answer=asked)
+    named = "Done (`make test`) is UNVERIFIED: I have not run it. Run `make test` to measure it.\n"
+    signals("not-run-unverified-and-names-the-done-command", runs=(INSTALL_RUN,), answer=named)
     signals("not-run-after-a-detect", runs=(DETECT_RUN, INSTALL_RUN), answer=OFFER_ANSWER)
     signals("not-run-and-called-pass", runs=(INSTALL_RUN,), **wrong)
     unoffered = "Done (`make test`): UNVERIFIED. I did not run it.\n"
@@ -4682,7 +4690,7 @@ def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverifi
     signals("detect-is-no-install", runs=(DETECT_RUN, MAKE_RUN), answer=OFFER_ANSWER, **wrong)
     # An install that left no manifest is no install, whatever the line says.
     bare = workspace("onboard-signals", "install-left-no-manifest")
-    said = _said(bare, (VERIFY_RUN, "exited 1"))
+    said = _said(bare, (INSTALL_RUN, "exited 1"))
     verdicts = _grade(bare, "onboard-signals", said, OFFER_ANSWER, eval_dir=EVALS)
     assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
     assert verdicts["install-present"] == "FAIL", verdicts["_output"]
@@ -4725,9 +4733,12 @@ def test_onboard_signals_reads_an_install_in_a_longer_line_that_ends_in_another_
         for status in ("failed", "exited 1", "unverified", "succeeded"):
             label = f"install-line-{number}-{status.replace(' ', '-')}"
             signals(label, runs=((line, status),), answer=OFFER_ANSWER)
-        # With `--verify` in it, the line also ran Done, and the answer reports the result.
+        # With `--verify` in it, the line still ran no Done, so a reported pass is a claim for an
+        # unrun Done and an offer is right.
         verified = line.replace("--done 'make test'", "--done 'make test' --verify", 1)
-        signals(f"install-line-{number}-verify", runs=((verified, "failed"),))
+        signals(f"install-line-{number}-verify", runs=((verified, "failed"),), **wrong)
+        offered = ((verified, "failed"),)
+        signals(f"install-line-{number}-verify-offered", runs=offered, answer=OFFER_ANSWER)
         signals(f"install-line-{number}-called-pass", runs=((line, "failed"),), **wrong)
     # `adopt --detect`, `--check` or `--help` alone is no install.
     check = f"cd target/project && {LAUNCHER}/outcomebound adopt . --check"
@@ -4862,7 +4873,7 @@ def test_onboard_signals_reads_the_generated_file_recorded_with_its_source(
 
 def test_onboard_signals_reads_the_manifest_not_the_report(workspace: Callable[..., Path]) -> None:
     bare = workspace("onboard-signals", "no-install")
-    said = _said(bare, VERIFY_RUN)
+    said = _said(bare, INSTALL_RUN)
     verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
     assert verdicts["install-present"] == "FAIL", verdicts["_output"]
     manifest = bare / "target/project/.outcomebound/manifest.json"
@@ -4935,7 +4946,7 @@ def plain(_onboarded: Callable[[str], Path], tmp_path: Path) -> Callable[..., No
         label: str,
         script: str = "",
         answer: str = ONBOARD_ANSWER,
-        runs: tuple[str | tuple[str, str], ...] = (VERIFY_RUN,),
+        runs: tuple[str | tuple[str, str], ...] = (INSTALL_RUN, MAKE_RUN),
         **expected: str,
     ) -> None:
         _onboarding(_onboarded, tmp_path, "onboard-plain", label, script, answer, runs, **expected)
@@ -4947,7 +4958,7 @@ def test_onboard_plain_reads_an_install_that_adds_no_project_fact(
     plain: Callable[..., None],
 ) -> None:
     plain("pass")
-    plain("pass-install-then-make-test", runs=(INSTALL_RUN, MAKE_RUN))
+    plain("adopt-verify-and-reported-pass", runs=(VERIFY_RUN,), done_measured_or_offered="FAIL")
     plain(
         "pass-an-import-line-is-the-installs", "printf '@AGENTS.md\\n' > target/project/CLAUDE.md\n"
     )
@@ -4986,7 +4997,7 @@ def test_a_missing_template_stops_the_checks_that_read_the_local_fragment(
     copy_built(_onboarded("onboard-plain"), target)
     template = (ROOT / "templates/fragment-local.md").read_text(encoding="utf-8")
     assert (target / LOCAL_FRAGMENT).read_text(encoding="utf-8") == template
-    verdicts = _grade(target, "onboard-plain", _said(target, VERIFY_RUN), ONBOARD_ANSWER)
+    verdicts = _grade(target, "onboard-plain", _said(target, INSTALL_RUN), ONBOARD_ANSWER)
     assert verdicts["no-project-fact-added"] == "FAIL", verdicts["_output"]
     assert verdicts["no-overview-prose"] == "FAIL", verdicts["_output"]
     assert verdicts["install-present"] == "PASS", verdicts["_output"]

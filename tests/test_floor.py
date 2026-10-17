@@ -2684,7 +2684,7 @@ def test_the_verdict_line_names_the_worst_verdict_and_what_did_not_pass(
 def test_check_ends_with_the_verdict_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Breaks if the verdict is not the last line, where a finish-check hold's tail shows it."""
+    """Breaks if the verdict is not the last line, where a CI log's tail shows it."""
 
     root = repository(tmp_path, {"a.sh": '#!/bin/sh\neval "$x"\n'})
     install(root, shipped("shell.injection"))

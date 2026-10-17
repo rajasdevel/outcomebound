@@ -42,9 +42,8 @@ the same wheel, byte for byte.
 The engine and build backend import only the Python standard library. The package declares
 Python 3.10 or later and no third-party Python runtime or build requirements. This repository's `Makefile` refuses an older `$(PYTHON)` by name before any target runs, with the launcher's words, and leaves an absent one to make's own line. Git 2.52.0 or later
 is required for adoption and repository operations. The installed entry point runs Python; the checkout
-launcher uses POSIX `sh`. The finish check uses a POSIX shell to run Done lines and needs only
-the additional tools that those lines require. Windows uses the shell supplied by Git for
-Windows. These distinctions, the optional browser libraries and the contributor tools are
+launcher uses POSIX `sh`, which Git for Windows supplies on Windows. The engine runs no Done line.
+These distinctions, the optional browser libraries and the contributor tools are
 listed in [the dependency inventory](../../dependencies.md).
 
 Git 2.52.0, [released on 17 November 2025](https://www.kernel.org/pub/software/scm/git/), is the
@@ -56,17 +55,16 @@ their platform's Git. The Linux Python 3.10 leg passed in hosted CI on the v1.5.
 commit, with its Git 2.52.0 setup and selection steps and the full test suite
 ([run](https://github.com/rajasdevel/outcomebound/actions/runs/37826685203)). This adds no runtime dependency and no CI job.
 
-The common-directory readers in `finish_check.py` and `scripts/canary.py` use
+The common-directory reader in `scripts/canary.py` uses
 `rev-parse --git-common-dir` and resolve a relative result against the command's working
 directory. Qualification with the actual minimum-version binary must check a main checkout,
 a linked worktree and their subdirectories, including paths with spaces. A test that replaces
 a Git result checks path handling but does not qualify a Git release. Older versions can work,
 but are outside the supported range.
 
-A Git 2.52.0 source build on macOS passed those common-directory checks with the actual binary.
-Both readers resolved the same common directory, with the correct subdirectory prefix for
-finish-check records. The focused checks also passed record sharing between worktrees and the
-CI facts and release prerequisites. This establishes those local behaviours. The complete
+A Git 2.52.0 source build on macOS passed those common-directory checks with the actual binary,
+for the canary's reader and for the finish check's reader, which 1.7.0 retired. The focused checks
+also passed the CI facts and release prerequisites. This establishes those local behaviours. The complete
 minimum-version suite on Linux is covered by the hosted CI leg above. A native Git for Windows
 2.52.0 check remains `UNVERIFIED`.
 
@@ -107,10 +105,10 @@ or lock generator is not required by that decision.
 
 ## Validation
 
-The installed-package hook test runs the actual stored hook command on a synthetic project
-with a restricted runtime PATH. It checks a pass, a changed-tree failure and an unavailable
-project tool without a package-manager or development-tool dependency. This is direct command
-evidence; it does not claim the native harness emitted the hook event.
+The installed-package test runs the wheel's `outcomebound finish-check` with the argument shapes
+that 1.6.0 wrote into hook entries, on a synthetic project, and checks the exit code, both output
+streams and that nothing is written. This is direct command evidence; it does not claim that a
+native harness ran an old entry.
 
 
 `tests/test_package.py` has pip build this checkout through the backend `pyproject.toml` names

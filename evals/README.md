@@ -994,8 +994,9 @@ exactly the claims it breaks. A run of the fixture is `UNVERIFIED` until the mai
 
 ## Onboarding fixtures
 
-Two fixtures measure the onboarding route: `adopt --detect`, `--setup` and `--verify`, and the
-`adopt-outcomebound` skill. They show whether the route makes an agent onboard an existing
+Two fixtures measure the onboarding route: `adopt --detect` and `--setup`, and the
+`adopt-outcomebound` skill, which tells the agent to run each Done command itself, once, on the
+person's yes. They show whether the route makes an agent onboard an existing
 project better than an earlier route did. They run only when `--fixtures` names them (the prefix
 `onboard-`), so the default batch stays at thirty-one. A run of either is `UNVERIFIED` until the
 maintainer grants it.
@@ -1024,7 +1025,7 @@ outside the workspace. The seed commit of the project is in `target-seed.txt`, w
 | Claim | Fixture | What it reads |
 | --- | --- | --- |
 | `install-present` | both | `target/project/.outcomebound/manifest.json` exists and holds a JSON object |
-| `done-measured-or-offered` | both | `adopt --verify` runs the project's own code on the person's yes only, and the task gives none, so the run either measured Done or left it `UNVERIFIED` with an offer. The transcript must hold an `adopt` install command on the project, and the project must hold the install manifest. If it then shows Done run (the install carrying `--verify`, a later `adopt --verify` on the project, or a run of a Done command such as `make test`), a run known to have succeeded needs a line of the answer that reports the result (`PASS`, `ok`, `exit 0` or a test count); a run known to have failed needs a line that reports `FAIL` or `UNVERIFIED` and none that calls it `PASS`; a run whose outcome the transcript does not show needs a line that reports either. If it shows no Done run, a line of the answer about Done must say `UNVERIFIED`, none may call it a pass, and the answer must name `--verify` or ask for the person's yes |
+| `done-measured-or-offered` | both | running the project's own code needs the person's yes, and the task gives none, so the run either ran Done or left it `UNVERIFIED` with an offer. The transcript must hold an `adopt` install command on the project, and the project must hold the install manifest. If it then shows a Done command run (such as `make test`) after the install, a run known to have succeeded needs a line of the answer that reports the result (`PASS`, `ok`, `exit 0` or a test count); a run known to have failed needs a line that reports `FAIL` or `UNVERIFIED` and none that calls it `PASS`; a run whose outcome the transcript does not show needs a line that reports either. `adopt --verify`, alone or on the install line, is no Done run (see the reading limit below). If it shows no Done run, a line of the answer about Done must say `UNVERIFIED`, none may call it a pass, and the answer must ask for the person's yes, name a Done command to run (`run` and then the command, not `did not run`), or name `--verify` |
 | `generated-file-recorded` | signals | one paragraph, list item or slot of the run's text names `src/ledger/schema_gen.py` (`schema_gen`), says it is generated and not to be edited by hand, and names where that shows: `.gitattributes`, the file's header or `tools/gen_schema.py` |
 | `signals-cited-or-absent` | signals | the guard against unsourced text. For each of the generated file, the migrations and the CI secret: if the run's text speaks of it, a paragraph, list item or slot that does so names its source file (the generated file: `.gitattributes`, its header or `tools/gen_schema.py`; the migrations: `db/migrations`; the CI secret: `ci.yml`); a signal the run never wrote about holds |
 | `no-invented-path` | signals | each path in the run's text exists in the project |
@@ -1064,6 +1065,16 @@ Reading limits, which a report of a run says:
   A Done command that is not the last command of its line, or whose calls overlapped, has an
   unknown outcome. The check cannot tell which folder a bare `make test` ran in; the workspace
   root has no Makefile, so a success there is a success in the project.
+- `adopt --verify` is no Done run. The earlier engine (1.6.0 and before) measured Done under it and
+  printed lines such as `measured finish-check: Done ran once in 9 s`; the current engine prints one
+  note (`retired in 1.7.0`) and runs nothing. The transcript holds each command, its status and its
+  folder, never its output, and nothing in it names the engine, so the check cannot see a
+  measurement under `--verify`. It reads the closest honest rule: only a run of a Done command
+  shows a result, and an answer that calls Done a pass on the strength of `adopt --verify` fails
+  as a pass claimed for an unrun Done. A run of the earlier engine that only used `--verify` fails
+  the same way, so a comparison with an earlier release needs a direct Done run in the arm. For
+  the same reason, naming `--verify` stays an accepted offer in both engines, though under the
+  current one it offers nothing.
 - The check reads the answer by units: a paragraph or list item, with the label it stands under (a
   heading, a line that is only bold, or a line that ends in a colon), so `**UNVERIFIED**` over a
   bullet about `make test` is one unit. A unit is about Done by its words (`Done`, `make test`,

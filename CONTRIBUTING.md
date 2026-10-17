@@ -106,7 +106,7 @@ of three ways:
 
 - Run `python3 -m pip install -r requirements-dev.txt` in a virtual environment.
 - Leave the tools to uv. If your `python3` lacks them and `uv` is on `PATH`, `make check` runs
-  them through `uv run`, as `make test` does. A finish hook that inherits no activated environment
+  them through `uv run`, as `make test` does. A process that inherits no activated environment
   then gets the same verdict as your shell.
 - Run `scripts/outcomebound floor provision . --accept`. It pip-installs ruff and mypy, at the
   versions the floor names, into the `python3` on `PATH`. Use a virtual environment, because pip
@@ -132,7 +132,7 @@ that makes the change can allow it with this line:
 `ruled`, write one word that says where a maintainer agreed to the change. It can be an issue or pull request (`#123`), a decision record, or a link. `scripts/outcomebound floor ratchet .` deletes the baseline
 lines that no finding matches any more.
 
-A change to a gate (the floor, the instruction audit, the finish check, a tickets refusal)
+A change to a gate (the floor, the instruction audit, a tickets refusal)
 that adds an exemption or narrows what the gate counts needs an independent review. The review
 tries to pass the gate without the ruling the gate requires. The pull request links the review.
 
