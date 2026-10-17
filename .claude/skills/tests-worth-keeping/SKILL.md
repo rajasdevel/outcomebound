@@ -7,16 +7,26 @@ description: Use when writing, changing or judging a test, or when the project's
 
 A test is worth keeping when some change to the code it covers would make it fail. Which tests
 to write, and when to run them, is yours, except the tests a hand-off package fixes, which stay
-as written; this is the bar a test you keep meets, and what your
-report keeps apart.
+as written (one that contradicts the requirement goes back to the package's author, with the
+conflict); this is the bar a test you keep meets, and what your
+report keeps apart. New logic that decides something (a branch, a parse, money, access) leaves one
+small test that would fail if it broke, unless an existing test already does; a change with no such
+logic needs none.
 
 ## In a project that already fails
 
-Before changing anything, run the tests relevant to the change and note which already fail and
-why. Report new failures apart from those. A pre-existing failure is left as found unless fixing
+Where the tests may already fail (CI is red, the person says so, or a run before your change
+showed it), note which fail and why before you change anything. Where a test fails after your
+change for a reason the change may not explain, run it on the unchanged code before you treat it
+as yours. The base is the one the outcome is judged against: the release in production where the
+outcome is stability against that release, else the last revision where the behaviour worked;
+compare under the same conditions. Report new
+failures apart from those that were already there. A pre-existing failure is left as found unless fixing
 it is the task: not skipped, not marked expected, not loosened until it passes. A test that fails
-on one run and passes on the next is flaky: report it as flaky with both results; a rerun that
-passes is not its verdict.
+on one run and passes on the next, with the same inputs and conditions, is flaky: report it as
+flaky with both results; a rerun that passes is not its verdict. Compare failures by their cause and
+the behaviour they reached, not only by their names: a setup failure leaves the behaviour it
+prevented `UNVERIFIED`, and before another long run, fix the prerequisite the last output names.
 
 ## What a kept test shows
 
@@ -27,6 +37,8 @@ passes is not its verdict.
   every test needs. For a refusal or a deliberate break, check that the case reaches the
   behaviour it names. A setup error or an earlier guard rejecting it is not evidence for
   that behaviour.
+- **A snapshot that earns its upkeep.** For a snapshot or golden file that is routinely
+  restamped, name the unwanted behaviour it detects and whether another check already covers it.
 - **Observable behaviour.** Assert through the interface a caller uses, against an expected value
   the code did not produce: a known-good literal, a worked example, the spec. A test that pins how
   the code is written, such as the order of calls on collaborators, private state or the exact

@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "897d8e1ff1dcb83539e39d2bbc990d6bc5c514aa4b082dcebf3278aca27ffe45"
+      "sha256": "ed1327df30de3d63450cbdcea47b0c400262833f0e837aa8707ccde6b90e6d00"
     },
     {
       "kind": "block",
@@ -28,35 +28,35 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "8d7c2f4f52488aaccaed19861e47d31a5ee6496f2c0817ddd7cfaab8503d8baa",
+        ".outcomebound/fragments/commands.md": "6db58f7778659d65321ab77354c6ba69f37e4a8a41ac3bd9921b3b9d9bf89d49",
         ".outcomebound/fragments/local.md": "89059ed082b738290753e98bdcbc7e8be4d3f4a2e3ef0f14744a3ea55a05c0f3",
-        ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
+        ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "ca79a11fcf324603b6e1b3c20e7c0fdc83c4decd921e0d4fb0d2cd73be06636e"
+        ".outcomebound/fragments/workspace.md": "7e9fffd6f583b3ec90f70bf55eef3aee953f6ed27ffa42566b23d3541e40d198"
       },
       "style": [
         "ste"
       ],
-      "sha256": "8ac76867af4f7b298b2ce69337110aa174c5c8b39052eea262fa44f3171d793d"
+      "sha256": "faff3cad6eb1d9bf6685595775833cf4f28fbccd1f5ee072e22a7c79fb9ab646"
     },
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "3533efd64dfc142970dfa5841af8d102223e5673466ed1d2da30d689d3d1812c",
-      "sha256": "79bdcc75dadcadaf9a1c2a409bfceee2a596a9d123a38aa768a258d86e28e34c"
+      "frame": "9c33c4e77bde4a72089b97b7d5ca5b21677cc8ca021a1a2baeddce2b1024e32b",
+      "sha256": "ac83d3add9d0d458ba0a10645cb9998cc1cb5d05821d307d3ac0c07b8cb57c46"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c"
+      "sha256": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "ca79a11fcf324603b6e1b3c20e7c0fdc83c4decd921e0d4fb0d2cd73be06636e"
+      "sha256": "7e9fffd6f583b3ec90f70bf55eef3aee953f6ed27ffa42566b23d3541e40d198"
     },
     {
       "kind": "fragment",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "8d7c2f4f52488aaccaed19861e47d31a5ee6496f2c0817ddd7cfaab8503d8baa"
+      "sha256": "6db58f7778659d65321ab77354c6ba69f37e4a8a41ac3bd9921b3b9d9bf89d49"
     },
     {
       "kind": "ignore",
@@ -89,7 +89,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "f555e797969e4763c99219865334787b7a804da2f0ab5f920244a50c42354aba"
+      "sha256": "ac18038526002ba19c3075dbe5a3ff201140ecb353cc409b87616c77032051db"
     },
     {
       "kind": "skill",
@@ -98,7 +98,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "48bb7eb369a7a6049ac7c846185b9e604123ad4883e9119e9b3a5a3cdc7b8bf6"
+      "sha256": "7e4c838717c2489e72ae1300af6585bcf7c88ef6a01ac1aa8f492439cc9a566b"
     },
     {
       "kind": "skill",
@@ -134,7 +134,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "6e8d849013ed11d6eb47ee4c46aba5ce373db0c056db929fb4b7e1848349b7a4"
+      "sha256": "1df73f07c45db9981f99978128889cabb540f07b6a37fe54b1391bacc4d0dc1c"
     },
     {
       "kind": "skill",
@@ -152,7 +152,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e8f715fcfd281086d5718528a03a16cc442ae51e6b094f09e2ae04c8031dede9"
+      "sha256": "8875622f3d27b758bd5fb56ce6ed83ec9b28b0879d05aa91ba265da38d1ecef0"
     },
     {
       "kind": "skill",
@@ -170,7 +170,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "3145cd40ea3d6ebdd5ae9b819c1c7b29787265cae6ac9174dae261300b2e2561"
+      "sha256": "77f82e67ce35e860354eb376ffffe5192344b40b6c26d8c23939f320c483e9d0"
     },
     {
       "kind": "skill",
@@ -188,7 +188,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "fca63376d1361660574f13cf1e86cbda52ebe1b7d4871a1a9cd19cd0831164bb"
+      "sha256": "8f81f2e51d74912d6fb6ddef60c098a248e797d840d28e8e5ae3ed1423c1a5d7"
     },
     {
       "kind": "skill",
@@ -206,7 +206,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "ac6f635d39ba130d3e29da497e8c2e2650322ef986a0a40faf675112727d8f7f"
+      "sha256": "5d85b7b70e74db7bb9d344f1ad5085a44909458b1a66aab924444f25af7e2390"
     },
     {
       "kind": "skill",
@@ -215,7 +215,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "8e344329bb7f78b28ef2c209b0510da418a7ed792896a9ba778a32d2e57ccbda"
+      "sha256": "cdca576d52d224671d83b2127ad54938fdfde76c5c4d33edf7f7c71a0456182e"
     },
     {
       "kind": "skill",
@@ -224,7 +224,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "56aa5ea867995b4ce4b256b9591e3bc6b4611268552be46af8c703bae53a7c8f"
+      "sha256": "a3b143c7576d3d5e5c04d139f3b43ee2ecc7218e5638a29762a2cd36a3462020"
     },
     {
       "kind": "skill",
@@ -242,7 +242,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "946c17df20fd54a17915d33bd62e50877f7a57b2c2ae0e888137a199678c8bfb"
+      "sha256": "e2a019341e39ccaf5451928f90b84b28be113df13dfbd0b47a53521b0e39b7d2"
     }
   ]
 }

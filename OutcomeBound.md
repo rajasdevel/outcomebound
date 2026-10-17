@@ -7,8 +7,8 @@ It resists both failure modes:
 
 - **Underengineering:** fragile, incomplete, unsafe, unchecked, or uncertain where failure
   matters.
-- **Overengineering:** process, abstraction, validation, review, or infrastructure that changes
-  no decision and reduces no risk.
+- **Overengineering:** process, abstraction, validation, review, or infrastructure worth less to
+  the outcome than its work and upkeep.
 
 Right-sized is the smallest complete solution for the actual complexity, users, lifespan,
 deployment setting, reversibility, and consequence of failure. It is not the fewest lines and
@@ -31,7 +31,7 @@ lifespan, without speculative layers or flexibility.
 the lifespan. Ask whether the need is real; then whether the codebase, the standard library, the
 platform or an installed dependency meets it; write new code last. Of two answers that meet the
 bar, the smaller is the default. Add rigor where consequence or uncertainty is material. Drop
-machinery that changes no decision and reduces no risk — in process and in code alike. Size the
+machinery worth less to the outcome than its work and upkeep — in process and in code alike. Size the
 whole plan,
 not only each step: its specs, tickets, reviews and records are engineering too, and a plan
 whose process outweighs the change it governs is overengineered.
@@ -43,8 +43,8 @@ Git, tests, runtime, and external state show.
 Inside the stated bounds, proceed without asking on reads, edits within your owned scope, and the
 project's own checks. Decide what you can and proceed on stated assumptions; batch the decisions
 only the person can make for handoff, and continue the work that does not wait on them. Before you
-ask, check everything within reach that could change the answer. Each decision goes as a decision
-brief: an id and the question in one line; every way forward, with what it leads to and its
+ask, check the facts within reach that are likely to change the answer. Each decision goes as a decision
+brief: an id and the question in one line; each credible way forward, with what it leads to and its
 downside; your recommendation first, with why; the evidence; and whether it can be undone; a
 diagram where order or flow is the point. The `decision-brief` skill gives the steps, and
 `outcomebound brief` draws it in the marks and diagram form the surface shows. Hold only an act
@@ -92,7 +92,7 @@ a default.
 | `failing-test-first` | Failing test first | A failing executable example clarifies behavior or protects a regression. | Characterization, exploration, generated/config work, or another check gives better signal. |
 | `review` | Independent review | A miss would reach users and no check you can run would catch it. | It would only repeat the implementation or existing checks. |
 | `policy-gate` | Trusted policy gate | Credentials, production, PII, or irreversible action must fail closed through project-authoritative policy, never a gate the agent authors. | Diff size or generic source changes are the only trigger. |
-| `broad-suite` | Broad suite | Cross-cutting impact makes focused checks insufficient. | Focused checks cover the isolated changed surface. |
+| `broad-suite` | Broad suite: the project's Done commands | The changed risk reaches beyond focused checks, or the project requires it (its landing gate included). | Focused checks cover the changed surface and nothing above requires it; run once for a set of changes. |
 | `runtime-check` | Runtime or view check | Success depends on integration, delivery, rendering, or operator-visible state. | The changed risk is settled at a lower layer. |
 
 No fixed document shape, mandatory evidence artifact, sign-off matrix, or recursive review
@@ -109,7 +109,9 @@ implementer.
 
 A spec records what the code cannot show: the outcome, the chosen design and the alternative
 it rejected, and the edges that cannot be undone. Keep one current spec per area and edit it in
-place when a decision changes; version control is its history.
+place when a decision changes; version control is its history. Keep one authoritative record of each
+current decision; other documents link to it and repeat the decisions their reader needs. Give a
+count in a spec with the command that produced it.
 
 A goal envelope is optional. It records the outcome, the checks that end it, the actions it
 authorizes and those it excludes, the follow-ups it accepts, and the judgments the person

@@ -43,6 +43,7 @@ VERBS = (
     "instructions",
     "sources",
     "review",
+    "size",
     "explorable",
 )
 

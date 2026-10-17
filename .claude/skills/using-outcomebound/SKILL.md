@@ -14,15 +14,29 @@ The default is no mechanism: do the task and run the checks the completion bar n
 approaches in order; the work is done when all four inputs hold, the checks and gates the bar
 names included, and not before:
 
-1. Is the need real? A part the outcome does not need (a feature, an option, a flexibility) is
-   left out.
+1. Is the need real? A part the outcome does not need (a feature, an option, a flexibility, code
+   for a later need) is left out. Where the request leaves the size open, build the smallest
+   version that does the core job, and name what you left out in one line of the report.
 2. Does the codebase, the standard library, the platform or an installed dependency already meet
-   it? Use it before new code.
+   it? Use it before new code. Between your own code and a new dependency, compare the whole
+   implementation and its upkeep, edge cases and tests included; few dependencies alone do not make
+   a design simpler.
 3. The smallest change that meets the completion bar.
 
 Check the approach you take with the smallest test, command or observation that settles its
-changed risk, not every check the project has. Report an omission only where it changes a
-decision or leaves a risk.
+changed risk, not every check the project has. Run a check once for a set of changes, keeping
+long output in a file, and read each failure from that output rather than running the check
+again to see more; a result stands until something it covers changes. Where a failed bar you did not set (a threshold, a
+monitor, a limit) is taken as evidence that the change made things worse, compare the change with
+the unchanged base under the same conditions: failing on both does not by itself show whether the
+change got worse, so report the comparison; a bar the project requires still applies. On work that spans many changes,
+`outcomebound size --base <ref>` shows how far the change has grown against the base that matters
+(for stability work, the release in production) and how its lines fall by path kind; read it where
+the change's growth is in doubt, and size again where what grew is not what the outcome needs. A forecast of time rests on cycles of
+build, review and repair already completed, with any speed-up from parallel work named as an
+assumption. Make independent reads and
+checks in one step where the tools allow it. Report an omission only where it changes a decision
+or leaves a risk.
 
 ## Add a mechanism only where its condition holds
 
@@ -37,7 +51,7 @@ action that needs it: a failing test before the code, a spec before the interfac
 | `failing-test-first` | a failing example that clarifies behavior or prevents regression | a failing test first |
 | `review` | a miss would reach users and no check you can run would catch it | one bounded review |
 | `policy-gate` | a credential, production, PII, or irreversible edge | the project's own policy gate, never one you author |
-| `broad-suite` | cross-surface confidence beyond focused checks | the broad suite, once per landing |
+| `broad-suite` | the changed risk reaches beyond focused checks, or the project requires it (its landing gate included) | the project's Done commands, once for that set of changes |
 | `runtime-check` | integration, delivery, rendering, or operator-visible truth | a runtime or view check |
 
 ## Required or suggested
@@ -73,13 +87,6 @@ or a decision, in the most checkable form that fixes it: a check or a refusal be
 | the work starts from an idea, in an empty folder or none | [the new-project reference](references/new-project.md) |
 | work spans stages, or delivery stopped before the outcome | [the lifecycle reference](references/lifecycle.md) |
 | the project's exposure or route changes, a "Leave when —" signal appears, or `adopt --check` prints a drift line | the transitions section of [the lifecycle reference](references/lifecycle.md) |
-| a decision is the person's | `decision-brief` |
-| the outcome or the bar is unclear, or requirements come from a source | `gather-requirements` |
-| a person must act on a spec they did not write | `explain-spec` |
-| a pull or merge request is to be driven through CI and review to landing | `land-change` |
-| a person outside the build is to accept a delivered change | `run-acceptance` |
-| a card is read from, or written to, a tracker that is not the ticket store | `sync-tracker` |
-| the person asks for an interactive page, or to try options or learn a mechanism by trying it | `explorable`, beside the decision brief, never in place of it |
 
 ## Read the full contract
 

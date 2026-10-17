@@ -6,12 +6,12 @@ Frame every task by four inputs. **Outcome**: what becomes observably true, and 
 **Context**: current code, runtime, and evidence; complexity, users, lifespan.
 **Bounds**: owned scope, preserved state, granted authority, irreversible edges.
 **Completion bar**: observable success plus checks sized to the changed risk; the full suite
-only where that risk reaches it, the project requires it, or at a landing.
+only where that risk reaches it or the project requires it.
 
 Satisfy all four completely for the lifespan. Ask whether the need is real; then whether the
 codebase, standard library, platform or an installed dependency meets it; new code last.
 Underengineered means fragile, unchecked, or uncertain where failure matters; overengineered
-means anything that changes no decision and reduces no risk. Size the whole plan: specs,
+means anything worth less to the outcome than its work and upkeep. Size the whole plan: specs,
 tickets, reviews, checks and records count. Smallest complete, not least work.
 
 None is default: a spec when later work relies on a decision code cannot show;
@@ -32,7 +32,7 @@ observation never stands in for another.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
-- Done: `make check` and `make test`
+- Done: `make check` and `make test` (the full suite)
 - CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --durations=25 --basetemp="$env:PYTEST_BASETEMP"` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not
@@ -77,6 +77,7 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
+Read each file below when its condition first holds; it stays in force for the session. Read it again after a compaction or when you need to check a detail.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
 - when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
@@ -89,7 +90,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
-- when handing an accepted ticket to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
+- when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
 - when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it: read .claude/skills/explorable/SKILL.md
 - when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
 - when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
@@ -106,7 +107,7 @@ standard library only.
 | Source | Role |
 | --- | --- |
 | `OutcomeBound.md` | the operating contract |
-| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check (retired), sources, review, research, lifecycle, scaffold |
+| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check (retired), sources, review, size, research, lifecycle, scaffold |
 | `docs/prompt-standard.md`, `docs/evaluations.md` | the prompt standard and this project's own evaluation record; read only when a task needs them |
 | [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, one advice file per model (`models/`) and implementer tiers (`applications/implementer-tiers.md`); read only when a task needs them |
 | Released `CHANGELOG.md` sections | history |
@@ -122,7 +123,7 @@ standard library only.
 | `make scrub` | the public-text check plus the local list of private names `OB_SCRUB_LIST` names, over the tracked files and the commits since `OB_BASE`; `UNVERIFIED` without the list |
 | `make canary` | this checkout's engine beside the installed release, on each project of the local list `OB_CANARY_LIST` names, under Python 3.10 and the installed release's Python: `adopt --dry-run`, `adopt --check` and `instructions check`, `floor check --base HEAD` where a floor is installed, `tickets check --draft` on each draft set the project's claims plan names, and `tickets check` on an `issues.json` export in the project root (else `UNVERIFIED`; it calls no tracker); fails on a candidate crash, refusal or invalid report, or on a difference in the before/after Git status or ignored-entry list; inspect custom floor commands first and use an owned isolated checkout where they may write (CONTRIBUTING.md); state checks detect changes after execution, not prevent them; reports by project number and records the verdict for HEAD's tree; `UNVERIFIED` without the list; run before a pull request that changes adopt, tickets, floor, instructions or discovery lands (one run on a commit that holds every change of several such pull requests covers all of them, before the first of them lands), and on the committed release commit (docs/VERSIONING.md gives the release sequence) |
 | `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: a PASS record of `make canary` for this tree, `VERSION`, changelog, README and CI templates agree (and, once named, the tag, and a passing CI run on main for its commit), the install is current, `make scrub` passes, and gate, floor and suite pass (with `TAG=`, the CI run on main for that commit stands in for gate, floor and suite) |
-| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `research`, `sources`, `explorable`, `review`, `scaffold`, `home` |
+| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `research`, `sources`, `explorable`, `review`, `size`, `scaffold`, `home` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |
 | `bash scripts/new-spec.sh <slug> [--with-plan]` | scaffold a design under `docs/specs/<slug>/` from `templates/spec/design.md`, and with `--with-plan` a plan from `templates/spec/plan.md` |
 | `python3 scripts/build_backend.py [--sdist]` | build the package adopters install, into `dist/` |

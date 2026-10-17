@@ -112,9 +112,11 @@ def both(items: Sequence[str]) -> str:
 
 
 def done_line(done: Sequence[str]) -> str:
-    """The Done fact: every command, each in its own code span."""
+    """The Done fact: every command, each in its own code span, named as the full suite the
+    kernel's completion bar runs only where the changed risk reaches it or the project requires
+    it."""
 
-    return f"- Done: {both([code(command) for command in done])}"
+    return f"- Done: {both([code(command) for command in done])} (the full suite)"
 
 
 def code(text: str) -> str:
@@ -591,6 +593,12 @@ def inline(fragment: Fragment) -> str:
     return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
 
 
+ONCE = (
+    "Read each file below when its condition first holds; it stays in force for the session. "
+    "Read it again after a compaction or when you need to check a detail."
+)
+
+
 def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) -> str | None:
     """The `local` fragment inline, then one pointer line per fragment and skill; None if empty."""
 
@@ -601,6 +609,8 @@ def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) ->
         if item.id != LOCAL
     ]
     lines += [f"- {condition}: read {path}" for condition, path in skills]
+    # Read once: session records showed one fragment read again dozens of times in one session.
+    lines = [ONCE, *lines] if lines else []
     parts += ["\n".join(lines)] if lines else []
     if not parts:
         return None

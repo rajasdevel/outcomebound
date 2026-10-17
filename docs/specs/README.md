@@ -26,6 +26,8 @@ the same change.
 - [sources](sources/design.md): requirement sources, `outcomebound sources`. Import a markdown or
   text source into items, and check the ledger that disposes of each item.
 - [review](review/design.md): the review file and `outcomebound review check`: every finding ends in a disposition.
+- [size](size/design.md): `outcomebound size`. How big a change is against a base, and what kind of
+  lines it holds.
 - [research](research/design.md): the research repository. How the engine finds, prints and
   updates its clone, and how it takes findings back.
 

@@ -4,7 +4,7 @@ family: setup
 applies: projects that declare a ticket store
 condition: when reading, working or changing this project's tickets or their declaration
 detect: []
-version: 13
+version: 14
 ---
 **Context** — `.outcomebound/tickets.json` declares where this project's tickets live; the
 engine reads them and reports, and writes nothing. How work lands here is what `CONTRIBUTING.md`
@@ -36,8 +36,7 @@ together, in one landing at the grain the project's instructions or the goal env
 or a batch of tickets; where neither sets one, each ticket is its own landing), pass that gate once,
 at that landing, so the project's merge gate (its Done commands, the broad suite and a review it
 requires before a merge) runs per landing, not per ticket, while each ticket's `done-when` checks
-still run and are reported per ticket, and its own Done run before its commit is the implementer's,
-as for any change; and a handover the tracker shows, the
+still run and are reported per ticket; and a handover the tracker shows, the
 pull request or, where work lands with no pull request, the closing comment on the ticket, never
 only a file the tracker cannot show, saying what changed, each check's verdict, what was decided
 beyond the ticket, and the follow-ups found.

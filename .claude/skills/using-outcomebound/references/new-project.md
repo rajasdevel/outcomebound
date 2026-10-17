@@ -41,10 +41,10 @@ an assumption you name. Then:
    it. Show the person each file written before any commit: `SECURITY.md` and `CONTRIBUTING.md`
    make promises in public.
 4. Run the `adopt` command the plan printed, with the harness in use.
-5. Run `outcomebound scaffold . --check`, `outcomebound adopt . --check` and
-   `outcomebound instructions check .`, each reported `PASS`, `FAIL` or `UNVERIFIED`.
-6. The first push, the person's act that turns CI on, comes after Done is recorded and `--check`
-   passes.
+5. Run `outcomebound scaffold . --check` and `outcomebound instructions check .`, each reported
+   `PASS`, `FAIL` or `UNVERIFIED`; an `adopt` that exited 0 has already checked its own records.
+6. The first push, the person's act that turns CI on, comes after Done is recorded and those checks
+   pass.
 
 ## Frame it
 
@@ -78,7 +78,8 @@ to the result. Then build the smallest probe that answers it: a
 spike, a throwaway prototype the person shows to users, a measurement, or an explorable where the
 answer turns on prices or values (`explorable`). Record each as question, probe, result (`PASS`,
 `FAIL` or `UNVERIFIED`) and the decision it led to. Probe code stays in the working area, marked
-throwaway, and never becomes the product: the skeleton is built fresh. A result that meets the stop
+throwaway; a part of it that meets the product's own bar after a check against its requirements may
+be kept, and the rest is dropped. A result that meets the stop
 rule ends or changes the idea, and you report it as such.
 
 A probe that needs people, such as a prototype shown to users or a trial with real customers, is the
@@ -111,8 +112,8 @@ calls a model, write its evaluation tasks and their grader first, before the cod
 model, and commit them first where the project commits. Report each line of its bar as `PASS`,
 `FAIL` or `UNVERIFIED`:
 
-1. One Done command passes on a clean checkout: format, lint, type checks, tests and build, failing
-   when any of them fails.
+1. One Done command passes on a clean checkout: of format, lint, type checks, tests and build,
+   the ones that settle the project's risk, failing when any of them fails.
 2. A defect you plant makes Done fail, and removing it makes Done pass again.
 3. One test goes through the real boundary: a request to the running service, a browser, the
    command as a user runs it.

@@ -234,9 +234,8 @@ evidence schema, runtime ledger or model-judge service.
 5. Extend the existing install, skill-path and package checks for the lifecycle reference and
    ignored native files. Include a minimal install without optional fragments or an engine
    checkout/launcher. A machine-local install need not commit its files.
-6. Observe prompt/Stop/retry in one declared native environment for each implemented hook row,
-   `claude-code` and `codex`. A short record names identity, events, result and limits.
-   Other platform combinations retain their own observed or UNVERIFIED status.
+6. Retired with the finish check in 1.7.0: OutcomeBound installs no hook, so no hook row is
+   observed.
 7. Apply the existing landing and release sequence: gate, floor, suite, scrub, required canary
    and release-check on the required tree. A model pass is not added to normal CI.
 

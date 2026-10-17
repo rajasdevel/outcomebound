@@ -101,7 +101,10 @@ CONDITIONS = {
         "when a person must act on a spec they did not write, or says they do not follow it"
     ),
     "slice-tickets": "when breaking work into tickets",
-    "hand-off-tickets": "when handing an accepted ticket to the agent or model that will build it",
+    "hand-off-tickets": (
+        "when handing an accepted ticket from the ticket store to the agent or model that will "
+        "build it"
+    ),
     "explorable": (
         "when the person asks for an interactive page, wants to try options with their own "
         "numbers, or must learn a mechanism by trying it"

@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket to the agent or model that will build it. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing work into tickets.
+description: Use when handing an accepted ticket from the ticket store to the agent or model that will build it. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing, nor for a prompt or spec asked for outside the ticket store.
 ---
 
 # Hand a ticket to its implementer
@@ -28,7 +28,10 @@ narrows it; that is, all four hold:
 
 **Bounds.** Writing a package, with its tests and stubs, inside the ticket's `bounds` and on the
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
-`done-when` stay the person's: a package adds to them and never changes them. An edit outside
+`done-when` stay the person's: a package adds to them and never changes them. Where a `done-when`
+as written would take far more than its outcome needs, estimate that part's files, lines and
+hours, and put the estimate to the person as a decision brief before it is built; the rest of the
+ticket goes on. `outcomebound size --base <ref>` measures work already built. An edit outside
 `bounds` that only carries the ticket's own change, such as an import or an inventory entry for its
 own files, is the implementer's to make, and its handover names it; any other edit outside
 `bounds` is the person's, put as a decision brief. Where a line of the ticket holds
@@ -58,7 +61,7 @@ handover. Where neither the table nor those instructions place the model, the ha
 the table does not list it, names any project rule that routes work to it, and starts with the
 spec tier's package, in full detail (the `--detail full` brief), while the question below is open.
 
-Ask the person one plain question, batched with the other questions: is the model that will build this a frontier model (the
+Where the model is still unplaced, ask the person one plain question, batched with the other questions: is the model that will build this a frontier model (the
 provider's most capable tier) or a smaller, faster model? Shape the hand-off from the answer: a
 frontier model takes the outcome tier, a smaller, faster model the spec tier, and where the person
 says it sits between them, the design tier. The handover says that the question is open until then.
@@ -66,8 +69,9 @@ says it sits between them, the design tier. The handover says that the question 
 ## Outcome tier
 
 The ticket as compiled by `outcomebound tickets brief <id> --input <export>`, plus only the lines
-its row's notes give and the commands under "Hand over". No design, plan or tests: the implementer
-designs, plans its milestones and writes its tests, and detail written for a less capable reader
+its row's notes give and the commands under "Hand over". No new design, plan or tests beyond the
+decisions already settled and the checks that exist: the implementer designs, plans its milestones
+and writes its tests, and detail written for a less capable reader
 narrows what it would have done.
 
 ## Design tier

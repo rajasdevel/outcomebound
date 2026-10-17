@@ -8,13 +8,14 @@ description: Use when a decision is the user's to make. That is an act the agent
 Put each decision that is the user's so they can make it quickly and make it well. You are done
 when the user can make each one in one reading: it is a drawn brief where they will read it (the
 handoff, the goal's Progress section, a comment on the ticket it holds, or your final message,
-when every remaining item waits on an answer), and each reversible choice you made yourself is
+when every remaining item waits on an answer), and each reversible choice you made yourself that later work depends on is
 noted in one line where the work is recorded. A link from that text to a file that holds the brief never stands in for
 it: the brief itself is in the text.
 
 ## Decide what is yours
 
-Decide every reversible choice inside your granted authority yourself. Ask the user only what is
+Decide every reversible choice inside your granted authority yourself. An act the outcome does not
+need is left out, not asked about. Ask the user only what is
 theirs — an act your authority does not grant, such as an irreversible edge, an external write,
 spending, or widening scope — batched into one message, and continue the work that does not wait
 on the answer. A brief never ends your turn: a run starts without answers, and a brief holds only
@@ -22,7 +23,10 @@ the work that waits on it, so every other item goes on. Some harnesses honor aut
 the user's own words: for an act a permission check guards, such as a deletion or a write outside
 the project, the brief names the act so the user's reply can state it, not only a letter.
 
-A question the person already settled is not asked again: their launch block, a grant a project
+Apply an existing ruling within its stated scope, and record a clear new instruction without
+asking the person to confirm it. Where another case needs a choice the person already made for a
+similar one, propose one bounded standing rule, with its exclusions, instead of another one-case
+question. A question the person already settled is not asked again: their launch block, a grant a project
 file records (a tickets declaration), their standing order and their earlier answer stand. An order
 that names a class of acts, such as clearing what is not needed, grants each item your check shows
 is in that class and that a tool rebuilds or a copy you verified restores; hold an item you did not
@@ -41,7 +45,7 @@ block.
 
 ## Do the due diligence first
 
-Before you ask, check everything within reach that could change the answer: the history of the
+Before you ask, check the facts within reach that are likely to change the answer: the history of the
 same decision and what was tried before, the files and settings the answer touches, the project's
 own rules, the read-only commands that settle a fact. Work out what each way forward leads to and
 what its downside is, so the evidence chooses your recommendation.
@@ -49,7 +53,7 @@ what its downside is, so the evidence chooses your recommendation.
 ## Write each brief
 
 - an id and the question in one line;
-- every way forward, when there are two or more, lettered A, B and on, each with what it leads to
+- each credible way forward, when there are two or more, lettered A, B and on, each with what it leads to
   and its downside;
 - your recommendation first, with why;
 - at least one line of evidence: what you checked, what you could not check (why, and what
@@ -78,8 +82,8 @@ machine, and the project's own decision numbers, never share an id. Cite a brief
 wherever it goes outside its document: a commit subject, a ticket, a handoff.
 
 Explain every internal id or term in plain words where you use it, or leave it out. A step the
-user types or checks by eye names a version, branch, tag or path, never a commit hash or other
-digest. Claim no check that did not run: a verdict you give is your report of a command you ran.
+user types or checks by eye names a version, branch, tag or path, and a commit hash or digest only where
+the check or the project's rule requires it. Claim no check that did not run: a verdict you give is your report of a command you ran.
 
 ## Draw it
 

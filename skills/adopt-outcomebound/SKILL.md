@@ -44,7 +44,7 @@ agent reads the code, and a summary of it adds text without adding a fact.
    Edit none of them. A review hit the person judges safe, they record themselves with
    `outcomebound instructions rule <target> <id>` at a terminal; never run that verb yourself.
 4. With the person's yes, and only after step 3, since it runs the repository's own code: run each
-   Done command once, and a failing one again to tell a stable failure from a flake. `adopt` runs
+   Done command once, and a failing one again only where its output suggests a flake. `adopt` runs
    none. Report each as `PASS`, `FAIL` or `UNVERIFIED`. A Done that needs a secret or a service
    reads as its command reads; say which.
 5. For a shared installation, check that the files it needs will survive the target's normal

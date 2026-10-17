@@ -6,12 +6,12 @@ Frame every task by four inputs. **Outcome**: what becomes observably true, and 
 **Context**: current code, runtime, and evidence; complexity, users, lifespan.
 **Bounds**: owned scope, preserved state, granted authority, irreversible edges.
 **Completion bar**: observable success plus checks sized to the changed risk; the full suite
-only where that risk reaches it, the project requires it, or at a landing.
+only where that risk reaches it or the project requires it.
 
 Satisfy all four completely for the lifespan. Ask whether the need is real; then whether the
 codebase, standard library, platform or an installed dependency meets it; new code last.
 Underengineered means fragile, unchecked, or uncertain where failure matters; overengineered
-means anything that changes no decision and reduces no risk. Size the whole plan: specs,
+means anything worth less to the outcome than its work and upkeep. Size the whole plan: specs,
 tickets, reviews, checks and records count. Smallest complete, not least work.
 
 None is default: a spec when later work relies on a decision code cannot show;

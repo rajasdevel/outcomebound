@@ -24,13 +24,13 @@ records each block's digest.
 cannot observe is left out, and the install report names it `UNVERIFIED`. A fact the engine read
 every place for and found absent (no CI file it reads, no Setup recorded, no edge declared and no
 floor) is left out too, and the report names those on one `note` line, `left out: ...`, each with
-what records it; Done stays `UNVERIFIED` when none is recorded, since it is the completion bar.
+what records it; Done stays `UNVERIFIED` when none is recorded, since it is the full suite the completion bar names.
 The report restates these facts only on a run that changes a file: a
 run with nothing to change prints `nothing to change` and no restated fact.
 
 | Fact | Source | Left out when |
 | --- | --- | --- |
-| Done | the commands `--done` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`: every one must pass (`facts.done_line`) | none is recorded |
+| Done | the commands `--done` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`, then `(the full suite)`, which ties it to the kernel's completion bar: run where the changed risk reaches it or the project requires it, and then every one must pass (`facts.done_line`) | none is recorded |
 | Setup | the commands `--setup` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`: the person's record, which adopt never runs | none is recorded |
 | CI test | each test command a `.github/workflows/*.yml` `run:` step or a `.gitlab-ci.yml` `script:` entry runs, as it runs from the root: a step's `working-directory:`, else its job's or the workflow's `defaults.run.working-directory:`, becomes `cd <dir> && `; each file's commands followed by the file | no command is read; a command the reading cannot settle (an expression, a `cd` earlier in its step or job, a folded, multi-line, flow or alias value, a link) is left out and named, and the file's other commands are kept |
 | Irreversible edges | each selected fragment's `edges:`, once each, then `loosening the quality floor` where `.outcomebound/floor.json` exists | none is declared |

@@ -1,12 +1,13 @@
 ---
 name: sync-tracker
-description: Use when reading a card from a tracker that is not the project's ticket store, or writing back to it. An example is a client's Jira. A read is a markdown snapshot; a write goes under a grant that names its kind, its notifications and automations, and its conflict rule, and any other write is a decision brief.
+description: Use when reading a card from a tracker that is not the project's ticket store, or writing back to it. An example is a client's Jira. A read that will be repeated or tracked is a markdown snapshot; a write goes under a grant that names its kind, its notifications and automations, and its conflict rule, and any other write is a decision brief.
 ---
 
 # Sync a tracker
 
 You are done when the project can see what the card says and the tracker holds only what a grant
-covered: each card you read is a snapshot that the sources verbs can compare, and each write
+covered: each card you will read again or whose requirements are tracked is a snapshot that the
+sources verbs can compare, and each write
 you made is read back and has a receipt. The tracker belongs to someone else, often a client, and
 its people see what you write. The engine holds no credential and calls no service: every read and
 write goes through a tool the person has already signed in to.
@@ -19,7 +20,9 @@ other, so that neither holds a stale copy of the other.
 Read through the harness's connector, a command-line tool the person has signed in to, or an export
 the person gives you. Do not ask for a password or a token, and do not look for one.
 
-Save the card as a markdown snapshot, under one file name that stays the same for this card, with:
+A card read once to answer a question is read and answered. Where it will be read again or its
+requirements tracked, save it as a markdown snapshot, under one file name that stays the same for
+this card, with:
 
 - the card's key and its fields, each under its own heading;
 - the time the tracker says the card was last updated;
@@ -29,7 +32,7 @@ Save the card as a markdown snapshot, under one file name that stays the same fo
 - the links to other cards;
 - the ids of the attachments, and their names.
 
-Import the snapshot with `outcomebound sources import --converted`, under the same `--name` each
+Where a snapshot is kept, import it with `outcomebound sources import --converted`, under the same `--name` each
 time you read this card. Then a field that changed since the last read shows as a changed item, and
 a new comment as a new one, and `gather-requirements` accounts for each. A snapshot cannot show that
 it is current: it is the card as of the time you read it, and says so.
