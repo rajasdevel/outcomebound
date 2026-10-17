@@ -7,8 +7,8 @@ It resists both failure modes:
 
 - **Underengineering:** fragile, incomplete, unsafe, unchecked, or uncertain where failure
   matters.
-- **Overengineering:** process, abstraction, validation, review, or infrastructure that changes
-  no decision and reduces no risk.
+- **Overengineering:** process, abstraction, validation, review, or infrastructure worth less to
+  the outcome than its work and upkeep.
 
 Right-sized is the smallest complete solution for the actual complexity, users, lifespan,
 deployment setting, reversibility, and consequence of failure. It is not the fewest lines and
@@ -31,8 +31,7 @@ lifespan, without speculative layers or flexibility.
 the lifespan. Ask whether the need is real; then whether the codebase, the standard library, the
 platform or an installed dependency meets it; write new code last. Of two answers that meet the
 bar, the smaller is the default. Add rigor where consequence or uncertainty is material. Drop
-machinery that changes no decision, or adds more work and upkeep than the risk it reduces — in
-process and in code alike. Size the
+machinery worth less to the outcome than its work and upkeep — in process and in code alike. Size the
 whole plan,
 not only each step: its specs, tickets, reviews and records are engineering too, and a plan
 whose process outweighs the change it governs is overengineered.
@@ -44,8 +43,8 @@ Git, tests, runtime, and external state show.
 Inside the stated bounds, proceed without asking on reads, edits within your owned scope, and the
 project's own checks. Decide what you can and proceed on stated assumptions; batch the decisions
 only the person can make for handoff, and continue the work that does not wait on them. Before you
-ask, check everything within reach that could change the answer. Each decision goes as a decision
-brief: an id and the question in one line; every way forward, with what it leads to and its
+ask, check the facts within reach that are likely to change the answer. Each decision goes as a decision
+brief: an id and the question in one line; each credible way forward, with what it leads to and its
 downside; your recommendation first, with why; the evidence; and whether it can be undone; a
 diagram where order or flow is the point. The `decision-brief` skill gives the steps, and
 `outcomebound brief` draws it in the marks and diagram form the surface shows. Hold only an act
