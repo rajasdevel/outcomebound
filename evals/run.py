@@ -74,6 +74,9 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "evals" / "fixtures"
 # A fixture's own file naming the fragments its install selects, one id a line.
 FRAGMENTS_FILE = "fragments"
+# A fixture's own empty file (a comment may explain it) that marks it as needing a local listener:
+# the run lets the model's commands bind a port, for this fixture only.
+LISTENER_FILE = "local-listener"
 # A fixture's own script printing its task for the built workspace, in place of a fixed
 # prompt.md: what it prints can name the seed commit, which exists only once the build is done.
 TASK_SCRIPT = "task.sh"
@@ -196,6 +199,12 @@ def selected_fragments(name: str) -> tuple[str, ...]:
         return ()
     ids = (line.split("#", 1)[0].strip() for line in path.read_text("utf-8").splitlines())
     return tuple(item for item in ids if item)
+
+
+def needs_local_listener(name: str) -> bool:
+    """Whether the fixture has a `local-listener` file: its task starts a service on a port."""
+
+    return (FIXTURES / name / LISTENER_FILE).is_file()
 
 
 def evals_dir() -> Path:
@@ -951,7 +960,12 @@ def _call_and_judge(
     answer, transcript, returncode = "", "", None
     try:
         result = harness.call(
-            prompt, request, workdir, fixture_write_roots(name, workdir), path, keep
+            prompt,
+            request._replace(local_listener=needs_local_listener(name)),
+            workdir,
+            fixture_write_roots(name, workdir),
+            path,
+            keep,
         )
         answer, transcript, returncode = result.answer, result.transcript, result.returncode
         extra.update(result.extras)

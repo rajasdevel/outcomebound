@@ -55,7 +55,9 @@ METERED = (
 # as the shell-quoted argv of a `zsh -lc` call with no working directory, as 0.162.1 does, and
 # the session record each command's `CommandExecution` item with its `cwd`: `exact`; `workdir`
 # (the first command ran in a subfolder of the session's cwd); `count` (one item missing);
-# `text` (the first item's script differs).
+# `text` (the first item's script differs). The record's sandbox policy allows network access
+# where the argv carries `sandbox_workspace_write.network_access=true`; $OB_FAKE_NETWORK (`true`
+# or `false`) sets it to the opposite of what the argv asked for, for a test of the check.
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
@@ -120,7 +122,11 @@ if mode != "none" and os.environ.get("CODEX_HOME"):
           "cwd":cwd,"cli_version":"0.162.1","originator":"codex_exec","source":"exec"}
     if mode=="no-version":
         del meta["cli_version"]
-    context={"cwd":cwd,"model":model,"effort":effort,"approval_policy":"never"}
+    allowed="sandbox_workspace_write.network_access=true" in argv
+    if os.environ.get("OB_FAKE_NETWORK"):
+        allowed=not allowed
+    context={"cwd":cwd,"model":model,"effort":effort,"approval_policy":"never",
+             "sandbox_policy":{"type":"workspace-write","network_access":allowed}}
     records=[{"type":"session_meta","payload":meta}]
     if mode!="no-turn-context":
         records.append({"type":"turn_context","payload":context})
@@ -820,6 +826,52 @@ def test_NEGATIVE_CONTROL_a_run_whose_codex_reports_another_model_does_not_count
     assert done.returncode == 1, done.stdout + done.stderr
     error = "the native session reports model gpt-6-astra, not gpt-6-sol"
     assert _meta(out)["error"] == error
+
+
+def _folder(parent: Path, name: str) -> Path:
+    (parent / name).mkdir()
+    return parent / name
+
+
+LISTENER = "sandbox_workspace_write.network_access=true"
+RUNTIME_CHECK = ("--arm", "current", "--model", "gpt-6-sol", "--fixtures", "runtime-check")
+
+
+def test_only_the_fixture_that_asks_gets_a_local_listener(tmp_path: Path) -> None:
+    """A call keeps the default sandbox, a port refused, unless its fixture has a
+    `local-listener` file; the meta file says which, and the session shows the same."""
+
+    done, out = _invoke(tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert LISTENER not in (tmp_path / "argv.txt").read_text(encoding="utf-8").splitlines()
+    meta = _meta(out)
+    assert (meta["local_listener"], meta["sandbox_network_access"]) == (False, False), meta
+
+    asking = {name for name in RUN.fixture_names() if RUN.needs_local_listener(name)}
+    assert asking == {"runtime-check"}, "a fixture that needs no listener must not be granted one"
+
+    done, out = _invoke(_folder(tmp_path, "listener"), RUNTIME_CHECK)
+    assert done.returncode == 0, done.stdout + done.stderr
+    argv = (tmp_path / "listener" / "argv.txt").read_text(encoding="utf-8").splitlines()
+    assert argv.count(LISTENER) == 1 and argv[argv.index(LISTENER) - 1] == "-c"
+    assert argv[argv.index("-s") + 1] == "workspace-write"
+    meta = _meta(out, "runtime-check")
+    assert meta["error"] == "" and meta["identity_error"] == "", meta
+    assert (meta["local_listener"], meta["sandbox_network_access"]) == (True, True), meta
+
+
+def test_NEGATIVE_CONTROL_a_session_whose_sandbox_differs_from_the_request_does_not_count(
+    tmp_path: Path,
+) -> None:
+    done, out = _invoke(
+        _folder(tmp_path, "listener"), RUNTIME_CHECK, env={"OB_FAKE_NETWORK": "flip"}
+    )
+    assert done.returncode == 1, done.stdout + done.stderr
+    error = "the native session reports network_access False, not True"
+    assert _meta(out, "runtime-check")["error"] == error
+    done, out = _invoke(_folder(tmp_path, "default"), env={"OB_FAKE_NETWORK": "flip"})
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert _meta(out)["error"] == "the native session reports network_access True, not False"
 
 
 def test_a_preflight_that_observes_no_login_exits_3_before_any_call(tmp_path: Path) -> None:

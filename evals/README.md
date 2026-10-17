@@ -186,6 +186,15 @@ harness must meet these items, and `--probe` shows which one it does not:
   bytes to `<fixture>.native.jsonl` with their SHA-256.
 - **No call from a fixture.** A fixture, a post plan and a grader never start the tool. The model
   is called once in `call`, and a failed call is never retried.
+- **A listener is granted only where a fixture asks.** `workspace-write` of codex refuses the
+  commands of a call a port to bind (`PermissionError`), so a fixture whose task is to check a
+  running service would measure the sandbox. A fixture that needs a local listener has a
+  `local-listener` file (today: `runtime-check`). The call of that fixture alone adds
+  `-c sandbox_workspace_write.network_access=true`. In codex-cli 0.163.0 this is one switch for
+  all network access, not for the loopback interface alone. The meta file records
+  `local_listener` and the `sandbox_network_access` that the native session shows, and a call
+  whose session differs from the request is an error (`native-sandbox-network`). The Claude arm
+  ignores the file.
 - **Results are keyed by harness.** The meta file and the `INDEX.json` row carry `harness`, and
   `--summary` groups by it, so runs of different harnesses never merge.
 

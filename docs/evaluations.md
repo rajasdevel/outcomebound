@@ -397,7 +397,7 @@ ignored it with a warning (codex-cli 0.158.0, 0.159.0 and 0.160.0). Whether a we
 there would reach the model is `UNVERIFIED`. Read the head of each transcript for warnings that
 name user-level files. Keep that directory empty for a pass.
 
-Two more conditions decide what a codex run can measure.
+Three more conditions decide what a codex run can measure.
 
 - The default `workspace-write` sandbox of codex protects `<writable_root>/.git` as read-only
   ([Codex, agent approvals and security](https://learn.chatgpt.com/docs/agent-approvals-security),
@@ -405,6 +405,21 @@ Two more conditions decide what a codex run can measure.
   `.git` of the workspace is added as a writable directory (`--add-dir <workspace>/.git`). With
   the directory added, a probe's `git commit` exited 0. A probed run without the isolation flags
   above read the Codex memories of the operator (codex-cli 0.156.1, 2026-09-24).
+- The default `workspace-write` sandbox of codex also refuses a command a port to bind, on the
+  loopback interface too (codex-cli 0.163.0, macOS: `PermissionError: [Errno 1] Operation not
+  permitted`; `codex sandbox -c 'sandbox_mode="workspace-write"' -- python3 -c "import socket;
+  socket.socket().bind(('127.0.0.1', 0))"` shows it with no model call). The session tells the
+  model that network access is restricted. A fixture whose task is to check a running service
+  then measures the sandbox, not the text: a run that tries is refused, and a run that reads the
+  notice may not try. A fixture with a `local-listener` file adds
+  `-c sandbox_workspace_write.network_access=true` to its call (`runtime-check` only), and the
+  native session must show `network_access` true. That setting allows all network access, the
+  internet too. A loopback-only form exists in the permissions-profile keys of the same version
+  (`default_permissions`, `permissions.<name>.network.allow_local_binding` with the experimental
+  `network_proxy` feature): `codex sandbox` showed it bind and connect on loopback and refuse the
+  internet. It is not used, because it replaces `-s workspace-write` and the writable roots of
+  the call, and whether it works inside `codex exec` is `UNVERIFIED` (testing it needs a model
+  call). Whether the grant removes the `runtime-check` failures is `UNVERIFIED` until a pass runs.
 - `codex login status` shows which sign-in a run uses: ChatGPT sign-in for subscription access, or
   an API key. OpenAI bills an API key through the Platform account at standard API rates
   ([Codex authentication](https://learn.chatgpt.com/docs/auth), L, read 2026-10-01). The status

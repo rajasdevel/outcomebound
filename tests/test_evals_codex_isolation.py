@@ -15,12 +15,17 @@ from pathlib import Path
 from tests.eval_helpers import RUN as run
 
 
-def _argv(tmp_path: Path, model: str = "gpt-6-sol", git: bool = True) -> tuple[list[str], Path]:
+def _argv(
+    tmp_path: Path, model: str = "gpt-6-sol", git: bool = True, local_listener: bool = False
+) -> tuple[list[str], Path]:
     workspace = tmp_path / model / "workspace"
     workspace.mkdir(parents=True)
     if git:
         subprocess.run(["git", "init", "-q", str(workspace)], check=True)
-    return run.make_harness().command(model, "medium", workspace, tmp_path / "last.md"), workspace
+    argv = run.make_harness().command(
+        model, "medium", workspace, tmp_path / "last.md", local_listener=local_listener
+    )
+    return argv, workspace
 
 
 def test_every_call_names_its_model_and_ignores_the_operators_setup(tmp_path: Path) -> None:
@@ -64,3 +69,13 @@ def test_nested_adoption_writes_are_confined_to_upgrade_owned_roots(tmp_path):
     subject = ".agents/skills/adopt-outcomebound/SKILL.md"
     assert subject in current.files and subject in current.record()["arm_files"]
     assert subject not in baseline.files
+
+
+def test_a_call_may_bind_a_port_only_where_its_fixture_needs_a_listener(tmp_path: Path) -> None:
+    setting = "sandbox_workspace_write.network_access=true"
+    default, _ = _argv(tmp_path / "default")
+    assert not [arg for arg in default if "network" in arg], "the default sandbox is kept"
+    granted, _ = _argv(tmp_path / "granted", local_listener=True)
+    assert granted.count(setting) == 1 and granted[granted.index(setting) - 1] == "-c"
+    assert granted[granted.index("-s") + 1] == "workspace-write"
+    assert len(granted) == len(default) + 2, "the grant adds the one setting and nothing else"
