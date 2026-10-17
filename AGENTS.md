@@ -69,7 +69,7 @@ definitions where the harness has them.
 **Mechanisms** — `spec` when a wire format or block schema changes; `review` when a change alters
 what the kernel, the contract, a skill, a fragment or a template tells a model to do, and when a
 change adds an exemption to a gate or narrows what a gate counts (the floor, the instruction
-audit, the finish check, a tickets refusal): that review tries to pass the gate without the ruling
+audit, a tickets refusal): that review tries to pass the gate without the ruling
 it requires, and the pull request links it; `broad-suite` once at each landing, never inside a
 delegate.
 **Completion bar** — `make gate`, `make check` and `make test`, green at the tip that lands;
@@ -108,7 +108,7 @@ standard library only.
 | Source | Role |
 | --- | --- |
 | `OutcomeBound.md` | the operating contract |
-| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check, sources, review, research, lifecycle, scaffold |
+| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check (retired), sources, review, research, lifecycle, scaffold |
 | `docs/prompt-standard.md`, `docs/evaluations.md` | the prompt standard and this project's own evaluation record; read only when a task needs them |
 | [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, one advice file per model (`models/`) and implementer tiers (`applications/implementer-tiers.md`); read only when a task needs them |
 | Released `CHANGELOG.md` sections | history |
@@ -124,7 +124,7 @@ standard library only.
 | `make scrub` | the public-text check plus the local list of private names `OB_SCRUB_LIST` names, over the tracked files and the commits since `OB_BASE`; `UNVERIFIED` without the list |
 | `make canary` | this checkout's engine beside the installed release, on each project of the local list `OB_CANARY_LIST` names, under Python 3.10 and the installed release's Python: `adopt --dry-run`, `adopt --check` and `instructions check`, `floor check --base HEAD` where a floor is installed, `tickets check --draft` on each draft set the project's claims plan names, and `tickets check` on an `issues.json` export in the project root (else `UNVERIFIED`; it calls no tracker); fails on a candidate crash, refusal or invalid report, or on a difference in the before/after Git status or ignored-entry list; inspect custom floor commands first and use an owned isolated checkout where they may write (CONTRIBUTING.md); state checks detect changes after execution, not prevent them; reports by project number and records the verdict for HEAD's tree; `UNVERIFIED` without the list; run before a pull request that changes adopt, tickets, floor, instructions or discovery lands (one run on a commit that holds every change of several such pull requests covers all of them, before the first of them lands), and on the committed release commit (docs/VERSIONING.md gives the release sequence) |
 | `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: a PASS record of `make canary` for this tree, `VERSION`, changelog, README and CI templates agree (and, once named, the tag, and a passing CI run on main for its commit), the install is current, `make scrub` passes, and gate, floor and suite pass (with `TAG=`, the CI run on main for that commit stands in for gate, floor and suite) |
-| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `finish-check`, `research`, `sources`, `explorable`, `review`, `scaffold`, `home` |
+| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `research`, `sources`, `explorable`, `review`, `scaffold`, `home` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |
 | `bash scripts/new-spec.sh <slug> [--with-plan]` | scaffold a design under `docs/specs/<slug>/` from `templates/spec/design.md`, and with `--with-plan` a plan from `templates/spec/plan.md` |
 | `python3 scripts/build_backend.py [--sdist]` | build the package adopters install, into `dist/` |

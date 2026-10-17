@@ -71,11 +71,8 @@ All four are under `.agents/`. Every agent on the machine shares them.
 The agent keeps these files here and not in a temporary or session directory, because the system
 can clear such a directory without warning.
 
-The finish check (`adopt --finish-check`) checks the checkout at the working directory of the
-session, not a worktree under `worktrees/`. If the agent works in a worktree and the session stays
-in the main checkout, as in a Codex session, a PASS tells you nothing about that worktree. Thus,
-before the agent lands work from a worktree, it runs the Done commands in that worktree and reports
-their verdict.
+Before the agent lands work from a worktree, it runs the Done commands in that worktree and
+reports their verdict. A result from the main checkout tells you nothing about the worktree.
 
 The main checkout, and the worktrees of other agents, are not the agent's to change. A new task
 starts like this:
@@ -195,11 +192,8 @@ wrote, and to read the result as follows:
   on the notes that the check names. It gets the same facts again from their sources, and it names
   those notes in its handoff for you.
 - All other results: the agent writes them in its handoff, and it continues to use the notes.
-  These results include a `FAIL` or a review hit in a different file, and any `UNVERIFIED`. Two
-  examples occur often. The finish-check entry that `adopt` writes in the harness settings is a
-  review hit in every install. While it runs only the Done commands that `AGENTS.md` shows, the
-  report marks it "(does not change the result)", and the exit code stays as it is. A row in the
-  harness table becomes `UNVERIFIED` after its re-check date.
+  These results include a `FAIL` or a review hit in a different file, and any `UNVERIFIED`. One
+  example occurs often: a row in the harness table becomes `UNVERIFIED` after its re-check date.
 
 Then, before the agent uses a fact from a note, it checks that fact against its source.
 

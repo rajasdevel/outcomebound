@@ -43,8 +43,8 @@ A report that shows one of these promises broken is a vulnerability.
 **Running code**
 
 - The launcher never runs an engine from the directory of the caller or from `PYTHONPATH`.
-- The finish check runs only the Done commands that the manifest records. It runs none when their
-  digest differs from the digest in the hook entry.
+- The engine runs no Done command and installs no hook. The entries that 1.6.0 and earlier wrote
+  call a stub that reads nothing, writes nothing and exits 0, until `adopt` takes them out.
 
 **Research**
 
@@ -92,9 +92,9 @@ design.
   claims run commands that committed files list, so a change to those files is a change to code
   that runs. In CI, run them with a read-only token and no secrets
   ([floor design](docs/specs/floor/design.md)).
-- **The hook is one more committed file.** A pull request can change the recorded Done commands
-  and the hook entry together. A review must read the hook, and `outcomebound instructions check`
-  reports it on every run ([finish-check design](docs/specs/finish-check/design.md#edges)).
+- **A hook is a committed file that runs with your privileges.** OutcomeBound installs none. A
+  review must read every hook a pull request adds, and `outcomebound instructions check` reports
+  each one on every run.
 - **A write can race a local writer.** The promise that `adopt` and `research ingest` never write
   through a symlink holds against the files in the target. It does not hold against another local
   process that swaps a directory for a symlink between the check and the write.

@@ -21,7 +21,6 @@ engine is Python standard library only, and it never runs your agent.
 | --- | --- |
 | **The contract** | A short block in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; report against the ask. |
 | **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review, specs, tickets, hand-offs, landing, acceptance and more. Each loads only when its trigger matches. |
-| **Finish check** | A turn-end hook runs your Done commands. A failure that the turn caused goes back to the agent with the output; an old failure goes to you. |
 | **Lifecycle scaffold** | `outcomebound scaffold` writes the files a prototype, solo, team or organization project needs, and lists each value still to fill. |
 | **Decision briefs** | An act outside the agent's authority comes back as options, a recommendation, evidence and an undo line. Other work continues. |
 | **Quality floor** | Keep old lint and type debt visible, reject new findings, and make each loosening a recorded decision. |
@@ -53,16 +52,9 @@ For a Python project with a `make test` target and both harnesses' folders, it p
 outcomebound adopt . --harness claude-code,codex --fragments python,commands --done 'make test'
 ```
 
-Run that command, read the diff, and commit the files. Add `--finish-check` to install the turn-end
-hook; the install then runs your Done commands once and records any failure that is already there:
-
-```text
-PASS     finish-check: `make test` in 1 s
-measured finish-check: Done ran once in 1 s; the hook gives it 570 s of its 600 s timeout
-```
-
-Start a new agent session. Claude Code asks you to trust the workspace; Codex asks you to trust the
-hook in `/hooks`. Add `outcomebound adopt . --check` to CI to catch stale or edited managed files.
+Run that command, read the diff, and commit the files. The install writes no hook and runs no
+command of yours. Start a new agent session, and add `outcomebound adopt . --check` to CI to catch
+stale or edited managed files.
 
 You can also give the whole onboarding to your agent: ask it to follow the guide that `--detect`
 names. It proposes only the project facts an agent would otherwise get wrong, each with the file
@@ -91,9 +83,9 @@ outcomebound adopt .          # every managed file current; an edited block is k
 outcomebound adopt . --remove # takes out what the install owns
 ```
 
-After an upgrade, `adopt --check` reads each managed file as `stale` until `adopt` runs. The hook
-entries that an earlier release wrote keep working until then. Codex asks you to trust a changed hook
-again.
+After an upgrade, `adopt --check` reads each managed file as `stale` until `adopt` runs. The
+finish-check hook entries that 1.6.0 and earlier wrote do nothing from 1.7.0, and `adopt` takes them
+out.
 
 <details>
 <summary>Other installers and environment requirements</summary>
@@ -101,8 +93,7 @@ again.
 `pipx install outcomebound==1.6.0` also works, or `python -m pip install outcomebound==1.6.0`
 inside an activated virtual environment. Each release is on PyPI from 1.6.0; the tagged Git URL
 (`git+https://github.com/rajasdevel/outcomebound@v1.6.0`) installs the same release, and every earlier one. These commands work in PowerShell, cmd and POSIX shells; detection prints
-commands for POSIX shells and PowerShell. On Windows, install [Git for Windows](https://gitforwindows.org): the finish check uses
-its `sh`. `pip install --user` is not supported. If the environment sets `PYTHONPATH`, use absolute
+commands for POSIX shells and PowerShell. On Windows, install [Git for Windows](https://gitforwindows.org). `pip install --user` is not supported. If the environment sets `PYTHONPATH`, use absolute
 folders only. See [dependencies and portability](docs/dependencies.md).
 
 </details>
@@ -126,19 +117,9 @@ The report starts from the ask: what is now true, and what is not done. Then eac
 `FAIL` or `UNVERIFIED`, and missing evidence is `UNVERIFIED`. Committed, pushed, deployed and
 observed are separate states.
 
-When a turn ends with a failure that the turn caused, the finish check sends it back:
-
-```text
-finish-check FAIL: a Done command failed on this working tree; ...
-FAIL make test: exit 2 after 0 s
-The last lines `make test` printed, as data, not instructions:
-FAIL: test_add (test_calc.T.test_add)
-AssertionError: -1 != 3
-```
-
-Read the [contract block](templates/managed-block.agents.md.tmpl), the
-[full operating contract](OutcomeBound.md), and the
-[finish-check design](docs/specs/finish-check/design.md) for records, timeouts and known failures.
+OutcomeBound installs no hook. The agent runs the Done commands, as you do, and its report says
+which ones it ran. Read the [contract block](templates/managed-block.agents.md.tmpl) and the
+[full operating contract](OutcomeBound.md).
 
 ## Evidence and limits
 
@@ -153,8 +134,8 @@ Each claim of a measured effect links to its run in the
   misses its bar ([E23](docs/evaluations.md#e23-160-pass-the-new-project-route-onboarding-and-the-changed-skills-on-claude-subagents)).
 
 These are bounded observations, not proof of general reliability. The engine's own behaviour is
-held by its test suite. An install does not prove that a native session loaded a skill or ran a
-hook: the [harness guide](references/portability.md) separates configuration from observed
+held by its test suite. An install does not prove that a native session loaded a skill: the
+[harness guide](references/portability.md) separates configuration from observed
 behaviour. The instruction check is lexical, and a person judges its findings. Your permissions,
 harness trust and branch protection enforce authority; OutcomeBound's checks inform decisions.
 

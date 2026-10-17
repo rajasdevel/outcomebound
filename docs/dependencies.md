@@ -11,7 +11,7 @@ and this repository's checks have different needs.
 | Python 3.10 or later | Engine and build backend | Runs the command and its standard-library modules. CI tests Python 3.10 through 3.14. |
 | Git 2.52.0 or later and a Git worktree | Adoption and repository operations | Reads tracked files, history, worktree identity and preservation state. |
 | One of uv, pipx, or pip in a virtual environment | Installation | Installs the package and creates the command. They are alternative routes. A Git URL also needs Git and network access; the package index (PyPI), for a version published there, needs network access only. |
-| POSIX `sh` | Checkout launcher and finish-check Done lines | Runs shell command lines. The installed entry point itself runs Python. On Windows, Git for Windows supplies `sh.exe`. |
+| POSIX `sh` | Checkout launcher | Runs the launcher script of a checkout. The installed entry point itself runs Python. On Windows, Git for Windows supplies `sh.exe`. |
 | The project's own check tools | Done lines or a selected floor | Runs the checks that the project declared. A missing tool reads UNVERIFIED. |
 | Windows job objects and `taskkill.exe` | Windows process cleanup | A job object, through the standard library's `ctypes`, stops a timed-out command's whole process tree. The command starts suspended, joins the job, and is then resumed through the thread calls of `kernel32` (`CreateToolhelp32Snapshot`, `OpenThread`, `ResumeThread`). `taskkill.exe` is the fallback where a job cannot be made or joined. All of these are operating-system features. |
 
@@ -36,7 +36,7 @@ resolve `rev-parse --git-common-dir` against the command's working directory; th
 `--path-format=absolute` option. The [distribution design](specs/distribution/design.md) states
 what the minimum-version checks establish.
 
-The engine and finish hook do not require Node, npm, jq, rg, curl, Docker, sg, make or a package
+The engine does not require Node, npm, jq, rg, curl, Docker, sg, make or a package
 manager for their own work. A project can use any of them in its Done commands. Installing a
 harness can also have requirements of its own.
 
