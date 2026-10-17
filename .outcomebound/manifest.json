@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "f6dd97ed8a6be502df15da0da1ac989e96bcb2b02ab08ca25845adc0d81be3d6"
+      "sha256": "812b591aa03f110982ddd70d3be2f68ca30bc3d0213b3f4ab15763cc00bdee65"
     },
     {
       "kind": "block",
@@ -28,7 +28,7 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "8d7c2f4f52488aaccaed19861e47d31a5ee6496f2c0817ddd7cfaab8503d8baa",
+        ".outcomebound/fragments/commands.md": "c55213a0d00d82211d4059dc529b1232ce990d095e9f64831813f03539c82b8d",
         ".outcomebound/fragments/local.md": "fe01d769bbabeee6359900aef1bdd06182dfd98e1b9ed6f55d921568b9ad488c",
         ".outcomebound/fragments/multi-agent.md": "88ad9c4afe29c4e43dc4377c3fb5848aa26a29b1beab9108531e5824f30b1c8c",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "8d7c2f4f52488aaccaed19861e47d31a5ee6496f2c0817ddd7cfaab8503d8baa"
+      "sha256": "c55213a0d00d82211d4059dc529b1232ce990d095e9f64831813f03539c82b8d"
     },
     {
       "kind": "ignore",
