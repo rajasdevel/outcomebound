@@ -98,21 +98,21 @@ These come from the request that added the explorable.
 | The procedure — what to decide yourself, the due diligence, the brief's parts, drawing it — lives in one skill, `decision-brief`, a default skill. The kernel's handoff sentence names it, and the core skill keeps only when to ask and a pointer | the procedure inside the core skill, reached only through it | user | decided |
 | Due diligence comes before the brief. The agent checks everything within reach that could change the answer, works out what each way leads to and its downside, and lets the evidence choose the recommendation. `Not checked` names only what could not be checked, why, and what would settle it | a form filled from whatever is already in hand | user | decided |
 | A brief is a floor, not a form, and it reads in the order a person decides: the id and the question in one line; what waits on the answer; the context the person needs to judge; a picture where it carries meaning; then each way forward, when there are two or more, with what it leads to and its downside, and the recommendation drawn on the option it names, with why. Always: the question, a recommendation where there are two or more ways, at least one line of evidence (checked, not checked, or a fact) and whether it can be undone. Anything else appears only when it changes the answer (maintainer, 2026-10-18) | the recommendation first, with why (the floor until 1.8.0), which asks the person to weigh a verdict before they know what is at stake and pulls their reading of the options toward it; a fixed form with every slot filled; a brief with no evidence line | user | decided |
-| Bottom line first holds for an answer or a report, whose first sentence says what happened or what was found (Anthropic's prompting guides and Claude Code's Concise output style, read 2026-10-18). A decision is not a report: its bottom line is the ask, so the question and what waits on it come first, then the context, and only then the options. Two studies of decisions made with an AI's suggestion found that a suggestion shown at once raised reliance on it, right or wrong (Buçinca, Malaya and Gajos, CSCW 2021; Fogliato and others, FAccT 2022); people often prefer information on the alternatives to a bare recommendation (Dalal and Bonaccio, 2010); and a decision record puts the decision after its context (Nygard, 2011). These studies are lab tasks, not written briefs, so the order rests on them as support, not as proof | the recommendation as the brief's first line, as bottom-line-up-front writing does for a reader who must act at once; a gate that hides the recommendation until the person answers, which no study tested for a written brief | user | decided |
+| Bottom line first holds for an answer or a report, whose first sentence says what happened or what was found (Anthropic's prompting guides and Claude Code's Concise output style, read 2026-10-18). A decision is not a report: its bottom line is the ask, so the question and what waits on it come first, then the context, and only then the options. The evidence on order is mixed: one study of decisions made with an AI's suggestion found more over-reliance where the suggestion was shown at once (Buçinca, Malaya and Gajos, CSCW 2021), one found more agreement with it, right or wrong, where it came before the person's own reading (Fogliato and others, FAccT 2022), and a later study by the second group found no such effect; people often prefer information on the alternatives to a bare recommendation (Dalal and Bonaccio, 2010); and a decision record, a record rather than a request, puts the decision after its context (Nygard, 2011). These are lab tasks, not written briefs, so the order rests on them as support, not as proof | the recommendation as the brief's first line, as bottom-line-up-front writing does for a reader who must act at once; a gate that hides the recommendation until the person answers, which no study tested for a written brief | user | decided |
 | The question names the choice, not the answer the agent favours: one decision, in the person's words, asked so that each option answers it (`How should…`, `Which…`, `When…`). A yes-or-no question about the agent's own pick leads the reader (field: briefs whose question carried their recommendation) | the question in one line with no rule on how it is framed | user | decided |
-| The context is short and built to skim: what the decision is about, what it touches, how the mechanism works where that changes the choice, and each term the person may not know, defined where it is used. The agent gives it as blocks, each a one-line paragraph or a list of one-line items, and the renderer separates every block by a blank line, so no two lines run together in any markdown view; a term is drawn as `📖 *term*: meaning`. History the person already knows is left out, and background several briefs share is written once above them | no context; context as one long line; free text with line breaks, which runs lines together in a markdown view and can forge a mark | user | decided |
-| The recommendation is drawn on the option it names, as `⭐ Recommended: <why>` directly under that option and before its `Choose if` and `Downside` lines; where the agent's confidence is given, the line ends with it in words: `a check shows this` (`fact`) or `my judgement` (`inferred`). Options keep the order the agent gives, so the recommended one is not moved to the top. A recommendation with no options is a line of its own before the evidence (maintainer, 2026-10-18) | a `Recommend` line before the options (until 1.8.0); one line after all the options, which delays the pick for a reader who scans; the recommended option moved first, which adds a default's pull to the mark's | user | decided |
-| Each option may carry `Choose if`: the condition, or what matters most to the person, under which a reasonable person picks it. Where options are close, what separates them is the person's values, and this line puts that choice to them; patient decision aid standards ask for the same balance (each option's good and bad side by side, and what matters most to the person) | options described only by what they lead to and their downside | user | decided |
-| An explorable is offered once in a message, as one line after its briefs, and only where a page would show what text cannot, such as the person's own numbers or a mechanism that moves; never under every brief | an offer under every brief, which the person learns to skip | user | decided |
+| The context is short and built to skim: what the decision is about, what it touches, how the mechanism works where that changes the choice, and each term the person may not know, defined where it is used. The agent gives it as blocks, each a one-line paragraph or a list of one-line items, and the renderer separates every block by a blank line, so no two lines run together in any markdown view; two lists in a row are refused, since a markdown view joins them into one, so a lead-in paragraph goes between them. Terms follow the context, each a paragraph `📖 *term*: meaning`. History the person already knows is left out, and background several briefs share is written once above them | no context; context as one long line; free text with line breaks, which runs lines together in a markdown view and can forge a mark | user | decided |
+| The recommendation is drawn on the option it names, as `⭐ Recommended: <why>` directly under that option and before its `Choose if` and `Downside` lines; where the agent's confidence is given, the line ends with it in words: `a check shows this` (`fact`), `my judgment` (`inferred`), and any other value as given. Options keep the order the agent gives, so the recommended one is not moved to the top. A recommendation with no options, or with options but no named way, is a paragraph of its own, `⭐ Recommended: <why>`, after the options and before the evidence; the command's floor still refuses options with no named way (maintainer, 2026-10-18) | a `Recommend` line before the options (until 1.8.0); one line after all the options, which delays the pick for a reader who scans; the recommended option moved first, which adds a default's pull to the mark's | user | decided |
+| Each option may carry `Choose if`: the condition, or what matters most to the person, under which a reasonable person picks it. Where options are close, what separates them is the person's values, and this line puts that choice to them; patient decision aid standards are summarised as asking for the same balance (each option's good and bad side by side, and what matters most to the person; read from summaries, the standard's own text UNVERIFIED) | options described only by what they lead to and their downside | user | decided |
+| A decision that is not simple, where the options trade off things the person may value differently, turn on numbers they may want to try, or rest on a mechanism easier to see moving, carries an `🧪 Explore:` paragraph right after its picture: what an interactive page would let the person try, and that they can ask for it by the brief's id. In a question tool the same brief gains a last choice, `Explore it first`. A simple decision carries none (maintainer, 2026-10-18: highlight the explorable as an option for decisions that are not simple) | an offer once per message, after all the briefs, which a person deciding a hard case may miss; an offer under every brief, which the person learns to skip | user | decided |
 | A brief stands on its own. Every internal id or term is explained in plain words where it is used, or left out | ids the person has to look up | user | decided |
 | A brief's id is one no other session or record can take: the next of the project's own numbering for briefs where its instructions keep one, else the task's or worktree's name before the number (`fix-login-D1`); a brief cited outside its document carries that whole id. The renderer already accepts such an id, so the rule lives in the skill | a bare `D<n>`, which two sessions on one machine can both take and which reads as one of the project's own decision numbers; an engine verb that reserves the next id, which needs a shared store the skill does not | agent | decided |
 | For an act a harness's permission check guards, such as a deletion or a write outside the project, the brief names the act so the person's reply can state it, since some harnesses honor authority only from the person's own words | a letter alone, which such a check does not read as the person's authority for the act | agent | decided |
-| What waits on the answer, the state it waits in and what happens if no answer comes are the brief's first line after the question: `⏳ Waiting on this:`, from the `why_now` field. A hold still holds only its own item (field: a held act left a service stopped, with no stated fallback). A `facts` pair labelled `If unanswered`, the form until 1.8.0, is still drawn among the facts | the `If unanswered` pair at the foot of the brief, read after the decision is made; a separate `if_unanswered` field beside `why_now`, which says the same | user | decided |
+| What waits on the answer, the state it waits in and what happens if no answer comes are the brief's first line after the question: `⏳ Waiting on this:`, from the `why_now` field, which stays optional in the wire; the skill asks for it. A hold still holds only its own item (field: a held act left a service stopped, with no stated fallback). A `facts` pair labelled `If unanswered`, the form until 1.8.0, is still drawn among the facts | the `If unanswered` pair at the foot of the brief, read after the decision is made; a separate `if_unanswered` field beside `why_now`, which says the same | user | decided |
 | A step the person types or checks by eye names a version, branch, tag or path, never a commit hash or other digest: people miss near-matching hex strings more often than words or numbers | a digest to copy or compare by eye | user | decided |
-| Marks are emoji where the output carries them, each beside the word it marks, so a screen reader that speaks an emoji's name still reads the word: ⏳ waiting, 📖 a term, 🗺️ a picture, ⭐ recommended, ⚖️ choose if, 🔻 downside, ✅ checked, ⚠️ not checked, 🧱 debt, ↩️ undo, ⛔ cannot be undone; ASCII where the output cannot carry them. 👉, the mark of the `Recommend` line until 1.8.0, is retired. Text the agent gives may carry another emoji only where it says something on its own (❌ for missing); it never carries a mark, and a picture's lines carry no emoji, which many fonts draw two columns wide | ASCII marks everywhere; consequences in prose only; emoji as decoration | user | decided |
-| A picture is drawn right after the context, where order, dependency, flow or before and after is the point, never as decoration: a graph from edges, Mermaid where the surface renders Mermaid and ASCII where it does not or is unknown; or a small fixed-width figure the agent gives line by line (`picture`), drawn in a text fence, for a before and after that edges show badly. Its caption, after `🗺️`, says what to look at | the diagram after the brief's list (until 1.8.0); one ASCII form for every surface; a diagram in every brief | user | decided |
+| Marks are emoji where the output carries them, each beside the word it marks, so the word is there for a reader whose screen reader speaks the emoji's name or whose font lacks it: ⏳ waiting, 📖 a term, 🗺️ a picture, 🧪 explore, ⭐ recommended, ⚖️ choose if, 🔻 downside, ✅ checked, ⚠️ not checked, 🧱 debt, ↩️ undo, ⛔ cannot be undone; ASCII words where the output cannot carry them. 👉, the mark of the `Recommend` line until 1.8.0, is retired. The renderer refuses a mark in given text; whether another emoji says something on its own (❌ for missing) or is decoration is the skill's rule, not the renderer's | ASCII marks everywhere; consequences in prose only; emoji as decoration | user | decided |
+| A picture is drawn right after the context, where order, dependency, flow or before and after is the point, never as decoration: a graph from edges, Mermaid where the surface renders Mermaid and ASCII where it does not or is unknown; or a small fixed-width figure the agent gives line by line (`picture`), drawn in a text fence, for a before and after that edges show badly. The caption, after `🗺️` and a blank line before the fence, says what to look at; it is required for a `picture` and optional for a graph, where the mark is drawn only with a caption | the diagram after the brief's list (until 1.8.0); one ASCII form for every surface; a diagram in every brief | user | decided |
 | The brief itself is in the text the person reads where it goes (the rows above); a link from that text to a file that holds it never stands in for the brief (field: a brief written to a working file and only linked from the message) | a brief kept in a file the message links to | user | decided |
-| Where a harness asks the person through a question tool, which shows each field on one line, the agent draws the brief in its message first and asks with `outcomebound brief --ask`, filling the tool's fields by name: per brief, the id, a short header, the heading and recommendation as question, and each option's label, description and one-line form, the recommended option first as the tools ask; a brief whose options the tool cannot take is asked by the drawn brief alone (field: a drawn brief put whole into a question tool's title, shown as one line) | the drawn brief's lines in the tool's fields; no question tool at all | user | decided |
+| Where a harness asks the person through a question tool, which shows each field on one line, the agent draws the brief in its message first and asks with `outcomebound brief --ask`, filling the tool's fields by name: per brief, the id, a short header, the heading and the recommended option's letter and `Recommended:` reason as question, and each option's label, description and one-line form, the recommended option first as the tools ask; a brief whose options the tool cannot take is asked by the drawn brief alone (field: a drawn brief put whole into a question tool's title, shown as one line) | the drawn brief's lines in the tool's fields; no question tool at all | user | decided |
 | Whether a surface renders Mermaid is read from the session's environment against `adapters/surfaces.json`, which records who observed each capability, and when. `OUTCOMEBOUND_DIAGRAMS` (the person's own observation) outranks the table, and `--form` outranks both | the agent guessing its surface | user | decided |
 
 ### Decisions on the explorable
@@ -172,9 +172,10 @@ The old `--legacy` flag switches the parser back to its 1.x behaviour. Two adopt
 - Keeping it: those adopters see a warning for one release before it goes.
 - Dropping it: the code path goes in 2.0.
 
-- 📖 *code path*: the branch of the parser that runs only when the flag is set
+📖 *code path*: the branch of the parser that runs only when the flag is set
 
 🗺️ How an upgrade reads the flag
+
 ```mermaid
 flowchart LR
   n1["config"] -->|old_flag| n2["warning"]
@@ -191,35 +192,45 @@ flowchart LR
   - ⚖️ Choose if: a smaller 2.0 matters more than a warning period
   - 🔻 Downside: an adopter who sets it is refused on upgrade
 
-- ✅ Checked: `grep -r old_flag` finds two adopter configs
-- ↩️ Undo: revert the commit
+✅ Checked: `grep -r old_flag` finds two adopter configs
+
+↩️ Undo: revert the commit
 ````
 
 Every block is separated from the next by one blank line, so no markdown view runs two lines into
-one paragraph. A field left out writes nothing, and its blank line goes with it. The order is
-fixed: the heading; `⏳ Waiting on this`; the context blocks; the terms; the picture (a graph from
-edges, then a `picture`, where both are given); the options, the recommendation under the option it
-names; a recommendation with no options as its own line; then the evidence list (`Asked`,
-`Checked`, `Not checked`, the facts, `Debt`, `Undo`).
+one paragraph or two lists into one: only the context's lists and the options are lists, the
+options follow their `**Options**` lead-in, and the terms and the evidence are paragraphs. A field
+left out writes nothing, and its blank line goes with it. The order is fixed: the heading;
+`⏳ Waiting on this`; the context blocks; the terms; the picture (a graph from edges, then a
+`picture`, where both are given); `🧪 Explore`; the options, the recommendation under the option
+it names; a `⭐ Recommended` paragraph where there are no options or no named way; then the
+evidence, one paragraph each: `Asked`, `Checked`, `Not checked`, the facts, `Debt`, `Undo`.
 
-The input gains, in 1.8.0, four optional fields and one option form; every 1.7.0 document still
-draws, in the new order, and the schema's id does not change:
+The input gains, in 1.8.0, five optional fields and one option form; every 1.7.0 document still
+draws, in the new order, and the schema's id does not change. A 1.7.0 engine given a 1.8.0
+document refuses it, naming the unknown field, which is the expected behaviour, not a reason for a
+new id:
 
 - `context`: a list of blocks, each a string (a paragraph) or a list of strings (a list);
 - `terms`: a list of `[term, meaning]` pairs;
-- `picture`: `{"caption": ..., "lines": [...]}`, drawn in a `text` fence;
+- `picture`: `{"caption": ..., "lines": [...]}`, `caption` required, a line may be empty, and
+  `lines` may not be all empty;
+- `explore`: one line, what an interactive page would let the person try;
 - an option as an object, `{"way", "leads_to", "downside", "choose_if"}`, with `choose_if`
   optional, beside the three-string form `[way, leads_to, downside]`.
 
-The decision page of an explorable draws its briefs in the same order
-(`decision_brief_html.py`). Every string is still one line. `why_now` keeps its name and is drawn as `⏳ Waiting on this`.
+The schema writes each union (a block that is a string or a list, an option that is a list or an
+object) as a `type` list, which the engine's schema check reads; it reads no `anyOf`. Every string
+is still one line. The decision page of an explorable draws its briefs in the same order
+(`decision_brief_html.py`). `why_now` keeps its name and is drawn as `⏳ Waiting on this`.
 `confidence` is drawn in words after the recommendation. `--ask` puts each option's `Choose if`
-in its description, between what it leads to and its downside, and keeps the recommended option
-first with ` (Recommended)`, as the question tools ask.
+in its description, between what it leads to and its downside, keeps the recommended option first
+with ` (Recommended)`, as the question tools ask, and, for a brief with `explore`, adds a last
+choice, `Explore it first`.
 
-The ASCII form writes `[wait]`, `[term]`, `[pic]`, `[*]`, `[if]`, `[-]`, `[ok]`, `[!]`, `[debt]`,
-`[undo]` and `[!!]`, the separators ` | ` and ` - `, and a graph as chains in a `text` fence:
-`config --old_flag--> warning --> new flag`. A batch that names an order among its briefs ends
+The ASCII form writes `[wait]`, `[term]`, `[pic]`, `[explore]`, `[rec]`, `[choose]`, `[-]`,
+`[ok]`, `[!]`, `[debt]`, `[undo]` and `[!!]`, the separators ` | ` and ` - `, and a graph as
+chains in a `text` fence: `config --old_flag--> warning --> new flag`. A batch that names an order among its briefs ends
 with the order drawn the same way.
 
 ### An explorable
@@ -288,8 +299,16 @@ The command refuses what it can detect — an option without its downside, a sin
 or more options with no recommendation, a brief with no evidence line, a mark's glyph inside
 given text, a line break inside a field, a diagram label that would end or split an edge, an
 option object missing its way, what it leads to or its downside, an empty context block or
-list, a `terms` pair that is not exactly two, and a `picture` line holding a fence or a
-character many fonts draw two columns wide (`--help` lists every refusal) — and cannot tell whether the due diligence was done well. The
+list, two context lists in a row, a context paragraph or item that starts with a markdown block
+opener (`-`, `*`, `+`, `#`, `>`, a number and `.` or `)`, `|`, three backticks or tildes,
+`---`, `===`), `*` or `_` at either edge of a way or a term, a `terms` pair that is not exactly
+two, a `picture` with no caption or only empty lines, a `picture` line holding three backticks or
+a character of East Asian width W or F, U+FE0F or U+20E3 (an emoji drawn by default as text,
+which many fonts still draw two columns wide, is not detected), and a `facts` label that takes a
+name the renderer writes, old or new (`Recommend`, `Why now`, `Waiting on this`, `Recommended`,
+`Choose if`, `Explore` among them; `--help` lists every refusal) — and cannot tell whether the
+due diligence was done well, nor whether the context, a term, a picture, an emoji or the
+question's framing earns its place. The
 verdicts on a `Checked` line are the agent's own report, and the passed mark is drawn only when
 every verdict is PASS. A surface missing from the table gets ASCII. A surface the table records
 as rendering Mermaid but that sets no environment variable is chosen with `--form mermaid`, never
@@ -332,6 +351,13 @@ fixes may read some end tags in script text differently (`UNVERIFIED`).
 - The contract, `OutcomeBound.md`, names the count of working skills, so its edit is a `review`
   item; `README.md`, `AGENTS.md`, `evals/README.md` and `skills/adopt-outcomebound/SKILL.md` carry
   the same count.
+- In 1.8.0, the brief's new order: the contract's sentence on what a decision brief holds
+  (`OutcomeBound.md`, a `review` item) and the `decision-brief` skill (its procedure, its JSON and
+  drawn examples; `adopt` runs so the installed copy matches); the eval grader of the `decision`
+  fixture (`evals/fixtures/decision/checks/brief.py` and `evals/README.md`); the explorable shell's
+  stylesheet (`templates/explorable/explorable.css`: classes for the waiting line, context, terms,
+  picture, explore, choose-if and the inline recommendation), so a page built by 1.7.0 reads
+  `build again`; and the decision starter (`templates/explorable/starters/decision.briefs.json`).
 
 ## Validation
 
@@ -340,8 +366,10 @@ fixes may read some end tags in script text differently (`UNVERIFIED`).
 `tests/test_decision_brief.py`, `tests/test_decision_brief_cli.py`, `tests/test_surfaces.py`;
 `outcomebound brief` draws the example in `--help` in both forms. A test draws every field in
 both forms and holds that each drawn line is a heading, a list item, a fence line or a paragraph
-with a blank line on each side, so no two lines run together; a 1.7.0 document draws without a
-refusal. `tests/test_adopt.py` installs,
+with a blank line on each side, and that no two lists stand next to each other; a 1.7.0
+document draws without a refusal. The `decision` fixture's grader reads a `Recommended` line
+nested under an option as naming that option and reads option letters only under the
+`**Options**` lead-in; its old-shape cases still pass and one new-shape case is added. `tests/test_adopt.py` installs,
 checks and removes the skill beside the core skill.
 
 ### Validation of the explorable
