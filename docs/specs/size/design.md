@@ -8,9 +8,8 @@ status: ratified
 ## Outcome
 
 An agent that builds a change can ask, at any time, how big the change is against the base that
-matters, and what kind of lines it holds. It gets one cheap fact. A change once grew to tens of
-thousands of lines against the production release, and most of the lines were test fixtures and
-records. The agent never saw that number.
+matters, and what kind of lines it holds. It gets one cheap fact, which makes growth visible while the work can still be sized
+again.
 
 The one invariant `outcomebound size` holds: the counts are what Git reports for the work tree
 against the base, plus the lines of the untracked files that Git does not ignore, and each count is

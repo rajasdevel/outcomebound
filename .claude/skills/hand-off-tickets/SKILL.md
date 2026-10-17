@@ -29,9 +29,9 @@ narrows it; that is, all four hold:
 **Bounds.** Writing a package, with its tests and stubs, inside the ticket's `bounds` and on the
 branch the ticket is built on, proceeds without asking. The ticket's outcome, `bounds` and
 `done-when` stay the person's: a package adds to them and never changes them. Where a `done-when`
-as written would take far more than its outcome needs, measure that part first (files and lines,
-with `outcomebound size`, and hours) and put the measure to the person as a decision brief before it is built; the rest of the
-ticket goes on. An edit outside
+as written would take far more than its outcome needs, estimate that part's files, lines and
+hours, and put the estimate to the person as a decision brief before it is built; the rest of the
+ticket goes on. `outcomebound size --base <ref>` measures work already built. An edit outside
 `bounds` that only carries the ticket's own change, such as an import or an inventory entry for its
 own files, is the implementer's to make, and its handover names it; any other edit outside
 `bounds` is the person's, put as a decision brief. Where a line of the ticket holds

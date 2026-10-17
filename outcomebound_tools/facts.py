@@ -594,8 +594,8 @@ def inline(fragment: Fragment) -> str:
 
 
 ONCE = (
-    "Read each file below when its condition first holds; it stays in force for the session, "
-    "so read it again only after the context was compacted."
+    "Read each file below when its condition first holds; it stays in force for the session. "
+    "Read it again after a compaction or when you need to check a detail."
 )
 
 

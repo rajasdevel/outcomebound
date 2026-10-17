@@ -25,9 +25,10 @@ names included, and not before:
 Check the approach you take with the smallest test, command or observation that settles its
 changed risk, not every check the project has. Run a check once for a set of changes, keeping
 long output in a file, and read each failure from that output rather than running the check
-again to see more; a result stands until something it covers changes. Before a pass or fail bar you did not set judges
-the change (a threshold, a monitor, a limit), see whether the unchanged base meets it: a bar the
-base already fails shows no regression, and goes to the person as a finding. On work that spans many changes,
+again to see more; a result stands until something it covers changes. Where a failed bar you did not set (a threshold, a
+monitor, a limit) is taken as evidence that the change made things worse, compare the change with
+the unchanged base under the same conditions: failing on both does not by itself show whether the
+change got worse, so report the comparison; a bar the project requires still applies. On work that spans many changes,
 `outcomebound size --base <ref>` shows how far the change has grown against the base that matters
 (for stability work, the release in production) and how much of it is tests, docs or records; read
 it at each landing, and size again where what grew is not what the outcome needs. Make independent reads and

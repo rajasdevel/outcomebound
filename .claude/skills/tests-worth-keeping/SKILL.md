@@ -17,8 +17,9 @@ logic needs none.
 Where the tests may already fail (CI is red, the person says so, or a run before your change
 showed it), note which fail and why before you change anything. Where a test fails after your
 change for a reason the change may not explain, run it on the unchanged code before you treat it
-as yours. The base is the one the outcome is judged against: for stability or regression work, the
-release in production, run in the same environment, not the branch you started from. Report new
+as yours. The base is the one the outcome is judged against: the release in production where the
+outcome is stability against that release, else the last revision where the behaviour worked;
+compare under the same conditions. Report new
 failures apart from those that were already there. A pre-existing failure is left as found unless fixing
 it is the task: not skipped, not marked expected, not loosened until it passes. A test that fails
 on one run and passes on the next is flaky: report it as flaky with both results; a rerun that

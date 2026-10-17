@@ -328,7 +328,8 @@ def _parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=(
             "Say how big a change is against a base, and what kind of lines it holds. It counts "
-            "what `git diff --numstat` reports for the work tree against the base (committed and "
+            "what `git diff-index --numstat` reports for the work tree against the base "
+            "(committed and "
             "uncommitted tracked changes, with Git's rename detection; `diff-index` does the "
             "reading, so the index is not refreshed), plus each untracked file "
             "that Git does not ignore, counted as added lines. A binary file counts as a file "
@@ -344,7 +345,8 @@ def _parser() -> argparse.ArgumentParser:
             "  config   CI files, *.json, *.yaml, *.yml, *.toml, *.ini, *.cfg, lock files\n"
             "  code     everything else\n\n"
             "The report has one line per kind present, a total, and the share of added lines "
-            "that are not code. It runs no project command and writes nothing."
+            "that are not code. It runs no project command and writes nothing. It does not "
+            "decide whether the change is too big or whether its lines are needed."
         ),
         epilog=(
             "The default base is the merge base of HEAD with the upstream of the current "
@@ -356,7 +358,10 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "target", nargs="?", default=".", help="a Git work tree (default: the current folder)"
+        "target",
+        nargs="?",
+        default=".",
+        help="a folder; the whole Git work tree holding it is measured (default: .)",
     )
     parser.add_argument("--base", metavar="REF", help="the base commit, branch or tag")
     parser.add_argument("--json", action="store_true", help="print one JSON object, not text")
