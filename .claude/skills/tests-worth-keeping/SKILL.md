@@ -7,7 +7,8 @@ description: Use when writing, changing or judging a test, or when the project's
 
 A test is worth keeping when some change to the code it covers would make it fail. Which tests
 to write, and when to run them, is yours, except the tests a hand-off package fixes, which stay
-as written; this is the bar a test you keep meets, and what your
+as written (one that contradicts the requirement goes back to the package's author, with the
+conflict); this is the bar a test you keep meets, and what your
 report keeps apart. New logic that decides something (a branch, a parse, money, access) leaves one
 small test that would fail if it broke, unless an existing test already does; a change with no such
 logic needs none.
@@ -22,8 +23,10 @@ outcome is stability against that release, else the last revision where the beha
 compare under the same conditions. Report new
 failures apart from those that were already there. A pre-existing failure is left as found unless fixing
 it is the task: not skipped, not marked expected, not loosened until it passes. A test that fails
-on one run and passes on the next is flaky: report it as flaky with both results; a rerun that
-passes is not its verdict.
+on one run and passes on the next, with the same inputs and conditions, is flaky: report it as
+flaky with both results; a rerun that passes is not its verdict. Compare failures by their cause and
+the behaviour they reached, not only by their names: a setup failure leaves the behaviour it
+prevented `UNVERIFIED`, and before another long run, fix the prerequisite the last output names.
 
 ## What a kept test shows
 

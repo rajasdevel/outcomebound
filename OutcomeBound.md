@@ -31,7 +31,8 @@ lifespan, without speculative layers or flexibility.
 the lifespan. Ask whether the need is real; then whether the codebase, the standard library, the
 platform or an installed dependency meets it; write new code last. Of two answers that meet the
 bar, the smaller is the default. Add rigor where consequence or uncertainty is material. Drop
-machinery that changes no decision and reduces no risk — in process and in code alike. Size the
+machinery that changes no decision, or adds more work and upkeep than the risk it reduces — in
+process and in code alike. Size the
 whole plan,
 not only each step: its specs, tickets, reviews and records are engineering too, and a plan
 whose process outweighs the change it governs is overengineered.
@@ -92,7 +93,7 @@ a default.
 | `failing-test-first` | Failing test first | A failing executable example clarifies behavior or protects a regression. | Characterization, exploration, generated/config work, or another check gives better signal. |
 | `review` | Independent review | A miss would reach users and no check you can run would catch it. | It would only repeat the implementation or existing checks. |
 | `policy-gate` | Trusted policy gate | Credentials, production, PII, or irreversible action must fail closed through project-authoritative policy, never a gate the agent authors. | Diff size or generic source changes are the only trigger. |
-| `broad-suite` | Broad suite: the project's Done commands | The changed risk reaches beyond focused checks, the project requires it, or the work lands. | Focused checks cover the changed surface and nothing above requires it; run once for a set of changes. |
+| `broad-suite` | Broad suite: the project's Done commands | The changed risk reaches beyond focused checks, or the project requires it (its landing gate included). | Focused checks cover the changed surface and nothing above requires it; run once for a set of changes. |
 | `runtime-check` | Runtime or view check | Success depends on integration, delivery, rendering, or operator-visible state. | The changed risk is settled at a lower layer. |
 
 No fixed document shape, mandatory evidence artifact, sign-off matrix, or recursive review

@@ -69,8 +69,9 @@ says it sits between them, the design tier. The handover says that the question 
 ## Outcome tier
 
 The ticket as compiled by `outcomebound tickets brief <id> --input <export>`, plus only the lines
-its row's notes give and the commands under "Hand over". No design, plan or tests: the implementer
-designs, plans its milestones and writes its tests, and detail written for a less capable reader
+its row's notes give and the commands under "Hand over". No new design, plan or tests beyond the
+decisions already settled and the checks that exist: the implementer designs, plans its milestones
+and writes its tests, and detail written for a less capable reader
 narrows what it would have done.
 
 ## Design tier

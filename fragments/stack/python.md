@@ -15,8 +15,9 @@ can be cleaned within their ownership. Where the project publishes, publishing t
 irreversible edge, which the `ci-release` fragment, or this project's local fragment, declares.
 **Mechanisms** — `failing-test-first` when a focused regression adds useful signal;
 `broad-suite` when the changed module is imported across packages.
-**Completion bar** — the affected project-native tests and existing static checks, with the formatter and the linter's own fix (`ruff format`,
-`ruff check --fix`, or the project's) run before you read what the linter still reports; where a check
+**Completion bar** — the affected project-native tests and existing static checks, with the formatter and the linter's own safe fix (`ruff format`,
+`ruff check --fix`, or the project's) run on the paths you changed before you read what the linter
+still reports, and their diff read; where a check
 runs only in a container or a managed environment, its floor claim runs there through the claim's
 `prefix` and keeps its baseline; a process that a harness or a CI job starts may hold no
 activated virtual environment, so a Done command names the project's interpreter

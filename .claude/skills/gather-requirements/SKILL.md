@@ -20,7 +20,7 @@ does to data, people and commitments, record it in one line
 as assumed, and name it in your report as a choice the person may reverse. The fork is the
 person's only where every reading would be hard to undo, in the code or in what operating it does
 to data, people or commitments, such as data deleted, a message sent or an interface others
-already call: put it to them as a decision brief (the `decision-brief`
+already call, or where building the wrong reading would waste most of the work: put it to them as a decision brief (the `decision-brief`
 skill) and continue the work that does not depend on it.
 
 "Make the export faster" is settled by reading: the history shows the nightly export timing out,
@@ -62,8 +62,8 @@ need their own handling of identity and provenance: see [the source kinds](refer
 
 Where a source holds many items or will be cited again, `outcomebound sources import` gives each
 item an id and a revision, and `outcomebound sources check` reads your ledger against it; without
-an import, keep the ledger by hand. In it, beside the requirements, give each item one
-disposition: carried into requirements, dropped as assumed or as decided, not
+an import, keep the ledger by hand. In it, beside the requirements, give each item that bears on the request
+one disposition (every item where coverage of the source is itself the task): carried into requirements, dropped as assumed or as decided, not
 requirement-bearing, deferred, or, for a picture, a reference (below). A source that changed
 since the ledger sends its items back for reconsideration.
 

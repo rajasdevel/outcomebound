@@ -22,7 +22,7 @@ command, writes nothing and exits 0 at once; whether a native session accepts it
 
 The agent runs the Done commands, as the person does: the project facts name them as the full
 suite, which the kernel's completion bar runs where the changed risk reaches it, the project
-requires it, or at a landing, and the agent's report gives each check it ran.
+requires it, and the agent's report gives each check it ran.
 
 Why the hook went:
 

@@ -27,15 +27,17 @@ are written for a POSIX shell; in PowerShell or cmd, use the shell's own form of
 outside the tree) is `UNVERIFIED`, never a fact about the target. A job that is still running when
 the task ends (a scheduled run, a service you do not stop) needs the person's grant, which names what it runs and how it stops. Quiet comes from a tool's own flags, never from hiding an error or disabling a check.
 Slow is not hung: do not shorten, skip or kill a check because it takes long; let it run to its end.
-Wait for its exit once, by a blocking wait or the harness's notice, not by a loop of short status
-reads; where it prints nothing long past its usual time, look at what it is doing or what holds it
-before you wait again.
+Wait for it by the harness's notice or the longest wait it supports, not by a loop of short status
+reads; look at a live run when what you would see can change your next action. A check this task
+started may be stopped when it can no longer answer the question (its setup is wrong, its input
+changed) or it endangers the machine; report it `UNVERIFIED`, with the reason.
 The person's own instruction to stop or skip a check outranks that line: stop it, and report the
 check `UNVERIFIED`. A command that was stopped can leave a lock or a half-done change: look before
 the next run.
 Where a bound forbids an act that a run can perform (a grant, a write to shared data, a call to a
-live service), a test suite is such a run: list what it will execute first (the runner's
-collect-only or dry-run form), exclude by the ids it prints, or take a route that cannot perform the act.
+live service), a test suite is such a run: read the setup it runs first, then list what it
+will execute (the runner's collect-only or dry-run form, where reading the setup shows that form
+performs no act), exclude by the ids it prints, or take a route that cannot perform the act.
 **Mechanisms** — `runtime-check` when a claim is about what a command does: run it and read its
 result, not its help text.
 **Completion bar** — a command that was stopped or timed out is reported `UNVERIFIED`, never as

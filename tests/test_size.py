@@ -151,8 +151,9 @@ def test_the_text_report_has_a_line_for_each_kind_present_a_total_and_the_share(
     out = capsys.readouterr().out.splitlines()
 
     assert out[0].startswith("size against HEAD (--base), commit ")
-    assert [line.split()[0] for line in out[2:-1]] == ["code", "tests", "total"]
-    assert out[2].split() == ["code", "1", "6", "0", "+6"]
+    assert out[1].startswith("kinds are path categories")
+    assert [line.split()[0] for line in out[3:-1]] == ["code", "tests", "total"]
+    assert out[3].split() == ["code", "1", "6", "0", "+6"]
     assert out[-2].split() == ["total", "2", "8", "0", "+8"]
     assert out[-1] == "non-code share of added lines: 25.0%"
 

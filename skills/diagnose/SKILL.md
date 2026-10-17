@@ -17,15 +17,16 @@ Before changing anything, run the smallest command that shows the case as it was
 failing test, or a few lines that call the code with the reported input. A neighbouring case that
 is easier to write is not the report, and a test that already passes does not reproduce it. Where
 you cannot reproduce it, say so and say what you tried; a fix made without a reproduction is
-`UNVERIFIED`. Where the failure is flaky, run the reproduction until the failure has shown itself,
-and report how many runs and how many failures; after the fix, at least as many runs with none are
-the evidence that it holds.
+`UNVERIFIED`. Where the failure is flaky, choose a number of runs suited to how often it fails,
+and report how many runs and how many failures; a failure that does not show in them stays
+uncertain, and after the fix the same number of runs with none is the evidence that it holds.
 
 ## Find the cause
 
-Read the whole error: the first failure and the line it names, not only its last line. Hold one
-hypothesis at a time, each from something you observed, and run the observation that would refute
-it before you edit. Narrow by whichever way is quickest: the input (the smallest one that still
+Read the whole error: the first failure and the line it names, not only its last line. Hold each
+hypothesis from something you observed, and run the observation that would refute it before you
+edit; make independent observations together, and change one thing at a time where changes would
+hide each other's effect. Narrow by whichever way is quickest: the input (the smallest one that still
 fails), the history (what changed since it last passed) or a split of the code or the commits
 between a working and a failing state. Stop when one cause explains every symptom. A cause that explains only some of them is
 the wrong one, or one of two.

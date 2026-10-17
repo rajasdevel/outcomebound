@@ -19,7 +19,9 @@ other, so that neither holds a stale copy of the other.
 Read through the harness's connector, a command-line tool the person has signed in to, or an export
 the person gives you. Do not ask for a password or a token, and do not look for one.
 
-Save the card as a markdown snapshot, under one file name that stays the same for this card, with:
+A card read once to answer a question is read and answered. Where it will be read again or its
+requirements tracked, save it as a markdown snapshot, under one file name that stays the same for
+this card, with:
 
 - the card's key and its fields, each under its own heading;
 - the time the tracker says the card was last updated;

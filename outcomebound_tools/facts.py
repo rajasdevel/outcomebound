@@ -113,8 +113,8 @@ def both(items: Sequence[str]) -> str:
 
 def done_line(done: Sequence[str]) -> str:
     """The Done fact: every command, each in its own code span, named as the full suite the
-    kernel's completion bar runs only where the changed risk reaches it, the project requires it,
-    or at a landing."""
+    kernel's completion bar runs only where the changed risk reaches it or the project requires
+    it."""
 
     return f"- Done: {both([code(command) for command in done])} (the full suite)"
 

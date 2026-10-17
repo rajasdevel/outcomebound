@@ -153,8 +153,10 @@ parent: #41
   gathers its children.
 - A `done-when` claim whose command reads more than the ticket's own paths, such as a type, lint,
   format or shell gate over the whole tree, or a runner script a suite needs, gets `bounds` that
-  cover what it reads where the outcome's authority already reaches those paths; otherwise a
-  repair ticket that makes that command green outside them comes first, named in `blocked-by`. A
+  cover what it reads where the outcome's authority already reaches those paths. What a check reads
+  grants no write: a failure this change causes is the ticket's to fix, and a failure already there
+  is recorded apart; a repair ticket for it comes first, named in `blocked-by`, only where the
+  project makes that check a gate this ticket must pass. A
   claim that names those paths in the plan's `required_paths` lets `check` warn,
   `CLAIM_READS_OUTSIDE_BOUNDS`, where `bounds` do not cover them.
 - `human-only: yes` marks a ticket a person will do; `requested` is an agent's, never a draft's.

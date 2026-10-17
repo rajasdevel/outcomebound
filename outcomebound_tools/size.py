@@ -290,6 +290,7 @@ def render_text(report: dict[str, Any]) -> str:
     base = report["base"]
     lines = [
         f"size against {textio.plain(base['ref'])} ({base['how']}), commit {base['commit'][:12]}",
+        "kinds are path categories, not what a line does; files Git ignores are not counted",
         f"{'kind':<8}{'files':>7}{'+added':>10}{'-removed':>10}{'net':>10}",
     ]
 

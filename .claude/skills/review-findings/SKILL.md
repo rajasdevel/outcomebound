@@ -35,9 +35,7 @@ it.
 
 A reviewer you dispatch reads again only where a fix changes a claim its finding rests on or a
 result a user can observe, and then reads that change alone. A finding that changes neither takes
-its disposition in this round and starts no other. Where rounds go on finding only test, fixture or
-wording issues, tell the person how many rounds ran and what the last ones changed in shipped
-behaviour; they decide whether review goes on.
+its disposition in this round and starts no other.
 
 ## Writing a review
 
@@ -46,7 +44,10 @@ evidence: the command and what it printed, or the lines read, so that a reader c
 you. Try a finding's counterexample before you report it; call a finding you did not check
 `UNVERIFIED`. Findings that share one cause go under that cause. Where the change rewrites text that
 carries a requirement, a bound or a verdict, compare the old and new text against what it carries.
-Give the change one verdict, first: `FAIL` while a finding that should change the code stands;
+Separate a finding that stops the accepted outcome or makes its evidence wrong (a test that cannot
+fail, a wrong expected value) from an improvement the outcome does not need; mark the second
+`optional`; whoever acts on it may reject it with that reason. Give the change one verdict, first: `FAIL`
+while a finding of the first kind stands;
 `UNVERIFIED` where you did not measure the property the change exists to protect, such as a time,
 a limit or a rollback path; else `PASS`. It is your judgment of the change, not of your own scope,
 and not `outcomebound review check`'s verdict on dispositions. End with what you did not read or

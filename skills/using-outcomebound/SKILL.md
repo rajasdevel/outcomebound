@@ -30,8 +30,8 @@ monitor, a limit) is taken as evidence that the change made things worse, compar
 the unchanged base under the same conditions: failing on both does not by itself show whether the
 change got worse, so report the comparison; a bar the project requires still applies. On work that spans many changes,
 `outcomebound size --base <ref>` shows how far the change has grown against the base that matters
-(for stability work, the release in production) and how much of it is tests, docs or records; read
-it at each landing, and size again where what grew is not what the outcome needs. Make independent reads and
+(for stability work, the release in production) and how its lines fall by path kind; read it where
+the change's growth is in doubt, and size again where what grew is not what the outcome needs. Make independent reads and
 checks in one step where the tools allow it. Report an omission only where it changes a decision
 or leaves a risk.
 
@@ -48,7 +48,7 @@ action that needs it: a failing test before the code, a spec before the interfac
 | `failing-test-first` | a failing example that clarifies behavior or prevents regression | a failing test first |
 | `review` | a miss would reach users and no check you can run would catch it | one bounded review |
 | `policy-gate` | a credential, production, PII, or irreversible edge | the project's own policy gate, never one you author |
-| `broad-suite` | the changed risk reaches beyond focused checks, the project requires it, or the work lands | the project's Done commands, once for that set of changes |
+| `broad-suite` | the changed risk reaches beyond focused checks, or the project requires it (its landing gate included) | the project's Done commands, once for that set of changes |
 | `runtime-check` | integration, delivery, rendering, or operator-visible truth | a runtime or view check |
 
 ## Required or suggested

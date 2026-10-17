@@ -10,7 +10,8 @@ version: 11
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
 `handoffs/<date>-<task>.md`, one per task, kept current as the work goes so that a run cut off
 anywhere can resume from it; `shared-memory/`, facts about this repository. A temporary or session
-directory can be cleared without warning, so the work never goes there. A scan that walks ignored
+directory can be cleared without warning, so what another run must resume or someone must inspect
+never goes there; disposable scratch may. A scan that walks ignored
 folders, such as `gitleaks dir .` or a content gate that does not read `.gitignore`, reads each
 worktree as a second copy of the repository: run such a scan from the worktree's root; the person,
 not you, makes a project gate skip these four folders at its root; and a finding that only those
@@ -36,8 +37,8 @@ that may resume it needs it, and remove it only when the task is finished, its c
 from a kept branch, and nothing uncommitted or ignored in it is still needed. A worktree's commits
 land as the project's instructions or the goal envelope say work lands, the rule the tickets
 fragment also states; where none says, they stay on the worktree's branch, which the handoff names
-with how they should land as a decision brief. Before you land work from a worktree, run the Done
-commands in that worktree and report their verdict. Work in another repository in a session started
+with how they should land as a decision brief. Before you land work from a worktree, run there the
+checks its completion bar and the project's landing gate name, and report their verdict. Work in another repository in a session started
 there, so that its own instructions and sandbox apply; where the person asks this session to change
 it, ask once for it as a writable root, and until then hold only the items that write there; apply
 its completion bar yourself, and report the checks you ran.

@@ -8,7 +8,7 @@ description: Use when a decision is the user's to make. That is an act the agent
 Put each decision that is the user's so they can make it quickly and make it well. You are done
 when the user can make each one in one reading: it is a drawn brief where they will read it (the
 handoff, the goal's Progress section, a comment on the ticket it holds, or your final message,
-when every remaining item waits on an answer), and each reversible choice you made yourself is
+when every remaining item waits on an answer), and each reversible choice you made yourself that later work depends on is
 noted in one line where the work is recorded. A link from that text to a file that holds the brief never stands in for
 it: the brief itself is in the text.
 
@@ -42,7 +42,7 @@ block.
 
 ## Do the due diligence first
 
-Before you ask, check everything within reach that could change the answer: the history of the
+Before you ask, check the facts within reach that are likely to change the answer: the history of the
 same decision and what was tried before, the files and settings the answer touches, the project's
 own rules, the read-only commands that settle a fact. Work out what each way forward leads to and
 what its downside is, so the evidence chooses your recommendation.
@@ -50,7 +50,7 @@ what its downside is, so the evidence chooses your recommendation.
 ## Write each brief
 
 - an id and the question in one line;
-- every way forward, when there are two or more, lettered A, B and on, each with what it leads to
+- each credible way forward, when there are two or more, lettered A, B and on, each with what it leads to
   and its downside;
 - your recommendation first, with why;
 - at least one line of evidence: what you checked, what you could not check (why, and what
