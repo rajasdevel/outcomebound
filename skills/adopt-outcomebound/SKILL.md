@@ -33,7 +33,9 @@ agent reads the code, and a summary of it adds text without adding a fact.
    the thirteen every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
    import a harness needs to load it, and `.outcomebound/manifest.json` last. It refuses a harness
    that would not load the contract. It also refuses to overwrite an owned file someone edited,
-   unless `--force` is given. Running it again from a newer release or checkout is the upgrade.
+   unless `--force` is given. Running it again from a newer release or checkout is the upgrade. An upgrade
+   from 1.6.0 also takes out the stop and prompt entries that the finish check wrote into
+   `.claude/settings.json` and `.codex/hooks.json`; since 1.7.0 `adopt` writes no hook.
 3. Report `outcomebound instructions check <target>`, which reads what each selected harness loads
    there as untrusted data, and what you read in those files' prose (the ones
    `adapters/harnesses.json` lists for the selected harnesses): what contradicts the contract, what
@@ -146,16 +148,13 @@ you take without an answer, and the work that does not wait on it goes on.
   reach the network.
 - A CI line that fails when the install drifts: `outcomebound adopt . --check` (`templates/ci/` has
   snippets). Never change CI, hooks, credentials or harness settings without the yes.
-- No finish check: since 1.7.0 `adopt` writes no hook and runs no Done command. Re-running it takes
-  out the stop and prompt entries that 1.6.0 wrote into `.claude/settings.json` and
-  `.codex/hooks.json`, and their records, and keeps every other entry and key of those files. You
-  run the Done commands, and the person does.
 
 ## Check and remove
 
 `outcomebound adopt <target> --check` reads each owned file as current, edited, stale or missing,
-exits with the count that is not current. A `hook` record that 1.6.0 wrote reads `stale` and names
-its entry; the next install takes the entry out. `outcomebound adopt <target> --remove` takes out the owned blocks, files and imports, the
+exits with the count that is not current. A `hook` record that 1.6.0 wrote reads `stale` where its
+entry is unchanged, `edited` where a person changed it, or `missing` where it is gone, and names the
+entry; the next install takes an unchanged entry out. `outcomebound adopt <target> --remove` takes out the owned blocks, files and imports, the
 manifest last.
 
 ## Report

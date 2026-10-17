@@ -178,8 +178,8 @@ gitleaks 8.30.1 with `--redact` reads `.gitleaksignore` from the project root, a
 without a commit, `path:rule:line`, allowlists its line in the directory scan and in every commit
 scan; shellcheck 0.9.0, 0.10.0 and 0.11.0 print the same `json1` report over one script.
 
-`outcomebound validation` judges a claim by its exit status alone: where the claim's log cannot be
-written the verdict stands and no excerpt is shown, so a `PASS` does not show that its log was
+In `outcomebound validation`, a claim's log that cannot be written does not change its verdict, and
+no excerpt is shown, so a `PASS` does not show that its log was
 kept. `tests/test_validation.py` covers the waiver line and the `executes_tests` contract, each
 with a control that has none (a run that executed no test reads `PASS` without the declaration),
 and `produces`: output present, absent, unchanged and changed, a nonzero exit with and without

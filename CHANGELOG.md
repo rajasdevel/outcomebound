@@ -17,18 +17,20 @@ every turn end, and the tests belong to the agent and to the person.
 
 Do these steps first:
 
-1. Install the new release, then run `outcomebound adopt .` in each project that has the hook.
-   Until then the old entries still call `outcomebound finish-check`, which now does nothing,
-   so no turn waits or fails.
-2. Read what `adopt --check` shows before you run it: each `hook` record reads `stale`, with the
-   event and the command of the entry that `adopt` takes out. The install takes out the stop entry
+1. Install the new release. Until a project runs `adopt`, its old entries call
+   `outcomebound finish-check`, which now runs no Done command and exits 0 at once.
+2. In each project that has the hook, run `outcomebound adopt . --check`, then
+   `outcomebound adopt .`. The check shows each `hook` record as `stale` where its entry is
+   unchanged, `edited` where a person changed it, or `missing` where it is gone, with the event
+   and the command of the entry. The install takes out the stop entry
    and the prompt entry from `.claude/settings.json` and `.codex/hooks.json`, and their records.
    It keeps every other key and entry of those files, and it deletes a file that an earlier
    `adopt` created and that now holds nothing. Review the diff and commit it.
 3. If you edited one of those entries, `adopt` stops and names it. Restore the entry or pass
    `--force`. If the file has comments, `adopt` cannot rewrite it: remove the entry by hand, then
    run `adopt` again.
-4. A CI job that runs `adopt --check` reads the hook records as `stale` until step 1 is committed.
+4. A CI job that runs `adopt --check` reports the hook records as not current until the install of
+   step 2 is committed.
 5. A project that used `--done-skip` has its `Done` fact without the "is not run when" clause
    after the install. The Done commands are the same.
 

@@ -16,8 +16,9 @@ reason, the way an install upgrades from the hook, and the verb that the old ent
 1.6.0 install made upgrades with `outcomebound adopt <target>`. That run takes out the entries and
 the records that 1.6.0 wrote, and it keeps every other entry and key of the settings document.
 Between `pip install -U outcomebound` and that run, the harness still calls
-`outcomebound finish-check ...` from the old entry. The call does nothing, so no turn waits, fails
-or holds, and no one sees an error.
+`outcomebound finish-check ...` from the old entry. That call starts the stub, which runs no Done
+command, writes nothing and exits 0 at once; whether a native session accepts its output is
+`UNVERIFIED` (see Edges).
 
 The agent runs the Done commands, as the person does. The kernel names them in the project facts,
 and the agent's report says which of them ran.
@@ -74,8 +75,8 @@ text output is not valid for that event (research, `harnesses/codex.md`, section
 value 1.6.0 printed for a stop that held nothing. A closed standard output does not change the
 exit code. The verb is not in the verb list of `outcomebound --help`; the verb table still routes it.
 
-The stub stays until a later major release. Before then, a project that has not run `adopt` since
-1.6.0 still works.
+The stub stays until a later major release, so a project that has not run `adopt` since 1.6.0
+calls it, not a missing verb.
 
 ## Edges
 

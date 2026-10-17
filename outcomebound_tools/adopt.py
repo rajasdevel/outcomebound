@@ -2243,7 +2243,8 @@ entries into .claude/settings.json and .codex/hooks.json; an install takes out e
 `hook` record of the manifest names, and the record, and keeps every other key and entry of the
 settings document with its order and indentation, and deletes the document only where an install
 created it and it is now empty. An entry a person edited is kept and refused without --force, like
-any other edited file. --check reports each such record as stale and names its entry. The flags
+any other edited file. --check reports each such record as stale, edited or missing, as for any
+other record, and names its entry. The flags
 that 1.6.0 and earlier took for the finish check are retired: each is still accepted, changes
 nothing and prints one note.
 """
