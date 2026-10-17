@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "outcomebound finish-check --constant-time --harness claude-code --done f015fea3cd37f6da78a779c833790ace6cc4bb1c4a622db188d89d9a9bd39c87 --timeout 900",
+            "asyncRewake": true,
+            "timeout": 960
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "outcomebound finish-check --mark --harness claude-code --done f015fea3cd37f6da78a779c833790ace6cc4bb1c4a622db188d89d9a9bd39c87",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -24,7 +24,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "c952cb3da3d572099295ed0481dc5705e6b132e60624b063b555a1d286a5d435",
+        ".github/workflows/ci.yml": "7e51671538a194db471379b2bca3b53b898680782e09d4e20b7bf588d780c577",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
@@ -243,6 +243,23 @@
         "claude-code"
       ],
       "sha256": "946c17df20fd54a17915d33bd62e50877f7a57b2c2ae0e888137a199678c8bfb"
+    },
+    {
+      "kind": "hook",
+      "path": ".claude/settings.json",
+      "id": "finish-check",
+      "harness": "claude-code",
+      "timeout": 900,
+      "created": true,
+      "sha256": "d1d018ecbfa7d7b7ae3229c8249b6bf5bda11084371cda55734c0388f69b6ada"
+    },
+    {
+      "kind": "hook",
+      "path": ".claude/settings.json",
+      "id": "finish-check-mark",
+      "harness": "claude-code",
+      "created": true,
+      "sha256": "1cb0a698b91b64887ae3c10dfd29950899ddfe197e04c2fca82bd5e8d21c2865"
     }
   ]
 }
