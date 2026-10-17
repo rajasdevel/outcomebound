@@ -39,8 +39,8 @@ fragment also states; where none says, they stay on the worktree's branch, which
 with how they should land as a decision brief. Before you land work from a worktree, run the Done
 commands in that worktree and report their verdict. Work in another repository in a session started
 there, so that its own instructions and sandbox apply; where the person asks this session to change
-it, ask once for it as a writable root, and until then hold only the items that write there; run
-its Done commands yourself, and say so in your report.
+it, ask once for it as a writable root, and until then hold only the items that write there; apply
+its completion bar yourself, and report the checks you ran.
 The machine is shared: before a heavy command (a full suite, a build, an image pull) check the
 free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
 hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches);

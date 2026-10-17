@@ -9,7 +9,7 @@ Each change the client accepts takes these stages. Each stage names who acts; a 
 5. Build: tests that can fail, runtime evidence, and Done.
 6. Review and land: the review this project's route names; a deploy to a non-production environment under its grant.
 7. Acceptance: the named acceptor runs the acceptance examples on the build the environment serves, and accepts or rejects that build by its name. Gate: the acceptance, by the owner that the "Gates — acceptance" line of `.outcomebound/fragments/local.md` names.
-8. Release: the accepted build is promoted unchanged, never rebuilt from a branch. Gate: the production go.
+8. Release: promote under the release style the client fragment describes. Gate: the production go.
 9. Verify and close: the result read from the environment, Successful, Failed or Inconclusive; the acceptance record names the build, the acceptor, their words and the date.
 
 A defect found in acceptance goes back to build, and through acceptance again.

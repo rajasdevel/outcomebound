@@ -104,8 +104,8 @@ envelope: the bounds that you grant in advance.
 Start a session in each repository that you change. The instructions and the sandbox of a
 repository apply only to a session that starts in it. If you ask one session to change a different
 repository, the agent asks you one time to add that repository as a writable root. Until you do,
-it holds the items that write there. It runs
-the Done commands of that repository itself, and it says so in its report.
+it holds the items that write there. It applies
+the completion bar of that repository itself, and reports the checks it ran.
 
 ## What Git sees
 

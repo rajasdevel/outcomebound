@@ -78,8 +78,8 @@ machine, and the project's own decision numbers, never share an id. Cite a brief
 wherever it goes outside its document: a commit subject, a ticket, a handoff.
 
 Explain every internal id or term in plain words where you use it, or leave it out. A step the
-user types or checks by eye names a version, branch, tag or path, never a commit hash or other
-digest. Claim no check that did not run: a verdict you give is your report of a command you ran.
+user types or checks by eye names a version, branch, tag or path, and a commit hash or digest only where
+the check or the project's rule requires it. Claim no check that did not run: a verdict you give is your report of a command you ran.
 
 ## Draw it
 

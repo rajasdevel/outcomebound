@@ -23,8 +23,8 @@ names included, and not before:
 3. The smallest change that meets the completion bar.
 
 Check the approach you take with the smallest test, command or observation that settles its
-changed risk, not every check the project has. Run a check once for a set of changes, with its
-whole output kept in a file, and read each failure from that file rather than running the check
+changed risk, not every check the project has. Run a check once for a set of changes, keeping
+long output in a file, and read each failure from that output rather than running the check
 again to see more; a result stands until something it covers changes. Make independent reads and
 checks in one step where the tools allow it. Report an omission only where it changes a decision
 or leaves a risk.
