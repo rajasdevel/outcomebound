@@ -204,6 +204,20 @@ def test_text_with_html_characters_is_escaped(tmp_path):
     assert "a&lt;b" in page
 
 
+def test_a_strong_span_is_bold_outside_code_and_left_as_written_inside_it(tmp_path):
+    """The text form's `**words**` shows bold in a markdown view; the page shows it bold too, and
+    leaves stars inside a code span, or not touching words, as they are."""
+
+    document = copy.deepcopy(DOCUMENT)
+    document["briefs"][0]["context"] = ["**Arrives:** the `a**b**` file, and 2 * 3 ** 4 <b>"]
+
+    page = drawn(tmp_path, document)
+
+    assert (
+        "<strong>Arrives:</strong> the <code>a**b**</code> file, and 2 * 3 ** 4 &lt;b&gt;" in page
+    )
+
+
 def test_no_brief_draws_nothing():
     assert decision_brief_html.render_html([]) == ""
 

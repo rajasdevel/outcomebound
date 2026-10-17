@@ -56,8 +56,8 @@ Write it in the order the person decides, so they know what is at stake before t
 pick:
 
 - **The question**, after its id, in one line. It names the choice, not the answer you favour:
-  one decision, in the person's words, asked so that each option answers it (`How should…`,
-  `Which…`, `When…`). A yes-or-no question about your own pick leads the reader.
+  one decision, in the person's words, asked so that each option answers it (a question that begins How should,
+  Which or When). A yes-or-no question about your own pick leads the reader.
 - **What waits on it** (`why_now`): the work the answer holds and the state it waits in, the side
   of the held act that is easiest to stay in, never half done. Say whether a default applies and
   when: a moment the person or the project already named (a handoff, a release, a date in the
@@ -72,8 +72,8 @@ pick:
   point, with a caption that says what to look at; never as decoration.
 - **An offer to explore** (`explore`) when the decision is not simple: the options trade off
   things the person may value differently, turn on numbers they may want to try, or rest on a
-  mechanism easier to see moving. Say what an interactive page would let them try. A simple
-  decision carries none.
+  mechanism easier to see moving. Say what an interactive page would let them try; the command
+  adds the reply that asks for it. A simple decision carries none.
 - **Each credible way forward**, when there are two or more: what it leads to, when a reasonable
   person would choose it (`choose_if`: the condition, or what matters most to them), and its
   downside. Each is a way someone could sensibly pick; waiting is one where it is a real choice;

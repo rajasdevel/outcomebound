@@ -29,6 +29,8 @@ __all__ = ["config_briefs", "render_html"]
 
 _SYMBOLS = "emoji"
 _CODE_SPAN = re.compile(r"`([^`]+)`")
+# A strong span, `**words**`, as a markdown view reads it: the stars touch the words they bracket.
+_STRONG = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*")
 
 
 def _escape(text: str) -> str:
@@ -38,9 +40,16 @@ def _escape(text: str) -> str:
 
 
 def _inline(text: str) -> str:
-    """`text` escaped, a backtick span as a `code` element."""
+    """`text` escaped, a backtick span as a `code` element and, outside code spans, a
+    `**strong**` span as a `strong` element, as the text form shows them in a markdown view."""
 
-    return _CODE_SPAN.sub(r"<code>\1</code>", _escape(text))
+    parts = _CODE_SPAN.split(text)
+    return "".join(
+        f"<code>{_escape(part)}</code>"
+        if index % 2
+        else _STRONG.sub(r"<strong>\1</strong>", _escape(part))
+        for index, part in enumerate(parts)
+    )
 
 
 def _fence(markdown: str, language: str) -> str:

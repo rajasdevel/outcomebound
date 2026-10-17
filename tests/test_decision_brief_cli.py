@@ -1135,6 +1135,28 @@ def test_text_that_opens_no_markdown_block_is_drawn(
     assert f"\n\n{text}\n\n" in out
 
 
+@pytest.mark.parametrize(
+    ("symbols", "line"),
+    [
+        ("emoji", "🧪 Explore: try your own numbers · reply `explore D1` for an interactive page"),
+        (
+            "ascii",
+            "[explore] Explore: try your own numbers | reply `explore D1` for an interactive page",
+        ),
+    ],
+)
+def test_the_offer_to_explore_names_the_reply_that_asks_for_the_page(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], symbols: str, line: str
+) -> None:
+    """The person takes the offer by replying with the brief's id, so the drawn line says how."""
+
+    path = _write(tmp_path, _document({"explore": "try your own numbers"}))
+    code, out, _ = _main(capsys, str(path), "--symbols", symbols)
+
+    assert code == 0
+    assert f"\n\n{line}\n" in out
+
+
 def test_a_picture_may_hold_an_empty_line_and_a_narrow_ambiguous_character(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

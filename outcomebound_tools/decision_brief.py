@@ -165,7 +165,7 @@ class Brief:
     written as a paragraph `<label>: <text>` after `Not checked` and before `Debt`.
     `diagram`, where set, is drawn after the terms and `picture` after it. `why_now`
     is written first, as what waits on the answer, and `explore` right before the
-    Options.
+    Options; where `id` is set, the offer ends by naming the reply that asks for the page.
     """
 
     heading: str
@@ -185,6 +185,7 @@ class Brief:
     terms: tuple[tuple[str, str], ...] = ()
     picture: Picture | None = None
     explore: str = ""
+    id: str = ""
 
 
 def checked_mark(verdicts: Sequence[str]) -> str:
@@ -331,7 +332,8 @@ def _lead_blocks(brief: Brief, symbols: str, form: str) -> list[str]:
         blocks.append(f"{marks['picture']} {brief.picture.caption}")
         blocks.append(_fence(brief.picture.lines))
     if brief.explore:
-        blocks.append(f"{marks['explore']} Explore: {brief.explore}")
+        ask = f"{SEPARATORS[symbols][0]}reply `explore {brief.id}` for an interactive page"
+        blocks.append(f"{marks['explore']} Explore: {brief.explore}{ask if brief.id else ''}")
     return blocks
 
 
@@ -1024,6 +1026,7 @@ def _brief(entry: Mapping[str, Any], index: int, sep: str) -> Brief:
             else None
         ),
         explore=entry.get("explore", ""),
+        id=entry["id"],
     )
 
 
