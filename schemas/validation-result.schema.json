@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:validation-result:1",
+  "title": "OutcomeBound validation result v1",
+  "description": "What one run of one validation-plan claim observed, kept as .outcomebound-checks/<log name>.result.json beside the claim's log and rewritten by the claim's next run. It records an observation; it is no proof that the result still holds, and `outcomebound validation status` reads it to say which declared paths changed since.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "claim",
+    "argv",
+    "cwd",
+    "paths",
+    "exit_code",
+    "verdict",
+    "detail",
+    "log",
+    "started",
+    "ended",
+    "plan_digest",
+    "head",
+    "dirty"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "claim": {
+      "type": "string"
+    },
+    "argv": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cwd": {
+      "type": "string",
+      "description": "The working directory the claim ran in, as an absolute path."
+    },
+    "paths": {
+      "type": "array",
+      "description": "The claim's declared `paths` when it ran, relative to cwd.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exit_code": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "The command's exit status; null where it did not run to an exit (not found, a refused path, a timeout)."
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ]
+    },
+    "detail": {
+      "type": "string"
+    },
+    "log": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The log's file name in the same folder; null where none was written."
+    },
+    "started": {
+      "type": "string",
+      "description": "UTC time the claim began, ISO 8601 with a trailing Z."
+    },
+    "ended": {
+      "type": "string",
+      "description": "UTC time the claim ended, ISO 8601 with a trailing Z."
+    },
+    "plan_digest": {
+      "type": "string",
+      "description": "SHA-256 of the plan file's bytes."
+    },
+    "head": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The commit HEAD named at the claim's start; null outside a Git work tree with a commit."
+    },
+    "dirty": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "description": "The paths that differed from HEAD at the claim's start (tracked changes and untracked files Git does not ignore, relative to the repository root, without the check folder), each with a digest of its content; null where head is null.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "digest"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "description": "SHA-256 of the file's bytes; `deleted` for a path that is gone, `unreadable` for one that is not a readable file."
+          }
+        }
+      }
+    }
+  }
+}

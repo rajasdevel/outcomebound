@@ -178,9 +178,56 @@ gitleaks 8.30.1 with `--redact` reads `.gitleaksignore` from the project root, a
 without a commit, `path:rule:line`, allowlists its line in the directory scan and in every commit
 scan; shellcheck 0.9.0, 0.10.0 and 0.11.0 print the same `json1` report over one script.
 
+### Retained results and `validation status`
+
+`outcomebound validation <plan>` keeps one result record for each claim it runs, beside the claim's
+log in `.outcomebound-checks/`: `<log name>.result.json`, rewritten by the next run of that claim
+(one file for each claim, so two runs of different claims never write the same file). The wire format
+is `schemas/validation-result.schema.json`. A record holds the claim name; its argv and working
+directory; its declared `paths`; the exit code (null where the command did not run to an exit: a
+missing executable, a refused path, a timeout); the verdict and detail; the log name; the start and
+end time (UTC); the plan file's digest; and, read at the claim's start, the HEAD commit and the dirty
+paths, each with a digest of its content (a deleted file has the digest `deleted`). The dirty paths
+are the tracked paths that differ from HEAD and the untracked paths that Git does not ignore, repository
+relative, without the check folder. Where the plan's directory is not in a Git work tree with a commit,
+`head` and `dirty` are null. A record that cannot be written does not change the verdict; the run
+prints that it was not kept.
+
+`--claim NAME` (repeatable) runs only the named claims, in plan order. A name that is not a claim is
+an invalid plan (exit 2). The `VERDICT` line reads the selected claims only and says so; where none of
+them is required, it reads UNVERIFIED, since nothing required was run. A claim not run keeps its
+earlier record. `--waive` names a selected claim.
+
+A claim may declare `paths`: the files and folders, relative to the plan's working directory, whose
+change can change its result (`.` is the whole working directory). It is a declaration by the plan's
+author; the runner does not read the command to check it.
+
+`outcomebound validation status <plan>` reads the plan and the records and runs nothing. For each
+claim, in plan order, it prints the last result (verdict, exit code, end time, commit) and one of:
+
+- `CURRENT`: the claim declares `paths`, its argv, working directory and `paths` equal the record's,
+  and no declared path has changed since the record. A path has changed when it differs between the
+  recorded commit and the HEAD now, or when it is dirty now with another content digest than the
+  record's, or was dirty then and is not now with the same digest.
+- `CHANGED`: a declared path has changed; they are listed.
+- `UNVERIFIED`: there is no record; or the claim declares no `paths` (the line says so and gives the
+  count of files changed since the record); or the claim's argv, working directory or `paths` differ
+  from the record's; or the recorded commit is not in the repository; or there is no Git state to
+  compare.
+
+`status` exits 0 once the plan loads and 2 for an invalid plan; it prints no `VERDICT` line and never
+waives or turns a result into `PASS`: the person or agent that reads it judges. `CURRENT` does not
+establish that the result was right, that the declared `paths` hold everything the command reads
+(its environment, tools, files outside them and the network are outside), that the tree did not
+change while the command ran (the state is read at its start), or that a file Git ignores is
+unchanged. `CHANGED` does not establish that the result is wrong. A record is written by the
+machine that ran the check and can be edited; it is evidence for the agent, not for a reviewer.
+
 In `outcomebound validation`, a claim's log that cannot be written does not change its verdict, and
 no excerpt is shown, so a `PASS` does not show that its log was
-kept. `tests/test_validation.py` covers the waiver line and the `executes_tests` contract, each
+kept. `tests/test_validation.py` also covers the records, `--claim` and `status`, each against a
+scratch Git repository: a changed declared path, an unrelated change, a path dirty at the start and
+edited again, a claim with no `paths`, a changed argv, and a commit that is gone. `tests/test_validation.py` covers the waiver line and the `executes_tests` contract, each
 with a control that has none (a run that executed no test reads `PASS` without the declaration),
 and `produces`: output present, absent, unchanged and changed, a nonzero exit with and without
 output, the stricter verdict beside `executes_tests`, a directory, and each path refusal;
