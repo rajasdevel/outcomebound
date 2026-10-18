@@ -79,6 +79,7 @@ def test_each_worktree_gets_its_state_and_the_removable_rule(project: Path) -> N
     assert found["merged"]["changed"] == 0 and found["merged"]["untracked"] == 0
     assert {name for name, item in found.items() if item["removable"]} == {"merged", "pushed"}
     assert found["main"]["main"] is True
+    assert found["merged"]["last_commit"].endswith("Z") and found["merged"]["age_days"] == 0
     assert report["counts"] == {"merged": 3, "pushed": 1, "local": 1, "unknown": 0}
     assert report["default_branch"] == "refs/remotes/origin/main"
 

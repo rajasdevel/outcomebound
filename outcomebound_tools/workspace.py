@@ -153,10 +153,10 @@ def _audit_one(tree: Worktree, main: bool, default: str | None, now: datetime) -
     commit = _text(path, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
     if commit:
         entry["state"] = classify(path, commit, default)
-        stamp = _text(path, "log", "-1", "--format=%cI", commit)
-        if stamp:
-            when = datetime.fromisoformat(stamp)
-            entry["last_commit"] = stamp
+        stamp = _text(path, "log", "-1", "--format=%ct", commit)
+        if stamp and stamp.isdigit():
+            when = datetime.fromtimestamp(int(stamp), timezone.utc)
+            entry["last_commit"] = when.strftime("%Y-%m-%dT%H:%M:%SZ")
             entry["age_days"] = max(0, (now - when).days)
     found = changes(path)
     if found is not None:
