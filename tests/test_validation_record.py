@@ -77,7 +77,9 @@ def main(capsys, *argv: str) -> tuple[int, str, str]:
 
 
 def record(root: Path, name: str = "unit") -> dict:
-    return json.loads((root / ".outcomebound-checks" / f"{name}.result.json").read_text())
+    return json.loads(
+        (root / ".outcomebound-checks" / f"{name}.result.json").read_text(encoding="utf-8")
+    )
 
 
 def status_line(capsys, path: Path, name: str = "unit") -> str:
@@ -95,7 +97,10 @@ def test_a_run_keeps_one_record_with_what_it_observed(tmp_path, capsys):
     first = record(root)
     assert (
         schemacheck.validate(
-            first, json.loads((ROOT / "schemas/validation-result.schema.json").read_text())
+            first,
+            json.loads(
+                (ROOT / "schemas/validation-result.schema.json").read_text(encoding="utf-8")
+            ),
         )
         == []
     )
@@ -192,7 +197,9 @@ def test_a_changed_claim_or_no_record_or_no_commit_reads_unverified(tmp_path, ca
     plan(root, [claim()])
     made = record(root)
     made["head"] = "0" * 40
-    (root / ".outcomebound-checks" / "unit.result.json").write_text(json.dumps(made))
+    (root / ".outcomebound-checks" / "unit.result.json").write_text(
+        json.dumps(made), encoding="utf-8"
+    )
     line = status_line(capsys, path)
     assert line.startswith("UNVERIFIED unit") and "cannot compare with the recorded commit" in line
 
@@ -280,7 +287,9 @@ def test_a_record_cannot_make_status_pass_git_an_option(tmp_path, capsys):
     main(capsys, str(path))
     forged = record(root)
     forged["head"] = "--output=" + str(tmp_path / "written")
-    (root / ".outcomebound-checks" / "unit.result.json").write_text(json.dumps(forged))
+    (root / ".outcomebound-checks" / "unit.result.json").write_text(
+        json.dumps(forged), encoding="utf-8"
+    )
     assert "no result kept" in status_line(capsys, path)
     assert not (tmp_path / "written").exists()
 
