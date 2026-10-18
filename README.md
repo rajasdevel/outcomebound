@@ -157,6 +157,8 @@ harness trust and branch protection enforce authority; OutcomeBound's checks inf
   handovers, and not in replies in conversation.
 - **Workspace and commands:** the [workspace guide](docs/workspace.md) and the
   [command guide](docs/commands.md).
+- **Private skills and tools:** keep them in your own private repository and link them into your
+  user-level folders, never a project: the [private kit guide](docs/private-kit.md).
 - **Research:** the [research library](https://github.com/rajasdevel/outcomebound-research) holds
   dated model, harness and practice evidence; `outcomebound research <path>` returns a file with
   its commit and digest. Cite the file by its path, that commit and that digest in a record.

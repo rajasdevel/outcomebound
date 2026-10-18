@@ -57,12 +57,13 @@ brief a commit or a `ruled` line cites is one that a public issue or pull reques
 that number; a behaviour is described in general terms with a synthetic reproduction; a fact stands as fact only where a public source or a check
 you ran shows it, else `UNVERIFIED`. A change lands only through a pull request, as
 `CONTRIBUTING.md` "Agents and releases" says. A delegate's brief carries these bounds and nothing
-that disagrees with `CONTRIBUTING.md`. Delegates: a scan, a rename, an inventory or a mechanical
-edit goes to the smallest model at high effort; an implementation slice, web research that reads
-and extracts, a fact-check and a write-up from given sources go to the middle model at medium or
-high effort; the session's model plans, integrates and verifies; a second opinion at a design or
-a release candidate goes to a model that is not the session's, through this repository's agent
-definitions where the harness has them.
+that disagrees with `CONTRIBUTING.md`. Delegates: the middle model at medium effort is the default
+for research and for simple, well-defined implementation, and at high effort as the work grows more complex; the smallest
+model at high effort takes small, bounded, specific research and work that is not implementation
+(a temporary or ancillary script only, never product code); the session's model plans,
+integrates and verifies; a second opinion at a design or a release candidate goes to a model
+that is not the session's, through this repository's agent definitions where the harness has
+them.
 **Mechanisms** — `spec` when a wire format or block schema changes; `review` when a change alters
 what the kernel, the contract, a skill, a fragment or a template tells a model to do, and when a
 change adds an exemption to a gate or narrows what a gate counts (the floor, the instruction

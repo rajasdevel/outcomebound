@@ -29,7 +29,7 @@
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
         ".outcomebound/fragments/commands.md": "59fae29c81d8c0da0811a2ca9f016737811fe1323e89f08b5a02dc24ca157123",
-        ".outcomebound/fragments/local.md": "89059ed082b738290753e98bdcbc7e8be4d3f4a2e3ef0f14744a3ea55a05c0f3",
+        ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
         ".outcomebound/fragments/workspace.md": "7e9fffd6f583b3ec90f70bf55eef3aee953f6ed27ffa42566b23d3541e40d198"
@@ -44,7 +44,7 @@
       "path": "AGENTS.md",
       "id": "guidance-pointers",
       "frame": "9c33c4e77bde4a72089b97b7d5ca5b21677cc8ca021a1a2baeddce2b1024e32b",
-      "sha256": "ac83d3add9d0d458ba0a10645cb9998cc1cb5d05821d307d3ac0c07b8cb57c46"
+      "sha256": "e77efb12fc8ec6c6483cd3b12b0d9a2ce382ccbfef5518af8f478ab2dd6d60b5"
     },
     {
       "kind": "fragment",
