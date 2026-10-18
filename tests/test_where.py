@@ -151,7 +151,8 @@ def test_a_folder_outside_git_reads_unverified_and_the_report_still_prints(tmp_p
     assert "Does not establish:" in out
 
 
-def test_other_worktrees_are_listed_when_they_hold_uncommitted_work_else_counted(project, tmp_path):
+def test_other_worktrees_are_listed_when_they_hold_work_else_counted(project, tmp_path):
+    git(project, "push", "-q", "origin", "feature")  # the commits of `feature` are pushed
     clean = tmp_path / "clean"
     dirty = tmp_path / "dirty"
     git(project, "worktree", "add", "-q", "-b", "clean-branch", str(clean))
@@ -160,9 +161,19 @@ def test_other_worktrees_are_listed_when_they_hold_uncommitted_work_else_counted
     items = read(project)
     held = one(items, "worktree", subject="dirty-branch")
     assert "1 uncommitted path(s)" in held["text"] and held["verdict"] == "NOTE"
-    assert "clean-branch" not in held["text"]
+    assert "commits pushed" in held["text"] and "clean-branch" not in held["text"]
     summary = one(items, "worktree", text="1 other worktree(s) with nothing uncommitted")
     assert "clean-branch" in summary["text"]
+
+
+def test_a_worktree_with_commits_held_nowhere_else_is_listed_though_clean(project, tmp_path):
+    git(project, "push", "-q", "origin", "feature")
+    tree = tmp_path / "ahead"
+    git(project, "worktree", "add", "-q", "-b", "ahead-branch", str(tree))
+    put(tree, "src/new.py", "n = 1\n")
+    commit(tree, "only here")
+    line = one(read(project), "worktree", subject="ahead-branch")
+    assert "commits local" in line["text"] and "0 uncommitted path(s)" in line["text"]
 
 
 def test_a_worktree_with_no_or_an_older_install_is_counted_as_adopt_check_names_it(
@@ -302,7 +313,7 @@ def test_an_answered_wait_leaves_the_ticket_ready_and_says_it_is_still_named(pro
     items = read(project)
     ticket = one(items, "ticket", subject="#4")
     assert ticket["verdict"] == "OPEN" and "answered but still named" in ticket["text"]
-    assert one(items, "brief", subject="Q7")["verdict"] == "CLEAR"
+    assert one(items, "brief", subject="q7")["verdict"] == "CLEAR"
 
 
 def test_a_wait_on_an_id_two_briefs_carry_is_unverified(project):
@@ -311,7 +322,7 @@ def test_a_wait_on_an_id_two_briefs_carry_is_unverified(project):
     put(project, ".agents/work/a/briefs.md", "### Q7 · One\n")
     put(project, ".agents/work/b/briefs.md", "### Q7 · Two\n")
     line = one(read(project), "brief", subject="q7")
-    assert line["verdict"] == "UNVERIFIED" and "2 briefs carry this id" in line["text"]
+    assert line["verdict"] == "UNVERIFIED" and "two different briefs carry this id" in line["text"]
 
 
 def test_a_wait_on_an_id_no_brief_defines_is_unverified(project):

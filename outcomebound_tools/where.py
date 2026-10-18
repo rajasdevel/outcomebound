@@ -32,6 +32,7 @@ from outcomebound_tools import (
     adopt,
     adopt_worktrees,
     brief_lookup,
+    brief_open,
     home,
     paths,
     programs,
@@ -40,6 +41,7 @@ from outcomebound_tools import (
     textio,
     validation,
     validation_record,
+    workspace,
 )
 from outcomebound_tools.gitenv import git_environment
 from outcomebound_tools.tickets_declaration import Declaration, load_declaration
@@ -124,15 +126,6 @@ def _git(root: Path, *arguments: str) -> str | None:
     return output.decode("utf-8", "replace").strip() if status == 0 else None
 
 
-def _dirty(root: Path) -> int:
-    """How many paths differ from HEAD or are untracked and not ignored. The plumbing, since the
-    porcelain refreshes the index."""
-
-    tracked = size._git_ok(root, "diff-index", "--name-only", "-z", "--no-renames", "HEAD", "--")
-    untracked = size._git_ok(root, "ls-files", "--others", "--exclude-standard", "-z")
-    return len({name for name in (tracked + untracked).split(b"\0") if name})
-
-
 def _shown(path: Path, top: Path) -> str:
     """`path` relative to the work tree;
     a file of the main checkout is shown as `main checkout: <path>`."""
@@ -151,9 +144,12 @@ def _shown(path: Path, top: Path) -> str:
 
 def _uncommitted(root: Path) -> str:
     try:
-        return f"{_dirty(root)} uncommitted path(s)"
-    except size.SizeError as error:
+        found = workspace.changes(root)
+    except workspace.WorkspaceError as error:
         return f"uncommitted paths UNVERIFIED: {textio.plain(str(error))}"
+    if found is None:
+        return "uncommitted paths UNVERIFIED: git status failed"
+    return f"{sum(found)} uncommitted path(s)"
 
 
 def _branch_line(top: Path) -> Item:
@@ -180,19 +176,28 @@ def _git_items(top: Path, inside: bool) -> list[Item]:
     listed = _git(top, "worktree", "list", "--porcelain")
     if listed is None:
         return [*items, _item("worktree", source, UNVERIFIED, "Git did not list the worktrees")]
-    here, clean = top.resolve(), []
+    here, quiet = top.resolve(), []
+    default = workspace.default_branch(top)
     for tree in adopt_worktrees.parse(listed):
         if tree.path.resolve() == here:
             continue
         label = f"worktree {SEE(str(tree.path))}, branch {SEE(tree.branch)}"
         if not tree.path.is_dir():
             items.append(_item("worktree", source, UNVERIFIED, f"{label}: the folder is gone"))
-        elif (state := _uncommitted(tree.path)) != "0 uncommitted path(s)":
-            items.append(_item("worktree", source, NOTE, f"{label}: {state}", subject=tree.branch))
+            continue
+        commit = _git(tree.path, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+        state = workspace.classify(tree.path, commit, default) if commit else "unknown"
+        held = _uncommitted(tree.path)
+        if state in ("local", "unknown") or held != "0 uncommitted path(s)":
+            text = f"{label}: commits {state}, {held}"
+            items.append(_item("worktree", source, NOTE, text, subject=tree.branch))
         else:
-            clean.append(SEE(tree.branch))
-    if clean:
-        text = f"{len(clean)} other worktree(s) with nothing uncommitted: {', '.join(clean)}"
+            quiet.append(SEE(tree.branch))
+    if quiet:
+        text = (
+            f"{len(quiet)} other worktree(s) with nothing uncommitted and commits merged or "
+            f"pushed: {', '.join(quiet)}"
+        )
         items.append(_item("worktree", source, NOTE, text))
     older = adopt_worktrees.lines(top, listed, adopt.engine_version(home.ROOT))
     if older:
@@ -594,56 +599,53 @@ def _handoff(top: Path) -> tuple[Path | None, list[Item]]:
     return path, [_item("handoff", SEE(_shown(path, top)), NOTE, text)]
 
 
+def _brief_line(
+    key: str, why: str, open_: dict[str, Any], shared: set[str], answered: set[str], top: Path
+) -> tuple[Item | None, str | None]:
+    """The line for one brief that something points to, and its status where it is read."""
+
+    if key in open_:
+        entry = open_[key]
+        waiting = f"; waiting on it: {SEE(entry['why_now'])}" if entry.get("why_now") else ""
+        text = f"{textio.quote(entry['question'])} has no Decided line ({why}){waiting}"
+        source = SEE(_shown(Path(entry["source"]), top))
+        line = _item("brief", source, OPEN, text, subject=entry["id"], item="unanswered-brief")
+        return line, "UNANSWERED"
+    if key in shared:
+        text = f"brief {SEE(key)} ({why}): two different briefs carry this id"
+        return _item("brief", "brief open", UNVERIFIED, text, subject=key), None
+    if key in answered:
+        line = _item("brief", "brief lookup", CLEAR, f"{SEE(key)} is answered; {why}", subject=key)
+        return (line if "waits" in why else None), "ANSWERED"
+    text = f"brief {SEE(key)} ({why}): no brief file defines it"
+    return _item("brief", "brief lookup", UNVERIFIED, text, subject=key), None
+
+
 def _brief_items(
     top: Path, tickets: Sequence[Ticket], handoff: Path | None
 ) -> tuple[list[Item], dict[str, str]]:
+    """The brief lines, and the status (ANSWERED or UNANSWERED) of each brief id that is read."""
+
     briefs, answers, _, unread, unreadable = brief_lookup.scan(brief_lookup.default_roots(top))
+    listed, collisions = brief_open.split(briefs, answers)
+    open_ = {e["id"].casefold(): e for e in listed}
+    shared = {c["id"].casefold() for c in collisions}
     answered = {a.id.casefold() for a in answers}
     wanted: dict[str, str] = {}
     for ticket in tickets:
         for brief_id in ticket.waits_on:
             wanted.setdefault(brief_id.casefold(), f"{ticket.id} waits on it")
-    for brief in briefs:
-        if handoff is not None and Path(brief.source) == handoff:
-            wanted.setdefault(brief.id.casefold(), "defined in the newest handoff")
+    for key, entry in open_.items():
+        if handoff is not None and Path(entry["source"]) == handoff:
+            wanted.setdefault(key, "defined in the newest handoff")
     items, status = [], {}
     for key, why in sorted(wanted.items()):
-        found = [b for b in briefs if b.id.casefold() == key]
-        if len(found) != 1:
-            text = f"brief {SEE(key)} ({why}): " + (
-                "no brief file defines it"
-                if not found
-                else f"{len(found)} briefs carry this id, so an answer cannot be told apart"
-            )
-            items.append(_item("brief", "brief lookup", UNVERIFIED, text, subject=key))
-        elif key in answered:
-            status[key] = "ANSWERED"
-            if "waits" in why:
-                items.append(
-                    _item(
-                        "brief",
-                        SEE(_shown(Path(found[0].source), top)),
-                        CLEAR,
-                        f"{SEE(found[0].id)} is answered; {why}",
-                        subject=found[0].id,
-                    )
-                )
-        else:
-            status[key] = "UNANSWERED"
-            where = SEE(_shown(Path(found[0].source), top))
-            items.append(
-                _item(
-                    "brief",
-                    where,
-                    OPEN,
-                    f"{textio.quote(found[0].heading)} has no Decided line ({why})",
-                    subject=found[0].id,
-                    item="unanswered-brief",
-                )
-            )
-    rest = sum(
-        1 for b in briefs if b.id.casefold() not in wanted and b.id.casefold() not in answered
-    )
+        line, state = _brief_line(key, why, open_, shared, answered, top)
+        if line is not None:
+            items.append(line)
+        if state is not None:
+            status[key] = state
+    rest = sum(1 for k in [*open_, *shared] if k not in wanted)
     if rest or unread or unreadable:
         text = (
             f"{rest} other brief heading(s) have no Decided line and are not listed: an answer "

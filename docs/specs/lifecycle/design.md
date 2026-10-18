@@ -215,12 +215,12 @@ so the report agrees with the verb that owns the file:
 | Kind | Read from | Reader |
 | --- | --- | --- |
 | `git` | the current branch, its upstream, ahead and behind counts, the uncommitted paths | `git`, read-only: optional locks off, no lazy fetch from a partial clone, and the plumbing that does not refresh the index (as `size` does) |
-| `worktree` | each other worktree: its branch and its uncommitted paths; a count of worktrees whose install is older than the engine | `git worktree list`, `adopt_worktrees` |
+| `worktree` | each other worktree: its branch, whether its commits are merged, pushed or only local, and its uncommitted paths; a count of worktrees with no readable install or one older than the engine | `git worktree list`, `workspace.default_branch`, `workspace.classify` and `workspace.changes` (the readers of `workspace audit`), `adopt_worktrees` |
 | `pr` | the open pull requests of the repository | `gh pr list`, only when `gh` is found on `PATH`'s absolute entries and answers; `--offline` skips it |
 | `ticket` | the open tickets of the declared store, from its export (`--tickets`, else `issues.json` at the work tree's root, else at the main checkout's): hold, blockers, `waits-on` | `tickets_store.read_store` |
 | `validation` | each claim of a validation plan (`--plan`, repeatable, else the `claims` plan the ticket declaration names; `--cwd` as `validation status` takes it): the last kept result and whether a declared path changed since | `validation.claim_states`, which `validation status` prints and `where` reads |
 | `review` | review files in `.agents/work` of this folder and of the main checkout: findings without a disposition; a review of this branch's commits and the paths that differ now | `review_check.sweep`, which keeps the ref each file says it read, and `size.tracked_changes` with the untracked paths, which is the comparison `review since` makes, without its hunks |
-| `brief` | briefs an open ticket waits on, and briefs defined in the newest handoff, with the `Decided:` lines recorded for them | `brief_lookup.scan` |
+| `brief` | briefs an open ticket waits on, and briefs defined in the newest handoff, with the `Decided:` lines recorded for them | `brief_lookup.scan` and `brief_open.split`, the readers of `brief open` |
 | `handoff` | the newest file in `.agents/handoffs` (this folder and the main checkout): its age, and the commits on `HEAD` since it was written | the file's time, `git rev-list` |
 
 **It prints one line for each item**, never a sequence: `<VERDICT> <kind> <subject>: <text>
@@ -265,17 +265,20 @@ rerun itself is the claim's command, which the line's text carries.
 keep every brief and review it ever wrote, so the verb names the ones that something in flight points
 to, and counts the rest on one `NOTE` line, so that a false `OPEN` never buries a true one:
 
-- a worktree is listed when it holds uncommitted paths or its folder is gone; the others are named on
-  one line. A count of worktrees with no readable install or one older than the engine follows,
-  from the logic of `adopt --check`. The verb does not count commits a worktree's branch has that the main line lacks: after a
-  squash merge Git cannot tell a landed branch from an unlanded one;
+- a worktree is listed when its commits are only local or unknown (held by no remote-tracking
+  branch and not by the default branch), when it holds uncommitted paths, or when its folder is
+  gone; the others are named on one line. This is the classification of `workspace audit`. After a
+  squash merge a landed branch reads `pushed` or `local`, since Git cannot tell it from an unlanded
+  one. A count of worktrees with no readable install or one older than the engine follows, from the
+  logic of `adopt --check`;
 - every open pull request of the repository is listed, the one whose branch is the current branch
   first and marked; `gh` is asked for up to 1000, and a list that long reads `UNVERIFIED`. `gh` runs
   with prompts and its update check off;
 - a brief is listed when an open ticket names it in `waits-on` or the newest handoff defines it; the
   other briefs with no `Decided:` line are counted, and the line says that an answer recorded before
-  the `Decided:` form shows as unanswered. A brief id that more than one file defines reads
-  `UNVERIFIED`, since a `Decided:` line cannot be told to answer this one; an answer given in a
+  the `Decided:` form shows as unanswered. A brief id that two different questions share (a
+  collision in `brief open`) reads `UNVERIFIED`, since a `Decided:` line cannot be told to answer
+  this one; a line a brief carries to say what waits on it is printed with it; an answer given in a
   ticket comment is not read, and the ticket line says so. The newest handoff is the newest of the
   folder, and may belong to another task;
 - a review file is listed when it has a finding without a disposition, or when its `Reviewed:` ref
