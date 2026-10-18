@@ -99,8 +99,8 @@ CONDITIONS = {
     "diagnose": "when a failure's cause is unknown, or a fix did not hold",
     "review-findings": "when acting on review findings, or writing a review the project requires",
     "review-council": (
-        "when a second opinion from other models or harnesses is worth its cost: a design, a "
-        "release candidate, or a change whose miss would reach users"
+        "when a second opinion from other models or harnesses is worth asking for, as for a "
+        "design, a release candidate, or a change whose miss would reach users"
     ),
     "explain-spec": (
         "when a person must act on a spec they did not write, or says they do not follow it"

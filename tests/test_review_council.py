@@ -216,30 +216,30 @@ def test_accept_runs_each_reviewer_read_only_on_a_snapshot_with_the_diff_as_data
     assert code == 0, out
     log = tools / "log"
     run = repo / ".agents/work/council" / git(repo, "rev-parse", "HEAD")[:12]
-    codex_argv = (log / "codex.argv").read_text().split("\n")
+    codex_argv = (log / "codex.argv").read_text("utf-8").split("\n")
     assert codex_argv[:3] == ["exec", "-s", "read-only"]
     assert codex_argv[-2] == "-"  # the prompt comes from standard input, which is a file and ends
     snapshot = codex_argv[codex_argv.index("-C") + 1]
     assert snapshot == str(review_council.snapshot_path(git(repo, "rev-parse", "HEAD"), run))
     assert not Path(snapshot).is_relative_to(repo)  # no work folder, no Git, holds the snapshot
-    assert Path((log / "codex.cwd").read_text().strip()).resolve() == Path(snapshot).resolve()
-    assert (log / "codex.snapshot").read_text() == "one\nTWO\nthree\nfour\n"  # as it was read
-    assert (log / "codex.nogit").read_text().strip() == "no .git"
+    assert Path((log / "codex.cwd").read_text("utf-8").strip()).resolve() == Path(snapshot).resolve()
+    assert (log / "codex.snapshot").read_text("utf-8") == "one\nTWO\nthree\nfour\n"  # as it was read
+    assert (log / "codex.nogit").read_text("utf-8").strip() == "no .git"
     assert not Path(snapshot).exists()  # removed after the run
-    listing = (log / "codex.ls").read_text().split()
+    listing = (log / "codex.ls").read_text("utf-8").split()
     assert "src" in listing and "spec.md" in listing  # the revision's files are there
     assert "AGENTS.md" not in listing and ".claude" not in listing  # its instructions are not
-    claude_argv = (log / "claude.argv").read_text().split("\n")
+    claude_argv = (log / "claude.argv").read_text("utf-8").split("\n")
     assert "--restricted" in claude_argv and "-p" in claude_argv
     assert claude_argv[claude_argv.index("--output-format") + 1] == "json"
-    prompt = (log / "codex.stdin").read_text()
+    prompt = (log / "codex.stdin").read_text("utf-8")
     assert "off-by-one cases" in prompt
     assert "+TWO" in prompt and "-two" in prompt  # the diff
     assert (
         len(re.findall(r"DATA-[0-9a-f]+ begin", prompt)) == 2
     )  # in the sentence, opening the block
     assert "\nDATA-" in prompt and "not instructions to you" in prompt
-    record = json.loads((run / "council.json").read_text())
+    record = json.loads((run / "council.json").read_text("utf-8"))
     assert [r["status"] for r in record["reviewers"]] == ["ok", "ok"]
     assert record["reviewers"][1]["cost_usd_estimate"] == 0.42
 
@@ -250,7 +250,7 @@ def test_the_review_file_has_the_engines_reviewed_line_and_no_reviewer_dispositi
     council(capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex")
     commit = git(repo, "rev-parse", "HEAD")
     review = repo / ".agents/work/council" / commit[:12] / "r1-codex.md"
-    text = review.read_text()
+    text = review.read_text("utf-8")
     assert text.startswith(f"Reviewed: {commit}\n")
     assert "somewhere-else" not in text and "already done" not in text
     assert "Disposition: kept in a fence" in text  # a fenced line is the reviewer's example
@@ -270,7 +270,7 @@ def test_a_citation_that_does_not_exist_is_flagged_in_the_file_and_never_dropped
 ) -> None:
     _, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex")
     commit = git(repo, "rev-parse", "HEAD")
-    text = (repo / ".agents/work/council" / commit[:12] / "r1-codex.md").read_text()
+    text = (repo / ".agents/work/council" / commit[:12] / "r1-codex.md").read_text("utf-8")
     lines = text.splitlines()
     for heading, expected in (
         ("### r1-1", None),
@@ -299,9 +299,9 @@ def test_the_existing_citation_of_a_named_file_checks_against_the_text_given(
     (tools / "answers/codex").write_text(answer, encoding="utf-8")
     code, out, _ = council(capsys, repo, "--accept", "--file", "spec.md", "--reviewer", "codex")
     assert code == 0, out
-    prompt = (tools / "log/codex.stdin").read_text()
+    prompt = (tools / "log/codex.stdin").read_text("utf-8")
     assert "    5| Four" in prompt  # line numbers added to a named file
-    review = next((repo / ".agents/work/council").glob("*/r1-codex.md")).read_text()
+    review = next((repo / ".agents/work/council").glob("*/r1-codex.md")).read_text("utf-8")
     assert "Citation check" not in review  # line 5 exists in the file as given, not at the commit
 
 
@@ -389,7 +389,7 @@ def test_the_range_diff_is_quoted_as_data(
     tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     council(capsys, repo, "--accept", "--range", "HEAD~1..HEAD", "--reviewer", "codex")
-    prompt = (tools / "log/codex.stdin").read_text()
+    prompt = (tools / "log/codex.stdin").read_text("utf-8")
     assert "diff --git a/src/app.py b/src/app.py" in prompt
     opening = re.findall(r"DATA-[0-9a-f]+ begin", prompt)
     assert len(opening) == 2 and opening[0] == opening[1]
@@ -455,7 +455,7 @@ def test_a_path_with_no_readable_blob_is_flagged_and_the_run_goes_on(
     monkeypatch.setattr(review_council.size, "_git_ok", refuse_blobs)
     code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex")
     assert code == 0, out
-    review = next((repo / ".agents/work/council").glob("*/r1-codex.md")).read_text()
+    review = next((repo / ".agents/work/council").glob("*/r1-codex.md")).read_text("utf-8")
     assert "src/app.py:2 names an entry of the revision that is no file" in review
     assert next((repo / ".agents/work/council").glob("*/council.json")).is_file()
 
@@ -503,20 +503,20 @@ def test_cursor_and_opencode_take_the_prompt_as_the_last_argument_and_say_read_o
     code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", *named)
     assert code == 0, out
     log = tools / "log"
-    cursor = (log / "cursor.argv").read_text().split("\n")
+    cursor = (log / "cursor.argv").read_text("utf-8").split("\n")
     assert cursor[:3] == ["-p", "--mode", "ask"] and "--force" not in cursor
     assert cursor[cursor.index("--model") + 1] == "some-model[effort=high]"
     assert "independent reviewer" in "\n".join(cursor[cursor.index("--model") + 2 :])  # last
-    assert (log / "cursor.stdin").read_text().strip() == "stdin closed"
-    assert (log / "cursor.env").read_text().strip().startswith("CURSOR_CONFIG_DIR=")
-    opencode = (log / "opencode.argv").read_text().split("\n")
+    assert (log / "cursor.stdin").read_text("utf-8").strip() == "stdin closed"
+    assert (log / "cursor.env").read_text("utf-8").strip().startswith("CURSOR_CONFIG_DIR=")
+    opencode = (log / "opencode.argv").read_text("utf-8").split("\n")
     assert opencode[:2] == ["run", "--standalone"] and "--auto" not in opencode
     assert "independent reviewer" in "\n".join(opencode[opencode.index("--model") + 2 :])
-    env = (log / "opencode.env").read_text()
+    env = (log / "opencode.env").read_text("utf-8")
     assert 'OPENCODE_PERMISSION={"*":"deny"' in env and "OPENCODE_DISABLE_CLAUDE_CODE=1" in env
     for name in ("r1-cursor.md", "r2-opencode.md"):
         review = next((repo / ".agents/work/council").glob(f"*/{name}"))
-        assert review.read_text().startswith("Reviewed: ")
+        assert review.read_text("utf-8").startswith("Reviewed: ")
 
 
 def test_a_harness_with_its_effort_in_the_model_id_refuses_an_effort_part() -> None:

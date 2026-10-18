@@ -1,6 +1,6 @@
 ---
 name: review-council
-description: Use when a second opinion from other models or harnesses is worth what it costs: a design, a release candidate, or a change whose miss would reach users and that no check of yours would catch. Plans the run, waits for the person's yes, runs it, and merges what comes back.
+description: Use when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users. Plans the run, waits for the person's yes, runs it, and merges what comes back.
 ---
 
 # Review council
@@ -9,9 +9,9 @@ You are done when the person saw the plan and said yes before any reviewer ran, 
 that answered has a review file, each reviewer that did not is named with its reason, and every
 finding you kept has one disposition with the evidence for it.
 
-## When it is worth the cost
+## When it is worth asking
 
-Every reviewer spends the person's credits, so the question is whether a second reader would
+Every reviewer spends the person's credits, so ask whether a second reader would
 change a decision. It would for a design that others will build on, for a release candidate, and
 for a change that would hurt users if wrong and that no check you can run would catch. It would not
 for a change a test or the project's gate already covers, a fix to text for people, or a doubt you
@@ -42,7 +42,7 @@ plan lists.
 Run the same command with `--accept` in place of `--plan`, in the background, and wait once for it
 to end. It runs the reviewers in parallel, read-only, each on a snapshot of the reviewed revision.
 A reviewer that fails or times out is reported and the rest go on; do not read a missing file as a
-clean review. Report to the person which reviewers answered, which did not and why, and the cost
+clean review. Report to the person which reviewers answered, which did not and why, and the spend
 the run printed, which is an estimate.
 
 ## Merge and dispose

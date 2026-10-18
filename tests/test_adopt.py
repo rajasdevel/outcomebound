@@ -2627,7 +2627,7 @@ def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
     assert len(lines) < 60
     assert (
         sum(
-            re.fullmatch(r"create   \.\w+/skills/: \d+ files in 13 skills", x) is not None
+            re.fullmatch(r"create   \.\w+/skills/: \d+ files in 14 skills", x) is not None
             for x in lines
         )
         == 3
