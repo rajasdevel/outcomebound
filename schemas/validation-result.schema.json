@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:outcomebound:schema:validation-result:1",
   "title": "OutcomeBound validation result v1",
-  "description": "What one run of one validation-plan claim observed, kept as .outcomebound-checks/<log name>.result.json beside the claim's log and rewritten by the claim's next run. It records an observation; it is no proof that the result still holds, and `outcomebound validation status` reads it to say which declared paths changed since.",
+  "description": "What one attempt of one validation-plan claim observed, kept as .outcomebound-checks/<log stem>.<attempt>.result.json beside the attempt's log <log stem>.<attempt>.log. An attempt is never rewritten by a later one, so a failure's output survives a later pass. It records an observation; it is no proof that the result still holds, and `outcomebound validation status` reads the newest attempt to say which declared paths changed since.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -20,7 +20,9 @@
     "plan_digest",
     "claim_digest",
     "head",
-    "dirty"
+    "dirty",
+    "environment",
+    "log_written"
   ],
   "properties": {
     "version": {
@@ -68,7 +70,7 @@
         "string",
         "null"
       ],
-      "description": "The log's file name in the same folder; null where none was written."
+      "description": "The attempt's own log file name in the same folder (a copy of the output, never overwritten by a later attempt); null where it was not written."
     },
     "started": {
       "type": "string",
@@ -117,6 +119,20 @@
     "claim_digest": {
       "type": "string",
       "description": "SHA-256 of what decides how the claim ran and is judged: command, working directory, paths, required_paths, timeout_seconds, executes_tests and produces. A result stands only for the claim that has this digest."
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "description": "Each environment variable the claim names, as a SHA-256 of its value (null where unset); the value is never kept."
+    },
+    "log_written": {
+      "type": "boolean",
+      "description": "Whether this attempt's log was written. False means the log named in `log` is absent (it is then null): a PASS with false does not show that its output was kept."
     }
   }
 }

@@ -117,6 +117,13 @@
               "type": "string"
             },
             "description": "Optional files and folders, relative to the plan's working directory, whose change can change this claim's result ('.' is the whole working directory). A declaration by the plan's author, which the runner does not check against the command. `outcomebound validation status` intersects it with what changed since the claim's last result."
+          },
+          "environment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional names of environment variables whose values can change this claim's result. A run records a digest of each (never the value); `outcomebound validation status` reads a claim as UNVERIFIED where one differs."
           }
         }
       }

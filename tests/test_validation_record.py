@@ -76,10 +76,18 @@ def main(capsys, *argv: str) -> tuple[int, str, str]:
     return code, captured.out, captured.err
 
 
+def attempts(root: Path, name: str = "unit") -> list[Path]:
+    return sorted((root / ".outcomebound-checks").glob(f"{name}.*.result.json"))
+
+
 def record(root: Path, name: str = "unit") -> dict:
-    return json.loads(
-        (root / ".outcomebound-checks" / f"{name}.result.json").read_text(encoding="utf-8")
-    )
+    return json.loads(attempts(root, name)[-1].read_text(encoding="utf-8"))
+
+
+def rewrite(root: Path, changes: dict) -> None:
+    path = attempts(root)[-1]
+    made = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**made, **changes}), encoding="utf-8")
 
 
 def status_line(capsys, path: Path, name: str = "unit") -> str:
@@ -105,7 +113,11 @@ def test_a_run_keeps_one_record_with_what_it_observed(tmp_path, capsys):
         == []
     )
     assert first["claim"] == "unit" and first["argv"] == OK and first["exit_code"] == 0
-    assert first["verdict"] == "PASS" and first["log"] == "unit.log"
+    assert (
+        first["verdict"] == "PASS"
+        and first["log"].startswith("unit.")
+        and first["log_written"] is True
+    )
     assert first["head"] == git(root, "rev-parse", "HEAD")
     assert [d["path"] for d in first["dirty"]] == ["docs/readme.md", "plan.json"]
     assert len(first["plan_digest"]) == 64 and first["started"] <= first["ended"]
@@ -118,8 +130,7 @@ def test_claim_runs_only_the_named_claims_and_the_verdict_says_so(tmp_path, caps
     code, out, _ = main(capsys, str(path), "--claim", "one", "--claim", "three")
     assert code == 0 and "two" not in out
     assert "2 of 3 claims, selected by --claim" in out
-    assert not (root / ".outcomebound-checks" / "two.result.json").exists()
-    assert (root / ".outcomebound-checks" / "one.result.json").exists()
+    assert not attempts(root, "two") and attempts(root, "one")
 
     code, out, _ = main(capsys, str(path), "--claim", "three")
     assert code == 2 and "VERDICT: UNVERIFIED (no required claim was selected)" in out
@@ -195,11 +206,7 @@ def test_a_changed_claim_or_no_record_or_no_commit_reads_unverified(tmp_path, ca
     plan(root, [claim(command=BAD)])
     assert "differ from the record" in status_line(capsys, path)
     plan(root, [claim()])
-    made = record(root)
-    made["head"] = "0" * 40
-    (root / ".outcomebound-checks" / "unit.result.json").write_text(
-        json.dumps(made), encoding="utf-8"
-    )
+    rewrite(root, {"head": "0" * 40})
     line = status_line(capsys, path)
     assert line.startswith("UNVERIFIED unit") and "cannot compare with the recorded commit" in line
 
@@ -285,11 +292,7 @@ def test_a_record_cannot_make_status_pass_git_an_option(tmp_path, capsys):
     root = repo(tmp_path)
     path = plan(root, [claim()])
     main(capsys, str(path))
-    forged = record(root)
-    forged["head"] = "--output=" + str(tmp_path / "written")
-    (root / ".outcomebound-checks" / "unit.result.json").write_text(
-        json.dumps(forged), encoding="utf-8"
-    )
+    rewrite(root, {"head": "--output=" + str(tmp_path / "written")})
     assert "no result kept" in status_line(capsys, path)
     assert not (tmp_path / "written").exists()
 
@@ -302,3 +305,64 @@ def test_a_claim_run_is_not_called_the_plans_verdict_and_status_counts(tmp_path,
     assert "all required" not in out
     _, out, _ = main(capsys, "status", str(path))
     assert out.splitlines()[0].startswith("status: 1 CURRENT, 0 CHANGED, 1 UNVERIFIED of 2")
+
+
+def test_each_attempt_is_kept_and_a_failures_output_survives_a_pass(tmp_path, capsys):
+    root = repo(tmp_path)
+    failing = [sys.executable, "-c", "print('boom'); raise SystemExit(4)"]
+    path = plan(root, [claim(command=failing)])
+    main(capsys, str(path))
+    plan(root, [claim()])
+    main(capsys, str(path))
+    first, second = attempts(root)
+    assert json.loads(first.read_text(encoding="utf-8"))["verdict"] == "FAIL"
+    assert json.loads(second.read_text(encoding="utf-8"))["verdict"] == "PASS"
+    old = root / ".outcomebound-checks" / json.loads(first.read_text(encoding="utf-8"))["log"]
+    assert "boom" in old.read_text(encoding="utf-8")
+    assert "PASS" in status_line(capsys, path) or "last PASS" in status_line(capsys, path)
+
+
+def test_the_record_says_whether_its_log_was_written(tmp_path, capsys):
+    root = repo(tmp_path)
+    path = plan(root, [claim()])
+    main(capsys, str(path))
+    made = record(root)
+    assert made["log_written"] is True and made["log"].endswith(".out")
+    assert "written" in status_line(capsys, path) and "NOT written" not in status_line(capsys, path)
+
+    other = tmp_path / "blocked"
+    other.mkdir()
+    path = plan(other, [claim()])
+    (other / ".outcomebound-checks" / "unit.log").mkdir(parents=True)  # the log cannot be written
+    code, _, _ = main(capsys, str(path))
+    assert code == 0  # the verdict is unchanged
+    made = record(other)
+    assert made["log_written"] is False and made["log"] is None and made["verdict"] == "PASS"
+    assert "NOT written" in status_line(capsys, path)
+
+
+def test_a_named_environment_variable_is_kept_as_a_digest_and_a_change_is_unverified(
+    tmp_path, capsys, monkeypatch
+):
+    root = repo(tmp_path)
+    path = plan(root, [claim(environment=["OB_TEST_TARGET"])])
+    monkeypatch.setenv("OB_TEST_TARGET", "staging-secret")
+    main(capsys, str(path))
+    text = attempts(root)[-1].read_text(encoding="utf-8")
+    assert "staging-secret" not in text and json.loads(text)["environment"]["OB_TEST_TARGET"]
+    assert status_line(capsys, path).startswith("CURRENT unit")
+    monkeypatch.setenv("OB_TEST_TARGET", "production")
+    line = status_line(capsys, path)
+    assert line.startswith("UNVERIFIED unit") and "environment variable differs" in line
+    code, _, err = main(capsys, str(plan(root, [claim(environment=["A=b"])])))
+    assert code == 2 and "environment" in err
+
+
+def test_a_command_that_differs_only_late_in_its_argv_is_not_current(tmp_path, capsys):
+    root = repo(tmp_path)
+    base = [sys.executable, "-c", "raise SystemExit(0)", "--dry-run"]
+    path = plan(root, [claim(command=base)])
+    main(capsys, str(path))
+    plan(root, [claim(command=[*base[:-1], "--deploy"])])
+    line = status_line(capsys, path)
+    assert line.startswith("UNVERIFIED unit") and "differ from the record" in line

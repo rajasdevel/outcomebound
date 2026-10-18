@@ -18,12 +18,12 @@ sets `timeout_seconds`.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import dataclasses
 import hashlib
 import json
 import math
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Collection, Mapping, Sequence
@@ -55,6 +55,7 @@ CLAIM_KEYS = frozenset(
         "executes_tests",
         "produces",
         "paths",
+        "environment",
     }
 )
 PRODUCES_KEYS = frozenset({"paths", "when_missing"})
@@ -116,6 +117,7 @@ class Claim:
     tests: CountContract | None = None
     produces: Produces | None = None
     paths: tuple[str, ...] = ()
+    environment: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,7 @@ class Result:
     log_path: Path | None = None
     waiver: str | None = None
     exit_code: int | None = None
+    log_written: bool = False
 
 
 def _nonempty_string(value: Any, field: str) -> str:
@@ -223,6 +226,13 @@ def _project_paths(value: Any, field: str, *, allow_root: bool) -> tuple[str, ..
     return paths
 
 
+def _env_names(value: Any, field: str) -> tuple[str, ...]:
+    names = _string_list(value, field, allow_empty=True)
+    if any("=" in name for name in names):
+        raise PlanError(f"{field} item must be a variable name, without '='")
+    return names
+
+
 def _produces(value: Any, field: str) -> Produces:
     if not isinstance(value, dict):
         raise PlanError(f"{field} must be an object")
@@ -270,6 +280,7 @@ def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float 
         produces=(
             _produces(item["produces"], f"{prefix}.produces") if "produces" in item else None
         ),
+        environment=_env_names(item.get("environment", []), f"{prefix}.environment"),
         paths=(
             _project_paths(item["paths"], f"{prefix}.paths", allow_root=True)
             if "paths" in item
@@ -534,6 +545,18 @@ def _execute(
             process.stdout.close()
 
 
+def _write_log(log_path: Path | None, output: bytes) -> bool:
+    """Whether the output reached its log; a log that cannot be written never changes a verdict."""
+
+    if log_path is None:
+        return False
+    try:
+        log_path.write_bytes(output)
+    except OSError:
+        return False
+    return True
+
+
 def run_claim(
     claim: Claim, cwd: Path, log_dir: Path | None, log_path: Path | None = None
 ) -> Result:
@@ -562,16 +585,14 @@ def run_claim(
         return Result(claim, UNVERIFIED, f"executable not found: {claim.command[0]}")
     except OSError as error:
         return Result(claim, UNVERIFIED, f"could not execute check: {error}")
-    if log_path is not None:
-        with contextlib.suppress(OSError):
-            log_path.write_bytes(output)
+    log_written = _write_log(log_path, output)
     if timed_out:
         detail = f"timeout after {claim.timeout_seconds:g} seconds"
-        return Result(claim, UNVERIFIED, detail, log_path)
+        return Result(claim, UNVERIFIED, detail, log_path, log_written=log_written)
     result = _judge(claim, status, output, log_path)
     if claim.produces is not None and status == 0:
         result = _produced(claim.produces, before, cwd, result)
-    return dataclasses.replace(result, exit_code=status)
+    return dataclasses.replace(result, exit_code=status, log_written=log_written)
 
 
 def _none_ran(
@@ -625,6 +646,7 @@ def claim_digest(claim: Claim, cwd: Path) -> str:
         "paths": claim.paths,
         "required_paths": claim.required_paths,
         "timeout_seconds": claim.timeout_seconds,
+        "environment": claim.environment,
         "tests": None
         if tests is None
         else [
@@ -638,24 +660,35 @@ def claim_digest(claim: Claim, cwd: Path) -> str:
 
 
 def _kept(plan: Plan, claim: Claim, log: Path, started: str, snapshot: Any, result: Result) -> str:
-    """Write the claim's record; the reason it was not kept, else an empty string."""
+    """Write this attempt's log copy and record beside the claim's latest log, never over an
+    earlier attempt; the reason it was not kept, else an empty string."""
 
+    attempt = validation_record.attempt_id()
+    attempt_log, attempt_record = validation_record.attempt_paths(log, attempt)
+    log_written = result.log_written
+    if result.log_path is not None and result.log_written:
+        try:
+            shutil.copyfile(result.log_path, attempt_log)
+        except OSError:
+            log_written = False
     observed = {
         "claim": claim.name,
         "argv": list(claim.command),
         "cwd": str(plan.cwd),
         "paths": list(claim.paths),
+        "environment": validation_record.environment(claim.environment),
         "exit_code": result.exit_code,
         "verdict": result.status,
         "detail": result.detail,
-        "log": None if result.log_path is None else result.log_path.name,
+        "log": attempt_log.name if log_written else None,
+        "log_written": log_written,
         "started": started,
         "ended": validation_record.now(),
         "plan_digest": plan.digest,
         "claim_digest": claim_digest(claim, plan.cwd),
     }
     record = validation_record.build(observed, snapshot)
-    return validation_record.write(validation_record.result_path(log), record) or ""
+    return validation_record.write(attempt_record, record) or ""
 
 
 def run_plan(
@@ -744,11 +777,14 @@ def _status(argv: Sequence[str]) -> int:
     logs = _log_paths(plan.log_dir, [claim.name for claim in plan.claims])
     lines: list[tuple[str, str]] = []
     for claim, log in zip(plan.claims, logs, strict=True):
-        record = validation_record.read(validation_record.result_path(log), claim.name)
+        record = validation_record.latest(log, claim.name)
         state, text = validation_record.assess(
             record,
-            claim_digest=claim_digest(claim, plan.cwd),
-            plan_digest=plan.digest,
+            expected={
+                "claim_digest": claim_digest(claim, plan.cwd),
+                "plan_digest": plan.digest,
+                "environment": validation_record.environment(claim.environment),
+            },
             cwd=plan.cwd,
             paths=claim.paths,
             skip=plan.log_dir,

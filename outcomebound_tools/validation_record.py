@@ -43,8 +43,53 @@ def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def result_path(log_path: Path) -> Path:
-    return log_path.with_name(log_path.stem + RESULT_SUFFIX)
+def attempt_id() -> str:
+    """A sortable name for one attempt, to the microsecond (UTC)."""
+
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def attempt_paths(log_path: Path, attempt: str) -> tuple[Path, Path]:
+    """The log and the record of one attempt, beside the claim's latest log."""
+
+    stem = log_path.stem
+    return (
+        log_path.with_name(f"{stem}.{attempt}.out"),
+        log_path.with_name(f"{stem}.{attempt}{RESULT_SUFFIX}"),
+    )
+
+
+def latest(log_path: Path, claim: str) -> dict[str, Any] | None:
+    """The record of the claim's newest attempt that can be read; None where there is none."""
+
+    pattern = re.compile(
+        rf"{re.escape(log_path.stem)}\.(\d{{8}}T\d{{12}}Z){re.escape(RESULT_SUFFIX)}"
+    )
+    try:
+        found = sorted(
+            (m.group(1), entry)
+            for entry in log_path.parent.iterdir()
+            if (m := pattern.fullmatch(entry.name))
+        )
+    except OSError:
+        return None
+    for _, entry in reversed(found):
+        record = read(entry, claim)
+        if record is not None:
+            return record
+    return None
+
+
+def environment(names: Sequence[str]) -> dict[str, str | None]:
+    """The named environment variables as digests of their values (None where unset), so a
+    record shows that a value differs without keeping it."""
+
+    return {
+        name: None
+        if (value := os.environ.get(name)) is None
+        else hashlib.sha256(value.encode("utf-8", "surrogateescape")).hexdigest()
+        for name in names
+    }
 
 
 def _digest(path: Path) -> str:
@@ -128,7 +173,7 @@ def build(observed: dict[str, Any], snapshot: Snapshot) -> dict[str, Any]:
 
 def write(path: Path, record: dict[str, Any]) -> str | None:
     """Write a record beside its log, whole or not at all; the reason where it could not. A
-    failed write removes the claim's earlier record, so `status` does not offer it as the last."""
+    record is one attempt and is never rewritten by a later one."""
 
     temporary = None
     try:
@@ -140,10 +185,9 @@ def write(path: Path, record: dict[str, Any]) -> str | None:
             handle.write(json.dumps(record, indent=2) + "\n")
         os.replace(temporary, path)
     except OSError as error:
-        for leftover in (temporary, path):
-            if leftover is not None:
-                with contextlib.suppress(OSError):
-                    leftover.unlink()
+        if temporary is not None:
+            with contextlib.suppress(OSError):
+                temporary.unlink()
         return str(error)
     return None
 
@@ -244,8 +288,7 @@ def _names_nothing(root: Path, repo_path: str) -> bool:
 def assess(
     record: dict[str, Any] | None,
     *,
-    claim_digest: str,
-    plan_digest: str,
+    expected: dict[str, Any],
     cwd: Path,
     paths: Sequence[str],
     skip: Path,
@@ -260,13 +303,17 @@ def assess(
     exit_code = record.get("exit_code")
     last = (
         f"last {record.get('verdict')} (exit {'none' if exit_code is None else exit_code}) "
-        f"ended {record.get('ended')} at {(record.get('head') or 'no commit')[:12]}"
+        f"ended {record.get('ended')} at {(record.get('head') or 'no commit')[:12]}, "
+        f"log {record.get('log') or 'none'} "
+        f"{'written' if record.get('log_written') else 'NOT written'}"
     )
-    if record.get("claim_digest") != claim_digest:
+    if record.get("claim_digest") != expected["claim_digest"]:
         return (
             UNVERIFIED,
             f"{last}; the claim's command, directory or contract differ from the record's",
         )
+    if record.get("environment") != expected["environment"]:
+        return UNVERIFIED, f"{last}; a named environment variable differs from the run's"
     changed, reason = _since(record, cwd, skip)
     if reason is not None:
         return UNVERIFIED, f"{last}; {reason}"
@@ -288,7 +335,7 @@ def assess(
     hit = sorted(c for c in changed if any(_covers(d, c) for d in declared))
     note = (
         ""
-        if record.get("plan_digest") == plan_digest
+        if record.get("plan_digest") == expected["plan_digest"]
         else " (the plan file differs from the run's)"
     )
     if hit:
