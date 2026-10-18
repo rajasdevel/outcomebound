@@ -39,10 +39,12 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from outcomebound_tools import home, programs, review_check, review_since, size, textio
+from outcomebound_tools import home, programs, review_check, review_since, schemacheck, size, textio
 from outcomebound_tools.gitenv import git_environment
 
 TABLE = home.ROOT / "adapters" / "council.json"
+CONFIG_SCHEMA = home.ROOT / "schemas" / "council-config.schema.json"
+CONFIG_PROJECT = Path(".outcomebound") / "council.json"
 SPEND = (
     "This run spends the person's credits: every reviewer below starts a model run on the "
     "person's own login or key. Run it only after the person says yes to this plan."
@@ -220,6 +222,31 @@ def parse_reviewer(text: str, index: int, table: dict[str, Any]) -> Reviewer:
 
 def default_reviewers(table: dict[str, Any]) -> list[Reviewer]:
     return [parse_reviewer(entry, i, table) for i, entry in enumerate(table["default_council"], 1)]
+
+
+def load_config(top: Path) -> tuple[Path | None, dict[str, Any]]:
+    """The council configuration and where it came from: the project's
+    `.outcomebound/council.json`, else the person's `~/.outcomebound/council.json`, else none.
+    The first file found is read alone and the other is not merged with it. A file that is not
+    valid against `schemas/council-config.schema.json` is a refusal that names it."""
+
+    for place in (top / CONFIG_PROJECT, Path.home() / ".outcomebound" / "council.json"):
+        if not place.is_file():
+            continue
+        try:
+            data = json.loads(textio.read_text(place))
+            schema = json.loads(CONFIG_SCHEMA.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise CouncilError(
+                f"the council file {place} cannot be read: {textio.plain(str(error))}"
+            ) from error
+        problems = schemacheck.validate(data, schema)
+        if problems:
+            raise CouncilError(
+                f"the council file {place} is not valid: {textio.plain('; '.join(problems))}"
+            )
+        return place, data
+    return None, {}
 
 
 # --- the request --------------------------------------------------------------------------------
@@ -426,10 +453,13 @@ def plan_id(request: Request, jobs: Sequence[Job]) -> str:
     return hashlib.sha256(json.dumps(record, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
 
-def render_plan(request: Request, jobs: Sequence[Job], out: Path, budget: str | None) -> str:
+def render_plan(
+    request: Request, jobs: Sequence[Job], out: Path, budget: str | None, source: str
+) -> str:
     lines = [
         "COUNCIL PLAN (nothing has run)",
         SPEND,
+        f"reviewers from: {source}",
         f"reviewing: {request.described}, at revision {request.commit}",
         f"lens: {textio.visible(request.lens)}",
         f"run folder: {out} (one prompt and one answer for each reviewer, one review file for "
@@ -908,7 +938,7 @@ def _parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="harness:model[:effort]",
-        help="a reviewer (repeat); with none, one of each harness in the table, at its defaults",
+        help="a reviewer (repeat); with none, the council file's, else the default council",
     )
     parser.add_argument("--plan-id", metavar="ID", help="with --accept, the id the plan printed")
     parser.add_argument("--timeout", type=int, metavar="SECONDS", help="per reviewer")
@@ -920,27 +950,54 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _toplevel(root: Path) -> Path:
+    try:
+        top = size._git_ok(root, "rev-parse", "--show-toplevel").decode("utf-8", "replace")
+    except size.SizeError as error:
+        raise CouncilError(str(error)) from error
+    return Path(top.strip())
+
+
+def _settings(options: argparse.Namespace, table: dict[str, Any]) -> dict[str, Any]:
+    """The reviewers, lens, timeout and cap of this run, and where the reviewers came from: the
+    command line wins, then the council file, then the table's default council."""
+
+    top = _toplevel(Path(options.root))
+    place, config = load_config(top)
+    lens = textio.read_text(Path(options.lens_file)) if options.lens_file else options.lens
+    if options.reviewer:
+        entries, source = options.reviewer, "--reviewer on the command line"
+    elif place is not None:
+        entries, source = config["reviewers"], f"the council file {place}"
+    else:
+        entries, source = table["default_council"], "the built-in default council"
+    budget = options.budget_usd if options.budget_usd is not None else config.get("budget_usd")
+    if budget is not None and not re.fullmatch(r"\d+(\.\d+)?", budget):
+        raise CouncilError("--budget-usd is a number of US dollars")
+    timeout = options.timeout if options.timeout is not None else config.get("timeout_seconds")
+    if timeout is not None and timeout < 1:
+        raise CouncilError("the timeout is a whole number of seconds, one or more")
+    return {
+        "reviewers": [parse_reviewer(text, i, table) for i, text in enumerate(entries, 1)],
+        "source": source,
+        "lens": lens or config.get("lens", ""),
+        "timeout": timeout,
+        "budget": budget,
+    }
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
     try:
         table = load_table()
-        lens = options.lens
-        if options.lens_file:
-            lens = textio.read_text(Path(options.lens_file))
+        chosen = _settings(options, table)
         request = gather(
             Path(options.root),
             range_spec=options.range_spec,
             base=options.base,
             files=options.file,
-            lens=lens,
+            lens=chosen["lens"],
         )
-        reviewers = [
-            parse_reviewer(text, i, table) for i, text in enumerate(options.reviewer, 1)
-        ] or default_reviewers(table)
-        if options.budget_usd is not None and not re.fullmatch(r"\d+(\.\d+)?", options.budget_usd):
-            raise CouncilError("--budget-usd is a number of US dollars")
-        if options.timeout is not None and options.timeout < 1:
-            raise CouncilError("--timeout is a whole number of seconds, one or more")
         out = (
             Path(options.out)
             if options.out
@@ -948,10 +1005,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         out = out.resolve()
         jobs = plan_jobs(
-            request, reviewers, table, out=out, timeout=options.timeout, budget=options.budget_usd
+            request,
+            chosen["reviewers"],
+            table,
+            out=out,
+            timeout=chosen["timeout"],
+            budget=chosen["budget"],
         )
         if options.plan:
-            sys.stdout.write(render_plan(request, jobs, out, options.budget_usd))
+            sys.stdout.write(render_plan(request, jobs, out, chosen["budget"], chosen["source"]))
             return 0
         if options.plan_id is not None and options.plan_id != plan_id(request, jobs):
             raise CouncilError(

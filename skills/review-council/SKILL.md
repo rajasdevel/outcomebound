@@ -23,9 +23,10 @@ your own, so name reviewers that are not your model.
 Run `outcomebound review council --plan` with what to review (`--range A..B`, `--base REF`, or
 `--file PATH` for a design or a spec), a lens (what the reviewers look at, one lens for a run so
 that the answers compare), and a `--reviewer harness:model[:effort]` for each reviewer. With none
-named, the plan holds the engine's default council, several reviewers at the table's models and
-efforts; those names are examples, so check them against what the person's logins offer, and name
-fewer reviewers when the question does not need them all. The plan runs nothing.
+named, the reviewers are those of the project's or the person's council file, else the engine's
+built-in default of one reviewer, and the plan says which. Those names are examples, so check them
+against what the person's logins offer. Name more reviewers when the question needs them. The plan
+runs nothing.
 
 Show the person the plan as printed, so that their yes is to the argv, the timeout and the cap
 and not to your summary of them. Then say in plain words who reviews, what they read, that it

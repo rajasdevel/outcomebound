@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; no entry is `tested` yet. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; no entry is `tested` yet. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
@@ -551,10 +551,6 @@
     }
   },
   "default_council": [
-    "codex:gpt-6-astra:xhigh",
-    "codex:gpt-6.1-sol:medium",
-    "claude:claude-opus-5-5:high",
-    "claude:claude-sonnet-5-5:high",
-    "claude:claude-fable-5-1:high"
+    "codex:gpt-6-astra:high"
   ]
 }

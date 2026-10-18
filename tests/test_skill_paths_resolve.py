@@ -32,6 +32,7 @@ CHECKOUT_ONLY = {
         "templates/harness/",
         "templates/lifecycle/",
         "templates/lifecycle/overlay-client.md",
+        "schemas/council-config.schema.json",
     ),
     "decision-brief": (),
     "gather-requirements": ("scripts/new-spec.sh",),

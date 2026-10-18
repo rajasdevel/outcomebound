@@ -87,16 +87,9 @@ Disposition: kept in a fence
 CLEAN = "Verdict: PASS\n\nNothing found.\n"
 
 
-def _defaults() -> dict[str, str]:
-    """Each harness's first default-council entry, which a bare `harness` reviewer means."""
-
-    found: dict[str, str] = {}
-    for entry in review_council.load_table()["default_council"]:
-        found.setdefault(entry.partition(":")[0], entry)
-    return found
-
-
-DEFAULTS = _defaults()
+# The two harnesses of most tests, with models named: only the built-in council names a default.
+CODEX_REVIEWER = "codex:m-codex:high"
+CLAUDE_REVIEWER = "claude:m-claude:high"
 
 
 def claude_json(text: str, cost: float = 0.42) -> str:
@@ -176,7 +169,7 @@ def council(
     """Run the verb; with `pair`, and no reviewer named, the two harnesses at their defaults."""
 
     if pair and "--reviewer" not in args:
-        args = (*args, "--reviewer", "codex", "--reviewer", "claude")
+        args = (*args, "--reviewer", CODEX_REVIEWER, "--reviewer", CLAUDE_REVIEWER)
     code = review_council.main(["--root", str(repo), *args])
     captured = capsys.readouterr()
     return code, captured.out, captured.err
@@ -185,15 +178,12 @@ def council(
 def test_plan_names_each_reviewer_its_argv_and_safeguards_and_runs_nothing(
     tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code, out, _ = council(
-        capsys, repo, "--plan", "--base", "HEAD~1", "--budget-usd", "3", pair=False
-    )
+    code, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", "--budget-usd", "3")
     assert code == 0
     assert "COUNCIL PLAN (nothing has run)" in out
     assert "spends the person's credits" in out
-    # No reviewer named: the table's default council, in its order.
-    for number, entry in enumerate(review_council.load_table()["default_council"], 1):
-        assert f"reviewer r{number}: {entry}" in out
+    assert "reviewers from: --reviewer on the command line" in out
+    assert f"reviewer r1: {CODEX_REVIEWER}" in out and f"reviewer r2: {CLAUDE_REVIEWER}" in out
     assert "-s read-only" in out and "--ephemeral" in out and "--ignore-user-config" in out
     assert "--restricted" in out and "--tools Read,Grep,Glob" in out
     assert "--permission-mode dontAsk" in out and "--max-budget-usd 3" in out
@@ -214,9 +204,12 @@ def test_the_budget_flag_is_in_the_argv_only_when_given(
 def test_a_reviewer_is_harness_model_effort_with_defaults_for_a_missing_part() -> None:
     table = review_council.load_table()
     assert review_council.parse_reviewer("codex:m-9:low", 3, table).label == "codex:m-9:low"
-    assert review_council.parse_reviewer("claude", 1, table).label == DEFAULTS["claude"]
-    model = DEFAULTS["codex"].split(":")[1]
-    assert review_council.parse_reviewer("codex::max", 1, table).label == f"codex:{model}:max"
+    # The built-in council names one reviewer; a bare harness takes its model and effort.
+    assert table["default_council"] == ["codex:gpt-6-astra:high"]
+    assert review_council.parse_reviewer("codex", 1, table).label == "codex:gpt-6-astra:high"
+    assert review_council.parse_reviewer("codex::max", 1, table).label == "codex:gpt-6-astra:max"
+    with pytest.raises(review_council.CouncilError, match="no default"):
+        review_council.parse_reviewer("claude", 1, table)
     for bad in ("", "gemini:x", "codex:--dangerously-bypass", "codex:m:e:x", "codex:a b"):
         with pytest.raises(review_council.CouncilError):
             review_council.parse_reviewer(bad, 1, table)
@@ -342,7 +335,7 @@ def test_a_failed_a_timed_out_and_an_unreadable_reviewer_are_reported_and_the_re
             capsys, repo, "--accept", "--base", "HEAD~1", "--timeout", "1", "--out", str(out_dir)
         )
         assert code == 1
-        assert f"r1 {DEFAULTS['codex']}: {status} after" in out and detail in out
+        assert f"r1 {CODEX_REVIEWER}: {status} after" in out and detail in out
         assert "r2 claude" in out and ": ok in" in out  # the other reviewer finished
         assert (out_dir / "r2-claude.md").is_file()
         assert not (out_dir / "r1-codex.md").exists()  # no file that would read as a clean review
@@ -374,7 +367,7 @@ def test_a_missing_program_is_a_reported_failure(
     assert programs.find("claude") is None
     code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1")
     assert code == 1
-    assert f"r2 {DEFAULTS['claude']}: FAILED" in out and "not on PATH" in out
+    assert f"r2 {CLAUDE_REVIEWER}: FAILED" in out and "not on PATH" in out
     assert "r1 codex" in out and ": ok in" in out
 
 
@@ -592,3 +585,87 @@ def test_a_credential_a_reviewer_echoes_in_an_error_is_not_printed(
     code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex")
     assert code == 1 and "FAILED" in out
     assert "secret-value-1234" not in out + err and "[redacted]" in out
+
+
+def _write_config(place: Path, **data: object) -> None:
+    place.parent.mkdir(parents=True, exist_ok=True)
+    place.write_text(json.dumps({"version": 1, **data}), encoding="utf-8")
+
+
+@pytest.fixture
+def person(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A home folder of the person with nothing in it."""
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+    return home
+
+
+def test_with_no_file_and_no_reviewer_the_plan_has_the_one_built_in_reviewer(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert "reviewers from: the built-in default council" in out
+    assert "reviewer r1: codex:gpt-6-astra:high" in out and "reviewer r2" not in out
+
+
+def test_the_projects_council_file_comes_before_the_persons_and_the_command_line_wins(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(person / ".outcomebound/council.json", reviewers=["codex:person-model:low"])
+    _, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert "reviewers from: the council file" in out and str(person) in out
+    assert "reviewer r1: codex:person-model:low" in out
+    _write_config(
+        repo / ".outcomebound/council.json",
+        reviewers=["codex:project-a:high", "claude:project-b:high"],
+        lens="the file's lens",
+        timeout_seconds=77,
+        budget_usd="2.5",
+    )
+    _, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert str(repo.resolve()) in out or ".outcomebound" in out
+    assert (
+        "reviewer r1: codex:project-a:high" in out and "reviewer r2: claude:project-b:high" in out
+    )
+    assert "person-model" not in out  # the person's file is not merged in
+    assert "the file's lens" in out and "timeout: 77 s" in out and "--max-budget-usd 2.5" in out
+    _, out, _ = council(
+        capsys,
+        repo,
+        "--plan",
+        "--base",
+        "HEAD~1",
+        "--reviewer",
+        "codex:cli-model:high",
+        "--lens",
+        "the command's lens",
+        "--timeout",
+        "9",
+        "--budget-usd",
+        "1",
+    )
+    assert "reviewers from: --reviewer on the command line" in out
+    assert "cli-model" in out and "project-a" not in out
+    assert "the command's lens" in out and "timeout: 9 s" in out
+    assert "--max-budget-usd" not in out  # Codex has no cap flag, so the cap reaches no argv
+
+
+def test_a_council_file_that_is_not_valid_is_refused_with_its_reason(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = repo / ".outcomebound/council.json"
+    for data, word in (
+        ({"reviewers": []}, "reviewers"),
+        ({"reviewers": ["codex"], "extra": 1}, "extra"),
+        ({"reviewers": ["codex"], "budget_usd": "lots"}, "budget_usd"),
+        ({"reviewers": ["gemini:x"]}, "not in the table"),
+    ):
+        _write_config(place, **data)
+        code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+        assert code == 1 and "COUNCIL_REFUSED" in err and word in err, (data, err)
+    place.write_text("{not json", encoding="utf-8")
+    code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert code == 1 and "cannot be read" in err
