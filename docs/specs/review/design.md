@@ -78,7 +78,7 @@ permission keys but not what they cover, and gives no way to skip the folder's o
 and configuration. The plan prints `READ-ONLY NOT CONFIRMED BY DOCUMENTATION` for each; neither is
 in the default council, so each is run only where the person's plan names it. Neither documents
 standard input, so the prompt is their last argument (`prompt_via` argument; standard input is
-closed), and each has its read-only settings given by environment variables the plan prints.
+closed), and each has its read-only settings given by environment variables the plan prints. A multi-line argument through a Windows `.cmd` shim loses its newlines, so these two rows are `UNVERIFIED` on Windows and their accepted-run test is skipped there.
 A
 reviewer that does not start, exits non-zero, passes the timeout (its process group is killed),
 writes no answer or an empty one, whose answer does not begin with `Verdict: FAIL`,

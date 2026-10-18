@@ -18,6 +18,7 @@ import pytest
 
 from outcomebound_tools import programs, review_check, review_council
 from tests.fake_tools import shell_tool
+from tests.portable import WINDOWS
 
 ROOT = Path(__file__).resolve().parent.parent
 IDENTITY = ("-c", "user.name=T", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false")
@@ -101,8 +102,13 @@ def claude_json(text: str, cost: float = 0.42) -> str:
     return json.dumps({"type": "result", "is_error": False, "result": text, "total_cost_usd": cost})
 
 
+# Found before a test changes PATH: a stand-in `git` first on PATH is for the engine, not for these
+# helpers.
+GIT = shutil.which("git") or "git"
+
+
 def git(where: Path, *args: str) -> str:
-    done = subprocess.run(["git", *IDENTITY, *args], cwd=where, check=True, capture_output=True)
+    done = subprocess.run([GIT, *IDENTITY, *args], cwd=where, check=True, capture_output=True)
     return done.stdout.decode("utf-8").strip()
 
 
@@ -129,8 +135,7 @@ def repo(tmp_path: Path) -> Path:
 def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Stand-in `codex` and `claude` first on PATH, with a Git beside them and nothing else."""
 
-    real_git = shutil.which("git")
-    assert real_git
+    real_git = Path(GIT).as_posix()
     bin_dir = tmp_path / "bin"
     shell_tool(bin_dir, "codex", CODEX)
     shell_tool(bin_dir, "claude", CLAUDE)
@@ -222,8 +227,11 @@ def test_accept_runs_each_reviewer_read_only_on_a_snapshot_with_the_diff_as_data
     snapshot = codex_argv[codex_argv.index("-C") + 1]
     assert snapshot == str(review_council.snapshot_path(git(repo, "rev-parse", "HEAD"), run))
     assert not Path(snapshot).is_relative_to(repo)  # no work folder, no Git, holds the snapshot
-    assert Path((log / "codex.cwd").read_text("utf-8").strip()).resolve() == Path(snapshot).resolve()
-    assert (log / "codex.snapshot").read_text("utf-8") == "one\nTWO\nthree\nfour\n"  # as it was read
+    # A POSIX shell on Windows prints its own form of the path: compare the folder's name.
+    assert Path((log / "codex.cwd").read_text("utf-8").strip()).name == Path(snapshot).name
+    assert (log / "codex.snapshot").read_text(
+        "utf-8"
+    ) == "one\nTWO\nthree\nfour\n"  # as it was read
     assert (log / "codex.nogit").read_text("utf-8").strip() == "no .git"
     assert not Path(snapshot).exists()  # removed after the run
     listing = (log / "codex.ls").read_text("utf-8").split()
@@ -491,15 +499,26 @@ def test_a_harness_with_no_default_needs_a_model_named(
     assert review_council.parse_reviewer("other:m:e", 1, table).label == "other:m:e"
 
 
-def test_cursor_and_opencode_take_the_prompt_as_the_last_argument_and_say_read_only_is_unconfirmed(
+NAMED = ("--reviewer", "cursor:some-model[effort=high]", "--reviewer", "opencode:p/m#high")
+
+
+def test_the_plan_says_read_only_is_unconfirmed_for_cursor_and_opencode(
     tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    named = ("--reviewer", "cursor:some-model[effort=high]", "--reviewer", "opencode:p/m#high")
-    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", *named)
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", *NAMED)
     assert plan.count("READ-ONLY NOT CONFIRMED BY DOCUMENTATION") == 2
     assert "reviewer r1: cursor:some-model[effort=high]" in plan
     assert "<the prompt>" in plan and "standard input: closed" in plan
     assert "OPENCODE_PERMISSION=" in plan and "CURSOR_CONFIG_DIR=" in plan
+
+
+@pytest.mark.skipif(
+    WINDOWS, reason="a .cmd stand-in cannot carry the newlines of a multi-line argument"
+)
+def test_cursor_and_opencode_take_the_prompt_as_the_last_argument(
+    tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    named = NAMED
     code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", *named)
     assert code == 0, out
     log = tools / "log"
