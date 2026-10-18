@@ -20,6 +20,7 @@ wrote, and writes nothing under the checkout except the run folder. Standard lib
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -47,6 +48,8 @@ SPEND = (
     "person's own login or key. Run it only after the person says yes to this plan."
 )
 _PART = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/@+-]*")
+# A model id may carry its variant or parameters: `provider/model#variant`, `model[effort=high]`.
+_MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/@+#\[\],=-]*")
 _VERDICT = re.compile(r"Verdict:[ \t]*(FAIL|UNVERIFIED|PASS)[ \t]*", re.IGNORECASE)
 _LINE_REVIEWED = re.compile(r"[ \t]*Reviewed:", re.IGNORECASE)
 _LINE_DISPOSITION = re.compile(r"[ \t]*Disposition:", re.IGNORECASE)
@@ -102,7 +105,7 @@ class Reviewer:
 
     @property
     def label(self) -> str:
-        return f"{self.harness}:{self.model}:{self.effort}"
+        return ":".join(part for part in (self.harness, self.model, self.effort) if part)
 
 
 @dataclass
@@ -127,6 +130,8 @@ class Job:
     review: Path
     timeout: int
     spec: dict[str, Any]
+    values: dict[str, str]
+    env: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -157,34 +162,55 @@ def load_table(path: Path = TABLE) -> dict[str, Any]:
     return table
 
 
+def _default_for(harness: str, table: dict[str, Any]) -> tuple[str, str] | None:
+    """The model and effort of the first default-council entry of `harness`, or None."""
+
+    for entry in table.get("default_council", []):
+        name, _, rest = entry.partition(":")
+        if name == harness:
+            model, _, effort = rest.partition(":")
+            return model, effort
+    return None
+
+
 def parse_reviewer(text: str, index: int, table: dict[str, Any]) -> Reviewer:
-    """`harness[:model[:effort]]`; an empty or missing part is the table's default for the
-    harness. Each part is a plain word that cannot start a flag."""
+    """`harness[:model[:effort]]`; an empty or missing part is the harness's first entry in the
+    default council. Each part is a plain word that cannot start a flag. A harness whose effort
+    is part of its model id (`has_effort` false in the table) takes no effort part."""
 
     parts = text.split(":")
-    if len(parts) > 3 or not parts[0]:
-        raise CouncilError(
-            f"the reviewer {textio.quote(text)} is not harness:model[:effort] "
-            "(for example codex:gpt-6-astra:xhigh)"
-        )
     harness = parts[0]
     row = table["harnesses"].get(harness)
-    if row is None:
+    if row is None and harness and len(parts) <= 3:
         known = ", ".join(sorted(table["harnesses"]))
         raise CouncilError(f"the harness {textio.quote(harness)} is not in the table ({known})")
+    names = ("model", "effort") if row is None or row.get("has_effort", True) else ("model",)
+    if row is None or len(parts) > 1 + len(names):
+        raise CouncilError(
+            f"the reviewer {textio.quote(text)} is not harness:model"
+            + (":effort" if names == ("model", "effort") else "")
+            + " (for example codex:gpt-6-astra:xhigh)"
+        )
+    default = _default_for(harness, table)
     chosen = []
-    for given, name in zip([*parts[1:], "", ""], ("model", "effort"), strict=False):
-        if given and not _PART.fullmatch(given):
+    for position, name in enumerate(names):
+        given = parts[position + 1] if position + 1 < len(parts) else ""
+        if given and not (_MODEL if name == "model" else _PART).fullmatch(given):
             raise CouncilError(
                 f"the {name} {textio.quote(given)} of reviewer {textio.quote(text)} holds a "
                 "character that a model or an effort never holds"
             )
-        chosen.append(given or row["default"][name])
-    return Reviewer(f"r{index}", harness, chosen[0], chosen[1])
+        if not given and default is None:
+            raise CouncilError(
+                f"the reviewer {textio.quote(text)} names no {name}, and {harness} has no "
+                "default in the table"
+            )
+        chosen.append(given or (default[position] if default else ""))
+    return Reviewer(f"r{index}", harness, chosen[0], chosen[1] if len(chosen) > 1 else "")
 
 
 def default_reviewers(table: dict[str, Any]) -> list[Reviewer]:
-    return [parse_reviewer(name, i, table) for i, name in enumerate(table["harnesses"], 1)]
+    return [parse_reviewer(entry, i, table) for i, entry in enumerate(table["default_council"], 1)]
 
 
 # --- the request --------------------------------------------------------------------------------
@@ -293,12 +319,26 @@ def build_prompt(request: Request, reviewer: Reviewer) -> str:
 # --- the plan -----------------------------------------------------------------------------------
 
 
+def _holds(condition: str | None, values: dict[str, str]) -> bool:
+    """Whether a table entry's `when` condition holds: a name set in `values`, or `!name` unset."""
+
+    if not condition:
+        return True
+    if condition.startswith("!"):
+        return not values.get(condition[1:])
+    return bool(values.get(condition))
+
+
+def _fill(text: str, values: dict[str, str]) -> str:
+    return _PLACEHOLDER.sub(lambda m: values[m.group(1)], text)
+
+
 def _argv(spec: dict[str, Any], reviewer: Reviewer, values: dict[str, str]) -> list[str]:
     out = [spec["binary"]]
     for entry in spec["argv"]:
-        if entry.get("when") and not values.get(entry["when"]):
+        if not _holds(entry.get("when"), values):
             continue
-        out.extend(_PLACEHOLDER.sub(lambda m: values[m.group(1)], word) for word in entry["args"])
+        out.extend(_fill(word, values) for word in entry["args"])
     return out
 
 
@@ -331,6 +371,9 @@ def plan_jobs(
             "snapshot": str(snapshot),
             "answer": str(answer),
             "budget": budget or "",
+            "api_key": "1" if os.environ.get("ANTHROPIC_API_KEY") else "",
+            "prompt": "<the prompt>",
+            "configdir": str(out / f"{reviewer.tag}.config"),
         }
         jobs.append(
             Job(
@@ -344,6 +387,12 @@ def plan_jobs(
                 review=out / f"{reviewer.tag}-{reviewer.harness}.md",
                 timeout=timeout or int(spec["timeout_seconds"]),
                 spec=spec,
+                values=values,
+                env={
+                    entry["name"]: _fill(entry["value"], values)
+                    for entry in spec.get("env", [])
+                    if _holds(entry.get("when"), values)
+                },
             )
         )
     return jobs
@@ -377,16 +426,42 @@ def render_plan(request: Request, jobs: Sequence[Job], out: Path, budget: str | 
             f"  program: {found or 'NOT FOUND on PATH: this reviewer would fail'} "
             f"({spec['help_version']} is the version whose --help the flags were read from)",
             f"  argv: {_shown(job.argv)}",
-            f"  working folder: {job.cwd}; standard input: the prompt file {job.stdin}",
+            (
+                f"  working folder: {job.cwd}; standard input: closed; the prompt (file "
+                f"{job.stdin}) is the last argument"
+                if spec.get("prompt_via") == "argument"
+                else f"  working folder: {job.cwd}; standard input: the prompt file {job.stdin}"
+            ),
+            *[
+                f"  environment: {name}={value}  [{why}]"
+                for name, value, why in (
+                    (e["name"], job.env[e["name"]], e["safeguard"])
+                    for e in spec.get("env", [])
+                    if e["name"] in job.env
+                )
+            ],
+            *(
+                [
+                    "  READ-ONLY NOT CONFIRMED BY DOCUMENTATION (UNVERIFIED): "
+                    + spec["unconfirmed_reason"]
+                ]
+                if not spec.get("read_only_confirmed", True)
+                else []
+            ),
             f"  timeout: {job.timeout} s, then the process and its children are killed",
             f"  answer file: {job.answer}; review file: {job.review}",
             f"  cost: {spec['cost']}"
-            + (f"; cap {budget} USD" if budget and reviewer.harness == "claude" else ""),
+            + (f"; cap {budget} USD" if budget and "--max-budget-usd" in job.argv else ""),
+            *[
+                f"  {text}"
+                for condition, text in spec.get("notes", {}).items()
+                if _holds(condition, job.values)
+            ],
             "  read-only safeguards, each read from the source on the date, none yet shown by a "
             "run on this machine (UNVERIFIED unless `run` says tested):",
         ]
         for entry in spec["argv"]:
-            if "safeguard" not in entry or (entry.get("when") and not budget):
+            if "safeguard" not in entry or not _holds(entry.get("when"), job.values):
                 continue
             lines.append(
                 f"    {' '.join(entry['args'])}: {entry['safeguard']} "
@@ -450,12 +525,15 @@ def _snapshot(root: Path, commit: str, into: Path) -> None:
 def _answer(job: Job) -> tuple[str | None, float | None, str]:
     """The reviewer's answer text, its cost, and a reason where there is no answer."""
 
-    if job.spec["answer"]["from"] == "file":
+    source = job.spec["answer"]["from"]
+    if source in ("file", "stdout"):
+        place = job.answer if source == "file" else job.stdout
         try:
-            text = job.answer.read_text(encoding="utf-8", errors="replace")
+            text = place.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            return None, None, "it wrote no answer file"
-        return (text, None, "") if text.strip() else (None, None, "its answer file is empty")
+            return None, None, f"it wrote no {source} answer"
+        what = "answer file" if source == "file" else "standard output"
+        return (text, None, "") if text.strip() else (None, None, f"its {what} is empty")
     try:
         data = json.loads(job.stdout.read_text(encoding="utf-8", errors="replace"))
     except (OSError, json.JSONDecodeError):
@@ -480,6 +558,41 @@ def _tail(path: Path) -> str:
     return textio.plain(text[-STDERR_TAIL:])
 
 
+def _execute(job: Job, argv: list[str]) -> tuple[str, str] | None:
+    """Run the reviewer to its end; `(status, detail)` where it did not end with exit 0."""
+
+    by_argument = job.spec.get("prompt_via") == "argument"
+    try:
+        if by_argument:
+            argv[-1] = job.stdin.read_text(encoding="utf-8")
+        for entry in job.spec.get("env", []):
+            if "{configdir}" in entry["value"]:
+                Path(job.values["configdir"]).mkdir(parents=True, exist_ok=True)
+        with contextlib.ExitStack() as files:
+            stdin = subprocess.DEVNULL if by_argument else files.enter_context(job.stdin.open("rb"))
+            stdout = files.enter_context(job.stdout.open("wb"))
+            stderr = files.enter_context(job.stderr.open("wb"))
+            process = programs.start_tree(
+                argv,
+                stdin=stdin,
+                stdout=stdout,
+                stderr=stderr,
+                cwd=job.cwd,
+                env={**os.environ, **job.env},
+            )
+            try:
+                process.wait(job.timeout)
+            except subprocess.TimeoutExpired:
+                programs.stop_tree(process)
+                process.wait()
+                return "timeout", f"killed after {job.timeout} s"
+    except OSError as error:
+        return "failed", f"it could not start: {textio.plain(str(error))}"
+    if process.returncode != 0:
+        return "failed", f"exit {process.returncode}: {_tail(job.stderr)}"
+    return None
+
+
 def run_job(job: Job) -> Outcome:
     reviewer = job.reviewer
     started = time.monotonic()
@@ -494,26 +607,9 @@ def run_job(job: Job) -> Outcome:
     cap = job.spec.get("max_prompt_bytes")
     if cap and size_now > cap:
         return done("failed", f"the prompt is {size_now} bytes; the documented limit is {cap}")
-    argv = [found, *job.argv[1:]]
-    try:
-        with (
-            job.stdin.open("rb") as stdin,
-            job.stdout.open("wb") as stdout,
-            job.stderr.open("wb") as stderr,
-        ):
-            process = programs.start_tree(
-                argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=job.cwd
-            )
-            try:
-                process.wait(job.timeout)
-            except subprocess.TimeoutExpired:
-                programs.stop_tree(process)
-                process.wait()
-                return done("timeout", f"killed after {job.timeout} s")
-    except OSError as error:
-        return done("failed", f"it could not start: {textio.plain(str(error))}")
-    if process.returncode != 0:
-        return done("failed", f"exit {process.returncode}: {_tail(job.stderr)}")
+    failure = _execute(job, [found, *job.argv[1:]])
+    if failure is not None:
+        return done(*failure)
     text, cost, why = _answer(job)
     if text is None:
         return done("failed", f"{why}: {_tail(job.stderr)}", cost_usd=cost)

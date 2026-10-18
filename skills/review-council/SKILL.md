@@ -23,14 +23,15 @@ your own, so name reviewers that are not your model.
 Run `outcomebound review council --plan` with what to review (`--range A..B`, `--base REF`, or
 `--file PATH` for a design or a spec), a lens (what the reviewers look at, one lens for a run so
 that the answers compare), and a `--reviewer harness:model[:effort]` for each reviewer. With none
-named, the plan holds one reviewer of each harness in the engine's table, at the table's model and
-effort; those names are examples, so check them against what the person's logins offer. The plan
-runs nothing.
+named, the plan holds the engine's default council, several reviewers at the table's models and
+efforts; those names are examples, so check them against what the person's logins offer, and name
+fewer reviewers when the question does not need them all. The plan runs nothing.
 
 Show the person the plan as printed, so that their yes is to the argv, the timeout and the cap
 and not to your summary of them. Then say in plain words who reviews, what they read, that it
-spends their credits, any program the plan says is not found, and which safeguards no run has
-shown. Then ask for a plain yes. Only that yes lets you run `--accept`. A yes to an earlier plan, or to reviews in
+spends their credits, any program the plan says is not found, which login each Claude reviewer bills, any reviewer the
+plan marks as read-only not confirmed (one is run only if the person names it), and which
+safeguards no run has shown. Then ask for a plain yes. Only that yes lets you run `--accept`. A yes to an earlier plan, or to reviews in
 general, is not a yes to this plan: a changed reviewer, range, lens or cap is a new plan. A failed
 reviewer you want to run again is a new plan too. If you get no yes, you stop at the plan. You
 never start `codex`, `claude -p` or another reviewer by hand, because that skips the safeguards the

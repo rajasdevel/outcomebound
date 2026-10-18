@@ -42,6 +42,19 @@ case "${FAKE_CODEX:-ok}" in
   empty) : > "$out";;
 esac
 """
+CURSOR = """#!/bin/sh
+log="$FAKE_LOG"
+printf '%s\\n' "$@" > "$log/cursor.argv"
+env | grep '^CURSOR_CONFIG_DIR=' > "$log/cursor.env"
+if read line; then echo "stdin had input"; else echo "stdin closed"; fi > "$log/cursor.stdin"
+printf '{"type":"result","is_error":false,"result":"Verdict: PASS\\\\n\\\\nNothing found."}'
+"""
+OPENCODE = """#!/bin/sh
+log="$FAKE_LOG"
+printf '%s\\n' "$@" > "$log/opencode.argv"
+env | grep '^OPENCODE_' | sort > "$log/opencode.env"
+printf 'Verdict: PASS\\n\\nNothing found.\\n'
+"""
 CLAUDE = """#!/bin/sh
 log="$FAKE_LOG"
 printf '%s\\n' "$@" > "$log/claude.argv"
@@ -73,10 +86,12 @@ CLEAN = "Verdict: PASS\n\nNothing found.\n"
 
 
 def _defaults() -> dict[str, str]:
-    rows = review_council.load_table()["harnesses"]
-    return {
-        name: f"{name}:{r['default']['model']}:{r['default']['effort']}" for name, r in rows.items()
-    }
+    """Each harness's first default-council entry, which a bare `harness` reviewer means."""
+
+    found: dict[str, str] = {}
+    for entry in review_council.load_table()["default_council"]:
+        found.setdefault(entry.partition(":")[0], entry)
+    return found
 
 
 DEFAULTS = _defaults()
@@ -119,6 +134,8 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     bin_dir = tmp_path / "bin"
     shell_tool(bin_dir, "codex", CODEX)
     shell_tool(bin_dir, "claude", CLAUDE)
+    shell_tool(bin_dir, "cursor-agent", CURSOR)
+    shell_tool(bin_dir, "opencode", OPENCODE)
     shell_tool(bin_dir, "git", f'#!/bin/sh\nexec "{real_git}" "$@"\n')
     log = tmp_path / "log"
     log.mkdir()
@@ -132,12 +149,19 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("FAKE_CLAUDE_JSON", str(answers / "claude.json"))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for name in ("codex", "claude"):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    for name in ("codex", "claude", "cursor-agent", "opencode"):
         assert Path(programs.find(name) or "").parent == bin_dir, f"a real {name} would run"
     return tmp_path
 
 
-def council(capsys: pytest.CaptureFixture[str], repo: Path, *args: str) -> tuple[int, str, str]:
+def council(
+    capsys: pytest.CaptureFixture[str], repo: Path, *args: str, pair: bool = True
+) -> tuple[int, str, str]:
+    """Run the verb; with `pair`, and no reviewer named, the two harnesses at their defaults."""
+
+    if pair and "--reviewer" not in args:
+        args = (*args, "--reviewer", "codex", "--reviewer", "claude")
     code = review_council.main(["--root", str(repo), *args])
     captured = capsys.readouterr()
     return code, captured.out, captured.err
@@ -146,13 +170,15 @@ def council(capsys: pytest.CaptureFixture[str], repo: Path, *args: str) -> tuple
 def test_plan_names_each_reviewer_its_argv_and_safeguards_and_runs_nothing(
     tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", "--budget-usd", "3")
+    code, out, _ = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--budget-usd", "3", pair=False
+    )
     assert code == 0
     assert "COUNCIL PLAN (nothing has run)" in out
     assert "spends the person's credits" in out
-    # No reviewer named: one of each harness, at the table's defaults.
-    assert f"reviewer r1: {DEFAULTS['codex']}" in out
-    assert f"reviewer r2: {DEFAULTS['claude']}" in out
+    # No reviewer named: the table's default council, in its order.
+    for number, entry in enumerate(review_council.load_table()["default_council"], 1):
+        assert f"reviewer r{number}: {entry}" in out
     assert "-s read-only" in out and "--ephemeral" in out and "--ignore-user-config" in out
     assert "--restricted" in out and "--tools Read,Grep,Glob" in out
     assert "--permission-mode dontAsk" in out and "--max-budget-usd 3" in out
@@ -174,7 +200,7 @@ def test_a_reviewer_is_harness_model_effort_with_defaults_for_a_missing_part() -
     table = review_council.load_table()
     assert review_council.parse_reviewer("codex:m-9:low", 3, table).label == "codex:m-9:low"
     assert review_council.parse_reviewer("claude", 1, table).label == DEFAULTS["claude"]
-    model = table["harnesses"]["codex"]["default"]["model"]
+    model = DEFAULTS["codex"].split(":")[1]
     assert review_council.parse_reviewer("codex::max", 1, table).label == f"codex:{model}:max"
     for bad in ("", "gemini:x", "codex:--dangerously-bypass", "codex:m:e:x", "codex:a b"):
         with pytest.raises(review_council.CouncilError):
@@ -372,18 +398,23 @@ def test_the_range_diff_is_quoted_as_data(
 
 def test_the_table_holds_a_source_and_a_read_day_for_every_flag_and_no_dangerous_flag() -> None:
     table = review_council.load_table()
-    known = {"model", "effort", "snapshot", "answer", "budget"}
+    known = {"model", "effort", "snapshot", "answer", "budget", "prompt", "configdir", "api_key"}
+    for entry in table["default_council"]:  # each default names a harness of the table
+        assert entry.split(":")[0] in table["harnesses"] and entry.count(":") == 2, entry
+    for entry in table["default_council"]:  # a harness whose read-only mode is unconfirmed
+        assert table["harnesses"][entry.split(":")[0]].get("read_only_confirmed", True), entry
     for name, row in table["harnesses"].items():
-        assert row["default"]["model"] and row["default"]["effort"], name
+        assert row["timeout_seconds"] > 0 and row["binary"], name
         words = [word for entry in row["argv"] for word in entry["args"]]
+        words += [entry["value"] for entry in row.get("env", [])]
         assert not any(
             bad in word for word in words for bad in ("bypass", "dangerous", "yolo", "skip-perm")
         ), name
-        for entry in row["argv"]:
+        for entry in [*row["argv"], *row.get("env", [])]:
             assert entry["source"] and entry["read"] and entry["why"], (name, entry)
             assert entry["run"] in {"tested", "UNVERIFIED"}, (name, entry)
             assert isinstance(entry["listed_in_help"], bool)
-            for word in entry["args"]:
+            for word in [*entry.get("args", []), entry.get("value", "")]:
                 for placeholder in review_council._PLACEHOLDER.findall(word):
                     assert placeholder in known, (name, word)
     assert ["-s", "read-only"] in [e["args"] for e in table["harnesses"]["codex"]["argv"]]
@@ -427,3 +458,70 @@ def test_a_path_with_no_readable_blob_is_flagged_and_the_run_goes_on(
     review = next((repo / ".agents/work/council").glob("*/r1-codex.md")).read_text()
     assert "src/app.py:2 names an entry of the revision that is no file" in review
     assert next((repo / ".agents/work/council").glob("*/council.json")).is_file()
+
+
+def test_claude_uses_bare_where_an_api_key_is_set_and_restricted_where_none_is(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, plain, _ = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "not-a-real-key")
+    _, keyed, _ = council(capsys, repo, "--plan", "--base", "HEAD~1")
+
+    def argvs(text: str) -> list[str]:
+        return [line for line in text.splitlines() if line.strip().startswith("argv: claude")]
+
+    assert argvs(plain) and argvs(keyed)
+    assert all("--restricted --safe-mode" in a and "--bare" not in a for a in argvs(plain))
+    assert all("--bare" in a and "--restricted" not in a for a in argvs(keyed))
+    assert "bills the API key" in keyed and "the person's Claude login" in plain
+    assert "not-a-real-key" not in keyed + plain  # the key is never printed
+    for argv_line in argvs(keyed):
+        assert "--tools Read,Grep,Glob" in argv_line and "--permission-mode dontAsk" in argv_line
+
+
+def test_a_harness_with_no_default_needs_a_model_named(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    table = {"harnesses": {"other": {}}, "default_council": []}
+    with pytest.raises(review_council.CouncilError, match="no default"):
+        review_council.parse_reviewer("other", 1, table)
+    assert review_council.parse_reviewer("other:m:e", 1, table).label == "other:m:e"
+
+
+def test_cursor_and_opencode_take_the_prompt_as_the_last_argument_and_say_read_only_is_unconfirmed(
+    tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    named = ("--reviewer", "cursor:some-model[effort=high]", "--reviewer", "opencode:p/m#high")
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", *named)
+    assert plan.count("READ-ONLY NOT CONFIRMED BY DOCUMENTATION") == 2
+    assert "reviewer r1: cursor:some-model[effort=high]" in plan
+    assert "<the prompt>" in plan and "standard input: closed" in plan
+    assert "OPENCODE_PERMISSION=" in plan and "CURSOR_CONFIG_DIR=" in plan
+    code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", *named)
+    assert code == 0, out
+    log = tools / "log"
+    cursor = (log / "cursor.argv").read_text().split("\n")
+    assert cursor[:3] == ["-p", "--mode", "ask"] and "--force" not in cursor
+    assert cursor[cursor.index("--model") + 1] == "some-model[effort=high]"
+    assert "independent reviewer" in "\n".join(cursor[cursor.index("--model") + 2 :])  # last
+    assert (log / "cursor.stdin").read_text().strip() == "stdin closed"
+    assert (log / "cursor.env").read_text().strip().startswith("CURSOR_CONFIG_DIR=")
+    opencode = (log / "opencode.argv").read_text().split("\n")
+    assert opencode[:2] == ["run", "--standalone"] and "--auto" not in opencode
+    assert "independent reviewer" in "\n".join(opencode[opencode.index("--model") + 2 :])
+    env = (log / "opencode.env").read_text()
+    assert 'OPENCODE_PERMISSION={"*":"deny"' in env and "OPENCODE_DISABLE_CLAUDE_CODE=1" in env
+    for name in ("r1-cursor.md", "r2-opencode.md"):
+        review = next((repo / ".agents/work/council").glob(f"*/{name}"))
+        assert review.read_text().startswith("Reviewed: ")
+
+
+def test_a_harness_with_its_effort_in_the_model_id_refuses_an_effort_part() -> None:
+    table = review_council.load_table()
+    for bad in ("cursor", "cursor:m:high", "opencode:p/m:high", "opencode"):
+        with pytest.raises(review_council.CouncilError):
+            review_council.parse_reviewer(bad, 1, table)
+    assert review_council.parse_reviewer("cursor:m[effort=high]", 1, table).effort == ""

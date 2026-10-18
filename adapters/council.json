@@ -1,14 +1,10 @@
 {
   "version": 1,
-  "note": "The review council's table: one row per reviewer harness. Each entry of `argv` is one flag with its reason and its source. `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, in the `help_version` below. `run` is `tested` only where a harmless run on a machine showed the effect, else `UNVERIFIED`; no entry is `tested` yet. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; no entry is `tested` yet. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
       "help_version": "codex-cli 0.163.0",
-      "default": {
-        "model": "gpt-6-astra",
-        "effort": "xhigh"
-      },
       "timeout_seconds": 1800,
       "timeout_source": "https://skills.cat/skills/trancong12102/agentskills/council-review (read 2026-10-18: a Codex review may take up to 30 minutes)",
       "max_prompt_bytes": null,
@@ -154,10 +150,6 @@
     "claude": {
       "binary": "claude",
       "help_version": "Claude Code 2.1.302",
-      "default": {
-        "model": "claude-fable-5-1",
-        "effort": "high"
-      },
       "timeout_seconds": 1800,
       "timeout_source": "UNVERIFIED: no source for a Claude run; the Codex figure is used",
       "max_prompt_bytes": 10485760,
@@ -180,14 +172,27 @@
         },
         {
           "args": [
+            "--bare"
+          ],
+          "when": "api_key",
+          "safeguard": "hooks (of settings and plugins), skills, plugins, MCP servers, auto memory and CLAUDE.md discovery are skipped; auth is ANTHROPIC_API_KEY only, so the run bills the API key and not the person's login",
+          "why": "the documented mode for scripted calls; preferred where an API key is set",
+          "source": "installed `claude --help`; https://code.claude.com/docs/en/headless",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
             "--restricted"
           ],
-          "safeguard": "no command-running tool, settings files of the user, the project and the folder are ignored (so no hook of theirs runs), file tools stay inside the working folder; --bare would also skip hooks but reads no login and needs ANTHROPIC_API_KEY",
+          "safeguard": "no command-running tool; the settings files of the user, the project and the folder are ignored (so no hook of theirs runs); file tools stay inside the working folder. Used where no API key is set, since --bare reads no login",
           "why": "isolation for scripted review",
           "source": "installed `claude --help`; https://code.claude.com/docs/en/cli-reference",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "when": "!api_key"
         },
         {
           "args": [
@@ -198,7 +203,8 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "when": "!api_key"
         },
         {
           "args": [
@@ -315,7 +321,240 @@
           "listed_in_help": true,
           "run": "UNVERIFIED"
         }
+      ],
+      "notes": {
+        "api_key": "login: ANTHROPIC_API_KEY is set, so the run uses --bare and bills the API key; the file tools are not confined to the working folder by a flag (the tool list and permission mode are what limit them: UNVERIFIED)",
+        "!api_key": "login: the person's Claude login (no ANTHROPIC_API_KEY is set), so the run uses --restricted and --safe-mode instead of --bare; whether those work with that login is UNVERIFIED"
+      }
+    },
+    "cursor": {
+      "binary": "cursor-agent",
+      "help_version": "cursor-agent 2026.10.16-e3cb207",
+      "has_effort": false,
+      "read_only_confirmed": false,
+      "unconfirmed_reason": "the docs name --mode ask and --plan as read-only but do not say that shell commands, MCP tools or web fetch are blocked in them, print mode is documented to have access to all tools, and no switch turns off the folder's rules, instruction files or MCP configuration (research read 2026-10-18)",
+      "timeout_seconds": 1800,
+      "timeout_source": "UNVERIFIED: no source for a Cursor run; the Codex figure is used",
+      "prompt_via": "argument",
+      "max_prompt_bytes": 131071,
+      "max_prompt_source": "execve(2): one argument string is limited to 32 pages on Linux (131072 bytes including the final NUL); not re-read today",
+      "answer": {
+        "from": "json",
+        "key": "result"
+      },
+      "cost": "none reported (the JSON result has no usage or cost field in the docs); no spend cap flag; the timeout is the only bound on a run. Billing follows the Cursor account or CURSOR_API_KEY",
+      "env": [
+        {
+          "name": "CURSOR_CONFIG_DIR",
+          "value": "{configdir}",
+          "safeguard": "the Cursor config folder is an empty folder made for the run, so no user permission file, hook or rule of the person is read",
+          "why": "isolate the config",
+          "source": "https://cursor.com/docs/cli/reference/configuration",
+          "read": "2026-10-18",
+          "listed_in_help": false,
+          "run": "UNVERIFIED"
+        }
+      ],
+      "argv": [
+        {
+          "args": [
+            "-p"
+          ],
+          "why": "print mode, non-interactive",
+          "source": "installed `cursor-agent --help`, 2026.10.16; https://cursor.com/docs/cli/headless",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--mode",
+            "ask"
+          ],
+          "safeguard": "mode ask is described as read-only; whether it blocks shell, MCP and web fetch is not documented",
+          "why": "Q&A mode, documented read-only",
+          "source": "installed `cursor-agent --help`, 2026.10.16; https://cursor.com/docs/cli/reference/parameters",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--sandbox",
+            "enabled"
+          ],
+          "safeguard": "the sandbox is on; its effect in print mode is not stated",
+          "why": "turn the sandbox on",
+          "source": "installed `cursor-agent --help`, 2026.10.16",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--workspace",
+            "{snapshot}"
+          ],
+          "safeguard": "the workspace is the snapshot of the reviewed revision",
+          "why": "the folder to work in",
+          "source": "installed `cursor-agent --help`, 2026.10.16",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--output-format",
+            "json"
+          ],
+          "why": "one JSON result, the answer in `result`",
+          "source": "installed `cursor-agent --help`, 2026.10.16; https://cursor.com/docs/cli/reference/output-format",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--model",
+            "{model}"
+          ],
+          "why": "model; its effort is part of the id or a bracket override, such as `model[effort=high]`",
+          "source": "installed `cursor-agent --help`, 2026.10.16",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "{prompt}"
+          ],
+          "why": "the prompt is the last argument; the docs do not mention standard input",
+          "source": "installed `cursor-agent --help`, 2026.10.16; https://cursor.com/docs/cli/headless",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        }
+      ]
+    },
+    "opencode": {
+      "binary": "opencode",
+      "help_version": "opencode v2.0.32",
+      "has_effort": false,
+      "read_only_confirmed": false,
+      "unconfirmed_reason": "the docs give permission keys with deny and inline JSON by environment variable, but not what an `ask` does in `run`, whether permission keys cover MCP tools, or any way to ignore the folder's instruction files, project config, plugins or MCP servers; the documented pages and the installed --help also disagree on flags (research read 2026-10-18)",
+      "timeout_seconds": 1800,
+      "timeout_source": "UNVERIFIED: no source for an OpenCode run; the Codex figure is used",
+      "prompt_via": "argument",
+      "max_prompt_bytes": 131071,
+      "max_prompt_source": "execve(2): one argument string is limited to 32 pages on Linux (131072 bytes including the final NUL); not re-read today",
+      "answer": {
+        "from": "stdout"
+      },
+      "cost": "none reported; no spend cap flag; the timeout is the only bound on a run. Billing follows the provider of the model named. The answer is taken from standard output in the default format; the final-answer field of `--format json` is UNVERIFIED",
+      "env": [
+        {
+          "name": "OPENCODE_PERMISSION",
+          "value": "{\"*\":\"deny\",\"read\":\"allow\",\"glob\":\"allow\",\"grep\":\"allow\",\"list\":\"allow\"}",
+          "safeguard": "every tool is denied except read, glob, grep and list (inline JSON, so no file of the reviewed folder is needed); the shape is built from the permissions page and is UNVERIFIED as a whole",
+          "why": "read-only permissions",
+          "source": "https://opencode.ai/docs/permissions",
+          "read": "2026-10-18",
+          "listed_in_help": false,
+          "run": "UNVERIFIED"
+        },
+        {
+          "name": "OPENCODE_DISABLE_CLAUDE_CODE",
+          "value": "1",
+          "safeguard": "Claude Code's folders and instruction files are not read",
+          "why": "no foreign instructions",
+          "source": "https://opencode.ai/docs/rules",
+          "read": "2026-10-18",
+          "listed_in_help": false,
+          "run": "UNVERIFIED"
+        },
+        {
+          "name": "OPENCODE_DISABLE_DEFAULT_PLUGINS",
+          "value": "1",
+          "safeguard": "the default plugins are not loaded",
+          "why": "no plugins",
+          "source": "https://opencode.ai/docs/plugins",
+          "read": "2026-10-18",
+          "listed_in_help": false,
+          "run": "UNVERIFIED"
+        },
+        {
+          "name": "OPENCODE_DISABLE_AUTOUPDATE",
+          "value": "1",
+          "safeguard": "the tool does not update itself during the run",
+          "why": "no update",
+          "source": "https://opencode.ai/docs/config",
+          "read": "2026-10-18",
+          "listed_in_help": false,
+          "run": "UNVERIFIED"
+        }
+      ],
+      "argv": [
+        {
+          "args": [
+            "run"
+          ],
+          "why": "non-interactive run",
+          "source": "installed `opencode run --help`, v2.0.32; https://opencode.ai/docs/cli",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--standalone"
+          ],
+          "safeguard": "the run does not use the background service, which may hold another environment (UNVERIFIED)",
+          "why": "a private server, so the run takes the environment given here and not a background service's",
+          "source": "installed `opencode run --help`, v2.0.32",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--format",
+            "default"
+          ],
+          "why": "formatted text on standard output",
+          "source": "installed `opencode run --help`, v2.0.32",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "--model",
+            "{model}"
+          ],
+          "why": "model as `provider/model#variant`; the variant is the reasoning effort",
+          "source": "installed `opencode run --help`, v2.0.32; https://opencode.ai/docs/models",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        },
+        {
+          "args": [
+            "{prompt}"
+          ],
+          "why": "the prompt is the last argument; the docs do not mention standard input",
+          "source": "installed `opencode run --help`, v2.0.32; https://opencode.ai/docs/cli",
+          "read": "2026-10-18",
+          "listed_in_help": true,
+          "run": "UNVERIFIED"
+        }
       ]
     }
-  }
+  },
+  "default_council": [
+    "codex:gpt-6-astra:xhigh",
+    "codex:gpt-6.1-sol:medium",
+    "claude:claude-opus-5-5:high",
+    "claude:claude-sonnet-5-5:high",
+    "claude:claude-fable-5-1:high"
+  ]
 }
