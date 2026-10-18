@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:brief-open:1",
+  "title": "OutcomeBound open briefs report v1",
+  "description": "What `outcomebound brief open --json` prints: the briefs with no `Decided:` line for their id, newest first, and the ids that stand for different questions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "searched",
+    "count",
+    "open",
+    "collisions",
+    "not_read",
+    "does_not_establish"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "searched": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "count": {
+      "type": "integer",
+      "description": "The length of `open`; collisions are not counted."
+    },
+    "open": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "question",
+          "source",
+          "date"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer",
+            "description": "The line of the Markdown heading; absent for a JSON document."
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+            "description": "The calendar date of the source file's last change; empty where it cannot be read."
+          },
+          "why_now": {
+            "type": "string",
+            "description": "The work that waits on the answer, where the brief says; absent otherwise."
+          }
+        }
+      }
+    },
+    "collisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "briefs"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "briefs": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "question",
+                "source",
+                "date"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "question": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer",
+                  "description": "The line of the Markdown heading; absent for a JSON document."
+                },
+                "date": {
+                  "type": "string",
+                  "pattern": "^(\\d{4}-\\d{2}-\\d{2})?$",
+                  "description": "The calendar date of the source file's last change; empty where it cannot be read."
+                },
+                "why_now": {
+                  "type": "string",
+                  "description": "The work that waits on the answer, where the brief says; absent otherwise."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "not_read": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "does_not_establish": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
