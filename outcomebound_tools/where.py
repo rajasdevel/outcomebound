@@ -127,10 +127,15 @@ def _dirty(root: Path) -> int:
 
 
 def _shown(path: Path, top: Path) -> str:
-    try:
-        return path.relative_to(top).as_posix()
-    except ValueError:
-        return str(path)
+    """`path` relative to the work tree; a file of the main checkout reads `main checkout: <path>`."""
+
+    for base, prefix in ((top, ""), (brief_lookup.main_checkout(top), "main checkout: ")):
+        if base is not None:
+            try:
+                return prefix + path.relative_to(base).as_posix()
+            except ValueError:
+                pass
+    return str(path)
 
 
 # --- git and worktrees ----------------------------------------------------------------
@@ -533,10 +538,7 @@ def _handoff(top: Path) -> tuple[Path | None, list[Item]]:
         f"{_age(time.time() - mtime)} ago{commits} by commit date, which a rebase moves; it is a "
         "claim, check its facts against the lines above"
     )
-    where = _shown(path, top)
-    if Path(where).is_absolute():
-        where = f"main checkout: .agents/handoffs/{path.name}"
-    return path, [_item("handoff", SEE(where), NOTE, text)]
+    return path, [_item("handoff", SEE(_shown(path, top)), NOTE, text)]
 
 
 def _brief_items(

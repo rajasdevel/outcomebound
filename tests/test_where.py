@@ -482,7 +482,7 @@ def test_a_worktree_reads_the_main_checkouts_handoffs_and_reviews(project, tmp_p
     git(project, "worktree", "add", "-q", "-b", "tree", str(tree))
     items = read(tree)
     assert one(items, "handoff")["source"] == "main checkout: .agents/handoffs/a.md"
-    assert one(items, "review", source="r6.md")["verdict"] == "OPEN"
+    assert one(items, "review", source="main checkout: .agents/work/r/r6.md")["verdict"] == "OPEN"
 
 
 # --- the whole report ----------------------------------------------------------------------
