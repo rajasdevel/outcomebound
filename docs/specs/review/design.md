@@ -66,7 +66,7 @@ rows keep each reviewer read-only: Codex `-s read-only` with no session kept and
 rules loaded; Claude `-p --restricted --safe-mode` with the tools `Read`, `Grep` and `Glob`, the writing and
 command tools denied by name, permission mode `dontAsk` with no one to answer a prompt, no MCP
 server and no skill. No flag turns off Claude's session record: a reviewer's session is kept like
-any other. The login of the person's own folders (`~/.claude`, `~/.codex`) is not isolated; the
+any other. The instruction files in the person's own home are not isolated; the
 files of the revision are. A
 reviewer that does not start, exits non-zero, passes the timeout (its process group is killed),
 writes no answer or an empty one, whose answer does not begin with `Verdict: FAIL`,
