@@ -104,7 +104,6 @@ _REF_WORD = re.compile(
 _HEX = re.compile(r"(?=.*\d)(?=.*[a-fA-F])[0-9a-fA-F]{7,40}")
 _REF_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 _SKIPPED_FOLDERS = frozenset((".git", "node_modules", ".venv"))
-_HTML_COMMENT = re.compile(r"<!--.*?-->")
 _SETEXT = re.compile(r" {0,3}(?:=+|-+)[ \t]*")
 _HTML_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
 _HEADING_LINK = re.compile(r"!?\[(?P<text>[^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
@@ -190,18 +189,31 @@ def _blank_spans(line: str) -> tuple[str, list[re.Match[str]]]:
 
 
 def _without_comments(line: str, inside: bool) -> tuple[str, bool]:
-    """`line` with HTML comments removed, and whether a comment is still open at its end."""
+    """`line` with HTML comments blanked out, and whether a comment is still open at its end.
 
-    if inside:
-        end = line.find("-->")
-        if end < 0:
-            return "", True
-        line = " " * (end + 3) + line[end + 3 :]
-    line = _HTML_COMMENT.sub(lambda m: " " * len(m.group(0)), line)
-    start = line.find("<!--")
-    if start >= 0:
-        return line[:start], True
-    return line, False
+    This only decides which text is read for links; nothing is sanitised or printed from it.
+    """
+
+    kept: list[str] = []
+    position = 0
+    while position < len(line):
+        if inside:
+            end = line.find("-->", position)
+            if end < 0:
+                kept.append(" " * (len(line) - position))
+                return "".join(kept), True
+            kept.append(" " * (end + 3 - position))
+            position, inside = end + 3, False
+            continue
+        start = line.find("<!--", position)
+        if start < 0:
+            kept.append(line[position:])
+            break
+        kept.append(line[position:start])
+        position, inside = start, True
+        kept.append("    ")
+        position = start + 4
+    return "".join(kept), inside
 
 
 def _ref_candidate(before: str, body: str) -> bool:
