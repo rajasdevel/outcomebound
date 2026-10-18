@@ -321,7 +321,9 @@ def test_a_wait_on_an_id_no_brief_defines_is_unverified(project):
 def test_an_export_given_by_name_is_read_in_place_of_the_default(project, tmp_path):
     declare(project)
     elsewhere = tmp_path / "export.json"
-    elsewhere.write_text(json.dumps(export.export(export.issue(9, title="far one"))))
+    elsewhere.write_text(
+        json.dumps(export.export(export.issue(9, title="far one"))), encoding="utf-8"
+    )
     line = one(read(project, export=elsewhere), "ticket", subject="#9")
     assert line["verdict"] == "OPEN"
 
@@ -611,7 +613,7 @@ def test_gh_is_told_not_to_prompt_or_check_for_updates(project, tmp_path, monkey
     script = f"#!/bin/sh\n{echo}\necho '[]'\n"
     gh_on_path(monkeypatch, tmp_path, script)
     read(project, offline=False)
-    assert seen.read_text().split() == ["1", "1"]
+    assert seen.read_text(encoding="utf-8").split() == ["1", "1"]
 
 
 def test_a_review_of_a_moving_ref_is_counted_not_tied_to_the_branch(project):
