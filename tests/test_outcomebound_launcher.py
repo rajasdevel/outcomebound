@@ -44,6 +44,7 @@ VERBS = (
     "sources",
     "review",
     "size",
+    "workspace",
     "explorable",
 )
 

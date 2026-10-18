@@ -181,7 +181,7 @@ scan; shellcheck 0.9.0, 0.10.0 and 0.11.0 print the same `json1` report over one
 
 ### Retained results and `validation status`
 
-`outcomebound validation <plan>` keeps one result record for each attempt of each claim it runs, in
+`outcomebound validation <plan>` (and `outcomebound tickets verify`, which runs the same function) keeps one result record for each attempt of each claim it runs, in
 the check folder beside the plan: `<log stem>.<attempt>.result.json`, with the attempt's output in
 `<log stem>.<attempt>.out` (`unit.20261018T080100605650Z.result.json`; the attempt is the UTC start
 time to the microsecond). An attempt is never rewritten by a later one, so the output of a failure
@@ -214,6 +214,8 @@ an invalid plan (exit 2), as is a `--waive` for a claim not selected. The `VERDI
 `(N of M claims, selected by --claim; not the plan's verdict)`, and where none of them is required it
 reads UNVERIFIED, since nothing required was run. The exit code follows that line. A gate (Make, CI)
 runs the plan without `--claim`. A claim not run keeps its earlier record.
+`outcomebound tickets verify` selects claims by a ticket's `done-when` and runs them through the same
+`run_plan` with the same records; its verdict and exits are its own ([tickets design](../tickets/design.md)).
 
 A claim may name `environment` variables whose values can change its result; `status` reads a claim as
 `UNVERIFIED` where one now differs from the run's. A claim may declare `paths`: the files and folders, relative to the plan's working directory, whose

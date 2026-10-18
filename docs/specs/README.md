@@ -28,6 +28,8 @@ the same change.
 - [review](review/design.md): the review file and `outcomebound review check`: every finding ends in a disposition.
 - [size](size/design.md): `outcomebound size`. How big a change is against a base, and what kind of
   lines it holds.
+- [workspace](workspace/design.md): `outcomebound workspace audit`. A read-only report of the
+  project's worktrees and which pass the mechanical removal rule.
 - [research](research/design.md): the research repository. How the engine finds, prints and
   updates its clone, and how it takes findings back.
 
