@@ -681,6 +681,9 @@ _EXAMPLE = """\
 }"""
 
 _EPILOG = f"""\
+`outcomebound brief lookup TERM... [--in PATH]... [--json]` finds a brief by id or words and
+prints the `Decided:` answer recorded for it (`lookup --help`).
+
 The document is one JSON object (schemas/decision-briefs.schema.json):
   briefs   the briefs, in the order they are put to the person; each holds
            id (required: the id the person answers by, joined to the heading
@@ -1103,6 +1106,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Draw the document's briefs, their diagrams and their order as markdown on
     standard output."""
 
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["lookup"]:
+        # A document named `lookup` is given as `./lookup`.
+        from outcomebound_tools import brief_lookup
+
+        return brief_lookup.main(arguments[1:])
     parser = argparse.ArgumentParser(
         prog="outcomebound brief",
         description="Draw the decisions an agent puts to a person as decision briefs, "
@@ -1129,7 +1138,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="print the briefs as JSON questions for a harness's question tool, each field "
         "on one line, instead of drawing them",
     )
-    args = parser.parse_args(argv)
+    args = parser.parse_args(arguments)
     symbols = args.symbols or symbols_for(sys.stdout)
     source = "standard input" if args.document == "-" else args.document
     try:

@@ -429,11 +429,23 @@ def _parser() -> argparse.ArgumentParser:
     swept.add_argument("folder", nargs="?", default=".agents/work", metavar="DIR")
     swept.add_argument("--json", action="store_true", help="print one JSON object, not text")
     swept.add_argument("--verbose", action="store_true", help="also print the checks that passed")
+    commands.add_parser(
+        "since",
+        prog="outcomebound review since",
+        help="what changed since the ref a review read (reads Git; see `since --help`)",
+        add_help=False,
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    options = _parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["since"]:
+        # Its own module: `check` and `sweep` stay free of Git.
+        from outcomebound_tools import review_since
+
+        return review_since.main(arguments[1:])
+    options = _parser().parse_args(arguments)
     if options.command == "sweep":
         folder = Path(options.folder)
         if not folder.is_dir():
