@@ -1,15 +1,18 @@
 # Cloud sessions
 
 A cloud session is an agent run on a machine that the harness's maker hosts. Examples are Claude
-Code on the web, Codex cloud, GitHub Copilot's cloud agent and Cursor's cloud agents. Each session
-starts from a fresh clone of your repository. Facts here come from the makers' pages, read on
+Code on the web, Codex cloud, GitHub Copilot's cloud agent and Cursor's cloud agents. The page for
+Claude Code on the web says a session starts from a fresh clone
+([page](https://code.claude.com/docs/en/claude-code-on-the-web)). The pages for the other three
+describe an ephemeral or separate environment built from your repository, and this guide treats
+them the same way; that is an inference. Facts here come from the makers' pages, read on
 2026-10-17, and each is marked with its page. A fact that no page shows is marked `UNVERIFIED`.
 No cloud session was run to write this guide.
 
 ## What arrives
 
 The session gets what your pushed branch holds. After `outcomebound adopt`, that is the committed
-install: the `AGENTS.md` block, the pointer file, the guidance under `.outcomebound/fragments/`
+install: the `AGENTS.md` block, the pointer file where the harness needs one, the guidance under `.outcomebound/fragments/`
 and the skill folders.
 
 The session does not get:
@@ -20,14 +23,19 @@ The session does not get:
 - the research clone, which `outcomebound research` keeps once for each machine. The verb then
   names the public link instead.
 - your personal files and memory. For Claude Code on the web, the user-level Claude files in your
-  home folder do not load ([page](https://code.claude.com/docs/en/claude-code-on-the-web)).
+  home folder do not load ([page](https://code.claude.com/docs/en/settings)).
 
 Whether each harness loads the committed skill folders in a cloud session is shown for Claude Code
-on the web only: its page says the repository's `.claude/skills` load. For Codex cloud, Copilot and
-Cursor it is `UNVERIFIED`. The pages for Codex cloud, Copilot and Cursor say the agent reads
-`AGENTS.md` (Codex cloud: for lint and test commands). Claude Code on the web loads the repository's
-`CLAUDE.md`, which the install points at `AGENTS.md`; whether it reads `AGENTS.md` by itself there is
-`UNVERIFIED`.
+on the web only: its page says the repository's `.claude/skills` load
+([page](https://code.claude.com/docs/en/skills)). For Codex cloud, Copilot and Cursor it is
+`UNVERIFIED`. The Codex cloud page says the agent uses `AGENTS.md` for lint and test commands
+([page](https://learn.chatgpt.com/docs/environments/cloud-environment)). The Copilot reference says
+its cloud agent supports `AGENTS.md`
+([page](https://docs.github.com/en/copilot/reference/custom-instructions-support)). The Cursor page
+says its cloud agents read `AGENTS.md` ([page](https://cursor.com/docs/cloud-agent)). Claude Code on
+the web loads the repository's `CLAUDE.md`, which the install points at `AGENTS.md`
+([page](https://code.claude.com/docs/en/claude-code-on-the-web)); whether it reads `AGENTS.md` by
+itself there is `UNVERIFIED`.
 
 ## The install line
 
@@ -39,8 +47,10 @@ uv tool install outcomebound==<version>
 ```
 
 Where `uv` is not there, the fallback is `python3 -m pip install outcomebound==<version>`. Add the
-line to the setup step of your cloud environment. Where your project records a `Setup` fact, add
-the line to that fact too, so that a person with a fresh clone runs the same steps.
+line to the setup step of your cloud environment. Where your project records a `Setup` fact, record
+the line there too, so that a person with a fresh clone runs the same steps: run
+`outcomebound adopt . --setup` again, repeating each recorded command and adding the line. Do not
+edit the `Setup` line in `AGENTS.md` by hand, because `adopt` owns that block.
 
 The package index must be reachable from the setup step:
 
@@ -48,8 +58,10 @@ The package index must be reachable from the setup step:
   ([page](https://code.claude.com/docs/en/cloud-environments)).
 - Codex cloud: the setup script runs with internet access; the agent phase after it blocks internet
   access by default ([page](https://learn.chatgpt.com/docs/environments/cloud-environment)).
-- GitHub Copilot and Cursor: the pages do not say if the package index is reachable by default.
-  `UNVERIFIED`.
+- GitHub Copilot: the page says the firewall does not cover setup-step processes
+  ([page](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-firewall)).
+  Whether the package index is reachable by default is `UNVERIFIED`.
+- Cursor: the pages do not say. `UNVERIFIED`.
 
 ## Where each harness keeps its setup step
 
@@ -58,7 +70,7 @@ The table is in `adapters/cloud.json`, with the page and the read date of each r
 | Harness | Setup step | Page, read 2026-10-17 |
 | --- | --- | --- |
 | Claude Code on the web | the cloud environment's setup script | [cloud environments](https://code.claude.com/docs/en/cloud-environments) |
-| Codex cloud | the environment's setup script | [cloud environment](https://learn.chatgpt.com/docs/environments/cloud-environment) |
+| Codex cloud | the environment's setup script | [cloud environment](https://learn.chatgpt.com/docs/environments/cloud-environment); the page says a newer guide replaces it, and that guide was not found |
 | GitHub Copilot | `.github/workflows/copilot-setup-steps.yml`, one job named `copilot-setup-steps`, read from the default branch only | [customize the agent environment](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment) |
 | Cursor | `.cursor/environment.json`, the `install` key, built from the default branch | [setup](https://cursor.com/docs/cloud-agent/setup) |
 

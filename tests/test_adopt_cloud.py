@@ -18,6 +18,7 @@ from tests.adopt_helpers import ROOT, Capture, engine_copy, repo, run, snapshot
 VERSION = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
 CLOUD = json.loads((ROOT / "adapters/cloud.json").read_text(encoding="utf-8"))
 UV = f"uv tool install outcomebound=={VERSION}"
+SETUP_LINE = "add the install line to it with --setup, repeating each recorded command"
 PIP = f"python3 -m pip install outcomebound=={VERSION}"
 
 
@@ -55,7 +56,7 @@ def test_an_install_names_the_pinned_line_and_each_selected_harnesss_setup(
     assert "Claude Code on the web: the cloud environment's setup script" in text
     assert "GitHub Copilot: .github/workflows/copilot-setup-steps.yml" in text
     assert "Codex cloud" not in text and "Cursor" not in text
-    assert "Setup fact too" not in text, "no Setup is recorded, so no line asks to add to it"
+    assert SETUP_LINE not in text, "no Setup is recorded, so no line asks to add to it"
 
 
 def test_the_note_prints_once_and_writes_no_file(tmp_path: Path, capsys: Capture) -> None:
@@ -94,10 +95,10 @@ def test_a_recorded_setup_is_asked_to_hold_the_install_line_too(
 
     target = repo(tmp_path / "t")
     _, out, _ = run(capsys, str(target), "--harness", "claude-code", "--setup", "make setup")
-    assert "add the install line to the Setup fact too" in "\n".join(cloud_lines(out))
+    assert SETUP_LINE in "\n".join(cloud_lines(out))
 
     _, out, _ = run(capsys, str(target), "--check")
-    assert "add the install line to the Setup fact too" in "\n".join(cloud_lines(out))
+    assert SETUP_LINE in "\n".join(cloud_lines(out))
 
 
 def test_a_target_with_no_harness_gets_every_entry(tmp_path: Path, capsys: Capture) -> None:
@@ -121,3 +122,25 @@ def test_the_line_follows_the_version_of_the_engine_installing(
 
     assert "uv tool install outcomebound==9.8.7" in out
     assert "python3 -m pip install outcomebound==9.8.7" in out
+
+
+def test_an_entry_without_a_name_or_setup_is_left_out_and_a_broken_table_is_refused(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a half-written entry prints as `None: None`, or a table that is not JSON
+    is read as empty."""
+
+    source = engine_copy(tmp_path)
+    table = source / "adapters/cloud.json"
+    table.write_text(
+        json.dumps({"x": {"harness": None}, "y": "text", "z": CLOUD["github-copilot"]}),
+        encoding="utf-8",
+    )
+    target = repo(tmp_path / "t")
+
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code", source=source)
+
+    assert "None" not in out and "GitHub Copilot: .github/workflows" in out
+    table.write_text("{", encoding="utf-8")
+    code, out, err = run(capsys, str(repo(tmp_path / "u")), source=source)
+    assert code == 1 and "adapters/cloud.json" in err

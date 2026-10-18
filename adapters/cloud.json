@@ -13,7 +13,7 @@
     "setup": "the environment's setup script",
     "read": "2026-10-17",
     "source": "https://learn.chatgpt.com/docs/environments/cloud-environment",
-    "says": "a setup script runs with internet access before the agent phase, which blocks internet access by default"
+    "says": "a setup script runs with internet access before the agent phase, which blocks internet access by default; the page says a newer guide replaces it, and that guide was not found on the read day"
   },
   "github-copilot": {
     "name": "GitHub Copilot",

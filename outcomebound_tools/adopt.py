@@ -1645,11 +1645,14 @@ def cloud_notes(source: Path, harnesses: Sequence[str], setup: Sequence[str]) ->
         f"  {entry.get('name')}: {entry.get('setup')}"
         for entry in table.values()
         if isinstance(entry, dict)
+        and isinstance(entry.get("name"), str)
+        and isinstance(entry.get("setup"), str)
         and (GENERIC in used or entry.get("harness") is None or entry.get("harness") in used)
     )
     if setup:
         lines.append(
-            "This project records a Setup fact: add the install line to the Setup fact too."
+            "This project records a Setup fact: add the install line to it with --setup, "
+            "repeating each recorded command."
         )
     return [("note", line) for line in lines]
 
