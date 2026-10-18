@@ -127,7 +127,8 @@ def _dirty(root: Path) -> int:
 
 
 def _shown(path: Path, top: Path) -> str:
-    """`path` relative to the work tree; a file of the main checkout reads `main checkout: <path>`."""
+    """`path` relative to the work tree;
+    a file of the main checkout is shown as `main checkout: <path>`."""
 
     for base, prefix in ((top, ""), (brief_lookup.main_checkout(top), "main checkout: ")):
         if base is not None:
