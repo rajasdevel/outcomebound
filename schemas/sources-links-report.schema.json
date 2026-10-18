@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:sources-links-report:1",
+  "title": "OutcomeBound sources links report v1",
+  "description": "What `outcomebound sources links --json` prints. Each broken reference says what it does not establish; a reference not checked is listed with its reason and is never broken.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "verdict", "counts", "broken", "not_checked"],
+  "properties": {
+    "version": {"const": 1},
+    "verdict": {"enum": ["PASS", "FAIL"]},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["broken", "not_checked", "checked"],
+      "properties": {
+        "broken": {"type": "integer"},
+        "not_checked": {"type": "integer"},
+        "checked": {"type": "integer"}
+      }
+    },
+    "broken": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "code", "target", "text", "does_not_establish", "next"],
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "code": {"enum": ["LINK_FILE_MISSING", "LINK_ANCHOR_MISSING", "LINE_PAST_END", "REF_MISSING", "REF_UNRESOLVED"]},
+          "target": {"type": "string"},
+          "text": {"type": "string"},
+          "does_not_establish": {"type": "string"},
+          "next": {"type": "string"}
+        }
+      }
+    },
+    "not_checked": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "code", "target", "text"],
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "code": {"enum": ["external", "outside_root", "git_unavailable", "unreadable", "unresolved_name"]},
+          "target": {"type": "string"},
+          "text": {"type": "string"}
+        }
+      }
+    }
+  }
+}

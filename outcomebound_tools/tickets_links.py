@@ -21,7 +21,7 @@ from outcomebound_tools import paths, textio
 from outcomebound_tools.tickets_model import fenced_spans
 from outcomebound_tools.tickets_report import EngineError
 
-__all__ = ["LinksError", "Section", "anchor_of", "section"]
+__all__ = ["LinksError", "Section", "anchor_of", "fenced_lines", "heading_slugs", "section"]
 
 # The heading grammar, spelled once.
 _HEADING = re.compile(r" {0,3}(?P<hashes>#{1,6})(?:[ \t]+(?P<text>.*))?")
@@ -166,6 +166,23 @@ def _fenced(text: str, lines: list[str]) -> list[bool]:
         flags.append(span < len(spans) and spans[span][0] <= position)
         position += len(line) + 1
     return flags
+
+
+def fenced_lines(text: str) -> list[bool]:
+    """Which lines of `text` a code fence swallows, one flag per line split on `\\n`."""
+
+    return _fenced(text, text.split("\n"))
+
+
+def heading_slugs(text: str) -> list[tuple[int, str]]:
+    """Each `#` heading outside a code fence as (zero-based line, anchor), in document order.
+
+    The anchor is the one `anchor_of` gives, so a link check and a `reads` citation read a
+    heading one way. A heading with no anchor is kept with the empty string.
+    """
+
+    lines = text.split("\n")
+    return [(found.index, found.anchor) for found in _headings(lines, _fenced(text, lines))]
 
 
 def section(target: Path | str, path: str, anchor: str) -> Section:
