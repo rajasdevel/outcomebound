@@ -136,9 +136,13 @@ def test_git_refs_marked_by_a_word_resolve_or_break(project, capsys):
     subprocess.run(["git", "add", "."], cwd=project, check=True)
     subprocess.run(["git", *ENV, "commit", "-qm", "m"], cwd=project, check=True)
     subprocess.run(["git", "tag", "v1"], cwd=project, check=True)
-    head = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"], cwd=project, capture_output=True, text=True
-    ).stdout.strip()
+    head = (
+        subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=project, capture_output=True, check=True
+        )
+        .stdout.decode("utf-8")
+        .strip()
+    )
     put(
         project,
         "g.md",
