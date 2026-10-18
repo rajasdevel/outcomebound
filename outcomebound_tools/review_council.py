@@ -57,9 +57,18 @@ _LINE_DISPOSITION = re.compile(r"[ \t]*Disposition:", re.IGNORECASE)
 # so that the revision under review cannot instruct its own reviewer; the diff and a named file
 # still carry them, as quoted data.
 INSTRUCTION_FILES = frozenset(
-    {"AGENTS.md", "AGENTS.override.md", "CLAUDE.md", "CLAUDE.local.md", "GEMINI.md"}
+    {
+        "AGENTS.md",
+        "AGENTS.override.md",
+        "CLAUDE.md",
+        "CLAUDE.local.md",
+        "GEMINI.md",
+        "opencode.json",
+        "opencode.jsonc",
+        ".cursorrules",
+    }
 )
-INSTRUCTION_FOLDERS = frozenset({".claude", ".codex", ".gemini", ".agents"})
+INSTRUCTION_FOLDERS = frozenset({".claude", ".codex", ".gemini", ".agents", ".cursor", ".opencode"})
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 STDERR_TAIL = 600
 # The sentence that opens a prompt. The data between the marked lines is never instructions.
@@ -402,6 +411,21 @@ def _shown(argv: Sequence[str]) -> str:
     return subprocess.list2cmdline(list(argv)) if os.name == "nt" else shlex.join(argv)
 
 
+def plan_id(request: Request, jobs: Sequence[Job]) -> str:
+    """A short digest of what a run would do: the revision, the lens, and each reviewer's argv,
+    environment and timeout. `--accept --plan-id ID` refuses a run that differs, such as one
+    where an API key was set or unset after the plan."""
+
+    record = [
+        request.commit,
+        request.described,
+        request.lens,
+        sorted(request.files),
+        [[j.reviewer.label, j.argv, sorted(j.env.items()), j.timeout, str(j.cwd)] for j in jobs],
+    ]
+    return hashlib.sha256(json.dumps(record, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+
+
 def render_plan(request: Request, jobs: Sequence[Job], out: Path, budget: str | None) -> str:
     lines = [
         "COUNCIL PLAN (nothing has run)",
@@ -475,7 +499,10 @@ def render_plan(request: Request, jobs: Sequence[Job], out: Path, budget: str | 
         "",
         "Not shown by any run: that a safeguard stops a write, that the model named exists on "
         "the person's login, or that a reviewer's effort was the one asked for.",
-        "To run it: the same command with --accept in place of --plan, after the person says yes.",
+        f"plan id: {plan_id(request, jobs)}",
+        "To run it, after the person says yes: the same command with --accept in place of --plan "
+        f"and --plan-id {plan_id(request, jobs)} added; a run that differs from this plan is "
+        "refused.",
     ]
     return "\n".join(lines) + "\n"
 
@@ -550,12 +577,26 @@ def _answer(job: Job) -> tuple[str | None, float | None, str]:
     return (answer, cost, "") if answer.strip() else (None, cost, "its answer is empty")
 
 
+_SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD", re.IGNORECASE)
+
+
+def _redact(text: str) -> str:
+    """`text` with the value of each environment variable named like a key, token, secret or
+    password (eight characters or more) replaced, so that a reviewer that echoes its credential
+    in an error does not print it in the report."""
+
+    for name, value in os.environ.items():
+        if len(value) >= 8 and _SECRET_NAME.search(name):
+            text = text.replace(value, "[redacted]")
+    return text
+
+
 def _tail(path: Path) -> str:
     try:
         text = path.read_text(encoding="utf-8", errors="replace").strip()
     except OSError:
         return ""
-    return textio.plain(text[-STDERR_TAIL:])
+    return textio.plain(_redact(text[-STDERR_TAIL:]))
 
 
 def _execute(job: Job, argv: list[str]) -> tuple[str, str] | None:
@@ -791,6 +832,7 @@ def run_council(request: Request, jobs: Sequence[Job], out: Path) -> list[Outcom
                 "tag": o.reviewer.tag,
                 "reviewer": o.reviewer.label,
                 "argv": j.argv,
+                "prompt_via": j.spec.get("prompt_via", "stdin"),
                 "status": o.status,
                 "detail": o.detail,
                 "seconds": o.seconds,
@@ -868,6 +910,7 @@ def _parser() -> argparse.ArgumentParser:
         metavar="harness:model[:effort]",
         help="a reviewer (repeat); with none, one of each harness in the table, at its defaults",
     )
+    parser.add_argument("--plan-id", metavar="ID", help="with --accept, the id the plan printed")
     parser.add_argument("--timeout", type=int, metavar="SECONDS", help="per reviewer")
     parser.add_argument("--budget-usd", metavar="N", help="a spend cap for Claude reviewers")
     parser.add_argument("--root", default=".", metavar="DIR", help="a folder inside the work tree")
@@ -910,6 +953,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if options.plan:
             sys.stdout.write(render_plan(request, jobs, out, options.budget_usd))
             return 0
+        if options.plan_id is not None and options.plan_id != plan_id(request, jobs):
+            raise CouncilError(
+                f"this run differs from the plan with id {textio.plain(options.plan_id)} "
+                f"(now {plan_id(request, jobs)}): the reviewers, the argument values, the login "
+                "(ANTHROPIC_API_KEY set or unset) or the revision changed; plan again"
+            )
         if out.exists():
             raise CouncilError(
                 f"the run folder {out} exists; give --out DIR for a new run, or remove it"

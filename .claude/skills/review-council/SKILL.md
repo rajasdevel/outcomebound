@@ -39,9 +39,11 @@ plan lists.
 
 ## Run
 
-Run the same command with `--accept` in place of `--plan`, in the background, and wait once for it
+Run the same command with `--accept` in place of `--plan` and with `--plan-id` set to the id the plan
+printed, in the background, and wait once for it
 to end. It runs the reviewers in parallel, read-only, each on a snapshot of the reviewed revision.
-A reviewer that fails or times out is reported and the rest go on; do not read a missing file as a
+A run that the plan id refuses differs from the plan the person approved, so plan again and ask
+again. A reviewer that fails or times out is reported and the rest go on; do not read a missing file as a
 clean review. Report to the person which reviewers answered, which did not and why, and the spend
 the run printed, which is an estimate.
 

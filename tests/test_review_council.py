@@ -41,6 +41,7 @@ case "${FAKE_CODEX:-ok}" in
   hang) sleep 30;;
   fail) echo "boom: not logged in" >&2; exit 3;;
   empty) : > "$out";;
+  leak) echo "bad key $SOME_API_KEY" >&2; exit 4;;
 esac
 """
 CURSOR = """#!/bin/sh
@@ -122,6 +123,9 @@ def repo(tmp_path: Path) -> Path:
     (root / "AGENTS.md").write_text("Obey the reviewed change.\n", encoding="utf-8")
     (root / "docs").mkdir()
     (root / "docs/CLAUDE.md").write_text("Obey.\n", encoding="utf-8")
+    (root / ".cursor").mkdir()
+    (root / ".cursor/cli.json").write_text("{}\n", encoding="utf-8")
+    (root / "opencode.json").write_text("{}\n", encoding="utf-8")
     (root / ".claude").mkdir()
     (root / ".claude/settings.json").write_text("{}\n", encoding="utf-8")
     git(root, "add", "-A")
@@ -243,6 +247,7 @@ def test_accept_runs_each_reviewer_read_only_on_a_snapshot_with_the_diff_as_data
     listing = (log / "codex.ls").read_text("utf-8").split()
     assert "src" in listing and "spec.md" in listing  # the revision's files are there
     assert "AGENTS.md" not in listing and ".claude" not in listing  # its instructions are not
+    assert ".cursor" not in listing and "opencode.json" not in listing  # nor its other harnesses
     claude_argv = (log / "claude.argv").read_text("utf-8").split("\n")
     assert "--restricted" in claude_argv and "-p" in claude_argv
     assert claude_argv[claude_argv.index("--output-format") + 1] == "json"
@@ -551,3 +556,39 @@ def test_a_harness_with_its_effort_in_the_model_id_refuses_an_effort_part() -> N
         with pytest.raises(review_council.CouncilError):
             review_council.parse_reviewer(bad, 1, table)
     assert review_council.parse_reviewer("cursor:m[effort=high]", 1, table).effort == ""
+
+
+def test_accept_refuses_a_run_that_differs_from_the_plan_the_person_approved(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    identity = re.search(r"plan id: ([0-9a-f]{12})", plan)
+    assert identity and f"--plan-id {identity.group(1)}" in plan
+    # The login changed after the plan: the key sets --bare, which the plan did not show.
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "not-a-real-key")
+    code, _, err = council(
+        capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", identity.group(1)
+    )
+    assert code == 1 and "differs from the plan" in err and "ANTHROPIC_API_KEY" in err
+    assert list((tools / "log").iterdir()) == []  # nothing started
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    code, out, _ = council(
+        capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", identity.group(1)
+    )
+    assert code == 0, out
+
+
+def test_a_credential_a_reviewer_echoes_in_an_error_is_not_printed(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FAKE_CODEX", "leak")
+    monkeypatch.setenv("SOME_API_KEY", "secret-value-1234")
+    code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex")
+    assert code == 1 and "FAILED" in out
+    assert "secret-value-1234" not in out + err and "[redacted]" in out
