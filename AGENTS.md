@@ -88,6 +88,7 @@ Read each file below when its condition first holds; it stays in force for the s
 - when writing, changing or judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
 - when a failure's cause is unknown, or a fix did not hold: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
+- when a second opinion from other models or harnesses is worth its cost: a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
@@ -136,7 +137,7 @@ OutcomeBound.md       the contract
 outcomebound_tools/   the engine
 scripts/              the `outcomebound` launcher, the package's build backend and this repository's scripts
 pyproject.toml        names the build backend; the package's metadata is in the backend
-skills/               the thirteen working skills, and the adopt skill, which stays in this checkout
+skills/               the fourteen working skills, and the adopt skill, which stays in this checkout
 fragments/            stack and setup guidance, copied under .outcomebound/fragments/ and pointed at from AGENTS.md
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       the lifecycle comparisons and the scaffold sets (scaffold/, with its manifest);

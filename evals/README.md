@@ -688,7 +688,7 @@ Each run also prints `observed:` lines, which never change a verdict: files, lin
 test runs (commands that run a test runner), `guidance_reads` (commands that name the hand-off or
 slicing skills, the model guidance or the implementer tiers), and the tool caches ignored.
 
-Every install carries the thirteen skills, so the hand-off and slicing skills, which say what a
+Every install carries the fourteen skills, so the hand-off and slicing skills, which say what a
 package does to a strong model, are in the workspace of a `current` run. A read of them shows in
 `guidance_reads`.
 

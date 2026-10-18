@@ -4,7 +4,7 @@
 
 **Work sized to the outcome. Evidence for each step.**
 
-OutcomeBound gives your coding agent a 300-word contract, thirteen skills it reads when a task
+OutcomeBound gives your coding agent a 300-word contract, fourteen skills it reads when a task
 needs them, and engine checks that run your project's own commands. The agent does the engineering
 that the outcome needs: no less, and no more. It holds only the decisions that are yours, and it
 reports what is true, what is not done, and which check shows it.

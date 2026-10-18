@@ -42,6 +42,7 @@ CHECKOUT_ONLY = {
     "tests-worth-keeping": (),
     "diagnose": (),
     "review-findings": (),
+    "review-council": (),
     "explain-spec": (),
     "hand-off-tickets": (),
     "explorable": (),

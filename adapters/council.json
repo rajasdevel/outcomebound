@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "note": "The review council's table: one row per reviewer harness. Each entry of `argv` is one flag with its reason and its source. `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, in the `help_version` below. `run` is `tested` only where a harmless run on a machine showed the effect, else `UNVERIFIED`; no entry is `tested` yet. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "harnesses": {
+    "codex": {
+      "binary": "codex",
+      "help_version": "codex-cli 0.163.0",
+      "default": {"model": "gpt-6-astra", "effort": "xhigh"},
+      "timeout_seconds": 1800,
+      "timeout_source": "https://skills.cat/skills/trancong12102/agentskills/council-review (read 2026-10-18: a Codex review may take up to 30 minutes)",
+      "max_prompt_bytes": null,
+      "answer": {"from": "file"},
+      "cost": "none reported; Codex has no spend cap flag in the installed --help, so the timeout is the only bound on a run",
+      "argv": [
+        {"args": ["exec"], "why": "run non-interactively", "source": "https://learn.chatgpt.com/docs/non-interactive-mode", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-s", "read-only"], "safeguard": "the sandbox lets no command the model runs write a file", "why": "read-only sandbox", "source": "https://learn.chatgpt.com/docs/non-interactive-mode", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--ephemeral"], "safeguard": "no session files are kept", "why": "keep no session on disk", "source": "installed `codex exec --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--ignore-user-config"], "safeguard": "the person's Codex config.toml is not loaded (login still works)", "why": "no user config", "source": "installed `codex exec --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--ignore-rules"], "safeguard": "no execpolicy rules file of the person or the project is loaded", "why": "no rules files", "source": "installed `codex exec --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-c", "features.memories=false"], "safeguard": "Codex memories are off", "why": "no memories", "source": "outcomebound-research harnesses/codex.md section 10 (read 2026-10-01); the evaluation runner passes it", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--skip-git-repo-check"], "why": "the snapshot folder holds no .git", "source": "installed `codex exec --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-C", "{snapshot}"], "safeguard": "the working root is a snapshot of the reviewed revision, not the person's work tree", "why": "working root", "source": "installed `codex exec --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-m", "{model}"], "why": "model", "source": "outcomebound-research harnesses/codex.md section 9 (read 2026-10-01)", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-c", "model_reasoning_effort={effort}"], "why": "reasoning effort; `codex debug models --bundled` lists the values each model accepts", "source": "outcomebound-research harnesses/codex.md section 9 (read 2026-10-01)", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-o", "{answer}"], "why": "write the last message to a file", "source": "https://learn.chatgpt.com/docs/non-interactive-mode", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["-"], "why": "read the prompt from standard input, which is the prompt file and so ends; the process never waits for more input", "source": "installed `codex exec --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"}
+      ]
+    },
+    "claude": {
+      "binary": "claude",
+      "help_version": "Claude Code 2.1.302",
+      "default": {"model": "claude-fable-5-1", "effort": "high"},
+      "timeout_seconds": 1800,
+      "timeout_source": "UNVERIFIED: no source for a Claude run; the Codex figure is used",
+      "max_prompt_bytes": 10485760,
+      "max_prompt_source": "https://code.claude.com/docs/en/headless (read 2026-10-18: piped input is capped at 10 MB)",
+      "answer": {"from": "json", "key": "result"},
+      "cost": "the JSON result carries total_cost_usd, a client-side estimate that can differ from the bill; --budget-usd sets a cap that a run can pass",
+      "argv": [
+        {"args": ["-p"], "why": "print mode: one answer, no prompts", "source": "https://code.claude.com/docs/en/headless", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--restricted"], "safeguard": "no command-running tool, settings files of the user, the project and the folder are ignored (so no hook of theirs runs), file tools stay inside the working folder; --bare would also skip hooks but reads no login and needs ANTHROPIC_API_KEY", "why": "isolation for scripted review", "source": "installed `claude --help`; https://code.claude.com/docs/en/cli-reference", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--tools", "Read,Grep,Glob"], "safeguard": "the only tools are Read, Grep and Glob", "why": "read-only tool set", "source": "https://code.claude.com/docs/en/cli-reference", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--disallowedTools", "Bash,Edit,Write,NotebookEdit"], "safeguard": "the write and command tools are denied by name as well", "why": "belt and braces beside --tools", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--permission-mode", "dontAsk"], "safeguard": "a call that would prompt is denied, and nothing waits for an answer", "why": "never prompt", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--strict-mcp-config"], "safeguard": "no MCP server is connected (none is given)", "why": "no MCP", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--disable-slash-commands"], "safeguard": "no skill is loaded", "why": "no skills", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--no-session-persistence"], "safeguard": "no session is saved", "why": "keep no session on disk", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--output-format", "json"], "why": "one JSON result with the answer and the cost", "source": "https://code.claude.com/docs/en/headless", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--model", "{model}"], "why": "model", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--effort", "{effort}"], "why": "effort: low, medium, high, xhigh or max", "source": "installed `claude --help`", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"},
+        {"args": ["--max-budget-usd", "{budget}"], "when": "budget", "why": "spend cap, print mode only; a run can pass it", "source": "installed `claude --help`; https://code.claude.com/docs/en/headless", "read": "2026-10-18", "listed_in_help": true, "run": "UNVERIFIED"}
+      ]
+    }
+  }
+}
