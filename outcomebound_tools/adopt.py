@@ -1641,13 +1641,16 @@ def cloud_notes(source: Path, harnesses: Sequence[str], setup: Sequence[str]) ->
         f"  python3 -m pip install outcomebound=={version}",
         "Where each harness keeps that step:",
     ]
-    for entry in table.values():
-        if isinstance(entry, dict) and (
-            GENERIC in used or entry.get("harness") is None or entry.get("harness") in used
-        ):
-            lines.append(f"  {entry.get('name')}: {entry.get('setup')}")
+    lines.extend(
+        f"  {entry.get('name')}: {entry.get('setup')}"
+        for entry in table.values()
+        if isinstance(entry, dict)
+        and (GENERIC in used or entry.get("harness") is None or entry.get("harness") in used)
+    )
     if setup:
-        lines.append("This project records a Setup fact: add the install line to the Setup fact too.")
+        lines.append(
+            "This project records a Setup fact: add the install line to the Setup fact too."
+        )
     return [("note", line) for line in lines]
 
 

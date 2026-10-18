@@ -19,8 +19,8 @@ The session does not get:
   `.agents/shared-memory`, and not your worktrees.
 - the research clone, which `outcomebound research` keeps once for each machine. The verb then
   names the public link instead.
-- your personal files and memory. For Claude Code on the web, the user-level `~/.claude` files
-  do not load ([page](https://code.claude.com/docs/en/claude-code-on-the-web)).
+- your personal files and memory. For Claude Code on the web, the user-level Claude files in your
+  home folder do not load ([page](https://code.claude.com/docs/en/claude-code-on-the-web)).
 
 Whether each harness loads the committed skill folders in a cloud session is shown for Claude Code
 on the web only: its page says the repository's `.claude/skills` load. For Codex cloud, Copilot and
