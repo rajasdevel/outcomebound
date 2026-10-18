@@ -154,19 +154,27 @@ def _files(root: Path, unread: list[str]) -> list[Path]:
     return sorted(found)
 
 
-def default_roots(here: Path) -> list[Path]:
-    roots = [here / name for name in DEFAULT_ROOTS]
+def main_checkout(here: Path) -> Path | None:
+    """The main checkout of the worktree `here` is in, or None where `here` is it or Git does not
+    say."""
+
     try:
         common = size._git_ok(here, "rev-parse", "--path-format=absolute", "--git-common-dir")
         parent = Path(common.decode("utf-8", "replace").strip()).parent
-        if parent.name and parent.resolve() != here.resolve():
-            roots += [parent / name for name in DEFAULT_ROOTS]
     except (size.SizeError, OSError):
-        pass
+        return None
+    return parent if parent.name and parent.resolve() != here.resolve() else None
+
+
+def default_roots(here: Path) -> list[Path]:
+    roots = [here / name for name in DEFAULT_ROOTS]
+    main = main_checkout(here)
+    if main is not None:
+        roots += [main / name for name in DEFAULT_ROOTS]
     return [root for root in roots if root.exists()]
 
 
-def _scan(
+def scan(
     roots: Sequence[Path],
 ) -> tuple[list[Brief], list[Answer], list[Any], list[str], list[str]]:
     """Every brief and answer under `roots`, the malformed `Decided:` lines, the paths not read
@@ -202,7 +210,7 @@ def _scan(
 
 
 def search(terms: Sequence[str], roots: Sequence[Path]) -> dict[str, Any]:
-    briefs, answers, malformed, unread, unreadable = _scan(roots)
+    briefs, answers, malformed, unread, unreadable = scan(roots)
     wanted = [term.casefold() for term in terms]
     matches = []
     for brief in briefs:

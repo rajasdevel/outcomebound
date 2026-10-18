@@ -222,7 +222,8 @@ change can change its result (`.` is the whole working directory; `[]` is the sa
 the command to check it (the tickets design explains why reading argv is only a warning).
 
 `outcomebound validation status <plan>` reads the plan and the records and runs nothing and writes
-nothing. It opens with one line of counts (`status: 2 CURRENT, 1 CHANGED, 1 UNVERIFIED of 4 claims`),
+nothing. The state of each claim comes from `validation.claim_states`, the one reader of it; `outcomebound where`
+([lifecycle](../lifecycle/design.md)) reads the same answer. It opens with one line of counts (`status: 2 CURRENT, 1 CHANGED, 1 UNVERIFIED of 4 claims`),
 then prints for each claim, in plan order, the newest attempt (verdict, exit code, end time, commit, whether its output was written)
 and one of:
 
