@@ -1,0 +1,146 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:brief-lookup:1",
+  "title": "OutcomeBound brief lookup report v1",
+  "description": "What `outcomebound brief lookup --json` prints: each brief the terms matched, where it is, and the `Decided:` lines recorded for its id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "terms",
+    "searched",
+    "matches",
+    "malformed",
+    "not_read",
+    "does_not_establish"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "terms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "matches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "source",
+          "status",
+          "answers"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "heading": {
+            "description": "Absent when no brief was found, only a `Decided:` line.",
+            "type": "string"
+          },
+          "source": {
+            "description": "The path of the brief, or of the first `Decided:` line when the brief was not found.",
+            "type": "string"
+          },
+          "line": {
+            "description": "The line of the Markdown heading, or of the first `Decided:` line when the brief was not found; absent for a JSON document.",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ANSWERED",
+              "UNANSWERED",
+              "BRIEF_NOT_FOUND"
+            ],
+            "description": "BRIEF_NOT_FOUND whenever no brief was found, with `source` and `line` of the first `Decided:` line; else ANSWERED or UNANSWERED."
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source",
+                "line",
+                "way",
+                "who",
+                "date",
+                "words"
+              ],
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "line": {
+                  "type": "integer"
+                },
+                "way": {
+                  "type": "string"
+                },
+                "who": {
+                  "type": "string"
+                },
+                "date": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                },
+                "words": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "malformed": {
+      "description": "Each `Decided:` line of a form the design does not define, with its place; none counts as an answer.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "line",
+          "text"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "not_read": {
+      "description": "Paths the search did not read: a link, a file over 1 MB, a file that is not text, a briefs document that fails its schema (with the first defect), a root it could not read.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "does_not_establish": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "searched": {
+      "description": "The roots searched.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
