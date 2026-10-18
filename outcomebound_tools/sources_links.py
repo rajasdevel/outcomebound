@@ -531,7 +531,7 @@ def render_text(report: Report, *, verbose: bool = False) -> str:
     verdict = (
         f"VERDICT: {report.verdict} broken={len(report.broken)} "
         f"not_checked={len(report.not_checked)}{f' ({kinds})' if kinds else ''} "
-        f"checked={report.checked}"
+        f"examined={report.checked}"
     )
     lines.insert(0, verdict)
     return "\n".join(lines) + "\n"
@@ -557,7 +557,7 @@ def render_json(report: Report) -> str:
         "counts": {
             "broken": len(report.broken),
             "not_checked": len(report.not_checked),
-            "checked": report.checked,
+            "examined": report.checked,
         },
         "broken": [row(item, with_limit=True) for item in report.broken],
         "not_checked": [row(item, with_limit=False) for item in report.not_checked],

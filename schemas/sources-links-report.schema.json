@@ -12,11 +12,11 @@
     "counts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["broken", "not_checked", "checked"],
+      "required": ["broken", "not_checked", "examined"],
       "properties": {
         "broken": {"type": "integer"},
         "not_checked": {"type": "integer"},
-        "checked": {"type": "integer"}
+        "examined": {"type": "integer"}
       }
     },
     "broken": {

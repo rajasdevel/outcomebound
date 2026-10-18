@@ -171,12 +171,12 @@ Not checked, listed and never broken: `external`, `outside_root`, `git_unavailab
 and `unresolved_name`.
 
 The report puts one line first, `VERDICT: PASS` or `VERDICT: FAIL`, then `broken=N`,
-`not_checked=N` with each kind's count in parentheses, and `checked=N`, so that a run whose refs
+`not_checked=N` with each kind's count in parentheses, and `examined=N`, so that a run whose refs
 were all not checked does not read as clean. One line per broken reference follows
 (`FILE:LINE: CODE target: reason. Does not establish: ... next: ...`), then, under `--verbose`, one
 line per reference not checked. Exits: 0 where nothing is broken (whatever is not checked), 1 where
 something is, 2 for a usage error. `--json` prints the object `schemas/sources-links-report.schema.json`
-holds: `version`, `verdict`, `counts` (`broken`, `not_checked`, `checked`), `broken` (each with
+holds: `version`, `verdict`, `counts` (`broken`, `not_checked`, `examined`), `broken` (each with
 `file`, `line`, `code`, `target`, `text`, `does_not_establish`, `next`) and `not_checked` (each with
 `file`, `line`, `code` as the kind, `target`, `text`).
 
