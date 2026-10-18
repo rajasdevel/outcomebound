@@ -165,11 +165,13 @@ def test_other_worktrees_are_listed_when_they_hold_uncommitted_work_else_counted
     assert "clean-branch" in summary["text"]
 
 
-def test_a_worktree_with_an_older_install_is_counted_as_adopt_check_names_it(project, tmp_path):
+def test_a_worktree_with_no_or_an_older_install_is_counted_as_adopt_check_names_it(
+    project, tmp_path
+):
     other = tmp_path / "other"
     git(project, "worktree", "add", "-q", "-b", "other", str(other))
     older = one(read(project), "worktree", source="adopt_worktrees")
-    assert "1 worktree(s) have an install older than the engine" in older["text"]
+    assert "1 worktree(s) have no readable install or one older" in older["text"]
 
 
 def test_a_worktree_whose_folder_is_gone_is_unverified(project, tmp_path):
@@ -467,7 +469,7 @@ def test_the_newest_handoff_gives_its_age_and_the_commits_since(project):
     os.utime(second, (time.time() - 7200, time.time() - 7200))
     line = one(read(project), "handoff")
     assert line["source"] == ".agents/handoffs/b.md" and "written 2h ago" in line["text"]
-    assert "commit(s) on HEAD since" in line["text"]
+    assert f"{git(project, 'rev-list', '--count', 'HEAD')} commit(s) on HEAD since" in line["text"]
     assert "claim" in line["text"]
 
 
@@ -546,6 +548,10 @@ def test_json_and_text_carry_the_same_lines(project, capsys):
     assert len(text) == len(document["items"]) + 2  # the head line and the limits line
     assert "next: hand-off-tickets" in "\n".join(text)
     assert text[0].startswith(f"where: {len(document['items'])} line(s)")
+    for item, line in zip(document["items"], text[1:-1], strict=True):
+        assert line.startswith(f"{item['verdict']:<11} {item['kind']}")
+        assert f"[{item['source']}]" in line and item["text"] in line
+        assert line.endswith(f"; next: {item.get('next')}") == ("next" in item)
 
 
 def test_exits_are_zero_for_any_verdict_and_two_for_a_usage_error(project):
@@ -619,11 +625,11 @@ def test_gh_is_told_not_to_prompt_or_check_for_updates(project, tmp_path, monkey
 def test_a_review_of_a_moving_ref_is_counted_not_tied_to_the_branch(project):
     review(project, "moving", "HEAD", CLOSED_FINDING)
     review(project, "words", "plan.md 2026-10-09", CLOSED_FINDING)
+    review(project, "relative", "HEAD~0", CLOSED_FINDING)
     items = read(project)
-    assert not [
-        i for i in lines(items, "review") if i["source"].endswith(("moving.md", "words.md"))
-    ]
-    assert "2 other review file(s)" in one(items, "review")["text"]
+    named = ("moving.md", "words.md", "relative.md")
+    assert not [i for i in lines(items, "review") if i["source"].endswith(named)]
+    assert "3 other review file(s)" in one(items, "review")["text"]
 
 
 def test_base_names_the_commit_that_tells_which_reviews_concern_the_branch(project):
@@ -674,3 +680,85 @@ def test_a_requested_hold_holds_like_a_human_only_one(project):
     issues(project, export.issue(1, text=export.body(hold="requested")))
     line = one(read(project), "ticket", subject="#1")
     assert line["verdict"] == "NOTE" and "held for a person (requested)" in line["text"]
+
+
+def test_a_review_stays_tied_when_the_branch_is_pushed(project):
+    review(project, "pushed", git(project, "rev-parse", "HEAD"), CLOSED_FINDING)
+    git(project, "push", "-q", "-u", "origin", "feature")  # the upstream is now the branch itself
+    line = one(read(project), "review", source=".agents/work/r/pushed.md")
+    assert line["verdict"] == "CLEAR"
+    base = where.build(project, export=None, plans=[], offline=True)["read"]["base"]
+    assert base["ref"] == "origin/HEAD"
+
+
+def test_a_result_with_no_verdict_is_not_clear(project, capsys):
+    plan = run_plan(project, [claim()], capsys)
+    path = sorted((project / ".outcomebound-checks").glob("unit.*.result.json"))[-1]
+    record = json.loads(path.read_text(encoding="utf-8"))
+    del record["verdict"]
+    path.write_text(json.dumps(record), encoding="utf-8")
+    summary = one(read(project, plans=[plan]), "validation", text="1 claim(s)")
+    assert summary["verdict"] != "CLEAR"
+
+
+def test_a_failed_claim_line_carries_its_command(project, capsys):
+    plan = run_plan(project, [claim(command=BAD)], capsys)
+    line = one(read(project, plans=[plan]), "validation", subject="unit")
+    assert "its command: " in line["text"] and "SystemExit(3)" in line["text"]
+
+
+def test_a_ticket_whose_relations_the_export_cut_short_is_not_ready(project):
+    declare(project)
+    node = export.issue(1, title="cut short")
+    node["blockedBy"]["pageInfo"]["hasNextPage"] = True
+    issues(project, node, export.issue(2, title="whole one"))
+    items = read(project)
+    assert one(items, "ticket", subject="#1")["verdict"] == "UNVERIFIED"
+    assert one(items, "ticket", subject="#2")["verdict"] == "OPEN"
+
+
+def test_an_export_that_is_not_the_whole_list_says_so(project):
+    declare(project)
+    path = issues(project, export.issue(1))
+    pages = json.loads(path.read_text(encoding="utf-8"))
+    pages[0]["data"]["repository"]["issues"]["pageInfo"]["hasNextPage"] = True
+    path.write_text(json.dumps(pages), encoding="utf-8")
+    head = one(read(project), "ticket", text="open ticket(s)")
+    assert head["verdict"] == "UNVERIFIED" and "not the whole issue list" in head["text"]
+
+
+def test_without_git_the_report_still_prints(project, tmp_path, monkeypatch, capsys):
+    declare(project)
+    issues(project, export.issue(1))
+    empty = tmp_path / "empty-path"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+    assert where.main([str(project), "--offline"]) == 0
+    out = capsys.readouterr().out
+    assert "UNVERIFIED  git:" in out and "OPEN        ticket #1" in out
+
+
+def test_git_is_told_not_to_fetch_lazily(project, monkeypatch):
+    seen: list[str | None] = []
+    real = subprocess.run
+
+    def spy(argv, *a, **k):
+        if Path(str(argv[0])).stem == "git":
+            seen.append(k["env"].get("GIT_NO_LAZY_FETCH"))
+        return real(argv, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", spy)
+    read(project)
+    assert seen and set(seen) == {"1"}
+
+
+def test_the_schemas_promises_hold_for_every_line(project, capsys):
+    declare(project)
+    issues(project, export.issue(1), export.issue(2, text=export.body(hold="yes")))
+    plan = run_plan(project, [claim(command=BAD)], capsys)
+    review(project, "open", "main", OPEN_FINDING)
+    for item in read(project, plans=[plan]):
+        assert item["source"] and item["text"]
+        assert ("next" in item) <= (item["verdict"] in ("OPEN", "STALE"))
+        if item["verdict"] == "OPEN":
+            assert "next" in item

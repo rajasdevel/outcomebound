@@ -205,20 +205,21 @@ another act (deleting a deployment cache, releasing a database lock) leaves the 
 [--json]` answers what a person asks after a pause or a compaction: what is in flight here, and
 what serves the next step of each unfinished item. The target is a folder in a Git work tree
 (default `.`). The code is `outcomebound_tools/where.py`; the `--json` format is
-`schemas/where.schema.json`. A run reads `.agents/work` to a depth of four folders, so it takes
-seconds, not milliseconds, on a large folder.
+`schemas/where.schema.json`. A run reads `.agents/work` to a depth of four folders and enters no
+folder below it, so it takes seconds, not milliseconds, on a large folder. It writes no file in the
+project; the interpreter's own bytecode cache of the engine is not the project.
 
 **It reads only what the project already keeps.** Each input is read with the engine's own reader,
 so the report agrees with the verb that owns the file:
 
 | Kind | Read from | Reader |
 | --- | --- | --- |
-| `git` | the current branch, its upstream, ahead and behind counts, the uncommitted paths | `git`, read-only, optional locks off, and the plumbing that does not refresh the index (as `size` does) |
+| `git` | the current branch, its upstream, ahead and behind counts, the uncommitted paths | `git`, read-only: optional locks off, no lazy fetch from a partial clone, and the plumbing that does not refresh the index (as `size` does) |
 | `worktree` | each other worktree: its branch and its uncommitted paths; a count of worktrees whose install is older than the engine | `git worktree list`, `adopt_worktrees` |
 | `pr` | the open pull requests of the repository | `gh pr list`, only when `gh` is found on `PATH`'s absolute entries and answers; `--offline` skips it |
 | `ticket` | the open tickets of the declared store, from its export (`--tickets`, else `issues.json` at the work tree's root, else at the main checkout's): hold, blockers, `waits-on` | `tickets_store.read_store` |
 | `validation` | each claim of a validation plan (`--plan`, repeatable, else the `claims` plan the ticket declaration names; `--cwd` as `validation status` takes it): the last kept result and whether a declared path changed since | `validation.claim_states`, which `validation status` prints and `where` reads |
-| `review` | review files in `.agents/work` of this folder and of the main checkout: findings without a disposition; a review of this branch's commits and the files that differ now | `review_check.sweep`, which keeps the ref each file says it read, and `review_since.build` |
+| `review` | review files in `.agents/work` of this folder and of the main checkout: findings without a disposition; a review of this branch's commits and the paths that differ now | `review_check.sweep`, which keeps the ref each file says it read, and `size.tracked_changes` with the untracked paths, which is the comparison `review since` makes, without its hunks |
 | `brief` | briefs an open ticket waits on, and briefs defined in the newest handoff, with the `Decided:` lines recorded for them | `brief_lookup.scan` |
 | `handoff` | the newest file in `.agents/handoffs` (this folder and the main checkout): its age, and the commits on `HEAD` since it was written | the file's time, `git rev-list` |
 
@@ -265,7 +266,8 @@ keep every brief and review it ever wrote, so the verb names the ones that somet
 to, and counts the rest on one `NOTE` line, so that a false `OPEN` never buries a true one:
 
 - a worktree is listed when it holds uncommitted paths or its folder is gone; the others are named on
-  one line. The verb does not count commits a worktree's branch has that the main line lacks: after a
+  one line. A count of worktrees with no readable install or one older than the engine follows,
+  from the logic of `adopt --check`. The verb does not count commits a worktree's branch has that the main line lacks: after a
   squash merge Git cannot tell a landed branch from an unlanded one;
 - every open pull request of the repository is listed, the one whose branch is the current branch
   first and marked; `gh` is asked for up to 1000, and a list that long reads `UNVERIFIED`. `gh` runs
@@ -277,30 +279,35 @@ to, and counts the rest on one `NOTE` line, so that a false `OPEN` never buries 
   ticket comment is not read, and the ticket line says so. The newest handoff is the newest of the
   folder, and may belong to another task;
 - a review file is listed when it has a finding without a disposition, or when its `Reviewed:` ref
-  names a fixed commit that `HEAD` holds and the base does not. A ref that moves (`HEAD`, a branch
-  name) or that names no commit is counted, never tied. The base is `--base`, else the merge base
-  with the upstream, else with `origin/HEAD`, as `size` chooses it; where there is none, the line is
+  names a fixed commit that `HEAD` holds and the base does not. A ref is fixed when it is an object
+  id or a tag; a branch, `HEAD`, an expression built on them (`HEAD~0`) and free text are counted,
+  never tied. The base is `--base`, else the merge base of `HEAD` with `origin/HEAD` (a pushed copy
+  of the branch does not move it), else the base `size` chooses; where there is none, the line is
   `UNVERIFIED` and only open findings are listed. A tied review is `CLEAR` where no file now differs
   from the commit it read and a `NOTE` naming the files where some does, since the files change
   when the findings are fixed and whether to review again is the project's call;
 - a ticket is `OPEN` with `next: hand-off-tickets` when it is open, has no hold (`yes` and
   `requested` both hold), has no blocker that the export does not show as a closed ticket, and
-  waits on no brief that is unanswered; a blocker that is not a ticket counts as open. A ticket
+  waits on no brief that is unanswered; a blocker that is not a ticket counts as open. A ticket for
+  which the export reports a partial answer (`EXPORT_PARTIAL`, `EXPORT_TRUNCATED`) is `UNVERIFIED`
+  and is not judged, and an export that is not the whole issue list says so on its head line. A ticket
   that waits on an unanswered brief is a `NOTE` and the brief carries the `OPEN` and
   `decision-brief`, so one thing is not reported twice. Whether a ticket is claimed is
   `UNVERIFIED`: the pinned export carries labels and blockers, not assignees or comments. The
   export's age is printed, since the report is only as current as the export;
 - for a validation plan the text prints one line of counts and one line for each claim that failed,
-  changed, or whose result is not a `PASS` that `validation status` reads `CURRENT`; a claim that
-  has no result kept is counted only.
+  changed, or whose result is not a `PASS` that `validation status` reads `CURRENT`, each with the
+  claim's command; a claim that has no result kept is counted only. The plan is `CLEAR` only when
+  every claim is `CURRENT` with a recorded `PASS`.
 
 **The `--json` report** holds `items` (the lines above, with `kind`, `source`, `subject`, `verdict`,
-`text` and `next`), `counts`, `read` (the base used, the export's source and age, and the roots
+`text` and `next`; `source` and `text` are not empty and `next` is on an `OPEN` or `STALE` line, which the
+schema's keyword subset cannot say and the tests hold), `counts`, `read` (the base used, the export's source and age, and the roots
 searched) and `does_not_establish`. It has no time of its own: an age is a count of seconds.
 
 **Exits.** 0 once a report is printed, whatever its verdicts, since it is a report and not a gate; 2
-for a usage error. A folder outside a Git work tree gives `UNVERIFIED` for the Git items and still
-reads the files. The verb has no limit on the number of lines and no threshold.
+for a usage error. A folder outside a Git work tree, or a machine with no `git`, gives `UNVERIFIED` for the Git items
+and still reads the files. The verb has no limit on the number of lines and no threshold.
 
 **What it does not establish.** That a line is current beyond the moment it was read (an export, a
 result and a handoff are each as old as the line says); that a pull request has passed CI or been
@@ -323,7 +330,7 @@ ships with it; it holds six rows, each a skill the engine already ships.
 
 **Validation.** `tests/test_where.py`, with temporary Git repositories and a stand-in `gh`: each
 kind with a source that reads, one that does not (`UNVERIFIED` with its reason), and one that is
-empty; each row of the next-skill table; the choice rules above (an answered brief, a brief id two
+empty; an export cut short, a result with no verdict, a pushed branch, a missing `git`; each row of the next-skill table; the choice rules above (an answered brief, a brief id two
 files define, an old review of other commits, a review of a moving ref, a held ticket, a worktree
 read from its main checkout); that no file or index changes in a run; that no process other than
 `git` and `gh` starts; that `--offline` starts no `gh`; the shape of the `--json` report against the

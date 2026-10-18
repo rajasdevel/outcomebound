@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -32,9 +33,9 @@ from outcomebound_tools import (
     adopt_worktrees,
     brief_lookup,
     home,
+    paths,
     programs,
     review_check,
-    review_since,
     size,
     textio,
     validation,
@@ -52,8 +53,11 @@ VERDICTS = (OPEN, STALE, CLEAR, NOTE, UNVERIFIED)
 # The order of reading. It says nothing about the order of work.
 KINDS = ("git", "worktree", "pr", "ticket", "validation", "review", "brief", "handoff")
 EXPORT = "issues.json"
+# The reader's codes for an export that did not give a whole answer.
+PARTIAL = ("EXPORT_PARTIAL", "EXPORT_TRUNCATED")
 GH_SECONDS = 30
 PR_LIMIT = 1000
+MAINLINE = "refs/remotes/origin/HEAD"
 SEE = textio.visible
 
 # The one table: the kind of open item to the shipped skill that serves its next step. It holds
@@ -113,7 +117,10 @@ def _age(seconds: float) -> str:
 def _git(root: Path, *arguments: str) -> str | None:
     """The text of one read-only Git command, or None where it fails."""
 
-    status, output, _ = size._git(root, *arguments)
+    try:
+        status, output, _ = size._git(root, *arguments)
+    except size.SizeError:
+        return None
     return output.decode("utf-8", "replace").strip() if status == 0 else None
 
 
@@ -190,7 +197,7 @@ def _git_items(top: Path, inside: bool) -> list[Item]:
     older = adopt_worktrees.lines(top, listed, adopt.engine_version(home.ROOT))
     if older:
         text = (
-            f"{len(older)} worktree(s) have an install older than the engine; "
+            f"{len(older)} worktree(s) have no readable install or one older than the engine; "
             "`outcomebound adopt . --check` names each"
         )
         items.append(_item("worktree", "adopt_worktrees", NOTE, text))
@@ -271,6 +278,8 @@ class Store:
     age_seconds: int | None = None
     open: tuple[Ticket, ...] = ()
     closed: frozenset[str] = frozenset()
+    incomplete: frozenset[str] = frozenset()
+    whole: bool = True
     failure: Item | None = None
 
 
@@ -323,6 +332,8 @@ def _read_tickets(top: Path, export: Path | None) -> Store:
         age,
         tuple(t for t in result.tickets if t.state == "open"),
         frozenset(t.id for t in result.tickets if t.state != "open"),
+        frozenset(m.ticket for m in result.messages if m.code in PARTIAL and m.ticket),
+        not any(m.code in PARTIAL and not m.ticket for m in result.messages),
     )
 
 
@@ -332,9 +343,15 @@ def _ticket_items(store: Store, status: dict[str, str]) -> list[Item]:
     if store.failure is not None:
         return [store.failure]
     source = store.source
-    items = [_item("ticket", source, NOTE, f"{len(store.open)} open ticket(s); {store.stamp}")]
+    whole = "" if store.whole else "; the export is not the whole issue list"
+    head = f"{len(store.open)} open ticket(s); {store.stamp}{whole}"
+    items = [_item("ticket", source, NOTE if store.whole else UNVERIFIED, head)]
     for ticket in store.open:
         label = textio.quote(ticket.title)
+        if ticket.id in store.incomplete:
+            text = f"{label}: the export holds only part of its relations, so it is not judged"
+            items.append(_item("ticket", source, UNVERIFIED, text, subject=ticket.id))
+            continue
         waits = [w for w in ticket.waits_on if status.get(w.casefold()) != "ANSWERED"]
         blockers = [b for b in ticket.blocked_by if b not in store.closed]
         if ticket.hold != "no":
@@ -370,6 +387,10 @@ def _ticket_items(store: Store, status: dict[str, str]) -> list[Item]:
 
 
 # --- validation -------------------------------------------------------------------------
+
+
+def _rerun(state: validation.ClaimState) -> str:
+    return "its command: " + SEE(" ".join(paths.shell_word(word) for word in state.claim.command))
 
 
 def _validation_items(
@@ -416,7 +437,7 @@ def _validation_items(
                         "validation",
                         source,
                         OPEN,
-                        f"last result FAIL; {SEE(state.text)}",
+                        f"last result FAIL; {SEE(state.text)}; {_rerun(state)}",
                         subject=name,
                         item="failed-claim",
                     )
@@ -427,7 +448,7 @@ def _validation_items(
                         "validation",
                         source,
                         STALE,
-                        SEE(state.text),
+                        f"{SEE(state.text)}; {_rerun(state)}",
                         subject=name,
                         item="changed-claim",
                     )
@@ -441,7 +462,10 @@ def _validation_items(
             for s in (validation_record.CURRENT, validation_record.CHANGED, UNVERIFIED)
         }
         unkept = sum(1 for st in states if st.verdict is None)
-        clear = counts["CURRENT"] == len(states) and not shown
+        clear = bool(states) and all(
+            st.state == validation_record.CURRENT and st.verdict == validation.PASSED
+            for st in states
+        )
         text = (
             f"{len(states)} claim(s): "
             + ", ".join(f"{n} {s}" for s, n in counts.items())
@@ -459,6 +483,41 @@ def _roots(top: Path, name: str) -> list[Path]:
     return [root for root in brief_lookup.default_roots(top) if root.name == name]
 
 
+HEX = re.compile(r"[0-9a-f]{7,64}")
+
+
+def _fixed(top: Path, ref: str) -> bool:
+    """Whether `ref` names one commit for good: an object id or a tag. A branch, `HEAD` and an
+    expression built on them (`HEAD~0`) move."""
+
+    if HEX.fullmatch(ref):
+        return True
+    return (_git(top, "rev-parse", "--symbolic-full-name", ref) or "").startswith("refs/tags/")
+
+
+def _branch_base(top: Path, base_ref: str | None) -> dict[str, str]:
+    """The base that tells a branch's commits from the main line's: `--base`, else the merge base
+    of HEAD with `origin/HEAD`, which a pushed copy of the branch does not move, else the base
+    `size` chooses."""
+
+    merged = _git(top, "merge-base", "HEAD", MAINLINE) if base_ref is None else None
+    if merged:
+        return {
+            "ref": "origin/HEAD",
+            "how": "merge base of HEAD with origin/HEAD",
+            "commit": merged,
+        }
+    return size.resolve_base(top, base_ref)
+
+
+def _differing(top: Path, commit: str) -> list[str]:
+    """The paths the work tree holds differently from `commit`: what `review since` compares, with
+    no hunks and no reading of the findings."""
+
+    tracked = [path for path, _, _ in size.tracked_changes(top, commit)]
+    return sorted({*tracked, *size.untracked_paths(top)})
+
+
 def _review_items(top: Path, base_ref: str | None) -> tuple[list[Item], dict[str, str] | None]:
     """The review lines, and the base that told which reviews concern this branch."""
 
@@ -466,53 +525,46 @@ def _review_items(top: Path, base_ref: str | None) -> tuple[list[Item], dict[str
     swept = [review_check.sweep(root) for root in roots]
     files = [(path, found, s.reviewed.get(path)) for s in swept for path, found in s.files]
     items = []
-    tied: list[tuple[str, str]] = []
+    tied: list[tuple[str, str, str]] = []
     base = None
     try:
-        base = size.resolve_base(top, base_ref)
+        base = _branch_base(top, base_ref)
         branch = set((_git(top, "rev-list", f"{base['commit']}..HEAD") or "").split())
     except size.SizeError as error:
         branch = set()
-        items.append(
-            _item(
-                "review",
-                "review since",
-                UNVERIFIED,
-                "no base tells which reviews concern this branch "
-                f"({SEE(textio.plain(str(error)))}); only open findings are listed",
-            )
+        why = SEE(textio.plain(str(error)))
+        text = (
+            f"no base tells which reviews concern this branch ({why}); "
+            "only open findings are listed"
         )
+        items.append(_item("review", "review since", UNVERIFIED, text))
     others = 0
     for path, found, ref in files:
         shown = SEE(_shown(Path(path), top))
+        commit = size._commit_of(top, ref) if ref and _fixed(top, ref) else None
         if review_check.verdict(found) == review_check.FAIL:
             codes = sorted({f.code for f in found if f.verdict == review_check.FAIL})
             items.append(_item("review", shown, OPEN, f"{', '.join(codes)}", item="review-open"))
-        elif ref and not review_since._moving(top, ref) and size._commit_of(top, ref) in branch:
-            tied.append((path, shown))
+        elif commit in branch and ref:
+            tied.append((shown, ref, commit))
         else:
             others += 1
-    for path, shown in tied:
-        report = review_since.build(Path(path), None, top)
-        if report["result"] == "UNVERIFIED":
-            items.append(_item("review", shown, UNVERIFIED, SEE(report["reason"])))
-        elif report["files"]:
-            names = ", ".join(SEE(f["path"]) for f in report["files"][:5])
-            more = "" if len(report["files"]) <= 5 else f" and {len(report['files']) - 5} more"
+    for shown, ref, commit in tied:
+        try:
+            differ = _differing(top, commit)
+        except size.SizeError as error:
+            items.append(_item("review", shown, UNVERIFIED, SEE(textio.plain(str(error)))))
+            continue
+        if differ:
+            names = ", ".join(SEE(name) for name in differ[:5])
+            more = "" if len(differ) <= 5 else f" and {len(differ) - 5} more"
             text = (
-                f"read {SEE(report['reviewed'])}; {len(report['files'])} file(s) differ now: "
-                f"{names}{more} (whether to review again is the project's call)"
+                f"read {SEE(ref)}; {len(differ)} file(s) differ now: {names}{more} "
+                "(whether to review again is the project's call)"
             )
             items.append(_item("review", shown, NOTE, text))
         else:
-            items.append(
-                _item(
-                    "review",
-                    shown,
-                    CLEAR,
-                    f"read {SEE(report['reviewed'])}; no tracked file differs now",
-                )
-            )
+            items.append(_item("review", shown, CLEAR, f"read {SEE(ref)}; no file differs now"))
     unread = sum(len(s.unread) for s in swept)
     if others or unread or not roots:
         text = (

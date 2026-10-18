@@ -135,7 +135,7 @@ def _files(root: Path, unread: list[str]) -> list[Path]:
     if root.is_file():
         return [root]
     found: list[Path] = []
-    for entered in walk.folders(root):
+    for entered in walk.folders(root, depth=DEPTH):
         depth = 0 if entered.relative == "." else len(Path(entered.relative).parts)
         if depth >= DEPTH:
             continue

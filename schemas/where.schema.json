@@ -43,7 +43,8 @@
           },
           "source": {
             "type": "string",
-            "description": "What was read: a command, or a path as given or relative to the work tree."
+            "description": "What was read: a command, or a path as given or relative to the work tree.",
+            "minLength": 1
           },
           "subject": {
             "type": "string",
@@ -60,7 +61,8 @@
             "description": "OPEN owes something; STALE was read and stands behind the tree; CLEAR owes nothing; NOTE is a fact without a judgement; UNVERIFIED could not be read, and text says why."
           },
           "text": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "next": {
             "enum": [

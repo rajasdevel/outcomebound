@@ -313,7 +313,7 @@ def _candidates(folder: Path) -> tuple[list[Path], list[str]]:
 
     found: list[Path] = []
     unread: list[str] = []
-    for entered in walk.folders(folder):
+    for entered in walk.folders(folder, depth=SWEEP_DEPTH):
         depth = 0 if entered.relative == "." else len(Path(entered.relative).parts)
         if depth >= SWEEP_DEPTH:
             continue
