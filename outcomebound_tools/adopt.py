@@ -155,6 +155,7 @@ LOCAL_IGNORE_TEXT = (
 )
 # A harness outside the harness table: the skills go where the pointers name them.
 GENERIC = "generic"
+CLOUD_TABLE = "adapters/cloud.json"
 GENERIC_SKILLS = ".outcomebound/skills"
 KERNEL_TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LOCAL = facts.LOCAL
@@ -1618,6 +1619,38 @@ class Selection:
     setup: list[str] | None = None
 
 
+def cloud_notes(source: Path, harnesses: Sequence[str], setup: Sequence[str]) -> Notes:
+    """The note on cloud sessions, which start from a fresh clone without the `outcomebound`
+    command: the install line pinned to this engine's version, and where each harness the
+    target uses keeps the setup step that takes it. It writes nothing. An entry that names no
+    table harness is a harness outside the table that reads AGENTS.md, so it is named for every
+    target; the `generic` route cannot say which harness is used, so it names every entry."""
+
+    try:
+        table = json.loads(_source_text(source, CLOUD_TABLE))
+    except ValueError as error:
+        raise AdoptError(f"{CLOUD_TABLE}: {error}") from error
+    if not isinstance(table, dict):
+        raise AdoptError(f"{CLOUD_TABLE} is not an object")
+    version = engine_version(source)
+    used = set(harnesses) or {GENERIC}
+    lines = [
+        "Cloud sessions start from a fresh clone, without the outcomebound command. Add one of "
+        "these lines to the cloud environment's setup step (this writes no file):",
+        f"  uv tool install outcomebound=={version}",
+        f"  python3 -m pip install outcomebound=={version}",
+        "Where each harness keeps that step:",
+    ]
+    for entry in table.values():
+        if isinstance(entry, dict) and (
+            GENERIC in used or entry.get("harness") is None or entry.get("harness") in used
+        ):
+            lines.append(f"  {entry.get('name')}: {entry.get('setup')}")
+    if setup:
+        lines.append("This project records a Setup fact: add the install line to the Setup fact too.")
+    return [("note", line) for line in lines]
+
+
 def install(
     target: Path, source: Path, selection: Selection, force: bool
 ) -> tuple[Planned, list[str], Notes]:
@@ -1655,6 +1688,7 @@ def install(
     run.notes.extend(ignored_notes(target, owned))
     run.notes.extend(uncommitted_notes(target, planned))
     notes = [*run.restated, *run.notes] if planned else run.notes
+    notes.extend(cloud_notes(source, [route.harness for route in found], setup))
     return planned, run.edited, notes
 
 
@@ -1884,6 +1918,10 @@ def check(target: Path, source: Path) -> int:
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
     for line in _drift_lines(target, source, manifest.own, facts.read_ci(target)):
         print(f"{'drift':<8} {line}")
+    for verb, text in cloud_notes(
+        source, recorded_harnesses(manifest.own), recorded_setup(manifest.own)
+    ):
+        print(f"{verb:<8} {text}")
     step = next_step(target, found)
     if step is not None:
         print(step)

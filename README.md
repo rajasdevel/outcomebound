@@ -155,6 +155,8 @@ harness trust and branch protection enforce authority; OutcomeBound's checks inf
 - **Text for people:** `adopt --human-style ste` asks for ASD-STE100 Simplified Technical English
   in documents a person keeps, such as pull request descriptions, commit messages, specs and
   handovers, and not in replies in conversation.
+- **Cloud sessions:** the [cloud guide](docs/cloud-sessions.md) says what a cloud session starts with
+  and where each harness keeps the setup step that installs `outcomebound`.
 - **Workspace and commands:** the [workspace guide](docs/workspace.md) and the
   [command guide](docs/commands.md).
 - **Research:** the [research library](https://github.com/rajasdevel/outcomebound-research) holds

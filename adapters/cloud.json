@@ -1,0 +1,34 @@
+{
+  "claude-code-web": {
+    "name": "Claude Code on the web",
+    "harness": "claude-code",
+    "setup": "the cloud environment's setup script",
+    "read": "2026-10-17",
+    "source": "https://code.claude.com/docs/en/cloud-environments",
+    "says": "a per-environment setup script runs once before the harness starts; an install from the package index works under the default network level"
+  },
+  "codex-cloud": {
+    "name": "Codex cloud",
+    "harness": "codex",
+    "setup": "the environment's setup script",
+    "read": "2026-10-17",
+    "source": "https://learn.chatgpt.com/docs/environments/cloud-environment",
+    "says": "a setup script runs with internet access before the agent phase, which blocks internet access by default"
+  },
+  "github-copilot": {
+    "name": "GitHub Copilot",
+    "harness": null,
+    "setup": ".github/workflows/copilot-setup-steps.yml",
+    "read": "2026-10-17",
+    "source": "https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/customize-the-agent-environment",
+    "says": "one job named copilot-setup-steps in that workflow file sets up the cloud agent's environment, and the file counts only on the default branch"
+  },
+  "cursor-cloud": {
+    "name": "Cursor",
+    "harness": "cursor",
+    "setup": ".cursor/environment.json, the install key",
+    "read": "2026-10-17",
+    "source": "https://cursor.com/docs/cloud-agent/setup",
+    "says": "the install key of that file runs when the environment is built, from the default branch's copy"
+  }
+}

@@ -106,6 +106,20 @@ def test_the_editor_extension_session_is_identified_and_draws_ascii() -> None:
     assert session_surface({**EDITOR_SESSION, "CURSOR_AGENT": "1"}) == "claude-code-editor"
 
 
+def test_a_cloud_session_is_identified_and_draws_ascii_until_a_rendering_is_observed() -> None:
+    """The cloud session of the harness is identified from its one documented variable,
+    beside the variable of every session of the harness, and draws ASCII because no
+    rendering is recorded for it; the person's record still outranks the table."""
+
+    cloud = {"CLAUDE_CODE_REMOTE": "true", "CLAUDECODE": "1"}
+
+    assert session_surface(cloud) == "claude-code-web"
+    assert diagram_form(cloud) == "ascii"
+    assert TABLE["claude-code-web"]["mermaid"] is None
+    assert diagram_form({**cloud, "OUTCOMEBOUND_DIAGRAMS": "mermaid"}) == "mermaid"
+    assert session_surface({"CLAUDE_CODE_REMOTE": "false"}) == UNKNOWN
+
+
 def test_the_most_specific_row_wins_and_a_tie_is_unknown() -> None:
     rows = {
         "a": _row([_variable("X")], mermaid=False),

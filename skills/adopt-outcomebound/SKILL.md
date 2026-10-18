@@ -59,7 +59,8 @@ agent reads the code, and a summary of it adds text without adding a fact.
    a passing check of the current working files does not prove this. A machine-local install is
    also valid when that is the intended scope; report that limit instead of claiming that another
    clone receives it. A cloud or background session starts from the pushed branch: it gets only what
-   was committed, and `outcomebound` only where the environment's setup installs it.
+   was committed, and `outcomebound` only where the environment's setup installs it; the report's cloud
+   note gives the install line.
 
 ## The project's own facts
 
