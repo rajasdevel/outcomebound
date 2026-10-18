@@ -13,9 +13,11 @@ a ref. It writes nothing and opens no connection. Standard library only.
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import re
+import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -54,13 +56,17 @@ _INLINE = re.compile(
     r"(?<!\\)\]\(\s*(?P<dest>" + _DESTINATION + r")"
     r"(?:\s+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?\s*\)"
 )
-_DEFINITION = re.compile(r" {0,3}\[[^\]\n]+\]:[ \t]*(?P<dest>" + _DESTINATION + r")")
+_DEFINITION = re.compile(r" {0,3}\[(?!\^)[^\]\n]+\]:[ \t]*(?P<dest>" + _DESTINATION + r")")
 _AUTOLINK = re.compile(r"<(?P<dest>[A-Za-z][A-Za-z0-9+.-]*:[^<>\s]*)>")
 _SPAN = re.compile(r"(?<!`)(?P<ticks>`+)(?!`)(?P<body>.+?)(?<!`)(?P=ticks)(?!`)")
-_SCHEME = re.compile(r"[A-Za-z][A-Za-z0-9+.-]+:")
+_SCHEME = re.compile(r"(?:[A-Za-z][A-Za-z0-9+.-]*://|(?:mailto|tel|data|javascript|urn):)")
 _LINES = r"\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*"
-_PATH_LINE = re.compile(r"(?P<path>\.{0,2}/?[A-Za-z0-9_.@+/-]+):(?P<lines>" + _LINES + r")")
-_LINE_ANCHOR = re.compile(r"L(?P<first>\d+)(?:-L(?P<last>\d+))?", re.IGNORECASE)
+_PATH = r"[A-Za-z0-9_.@+-]+(?:/[A-Za-z0-9_.@+-]+)*"
+_PATH_LINE = re.compile(r"(?P<path>/?" + _PATH + r"):(?P<lines>" + _LINES + r")(?::\d+)?")
+_BARE_PATH_LINE = re.compile(
+    r"(?<![\w/.@:+-])(?P<tok>" + _PATH + r"/" + _PATH + r":" + _LINES + r"(?::\d+)?)(?![\w/])"
+)
+_LINE_ANCHOR = re.compile(r"L(?P<first>\d+)(?:C\d+)?(?:-L(?P<last>\d+)(?:C\d+)?)?")
 _SOURCE_SUFFIXES = frozenset(
     (
         "py",
@@ -91,11 +97,17 @@ _SOURCE_SUFFIXES = frozenset(
         "markdown",
     )
 )
-_REF_WORD = re.compile(r"\b(?:commit|ref|branch|tag|sha|rev)\s+(?:at\s+|of\s+)?$", re.IGNORECASE)
-_REF_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/@~^{}-]*")
+_SOURCE_NAMES = frozenset(("Makefile", "Dockerfile"))
+_REF_WORD = re.compile(
+    r"\b(?P<word>commit|ref|branch|tag|sha|rev)[ \t]+(?:at[ \t]+|of[ \t]+)?$", re.IGNORECASE
+)
+_HEX = re.compile(r"(?=.*\d)(?=.*[a-fA-F])[0-9a-fA-F]{7,40}")
+_REF_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+_SKIPPED_FOLDERS = frozenset((".git", "node_modules", ".venv"))
+_HTML_COMMENT = re.compile(r"<!--.*?-->")
 _SETEXT = re.compile(r" {0,3}(?:=+|-+)[ \t]*")
 _HTML_TAG = re.compile(r"</?[A-Za-z][^<>]*>")
-_HEADING_LINK = re.compile(r"!?\[(?P<text>[^\]]*)\]\([^)]*\)")
+_HEADING_LINK = re.compile(r"!?\[(?P<text>[^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
 
 
 @dataclass(frozen=True, order=True)
@@ -134,17 +146,22 @@ class LinksRefusal(Exception):
 
 def markdown_files(inputs: Iterable[Path]) -> list[Path]:
     """The Markdown files the inputs name: each file as given, each folder's `.md` and
-    `.markdown` files, in path order. Symbolic links to folders and `.git` are not entered."""
+    `.markdown` files, in path order. Symbolic links, `.git`, `node_modules` and `.venv` are
+    not entered, and no ignore file is read."""
 
     found: dict[str, Path] = {}
     for given in inputs:
         if given.is_dir():
             for directory, names, files in os.walk(given):
                 names[:] = sorted(
-                    n for n in names if n != ".git" and not os.path.islink(Path(directory, n))
+                    n
+                    for n in names
+                    if n not in _SKIPPED_FOLDERS and not os.path.islink(Path(directory, n))
                 )
                 for name in sorted(files):
-                    if name.lower().endswith(MARKDOWN_SUFFIXES):
+                    if name.lower().endswith(MARKDOWN_SUFFIXES) and not os.path.islink(
+                        Path(directory, name)
+                    ):
                         found.setdefault(str(Path(directory, name)), Path(directory, name))
         elif given.is_file():
             found.setdefault(str(given), given)
@@ -172,10 +189,46 @@ def _blank_spans(line: str) -> tuple[str, list[re.Match[str]]]:
     return text, spans
 
 
+def _without_comments(line: str, inside: bool) -> tuple[str, bool]:
+    """`line` with HTML comments removed, and whether a comment is still open at its end."""
+
+    if inside:
+        end = line.find("-->")
+        if end < 0:
+            return "", True
+        line = " " * (end + 3) + line[end + 3 :]
+    line = _HTML_COMMENT.sub(lambda m: " " * len(m.group(0)), line)
+    start = line.find("<!--")
+    if start >= 0:
+        return line[:start], True
+    return line, False
+
+
+def _ref_candidate(before: str, body: str) -> bool:
+    """Whether a code span is read as a Git ref: hex of 7 to 40 characters holding a digit and a
+    letter, or a valid name straight after one of the words `ref`, `branch` or `tag`; or hex
+    straight after `commit`, `sha` or `rev`."""
+
+    if _HEX.fullmatch(body):
+        return True
+    marked = _REF_WORD.search(before)
+    if marked is None or marked.group("word").lower() in ("commit", "sha", "rev"):
+        return False
+    return (
+        _REF_NAME.fullmatch(body) is not None
+        and ".." not in body
+        and not body.endswith((".", "/", ".lock"))
+        and "//" not in body
+    )
+
+
 def _strip_markup(heading: str) -> str:
     """A heading line with link syntax and HTML tags reduced to the text GitHub slugs."""
 
-    return _HTML_TAG.sub("", _HEADING_LINK.sub(lambda m: m.group("text"), heading))
+    reduced = _HTML_TAG.sub("", _HEADING_LINK.sub(lambda m: m.group("text"), heading))
+    return unicodedata.normalize(
+        "NFC", html.unescape(re.sub(r"\\([!-/:-@\[-`{-~])", r"\1", reduced))
+    )
 
 
 def anchors_of(text: str) -> set[str]:
@@ -209,9 +262,13 @@ def anchors_of(text: str) -> set[str]:
     for _, slug in sorted(entries):
         if not slug:
             continue
-        count = seen.get(slug, 0)
-        seen[slug] = count + 1
-        anchors.add(slug if count == 0 else f"{slug}-{count}")
+        if slug in anchors:
+            count = seen.get(slug, 0) + 1
+            while f"{slug}-{count}" in anchors:
+                count += 1
+            seen[slug] = count
+            slug = f"{slug}-{count}"
+        anchors.add(slug)
     return anchors
 
 
@@ -298,6 +355,9 @@ class _Checker:
         if _SCHEME.match(target) or target.startswith("//"):
             self._skip(name, line, "external", target, "an external link is not opened")
             return
+        if _PATH_LINE.fullmatch(target):
+            self.path_line(doc, name, line, target)
+            return
         path_part, _, fragment = target.partition("#")
         path_part = unquote(path_part.partition("?")[0])
         fragment = unquote(fragment)
@@ -318,19 +378,19 @@ class _Checker:
             self._fragment(name, line, target, fragment, inside)
 
     def _fragment(self, name: str, line: int, target: str, fragment: str, file: Path) -> None:
-        if file.name.lower().endswith(MARKDOWN_SUFFIXES):
-            anchors = self._anchors_for(file)
-            if anchors is None:
-                self._skip(name, line, "unreadable", target, "the file is not readable text")
-            elif fragment.lower() not in anchors:
-                self._fail(
-                    name, line, LINK_ANCHOR_MISSING, target, f"no heading anchors #{fragment}"
-                )
-            return
         wanted = _LINE_ANCHOR.fullmatch(fragment)
         if wanted:
             last = int(wanted.group("last") or wanted.group("first"))
             self._lines(name, line, target, file, max(int(wanted.group("first")), last))
+            return
+        if file.name.lower().endswith(MARKDOWN_SUFFIXES):
+            anchors = self._anchors_for(file)
+            if anchors is None:
+                self._skip(name, line, "unreadable", target, "the file is not readable text")
+            elif unicodedata.normalize("NFC", fragment).lower() not in anchors:
+                self._fail(
+                    name, line, LINK_ANCHOR_MISSING, target, f"no heading anchors #{fragment}"
+                )
 
     def _lines(self, name: str, line: int, target: str, file: Path, last: int) -> None:
         count = self._count(file)
@@ -342,12 +402,14 @@ class _Checker:
         if match is None:
             return
         path = match.group("path")
-        suffix = path.rsplit(".", 1)[-1].lower() if "." in Path(path).name else ""
-        if "/" not in path and suffix not in _SOURCE_SUFFIXES:
+        base_name = Path(path).name
+        suffix = base_name.rsplit(".", 1)[-1].lower() if "." in base_name else ""
+        if suffix not in _SOURCE_SUFFIXES and base_name not in _SOURCE_NAMES:
             return
-        numbers = [int(n) for n in re.findall(r"\d+", match.group("lines"))]
-        if min(numbers) < 1:
+        spans = [tuple(int(n) for n in part.split("-")) for part in match.group("lines").split(",")]
+        if any(span[0] < 1 or span[-1] < span[0] for span in spans):
             return
+        numbers = [span[-1] for span in spans]
         for base in (self.root, doc.parent):
             candidate = base / path.lstrip("/")
             if self._exact(candidate) and candidate.is_file():
@@ -368,8 +430,6 @@ class _Checker:
         self._fail(name, line, REF_MISSING, body, "no such file")
 
     def ref(self, name: str, line: int, ref: str) -> None:
-        if not _REF_NAME.fullmatch(ref):
-            return
         if self._repository is None:
             try:
                 self._repository = tickets_git.git(self.root, "rev-parse", "--git-dir").status == 0
@@ -379,12 +439,18 @@ class _Checker:
             self._skip(name, line, "git_unavailable", ref, "Git cannot be asked here")
             return
         if ref not in self._refs:
-            self._refs[ref] = (
-                tickets_git.git(
-                    self.root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"
-                ).status
-                == 0
-            )
+            status = tickets_git.git(
+                self.root,
+                "rev-parse",
+                "--verify",
+                "--quiet",
+                "--end-of-options",
+                f"{ref}^{{commit}}",
+            ).status
+            self._refs[ref] = True if status == 0 else (False if status == 1 else None)
+        if self._refs[ref] is None:
+            self._skip(name, line, "git_unavailable", ref, "Git could not answer")
+            return
         self.report.checked += 1
         if not self._refs[ref]:
             self._fail(name, line, REF_UNRESOLVED, ref, "names no commit in this repository")
@@ -395,15 +461,20 @@ class _Checker:
         text = _read(doc)
         name = doc.as_posix()
         fenced = tickets_links.fenced_lines(text)
-        for number, line in enumerate(text.split("\n"), start=1):
+        in_comment = False
+        for number, raw_line in enumerate(text.split("\n"), start=1):
             if fenced[number - 1]:
                 continue
+            line, in_comment = _without_comments(raw_line, in_comment)
             blanked, spans = _blank_spans(line)
             for span in spans:
                 body = span.group("body").strip()
                 self.path_line(doc, name, number, body)
-                if _REF_WORD.search(line[: span.start()]):
+                if _ref_candidate(line[: span.start()], body):
                     self.ref(name, number, body)
+            bare = _INLINE.sub(lambda m: " " * len(m.group(0)), blanked)
+            for token in _BARE_PATH_LINE.finditer(bare):
+                self.path_line(doc, name, number, token.group("tok"))
             definition = _DEFINITION.match(blanked)
             if definition:
                 self.link(doc, name, number, definition.group("dest"))
@@ -415,7 +486,11 @@ class _Checker:
 
 def check(inputs: Sequence[Path], root: Path) -> Report:
     checker = _Checker(root)
-    for doc in markdown_files(inputs):
+    files = markdown_files(inputs)
+    for doc in files:
+        if checker._inside(doc) is None:
+            raise LinksRefusal(f"{doc.as_posix()} is outside --root {root.as_posix()}")
+    for doc in files:
         checker.file(doc)
     checker.report.broken.sort()
     checker.report.not_checked.sort()
@@ -446,23 +521,19 @@ def render_text(report: Report, *, verbose: bool = False) -> str:
         f"Does not establish: {item.limit}. next: {item.next}."
         for item in report.broken
     ]
-    counts = _counts(report)
-    if counts:
-        lines.append(
-            "not checked: "
-            + ", ".join(f"{n} {kind}" for kind, n in sorted(counts.items()))
-            + " (no network is opened; Git or the root bounds the rest)."
-        )
     if verbose:
         lines.extend(
             f"not checked {_safe(item.file)}:{item.line}: {item.code} "
             f"{_safe(item.target)}: {item.text}."
             for item in report.not_checked
         )
-    lines.append(
-        f"VERDICT: {report.verdict}; {len(report.broken)} broken, "
-        f"{len(report.not_checked)} not checked, {report.checked} checked"
+    kinds = ", ".join(f"{kind}={n}" for kind, n in sorted(_counts(report).items()))
+    verdict = (
+        f"VERDICT: {report.verdict} broken={len(report.broken)} "
+        f"not_checked={len(report.not_checked)}{f' ({kinds})' if kinds else ''} "
+        f"checked={report.checked}"
     )
+    lines.insert(0, verdict)
     return "\n".join(lines) + "\n"
 
 

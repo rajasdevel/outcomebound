@@ -61,8 +61,8 @@ and no connection is opened.
 | A manifest that is absent reads `UNVERIFIED`, and so does a partial item; neither hides a FAIL found elsewhere, and rows for the absent manifest's name are reported unchecked, never unknown | exit 2 before any other check runs | agent | assumed |
 | `check --skeleton <manifest>...` prints a ledger section with one `todo` row per item, ids and revisions filled; each `--range FIRST..LAST` replaces the rows of its items with one row that holds the range's digest, so an agent never types an id or a digest | an agent that writes ids by hand | agent | assumed |
 | Exits as `outcomebound tickets` exits: 0 PASS; 1 FAIL or a refusal; 2 UNVERIFIED or a usage error. `import` exits 2 where the manifest is partial; its refusals are `SOURCE_UNREADABLE`, `SOURCE_KIND_UNKNOWN`, `SOURCE_IMAGE_INVALID`, `SOURCE_ENCODING`, `SOURCE_NAME_INVALID`, `SOURCE_EMPTY`, `SOURCE_DUPLICATE` and `SOURCE_UNWRITABLE`; `check`'s is `LEDGER_UNREADABLE` | a new code for UNVERIFIED | agent | assumed |
-| `sources links` checks the references inside Markdown files (below). It is a third subcommand of `sources`, not a new verb and not part of `instructions`: `sources` is the verb that checks a file against what it cites, and `instructions` reads text for what a model might obey. The check shares no code with `check` but the heading reader of `tickets_links.py`, so the two readings of a heading cannot differ | a new verb `links`, which a person must learn beside `sources`; `instructions check`, which judges model-facing text and would run the check only on files that load into a model | agent | assumed |
-| `sources links` exits 0 where nothing is broken, 1 where something is, 2 for a usage error (no input, a path that is not there, a folder with no Markdown file). It has no UNVERIFIED exit: a reference it cannot judge (an external link, a path outside `--root`, a Git ref where Git cannot be asked) is listed as not checked, and does not change the exit. This differs from `check`, whose exit 2 means UNVERIFIED | the exits of `check`, under which a handoff with one web link would never read clean | agent | assumed |
+| `sources links` checks the references inside Markdown files (below). It is a third subcommand of `sources`, not a new verb and not part of `instructions`: `sources` is the verb that checks a file against what it cites, and `instructions` reads text for what a model might obey. The check shares no code with `check`; it shares the slug function and the fence detection of `tickets_links.py`, so a heading anchors one way in both | a new verb `links`, which a person must learn beside `sources`; `instructions check`, which judges model-facing text and would run the check only on files that load into a model | agent | assumed |
+| `sources links` exits 0 where nothing is broken, 1 where something is, 2 for a usage error (a path that is not there or cannot be read, a named file outside `--root`, no Markdown file). It has no UNVERIFIED exit: a reference it cannot judge (an external link, a path outside `--root`, a Git ref where Git cannot be asked); the verdict line says how many is listed as not checked, and does not change the exit. This differs from `check`, whose exit 2 means UNVERIFIED | the exits of `check`, under which a handoff with one web link would never read clean | agent | assumed |
 | An engine limit on items, file size or section length is not imposed | a cap chosen without evidence | agent | assumed |
 | `check` reports a requirement carried from no item and not marked `[assumed]`, an item dropped on an assumption, a suspect item and a converted source, each as information that does not change the verdict | failing on them, which would hold work for a requirement the person gave by word | agent | assumed |
 
@@ -99,54 +99,90 @@ speaker truth, the source's currency and authority.
 
 ## Links
 
-`outcomebound sources links PATH... [--root DIR] [--json]` reads each Markdown file named, and
-each `.md` and `.markdown` file under each folder named (symbolic links to folders and `.git` are
-not entered), and reports each reference that does not hold, with file and line. It reads
-files and runs no process but `git`, which it runs only to resolve a ref. It writes nothing and
-opens no connection. `--root` (default `.`) is the repository root: a link that starts with `/`,
-and a `path:line` reference, are resolved from it first.
+`outcomebound sources links PATH... [--root DIR] [--json] [--verbose]` reads each Markdown file
+named, and each `.md` and `.markdown` file under each folder named, and reports each reference
+that does not hold, with file and line. Symbolic links, `.git`, `node_modules` and `.venv` are not
+entered, and no ignore file is read: a caller names the folders it means. It reads files and runs
+no process but `git`, which it runs only to resolve a ref, through the engine's one Git runner
+(`tickets_git.git`). It writes nothing and opens no connection. `--root` (default `.`) is the
+repository root. A link that starts with `/` is resolved from it, with no other base. A `path:line`
+reference is tried from `--root`, then from the folder of the file that holds it. A target that
+resolves outside `--root`, or through a symbolic link to outside it, is never read: it is listed
+as not checked. A named file outside `--root` is a usage error.
 
-What is read: inline links and images `[text](target)`, reference definitions `[id]: target`, and
-inline code spans. Fenced code, indented code and code spans are never read for links. A target
-may be in angle brackets, may carry a title, may use percent-escapes, and may end in a query,
-which is dropped.
+Usage errors come before any check: an input that is not there, a named file that is not UTF-8 or
+cannot be read, a named file outside `--root`, and no Markdown file under all the inputs together.
+A target file that is not UTF-8 is listed as not checked, never as a missing anchor.
+
+What is read, line by line, outside fenced code, HTML comments and code spans: inline links and
+images `[text](target)` (a nested image in a link text, a target in angle brackets, a title,
+percent-escapes, one level of balanced parentheses; a `?query` is dropped), reference definitions
+`[id]: target` at the start of a line (a footnote definition `[^id]:` is not one), and `<scheme:...>`
+autolinks. A line indented four spaces is read as any other line: links in a list continuation are
+live, and indented code is not told apart from it. Inside code spans: a `path:line` reference, and
+a Git ref (below). Outside them: a bare `path/to/file.ext:line` token with a `/` in it.
 
 | Code | Broken when |
 | --- | --- |
-| `LINK_FILE_MISSING` | a relative link names a file or folder that is not there |
+| `LINK_FILE_MISSING` | a relative link names a file or folder that is not there, with the case written |
 | `LINK_ANCHOR_MISSING` | the `#anchor`, in the file itself or in another Markdown file, matches no heading there |
-| `LINE_PAST_END` | a `path:N`, `path:N-M` or `path#LN` reference names a line after the last line of an existing file |
-| `REF_MISSING` | a `path:N` reference names a file that is not there |
+| `LINE_PAST_END` | a `path:N`, `path:N-M`, `path:N,M` reference, or a `#L12`, `#L12-L20` or `#L12C3-L20C9` anchor, names a line after the last line of an existing file |
+| `REF_MISSING` | a `path:N` reference with a `/` in its path names a file that is not there |
 | `REF_UNRESOLVED` | a Git ref or commit named as a ref does not resolve to a commit |
 
-An anchor is a heading's GitHub slug: the text lowercased, each character that is not a letter, a
-digit, a space, a hyphen or an underscore removed, each space made a hyphen (`anchor_of` in
-`tickets_links.py`, the one slug function), and the second and later heading with one slug
-suffixed `-1`, `-2` in document order. `#` headings and setext headings (a text line over a line of
-`=` or `-`) are headings; a heading in fenced code is not. A `#L12` or `#L12-L20` anchor on a file
-that is not Markdown is a line reference. A link to a folder holds if the folder is there; its
-anchor is not read.
+A link target is an external link where it starts with `//`, or with a scheme and `//`, or with
+`mailto:`, `tel:`, `data:`, `javascript:` or `urn:`. Any other target is a path; a target that is
+a `path:line` reference (`sources.py:12`) is checked as one.
 
-A `path:N` reference is the content of one code span, a path with a `/` or an ending in a known
-source suffix, then `:N` or `:N-M`. It is checked against the file as a count of lines, never
-against what the line holds. A ref is named as a ref where a code span follows the word `commit`,
-`ref`, `branch`, `tag`, `sha` or `rev` (any case); it resolves where
-`git rev-parse --verify --quiet <name>^{commit}` succeeds in `--root`. A name that starts with `-`
-does not resolve and is never passed to Git.
+An anchor is a heading's GitHub slug. The slug function is `anchor_of` in `tickets_links.py`; the
+reader of headings is this check's own. It shares with `tickets_links.py` the fence detection and
+the `#` heading grammar, and it differs on purpose: `reads` refuses two headings with one slug, this
+check suffixes them, and this check reads setext headings and skips a leading frontmatter block,
+which `reads` does not. A heading is reduced to its rendered text before it is slugged (tags
+dropped, `[text](..)` and `![alt](..)` reduced to their text, entities decoded, backslash escapes
+dropped, NFC form). A slug that repeats takes the smallest suffix `-1`, `-2`, ... that no earlier
+slug of the file already holds, in document order (`# Foo`, `# Foo 1`, `# Foo` give `foo`, `foo-1`,
+`foo-2`). A heading with an empty slug anchors nothing. The anchor of the link is percent-decoded
+and compared in lowercase. A setext heading is a text line over a line of `=` or `-`, where the text
+line is not blank, not a heading, not in a fence, not a list item, quote or table row. A `#L12`
+anchor is a line reference on any file; every other anchor is read against headings, on a Markdown
+file only. A link to a folder holds if the folder is there; its anchor is not read.
 
-Not checked, listed and never broken: an external link (`http`, `https` and every other scheme,
-including `mailto`), counted as `external` (no network is opened); a target outside `--root`
-after the path is resolved; a ref where Git is not there or `--root` is not a repository.
+A `path:line` reference is the whole of a code span (or a bare token), a path, then `:N`, `:N-M`
+or a comma list of them, then optionally `:column`. The last component of the path is `Makefile`,
+`Dockerfile` or ends in one of the suffixes `py md json sh toml yml yaml txt js ts tsx jsx go rs c h
+cpp java rb html css mk cfg ini tmpl markdown`. N is at least 1 and M at least N, else the span is
+not read. The file's line count is its line terminators, plus one where the last line has none; an
+empty file has 0 lines. A path with no `/` that is found in neither base is listed as not checked
+(`unresolved_name`), since a bare file name may name a file of another folder.
 
-The report prints one line per broken reference (`FILE:LINE: CODE target: reason. Does not
-establish: ...`), then the not-checked counts, then one last line `VERDICT: PASS` or
-`VERDICT: FAIL`, followed by the counts of broken, not checked and checked references. `--json`
-prints the object `schemas/sources-links-report.schema.json` holds.
+A ref is read in a code span where the span is hex of 7 to 40 characters with a digit and a letter
+in it; or follows, with only spaces between, the word `commit`, `sha` or `rev` (optionally then
+`at` or `of`) and is such hex; or follows `ref`, `branch` or `tag` and is a name of letters, digits,
+`.`, `_`, `-` and `/` that starts with a letter or digit, holds no `..` or `//` and does not end in
+`.`, `/` or `.lock`. Any other span is not read, so a placeholder (`v<VERSION>`) or a name that
+starts with `-` is never passed to Git. A ref resolves where `git rev-parse --verify --quiet
+--end-of-options <name>^{commit}` exits 0 in `--root`; exit 1 is `REF_UNRESOLVED`; any other exit
+(128 where `--root` is no repository), or no `git`, lists the ref as not checked
+(`git_unavailable`). A ref that names history in another repository cannot be told from a stale
+one: the check has no escape for it, and reports it.
+
+Not checked, listed and never broken: `external`, `outside_root`, `git_unavailable`, `unreadable`
+and `unresolved_name`.
+
+The report puts one line first, `VERDICT: PASS` or `VERDICT: FAIL`, then `broken=N`,
+`not_checked=N` with each kind's count in parentheses, and `checked=N`, so that a run whose refs
+were all not checked does not read as clean. One line per broken reference follows
+(`FILE:LINE: CODE target: reason. Does not establish: ... next: ...`), then, under `--verbose`, one
+line per reference not checked. Exits: 0 where nothing is broken (whatever is not checked), 1 where
+something is, 2 for a usage error. `--json` prints the object `schemas/sources-links-report.schema.json`
+holds: `version`, `verdict`, `counts` (`broken`, `not_checked`, `checked`), `broken` (each with
+`file`, `line`, `code`, `target`, `text`, `does_not_establish`, `next`) and `not_checked` (each with
+`file`, `line`, `code` as the kind, `target`, `text`).
 
 Not established, and said on each line: that a link target still means what the text says; that a
 line number points at the content a person meant; that a ref names the commit a person meant;
-that an external link is live. A reference the syntax above does not name (a bare path in prose,
-a hash that no word marks) is not read.
+that an external link is live. A reference the syntax above does not name is not read.
 
 ## Validation
 
@@ -158,7 +194,7 @@ image tests build each format from bytes (no binary file is committed): the head
 first such run, and what it finds becomes a case in the suite.
 
 `tests/test_sources_links.py`: each code has a file that triggers it and a clean file beside it;
-duplicate headings take `-1` and `-2`, a setext heading and an ATX heading both anchor, a heading in
-a fence does not; code spans and fences hide a link; external links are counted and never broken;
-a ref that does not resolve is broken, one that does is not; the exits are 0, 1 and 2; the JSON
+duplicate headings take `-1` and `-2` past a natural `foo-1`, frontmatter anchors nothing, a setext heading and an ATX heading both anchor, a heading in
+a fence does not, entities and links in a heading slug as rendered; code spans and fences hide a link; external links are counted and never broken;
+a ref that does not resolve is broken, one that does is not, a placeholder and an option-like name are not read; the exits are 0, 1 and 2; the JSON
 report is valid against its schema; nothing is written.
