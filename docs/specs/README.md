@@ -33,7 +33,7 @@ the same change.
 - [research](research/design.md): the research repository. How the engine finds, prints and
   updates its clone, and how it takes findings back.
 
-- [lifecycle](lifecycle/design.md): the complete lifecycle route, cross-area handoffs and the v1.5.0 qualification scope. Area contracts stay in their current designs.
+- [lifecycle](lifecycle/design.md): the complete lifecycle route, cross-area handoffs and the v1.5.0 qualification scope, and `outcomebound where`, the report of the work in flight. Area contracts stay in their current designs.
 - [scaffold](scaffold/design.md): the scaffold verb. The project files of a lifecycle preset
   and its overlays, written once where absent, for a new project or a move.
 

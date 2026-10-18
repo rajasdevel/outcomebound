@@ -142,7 +142,8 @@ fragments/            stack and setup guidance, copied under .outcomebound/fragm
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       the lifecycle comparisons and the scaffold sets (scaffold/, with its manifest);
                       outcomebound.mk, Make targets a project may include for the floor and a validation plan
-adapters/             harnesses.json, the harness table adopt routes by; surfaces.json, which surfaces render Mermaid
+adapters/             harnesses.json, the harness table adopt routes by; surfaces.json, which surfaces render Mermaid;
+                      cloud.json, where each cloud surface keeps its setup step, with source and read date
 schemas/              wire formats
 docs/                 designs, references, guides
 references/           portability.md, the harness matrix as adapters/harnesses.json records it

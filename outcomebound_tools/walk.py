@@ -36,11 +36,15 @@ class Folder(NamedTuple):
 
 
 def folders(
-    root: Path, skip: Collection[str] = (), unreadable: list[Path] | None = None
+    root: Path,
+    skip: Collection[str] = (),
+    unreadable: list[Path] | None = None,
+    depth: int | None = None,
 ) -> Iterator[Folder]:
     """Each folder under `root`, `root` first, top down and in name order. `skip` holds
     root-relative folder paths not to enter; each folder that cannot be listed is appended to
-    `unreadable` where it is given."""
+    `unreadable` where it is given. `depth` is how many levels are entered (`root` is the first);
+    a folder below that is not listed, so a deep tree costs nothing."""
 
     def failed(error: OSError) -> None:
         if unreadable is not None and error.filename is not None:
@@ -58,4 +62,6 @@ def folders(
             and not os.path.lexists(here / name / ".git")
             and (name if relative == "." else f"{relative}/{name}") not in skip
         )
+        if depth is not None and (0 if relative == "." else len(Path(relative).parts)) + 1 >= depth:
+            dirnames[:] = []
         yield Folder(here, relative, sorted(filenames), links)

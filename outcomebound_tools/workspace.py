@@ -42,7 +42,9 @@ def _git(root: Path, *arguments: str) -> tuple[int, bytes, bytes]:
         completed = subprocess.run(
             [programs.require("git"), *GIT_READ_CONFIGURATION, *arguments],
             cwd=root,
-            env=git_environment({**os.environ, "GIT_OPTIONAL_LOCKS": "0"}),
+            env=git_environment(
+                {**os.environ, "GIT_OPTIONAL_LOCKS": "0", "GIT_NO_LAZY_FETCH": "1"}
+            ),
             stdin=subprocess.DEVNULL,
             capture_output=True,
             check=False,

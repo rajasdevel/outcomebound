@@ -30,6 +30,17 @@
       "says": "a Mermaid block put to the person in this surface showed as its source text"
     }
   },
+  "claude-code-web": {
+    "harness": "claude-code",
+    "signals": {
+      "environment": [{"name": "CLAUDE_CODE_REMOTE", "value": "true"}],
+      "store": null,
+      "source": "2026-10-17: the harness's cloud-environments documentation says the variable is true in a cloud session (https://code.claude.com/docs/en/cloud-environments)"
+    },
+    "mermaid": null,
+    "provenance": null,
+    "note": "read 2026-10-17: the harness's pages on cloud sessions say nothing on whether a Mermaid block is drawn in the web or the phone view, and no one has observed it, so a brief there takes the plain form"
+  },
   "claude-code-desktop": {
     "harness": "claude-code",
     "signals": {"environment": null, "store": null, "source": null},

@@ -32,7 +32,7 @@
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "7e9fffd6f583b3ec90f70bf55eef3aee953f6ed27ffa42566b23d3541e40d198"
+        ".outcomebound/fragments/workspace.md": "9ec8be0bba48522fe34ee6cacf71eb24c7252b44d7ec6d37f805c79b29631200"
       },
       "style": [
         "ste"
@@ -56,7 +56,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "7e9fffd6f583b3ec90f70bf55eef3aee953f6ed27ffa42566b23d3541e40d198"
+      "sha256": "9ec8be0bba48522fe34ee6cacf71eb24c7252b44d7ec6d37f805c79b29631200"
     },
     {
       "kind": "fragment",

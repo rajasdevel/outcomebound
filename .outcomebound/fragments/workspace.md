@@ -4,7 +4,7 @@ family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 11
+version: 12
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -52,13 +52,14 @@ project), with a command that names what it removes, unless the project's instru
 Never a volume, a container or named data, except what the person's order for this project covers and a copy you verified restores; never anything another project or owner uses. Name what you
 reclaimed in your report. A cloud or background
 session starts from the pushed branch, without this machine's ignored folders, uncommitted files or
-tools: commit the install; where its verbs are needed, give the environment's setup script the
-`outcomebound` install, else use each verb's by-hand form. A worktree a harness made stays where the
+tools: commit the install; where its verbs are needed, the person adds the install line that
+`outcomebound adopt` prints to the environment's setup step, else use each verb's by-hand form; a
+cloud session puts its handover in the pull request description. A worktree a harness made stays where the
 harness put it.
 **Mechanisms** — `goal-envelope` when work spans sessions.
 **Completion bar** — a handoff names what landed with each check's verdict, what is in flight,
 what is blocked and why, the next step, the choices made, what is still owed, and the user's
-decisions as briefs; one that another machine or a cloud session will read goes in the ticket or
+decisions as briefs; one that another machine will read goes in the ticket or
 the pull request, since these folders stay on this machine. A handoff that starts a run gives the
 person one block to paste as the run's first message, the goal envelope itself, so that its grants
 are the person's own words; what is for the person, such as how to start the run, stays outside

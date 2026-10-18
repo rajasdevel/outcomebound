@@ -24,8 +24,8 @@ import json
 import os
 import re
 import sys
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from outcomebound_tools import instruction_audit, textio, walk
@@ -281,10 +281,14 @@ SWEEP_DEPTH = 4
 
 @dataclass(frozen=True)
 class Swept:
-    """What a sweep read: each review file and its findings, and the paths it did not read."""
+    """What a sweep read: each review file and its findings, the ref each says it read, and the
+    paths it did not read."""
 
     files: tuple[tuple[str, tuple[Finding, ...]], ...]
     unread: tuple[str, ...]
+    reviewed: Mapping[str, str | None] = field(
+        default_factory=dict
+    )  # the `Reviewed:` ref of a file
 
     @property
     def findings(self) -> list[Finding]:
@@ -309,7 +313,7 @@ def _candidates(folder: Path) -> tuple[list[Path], list[str]]:
 
     found: list[Path] = []
     unread: list[str] = []
-    for entered in walk.folders(folder):
+    for entered in walk.folders(folder, depth=SWEEP_DEPTH):
         depth = 0 if entered.relative == "." else len(Path(entered.relative).parts)
         if depth >= SWEEP_DEPTH:
             continue
@@ -334,6 +338,7 @@ def sweep(folder: Path) -> Swept:
 
     candidates, unread = _candidates(folder)
     files = []
+    refs: dict[str, str | None] = {}
     for path in candidates:
         try:
             text = textio.read_text(path)
@@ -341,8 +346,10 @@ def sweep(folder: Path) -> Swept:
             unread.append(str(path))
             continue
         if _declares(text):
-            files.append((str(path), tuple(check(text, str(path))[1])))
-    return Swept(tuple(files), tuple(sorted(unread)))
+            reviewed, found = check(text, str(path))
+            files.append((str(path), tuple(found)))
+            refs[str(path)] = reviewed
+    return Swept(tuple(files), tuple(sorted(unread)), refs)
 
 
 def render_sweep(swept: Swept, *, verbose: bool = False) -> str:

@@ -62,8 +62,11 @@ def _newest(entry: dict[str, Any]) -> tuple[Any, ...]:
     return (entry["date"], entry["source"], -entry.get("line", 0))
 
 
-def find_open(roots: Sequence[Path]) -> dict[str, Any]:
-    briefs, answers, _, unread, unreadable = brief_lookup._scan(roots)
+def split(
+    briefs: Sequence[brief_lookup.Brief], answers: Sequence[brief_lookup.Answer]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """The open briefs, newest first, and the ids that two different questions share."""
+
     answered = {a.id.casefold() for a in answers}
     by_id: dict[str, list[brief_lookup.Brief]] = {}
     for brief in briefs:
@@ -79,6 +82,12 @@ def find_open(roots: Sequence[Path]) -> dict[str, Any]:
             listed.append(entries[0])
     listed.sort(key=_newest, reverse=True)
     collisions.sort(key=lambda c: _newest(c["briefs"][0]), reverse=True)
+    return listed, collisions
+
+
+def find_open(roots: Sequence[Path]) -> dict[str, Any]:
+    briefs, answers, _, unread, unreadable = brief_lookup.scan(roots)
+    listed, collisions = split(briefs, answers)
     return {
         "version": VERSION,
         "searched": [str(root) for root in roots],
