@@ -141,14 +141,20 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     shell_tool(bin_dir, "claude", CLAUDE)
     shell_tool(bin_dir, "cursor-agent", CURSOR)
     shell_tool(bin_dir, "opencode", OPENCODE)
-    shell_tool(bin_dir, "git", f'#!/bin/sh\nexec "{real_git}" "$@"\n')
+    if not WINDOWS:  # a stand-in Git keeps a real codex or claude in Git's folder out of reach
+        shell_tool(bin_dir, "git", f'#!/bin/sh\nexec "{real_git}" "$@"\n')
     log = tmp_path / "log"
     log.mkdir()
     answers = tmp_path / "answers"
     answers.mkdir()
     (answers / "codex").write_text(GOOD, encoding="utf-8")
     (answers / "claude.json").write_text(claude_json(CLEAN), encoding="utf-8")
-    monkeypatch.setenv("PATH", os.pathsep.join([str(bin_dir), "/usr/bin", "/bin"]))
+    if WINDOWS:  # Git's own folder and the system folder, after the stand-ins
+        system = os.path.join(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32")
+        path = [str(bin_dir), str(Path(GIT).parent), system]
+    else:
+        path = [str(bin_dir), "/usr/bin", "/bin"]
+    monkeypatch.setenv("PATH", os.pathsep.join(path))
     monkeypatch.setenv("FAKE_LOG", str(log))
     monkeypatch.setenv("FAKE_CODEX_ANSWER", str(answers / "codex"))
     monkeypatch.setenv("FAKE_CLAUDE_JSON", str(answers / "claude.json"))
@@ -358,7 +364,8 @@ def test_a_missing_program_is_a_reported_failure(
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    (tools / "bin" / "claude").unlink()
+    for stand_in in (tools / "bin").glob("claude*"):
+        stand_in.unlink()
     assert programs.find("claude") is None
     code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1")
     assert code == 1
