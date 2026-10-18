@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:where:1",
+  "title": "OutcomeBound where report v1",
+  "description": "What `outcomebound where --json` prints: one item for each thing in flight that the project's own files, Git and gh show, with the source it was read from, a verdict and, for an unfinished item, the shipped skill that serves its next step. The report is not a gate and defines no stage.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "items", "counts", "does_not_establish"],
+  "properties": {
+    "version": {"const": 1},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "source", "verdict", "text"],
+        "properties": {
+          "kind": {
+            "enum": ["git", "worktree", "pr", "ticket", "validation", "review", "brief", "handoff"],
+            "description": "The sort of source. The items come in this order, which is an order of reading and not of work."
+          },
+          "source": {
+            "type": "string",
+            "description": "What was read: a command, or a path as given or relative to the work tree."
+          },
+          "subject": {
+            "type": "string",
+            "description": "The thing the line is about: a pull request or ticket number, a claim or brief id, a branch. Absent for a line about the whole source."
+          },
+          "verdict": {
+            "enum": ["OPEN", "STALE", "CLEAR", "NOTE", "UNVERIFIED"],
+            "description": "OPEN owes something; STALE was read and stands behind the tree; CLEAR owes nothing; NOTE is a fact without a judgement; UNVERIFIED could not be read, and text says why."
+          },
+          "text": {"type": "string"},
+          "next": {
+            "enum": ["decision-brief", "diagnose", "tests-worth-keeping", "review-findings", "land-change", "hand-off-tickets"],
+            "description": "The skill that serves the next step of an OPEN or STALE item, from the engine's table keyed by the kind of open item. Absent when no row fits."
+          }
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["OPEN", "STALE", "CLEAR", "NOTE", "UNVERIFIED"],
+      "properties": {
+        "OPEN": {"type": "integer", "minimum": 0},
+        "STALE": {"type": "integer", "minimum": 0},
+        "CLEAR": {"type": "integer", "minimum": 0},
+        "NOTE": {"type": "integer", "minimum": 0},
+        "UNVERIFIED": {"type": "integer", "minimum": 0}
+      }
+    },
+    "does_not_establish": {"type": "array", "items": {"type": "string"}}
+  }
+}

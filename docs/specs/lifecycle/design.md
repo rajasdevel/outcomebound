@@ -79,6 +79,7 @@ checks the behavior kept from each cited inspiration, and E21 claims no parity w
 | A production read is allowed with a read-only credential the project gave, under a grant that names the target and its end, and a costly read on a loaded system is named in the grant; a credential that bypasses a control stays forbidden. The `runtime` and `deploy` fragments say the same (maintainer, 2026-10-14) | a ban on every production credential; a read under any credential the agent can find | user | decided |
 | A retired term, path or command gets an entry in the project's `.outcomebound/retired.json` in the change that retires it, so a copy left in a guide or a playbook fails `instructions check` (the [instructions design](../instructions/design.md) owns the file and the check). The lifecycle reference tells the agent where: the transition inventory's "what to retire" item lists the entries the change adds, and once the change is decided the agent writes them in the commit that adds the dated `Changed —` line, quoting the old term in that line so the line itself does not count; and the "Maintenance to retirement" row adds an entry for each path, command or process step it removes once the removal is authorized. A process cut outside a transition (a step dropped from the project's own route document) adds its entry in the same change, which the same reference says. Where a floor is installed and holds no `docs.retired` claim, the change that adds the first entry adds that claim too (the [floor design](../floor/design.md)), so the check runs at each `floor check` from then on, not only when someone runs `instructions check` by hand | a kernel line for each retirement, which every task would load; a list the engine fills from a diff, which cannot tell a renamed step from a retired one; leaving the copies to review, which missed 16 in one week, measured in adopting projects | agent | decided |
 | A recurring job that outlives the task, and a probe a sandbox denied, get no new kernel sentence: the lifecycle reference already requires a grant that covers a new ongoing job's scope, owner and stop condition, and the `commands` fragment already reads a denied probe as `UNVERIFIED` and a job that outlives the task as needing a grant. The field shows one instance each | a kernel line for each | agent | decided |
+| `outcomebound where` reports the work in flight from what the project already keeps, each line with its source and a verdict, and names the skill that serves an unfinished item from a table in the engine, keyed by the kind of open item. It writes nothing, starts no process but `git` and `gh`, and is run by an agent or a person, never by a hook. Approved for 1.8.0. The section "Where the work stands" holds the inputs, the output and the limits | a lifecycle file with stage tables (the row on the `local` fragment); a text-only "Next:" clause in each skill, which every task would load and which repeats the lifecycle reference; a hook that prints the state at each turn start, since a hook costs time at every turn end and the engine installs none | user | decided |
 
 The qualification row stays `assumed`. E21 uses synthetic adoption fixtures and the engine's
 own checks. No record in this repository shows the release adopted by a real project, so that
@@ -197,6 +198,104 @@ another act (deleting a deployment cache, releasing a database lock) leaves the 
 | Incident and feedback to maintenance | `diagnose`, requirements and research guidance | Evidence separates cause, symptom, correction and recurrence; a defect or changed outcome returns to the appropriate stage. |
 | A change of lifecycle | from 1.6.0, the lifecycle reference's transitions section, `decision-brief`, the drift lines of `adopt --check` as signals to check, and the scaffold verb's preview with `--from` for the files the new lifecycle lacks | The brief names the fragment diff, the work in flight and what each item owes; nothing switches without the person. E24 ran one fixture pair: no verdict changed at one run a side. |
 | Maintenance to retirement | contract, deploy and database migration guidance | Consumer and retention conditions are checked, authorized preparation continues, and removal waits for its actual gate and grant. |
+
+## Where the work stands
+
+`outcomebound where [TARGET] [--tickets FILE] [--plan FILE]... [--offline] [--json]` answers what
+a person asks after a pause or a compaction: what is in flight here, and what serves the next
+step of each unfinished item. The target is a folder in a Git work tree (default `.`). The code is
+`outcomebound_tools/where.py`; the `--json` format is `schemas/where.schema.json`.
+
+**It reads only what the project already keeps.** Each input is read with the engine's own reader,
+so the report agrees with the verb that owns the file:
+
+| Kind | Read from | Reader |
+| --- | --- | --- |
+| `git` | the current branch, its upstream, ahead and behind counts, the uncommitted paths | `git` (read-only, optional locks off) |
+| `worktree` | each other worktree: its branch, its uncommitted paths, an install older than the engine | `git worktree list`, `adopt_worktrees` |
+| `pr` | the open pull requests of the repository | `gh pr list`, only when `gh` is on `PATH` and answers; `--offline` skips it |
+| `ticket` | the open tickets of the declared store, from its export (`--tickets`, else `issues.json` at the work tree's root): hold, blockers, `waits-on` | `tickets_store.read_store` |
+| `validation` | each claim of a validation plan (`--plan`, repeatable, else the `claims` plan the ticket declaration names): the last kept result and whether a declared path changed since | `validation.claim_states`, the reader of `validation status` |
+| `review` | review files in `.agents/work` of this folder and of the main checkout: findings without a disposition; a review of this branch's commits and the files that changed since | `review_check.sweep`, `review_since.build` |
+| `brief` | briefs an open ticket waits on, and briefs defined in the newest handoff, with the `Decided:` lines recorded for them | `brief_lookup` |
+| `handoff` | the newest file in `.agents/handoffs` (this folder and the main checkout): its age, and the commits on `HEAD` since it was written | the file's time, `git log` |
+
+**It prints one line for each item**, never a sequence: `<VERDICT> <kind> <source>: <text>`, then
+`; next: <skill>` where the item is unfinished. The lines come in the order of the table, which is a
+fixed order of reading and says nothing about the order of work. The verdicts:
+
+- `OPEN`: the item owes something. A pull request is open; a ticket is ready to hand off; a brief is
+  unanswered; a review has a finding without a disposition; the last kept result of a claim is
+  `FAIL`.
+- `STALE`: a record that was read stands behind the tree. A declared path of a claim changed since
+  its result (`CHANGED` in `validation status`); files changed since a review of this branch.
+- `CLEAR`: the source was read and owes nothing: no open pull request; the claims are `CURRENT`.
+- `NOTE`: a fact with no judgement: the branch, a worktree, a ticket that waits on another ticket or
+  is held for a person, the newest handoff.
+- `UNVERIFIED`: the source could not be read, and the line says why and what would read it: `gh`
+  absent, offline or not signed in; no ticket export; no validation plan; no result kept; no base to
+  tell which reviews concern this branch; a ticket claim, which the pinned export does not carry.
+
+**The next skill** comes from this table in `where.py`, keyed by the kind of open item, and nothing
+else:
+
+| Open item | Skill |
+| --- | --- |
+| an unanswered brief | `decision-brief` |
+| a claim whose last result failed | `diagnose` |
+| a claim whose declared paths changed since its result | `tests-worth-keeping` |
+| a review with a finding without a disposition, or files changed since a review | `review-findings` |
+| an open pull request | `land-change` |
+| a ticket ready to hand off | `hand-off-tickets` |
+
+A test holds that every name in the table is a shipped skill. An item with no row (a worktree, a
+held ticket, an unreadable source) has no `next`.
+
+**How an item is chosen, where a source holds more than the work in flight.** A project's folders
+keep every brief and review it ever wrote, so the verb names the ones that something in flight points
+to, and counts the rest on one `NOTE` line, so that a false `OPEN` never buries a true one:
+
+- a brief is listed when an open ticket names it in `waits-on` or the newest handoff defines it; the
+  other briefs with no `Decided:` line are counted, and the line says that an answer recorded before
+  the `Decided:` form shows as unanswered;
+- a review file is listed when it has a finding without a disposition, or when its `Reviewed:` ref
+  names a commit that `HEAD` holds and the base does not (the base is the merge base with the
+  upstream, else `origin/HEAD`; where there is none, the line is `UNVERIFIED` and only open findings
+  are listed); the other review files are counted;
+- a ticket is `OPEN` with `next: hand-off-tickets` when it is open, not held for a person, has no
+  open blocker and waits on no unanswered brief; a ticket that waits on an unanswered brief is
+  `OPEN` with `next: decision-brief`; the others are `NOTE` with the reason. Whether a ticket is
+  claimed is `UNVERIFIED`: the pinned export carries labels and blockers, not assignees or comments.
+  The export's age is printed, since the report is only as current as the export;
+- for a validation plan the text prints one line of counts and one line for each claim that failed
+  or changed; `--json` lists every claim.
+
+**Exits.** 0 once a report is printed, whatever its verdicts, since it is a report and not a gate; 2
+for a usage error. A folder outside a Git work tree gives `UNVERIFIED` for the Git items and still
+reads the files. The verb has no limit on the number of lines and no threshold.
+
+**What it does not establish.** That a line is current beyond the moment it was read (an export, a
+record and a handoff are each as old as the line says); that a pull request has passed CI or been
+reviewed; that a ticket has no branch or worktree under way (no line joins a ticket to a branch); that
+a brief with no `Decided:` line is open outside the briefs it names; that a review of other
+commits holds no finding; what the person intends next; how long anything will take. A handoff is a
+claim, so its line points at the sources above it and grants nothing.
+
+**Why it is not a stage table.** The row of the Decisions table that refuses a lifecycle file
+with stage tables refused a copy of routes the project writes down, checked only against a model's
+own text. `where` differs on each count that row rests on. It reads no file that lists stages and
+writes none. Its keys are kinds of open item found in files (an unanswered brief, a failed claim),
+not stages of a route: such an item needs the same skill under any route a project has, a
+prototype's or a client's. No line is derived from the position of another, so removing the table
+leaves a complete report without the `next` field. It names no order, owner or gate. The table is the
+engine's and ships with it; it holds six rows, each a skill the engine already ships.
+
+**Validation.** `tests/test_where.py`, with temporary Git repositories and a stand-in `gh`: each
+kind with a source that reads, one that does not (`UNVERIFIED` with its reason), and one that is
+empty; each row of the next-skill table; the choice rules above (an answered brief, an old review of
+other commits, a held ticket); that no file, index or ref changes in a run; that no process other
+than `git` and `gh` starts; that `--offline` starts no `gh`; the shape of the `--json` report against
+the schema; and that every skill the table names is shipped. The verb is in the launcher help tests.
 
 ## Area updates
 
