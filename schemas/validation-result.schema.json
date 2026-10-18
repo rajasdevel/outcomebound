@@ -1,0 +1,138 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:validation-result:1",
+  "title": "OutcomeBound validation result v1",
+  "description": "What one attempt of one validation-plan claim observed, kept as .outcomebound-checks/<log stem>.<attempt>.result.json beside the attempt's log <log stem>.<attempt>.log. An attempt is never rewritten by a later one, so a failure's output survives a later pass. It records an observation; it is no proof that the result still holds, and `outcomebound validation status` reads the newest attempt to say which declared paths changed since.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "claim",
+    "argv",
+    "cwd",
+    "paths",
+    "exit_code",
+    "verdict",
+    "detail",
+    "log",
+    "started",
+    "ended",
+    "plan_digest",
+    "claim_digest",
+    "head",
+    "dirty",
+    "environment",
+    "log_written"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "claim": {
+      "type": "string"
+    },
+    "argv": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "cwd": {
+      "type": "string",
+      "description": "The working directory the claim ran in, as an absolute path."
+    },
+    "paths": {
+      "type": "array",
+      "description": "The claim's declared `paths` when it ran, relative to cwd.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "exit_code": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "The command's exit status; null where it did not run to an exit (not found, a refused path, a timeout)."
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "UNVERIFIED"
+      ]
+    },
+    "detail": {
+      "type": "string"
+    },
+    "log": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The attempt's own log file name in the same folder (a copy of the output, never overwritten by a later attempt); null where it was not written."
+    },
+    "started": {
+      "type": "string",
+      "description": "UTC time the claim began, ISO 8601 with a trailing Z."
+    },
+    "ended": {
+      "type": "string",
+      "description": "UTC time the claim ended, ISO 8601 with a trailing Z."
+    },
+    "plan_digest": {
+      "type": "string",
+      "description": "SHA-256 of the plan file's bytes. Informational: `status` notes where the plan file differs from the run's."
+    },
+    "head": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The commit HEAD named at the claim's start; null outside a Git work tree with a commit.",
+      "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+    },
+    "dirty": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "description": "The paths that differed from HEAD at the claim's start (tracked changes and untracked files Git does not ignore, relative to the repository root, without the check folder), each with a digest of its content; null where head is null.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "digest"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "digest": {
+            "type": "string",
+            "description": "SHA-256 of the file's bytes (of the link text for a link); `deleted` for a path that is gone; `unreadable` for one that is no readable file (a nested repository, a submodule), which is never known equal to anything."
+          }
+        }
+      }
+    },
+    "claim_digest": {
+      "type": "string",
+      "description": "SHA-256 of what decides how the claim ran and is judged: command, working directory, paths, required_paths, timeout_seconds, executes_tests and produces. A result stands only for the claim that has this digest."
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "description": "Each environment variable the claim names, as a SHA-256 of its value (null where unset); the value is never kept."
+    },
+    "log_written": {
+      "type": "boolean",
+      "description": "Whether this attempt's log was written. False means the log named in `log` is absent (it is then null): a PASS with false does not show that its output was kept."
+    }
+  }
+}

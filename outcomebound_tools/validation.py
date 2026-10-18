@@ -3,7 +3,8 @@
 The runner answers one narrow question per claim: did the declared check succeed?
 It does not infer that the implementation, release, runtime, or user outcome is
 correct beyond that declaration. Plans are explicitly selected local JSON files;
-the runner does not accept stdin projections and writes no receipt or ledger. A
+the runner does not accept stdin projections. It keeps one result record per claim
+beside the claim's log (`validation_record`), which `validation status` reads. A
 plan is executable code: the caller must establish its provenance before running
 it. ``shell=False`` prevents implicit shell interpretation, not arbitrary effects
 from an executable named by the plan.
@@ -17,20 +18,20 @@ sets `timeout_seconds`.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import dataclasses
 import hashlib
 import json
 import math
 import re
+import shutil
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from outcomebound_tools import home, programs, schemacheck
+from outcomebound_tools import home, programs, schemacheck, validation_record
 from outcomebound_tools.paths import names_git
 
 PASSED = "PASS"
@@ -53,6 +54,8 @@ CLAIM_KEYS = frozenset(
         "timeout_seconds",
         "executes_tests",
         "produces",
+        "paths",
+        "environment",
     }
 )
 PRODUCES_KEYS = frozenset({"paths", "when_missing"})
@@ -113,6 +116,8 @@ class Claim:
     timeout_seconds: float | None
     tests: CountContract | None = None
     produces: Produces | None = None
+    paths: tuple[str, ...] = ()
+    environment: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,6 +125,7 @@ class Plan:
     cwd: Path
     claims: tuple[Claim, ...]
     log_dir: Path
+    digest: str = ""
 
 
 @dataclass(frozen=True)
@@ -129,6 +135,8 @@ class Result:
     detail: str
     log_path: Path | None = None
     waiver: str | None = None
+    exit_code: int | None = None
+    log_written: bool = False
 
 
 def _nonempty_string(value: Any, field: str) -> str:
@@ -192,15 +200,11 @@ def _tests_contract(value: Any, field: str) -> CountContract:
     return CountContract(exit_code_value, pattern, when_none)
 
 
-def _produces(value: Any, field: str) -> Produces:
-    if not isinstance(value, dict):
-        raise PlanError(f"{field} must be an object")
-    unknown = sorted(set(value) - PRODUCES_KEYS)
-    if unknown:
-        raise PlanError(f"{field} has unknown field(s): {', '.join(unknown)}")
-    if "paths" not in value:
-        raise PlanError(f"{field}.paths is required")
-    paths = _string_list(value["paths"], f"{field}.paths", allow_empty=False)
+def _project_paths(value: Any, field: str, *, allow_root: bool) -> tuple[str, ...]:
+    """Paths relative to the plan's directory: none absolute, none with '..', none in `.git`,
+    and the project itself (`.`) only where `allow_root`."""
+
+    paths = _string_list(value, field, allow_empty=allow_root)
     for raw in paths:
         parts = re.split(r"[\\/]", raw)
         if (
@@ -210,13 +214,34 @@ def _produces(value: Any, field: str) -> Produces:
             or ".." in parts
         ):
             raise PlanError(
-                f"{field}.paths item must be relative, inside the project, without '..': {raw}"
+                f"{field} item must be relative, inside the project, without '..': {raw}"
             )
-        if "." in parts or any(names_git(part) for part in parts):
+        if any(names_git(part) for part in parts) or (
+            "." in parts and not (allow_root and raw == ".")
+        ):
             raise PlanError(
-                f"{field}.paths item must name a file or folder under the project, "
+                f"{field} item must name a file or folder under the project, "
                 f"not the project itself or anything in .git: {raw}"
             )
+    return paths
+
+
+def _env_names(value: Any, field: str) -> tuple[str, ...]:
+    names = _string_list(value, field, allow_empty=True)
+    if any("=" in name for name in names):
+        raise PlanError(f"{field} item must be a variable name, without '='")
+    return names
+
+
+def _produces(value: Any, field: str) -> Produces:
+    if not isinstance(value, dict):
+        raise PlanError(f"{field} must be an object")
+    unknown = sorted(set(value) - PRODUCES_KEYS)
+    if unknown:
+        raise PlanError(f"{field} has unknown field(s): {', '.join(unknown)}")
+    if "paths" not in value:
+        raise PlanError(f"{field}.paths is required")
+    paths = _project_paths(value["paths"], f"{field}.paths", allow_root=False)
     when_missing = value.get("when_missing", UNVERIFIED)
     if when_missing not in (UNVERIFIED, FAIL):
         raise PlanError(f"{field}.when_missing must be {UNVERIFIED} or {FAIL}")
@@ -254,6 +279,12 @@ def _claim(item: dict[str, Any], prefix: str, name: str, default_timeout: float 
         ),
         produces=(
             _produces(item["produces"], f"{prefix}.produces") if "produces" in item else None
+        ),
+        environment=_env_names(item.get("environment", []), f"{prefix}.environment"),
+        paths=(
+            _project_paths(item["paths"], f"{prefix}.paths", allow_root=True)
+            if "paths" in item
+            else ()
         ),
     )
 
@@ -325,15 +356,17 @@ def load_plan(path: Path, *, cwd_override: str | None = None) -> Plan:
     if not plan_path.is_file():
         raise PlanError(f"plan is not a file: {path}")
     try:
-        raw = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan_bytes = plan_path.read_bytes()
+        raw = json.loads(plan_bytes.decode("utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise PlanError(f"cannot read plan: {error}") from error
-    return parse_plan(
+    plan = parse_plan(
         raw,
         invocation_cwd=plan_path.parent,
         cwd_override=cwd_override,
         log_dir=plan_path.parent / LOG_DIR_NAME,
     )
+    return dataclasses.replace(plan, digest=hashlib.sha256(plan_bytes).hexdigest())
 
 
 def _resolve_required_path(cwd: Path, raw: str) -> Path:
@@ -512,6 +545,18 @@ def _execute(
             process.stdout.close()
 
 
+def _write_log(log_path: Path | None, output: bytes) -> bool:
+    """Whether the output reached its log; a log that cannot be written never changes a verdict."""
+
+    if log_path is None:
+        return False
+    try:
+        log_path.write_bytes(output)
+    except OSError:
+        return False
+    return True
+
+
 def run_claim(
     claim: Claim, cwd: Path, log_dir: Path | None, log_path: Path | None = None
 ) -> Result:
@@ -540,16 +585,14 @@ def run_claim(
         return Result(claim, UNVERIFIED, f"executable not found: {claim.command[0]}")
     except OSError as error:
         return Result(claim, UNVERIFIED, f"could not execute check: {error}")
-    if log_path is not None:
-        with contextlib.suppress(OSError):
-            log_path.write_bytes(output)
+    log_written = _write_log(log_path, output)
     if timed_out:
         detail = f"timeout after {claim.timeout_seconds:g} seconds"
-        return Result(claim, UNVERIFIED, detail, log_path)
+        return Result(claim, UNVERIFIED, detail, log_path, log_written=log_written)
     result = _judge(claim, status, output, log_path)
     if claim.produces is not None and status == 0:
-        return _produced(claim.produces, before, cwd, result)
-    return result
+        result = _produced(claim.produces, before, cwd, result)
+    return dataclasses.replace(result, exit_code=status, log_written=log_written)
 
 
 def _none_ran(
@@ -593,12 +636,81 @@ def tail(log_path: Path | None, lines: int = LOG_TAIL_LINES) -> str:
     return "\n".join(text.splitlines()[-lines:])
 
 
-def run_plan(plan: Plan) -> tuple[Result, ...]:
+def claim_digest(claim: Claim, cwd: Path) -> str:
+    """What decides how a claim's command runs and is judged: a result stands only for it."""
+
+    tests, produces = claim.tests, claim.produces
+    fields = {
+        "command": claim.command,
+        "cwd": str(cwd),
+        "paths": claim.paths,
+        "required_paths": claim.required_paths,
+        "timeout_seconds": claim.timeout_seconds,
+        "environment": claim.environment,
+        "tests": None
+        if tests is None
+        else [
+            tests.no_tests_exit,
+            None if tests.ran_output is None else tests.ran_output.pattern,
+            tests.when_none,
+        ],
+        "produces": None if produces is None else [produces.paths, produces.when_missing],
+    }
+    return hashlib.sha256(json.dumps(fields, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _kept(plan: Plan, claim: Claim, log: Path, started: str, snapshot: Any, result: Result) -> str:
+    """Write this attempt's log copy and record beside the claim's latest log, never over an
+    earlier attempt; the reason it was not kept, else an empty string."""
+
+    attempt = validation_record.attempt_id()
+    attempt_log, attempt_record = validation_record.attempt_paths(log, attempt)
+    log_written = result.log_written
+    if result.log_path is not None and result.log_written:
+        try:
+            shutil.copyfile(result.log_path, attempt_log)
+        except OSError:
+            log_written = False
+    observed = {
+        "claim": claim.name,
+        "argv": list(claim.command),
+        "cwd": str(plan.cwd),
+        "paths": list(claim.paths),
+        "environment": validation_record.environment(claim.environment),
+        "exit_code": result.exit_code,
+        "verdict": result.status,
+        "detail": result.detail,
+        "log": attempt_log.name if log_written else None,
+        "log_written": log_written,
+        "started": started,
+        "ended": validation_record.now(),
+        "plan_digest": plan.digest,
+        "claim_digest": claim_digest(claim, plan.cwd),
+    }
+    record = validation_record.build(observed, snapshot)
+    return validation_record.write(attempt_record, record) or ""
+
+
+def run_plan(
+    plan: Plan, only: Collection[str] | None = None, *, keep: bool = False
+) -> tuple[Result, ...]:
+    """Run the plan's claims, or those named in `only`, in plan order. With `keep`, each claim
+    leaves a record beside its log, whose state of Git is read when the claim starts."""
+
     logs = _log_paths(plan.log_dir, [claim.name for claim in plan.claims])
-    return tuple(
-        run_claim(claim, plan.cwd, plan.log_dir, log)
-        for claim, log in zip(plan.claims, logs, strict=True)
-    )
+    results = []
+    for claim, log in zip(plan.claims, logs, strict=True):
+        if only is not None and claim.name not in only:
+            continue
+        started = validation_record.now()
+        snapshot = validation_record.capture(plan.cwd, plan.log_dir) if keep else None
+        result = run_claim(claim, plan.cwd, plan.log_dir, log)
+        if keep:
+            problem = _kept(plan, claim, log, started, snapshot, result)
+            if problem:
+                sys.stderr.write(f"validation: result of {claim.name} not kept: {problem}\n")
+        results.append(result)
+    return tuple(results)
 
 
 def verdict(results: tuple[Result, ...]) -> str:
@@ -634,7 +746,63 @@ def _waivers(items: Sequence[str], plan: Plan) -> dict[str, str]:
     return waivers
 
 
+def _selected(names: Sequence[str], plan: Plan) -> frozenset[str] | None:
+    known = {claim.name for claim in plan.claims}
+    unknown = sorted(set(names) - known)
+    if unknown:
+        raise PlanError(f"--claim names no claim: {', '.join(unknown)}")
+    return frozenset(names) if names else None
+
+
+def _status(argv: Sequence[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="outcomebound validation status",
+        description=(
+            "Read the result a validation plan's claims last kept and say, for each, whether a\n"
+            "path it declares has changed since: CURRENT (none has), CHANGED (some has, named) or\n"
+            "UNVERIFIED (no result, no declared paths, a changed claim, or no Git to compare).\n"
+            "It runs nothing, writes nothing and never turns a result into PASS: you judge.\n"
+            "CURRENT does not show that the declared paths hold everything the command reads.\n\n"
+            "Exit 0 once the plan loads, 2 for an invalid plan."
+        ),
+    )
+    parser.add_argument("plan", help="the validation-plan JSON file")
+    parser.add_argument("--cwd", help="the plan cwd override the run used")
+    args = parser.parse_args(argv)
+    try:
+        plan = load_plan(Path(args.plan), cwd_override=args.cwd)
+    except PlanError as error:
+        sys.stderr.write(f"validation: UNVERIFIED — invalid plan: {error}\n")
+        return 2
+    logs = _log_paths(plan.log_dir, [claim.name for claim in plan.claims])
+    lines: list[tuple[str, str]] = []
+    for claim, log in zip(plan.claims, logs, strict=True):
+        record = validation_record.latest(log, claim.name)
+        state, text = validation_record.assess(
+            record,
+            expected={
+                "claim_digest": claim_digest(claim, plan.cwd),
+                "plan_digest": plan.digest,
+                "environment": validation_record.environment(claim.environment),
+            },
+            cwd=plan.cwd,
+            paths=claim.paths,
+            skip=plan.log_dir,
+        )
+        lines.append((state, f"{state} {claim.name} — {text}\n"))
+    counts = ", ".join(
+        f"{sum(1 for st, _ in lines if st == name)} {name}"
+        for name in (validation_record.CURRENT, validation_record.CHANGED, UNVERIFIED)
+    )
+    sys.stdout.write(f"status: {counts} of {len(lines)} claims (no verdict; you judge)\n")
+    sys.stdout.writelines(line for _, line in lines)
+    return 0
+
+
 def _main(argv: Sequence[str] | None = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["status"]:
+        return _status(arguments[1:])
     parser = argparse.ArgumentParser(
         prog="outcomebound validation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -648,12 +816,22 @@ def _main(argv: Sequence[str] | None = None) -> int:
             "$(outcomebound home)/schemas/validation-plan.schema.json, and\n"
             "$(outcomebound home)/templates/validation/plan.example.json is an example.\n"
             "A plan runs its commands, so run only one you trust.\n\n"
+            "Each claim that runs leaves a record (command, exit, verdict, log, times, the commit\n"
+            "and the changed paths when it started) beside its log. `outcomebound validation\n"
+            "status PLAN` reads them. A plan named `status` is given as ./status.\n\n"
             "Exit 0 PASS, 1 FAIL, 2 UNVERIFIED or an invalid plan."
         ),
     )
     parser.add_argument("plan", help="the validation-plan JSON file to run")
     parser.add_argument(
         "--cwd", help="override the plan cwd; relative paths use the plan directory"
+    )
+    parser.add_argument(
+        "--claim",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="run only the named claim; repeat for more. The VERDICT line reads those claims only",
     )
     parser.add_argument(
         "--waive",
@@ -669,14 +847,18 @@ def _main(argv: Sequence[str] | None = None) -> int:
 
     try:
         plan = load_plan(Path(args.plan), cwd_override=args.cwd)
+        only = _selected(args.claim, plan)
         waivers = _waivers(args.waive, plan)
+        unrun = sorted(set(waivers) - set(only or waivers))
+        if unrun:
+            raise PlanError(f"--waive names a claim --claim did not select: {', '.join(unrun)}")
     except PlanError as error:
         sys.stderr.write(f"validation: UNVERIFIED — invalid plan: {error}\n")
         return 2
 
     results = tuple(
         dataclasses.replace(result, waiver=waivers.get(result.claim.name))
-        for result in run_plan(plan)
+        for result in run_plan(plan, only, keep=True)
     )
     for result in results:
         requirement = "required" if result.claim.required else "optional"
@@ -695,6 +877,14 @@ def _main(argv: Sequence[str] | None = None) -> int:
                 sys.stdout.write(f"  | {line}\n")
     status = verdict(results)
     suffix = "" if status != PASSED else " (all required declared checks passed)"
+    if only is not None:
+        if not any(result.claim.required for result in results):
+            status, suffix = UNVERIFIED, " (no required claim was selected)"
+        else:
+            suffix = (
+                f" ({len(results)} of {len(plan.claims)} claims, selected by --claim; "
+                "not the plan's verdict)"
+            )
     sys.stdout.write(f"VERDICT: {status}{suffix}\n")
     return exit_code(status)
 
