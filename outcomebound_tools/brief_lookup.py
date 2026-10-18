@@ -147,7 +147,10 @@ def _files(root: Path, unread: list[str]) -> list[Path]:
                 big = path.is_symlink() or path.stat().st_size > MAX_BYTES
             except OSError:
                 big = True
-            (unread if big else found).append(path)
+            if big:
+                unread.append(str(path))
+            else:
+                found.append(path)
     return sorted(found)
 
 
