@@ -776,6 +776,41 @@ def _selected(names: Sequence[str], plan: Plan) -> frozenset[str] | None:
     return frozenset(names) if names else None
 
 
+@dataclass(frozen=True)
+class ClaimState:
+    """What `validation status` says of one claim: its state (CURRENT, CHANGED or UNVERIFIED), the
+    line that says why, and the verdict of the newest result kept for it (None where none is)."""
+
+    claim: Claim
+    state: str
+    text: str
+    verdict: str | None
+
+
+def claim_states(plan: Plan) -> list[ClaimState]:
+    """The state of each claim of `plan`, in plan order, from the results it kept. Runs and writes
+    nothing; `where` reads the same answer as `validation status`."""
+
+    logs = _log_paths(plan.log_dir, [claim.name for claim in plan.claims])
+    found = []
+    for claim, log in zip(plan.claims, logs, strict=True):
+        record = validation_record.latest(log, claim.name)
+        state, text = validation_record.assess(
+            record,
+            expected={
+                "claim_digest": claim_digest(claim, plan.cwd),
+                "plan_digest": plan.digest,
+                "environment": validation_record.environment(claim.environment),
+            },
+            cwd=plan.cwd,
+            paths=claim.paths,
+            skip=plan.log_dir,
+        )
+        verdict = record.get("verdict") if record is not None else None
+        found.append(ClaimState(claim, state, text, verdict if isinstance(verdict, str) else None))
+    return found
+
+
 def _status(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(
         prog="outcomebound validation status",
@@ -796,22 +831,10 @@ def _status(argv: Sequence[str]) -> int:
     except PlanError as error:
         sys.stderr.write(f"validation: UNVERIFIED — invalid plan: {error}\n")
         return 2
-    logs = _log_paths(plan.log_dir, [claim.name for claim in plan.claims])
-    lines: list[tuple[str, str]] = []
-    for claim, log in zip(plan.claims, logs, strict=True):
-        record = validation_record.latest(log, claim.name)
-        state, text = validation_record.assess(
-            record,
-            expected={
-                "claim_digest": claim_digest(claim, plan.cwd),
-                "plan_digest": plan.digest,
-                "environment": validation_record.environment(claim.environment),
-            },
-            cwd=plan.cwd,
-            paths=claim.paths,
-            skip=plan.log_dir,
-        )
-        lines.append((state, f"{state} {claim.name} — {text}\n"))
+    lines = [
+        (state.state, f"{state.state} {state.claim.name} — {state.text}\n")
+        for state in claim_states(plan)
+    ]
     counts = ", ".join(
         f"{sum(1 for st, _ in lines if st == name)} {name}"
         for name in (validation_record.CURRENT, validation_record.CHANGED, UNVERIFIED)

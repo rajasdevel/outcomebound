@@ -162,3 +162,12 @@ def test_os_walk_appears_only_in_the_modules_the_allow_list_names() -> None:
         if _os_walk_calls(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
     }
     assert walkers == WALKERS
+
+
+def test_a_walk_with_a_depth_enters_no_folder_below_it(tmp_path: Path) -> None:
+    from outcomebound_tools import walk
+
+    (tmp_path / "a" / "b" / "c" / "d").mkdir(parents=True)
+    seen = [entered.relative for entered in walk.folders(tmp_path, depth=3)]
+    assert seen == [".", "a", "a/b"]
+    assert [e.relative for e in walk.folders(tmp_path)][-1] == "a/b/c/d"

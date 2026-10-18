@@ -36,6 +36,7 @@ VERBS = {
     "workspace": "workspace",
     "explorable": "explorable",
     "scaffold": "scaffold",
+    "where": "where",
 }
 # Verbs that earlier versions wrote into a project's files and that do nothing now: routed, so that
 # an entry an earlier `adopt` wrote still runs to a quiet exit 0, and listed nowhere.
