@@ -728,6 +728,28 @@ def exit_code(status: str) -> int:
     return {PASSED: 0, FAIL: 1, UNVERIFIED: 2}[status]
 
 
+def render_results(results: Sequence[Result]) -> str:
+    """One result as the runner prints it, for each claim: its verdict line, the waiver
+    the person gave, and for a result that is not `PASS` the last lines of its log."""
+
+    lines: list[str] = []
+    for result in results:
+        requirement = "required" if result.claim.required else "optional"
+        lines.append(
+            f"{result.status} {result.claim.name} [{result.claim.kind}, {requirement}] — "
+            f"{result.detail}; addresses: {result.claim.risk}\n"
+        )
+        if result.waiver is not None:
+            lines.append(
+                f"  waived by instruction: {result.waiver}; the observed {result.status} stands\n"
+            )
+        excerpt = "" if result.status == PASSED else tail(result.log_path)
+        if excerpt and result.log_path is not None:
+            lines.append(f"  last {LOG_TAIL_LINES} lines of {result.log_path.name}:\n")
+            lines.extend(f"  | {line}\n" for line in excerpt.splitlines())
+    return "".join(lines)
+
+
 def _waivers(items: Sequence[str], plan: Plan) -> dict[str, str]:
     names = {claim.name for claim in plan.claims}
     waivers: dict[str, str] = {}
@@ -860,21 +882,7 @@ def _main(argv: Sequence[str] | None = None) -> int:
         dataclasses.replace(result, waiver=waivers.get(result.claim.name))
         for result in run_plan(plan, only, keep=True)
     )
-    for result in results:
-        requirement = "required" if result.claim.required else "optional"
-        sys.stdout.write(
-            f"{result.status} {result.claim.name} [{result.claim.kind}, {requirement}] — "
-            f"{result.detail}; addresses: {result.claim.risk}\n"
-        )
-        if result.waiver is not None:
-            sys.stdout.write(
-                f"  waived by instruction: {result.waiver}; the observed {result.status} stands\n"
-            )
-        excerpt = "" if result.status == PASSED else tail(result.log_path)
-        if excerpt and result.log_path is not None:
-            sys.stdout.write(f"  last {LOG_TAIL_LINES} lines of {result.log_path.name}:\n")
-            for line in excerpt.splitlines():
-                sys.stdout.write(f"  | {line}\n")
+    sys.stdout.write(render_results(results))
     status = verdict(results)
     suffix = "" if status != PASSED else " (all required declared checks passed)"
     if only is not None:

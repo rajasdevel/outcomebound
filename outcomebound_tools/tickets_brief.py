@@ -34,33 +34,40 @@ from __future__ import annotations
 
 import argparse
 import os.path
-import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
 
 from outcomebound_tools import paths
-from outcomebound_tools.tickets_check import check_loaded
 from outcomebound_tools.tickets_claims import ClaimsPlan, load_claims
 from outcomebound_tools.tickets_declaration import Declaration
-from outcomebound_tools.tickets_draft import read_draft
 from outcomebound_tools.tickets_git import GitError, head_commit, tree_clean
 from outcomebound_tools.tickets_links import Section, section
-from outcomebound_tools.tickets_model import (
-    STATES,
-    DoneWhen,
-    ReadResult,
-    Ticket,
+from outcomebound_tools.tickets_model import DoneWhen, Ticket
+from outcomebound_tools.tickets_report import Refusal
+from outcomebound_tools.tickets_subject import (
+    Subject,
+    Use,
+    read_subject,
+    refuse_closed,
+    refuse_findings,
 )
-from outcomebound_tools.tickets_report import Level, Refusal, held
-from outcomebound_tools.tickets_store import read_store
 
 __all__ = ["brief"]
 
-# The normalised ticket's first state: the only one a brief compiles, because a
-# brief is the input to work.
-_OPEN = STATES[0]
+# What `brief` says when it refuses a ticket.
+_USE = Use(
+    code="BRIEF_REFUSED",
+    from_file="a brief is compiled from what the file says and nothing else",
+    to_act="compile",
+    from_ticket="a brief is compiled from the ticket it names and from no other",
+    closed=(
+        "a brief is the input to work that is still open; read the ticket itself for what was done"
+    ),
+    stopped="so no brief of it is compiled",
+    again="compile it again",
+)
 
 # The project's workflow document, named and never quoted: the declaration
 # has no field for it, so this is the one name the engine looks for.
@@ -139,195 +146,6 @@ class _Compiled:
     workflow: bool
 
 
-# --- the subject -------------------------------------------------------------------
-
-
-def _drafted(paths: Sequence[str], declaration: Declaration, wanted: str) -> Ticket:
-    """The draft named `wanted` among `paths`, read through the one draft reader.
-
-    A draft's id is its file name without the extension, and the id a person
-    named picks the file: the other files are the breakdown it belongs to, which
-    `check` lints with it so that a `parent` or a `blocked-by` naming a sibling
-    resolves. A brief headed with another ticket's id would be a document about
-    the wrong work, so with no file of that name the first one's id is what the
-    refusal names. The file that could not be read at all is the reader's own
-    sentence.
-    """
-
-    path = next((path for path in paths if Path(path).stem == wanted), paths[0])
-    ticket, messages = read_draft(path, declaration)
-    if ticket is None:
-        raise Refusal(
-            "BRIEF_REFUSED",
-            f"no draft could be read at {path}: {messages[0].text}; name a draft file this "
-            "checkout holds, because a brief is compiled from what the file says and nothing "
-            "else",
-        )
-    if ticket.id != wanted:
-        raise Refusal(
-            "TICKET_NOT_FOUND",
-            f"the draft at {path} is the ticket {ticket.id}, not {wanted}; a draft's id is "
-            "its file name without the extension, so name that id beside the file",
-        )
-    return ticket
-
-
-# `<owner>/<name>#<n>`, the form the tracker itself writes a reference in.
-_QUALIFIED = re.compile(r"(?P<repo>[^/\s#]+/[^/\s#]+)#(?P<number>[0-9]+)", re.ASCII)
-
-
-def _store_id(wanted: str, declaration: Declaration) -> str:
-    """The id a store ticket is named by: a bare issue number is `#<n>`.
-
-    A shell reads `#20` as the start of a comment unless it is quoted, so a
-    person types `20`; the tracker's own ids are all `#<n>`, and a bare number
-    names nothing else. `<owner>/<name>#<n>` is how the tracker writes a
-    reference, and it is `#<n>` where it names the declared repository, which
-    the tracker compares without case. Another repository's issue is not in
-    this store, so it is refused by name rather than reported as missing.
-    """
-
-    if wanted.isdecimal() and wanted.isascii():
-        return f"#{wanted}"
-    qualified = _QUALIFIED.fullmatch(wanted)
-    if qualified is None:
-        return wanted
-    if qualified["repo"].casefold() != declaration.repo.casefold():
-        raise Refusal(
-            "TICKET_NOT_FOUND",
-            f"{wanted} names the repository {qualified['repo']}; this project's declaration "
-            f"names {declaration.repo}, and its store holds that repository's tickets only",
-        )
-    return f"#{qualified['number']}"
-
-
-def _export_said(read: ReadResult) -> str:
-    """The export a run read, as a refusal names it: path, time, age and id range."""
-
-    source = read.input
-    if source is None:
-        return ""
-    if source.modified is None or source.age_seconds is None:
-        written = "written at a time standard input does not carry"
-    else:
-        written = f"written {source.modified} ({source.age_seconds}s ago)"
-    return f"; the export {source.path}, {written}, {held(source)}"
-
-
-def _from_store(read: ReadResult, given: str, declaration: Declaration) -> Ticket:
-    """The one ticket this run is about. A reader holds at most one per id."""
-
-    wanted = _store_id(given, declaration)
-    for ticket in read.tickets:
-        if ticket.id == wanted:
-            return ticket
-    if wanted in read.others:
-        raise Refusal(
-            "BRIEF_REFUSED",
-            f"{wanted} is an issue this project's gate does not read as a ticket, so there "
-            "is no decision content to compile; the declared label, the user's acceptance, "
-            "makes it one",
-        )
-    raise Refusal(
-        "TICKET_NOT_FOUND",
-        f"the declared store holds no ticket {wanted}{_export_said(read)}; a ticket newer "
-        "than the export needs a new export (`outcomebound tickets export` prints the "
-        "command); name a ticket the store carries, because a brief is compiled from the "
-        "ticket it names and from no other",
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class _Subject:
-    """The ticket this run compiles, and what was read to find it.
-
-    `read` is the declared store as this verb read it, and None where
-    `--draft` named a local file and no store was read at all. It is carried
-    because `check` is asked about this same ticket and must be asked about
-    this same reading: an export given as `--input -` is a stream, and a
-    second reader of one finds it empty.
-    """
-
-    ticket: Ticket
-    read: ReadResult | None
-
-
-def _subject(root: Path, declaration: Declaration, options: argparse.Namespace) -> _Subject:
-    """The ticket to compile, and the reading it came from where it came from a store."""
-
-    if options.draft:
-        return _Subject(_drafted(options.draft, declaration, options.ticket), None)
-    read = read_store(root, declaration, options.input)
-    return _Subject(_from_store(read, options.ticket, declaration), read)
-
-
-# --- what is refused ---------------------------------------------------------------
-
-
-def _refuse_closed(ticket: Ticket) -> None:
-    """A brief is an implementer's input, so only an open ticket has one."""
-
-    if ticket.state != _OPEN:
-        raise Refusal(
-            "BRIEF_REFUSED",
-            f"{ticket.id} is {ticket.state}, and a brief is the input to work that is still "
-            "open; read the ticket itself for what was done",
-        )
-
-
-def _judgement(options: argparse.Namespace) -> argparse.Namespace:
-    """The options `check` reads, carried into it from this run.
-
-    A verb that needs another verb's judgement calls that verb's function with a
-    namespace carrying every option the callee reads, so `check` parses nothing
-    and nothing of its own is reimplemented here. Its `--draft` files are the
-    list `check` lints together.
-    """
-
-    return argparse.Namespace(
-        input=options.input,
-        draft=list(options.draft) if options.draft else None,
-    )
-
-
-def _refuse_findings(
-    root: Path,
-    declaration: Declaration,
-    options: argparse.Namespace,
-    subject: _Subject,
-    plan: ClaimsPlan,
-) -> None:
-    """What `check` says about this ticket stops the compilation.
-
-    It is asked through `check_loaded`, about the store this verb already read
-    and the plan it already loaded, so one run reads each once.
-
-    Scoped to the one ticket by the id every message is stamped with: what a
-    reader found about another ticket is `check`'s to report and says nothing
-    about this brief. A message stamped with no id is the run's — a claims plan
-    whose directory resolves outside the checkout is one — and a brief that runs
-    nothing is not refused for it.
-
-    A block this engine did not read is one of those ERRORs, so a brief never
-    says such a ticket covers nothing and grants nothing.
-    """
-
-    ticket = subject.ticket
-    report = check_loaded(root, declaration, _judgement(options), subject.read, plan)
-    about = [
-        item for result in report.tickets if result.id == ticket.id for item in result.messages
-    ]
-    found = [item for item in about if item.level is Level.ERROR]
-    if not found:
-        return
-    said = "; ".join(f"{item.code}: {item.text}" for item in found)
-    raise Refusal(
-        "BRIEF_REFUSED",
-        f"`check` reports an error on {ticket.id}, so no brief of it is compiled — {said}; "
-        "fix what `check` reports and compile it again",
-    )
-
-
 # --- what is read ------------------------------------------------------------------
 
 
@@ -376,9 +194,7 @@ def _claims_cwd(plan: ClaimsPlan, root: Path) -> str:
     return Path(os.path.relpath(plan.cwd_resolved, root.resolve())).as_posix()
 
 
-def _compile(
-    root: Path, declaration: Declaration, subject: _Subject, plan: ClaimsPlan
-) -> _Compiled:
+def _compile(root: Path, declaration: Declaration, subject: Subject, plan: ClaimsPlan) -> _Compiled:
     """Everything the document names, read once at this checkout.
 
     The plan is the one this run already loaded, and not a second reading of
@@ -630,9 +446,9 @@ def brief(target: Path, declaration: Declaration, options: argparse.Namespace) -
     """
 
     root = Path(target)
-    subject = _subject(root, declaration, options)
-    _refuse_closed(subject.ticket)
+    subject = read_subject(root, declaration, options, _USE)
+    refuse_closed(subject.ticket, _USE)
     plan = load_claims(root, declaration)
-    _refuse_findings(root, declaration, options, subject, plan)
+    refuse_findings(root, declaration, options, subject, plan, _USE)
     detail = getattr(options, "detail", None) or "plain"
     return _document(_compile(root, declaration, subject, plan), detail)
