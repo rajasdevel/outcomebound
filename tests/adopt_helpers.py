@@ -63,7 +63,7 @@ def states(out: str) -> dict[str, str]:
     """`--check` output as {record label: state}, any detail after the label, the measurement
     note and the closing `next:` line left out."""
 
-    skipped = ("next: ", "note ", "drift ")
+    skipped = ("next: ", "note ", "drift ", "warn ")
     lines = [line for line in out.splitlines() if not line.startswith(skipped)]
     rows = [line.split(None, 1) for line in lines]
     return {name.split(": ", 1)[0]: found for found, name in rows}

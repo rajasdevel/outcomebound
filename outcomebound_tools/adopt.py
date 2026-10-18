@@ -50,6 +50,7 @@ from typing import Any
 
 from outcomebound_tools import (
     adapters,
+    adopt_worktrees,
     discovery,
     drift,
     facts,
@@ -1884,10 +1885,23 @@ def check(target: Path, source: Path) -> int:
         print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
     for line in _drift_lines(target, source, manifest.own, facts.read_ci(target)):
         print(f"{'drift':<8} {line}")
+    for line in _worktree_warnings(target, source):
+        print(line)
     step = next_step(target, found)
     if step is not None:
         print(step)
     return min(sum(state != "current" for state in found), CHECK_CAP)
+
+
+def _worktree_warnings(target: Path, source: Path) -> list[str]:
+    """The `warn` lines for each other worktree of the project whose install is older than this
+    engine; none where Git cannot list them. Informational: no exit changes."""
+
+    listed = _git(target, "worktree", "list", "--porcelain")
+    if listed is None:
+        return []
+    found = adopt_worktrees.lines(target, listed.decode("utf-8", "replace"), engine_version(source))
+    return adopt_worktrees.render(found)
 
 
 def _drift_lines(
