@@ -512,8 +512,8 @@ def render_plan(
                 for condition, text in spec.get("notes", {}).items()
                 if _holds(condition, job.values)
             ],
-            "  read-only safeguards, each read from the source on the date, none yet shown by a "
-            "run on this machine (UNVERIFIED unless `run` says tested):",
+            "  read-only safeguards, each read from the source on the date, and shown by a run "
+            "only where `run` says tested (else UNVERIFIED):",
         ]
         for entry in spec["argv"]:
             if "safeguard" not in entry or not _holds(entry.get("when"), job.values):
@@ -522,14 +522,20 @@ def render_plan(
                 f"    {' '.join(entry['args'])}: {entry['safeguard']} "
                 f"[help: {'listed' if entry['listed_in_help'] else 'not listed'}, "
                 f"run: {entry['run']}, source: {entry['source']}, read {entry['read']}]"
+                + (
+                    f" observed {entry['observed_on']}: {entry['observed']}"
+                    if "observed" in entry
+                    else ""
+                )
             )
         cap = spec.get("max_prompt_bytes")
         if cap:
             lines.append(f"  prompt limit: {cap} bytes ({spec.get('max_prompt_source', '')})")
     lines += [
         "",
-        "Not shown by any run: that a safeguard stops a write, that the model named exists on "
-        "the person's login, or that a reviewer's effort was the one asked for.",
+        "No run has shown that a safeguard stops a write. Whether the model named exists on the "
+        "person's login and ran at the effort asked is shown only where a flag's observed note "
+        "says so.",
         f"plan id: {plan_id(request, jobs)}",
         "To run it, after the person says yes: the same command with --accept in place of --plan "
         f"and --plan-id {plan_id(request, jobs)} added; a run that differs from this plan is "

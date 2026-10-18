@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; no entry is `tested` yet. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
@@ -21,7 +21,9 @@
           "source": "https://learn.chatgpt.com/docs/non-interactive-mode",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "ran non-interactively and ended with exit 0 (one smoke run, codex-cli 0.163.0, a one-line README change in a one-commit-deep throwaway repository)",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -33,7 +35,9 @@
           "source": "https://learn.chatgpt.com/docs/non-interactive-mode",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; the run header printed `sandbox: read-only` and the reviewer ran `pwd`, `rg` and `nl` through the shell. No write was attempted, so that it blocks a write is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -44,7 +48,9 @@
           "source": "installed `codex exec --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "no file appeared under the Codex sessions folder during the run",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -55,7 +61,9 @@
           "source": "installed `codex exec --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; the run still read the agent role files of the person's Codex folder (it warned about a malformed one), so what it skips is config.toml only and that is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -66,7 +74,9 @@
           "source": "installed `codex exec --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; its effect is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -78,7 +88,9 @@
           "source": "outcomebound-research harnesses/codex.md section 10 (read 2026-10-01); the evaluation runner passes it",
           "read": "2026-10-18",
           "listed_in_help": false,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; its effect is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -88,7 +100,9 @@
           "source": "installed `codex exec --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "the run worked in a snapshot folder with no .git",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -100,7 +114,9 @@
           "source": "installed `codex exec --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "the run header printed the snapshot as `workdir`, and the snapshot held the same one file before and after",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -111,7 +127,9 @@
           "source": "outcomebound-research harnesses/codex.md section 9 (read 2026-10-01)",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "the run header printed `model: gpt-6-astra`",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -122,7 +140,9 @@
           "source": "outcomebound-research harnesses/codex.md section 9 (read 2026-10-01)",
           "read": "2026-10-18",
           "listed_in_help": false,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "the run header printed `reasoning effort: high`",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -133,7 +153,9 @@
           "source": "https://learn.chatgpt.com/docs/non-interactive-mode",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "the last message was written to the answer file",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -143,7 +165,9 @@
           "source": "installed `codex exec --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "the prompt was read from standard input",
+          "observed_on": "2026-10-19"
         }
       ]
     },
@@ -168,7 +192,9 @@
           "source": "https://code.claude.com/docs/en/headless",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "one answer and exit 0 (one smoke run, Claude Code 2.1.302, logged in with an account and no API key, same change)",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -192,7 +218,9 @@
           "read": "2026-10-18",
           "listed_in_help": true,
           "run": "UNVERIFIED",
-          "when": "!api_key"
+          "when": "!api_key",
+          "observed": "accepted with the account login and no API key; the run worked. No command tool was needed, so that the command tools are absent is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -204,7 +232,9 @@
           "read": "2026-10-18",
           "listed_in_help": true,
           "run": "UNVERIFIED",
-          "when": "!api_key"
+          "when": "!api_key",
+          "observed": "accepted together with --restricted and the account login, and the run worked; its effect on plugins and hooks is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -216,7 +246,9 @@
           "source": "https://code.claude.com/docs/en/cli-reference",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "the reviewer reported Read, Grep and Glob as its tools and used Read; that other tools are absent is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -228,7 +260,9 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; the result reported no permission denial, and no write was attempted",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -240,7 +274,9 @@
           "source": "https://code.claude.com/docs/en/cli-reference (via outcomebound-research harnesses/claude-code.md); installed `claude --help` names the mode",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; nothing prompted, and no call was denied",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -252,7 +288,9 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; nothing prompted",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -263,7 +301,9 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; its effect is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -274,7 +314,9 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; its effect is not shown",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -285,7 +327,9 @@
           "source": "https://code.claude.com/docs/en/headless",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "one JSON result with the answer in `result`, `total_cost_usd`, `modelUsage` and `permission_denials`",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -296,7 +340,9 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "tested",
+          "observed": "`modelUsage` named claude-sonnet-5-5 as the only model used",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [
@@ -307,7 +353,9 @@
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
-          "run": "UNVERIFIED"
+          "run": "UNVERIFIED",
+          "observed": "accepted; the result does not name the effort that ran",
+          "observed_on": "2026-10-19"
         },
         {
           "args": [

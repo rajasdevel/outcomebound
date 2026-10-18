@@ -426,6 +426,8 @@ def test_the_table_holds_a_source_and_a_read_day_for_every_flag_and_no_dangerous
         for entry in [*row["argv"], *row.get("env", [])]:
             assert entry["source"] and entry["read"] and entry["why"], (name, entry)
             assert entry["run"] in {"tested", "UNVERIFIED"}, (name, entry)
+            if entry["run"] == "tested":  # a claim of a run names what the run showed and when
+                assert entry["observed"] and entry["observed_on"], (name, entry)
             assert isinstance(entry["listed_in_help"], bool)
             for word in [*entry.get("args", []), entry.get("value", "")]:
                 for placeholder in review_council._PLACEHOLDER.findall(word):
