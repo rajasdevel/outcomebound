@@ -682,7 +682,8 @@ _EXAMPLE = """\
 
 _EPILOG = f"""\
 `outcomebound brief lookup TERM... [--in PATH]... [--json]` finds a brief by id or words and
-prints the `Decided:` answer recorded for it (`lookup --help`).
+prints the `Decided:` answer recorded for it (`lookup --help`). `outcomebound brief open
+[PATH]... [--json]` lists the briefs with no recorded answer (`open --help`).
 
 The document is one JSON object (schemas/decision-briefs.schema.json):
   briefs   the briefs, in the order they are put to the person; each holds
@@ -1112,6 +1113,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from outcomebound_tools import brief_lookup
 
         return brief_lookup.main(arguments[1:])
+    if arguments[:1] == ["open"]:
+        # A document named `open` is given as `./open`.
+        from outcomebound_tools import brief_open
+
+        return brief_open.main(arguments[1:])
     parser = argparse.ArgumentParser(
         prog="outcomebound brief",
         description="Draw the decisions an agent puts to a person as decision briefs, "
