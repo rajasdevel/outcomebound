@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 from typing import Any
 
-from outcomebound_tools import home, programs, schemacheck, validation_record
+from outcomebound_tools import home, programs, schemacheck, textio, validation_record
 from outcomebound_tools.paths import names_git
 
 PASSED = "PASS"
@@ -357,7 +357,7 @@ def load_plan(path: Path, *, cwd_override: str | None = None) -> Plan:
         raise PlanError(f"plan is not a file: {path}")
     try:
         plan_bytes = plan_path.read_bytes()
-        raw = json.loads(plan_bytes.decode("utf-8"))
+        raw = json.loads(textio.decode(plan_bytes))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise PlanError(f"cannot read plan: {error}") from error
     plan = parse_plan(

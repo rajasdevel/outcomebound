@@ -10,6 +10,7 @@ verdict and an exit code.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -18,10 +19,10 @@ from typing import Any
 
 import pytest
 
+from outcomebound_tools import tickets_verify as verify_module
 from outcomebound_tools.tickets import main
 from tests.test_tickets_brief import (
     CLAIMS_PATH,
-    block,
     checkout,
     draft_document,
     exported,
@@ -282,13 +283,15 @@ def test_a_plan_that_runs_outside_the_checkout_is_refused(
 ) -> None:
     markers = tmp_path / "markers"
     root, markers = project(tmp_path, [claim(markers, "alpha")], ["alpha"])
-    write(root, CLAIMS_PATH, plan_document([claim(markers, "alpha")], cwd="../.."))
+    for outside in ("../..", " ../.. "):
+        write(root, CLAIMS_PATH, plan_document([claim(markers, "alpha")], cwd=outside))
 
-    code, out, err = verify(root, "1", capsys=capsys)
+        code, out, err = verify(root, "1", capsys=capsys)
 
-    assert (code, out) == (1, "")
-    assert err.startswith("VERIFY_REFUSED: the claims plan") and "outside this checkout" in err
-    assert ran(markers) == set()
+        assert (code, out) == (1, ""), outside
+        assert err.startswith("VERIFY_REFUSED: the claims plan"), outside
+        assert "outside this checkout" in err, outside
+        assert ran(markers) == set(), outside
 
 
 def test_a_plan_the_runner_cannot_load_is_an_invalid_plan(
@@ -365,7 +368,43 @@ def test_a_ticket_named_before_the_checkout_gets_the_order(
     assert "outcomebound tickets verify" in err
 
 
-def test_block_keys_are_unchanged_by_the_fixture() -> None:
-    """The fixture's block is the one `brief`'s tests read, so a ticket here is a ticket there."""
+def test_a_plan_saved_with_a_byte_order_mark_is_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The ticket reader accepts a claims plan with a UTF-8 mark, so the run must too."""
 
-    assert block(done_when=("alpha",))[4:6] == ["done-when:", "- alpha"]
+    markers = tmp_path / "markers"
+    root, markers = project(tmp_path, [claim(markers, "alpha")], ["alpha"])
+    plan = root / CLAIMS_PATH
+    plan.write_bytes(b"\xef\xbb\xbf" + plan.read_bytes())
+
+    code, out, _ = verify(root, "1", capsys=capsys)
+
+    assert code == 0
+    assert ran(markers) == {"alpha"}
+    assert lines(out)[-1] == "VERDICT: PASS (done-when of #1: 1 PASS)"
+
+
+def test_a_ticket_that_names_no_check_is_never_a_pass(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Were a ticket to reach the runner with an empty `done-when` (a draft changed between the
+    two readings), nothing would have run, and the runner's verdict over nothing is PASS."""
+
+    markers = tmp_path / "markers"
+    root, markers = project(tmp_path, [claim(markers, "alpha")], ["alpha"])
+    reading = verify_module.read_subject
+
+    def emptied(*arguments: Any) -> Any:
+        subject = reading(*arguments)
+        return dataclasses.replace(
+            subject, ticket=dataclasses.replace(subject.ticket, done_when=())
+        )
+
+    monkeypatch.setattr(verify_module, "read_subject", emptied)
+
+    code, out, _ = verify(root, "1", capsys=capsys)
+
+    assert code == 2
+    assert ran(markers) == set()
+    assert lines(out)[-1].startswith("VERDICT: UNVERIFIED")

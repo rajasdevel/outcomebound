@@ -85,20 +85,6 @@ def _persons(items: Iterable[DoneWhen]) -> tuple[DoneWhen, ...]:
     return tuple(item for item in items if item.human)
 
 
-def _inside(root: Path, declaration: Declaration) -> None:
-    """The plan's commands run inside the checkout, since this verb runs them."""
-
-    plan = load_claims(root, declaration)
-    if not plan.cwd_inside:
-        where = Path(os.path.relpath(plan.cwd_resolved, root.resolve())).as_posix()
-        raise Refusal(
-            _USE.code,
-            f"the claims plan {declaration.claims} runs its claims in {where}, outside this "
-            "checkout; verify runs the plan's commands, so it runs them only inside the "
-            "checkout; set the plan's `cwd` to a folder of the checkout",
-        )
-
-
 def _plan(root: Path, declaration: Declaration) -> validation.Plan:
     """The plan as `outcomebound validation` loads it, or the planning error it reports."""
 
@@ -110,6 +96,23 @@ def _plan(root: Path, declaration: Declaration) -> validation.Plan:
             f"the claims plan {declaration.claims} cannot be run: {error}; nothing was run, "
             "and `outcomebound validation` reports the same",
         ) from error
+
+
+def _inside(root: Path, plan: validation.Plan, declaration: Declaration) -> None:
+    """The plan's commands run inside the checkout, since this verb runs them.
+
+    It is asked of the directory the runner will use, the loaded plan's, and not of the
+    ticket reader's reading of the same text, so the two cannot differ.
+    """
+
+    if not plan.cwd.is_relative_to(root.resolve()):
+        where = Path(os.path.relpath(plan.cwd, root.resolve())).as_posix()
+        raise Refusal(
+            _USE.code,
+            f"the claims plan {declaration.claims} runs its claims in {where}, outside this "
+            "checkout; verify runs the plan's commands, so it runs them only inside the "
+            "checkout; set the plan's `cwd` to a folder of the checkout",
+        )
 
 
 def _undefined(
@@ -146,10 +149,12 @@ def _person_line(item: DoneWhen) -> str:
 
 
 def _verdict(results: tuple[validation.Result, ...], persons: int) -> str:
-    """`validation`'s verdict over the claims run; a person's check keeps it from `PASS`."""
+    """`validation`'s verdict over the claims run; a person's check keeps it from `PASS`, and so
+    does a `done-when` that names no check at all."""
 
     status = validation.verdict(results)
-    return validation.UNVERIFIED if persons and status == validation.PASSED else status
+    nothing = not results and not persons
+    return validation.UNVERIFIED if status == validation.PASSED and (persons or nothing) else status
 
 
 def _counts(results: tuple[validation.Result, ...], persons: int) -> str:
@@ -173,8 +178,8 @@ def verify(target: Path, declaration: Declaration, options: argparse.Namespace) 
     refuse_closed(ticket, _USE)
     claims = load_claims(root, declaration)
     refuse_findings(root, declaration, options, subject, claims, _USE)
-    _inside(root, declaration)
     plan = _plan(root, declaration)
+    _inside(root, plan, declaration)
     names = _names(ticket.done_when)
     _undefined(names, plan, declaration, ticket.id)
     persons = _persons(ticket.done_when)
