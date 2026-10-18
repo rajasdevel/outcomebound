@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "5dce7597b793a4cf0a5c8c4103458b999721af6138d4d41db5b4e837ea795f56"
+      "sha256": "0935bc000e1accea55998bb30665a87865816fa3a3c7ed1112dbb50419dc7f3a"
     },
     {
       "kind": "block",
@@ -37,7 +37,7 @@
       "style": [
         "ste"
       ],
-      "sha256": "faff3cad6eb1d9bf6685595775833cf4f28fbccd1f5ee072e22a7c79fb9ab646"
+      "sha256": "3cf27ec40b92f7e2bc9987d06b447e1bed6293f79dfc16c4d754b18b1d47a1ac"
     },
     {
       "kind": "block",
@@ -242,7 +242,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e2a019341e39ccaf5451928f90b84b28be113df13dfbd0b47a53521b0e39b7d2"
+      "sha256": "e2ed6bc3cb84cf006207da4ad993be5d9cb981a8cfa4cd26f565df6b281c1ab7"
     }
   ]
 }

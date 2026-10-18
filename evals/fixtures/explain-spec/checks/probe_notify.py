@@ -9,8 +9,8 @@ understanding: they read what the run explained, asked, reported and left unchan
                    and the retry for ever
     questions      the answer, or a note the run wrote, holds a question about a rejected
                    alternative, one about the assumed row and one about an edge
-    understanding  a line reports the person's understanding as `UNVERIFIED`, and no line says
-                   that the person understands the design
+    understanding  a line reports the person's understanding as `UNVERIFIED` or not checked, and no
+                   line says that the person understands the design
     rows           each decision and assumed row of the seed's design is still in it
 
 The answer checks read lines for the words each must carry, not meaning. Each exits 0 where it
@@ -150,6 +150,12 @@ UNDERSTOOD = re.compile(
 )
 HEDGED = re.compile(r"(?i)UNVERIFIED|\bnot\b|n't|cannot|whether|\bif\b|until|once|unless|no way")
 REPORTS = re.compile(r"(?i)understand|understood|follow|grasp|comprehen")
+# The label `UNVERIFIED`, or plain words that say a claim was not checked or confirmed.
+NOT_VERIFIED = re.compile(
+    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b"
+    r"|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
+    r"(?:run|ran|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*|validat\w*)\b)"
+)
 
 
 def understanding() -> list[str]:
@@ -158,8 +164,8 @@ def understanding() -> list[str]:
         return ["no answer was supplied"]
     lines = text.splitlines()
     lacking = []
-    if not any("UNVERIFIED" in line and REPORTS.search(line) for line in lines):
-        lacking.append("no line reports the person's understanding as UNVERIFIED")
+    if not any(NOT_VERIFIED.search(line) and REPORTS.search(line) for line in lines):
+        lacking.append("no line reports the person's understanding as UNVERIFIED or not checked")
     lacking += [
         f"a line says the person understands the design: {line.strip()[:80]!r}"
         for line in lines

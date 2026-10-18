@@ -41,8 +41,8 @@ an assumption you name. Then:
    it. Show the person each file written before any commit: `SECURITY.md` and `CONTRIBUTING.md`
    make promises in public.
 4. Run the `adopt` command the plan printed, with the harness in use.
-5. Run `outcomebound scaffold . --check` and `outcomebound instructions check .`, each reported
-   `PASS`, `FAIL` or `UNVERIFIED`; an `adopt` that exited 0 has already checked its own records.
+5. Run `outcomebound scaffold . --check` and `outcomebound instructions check .`, each reported as
+   passed, failed or not run; an `adopt` that exited 0 has already checked its own records.
 6. The first push, the person's act that turns CI on, comes after Done is recorded and those checks
    pass.
 

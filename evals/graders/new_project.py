@@ -627,8 +627,20 @@ def bare_questions(text: str) -> list[str]:
     return bare
 
 
-def has_status_line(text: str, subject: re.Pattern[str], status: str = "UNVERIFIED") -> bool:
-    return any(status in block and subject.search(block) for block in sections(text))
+# What says that a check or a claim was not settled: the label `UNVERIFIED`, or plain words, as
+# a reply in conversation gives it ("not run", "did not run", "hasn't been verified").
+NOT_VERIFIED_WORDS = (
+    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b"
+    r"|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
+    r"(?:run|ran|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*|validat\w*)\b)"
+)
+NOT_VERIFIED = re.compile(NOT_VERIFIED_WORDS)
+
+
+def has_status_line(
+    text: str, subject: re.Pattern[str], status: re.Pattern[str] = NOT_VERIFIED
+) -> bool:
+    return any(status.search(block) and subject.search(block) for block in sections(text))
 
 
 # --- the Done command -------------------------------------------------------------------------

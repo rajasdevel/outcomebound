@@ -113,13 +113,14 @@ The agent decides what it can, states its assumptions, and adds a spec, a test f
 wider check only when the outcome and risk need one. Your project's required process stays
 required; process a document only suggests is sized to the task.
 
-The report starts from the ask: what is now true, and what is not done. Then each check is `PASS`,
-`FAIL` or `UNVERIFIED`, and missing evidence is `UNVERIFIED`. Committed, pushed, deployed and
-observed are separate states.
+The agent never claims a check that did not run, and always reports a failure. A label or id you
+did not use is explained in plain words or left out. Committed, pushed, deployed and observed are
+separate states.
 
 OutcomeBound installs no hook. The project facts name the Done commands as the full suite; the
 agent runs them where the change's risk reaches them, the project requires them, or the work
-lands, and its report gives each check it ran as `PASS`, `FAIL` or `UNVERIFIED`. Read the [contract block](templates/managed-block.agents.md.tmpl) and the
+lands. A record another reader acts on, such as a pull request description or a handover, gives
+each check as `PASS`, `FAIL` or `UNVERIFIED`; a reply in conversation says it in plain words. Read the [contract block](templates/managed-block.agents.md.tmpl) and the
 [full operating contract](OutcomeBound.md).
 
 ## Evidence and limits
@@ -152,7 +153,8 @@ harness trust and branch protection enforce authority; OutcomeBound's checks inf
   removes against a base (for stability work, the release tag in production), and how many of them
   are code, tests, docs, config or records; see the [size design](docs/specs/size/design.md).
 - **Text for people:** `adopt --human-style ste` asks for ASD-STE100 Simplified Technical English
-  in reports and commit messages.
+  in documents a person keeps, such as pull request descriptions, commit messages, specs and
+  handovers, and not in replies in conversation.
 - **Workspace and commands:** the [workspace guide](docs/workspace.md) and the
   [command guide](docs/commands.md).
 - **Research:** the [research library](https://github.com/rajasdevel/outcomebound-research) holds
