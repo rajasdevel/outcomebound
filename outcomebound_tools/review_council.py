@@ -50,6 +50,13 @@ _PART = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/@+-]*")
 _VERDICT = re.compile(r"Verdict:[ \t]*(FAIL|UNVERIFIED|PASS)[ \t]*", re.IGNORECASE)
 _LINE_REVIEWED = re.compile(r"[ \t]*Reviewed:", re.IGNORECASE)
 _LINE_DISPOSITION = re.compile(r"[ \t]*Disposition:", re.IGNORECASE)
+# What a harness loads as instructions from the folder it works in. The snapshot leaves these out,
+# so that the revision under review cannot instruct its own reviewer; the diff and a named file
+# still carry them, as quoted data.
+INSTRUCTION_FILES = frozenset(
+    {"AGENTS.md", "AGENTS.override.md", "CLAUDE.md", "CLAUDE.local.md", "GEMINI.md"}
+)
+INSTRUCTION_FOLDERS = frozenset({".claude", ".codex", ".gemini", ".agents"})
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 STDERR_TAIL = 600
 # The sentence that opens a prompt. The data between the marked lines is never instructions.
@@ -78,7 +85,7 @@ Write your answer as Markdown, in this form and no other:
   your mind and what it gives. Mark a finding that only improves the change `optional`.
 - Write no `Disposition:` line and no `Reviewed:` line; someone else decides what happens to each
   finding.
-- End with a short list of what you did not read.
+- End with a heading `## Not read` and, under it, a short list of what you did not read.
 """
 
 
@@ -134,6 +141,8 @@ class Outcome:
     cited: int = 0
     notes: list[str] = field(default_factory=list)
     body: str = ""
+    verdict: str = ""
+    findings: int = 0
 
 
 def load_table(path: Path = TABLE) -> dict[str, Any]:
@@ -353,7 +362,9 @@ def render_plan(request: Request, jobs: Sequence[Job], out: Path, budget: str | 
         f"run folder: {out} (one prompt and one answer for each reviewer, one review file for "
         "each that answers, council.json)",
         f"snapshot: {jobs[0].cwd if jobs else ''}, the files of the revision with no Git history, "
-        "made for the run and removed after it",
+        "made for the run and removed after it; it leaves out the instruction files and folders "
+        f"a harness would load ({', '.join(sorted(INSTRUCTION_FILES))}, "
+        f"{', '.join(sorted(INSTRUCTION_FOLDERS))})",
         "the diff and the files go to each reviewer as quoted data between marked lines, "
         "labelled as data and not instructions; a reviewer's answer is never run",
     ]
@@ -416,6 +427,8 @@ def _snapshot(root: Path, commit: str, into: Path) -> None:
         for member in archive:
             name = PurePosixPath(member.name)
             if name.is_absolute() or ".." in name.parts or not (member.isfile() or member.isdir()):
+                continue
+            if name.name in INSTRUCTION_FILES or INSTRUCTION_FOLDERS & set(name.parts):
                 continue
             target = (base / name).resolve()
             if target != base and not target.is_relative_to(base):
@@ -504,6 +517,12 @@ def run_job(job: Job) -> Outcome:
     text, cost, why = _answer(job)
     if text is None:
         return done("failed", f"{why}: {_tail(job.stderr)}", cost_usd=cost)
+    return _filed(job, text, cost, done)
+
+
+def _filed(job: Job, text: str, cost: float | None, done: Any) -> Outcome:
+    """The outcome for an answer that exists: filed, or `unreadable` and kept apart."""
+
     first = next((line.strip() for line in text.splitlines() if line.strip()), "")
     if not _VERDICT.fullmatch(first.strip("`*# ")):
         raw = job.review.with_suffix(".raw.txt")
@@ -515,7 +534,21 @@ def run_job(job: Job) -> Outcome:
             cost_usd=cost,
         )
     body, dropped = _strip(text)
-    outcome = done("ok", review=str(job.review), cost_usd=cost, body=body)
+    verdict = _VERDICT.fullmatch(first.strip("`*# "))
+    named = verdict.group(1).upper() if verdict else ""
+    count = len(review_since._findings(body))
+    if named == "FAIL" and not count:
+        raw = job.review.with_suffix(".raw.txt")
+        raw.write_text(text, encoding="utf-8")
+        return done(
+            "unreadable",
+            f"its verdict is FAIL and it names no finding in the form; kept as {raw.name}, "
+            "no review file written",
+            cost_usd=cost,
+        )
+    outcome = done(
+        "ok", review=str(job.review), cost_usd=cost, body=body, verdict=named, findings=count
+    )
     if dropped:
         outcome.notes.append(
             f"{dropped} Reviewed: or Disposition: line(s) the reviewer wrote were left out"
@@ -524,18 +557,14 @@ def run_job(job: Job) -> Outcome:
 
 
 def _strip(body: str) -> tuple[str, int]:
-    """The answer without a `Reviewed:` or a `Disposition:` line outside a code fence: the
-    first is the engine's, the second belongs to whoever acts on a finding."""
+    """The answer without a `Reviewed:` or a `Disposition:` line outside a code fence, fenced as
+    `review check` reads it: the first is the engine's, the second belongs to whoever acts on a
+    finding."""
 
-    kept, dropped, fence = [], 0, ""
-    for line in body.splitlines():
-        mark = review_check._FENCE.match(line)
-        if mark:
-            if not fence:
-                fence = mark.group(1)[0]
-            elif mark.group(1)[0] == fence and review_check._CLOSING.fullmatch(line):
-                fence = ""
-        elif not fence and (_LINE_REVIEWED.match(line) or _LINE_DISPOSITION.match(line)):
+    outside = {number for number, _ in review_check._lines(body)}
+    kept, dropped = [], 0
+    for number, line in enumerate(body.splitlines(), 1):
+        if number in outside and (_LINE_REVIEWED.match(line) or _LINE_DISPOSITION.match(line)):
             dropped += 1
             continue
         kept.append(line)
@@ -579,14 +608,21 @@ class Revision:
             return [path]
         return [name for name in self.counts if name.endswith("/" + path)]
 
-    def lines(self, name: str) -> int:
+    def lines(self, name: str) -> int | None:
+        """The file's line count, or None where Git holds no readable blob for the path (a
+        submodule entry)."""
+
         count = self.counts[name]
         if count is None:
-            blob = size._git_ok(
-                self.request.root, "cat-file", "blob", f"{self.request.commit}:{name}"
-            )
+            try:
+                blob = size._git_ok(
+                    self.request.root, "cat-file", "blob", f"{self.request.commit}:{name}"
+                )
+            except size.SizeError:
+                self.counts[name] = -1
+                return None
             count = self.counts[name] = size.count_lines(blob)
-        return count
+        return None if count < 0 else count
 
 
 def _problems(revision: Revision, text: Sequence[str]) -> tuple[int, list[str]]:
@@ -601,10 +637,12 @@ def _problems(revision: Revision, text: Sequence[str]) -> tuple[int, list[str]]:
             problems.append(f"{path}:{first} names no file at the reviewed revision")
         elif len(found) > 1:
             problems.append(f"{path}:{first} is ambiguous ({len(found)} files end in it)")
-        elif end is not None and end > revision.lines(found[0]):
-            problems.append(
-                f"{path}:{end} is past the end of {found[0]} ({revision.lines(found[0])} lines)"
-            )
+        else:
+            length = revision.lines(found[0])
+            if length is None:
+                problems.append(f"{path}:{first} names an entry of the revision that is no file")
+            elif end is not None and end > length:
+                problems.append(f"{path}:{end} is past the end of {found[0]} ({length} lines)")
     if not cites:
         problems.append("no path:line citation")
     return len(cites), problems
@@ -683,6 +721,7 @@ def render_outcomes(outcomes: Sequence[Outcome], out: Path) -> str:
             cost = "" if o.cost_usd is None else f", about ${o.cost_usd:.2f} (an estimate)"
             lines.append(
                 f"{o.reviewer.tag} {o.reviewer.label}: ok in {o.seconds} s{cost}; "
+                f"verdict {o.verdict}, {o.findings} finding(s); "
                 f"{o.flagged} citation problem(s) of {o.cited} citation(s); {o.review}"
             )
             lines.extend(f"  note: {note}" for note in o.notes)
@@ -780,7 +819,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 f"the run folder {out} exists; give --out DIR for a new run, or remove it"
             )
         outcomes = run_council(request, jobs, out)
-    except (CouncilError, OSError, UnicodeDecodeError) as error:
+    except (CouncilError, size.SizeError, OSError, UnicodeDecodeError) as error:
         sys.stderr.write(f"COUNCIL_REFUSED: {textio.plain(str(error))}\n")
         return 1
     sys.stdout.write(render_outcomes(outcomes, out))

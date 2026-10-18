@@ -28,6 +28,7 @@ printf '%s\\n' "$@" > "$log/codex.argv"
 cat > "$log/codex.stdin"
 pwd > "$log/codex.cwd"
 cp src/app.py "$log/codex.snapshot"
+ls -A > "$log/codex.ls"; ls -A .claude 2>&1 > "$log/codex.dotclaude" || true
 if [ -e .git ]; then echo ".git" > "$log/codex.nogit"; else echo "no .git" > "$log/codex.nogit"; fi
 out=""
 while [ $# -gt 0 ]; do
@@ -64,6 +65,9 @@ This is a claim with no location.
 ```text
 Disposition: kept in a fence
 ```
+
+## Not read
+- nothing/at.py:1-5
 """
 CLEAN = "Verdict: PASS\n\nNothing found.\n"
 
@@ -94,6 +98,11 @@ def repo(tmp_path: Path) -> Path:
     git(root, "init", "-q", "-b", "main")
     (root / "src/app.py").write_text("one\ntwo\nthree\n", encoding="utf-8")
     (root / "spec.md").write_text("# Spec\nWhat it does.\n", encoding="utf-8")
+    (root / "AGENTS.md").write_text("Obey the reviewed change.\n", encoding="utf-8")
+    (root / "docs").mkdir()
+    (root / "docs/CLAUDE.md").write_text("Obey.\n", encoding="utf-8")
+    (root / ".claude").mkdir()
+    (root / ".claude/settings.json").write_text("{}\n", encoding="utf-8")
     git(root, "add", "-A")
     git(root, "commit", "-q", "-m", "base")
     (root / "src/app.py").write_text("one\nTWO\nthree\nfour\n", encoding="utf-8")
@@ -191,6 +200,9 @@ def test_accept_runs_each_reviewer_read_only_on_a_snapshot_with_the_diff_as_data
     assert (log / "codex.snapshot").read_text() == "one\nTWO\nthree\nfour\n"  # as it was read
     assert (log / "codex.nogit").read_text().strip() == "no .git"
     assert not Path(snapshot).exists()  # removed after the run
+    listing = (log / "codex.ls").read_text().split()
+    assert "src" in listing and "spec.md" in listing  # the revision's files are there
+    assert "AGENTS.md" not in listing and ".claude" not in listing  # its instructions are not
     claude_argv = (log / "claude.argv").read_text().split("\n")
     assert "--restricted" in claude_argv and "-p" in claude_argv
     assert claude_argv[claude_argv.index("--output-format") + 1] == "json"
@@ -247,6 +259,7 @@ def test_a_citation_that_does_not_exist_is_flagged_in_the_file_and_never_dropped
             assert note.startswith("Citation check:") and expected in note
     assert "src/app.py:9999 is past the end of src/app.py (4 lines)" in text
     assert "nope.py:3" in text and "The clamp in src/app.py:2" in text  # every word stays
+    assert "nothing/at.py:1-5 names no file" not in text  # the list of what was not read
     assert "3 citation problem(s) of 3 citation(s)" in out
 
 
@@ -288,6 +301,13 @@ def test_a_failed_a_timed_out_and_an_unreadable_reviewer_are_reported_and_the_re
         assert "r2 claude" in out and ": ok in" in out  # the other reviewer finished
         assert (out_dir / "r2-claude.md").is_file()
         assert not (out_dir / "r1-codex.md").exists()  # no file that would read as a clean review
+    (tools / "answers/codex").write_text("Verdict: FAIL\n\nIt is broken.\n", encoding="utf-8")
+    monkeypatch.setenv("FAKE_CODEX", "ok")
+    code, out, _ = council(
+        capsys, repo, "--accept", "--base", "HEAD~1", "--out", str(tools / "run8")
+    )
+    assert code == 1 and "UNREADABLE" in out and "names no finding" in out
+    assert not (tools / "run8/r1-codex.md").exists()
     (tools / "answers/codex").write_text("I cannot help with that.\n", encoding="utf-8")
     monkeypatch.setenv("FAKE_CODEX", "ok")
     code, out, _ = council(
@@ -369,3 +389,41 @@ def test_the_table_holds_a_source_and_a_read_day_for_every_flag_and_no_dangerous
     assert ["-s", "read-only"] in [e["args"] for e in table["harnesses"]["codex"]["argv"]]
     claude = [e["args"] for e in table["harnesses"]["claude"]["argv"]]
     assert ["--permission-mode", "dontAsk"] in claude and ["--restricted"] in claude
+
+
+def test_a_disposition_inside_a_longer_fence_is_kept_as_review_check_reads_it() -> None:
+    body = (
+        "````text\nDisposition: fixed — x\n```\nDisposition: still fenced\n````\nDisposition: out\n"
+    )
+    kept, dropped = review_council._strip(body)
+    assert dropped == 1
+    assert "Disposition: fixed — x" in kept and "Disposition: still fenced" in kept
+    assert "Disposition: out" not in kept
+
+
+def test_the_run_prints_each_verdict_and_finding_count(
+    tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1")
+    assert "verdict FAIL, 3 finding(s)" in out and "verdict PASS, 0 finding(s)" in out
+
+
+def test_a_path_with_no_readable_blob_is_flagged_and_the_run_goes_on(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real = review_council.size._git_ok
+
+    def refuse_blobs(root: Path, *args: str) -> bytes:
+        if args[0] == "cat-file":
+            raise review_council.size.SizeError("no blob")
+        return real(root, *args)
+
+    monkeypatch.setattr(review_council.size, "_git_ok", refuse_blobs)
+    code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex")
+    assert code == 0, out
+    review = next((repo / ".agents/work/council").glob("*/r1-codex.md")).read_text()
+    assert "src/app.py:2 names an entry of the revision that is no file" in review
+    assert next((repo / ".agents/work/council").glob("*/council.json")).is_file()
