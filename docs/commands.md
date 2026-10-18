@@ -79,7 +79,7 @@ the agent reads the fragment only when it runs a command.
     is lost, and the check has no verdict.
   - A slow command is not a command that hangs. Do not shorten, skip or stop a check because it
     takes a long time. Let it run to its end. A check that the agent stops has no verdict, and
-    the agent reports it as `UNVERIFIED`.
+    the agent reports that it did not finish.
   - Source: harness documentation (Claude Code, Codex, Gemini CLI timeouts). Test on
     2026-10-04 with a command that printed one line, waited 3 seconds and stopped with exit
     code 3: the shell form returned at once. When the command ended, the file held its output

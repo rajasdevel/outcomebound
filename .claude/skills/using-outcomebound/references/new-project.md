@@ -63,7 +63,7 @@ Write one working note, or the area's spec where the `spec` mechanism applies, w
 
 Ask only what changes these, as `gather-requirements` says. Your own agreement, and the answers of a
 user an agent simulates, are hypotheses, never evidence that people want it: a claim that users want
-it reads `UNVERIFIED` until a person reports what users did or said. End the frame with your
+it is not verified until a person reports what users did or said. End the frame with your
 recommendation: build, probe first, or stop. Spending, accounts and publishing are the person's
 (`decision-brief`).
 
@@ -109,16 +109,16 @@ Skip when: the idea is throwaway or personal; a line in the working note per cho
 Build the thinnest path from the user's action through each layer the outcome needs and back, and
 to the delivery destination where one is in scope and the person granted it. For a feature that
 calls a model, write its evaluation tasks and their grader first, before the code that calls the
-model, and commit them first where the project commits. Report each line of its bar as `PASS`,
-`FAIL` or `UNVERIFIED`:
+model, and commit them first where the project commits. Report whether each line of its bar
+passed, failed or was not run:
 
 1. One Done command passes on a clean checkout: of format, lint, type checks, tests and build,
    the ones that settle the project's risk, failing when any of them fails.
 2. A defect you plant makes Done fail, and removing it makes Done pass again.
 3. One test goes through the real boundary: a request to the running service, a browser, the
    command as a user runs it.
-4. CI runs the same Done command. The file in place is a static `PASS`; a green run stays
-   `UNVERIFIED` until the person pushes, since enabling CI, the first push and branch protection
+4. CI runs the same Done command. The file in place passes a static check; a green run stays
+   unverified until the person pushes, since enabling CI, the first push and branch protection
    are theirs.
 5. Secrets and dependencies: an example environment file that holds names only, a secret scan, a
    lockfile, and each new dependency's name checked in its registry before it is installed.
@@ -126,8 +126,8 @@ model, and commit them first where the project commits. Report each line of its 
 7. For a feature that calls a model: evaluation tasks drawn from its expected use and a grader,
    written before the code that calls the model.
 8. Where delivery is in scope and the person deployed, or granted the deploy and the account it
-   needs, the deployed version observed at its destination; else `UNVERIFIED`, with what would
-   settle it.
+   needs, the deployed version observed at its destination; else say it was not observed, with
+   what would settle it.
 
 Offer the quality floor (`outcomebound floor --help`): from the first commit, it has nothing old to
 grandfather. Then record Done with `outcomebound adopt . --done '<command>'`.

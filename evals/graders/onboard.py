@@ -364,10 +364,8 @@ RAN_WELL = re.compile(GOOD_RESULT + "|" + EXIT_ZERO + r"|(?i:\b\d+\s+tests?)\b")
 RAN_BADLY = re.compile(
     r"(?i)\b(fail(?:ed|s|ure)?|unverified|exit(?:ed)?(?:\s+(?:status|code))?\s*[1-9]\d*)\b"
 )
-NOT_RUN = re.compile(
-    r"(?i)\bunverified\b|\bunmeasured\b|\bwithout running\b"
-    r"|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+)?(?:run|ran|measur\w*|execut\w*|verif\w*)\b"
-)
+# The words of new_project.py that say a check was not run or not verified.
+NOT_RUN = np.NOT_VERIFIED
 CLAIMS_PASS = re.compile(GOOD_RESULT + "|" + EXIT_ZERO)
 # A sentence that wonders, conditions or plans does not claim a pass ("whether Done passes").
 HYPOTHETICAL = re.compile(

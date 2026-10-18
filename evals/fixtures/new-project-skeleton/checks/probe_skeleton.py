@@ -49,8 +49,7 @@ CLI = "linkbox"
 VARIABLE = "LINKBOX_FILE"
 # A verdict label, or the plain words a reply in conversation gives for one.
 STATUS = re.compile(
-    r"\b(PASS|FAIL|UNVERIFIED)\b|(?i:\b(?:passed|passes|passing|failed|fails|failing)\b)|"
-    + np.NOT_VERIFIED_WORDS
+    r"\b(PASS|FAIL|UNVERIFIED)\b|(?i:\b(?:passed|passes|failed|fails)\b)|" + np.NOT_VERIFIED_WORDS
 )
 DEFECT = re.compile(r"(?i)defect|negative control|planted|sabotag|mutation")
 PLACEHOLDER = re.compile(r"(?i)<[^>]*>|change-?me|your[-_ ].*|x{3,}|\.\.\.|replace[-_ ]?me|example")

@@ -19,7 +19,7 @@ engine is Python standard library only, and it never runs your agent.
 
 | Feature | What it does |
 | --- | --- |
-| **The contract** | A short block in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; report against the ask. |
+| **The contract** | A short block in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; never claim a check that did not run. |
 | **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review, specs, tickets, hand-offs, landing, acceptance and more. Each loads only when its trigger matches. |
 | **Lifecycle scaffold** | `outcomebound scaffold` writes the files a prototype, solo, team or organization project needs, and lists each value still to fill. |
 | **Decision briefs** | An act outside the agent's authority comes back as options, a recommendation, evidence and an undo line. Other work continues. |

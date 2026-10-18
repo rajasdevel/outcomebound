@@ -66,16 +66,17 @@ ends only when its completion bar holds or nothing left can proceed.
 ## Validate and report
 
 Never claim a check that did not run, and always report a failure. A label or id the person did not
-use is explained in plain words or left out. Where it helps the person, say what was asked, what
+use is explained in plain words or, where nothing requires it, left out. Where it helps the person, say what was asked, what
 is now true, and what is not done; where the work meets only part of the ask, say how much, such
 as two of ten. Name the checks that settle the changed risk and those the completion bar names;
 do not list checks nobody asked for. A check that was not run, or a material claim
 no check settles, says what evidence is missing and what would settle it.
 
 In conversation, say in plain words whether each check passed, failed or did not run. A record
-that another reader acts on without you (a handover, a pull request description, a check report)
+that another reader acts on without you (a handover, a pull request description, the report a check tool prints)
 gives each check the completion bar names as `PASS`, `FAIL`, or `UNVERIFIED`: `PASS` means only
-that the declared check succeeded, and a named check that was not run is `UNVERIFIED`. A trusted project
+that the declared check succeeded, a named check that was not run is `UNVERIFIED`, and the
+meaning of each is stated once where the reader has not used them. A trusted project
 policy check can establish its declared boundary rule; it cannot prove product behavior. A local
 change, a passing test, a commit, a push, a deployment, a runtime observation, and an operator
 judgment are each their own state; report none of them as another.

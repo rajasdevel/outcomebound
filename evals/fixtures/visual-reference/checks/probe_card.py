@@ -117,10 +117,12 @@ def inferred(lines: list[str]) -> list[str]:
 
 
 # The label `UNVERIFIED`, or plain words that say the match was not checked or confirmed.
+# A copy of `NOT_VERIFIED_WORDS` in new_project.py; a test keeps the two the same.
 NOT_VERIFIED = re.compile(
-    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b"
-    r"|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
-    r"(?:run|ran|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*|validat\w*)\b)"
+    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b|\bunmeasured\b|\bskipped\b"
+    r"|\bwithout running\b|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
+    r"(?:run|ran|execut\w*|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*"
+    r"|validat\w*)\b)"
 )
 
 
