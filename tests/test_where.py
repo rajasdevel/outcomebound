@@ -709,8 +709,8 @@ def test_a_failed_claim_line_carries_its_command(project, capsys):
 
 def test_a_ticket_whose_relations_the_export_cut_short_is_not_ready(project):
     declare(project)
-    node = export.issue(1, title="cut short")
-    node["blockedBy"]["pageInfo"]["hasNextPage"] = True  # type: ignore[index]
+    node = json.loads(json.dumps(export.issue(1, title="cut short")))
+    node["blockedBy"]["pageInfo"]["hasNextPage"] = True
     issues(project, node, export.issue(2, title="whole one"))
     items = read(project)
     assert one(items, "ticket", subject="#1")["verdict"] == "UNVERIFIED"
