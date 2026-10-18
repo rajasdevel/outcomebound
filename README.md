@@ -152,6 +152,9 @@ harness trust and branch protection enforce authority; OutcomeBound's checks inf
 - **Size of a change:** `outcomebound size [--base REF]` says how many lines the work tree adds and
   removes against a base (for stability work, the release tag in production), and how many of them
   are code, tests, docs, config or records; see the [size design](docs/specs/size/design.md).
+- **Worktrees:** `outcomebound workspace audit` reports each worktree's commits (merged, pushed or
+  local), changed and untracked paths, age and size, and which pass the mechanical removal rule; it
+  removes nothing; see the [workspace design](docs/specs/workspace/design.md).
 - **Text for people:** `adopt --human-style ste` asks for ASD-STE100 Simplified Technical English
   in documents a person keeps, such as pull request descriptions, commit messages, specs and
   handovers, and not in replies in conversation.
