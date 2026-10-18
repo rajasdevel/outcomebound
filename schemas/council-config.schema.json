@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:outcomebound:schema:council-config:1",
   "title": "OutcomeBound review council configuration v1",
-  "description": "The optional file `.outcomebound/council.json` of a project, or `~/.outcomebound/council.json` of a person, that `outcomebound review council` reads: the reviewers that run when `--reviewer` names none, and optional settings the command line overrides. The project's file is read first; where it exists the person's is not read.",
+  "description": "The optional file `.outcomebound/council.json` of a project, or `.outcomebound/council.json` in the home folder of a person, that `outcomebound review council` reads: the reviewers that run when `--reviewer` names none, and optional settings the command line overrides. The project's file is read first; where it exists the person's is not read.",
   "type": "object",
   "additionalProperties": false,
   "required": [

@@ -226,7 +226,7 @@ def default_reviewers(table: dict[str, Any]) -> list[Reviewer]:
 
 def load_config(top: Path) -> tuple[Path | None, dict[str, Any]]:
     """The council configuration and where it came from: the project's
-    `.outcomebound/council.json`, else the person's `~/.outcomebound/council.json`, else none.
+    `.outcomebound/council.json`, else the `.outcomebound/council.json` in the person's home folder, else none.
     The first file found is read alone and the other is not merged with it. A file that is not
     valid against `schemas/council-config.schema.json` is a refusal that names it."""
 
