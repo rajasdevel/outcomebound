@@ -18,7 +18,13 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from outcomebound_tools import fileplan, sources_check, sources_ledger, sources_manifest
+from outcomebound_tools import (
+    fileplan,
+    sources_check,
+    sources_ledger,
+    sources_links,
+    sources_manifest,
+)
 from outcomebound_tools.sources_manifest import SourceRefusal, display
 
 DEFAULT_OUT = Path(".outcomebound") / "sources"
@@ -131,7 +137,49 @@ def _parser() -> argparse.ArgumentParser:
         help="the validation plan a `reference ... by: command <claim>` row names a claim of",
     )
     checked.add_argument("--verbose", action="store_true", help="also print the checks that passed")
+    linked = commands.add_parser(
+        "links",
+        prog="outcomebound sources links",
+        help="report broken links, anchors, path:line and Git refs in Markdown files",
+        description=(
+            "Read Markdown files, and the .md files under folders, and report each reference "
+            "that does not hold, with file and line: LINK_FILE_MISSING, LINK_ANCHOR_MISSING "
+            "(GitHub heading slugs, repeats suffixed -1, -2), LINE_PAST_END, REF_MISSING and "
+            "REF_UNRESOLVED (a code span after the word commit, ref, branch, tag, sha or rev). "
+            "External links are listed as not checked: no network is opened. Writes nothing; "
+            "runs no process but git."
+        ),
+        epilog=(
+            "Exits: 0 nothing broken; 1 something broken; 2 a usage error or an input that is "
+            "not there. The last line is `VERDICT: PASS` or `VERDICT: FAIL` with counts."
+        ),
+    )
+    linked.add_argument("paths", nargs="+", metavar="PATH", help="a Markdown file or a folder")
+    linked.add_argument(
+        "--root",
+        metavar="DIR",
+        default=".",
+        help="the repository root: `/x` links and path:line resolve from it, and no target "
+        "outside it is read (default .)",
+    )
+    linked.add_argument("--json", action="store_true", help="print one JSON object instead of text")
+    linked.add_argument(
+        "--verbose", action="store_true", help="also list each reference not checked"
+    )
     return parser
+
+
+def _links(options: argparse.Namespace) -> int:
+    try:
+        report = sources_links.check([Path(p) for p in options.paths], Path(options.root))
+    except sources_links.LinksRefusal as refused:
+        sys.stderr.write(f"usage: {refused}\n")
+        return 2
+    if options.json:
+        sys.stdout.write(sources_links.render_json(report))
+    else:
+        sys.stdout.write(sources_links.render_text(report, verbose=options.verbose))
+    return sources_links.exit_code(report)
 
 
 def _write_manifest(options: argparse.Namespace) -> tuple[Path, bool]:
@@ -267,6 +315,8 @@ def _check(options: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     options = parser.parse_args(argv)
+    if options.command == "links":
+        return _links(options)
     try:
         if options.command == "import":
             _, partial = _write_manifest(options)

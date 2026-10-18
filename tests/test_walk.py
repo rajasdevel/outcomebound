@@ -27,6 +27,7 @@ WALKERS = {
     "outcomebound_tools/walk.py",
     "outcomebound_tools/discovery.py",
     "outcomebound_tools/artifactcheck.py",
+    "outcomebound_tools/sources_links.py",
 }
 Capture = pytest.CaptureFixture[str]
 
