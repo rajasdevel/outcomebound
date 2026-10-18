@@ -41,6 +41,7 @@ LIMITS = (
 _ID = r"[A-Za-z][A-Za-z0-9-]*"
 _HEADING = re.compile(rf"###[ \t]+({_ID})(?: · | \| )(\S.*?)[ \t]*")
 _DECIDED = re.compile(r"[ \t]*(?:(?:[-*+]|\d{1,9}[.)]|>)[ \t]+)*(?:\*\*)?Decided:(?:\*\*)?(.*)")
+_WAITING = re.compile(r"[ \t]*(?:⏳|\[wait\])[ \t]+Waiting on this:[ \t]*(\S.*?)[ \t]*")
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _OPEN, _CLOSE = '"“', '"”'
 
@@ -62,6 +63,7 @@ class Brief:
     heading: str
     source: str
     line: int | None
+    why_now: str = ""
 
 
 def _answer(rest: str, source: str, number: int) -> Answer | None:
@@ -104,14 +106,17 @@ def _markdown(
         if not heading:
             continue
         finding = False
+        waiting = ""
         for _, after in lines[index + 1 :]:
             if after.lstrip().startswith("#"):
                 break
             if review_check._DISPOSITION.fullmatch(after):
                 finding = True
                 break
+            if not waiting and (held := _WAITING.fullmatch(after)):
+                waiting = held.group(1)
         if not finding:
-            briefs.append(Brief(heading.group(1), heading.group(2), source, number))
+            briefs.append(Brief(heading.group(1), heading.group(2), source, number, waiting))
     return briefs, answers, malformed
 
 
@@ -128,7 +133,9 @@ def _json(text: str, source: str, schema: Any) -> tuple[list[Brief], str | None]
     defects = schemacheck.validate(document, schema)
     if defects:
         return [], defects[0]
-    return [Brief(b["id"], b["heading"], source, None) for b in document["briefs"]], None
+    return [
+        Brief(b["id"], b["heading"], source, None, b.get("why_now", "")) for b in document["briefs"]
+    ], None
 
 
 def _files(root: Path, unread: list[str]) -> list[Path]:

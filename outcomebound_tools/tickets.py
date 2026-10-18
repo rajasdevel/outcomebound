@@ -1,6 +1,6 @@
 """`outcomebound tickets <verb>`: the ticket engine's command line.
 
-What this module decides: the four verbs, every option's name and default,
+What this module decides: the five verbs, every option's name and default,
 which stream a report and a refusal reach, and the exit code of the process. A
 verb reads `options` and parses nothing.
 
@@ -10,7 +10,8 @@ refuses an undeclared or misdeclared project alike and none loads it again.
 What it does not decide: anything a verb does. It holds no ticket logic: a verb
 returns a `Report`, this module renders it as text or as JSON and returns the
 report's own exit code; `brief`, `publish` and `export` return text, a document, a
-script and a command, which it prints as they are. A verb that
+script and a command, which it prints as they are; `verify` returns what the runner
+reported with the exit code of its verdict (`Verified`). A verb that
 stops instead raises, and the exception says which exit it carries: a `Refusal`
 is one named line and exit 1, a `PlanningError` one named line and exit 2.
 """
@@ -40,13 +41,14 @@ from outcomebound_tools.tickets_report import (
     render_text,
 )
 from outcomebound_tools.tickets_store import export
+from outcomebound_tools.tickets_verify import Verified, verify
 
 __all__ = ["VERBS", "build_parser", "main"]
 
 # The one signature every verb has. The declaration is loaded here, once,
 # before any verb runs, so a project that declares no store is refused the
 # same way by every verb.
-VerbFunction = Callable[[Path, Declaration, argparse.Namespace], "Report | str"]
+VerbFunction = Callable[[Path, Declaration, argparse.Namespace], "Report | str | Verified"]
 
 
 # One row per verb, in the order the command line lists them.
@@ -54,6 +56,7 @@ VERBS: Mapping[str, VerbFunction] = MappingProxyType(
     {
         "check": check,
         "brief": brief,
+        "verify": verify,
         "publish": publish,
         "export": export,
     }
@@ -85,22 +88,31 @@ def _check_usage(options: argparse.Namespace) -> str:
     return ""
 
 
-def _brief_options(command: argparse.ArgumentParser) -> None:
-    """`brief <ticket> [--draft <file>] [--detail plain|full]`.
+def _ticket_options(command: argparse.ArgumentParser, ticket_help: str, draft_help: str) -> None:
+    """A ticket, and the draft files it may be read from: what `brief` and `verify` take.
 
-    One file, where `check` takes many: a brief is one document about one
-    ticket. The id is named beside it, because a draft's id is its file name
-    without the extension and a brief headed with another id would be a
-    document about the wrong work.
+    One ticket, and the files beside it as a breakdown: a draft's id is its file name
+    without the extension, so the id is named beside the file, and an action on another
+    id would be about the wrong work.
     """
 
-    command.add_argument("ticket", help="the ticket whose brief to compile")
+    command.add_argument("ticket", help=ticket_help)
     command.add_argument(
         "--draft",
         metavar="FILE",
         nargs="+",
         action="extend",
-        help="compile the draft among these local files whose name is the ticket named, "
+        help=draft_help,
+    )
+
+
+def _brief_options(command: argparse.ArgumentParser) -> None:
+    """`brief <ticket> [--draft <file>…] [--detail plain|full]`."""
+
+    _ticket_options(
+        command,
+        "the ticket whose brief to compile",
+        "compile the draft among these local files whose name is the ticket named, "
         "instead of reading the declared store; the others are the breakdown it belongs to",
     )
     command.add_argument(
@@ -118,6 +130,28 @@ def _brief_usage(options: argparse.Namespace) -> str:
     if options.draft and options.input is not None:
         return (
             "--draft compiles a local file and reads no store, so it cannot be given with --input"
+        )
+    return ""
+
+
+def _verify_options(command: argparse.ArgumentParser) -> None:
+    """`verify <ticket> [--draft <file>…]`."""
+
+    _ticket_options(
+        command,
+        "the ticket whose done-when claims to run",
+        "run the checks of the draft among these local files whose name is the ticket named, "
+        "instead of reading the declared store; the others are the breakdown it belongs to",
+    )
+
+
+def _verify_usage(options: argparse.Namespace) -> str:
+    """A draft run reads no store, so an export is nothing it could read."""
+
+    if options.draft and options.input is not None:
+        return (
+            "--draft runs the checks of a local file and reads no store, "
+            "so it cannot be given with --input"
         )
     return ""
 
@@ -204,6 +238,18 @@ _ROWS: Mapping[str, _Surface] = {
         epilog="Exits: 0 the brief printed; 1 a refusal; 2 a planning error or a usage error.",
         prints_report=False,
     ),
+    "verify": _Surface(
+        "run the claims one ticket's done-when names, through the plan's runner, and print "
+        "each verdict",
+        own=_verify_options,
+        usage=_verify_usage,
+        epilog="Runs the commands of the claims plan the declaration names, and only the claims "
+        "the ticket names: run only a plan you trust. A claim the plan does not define stops "
+        "the run before any command starts. Each attempt is kept as `outcomebound validation` "
+        "keeps it. Exits: 0 every claim passed; 1 a claim failed or a refusal; 2 UNVERIFIED, a "
+        "claim the plan lacks, an invalid plan or a usage error.",
+        prints_report=False,
+    ),
     "publish": _Surface(
         "print the gh commands that publish drafts as tickets, with their relations; "
         "run nothing and write nothing",
@@ -254,7 +300,10 @@ def build_parser() -> _CommandLine:
 
     parser = _CommandLine(
         prog="outcomebound tickets",
-        description="Report what a project's tickets say, offline and without credentials",
+        description=(
+            "Report what a project's tickets say, offline and without credentials; "
+            "`verify` also runs the claims of one ticket"
+        ),
     )
     commands = parser.add_subparsers(dest="verb", required=True)
     verbs: dict[str, argparse.ArgumentParser] = {}
@@ -301,19 +350,20 @@ _TICKET = re.compile(r"(?:[\w.-]+/[\w.-]+#|#)?\d+")
 
 
 def _order_hint(options: argparse.Namespace) -> str:
-    """What to add to a missing declaration when `brief` was given its ticket first: its target
-    is not a folder and reads as a ticket, so the two arguments are most likely swapped."""
+    """What to add to a missing declaration when `brief` or `verify` was given its ticket
+    first: its target is not a folder and reads as a ticket, so the two arguments are most
+    likely swapped."""
 
     target = options.target
     if not hasattr(options, "ticket") or Path(target).is_dir() or not _TICKET.fullmatch(target):
         return ""
-    command = "outcomebound tickets brief <target> <ticket>"
+    command = f"outcomebound tickets {options.verb} <target> <ticket>"
     if Path(options.ticket).is_dir():
         words = (paths.shell_word(options.ticket), paths.shell_word(target))
-        command = f"outcomebound tickets brief {' '.join(words)}"
+        command = f"outcomebound tickets {options.verb} {' '.join(words)}"
     return (
-        f"; {target} is not a folder but reads as a ticket, and `brief` takes the target first, "
-        f"then the ticket: `{command}`"
+        f"; {target} is not a folder but reads as a ticket, and `{options.verb}` takes the "
+        f"target first, then the ticket: `{command}`"
     )
 
 
@@ -344,6 +394,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         # The engine could not act. The module's own sentence is the line.
         sys.stderr.write(f"ENGINE_ERROR: {could_not}\n")
         return 1
+    if isinstance(outcome, Verified):
+        # `verify` prints what the runner reported and exits with its verdict.
+        sys.stdout.write(outcome.text)
+        return outcome.code
     if isinstance(outcome, str):
         # `brief` prints its document, `publish` its script and `export` its
         # command, and nothing else.

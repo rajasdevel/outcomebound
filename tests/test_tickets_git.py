@@ -134,8 +134,11 @@ SPAWNING_MODULES = frozenset({"subprocess", "pty", "multiprocessing", "asyncio"}
 SPAWNING_OS_NAMES = frozenset({"system", "popen"})
 SPAWNING_OS_FAMILIES = ("exec", "spawn")
 # What `validation` offers that runs a command: the engine names a claim's command
-# and runs none.
+# and runs none, except through the one call `verify` makes.
 RUNNERS = frozenset({"run_claim", "run_plan", "_execute"})
+# The one ticket module that may run the plan's claims, and the one runner it may reach.
+VERIFY_SEAM = "tickets_verify.py"
+VERIFY_RUNNERS = {"validation.run_plan"}
 NETWORK_MODULES = frozenset(
     {
         "ftplib",
@@ -222,7 +225,7 @@ def _taken(tree: ast.Module, module: str, wanted: Callable[[str], bool]) -> set[
 
 def test_the_ticket_engine_runs_only_git() -> None:
     """The ticket engine's one way to start a process is `git`, through this seam, and
-    it runs no claim.
+    it runs a claim only in `verify`, through `validation.run_plan`.
 
     The whole ticket surface is surveyed, so every `outcomebound_tools/tickets*.py`
     the glob finds answers for itself and a module added later is surveyed by having
@@ -245,7 +248,9 @@ def test_the_ticket_engine_runs_only_git() -> None:
             | _taken(tree, "validation", RUNNERS.__contains__)
         )
     }
+    verifying = reaching.pop(VERIFY_SEAM, None)
     assert not reaching, f"ticket modules start a process or run a claim: {reaching}"
+    assert verifying is not None and set(verifying) == VERIFY_RUNNERS, verifying
 
     for node in ast.walk(trees[GIT_SEAM]):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):

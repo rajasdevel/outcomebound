@@ -55,8 +55,9 @@ names no test plan, because which tests to write is the implementer's decision.
   that export. For an export read from standard input, the report says that the age is unknown.
   To publish drafts, `publish` prints the `gh` commands, and `gh` runs them with the login of
   the person or agent who runs the script.
-- **It runs nothing.** A `done-when` item names a claim of the committed claims plan. The
-  project's own gate runs the claim where the work lands.
+- **It runs no command that a ticket writes.** A `done-when` item names a claim of the committed
+  claims plan. Only `verify` runs claims, and only the plan's, as `outcomebound validation` runs
+  them. The project's own gate runs the claim where the work lands.
 - **It shapes the hand-off to the implementer.** A ticket is the same whoever builds it. A
   capable implementer decides which tests to write, when to run them and how to carry the work.
   A less capable implementer receives more of these decisions already made. A small model
@@ -209,6 +210,40 @@ its exact command.
 
 `brief` exits with `0` when it printed the brief. It exits with `1` for a refusal. It exits with
 `2` for a planning error or a usage error.
+
+### `verify`
+
+`verify <ticket> [--draft <file>…]` runs the claims that the `done-when` of one ticket names, and only
+those, and prints one verdict for each claim and one `VERDICT` line. It reads the ticket as `brief`
+does: `<ticket>` is `#20`, `20` or `<owner>/<name>#20`, and `--draft` reads a local file instead of
+the store. It finds each name in the claims plan that the declaration names, and runs the claims
+through the runner of `outcomebound validation` in plan order. The record of each attempt is kept as
+`validation` keeps it, and `outcomebound validation status` reads it. A claim of the plan that the
+ticket does not name is not run.
+
+**The plan is executable code.** `verify` runs the commands of the plan in the checkout, as
+`validation` does, so run it only for a plan that you trust. A ticket contributes names; it
+contributes no command. `verify` refuses a plan whose working directory is outside the checkout.
+
+`verify` takes an open ticket that `check` reads with no ERROR, and refuses any other with
+`VERIFY_REFUSED` (exit `1`). It stops before any command starts when:
+
+- the plan names no claim of a name that the ticket gives: `CLAIM_MISSING` names each such claim, and
+  the exit is `2`. A part run would not be a result for the ticket. Add the claim to the plan, or
+  correct the name in the ticket;
+- `validation` cannot load the plan: `PLAN_INVALID`, exit `2`.
+
+The ticket requires each claim it names, so a claim that the plan marks `required: false` still
+fails the verdict when it fails. A person's check (`<name>: human: <observation>`) is printed
+`UNVERIFIED` and is run by nobody, so a ticket that a person does never reads `PASS`.
+
+The `VERDICT` is `FAIL` when a claim failed, else `UNVERIFIED` when one did not run or is a person's
+check, else `PASS`. `verify` exits with `0` for `PASS`, `1` for `FAIL` or a refusal, and `2` for
+`UNVERIFIED`, a missing claim, an invalid plan or a usage error. A `PASS` shows that the claims that
+the ticket names, as this checkout's plan defines them, exited `0` now. It does not show that the
+work is done or landed (the project's gate decides that), that the plan holds the right claims
+(the change under check can edit the plan), or that the ticket names every check its outcome
+needs.
 
 ### `publish`
 

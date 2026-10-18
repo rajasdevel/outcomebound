@@ -340,8 +340,8 @@ def test_a_report_key_the_schema_does_not_declare_is_refused() -> None:
 # --- the command skeleton --------------------------------------------------------
 
 
-def test_verbs_are_check_brief_publish_and_export() -> None:
-    assert tuple(VERBS) == ("check", "brief", "publish", "export")
+def test_verbs_are_check_brief_verify_publish_and_export() -> None:
+    assert tuple(VERBS) == ("check", "brief", "verify", "publish", "export")
     parser = build_parser()
     for name in VERBS:
         assert parser.parse_args([name, "."]).verb == name
@@ -425,7 +425,7 @@ def test_an_undeclared_project_is_refused_before_any_verb_runs(
     positional is the ticket, and the target would then be wherever the suite
     happens to run — a project that may well have declared a store."""
 
-    given = {"brief": ["#1"], "publish": ["--draft", str(tmp_path / "a.md")]}
+    given = {"brief": ["#1"], "verify": ["#1"], "publish": ["--draft", str(tmp_path / "a.md")]}
     for name in VERBS:
         assert main([name, str(tmp_path), *given.get(name, [])]) == 1, name
         captured = capsys.readouterr()

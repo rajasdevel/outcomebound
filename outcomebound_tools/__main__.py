@@ -33,6 +33,7 @@ VERBS = {
     "sources": "sources",
     "review": "review_check",
     "size": "size",
+    "workspace": "workspace",
     "explorable": "explorable",
     "scaffold": "scaffold",
     "where": "where",
