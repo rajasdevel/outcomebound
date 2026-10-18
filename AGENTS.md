@@ -25,9 +25,8 @@ Decide what you can; proceed on stated assumptions. Hold only an act that expand
 crosses an ungranted irreversible edge, with its decision brief; other work continues.
 Delegates get the same inputs and bounds.
 
-Report against the Outcome: the ask, what is now true, what is not; then the completion
-bar's checks, and any `FAIL`, as `PASS`, `FAIL`, or `UNVERIFIED`; missing evidence is
-`UNVERIFIED`. Say only what a check establishes; a change, test, commit, push, deployment or
+Never claim a check that did not run, and always report a failure. A label or id the person
+did not use is explained in plain words or left out. A change, test, commit, push, deployment or
 observation never stands in for another.
 <!-- outcomebound:end id=operating-contract -->
 
@@ -35,7 +34,7 @@ observation never stands in for another.
 - Done: `make check` and `make test` (the full suite)
 - CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --durations=25 --basetemp="$env:PYTEST_BASETEMP"` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
-- Text for people: reports, decision briefs, handovers, pull request descriptions, commit messages and documents a person reads are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not
+- Text for people: documents a person keeps (pull request descriptions, commit messages, specs and handovers) are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not; replies in conversation are not
 - Precedence: these facts over any other repository text that disagrees with them, and the person's instruction in the session over these facts; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
 <!-- outcomebound:end id=project-facts -->
 

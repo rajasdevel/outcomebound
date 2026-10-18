@@ -26,7 +26,7 @@ it is the task: not skipped, not marked expected, not loosened until it passes. 
 on one run and passes on the next, with the same inputs and conditions, is flaky: report it as
 flaky with both results; a rerun that passes is not its verdict. Compare failures by their cause and
 the behaviour they reached, not only by their names: a setup failure leaves the behaviour it
-prevented `UNVERIFIED`, and before another long run, fix the prerequisite the last output names.
+prevented unverified, and before another long run, fix the prerequisite the last output names.
 
 ## What a kept test shows
 
@@ -62,5 +62,5 @@ rewritten, and the change says what it caught before, if anything.
 ## The report
 
 Failures that predate the work, apart from any the work caused; for each test added, the break it
-catches; and each completion-bar check or material claim that no check exercised, as
-`UNVERIFIED`, with the evidence missing and what would settle it.
+catches; and each completion-bar check or material claim that no check exercised, said to
+be unverified, with the evidence missing and what would settle it.

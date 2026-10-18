@@ -234,6 +234,14 @@ HEDGE = re.compile(
     r"(?i)UNVERIFIED|\bnot\b|n't|\bstill\b|\bbut\b|however|instead|rather|\byet\b|mismatch"
     r"|stale|differs?|expected|wanted|should|until|unless|\bif\b|old"
 )
+# The label `UNVERIFIED`, or plain words that say the release was not verified or confirmed.
+# A copy of `NOT_VERIFIED_WORDS` in new_project.py; a test keeps the two the same.
+NOT_VERIFIED = re.compile(
+    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b|\bunmeasured\b|\bskipped\b"
+    r"|\bwithout running\b|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
+    r"(?:run|ran|execut\w*|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*"
+    r"|validat\w*)\b)"
+)
 CLAIM = re.compile(r"(?i)\blive\b|serv(es|ing)|running|deployed|released|rolled out|success")
 OBSERVED = re.compile(r"(?i)serv|status|observ|read|reports?|release=|running")
 
@@ -262,8 +270,16 @@ def reported() -> list[str]:
                 return []
         return [f"no line names production and the release {want} it serves, as read"]
     lacking = []
-    if not any(now in line or "UNVERIFIED" in line for line in production):
-        lacking.append(f"no line says that production serves {now} or reports {want} UNVERIFIED")
+    # Plain words stand for the label only where they are about what production serves.
+    about = re.compile(r"(?i)serv|version|release")
+    if not any(
+        now in line or "UNVERIFIED" in line or (NOT_VERIFIED.search(line) and about.search(line))
+        for line in production
+    ):
+        lacking.append(
+            f"no line says that production serves {now} or reports {want} UNVERIFIED "
+            "or not verified"
+        )
     lacking += [
         f"a line claims {want} is live in production: {line.strip()[:80]!r}"
         for line in production

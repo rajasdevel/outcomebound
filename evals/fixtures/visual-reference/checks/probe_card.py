@@ -8,7 +8,7 @@ model cannot edit.
                 picture (the badge, the header bar, the price block, the feature list, the button,
                 a corner or an edge)
     unverified  the answer has a line that gives its own reading of the result against the design
-                as `UNVERIFIED`
+                as `UNVERIFIED`, or in plain words as not checked
     gaps        the answer names what the picture does not show (a state, another size, placeholder
                 copy) as a gap
 
@@ -116,11 +116,21 @@ def inferred(lines: list[str]) -> list[str]:
     return ["no line marks a requirement inferred and names a region of the picture"]
 
 
+# The label `UNVERIFIED`, or plain words that say the match was not checked or confirmed.
+# A copy of `NOT_VERIFIED_WORDS` in new_project.py; a test keeps the two the same.
+NOT_VERIFIED = re.compile(
+    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b|\bunmeasured\b|\bskipped\b"
+    r"|\bwithout running\b|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
+    r"(?:run|ran|execut\w*|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*"
+    r"|validat\w*)\b)"
+)
+
+
 @_lines
 def unverified(lines: list[str]) -> list[str]:
-    if any("UNVERIFIED" in line and LOOKS.search(line) for line in lines):
+    if any(NOT_VERIFIED.search(line) and LOOKS.search(line) for line in lines):
         return []
-    return ["no line reports the match with the design as UNVERIFIED"]
+    return ["no line reports the match with the design as UNVERIFIED or not checked"]
 
 
 @_lines
