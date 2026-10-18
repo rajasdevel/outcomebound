@@ -30,15 +30,15 @@ Link to the user-level folders only. Never link or copy into a project.
 
 | Harness | Skills folder | User instruction file |
 | --- | --- | --- |
-| Claude Code | `~/.claude/skills/<name>/SKILL.md` | `~/.claude/CLAUDE.md`, `~/.claude/rules/*.md` |
-| Codex | `~/.agents/skills` | `~/.codex/AGENTS.override.md`, else `~/.codex/AGENTS.md` |
-| Cursor | `~/.agents/skills`, `~/.cursor/skills`, and `~/.claude/skills` | User Rules in the settings screen only; no file path is documented |
+| Claude Code | `$HOME/.claude/skills/<name>/SKILL.md` | `$HOME/.claude/CLAUDE.md`, `$HOME/.claude/rules/*.md` |
+| Codex | `$HOME/.agents/skills` | `$HOME/.codex/AGENTS.override.md`, else `$HOME/.codex/AGENTS.md` |
+| Cursor | `$HOME/.agents/skills`, `$HOME/.cursor/skills`, and `$HOME/.claude/skills` | User Rules in the settings screen only; no file path is documented |
 
 Sources, read 2026-10-17: the Claude Code documentation pages `memory` and `skills` at
 code.claude.com/docs/en; the Codex pages `agent-configuration/agents-md` and `build-skills` at
 learn.chatgpt.com/docs; the Cursor pages `context/rules` and `context/skills` at
 cursor.com/docs. The Codex pages say that Codex follows a symlinked skill folder. The Cursor
-skills page lists `~/.claude/skills` as a folder it reads, so Cursor finds the kit through
+skills page lists `$HOME/.claude/skills` as a folder it reads, so Cursor finds the kit through
 either link. Which one wins when the same name is in two folders: the Cursor page does not say
 (`UNVERIFIED`).
 
@@ -46,29 +46,29 @@ Set `KIT` to the kit's folder. On macOS and Linux:
 
 ```bash
 KIT="$HOME/private-kit"
-mkdir -p ~/.claude/skills ~/.agents/skills ~/.claude/rules ~/.codex
+mkdir -p "$HOME/.claude/skills" "$HOME/.agents/skills" "$HOME/.claude/rules" "$HOME/.codex"
 for s in "$KIT"/skills/*/; do
   n=$(basename "$s")
-  ln -sfn "$KIT/skills/$n" ~/.claude/skills/"$n"
-  ln -sfn "$KIT/skills/$n" ~/.agents/skills/"$n"
+  ln -sfn "$KIT/skills/$n" "$HOME/.claude/skills/$n"
+  ln -sfn "$KIT/skills/$n" "$HOME/.agents/skills/$n"
 done
-ln -sfn "$KIT/pointer.md" ~/.claude/rules/kit.md
+ln -sfn "$KIT/pointer.md" "$HOME/.claude/rules/kit.md"
 ```
 
 `ln -sfn` replaces a link that exists, so you can run the loop again after you add a skill.
 Edits to a skill in the kit show at once, because the link is the file.
 
-For the Codex instruction file, check first: `ls -l ~/.codex/AGENTS.md`. If you have the file
+For the Codex instruction file, check first: `ls -l "$HOME/.codex/AGENTS.md"`. If you have the file
 already, add one line to it by hand that tells Codex to read `$KIT/pointer.md`. Do not replace
-your file with a link. If you have no such file, `ln -s "$KIT/pointer.md" ~/.codex/AGENTS.md`
+your file with a link. If you have no such file, `ln -s "$KIT/pointer.md" "$HOME/.codex/AGENTS.md"`
 works. Codex reads `AGENTS.override.md` first when it exists, so a link in `AGENTS.md` is then
 not read.
 
 Check the links:
 
 ```bash
-ls -l ~/.claude/skills ~/.agents/skills
-test -e ~/.claude/skills/<name>/SKILL.md && echo resolves || echo dangling
+ls -l "$HOME/.claude/skills" "$HOME/.agents/skills"
+test -e "$HOME/.claude/skills/<name>/SKILL.md" && echo resolves || echo dangling
 ```
 
 A link whose target moved is dangling, and the harness sees no skill. The check above shows it.
@@ -91,24 +91,24 @@ source.
 `pointer.md` tells the agent in general terms when to read the kit. Example:
 
 ```text
-My private kit is at ~/private-kit. When a task matches a skill in it, use that skill.
+My private kit is at $HOME/private-kit. When a task matches a skill in it, use that skill.
 Before you run a tool from the kit, read the tool's skill. Never write a name, id or path
 from the kit into a committed file of any project.
 ```
 
-Put it in the user files in the table: a link to `~/.claude/rules/kit.md` for Claude Code, and
-one line in `~/.codex/AGENTS.md` for Codex. Both documentation sets say that user instructions
+Put it in the user files in the table: a link to `$HOME/.claude/rules/kit.md` for Claude Code, and
+one line in `$HOME/.codex/AGENTS.md` for Codex. Both documentation sets say that user instructions
 are loaded together with the project's. They are added to it, and they do not replace it
 (sources as above). Do not put this text in a project's `AGENTS.md`: that file is committed.
 
 ## Cloud sessions see none of it
 
 A cloud or background session starts from the pushed branch. The Claude Code documentation
-(`cloud-environments`, read 2026-10-17) says that the user's `~/.claude/CLAUDE.md`, skills,
+(`cloud-environments`, read 2026-10-17) says that the user's `$HOME/.claude/CLAUDE.md`, skills,
 user-scope plugins, user MCP servers and user hooks are not available there. The Cursor
 documentation says that user hooks are not available in cloud agents, and that only
-`~/.cursor/skills` can sync, with a setting turned on. For Codex cloud the documentation read
-for this guide does not say whether `~/.codex` or `~/.agents` apply (`UNVERIFIED`).
+`$HOME/.cursor/skills` can sync, with a setting turned on. For Codex cloud the documentation read
+for this guide does not say whether `$HOME/.codex` or `$HOME/.agents` apply (`UNVERIFIED`).
 
 So write each machine-bound tool to refuse to run away from your machine. A cloud session has
 no sign-in of yours, and its network address is not yours. A tool that updates a firewall rule
@@ -137,7 +137,7 @@ current public IP. It acts outside the machine, so it follows these rules.
    prints the exact command it would run, and changes nothing. A flag such as `--apply` makes
    the change. After it, the tool reads the rule again and prints the result.
 3. **Log each run.** Append the time, the rule, the old value and the new value to a log file in
-   the kit's folder or in `~/.local/state`. Never log to a project. Keep the log out of Git
+   the kit's folder or in `$HOME/.local/state`. Never log to a project. Keep the log out of Git
    with the kit's `.gitignore`.
 4. **Keep credentials out of the kit.** The tool uses the sign-in you already made with the
    cloud provider's command line, or your secret store. The kit holds no password, key or token,
