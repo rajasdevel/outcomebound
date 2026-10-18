@@ -6,9 +6,9 @@ workspace, the transcript and the answer by a probe the model cannot edit.
                     before every file of spike code; spike code exists
     throwaway       spike code is in the working area, and every file of it says it is throwaway
     ran             a command of the run named a file of spike code
-    fail            a line of the answer reports the spike as FAIL, the answer carries a measured
-                    figure and says that the idea ends or changes, and it does not recommend
-                    building
+    fail            a line of the answer reports the spike as FAIL or failed, the answer carries a
+                    measured figure and says that the idea ends or changes, and it does not
+                    recommend building
     kept-out        no code, dependency manifest or CI file outside the working area
 
 The checks read lines for the words each must carry, not meaning; the order of two writes is the
@@ -102,11 +102,15 @@ def ran() -> list[str]:
     return ["no command of the run named a file of spike code"]
 
 
+# The label `FAIL`, or the plain words a reply in conversation gives for it.
+FAILED = re.compile(r"\bFAIL\b|(?i:\bfail(?:ed|s)\b)")
+
+
 def _reports_fail(block: str) -> bool:
     """A unit that says FAIL and is about the spike: by a word of the spike, or by "result" where
     the same unit holds a figure ("Result: FAIL. It got 22 of 40")."""
 
-    return "FAIL" in block and bool(
+    return bool(FAILED.search(block)) and bool(
         SPIKE.search(block) or (re.search(r"(?i)\bresult\b", block) and FIGURE.search(block))
     )
 

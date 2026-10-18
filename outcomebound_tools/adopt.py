@@ -2204,8 +2204,9 @@ blocks: the operating contract; the project facts (Done: the --done commands; Se
 --setup commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
 edges: those the selected fragments declare, and a floor loosening where a floor is installed;
-Text for people: with --human-style ste, text an agent writes for a person in the style of
-ASD-STE100 Simplified Technical English; Precedence); and the guidance pointers: the local
+Text for people: with --human-style ste, documents a person keeps (pull request descriptions,
+commit messages, specs and handovers) in the style of ASD-STE100 Simplified Technical English,
+and not replies in conversation; Precedence); and the guidance pointers: the local
 fragment inline, then one line per fragment in --fragments, copied under
 .outcomebound/fragments/, and per skill: the thirteen working skills. The workspace fragment also
 gets .agents/.gitignore, which keeps its four folders out of Git, and every install gets
@@ -2314,8 +2315,9 @@ def _parser() -> argparse.ArgumentParser:
         "--human-style",
         choices=(*facts.STYLES, ""),
         metavar="STYLE",
-        help="a style for text an agent writes for a person: 'ste' (ASD-STE100 Simplified "
-        "Technical English); '' for none; omitted keeps the recorded one",
+        help="a style for documents an agent writes for a person to keep: 'ste' (ASD-STE100 "
+        "Simplified Technical English; not replies in conversation); '' for none; omitted "
+        "keeps the recorded one",
     )
     parser.add_argument(
         "--dry-run",

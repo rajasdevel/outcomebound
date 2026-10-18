@@ -44,13 +44,13 @@ LABELS = ("Done", "Setup", "CI test", "Irreversible edges", "Text for people", "
 # fact each renders. The standard is named, never quoted.
 STYLES = {
     "ste": (
-        "reports, decision briefs, handovers, pull request descriptions, commit messages and "
-        "documents a person reads are written in the style of ASD-STE100 Simplified Technical "
+        "documents a person keeps (pull request descriptions, commit messages, specs and "
+        "handovers) are written in the style of ASD-STE100 Simplified Technical "
         "English, with no length limit; every fact, number and caveat is kept, and this "
         "project's own terms stay as they are; in a report, brief, handover or request "
         "description, an id or label the person has not used is explained or left out, and a "
         "commit hash or digest is given as a ref, version or path, save one a check or the "
-        "project's rule requires; text a model reads is not"
+        "project's rule requires; text a model reads is not; replies in conversation are not"
     ),
 }
 

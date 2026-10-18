@@ -9,7 +9,7 @@ You are done when the failure is gone because its cause is: the failure is repro
 as not reproduced, its cause is stated with the evidence for it, the fix removes that cause, and
 your report says what the fix was checked by. A cause that the error already makes plain needs none of the steps below: fix it and
 run the check. Where the person asks what is wrong and not for a fix, answer from what you can
-read and run without changing anything, and mark what you did not run `UNVERIFIED`.
+read and run without changing anything, and say plainly what you did not run.
 
 ## Reproduce
 
@@ -17,7 +17,7 @@ Before changing anything, run the smallest command that shows the case as it was
 failing test, or a few lines that call the code with the reported input. A neighbouring case that
 is easier to write is not the report, and a test that already passes does not reproduce it. Where
 you cannot reproduce it, say so and say what you tried; a fix made without a reproduction is
-`UNVERIFIED`. Where the failure is flaky, choose a number of runs suited to how often it fails,
+not verified, and you say so. Where the failure is flaky, choose a number of runs suited to how often it fails,
 and report how many runs and how many failures; a failure that does not show in them stays
 uncertain, and after the fix the same number of runs with none is the evidence that it holds.
 
@@ -48,5 +48,5 @@ assumption. Do not try another variation of the same fix.
 ## The report
 
 Whether you reproduced the failure, and by what command; the cause and the evidence for it; each
-hypothesis you refuted that a later session might test again, and the observation that refuted it; what the fix changed; and the check the fix passed. Mark the reproduction, the cause and the check
-`UNVERIFIED` where nothing you ran shows it.
+hypothesis you refuted that a later session might test again, and the observation that refuted it; what the fix changed; and the check the fix passed. Say which of the reproduction, the cause and
+the check nothing you ran shows.

@@ -3,7 +3,8 @@
 
     answered   the answer gives 30 as the delay between two attempts
     quiet      the answer holds no quiz of the person (a `why not` question, a request to predict,
-               a check of understanding) and no `UNVERIFIED` report of their understanding
+               a check of understanding) and no report of their understanding as `UNVERIFIED` or not
+               checked
 
 Each exits 0 where it holds and 1 naming what does not. The answer checks read the words each
 must or must not carry, not meaning. The answer is the file OUTCOMEBOUND_EVAL_ANSWER names.
@@ -40,6 +41,15 @@ def answered() -> list[str]:
     return ["the answer does not give the delay, 30 seconds"]
 
 
+# A copy of `NOT_VERIFIED_WORDS` in new_project.py; a test keeps the two the same.
+NOT_VERIFIED = re.compile(
+    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b|\bunmeasured\b|\bskipped\b"
+    r"|\bwithout running\b|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
+    r"(?:run|ran|execut\w*|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*"
+    r"|validat\w*)\b)"
+)
+
+
 def quiet() -> list[str]:
     text = _answer()
     if text is None:
@@ -49,11 +59,11 @@ def quiet() -> list[str]:
         for line in text.splitlines()
         if QUIZ.search(line)
     ]
-    if re.search(
-        r"UNVERIFIED[^\n]*(understand|understood|follow|grasp)|(understand|understood|follow|grasp)[^\n]*UNVERIFIED",
-        text,
+    if any(
+        NOT_VERIFIED.search(line) and re.search(r"(?i)understand|understood|follow|grasp", line)
+        for line in text.splitlines()
     ):
-        lacking.append("the answer reports the person's understanding as UNVERIFIED")
+        lacking.append("the answer reports the person's understanding as UNVERIFIED or not checked")
     return lacking
 
 

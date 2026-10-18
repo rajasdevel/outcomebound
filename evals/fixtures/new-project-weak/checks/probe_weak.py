@@ -8,7 +8,8 @@ cannot edit.
     against         the answer or a note gives the strongest case against building it, in the
                     words of the route (a case against, the strongest argument, a counter-argument)
     recommendation  the answer recommends stopping or probing first, never building
-    unverified      a line of the answer reports whether people want it as `UNVERIFIED`
+    unverified      a line of the answer reports whether people want it as `UNVERIFIED`, or in plain
+                    words as not verified
     simulated       no paragraph or list item counts what simulated users said or did as evidence
                     that people want it, unless it says in the same item that it is no such
                     evidence
@@ -99,7 +100,7 @@ def unverified() -> list[str]:
         return ["no answer was supplied"]
     if np.has_status_line(text, WANTED):
         return []
-    return ["no line reports whether people want it as UNVERIFIED"]
+    return ["no line reports whether people want it as UNVERIFIED or not verified"]
 
 
 def simulated() -> list[str]:

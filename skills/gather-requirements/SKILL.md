@@ -77,7 +77,7 @@ text layers, is stated, though not yet a requirement. A design binds where the p
 work is to build it; otherwise it is a reference, disposed `reference` against the requirement it
 is the standard for, with how the built result will be compared: `by: command` and a claim of the
 project's validation plan, `by: review` and a name, or `by: judgment`. Your own reading of a
-screenshot of the build is a reading, not a pass: report it `UNVERIFIED`; a pass comes from the
+screenshot of the build is a reading, not a pass: say it is not verified; a pass comes from the
 comparison the `by:` names. Name what the picture does not show, such as states, other sizes and copy that
 looks like placeholder text, as a gap, and settle it as the first section says.
 

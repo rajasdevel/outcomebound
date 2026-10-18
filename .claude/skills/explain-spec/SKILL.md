@@ -12,12 +12,13 @@ explained, what they answered, and what changed in the spec.
 
 ## Explain
 
-Read the spec and the code it points to, and teach only what they say; mark anything else
-`UNVERIFIED`. Start from what the person says they already know and skip it. Give the outcome
+Read the spec and the code it points to, and teach only what they say; say that anything else
+is not verified. Start from what the person says they already know and skip it. Give the outcome
 and who it is for, then each decision in dependency order with the alternative the spec rejected
 and the reason, then the edges: what happens when the input is empty, the call is repeated, a
 step fails, or the change is undone. Where order or flow is the point, add a diagram, in the form
-the surface shows. Write for the person in the style the project sets for text people read; when
+the surface shows. Write for the person in plain words, and in a file in the style the project sets for
+documents a person keeps; when
 a message does not land, say it again, shorter, in the project's own terms.
 
 When code falls short of a decided requirement, keep the requirement and record the gap
@@ -44,7 +45,7 @@ same change.
 
 ## With no person present
 
-A run with nobody to answer cannot show understanding, so report `UNVERIFIED` for it. Put the
+A run with nobody to answer cannot show understanding, so say that it is not verified. Put the
 questions, the rows most likely to be misread first, in your report, and in a file only where the
 task or the project names a place for it; go on with the rest of the work, since this skill blocks
 nothing.

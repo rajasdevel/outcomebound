@@ -364,11 +364,8 @@ RAN_WELL = re.compile(GOOD_RESULT + "|" + EXIT_ZERO + r"|(?i:\b\d+\s+tests?)\b")
 RAN_BADLY = re.compile(
     r"(?i)\b(fail(?:ed|s|ure)?|unverified|exit(?:ed)?(?:\s+(?:status|code))?\s*[1-9]\d*)\b"
 )
-UNVERIFIED = re.compile(r"(?i)\bunverified\b")
-NOT_RUN = re.compile(
-    r"(?i)\bunverified\b|\bunmeasured\b|\bwithout running\b"
-    r"|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+)?(?:run|ran|measur\w*|execut\w*|verif\w*)\b"
-)
+# The words of new_project.py that say a check was not run or not verified.
+NOT_RUN = np.NOT_VERIFIED
 CLAIMS_PASS = re.compile(GOOD_RESULT + "|" + EXIT_ZERO)
 # A sentence that wonders, conditions or plans does not claim a pass ("whether Done passes").
 HYPOTHETICAL = re.compile(
@@ -606,13 +603,16 @@ def offers_to_run(unit: str, commands: Sequence[str]) -> bool:
 def _without_a_run(
     units: Sequence[str], about: Sequence[str], commands: Sequence[str]
 ) -> list[str]:
-    """The reasons the answer does not report an unrun Done as UNVERIFIED and offer to run it."""
+    """The reasons the answer does not report an unrun Done as UNVERIFIED, or in plain words as
+    not run, and offer to run it."""
 
     lacking = []
     if any(claims_pass(unit) for unit in about):
         lacking.append("Done was not run, and a line of the answer calls it a pass")
-    if not any(UNVERIFIED.search(unit) for unit in about):
-        lacking.append("Done was not run, and no line of the answer reports it UNVERIFIED")
+    if not any(NOT_RUN.search(unit) for unit in about):
+        lacking.append(
+            "Done was not run, and no line of the answer reports it UNVERIFIED or not run"
+        )
     if not any(OFFER.search(unit) or offers_to_run(unit, commands) for unit in units):
         lacking.append(
             "Done was not run, and the answer neither asks for a yes nor names the Done command "
