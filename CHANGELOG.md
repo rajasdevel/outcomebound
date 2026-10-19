@@ -20,7 +20,7 @@ work again, check one ticket, review a change with other reviewers, and look aft
 person decides (#139). The kernel has two short rules for reports in place of one long sentence,
 and Simplified Technical English applies only to documents that a person keeps (#143). `adopt`
 tells a person how to install `outcomebound` in a cloud session (#146) and warns of a worktree
-with an older install (#145). The designs agree with the code again (#152), and four defects found on the way are fixed (#154). A new skill, `review-council`, makes 14 skills in each install
+with an older install (#145). The designs agree with the code again and record the decisions of this release (#152, #158), four defects found on the way are fixed (#154), and the README tells a working day with the new commands (#157). A new skill, `review-council`, makes 14 skills in each install
 (#151). The engine remains Python standard library only.
 
 Do these steps first:
@@ -197,6 +197,15 @@ Do these steps first:
   worktree warnings) and `review`. The result schema names the `.out` file and puts `environment`
   in the digest. The review design records the Agent Client Protocol as a transport that was
   considered and deferred (#153) (#152).
+- The designs record the decisions of this release that no design held: why two lifecycle verbs
+  are not built and what else is left out; two open rows in the tickets design; the evidence and
+  limits behind the two report rules; why the cloud setup places are a file of their own; why a
+  cloud handover goes in the pull request description; and why `removable` is a mechanical rule.
+  `docs/evaluations.md` records the two blind reads behind the tone change, with their limits
+  (#158).
+- The README opens with a working day on a small project, from the install check to a decision
+  brief, `where` after a break, a review council and `tickets verify`, with real output and two
+  pictures of the decision page (#157).
 
 ### Fixed
 
