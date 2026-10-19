@@ -1,4 +1,4 @@
-<!-- outcomebound:begin id=operating-contract v=1.7.0 -->
+<!-- outcomebound:begin id=operating-contract v=1.8.0 -->
 **OutcomeBound** — neither underengineer nor overengineer: the core work the outcome requires,
 by default the smallest answer meeting the bar.
 
