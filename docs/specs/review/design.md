@@ -45,7 +45,7 @@ model or effort is that of the harness's first entry in the table's default coun
 reviewers come from `--reviewer` where it is given; else from the council file (below); else from
 the built-in default council, which is one reviewer, and the plan prints which of the three it
 used. A harness with no entry in the default council needs its model named, and a harness whose effort is part of its model id (Cursor,
-OpenCode) takes no effort part. The reviewed revision is the end of the range, else `HEAD`.
+OpenCode) takes no effort part. An effort left out, where the table names none, leaves the tool's own effort and its flag out of the argv. The reviewed revision is the end of the range, else `HEAD`.
 `--timeout` (per reviewer, default from the table), `--budget-usd` (a spend cap for Claude
 reviewers, given only where the person sets one), `--out` and `--root` complete it.
 
@@ -54,7 +54,12 @@ The council file is optional JSON that `schemas/council-config.schema.json` desc
 `budget_usd`. The verb reads the project's `.outcomebound/council.json` (committed) first, and where
 that does not exist, the `.outcomebound/council.json` in the person's home folder; the first file found is read
 alone and the other is not merged with it. A value given on the command line wins for that run. A
-file that does not validate is a refusal that names it and the problem. The `adopt-outcomebound`
+file that does not validate is a refusal that names it and the problem; so is a value from it that
+the verb refuses. `--defaults` prints the built-in default council and the file in effect, and runs
+nothing. The plan prints where the reviewers and the lens came from; where the project's file
+supplied a setting and that file is part of the change under review (named in the diff, or with
+uncommitted changes), the plan prints a warning, since the change would then choose its own
+reviewers or lens. The plan id protects the run against a later change, not against that. The `adopt-outcomebound`
 skill asks the adopter once which reviewers they want and writes the project's file only if they
 name others.
 

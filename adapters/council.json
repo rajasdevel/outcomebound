@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
@@ -136,13 +136,14 @@
             "-c",
             "model_reasoning_effort={effort}"
           ],
-          "why": "reasoning effort; `codex debug models --bundled` lists the values each model accepts (set by `-c key=value`; the help lists `-c` and not this key)",
+          "why": "reasoning effort; `codex debug models --bundled` lists the values each model accepts (set by `-c key=value`; the help lists `-c` and not this key) (left out where the reviewer names no effort, so the tool's own effort applies)",
           "source": "outcomebound-research harnesses/codex.md section 9 (read 2026-10-01)",
           "read": "2026-10-18",
           "listed_in_help": false,
           "run": "tested",
           "observed": "the run header printed `reasoning effort: high`",
-          "observed_on": "2026-10-19"
+          "observed_on": "2026-10-19",
+          "when": "effort"
         },
         {
           "args": [
@@ -349,13 +350,14 @@
             "--effort",
             "{effort}"
           ],
-          "why": "effort: low, medium, high, xhigh or max",
+          "why": "effort: low, medium, high, xhigh or max (left out where the reviewer names no effort, so the tool's own effort applies)",
           "source": "installed `claude --help`",
           "read": "2026-10-18",
           "listed_in_help": true,
           "run": "UNVERIFIED",
           "observed": "accepted; the result does not name the effort that ran",
-          "observed_on": "2026-10-19"
+          "observed_on": "2026-10-19",
+          "when": "effort"
         },
         {
           "args": [

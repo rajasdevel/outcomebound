@@ -14,7 +14,7 @@
       "const": 1
     },
     "reviewers": {
-      "description": "Each entry is `harness:model[:effort]`, as `--reviewer` takes it.",
+      "description": "Each entry is `harness:model[:effort]`, as `--reviewer` takes it. A harness with no built-in default needs its model; an effort left out leaves the tool's own effort.",
       "type": "array",
       "minItems": 1,
       "items": {

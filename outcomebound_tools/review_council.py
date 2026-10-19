@@ -211,11 +211,12 @@ def parse_reviewer(text: str, index: int, table: dict[str, Any]) -> Reviewer:
                 f"the {name} {textio.quote(given)} of reviewer {textio.quote(text)} holds a "
                 "character that a model or an effort never holds"
             )
-        if not given and default is None:
+        if not given and default is None and name == "model":
             raise CouncilError(
-                f"the reviewer {textio.quote(text)} names no {name}, and {harness} has no "
+                f"the reviewer {textio.quote(text)} names no model, and {harness} has no "
                 "default in the table"
             )
+        # No effort named and none in the table: the tool's own effort applies (no effort flag).
         chosen.append(given or (default[position] if default else ""))
     return Reviewer(f"r{index}", harness, chosen[0], chosen[1] if len(chosen) > 1 else "")
 
@@ -455,12 +456,14 @@ def plan_id(request: Request, jobs: Sequence[Job]) -> str:
 
 
 def render_plan(
-    request: Request, jobs: Sequence[Job], out: Path, budget: str | None, source: str
+    request: Request, jobs: Sequence[Job], out: Path, budget: str | None, chosen: dict[str, Any]
 ) -> str:
     lines = [
         "COUNCIL PLAN (nothing has run)",
         SPEND,
-        f"reviewers from: {source}",
+        f"reviewers from: {chosen['source']}",
+        f"lens from: {chosen['lens_source']}",
+        *([w] if (w := _file_warning(request, chosen)) else []),
         f"reviewing: {request.described}, at revision {request.commit}",
         f"lens: {textio.visible(request.lens)}",
         f"run folder: {out} (one prompt and one answer for each reviewer, one review file for "
@@ -931,6 +934,11 @@ def _parser() -> argparse.ArgumentParser:
         epilog="Exits: 0 every reviewer wrote a file; 1 a refusal or a reviewer failed; 2 usage.",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--defaults",
+        action="store_true",
+        help="print the built-in default council and any council file in effect; runs nothing",
+    )
     mode.add_argument("--plan", action="store_true", help="print the plan; run nothing")
     mode.add_argument("--accept", action="store_true", help="run the plan; spends credits")
     parser.add_argument("--range", dest="range_spec", metavar="A..B", help="review the diff A..B")
@@ -938,7 +946,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--file", action="append", default=[], metavar="PATH", help="a file to review (repeat)"
     )
-    parser.add_argument("--lens", default="", metavar="TEXT", help="what the reviewers look at")
+    parser.add_argument("--lens", metavar="TEXT", help="what the reviewers look at")
     parser.add_argument("--lens-file", metavar="FILE", help="the lens, read from a file")
     parser.add_argument(
         "--reviewer",
@@ -957,6 +965,19 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def render_defaults(table: dict[str, Any], root: Path) -> str:
+    """The built-in default council and the council file in effect for `root`, if any."""
+
+    place, config = load_config(_toplevel(root))
+    lines = ["built-in default council: " + ", ".join(table["default_council"])]
+    if place is None:
+        lines.append("council file in effect: none")
+    else:
+        lines.append(f"council file in effect: {place}")
+        lines.append("  reviewers: " + ", ".join(config["reviewers"]))
+    return "\n".join(lines) + "\n"
+
+
 def _toplevel(root: Path) -> Path:
     try:
         top = size._git_ok(root, "rev-parse", "--show-toplevel").decode("utf-8", "replace")
@@ -966,37 +987,84 @@ def _toplevel(root: Path) -> Path:
 
 
 def _settings(options: argparse.Namespace, table: dict[str, Any]) -> dict[str, Any]:
-    """The reviewers, lens, timeout and cap of this run, and where the reviewers came from: the
-    command line wins, then the council file, then the table's default council."""
+    """The reviewers, lens, timeout and cap of this run, and where each came from: the command
+    line wins, then the council file, then the table's default council (the lens, the timeout
+    and the cap have no default beyond the general lens, the table's timeout and no cap)."""
 
     top = _toplevel(Path(options.root))
     place, config = load_config(top)
+    where = f"the council file {place}"
     lens = textio.read_text(Path(options.lens_file)) if options.lens_file else options.lens
+    lens_source = "--lens on the command line" if lens is not None else where
+    if lens is None and "lens" not in config:
+        lens_source = "the general default lens"
     if options.reviewer:
         entries, source = options.reviewer, "--reviewer on the command line"
     elif place is not None:
-        entries, source = config["reviewers"], f"the council file {place}"
+        entries, source = config["reviewers"], where
     else:
         entries, source = table["default_council"], "the built-in default council"
     budget = options.budget_usd if options.budget_usd is not None else config.get("budget_usd")
-    if budget is not None and not re.fullmatch(r"\d+(\.\d+)?", budget):
-        raise CouncilError("--budget-usd is a number of US dollars")
     timeout = options.timeout if options.timeout is not None else config.get("timeout_seconds")
-    if timeout is not None and timeout < 1:
-        raise CouncilError("the timeout is a whole number of seconds, one or more")
+    try:
+        if budget is not None and not re.fullmatch(r"\d+(\.\d+)?", budget):
+            raise CouncilError("the cap is a number of US dollars")
+        if timeout is not None and timeout < 1:
+            raise CouncilError("the timeout is a whole number of seconds, one or more")
+        reviewers = [parse_reviewer(text, i, table) for i, text in enumerate(entries, 1)]
+    except CouncilError as error:
+        # An error from a value the file supplied names the file.
+        from_file = place is not None and (
+            source == where or (options.budget_usd is None and options.timeout is None)
+        )
+        raise CouncilError(f"in {where}: {error}" if from_file else str(error)) from error
     return {
-        "reviewers": [parse_reviewer(text, i, table) for i, text in enumerate(entries, 1)],
+        "reviewers": reviewers,
         "source": source,
-        "lens": lens or config.get("lens", ""),
+        "lens": config.get("lens", "") if lens is None else lens,
+        "lens_source": lens_source,
         "timeout": timeout,
         "budget": budget,
+        "file": place,
+        "file_used": place is not None
+        and (
+            source == where
+            or lens_source == where
+            or (options.timeout is None and "timeout_seconds" in config)
+            or (options.budget_usd is None and "budget_usd" in config)
+        ),
     }
+
+
+def _file_warning(request: Request, chosen: dict[str, Any]) -> str:
+    """A line for the plan where the council file that supplied a setting is part of the change
+    under review (named in the diff, or with uncommitted changes): the change would then choose
+    its own reviewers or lens. Empty where it is not, or where the file is the person's own."""
+
+    place = chosen["file"]
+    if place is None or not chosen["file_used"] or place != request.root / CONFIG_PROJECT:
+        return ""
+    name = CONFIG_PROJECT.as_posix()
+    in_diff = request.diff is not None and (
+        f"diff --git a/{name} " in request.diff or f" b/{name}\n" in request.diff
+    )
+    status = size._git(request.root, "status", "--porcelain", "--", name)[1].strip()
+    if not (in_diff or status):
+        return ""
+    return (
+        f"WARNING: the council file {place} is part of the change under review "
+        f"({'named in the diff' if in_diff else 'with uncommitted changes'}), so the change "
+        "supplies the settings above that came from it; check them before saying yes."
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
     try:
         table = load_table()
+        if options.defaults:
+            sys.stdout.write(render_defaults(table, Path(options.root)))
+            return 0
         chosen = _settings(options, table)
         request = gather(
             Path(options.root),
@@ -1020,7 +1088,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             budget=chosen["budget"],
         )
         if options.plan:
-            sys.stdout.write(render_plan(request, jobs, out, chosen["budget"], chosen["source"]))
+            sys.stdout.write(render_plan(request, jobs, out, chosen["budget"], chosen))
             return 0
         if options.plan_id is not None and options.plan_id != plan_id(request, jobs):
             raise CouncilError(

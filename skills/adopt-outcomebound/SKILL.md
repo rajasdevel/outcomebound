@@ -136,7 +136,7 @@ such as a secret or production access. Each question names the line that raised 
 you take without an answer, and the work that does not wait on it goes on. Include one question
 on the review council: which reviewers the person wants for a second opinion, as
 `harness:model[:effort]` entries, offering the built-in default that
-`outcomebound review council --plan` prints. If they name others, write them as
+`outcomebound review council --defaults` prints, with any council file already in effect. If they name others, write them as
 `.outcomebound/council.json` (`{"version": 1, "reviewers": ["harness:model"]}`; the
 `review-council` skill and `$(outcomebound home)/schemas/council-config.schema.json` give the rest); if they keep the
 default, write nothing.

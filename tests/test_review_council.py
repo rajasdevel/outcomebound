@@ -210,6 +210,8 @@ def test_a_reviewer_is_harness_model_effort_with_defaults_for_a_missing_part() -
     assert review_council.parse_reviewer("codex::max", 1, table).label == "codex:gpt-6-astra:max"
     with pytest.raises(review_council.CouncilError, match="no default"):
         review_council.parse_reviewer("claude", 1, table)
+    # A model with no effort leaves the tool's own effort.
+    assert review_council.parse_reviewer("claude:m-1", 1, table).label == "claude:m-1"
     for bad in ("", "gemini:x", "codex:--dangerously-bypass", "codex:m:e:x", "codex:a b"):
         with pytest.raises(review_council.CouncilError):
             review_council.parse_reviewer(bad, 1, table)
@@ -671,3 +673,81 @@ def test_a_council_file_that_is_not_valid_is_refused_with_its_reason(
     place.write_text("{not json", encoding="utf-8")
     code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
     assert code == 1 and "cannot be read" in err
+
+
+def test_a_reviewer_with_no_effort_and_no_default_has_no_effort_flag(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, out, _ = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", "claude:m-1", pair=False
+    )
+    (line,) = (line for line in out.splitlines() if line.strip().startswith("argv:"))
+    assert "--model m-1" in line and "--effort" not in line
+    # Codex has a default effort in the table, so a model alone takes it.
+    _, out, _ = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", "codex:m-2", pair=False
+    )
+    assert "-m m-2 -c model_reasoning_effort=high" in out
+
+
+def test_an_empty_lens_on_the_command_line_overrides_the_files_lens(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(repo / ".outcomebound/council.json", reviewers=[CODEX_REVIEWER], lens="from file")
+    _, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert "lens: from file" in out and "lens from: the council file" in out
+    _, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", "--lens", "", pair=False)
+    assert "from file" not in out and "lens from: --lens on the command line" in out
+
+
+def test_the_plan_warns_where_the_change_under_review_supplies_the_council_file(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Committed in the reviewed range: the change picks its own reviewers and lens.
+    _write_config(
+        repo / ".outcomebound/council.json", reviewers=[CODEX_REVIEWER], lens="only spelling"
+    )
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "add a council file")
+    _, out, _ = council(capsys, repo, "--plan", "--range", "HEAD~1..HEAD", pair=False)
+    assert "WARNING: the council file" in out and "named in the diff" in out
+    # Committed before the range: no warning.
+    _, out, _ = council(capsys, repo, "--plan", "--range", "HEAD~2..HEAD~1", pair=False)
+    assert "WARNING" not in out
+    _, out, _ = council(capsys, repo, "--plan", "--file", "spec.md", pair=False)
+    assert "WARNING" not in out  # a clean committed file is the project's own setting
+    # Edited and not committed.
+    _write_config(repo / ".outcomebound/council.json", reviewers=[CODEX_REVIEWER], lens="edited")
+    _, out, _ = council(capsys, repo, "--plan", "--file", "spec.md", pair=False)
+    assert "with uncommitted changes" in out
+    # A command-line reviewer and lens leave nothing from the file in use.
+    _, out, _ = council(
+        capsys, repo, "--plan", "--range", "HEAD~1..HEAD", "--lens", "mine", pair=True
+    )
+    assert "WARNING" not in out
+
+
+def test_defaults_prints_the_built_in_council_and_the_file_in_effect_and_runs_nothing(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _, out, _ = council(capsys, repo, "--defaults", pair=False)
+    assert "built-in default council: codex:gpt-6-astra:high" in out
+    assert "council file in effect: none" in out
+    _write_config(person / ".outcomebound/council.json", reviewers=["codex:other:low"])
+    _, out, _ = council(capsys, repo, "--defaults", pair=False)
+    assert "council file in effect:" in out and "reviewers: codex:other:low" in out
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_every_refusal_of_a_value_from_the_council_file_names_the_file(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = repo / ".outcomebound/council.json"
+    for data in (
+        {"reviewers": ["gemini:x"]},
+        {"reviewers": [CODEX_REVIEWER], "timeout_seconds": 0},
+        {"reviewers": ["claude"]},
+    ):
+        _write_config(place, **data)
+        code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+        assert code == 1 and "in the council file" in err and "council.json" in err, (data, err)
