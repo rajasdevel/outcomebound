@@ -56,6 +56,14 @@ def test_newest_source_first_and_why_now_from_markdown_and_json(tmp_path):
     assert report["open"][1]["date"] == "2023-11-15" and report["open"][1]["line"] == 1
 
 
+def test_equal_dates_order_by_later_path_first_then_earlier_line_first(tmp_path):
+    when = 1_750_000_000
+    put(tmp_path, "a.md", "### D1 · One?\n\n### D2 · Two?\n", when)
+    put(tmp_path, "b.md", "### D3 · Three?\n\n### D4 · Four?\n", when)
+    report = brief_open.find_open([tmp_path])
+    assert ids(report) == ["D3", "D4", "D1", "D2"]
+
+
 def test_a_why_now_after_the_next_heading_belongs_to_that_brief(tmp_path):
     put(tmp_path, "a.md", "### D1 · One?\n\n### D2 · Two?\n\n[wait] Waiting on this: x\n")
     one, two = brief_open.find_open([tmp_path])["open"]

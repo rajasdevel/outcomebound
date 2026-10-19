@@ -955,7 +955,9 @@ def _parser() -> argparse.ArgumentParser:
         metavar="harness:model[:effort]",
         help="a reviewer (repeat); with none, the council file's, else the default council",
     )
-    parser.add_argument("--plan-id", metavar="ID", help="with --accept, the id the plan printed")
+    parser.add_argument(
+        "--plan-id", metavar="ID", help="required with --accept: the id the plan printed"
+    )
     parser.add_argument("--timeout", type=int, metavar="SECONDS", help="per reviewer")
     parser.add_argument("--budget-usd", metavar="N", help="a spend cap for Claude reviewers")
     parser.add_argument("--root", default=".", metavar="DIR", help="a folder inside the work tree")
@@ -1090,7 +1092,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if options.plan:
             sys.stdout.write(render_plan(request, jobs, out, chosen["budget"], chosen))
             return 0
-        if options.plan_id is not None and options.plan_id != plan_id(request, jobs):
+        if options.plan_id is None:
+            raise CouncilError(
+                "--accept needs --plan-id, the id of the plan the person saw; run the same "
+                "command with --plan to get one"
+            )
+        if options.plan_id != plan_id(request, jobs):
             raise CouncilError(
                 f"this run differs from the plan with id {textio.plain(options.plan_id)} "
                 f"(now {plan_id(request, jobs)}): the reviewers, the argument values, the login "

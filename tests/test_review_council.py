@@ -170,6 +170,14 @@ def council(
 
     if pair and "--reviewer" not in args:
         args = (*args, "--reviewer", CODEX_REVIEWER, "--reviewer", CLAUDE_REVIEWER)
+    if "--accept" in args and "--plan-id" not in args:
+        # The person saw the plan first: take its id, as `--accept` requires.
+        review_council.main(
+            ["--root", str(repo), *("--plan" if a == "--accept" else a for a in args)]
+        )
+        shown = re.search(r"plan id: ([0-9a-f]{12})", capsys.readouterr().out)
+        if shown:
+            args = (*args, "--plan-id", shown.group(1))
     code = review_council.main(["--root", str(repo), *args])
     captured = capsys.readouterr()
     return code, captured.out, captured.err
@@ -576,6 +584,17 @@ def test_accept_refuses_a_run_that_differs_from_the_plan_the_person_approved(
         capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", identity.group(1)
     )
     assert code == 0, out
+
+
+def test_accept_refuses_without_a_plan_id(
+    tools: Path, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code = review_council.main(
+        ["--root", str(repo), "--accept", "--base", "HEAD~1", "--reviewer", CODEX_REVIEWER]
+    )
+    err = capsys.readouterr().err
+    assert code == 1 and "--plan-id" in err and "--plan" in err
+    assert list((tools / "log").iterdir()) == []  # nothing started
 
 
 def test_a_credential_a_reviewer_echoes_in_an_error_is_not_printed(

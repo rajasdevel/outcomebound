@@ -52,7 +52,8 @@ def test_each_kind_of_rot_is_found_and_what_exists_is_not(tmp_path: Path) -> Non
     clean = {
         "Makefile": "test:\n\ttrue\n",
         helps: "#!/bin/sh\nexit 0\n",
-        "README.md": f"Run `{helps}` or `make test`.\n\n```sh\n./{helps}\n```\n",
+        "README.md": f"Run `{helps}` or `make test`; `outcomebound version` and `outcomebound home`"
+        f" are verbs.\n\n```sh\n./{helps}\n```\n",
     }
     rotten = {
         **clean,
