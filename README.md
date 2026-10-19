@@ -20,9 +20,9 @@ engine is Python standard library only, and it never runs your agent.
 | Feature | What it does |
 | --- | --- |
 | **The contract** | A short block in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; never claim a check that did not run. |
-| **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review, specs, tickets, hand-offs, landing, acceptance and more. Each loads only when its trigger matches. |
+| **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review (and a council of other reviewers), specs, tickets, hand-offs, landing, acceptance and more. Each loads only when its trigger matches. |
 | **Lifecycle scaffold** | `outcomebound scaffold` writes the files a prototype, solo, team or organization project needs, and lists each value still to fill. |
-| **Decision briefs** | An act outside the agent's authority comes back as options, a recommendation, evidence and an undo line. Other work continues. |
+| **Decision briefs** | An act outside the agent's authority comes back as a question, what waits on it, the context, options with the recommendation marked on its option, evidence and an undo line. Other work continues. |
 | **Quality floor** | Keep old lint and type debt visible, reject new findings, and make each loosening a recorded decision. |
 | **Ticket hand-off** | Slice work into outcomes you accept, then hand each one to an implementer with the detail its tier needs. |
 | **Instruction check** | Read agent instructions for hidden characters, override phrases and risky settings. |
@@ -41,7 +41,7 @@ and hand-offs for each stage. Your project records its own lifecycle in a few li
 You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree.
 
 ```sh
-uv tool install outcomebound==1.7.0
+uv tool install outcomebound==1.8.0
 cd your-repo
 outcomebound adopt . --detect       # writes nothing; prints the install command for your files
 ```
@@ -78,7 +78,7 @@ what could end it, and builds a walking skeleton with a Done command that can fa
 ### Upgrade or remove
 
 ```sh
-uv tool install --force outcomebound==1.7.0
+uv tool install --force outcomebound==1.8.0
 outcomebound adopt .          # every managed file current; an edited block is kept unless --force
 outcomebound adopt . --remove # takes out what the install owns
 ```
@@ -86,14 +86,15 @@ outcomebound adopt . --remove # takes out what the install owns
 After an upgrade, `adopt --check` reads the operating-contract block, and each managed file that the
 release changed, as `stale` until `adopt` runs. The `version` verb prints the engine version and the folder of its files. The
 finish-check hook entries that 1.6.0 and earlier wrote do nothing from 1.7.0, and `adopt` takes them
-out.
+out. `adopt` also prints the install line for a cloud session, and `adopt --check` warns of each
+other worktree whose install is older than the engine.
 
 <details>
 <summary>Other installers and environment requirements</summary>
 
-`pipx install outcomebound==1.7.0` also works, or `python -m pip install outcomebound==1.7.0`
+`pipx install outcomebound==1.8.0` also works, or `python -m pip install outcomebound==1.8.0`
 inside an activated virtual environment. Each release is on PyPI from 1.6.0; the tagged Git URL
-(`git+https://github.com/rajasdevel/outcomebound@v1.7.0`) installs the same release, and every earlier one. These commands work in PowerShell, cmd and POSIX shells; detection prints
+(`git+https://github.com/rajasdevel/outcomebound@v1.8.0`) installs the same release, and every earlier one. These commands work in PowerShell, cmd and POSIX shells; detection prints
 commands for POSIX shells and PowerShell. On Windows, install [Git for Windows](https://gitforwindows.org). `pip install --user` is not supported. If the environment sets `PYTHONPATH`, use absolute
 folders only. See [dependencies and portability](docs/dependencies.md).
 

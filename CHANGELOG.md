@@ -12,6 +12,224 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-19
+
+A minor release. Nine new read-only or planning commands help an agent find the state of the
+work again, check one ticket, review a change with other reviewers, and look after worktrees
+(#140, #141, #142, #147, #148, #149, #150, #151), and the skills name them where they help (#155). The decision brief now reads in the order a
+person decides (#139). The kernel has two short rules for reports in place of one long sentence,
+and Simplified Technical English applies only to documents that a person keeps (#143). `adopt`
+tells a person how to install `outcomebound` in a cloud session (#146) and warns of a worktree
+with an older install (#145). The designs agree with the code again (#152), and four defects found on the way are fixed (#154). A new skill, `review-council`, makes 14 skills in each install
+(#151). The engine remains Python standard library only.
+
+Do these steps first:
+
+1. If you upgrade from 1.6.0 or earlier, do the steps of the 1.7.0 section first. Use Python 3.10
+   or later and Git 2.52.0 or later. These minimums do not change.
+2. Install the release: `uv tool install --force outcomebound==1.8.0`. The tagged Git URL
+   (`git+https://github.com/rajasdevel/outcomebound@v1.8.0`) installs the same release.
+3. In each project, run `outcomebound adopt . --check`, then `outcomebound adopt .`. Review the
+   diff and commit it with the project's own checks (#139, #143, #146, #151, #155):
+   - The install changes the kernel (the two report rules), the `Text for people` fact, the
+     skill `decision-brief` and the other skills that name the report labels.
+   - The install adds the skill `review-council` and changes the fragments `commands` (9) and
+     `workspace` (13).
+   - The install changes the skills `decision-brief`, `hand-off-tickets`, `review-findings` and
+     `tests-worth-keeping`, which now name the new commands.
+   - A project that declares a ticket store gets the fragment `tickets` (15).
+4. Cloud sessions: a cloud session starts from a fresh clone, and the clone has no `outcomebound`
+   command. `adopt` now prints the install line, pinned to the engine version
+   (`uv tool install outcomebound==1.8.0` and `python3 -m pip install outcomebound==1.8.0`), and
+   the place where each harness that the project uses keeps its setup step. A person adds the
+   line to the setup step of the cloud environment. `adopt` writes no file for this (#146).
+   Where the project records a `Setup` fact, record the install line with `--setup`, and repeat
+   each command that is recorded already.
+5. If your CI installs a pinned release, change the pin to `1.8.0` in the same change as the
+   managed install.
+6. Nothing breaks. No existing command, option, exit code or file format changes meaning. A new
+   verb or option is new. If a script reads the output of `adopt`, it can now see `warn` lines for
+   other worktrees and a `note` line for cloud sessions (#145, #146).
+
+### Added
+
+- Commands that help an agent find the state of the work:
+  - `outcomebound where [target] [--offline] [--json]` prints one line for each item of work in
+    flight: its source and a verdict (`OPEN`, `STALE`, `CLEAR`, `NOTE` or `UNVERIFIED`). For an
+    unfinished item, the line names the shipped skill for the next step. It reads Git, `gh` (only
+    where `gh` is on the path and answers), the ticket export, the validation results, the review
+    files, the decision briefs and the newest handoff. It writes nothing. It starts no process
+    except `git` and `gh`, and `--offline` does not start `gh`. It is for use after a pause or a
+    compaction, and no hook runs it. A brief id that more than one file defines gives
+    `UNVERIFIED`. The design is in `docs/specs/lifecycle/design.md` (#150).
+  - `outcomebound brief lookup TERM... [--in PATH]... [--json]` finds a decision brief by id or by
+    words, in brief JSON documents and in Markdown brief headings. It prints each match with its
+    source and the recorded answer, or `UNANSWERED`. An answer is one `Decided:` line. The
+    person's words are the authority, and there is no second store (#140).
+  - `outcomebound brief open [PATH]... [--json]` lists each decision brief that has no recorded
+    answer, newest first: id, question, source file and date, and the work that waits on it where
+    the brief says. A brief id that is used for different questions is reported as a collision and
+    is not counted as open. It writes nothing (#148).
+  - `outcomebound review since FILE [--since REF] [--root DIR] [--json]` prints the files and hunks
+    that changed between the ref in the `Reviewed:` line of a review file and the work tree. It
+    also prints which findings cite a changed path. A ref that does not resolve gives `UNVERIFIED`
+    with the reason. `review check` and `review sweep` stay free of Git (#140).
+  - `outcomebound sources links PATH... [--root DIR] [--json]` reads Markdown files, or folders of
+    them, and reports each broken reference with file and line: a relative link to a missing
+    file or folder, a `#anchor` that matches no heading, a `path:N`, `path:N-M` or `#L12` line
+    reference past the end of the file, and a Git ref in a code span that does not resolve. The
+    first output line is `VERDICT: PASS` or `VERDICT: FAIL`. External links and targets outside
+    `--root` are listed as not checked, never as broken. No network is opened. A resumed session
+    can use it to check that a handoff still names real paths (#142).
+  - `outcomebound workspace audit [target] [--json]` reports each Git worktree of the project: its
+    branch, whether its commits are merged, pushed only or local only, the count of changed paths
+    and of untracked paths that Git does not ignore, the date of the last commit, its age and its
+    size on disk. It also lists worktrees that Git lists but whose folder is gone. It marks a
+    worktree `removable` by the mechanical rule only: a linked worktree with no changed path, no
+    untracked path and all commits kept. It never removes or changes anything. The design is
+    `docs/specs/workspace/design.md` (#147).
+- Commands that check the work of a ticket and of a claim:
+  - `outcomebound tickets verify <ticket>` runs the claims that the `done-when` of one ticket
+    names, and no other claim, and prints one verdict for each claim and one `VERDICT` line. It
+    uses the runner of `outcomebound validation`, so each attempt is kept as `validation` keeps
+    it. A name that the plan does not define stops the run before a command starts. A check that
+    a person must do prints `UNVERIFIED`, and a ticket with only such a check never reads `PASS`.
+    The verb refuses a ticket that is not open and a ticket with a `check` error. It runs the
+    commands of the plan, so run it only for a plan that you trust. A `PASS` does not show that
+    the work is done or landed (#149).
+  - `outcomebound validation` keeps one record for each attempt of each claim, beside the log of
+    the claim. A later attempt never rewrites an earlier one, and the output of a failure is kept
+    in its own file. The format is `schemas/validation-result.schema.json`. `--claim NAME`
+    (repeatable) runs only the named claims; its `VERDICT` line says that it is not the verdict of
+    the plan. `outcomebound validation status PLAN` is read-only and runs nothing. It says, for
+    each claim, `CURRENT`, `CHANGED` (with the changed declared paths) or `UNVERIFIED`. A claim may
+    declare `paths` and `environment` for this. The exit codes and the `VERDICT` line of a full run
+    keep their meaning (#141).
+- `outcomebound review council` asks reviewers of other harnesses and models for an independent,
+  read-only review of one change, and writes one review file for each reviewer that answers.
+  `--plan` shows each reviewer, its exact command line, its read-only flags, its time limit, its
+  output file and that the run spends the credits of the person; it runs nothing and prints a plan
+  id. `--accept --plan-id <id>` runs the reviewers in parallel, and refuses a run that differs from
+  the plan. Each reviewer works in a snapshot of the reviewed revision that has no Git history and
+  leaves out the instruction and configuration files that a harness loads. The diff goes to each
+  reviewer as quoted data between marked lines. The engine drops any `Reviewed:` or `Disposition:`
+  line that a reviewer wrote outside a code fence, and it adds a `Citation check:` line under a
+  finding whose `path:line` citation does not exist. A reviewer that fails or times out is
+  reported, and the others go on. The review files start as `FAIL` for `review check` until the
+  acting agent writes the dispositions. One built-in reviewer is the default. A project can name
+  its reviewers in `.outcomebound/council.json`, and a person can name them in a file in the home
+  folder; `--reviewer` wins for one run, and `--defaults` prints the default and the file in
+  effect. The flags of each harness are data in `adapters/council.json`, each with its reason,
+  its source and the day it was read. A harness whose documents do not confirm a read-only mode is
+  marked so in the plan (#151).
+- The skill `review-council` says when a second opinion is worth asking for, that the person
+  must see the plan and say yes before the run, and how to merge the findings. Each install now
+  has 14 skills. The `adopt-outcomebound` skill asks the adopter once which reviewers they want,
+  and writes the project file only if the adopter names others (#151).
+- `adopt --check` prints one `warn` line for each other worktree of the project whose installed
+  version is older than the engine that runs the check. The line has the path, the branch
+  (`(detached)` if none), the installed version and the engine version. A worktree with no install
+  gets a line that says so. The check reads files and runs `git` only, writes nothing and does not
+  change the exit code (#145).
+- `docs/private-kit.md` is a guide for private skills, tools and pointers kept in the person's
+  own private repository and linked into the user-level folders of each harness, with no change to
+  any project. It is a guide, not a verb (#144).
+- `docs/cloud-sessions.md` says what a cloud session starts with and where each harness keeps its
+  setup step. The places are data in `adapters/cloud.json`, each with its source address and
+  the day it was read (#146).
+
+### Changed
+
+- The decision brief reads in the order a person decides (#139):
+  1. the question, which names the choice and not the answer that the agent favours;
+  2. `⏳ Waiting on this:`, which says what the answer holds and what happens if no answer
+     comes (the field `why_now`; it replaces the `If unanswered` fact at the foot);
+  3. the context and the meaning of each term the person may not know;
+  4. a picture where it carries meaning;
+  5. `🧪 Explore:` for a decision that is not simple, which says what an interactive page would
+     let the person try (in a question tool, the last choice is `Explore it first`);
+  6. the options, with what each leads to, `⭐ Recommended:` under the option that the agent
+     recommends, `⚖️ Choose if:` and `🔻 Downside:`;
+  7. the evidence and the undo line.
+  Every block has a blank line before it. The renderer refuses context that a Markdown view would
+  read as a block of its own, and characters that many fonts draw two columns wide in a picture.
+  The design is `docs/specs/decision-support/design.md`.
+- The kernel has two short rules for reports in place of the long report sentence: never claim a
+  check that did not run and always report a failure; explain in plain words, or leave out, a
+  label or id that the person did not use. A change, test, commit, push, deployment or observation
+  never stands in for another (#143).
+- The `Text for people` fact (ASD-STE100 Simplified Technical English, for `adopt --human-style
+  ste`) now covers documents that a person keeps: pull request descriptions, commit messages,
+  specs and handovers. It does not cover replies in conversation (#143).
+- `PASS`, `FAIL` and `UNVERIFIED` stay for records that another reader acts on: a handover, a
+  pull request description and the report that a check tool prints. In such a record, the meaning
+  of a label is given once where the reader has not used it. In conversation, the agent says in
+  plain words whether each check passed, failed or did not run. The contract, the README, the
+  `adopt --help` text, the new-project reference, the `adopt-outcomebound` skill, the fragment
+  `commands` (9), `diagnose`, `tests-worth-keeping`, `gather-requirements` and `explain-spec`
+  follow this rule. `land-change`, `review-findings`, `run-acceptance`, `sync-tracker` and the bars
+  in the fragments keep the labels (#143).
+- The evaluation graders that read a final answer for the word `UNVERIFIED` (or `FAIL`) now also
+  accept plain words such as "not run", "did not run", "could not be run" or "not verified". All
+  graders use one list of words (#143).
+- `outcomebound brief` draws the plain form in a cloud session of Claude Code on the web, where
+  Mermaid is not known to render. `OUTCOMEBOUND_DIAGRAMS` and `--form` still outrank the table.
+  The row is in `adapters/surfaces.json` (#146).
+- `adopt`, `adopt --dry-run` and `adopt --check` print one cloud note (see Upgrading). The
+  `workspace` fragment says that a person adds the install line to the setup step of the
+  cloud environment, and that a cloud session puts its handover in the pull request description
+  (#146).
+- The install design no longer leaves cloud setup lines out. It records the 1.8.0 decision to
+  print them and to write no file for them (#146).
+- `docs/evaluations.md` records the passes behind 1.7.0 that had no section (#138).
+- Each read-only command of this release is named once, in the skill or fragment that owns the
+  moment it helps: `review since` in `review-findings`; `brief lookup` and `brief open` in
+  `decision-brief`; `tickets verify` in `hand-off-tickets`, with a warning to read the diff of the
+  claims plan first, because the work under review can change it; `validation status` in
+  `tests-worth-keeping`; `where`, `workspace audit` and `sources links` in the `workspace`
+  fragment (13). Each pointer says that the command only reads, or what it runs (#155).
+- The `tickets` fragment (15) no longer says that the engine writes nothing: `tickets verify`
+  keeps the output and the result of each claim in `.outcomebound-checks/` beside the claims
+  plan, and never writes to the tracker (#152).
+- The designs, the specs index, the README and the manual part of `AGENTS.md` agree with the code
+  of this release. Help text that disagreed with the code is changed: `where` (`--base`,
+  `--tickets`), `sources links` (the verdict is the first line), `adopt` (the cloud note and the
+  worktree warnings) and `review`. The result schema names the `.out` file and puts `environment`
+  in the digest. The review design records the Agent Client Protocol as a transport that was
+  considered and deferred (#153) (#152).
+
+### Fixed
+
+- The code that finds a ticket and refuses a ticket that is not open or has a `check` error now
+  serves `brief` and `verify` alike. The words of each `brief` refusal are the same (#149).
+- `outcomebound validation` reads a claims plan that starts with a UTF-8 byte-order mark, as the
+  ticket reader does (#149).
+- `size` runs Git with no lazy fetch (#150).
+- `sources links` no longer makes an anchor from a `#` line inside the front matter at the top of
+  a file. A heading after the front matter still makes one (#154).
+- `review council --accept` refuses a run without `--plan-id`, so only the plan that the person
+  saw can run (#154).
+- `make check` knows the `version` verb, so a code span `outcomebound version` passes (#154).
+- A test now fixes the order of `brief open` for briefs with the same date (#154).
+
+### Verification limits
+
+- No cloud session was run. Whether Codex cloud, GitHub Copilot and Cursor load committed
+  skills, and whether any cloud view draws Mermaid, is `UNVERIFIED`. Google Jules is not covered
+  (#146).
+- The Windows commands of the private kit guide were not run (`UNVERIFIED`). No harness was
+  started to test its link layout (#144).
+- The reviewer flags of `review council` for two harnesses are marked as not confirmed read-only
+  by their documents (#151).
+- `outcomebound where` does not count the commits that a worktree has and the main line lacks.
+  After a squash merge, Git cannot tell a landed branch from an unlanded one (#150).
+- The platform limits of 1.5.0 stay: native Windows and Linux sessions, Codex desktop and Git for
+  Windows at the exact minimum are `UNVERIFIED`, and CI runs no models.
+
+### Known issues
+
+None known.
+
 ## [1.7.0] - 2026-10-17
 
 A minor release. The finish check is retired: `adopt` installs no hook and runs no Done command,
@@ -1403,7 +1621,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.8.0
 [1.7.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.7.0
 [1.6.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.6.0
 [1.5.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.5.0
