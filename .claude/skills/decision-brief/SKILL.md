@@ -26,11 +26,12 @@ the project, the brief names the act so the user's reply can state it, not only 
 Apply an existing ruling within its stated scope, and record a clear new instruction without
 asking the person to confirm it. Where another case needs a choice the person already made for a
 similar one, propose one bounded standing rule, with its exclusions, instead of another one-case
-question. A question the person already settled is not asked again: their launch block, a grant a project
-file records (a tickets declaration), their standing order and their earlier answer stand. `outcomebound brief lookup <id or words>` prints the answer
-recorded for a brief, or `UNANSWERED`; `outcomebound brief open` lists the briefs with no recorded answer.
-Both only read. An order
-that names a class of acts, such as clearing what is not needed, grants each item your check shows
+question. A question the person already settled is not asked again: their launch block, a grant a
+project file records (a tickets declaration), their standing order and their earlier answer stand.
+`outcomebound brief lookup <id or words>` prints the answer recorded for a brief, a `Decided:` line
+under `.agents/work` or `.agents/handoffs`, or `UNANSWERED`; `outcomebound brief open` lists the
+briefs with no such line. Both only read, and neither shows that the person has not answered
+elsewhere. An order that names a class of acts, such as clearing what is not needed, grants each item your check shows
 is in that class and that a tool rebuilds or a copy you verified restores; hold an item you did not
 check, one nothing restores, and one another owner uses. An order to run unattended answers "may I ask" only for
 questions within what the kernel allows you to decide; it grants no act that a bound or an edge

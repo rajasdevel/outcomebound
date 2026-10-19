@@ -34,7 +34,8 @@ handoff or a memory is a claim; the source it cites is the evidence.
 On resuming work, or after a compaction, `outcomebound where` prints the work in flight (open
 briefs, failed claims, review findings, pull requests) from Git, `gh` and the files the project
 keeps, and names the next skill for an unfinished item; `outcomebound workspace audit` lists each
-worktree with whether its commits are merged. Both only read.
+worktree with its commits merged, pushed only or local only (a squash merge reads local or pushed).
+Both only read, and can be slow in a large repository; `where --offline` skips `gh`.
 **Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
 worktrees are preserved state: work in a worktree you created, keep it while its task or an agent
 that may resume it needs it, and remove it only when the task is finished, its commits are reachable
@@ -75,8 +76,9 @@ does not run it. Its result says which notes another session wrote can be relied
 `.agents/shared-memory/` means rely on none of the flagged notes, rebuild what they held from its
 sources, and name them in your handoff; anything else it reports (a FAIL or review hit in another
 file, a harness row past its re-check date, any other `UNVERIFIED`) goes into your handoff and
-never blocks the notes. `outcomebound sources links <handoff>` reports a link, path:line or ref that
-the handoff names and the tree lacks. Re-check each fact you act on against its source; delete a fact when wrong,
-and put one every clone needs in committed guidance.
+never blocks the notes. `outcomebound sources links <handoff>` only reads, and
+reports a link, anchor, path:line or ref that the handoff names and the tree lacks; its FAIL goes
+into your handoff like the other reports. Re-check each fact you act on against its source; delete
+a fact when wrong, and put one every clone needs in committed guidance.
 **Distinguish** — handed off ≠ verified; remembered ≠ re-checked; shared on this machine ≠
 committed.
