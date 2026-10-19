@@ -126,7 +126,11 @@ def _code(text: str) -> Iterator[tuple[int, str]]:
 
 
 def documented(root: Path, tracked: list[str]) -> list[str]:
-    verbs = {"home", *VERB_ROW.findall(_text(root / "outcomebound_tools/__main__.py") or "")}
+    verbs = {
+        "home",
+        "version",
+        *VERB_ROW.findall(_text(root / "outcomebound_tools/__main__.py") or ""),
+    }
     targets = set(MAKE_TARGET.findall(_text(root / "Makefile") or ""))
     drafts = tuple(
         path.removesuffix("design.md")

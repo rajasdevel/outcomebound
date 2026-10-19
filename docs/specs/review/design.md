@@ -69,10 +69,9 @@ of the prompt file, which the plan names and does not print), its working folder
 timeout, its answer and review files, its cost note; each flag that is a read-only safeguard with
 the day it was read, where, and whether a run showed it (`UNVERIFIED` unless the table says
 `tested`); a line for what no run has shown; and a plan id, a digest of the revision, what is reviewed, the lens and
-each reviewer's argv, environment, timeout and working folder. `--accept`, with the same arguments, builds the argv. Where `--plan-id` is set to that id, it
-refuses a run whose id differs (for one, where `ANTHROPIC_API_KEY` was set or unset after the plan
-and so changed Claude's login and flags). The `review-council` skill always sets `--plan-id`; the
-verb also accepts a run without it, and then makes no comparison. It makes the snapshot and runs
+each reviewer's argv, environment, timeout and working folder. `--accept`, with the same arguments and
+`--plan-id` set to that id, builds the argv; it refuses a run without `--plan-id`, and refuses a run whose id differs (for one, where `ANTHROPIC_API_KEY` was set or unset after the plan
+and so changed Claude's login and flags). The `review-council` skill always sets `--plan-id`. It makes the snapshot and runs
 every reviewer in parallel. The person's yes is given to
 the plan, in chat; the verb has no prompt of its own, because an agent has no terminal to answer
 it, and `--accept` is the act that spends.

@@ -249,13 +249,13 @@ def anchors_of(text: str) -> set[str]:
 
     lines = text.split("\n")
     fenced = tickets_links.fenced_lines(text)
-    atx = {index for index, _ in tickets_links.heading_slugs(text)}
-    entries: list[tuple[int, str]] = [
-        (index, tickets_links.anchor_of(_strip_markup(lines[index]))) for index in sorted(atx)
-    ]
     start = 0
     if lines and lines[0].strip() == "---":
         start = next((i + 1 for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
+    atx = {index for index, _ in tickets_links.heading_slugs(text) if index >= start}
+    entries: list[tuple[int, str]] = [
+        (index, tickets_links.anchor_of(_strip_markup(lines[index]))) for index in sorted(atx)
+    ]
     for index in range(max(start, 1), len(lines)):
         previous = lines[index - 1]
         if (

@@ -192,6 +192,11 @@ def test_the_check_writes_nothing(project, capsys):
     assert before == after
 
 
+def test_anchors_of_frontmatter_makes_no_anchor_and_a_heading_after_it_does():
+    text = "---\n# not a heading\ntitle: x\n---\n# Real\n"
+    assert sources_links.anchors_of(text) == {"real"}
+
+
 def test_anchors_of_counts_a_repeated_slug_from_zero():
     assert sources_links.anchors_of("# A\n## A\n## A\n") == {"a", "a-1", "a-2"}
 
