@@ -35,7 +35,9 @@ it.
 
 A reviewer you dispatch reads again only where a fix changes a claim its finding rests on or a
 result a user can observe, and then reads the changed claims and the context needed to check them. A finding that changes neither takes
-its disposition in this round and starts no other.
+its disposition in this round and starts no other. `outcomebound review since <file>` shows what
+changed in Git since the revision the review read, and which findings cite a changed path; it
+writes nothing.
 
 ## Writing a review
 
