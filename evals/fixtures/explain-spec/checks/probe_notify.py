@@ -12,7 +12,7 @@ understanding: they read what the run explained, asked, reported and left unchan
     understanding  a line reports the person's understanding as `UNVERIFIED` or not checked, and no
                    line says that the person understands the design
     rows           each decision and assumed row of the seed's design is still in it: its why and
-                   rejected cells unchanged, its decision cell clarified at most, with its numbers kept
+                   rejected cells unchanged, its decision cell clarified at most, numbers kept
 
 The answer checks read lines for the words each must carry, not meaning. Each exits 0 where it
 holds and 1 naming what does not. The seed is the commit OUTCOMEBOUND_SEED_SHA names, else the
