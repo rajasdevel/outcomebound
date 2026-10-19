@@ -11,23 +11,29 @@ the same change.
 - [distribution](distribution/design.md): how `outcomebound` reaches an adopter. The package, its
   build and the launcher.
 - [skills](skills/design.md): which skills ship, to whom, and the bar that each one meets.
-- [floor](floor/design.md): the quality floor, `outcomebound floor`.
-- [tickets](tickets/design.md): the ticket layer, `outcomebound tickets`.
+- [floor](floor/design.md): the quality floor, `outcomebound floor`, and the plan runner `outcomebound validation`
+  with its retained results and `validation status`.
+- [tickets](tickets/design.md): the ticket layer, `outcomebound tickets`, including `tickets verify`.
 - [decision-support](decision-support/design.md): how a decision, a lesson or a question goes to
-  a person. The decision brief, `outcomebound brief`, and the explorable page,
-  `outcomebound explorable`.
+  a person. The decision brief, `outcomebound brief`, its read-only lookups of recorded answers
+  (`brief lookup`, `brief open`), and the explorable page, `outcomebound explorable`.
 - [instructions](instructions/design.md): read-only checks on the instruction files of a project,
   `outcomebound instructions`.
 - [finish-check](finish-check/design.md): retired in 1.7.0. `adopt` installs no hook; the design
   holds the reason, the way an install takes out the entries that 1.6.0 wrote, and the stub that
   the verb `outcomebound finish-check` is now. The result contract of `outcomebound validation`
-  (`outcomebound_tools/validation.py`, plan schema `schemas/validation-plan.schema.json`) and the
-  process control of `programs.py` are in the [floor](floor/design.md) design.
+  (`outcomebound_tools/validation.py`, plan schema `schemas/validation-plan.schema.json`), its
+  retained results (`outcomebound_tools/validation_record.py`,
+  `schemas/validation-result.schema.json`), `validation status` and the process control of
+  `programs.py` are in the [floor](floor/design.md) design.
 - [sources](sources/design.md): requirement sources, `outcomebound sources`. Import a markdown or
-  text source into items, and check the ledger that disposes of each item.
-- [review](review/design.md): the review file and `outcomebound review check`: every finding ends in a disposition.
+  text source into items, check the ledger that disposes of each item, and check the links of
+  Markdown files (`sources links`).
+- [review](review/design.md): the review file and `outcomebound review`: `check`, `sweep` and
+  `since` hold that every finding ends in a disposition, and `council` asks reviewers of other
+  harnesses and models for a read-only second opinion.
 - [size](size/design.md): `outcomebound size`. How big a change is against a base, and what kind of
-  lines it holds.
+  lines it holds. Other verbs share its Git reader.
 - [workspace](workspace/design.md): `outcomebound workspace audit`. A read-only report of the
   project's worktrees and which pass the mechanical removal rule.
 - [research](research/design.md): the research repository. How the engine finds, prints and

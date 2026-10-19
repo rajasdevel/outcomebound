@@ -13,10 +13,18 @@ again.
 
 The one invariant `outcomebound size` holds: the counts are what Git reports for the work tree
 against the base, plus the lines of the untracked files that Git does not ignore, and each count is
-placed in one kind by the path alone. How: `outcomebound_tools/size.py`.
+placed in one kind by the path alone. How: `outcomebound_tools/size.py`. Git runs with its optional
+locks off and no lazy fetch, so that a partial clone cannot fetch objects during the read.
 
 The verb does not say that a change is too big, and it does not say that a line was needed. A
 person or an agent decides that. The verb runs no project command and writes nothing.
+
+`size.py` is also the shared Git reader of other verbs: `size._git`, `_git_ok`, `_commit_of`,
+`resolve_base`, `tracked_changes` and `untracked_paths` are used by `review_since.py`,
+`review_council.py`, `where.py`, `brief_lookup.py` and `validation_record.py`. A change to the base
+rule or to the Git environment here changes those verbs too. `outcomebound where` takes its own
+default base, by decision of the [lifecycle design](../lifecycle/design.md): the merge base with
+`origin/HEAD` first, then the base that `size` chooses.
 
 ## Use
 

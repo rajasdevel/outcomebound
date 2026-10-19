@@ -5,11 +5,8 @@ status: ratified
 
 # Scaffold — design
 
-> Ratified once the verb, the templates and their manifest, the shipped text and the engine tests
-> below were built and `make check` passed on them. Before the scaffold lands in 1.6.0: the review
-> the `review` mechanism names reads the templates and the reference text, and `make canary`
-> passes. The three model fixtures land after the grader-isolation change. Every user-owned row
-> below is ruled.
+> Ratified, and shipped in 1.6.0 with the verb, the templates and their manifest, the shipped text
+> and the engine tests below, and the three model fixtures. Every user-owned row below is ruled.
 
 ## Outcome
 
@@ -109,8 +106,8 @@ one line for each item, then `next:`.
 Plan, for example `--lifecycle team+client --visibility public`:
 
 ```text
-plan team+client (public, github): 4 to write, 1 present, 3 to offer; 9 platform acts; writes nothing without --accept
-assumes: life: a product; maintainers: two or more in one team; dependants: outside users; who accepts: an outside party on a named build
+plan team+client (public, github): 4 to write, 1 present, 3 to offer; 7 platform acts; writes nothing without --accept
+assumes: life: a product; maintainers: two or more in one team; dependants: outside users or adopters; who accepts: an outside party on a named build
 write   .outcomebound/fragments/local.md   team, client
 write   CONTRIBUTING.md                    team, client
 write   .github/workflows/ci.yml           team
@@ -576,8 +573,9 @@ selection. Done is recorded later, with `adopt --done`, at the probe or the skel
 | `outcomebound adopt . --check` | the install is current, and no drift line between the files and the selection |
 | `outcomebound instructions check .` | no route path in the local fragment is missing (`stale-reference`); on a move, no retired term is left where the project's `.outcomebound/retired.json` retires it (`retired-reference`) |
 
-Each is reported `PASS`, `FAIL` or `UNVERIFIED`. A gate owner not named is reported to the person
-as a gap.
+The tool's own first line stays `PASS` or `FAIL`. The agent reports each check in plain words
+(passed, failed, not run), as the new-project reference says. A gate owner not named is reported
+to the person as a gap.
 
 ## Rules for the template text
 
@@ -758,17 +756,18 @@ In the existing files:
 
 Three fixtures, run only when `--fixtures` names them (the prefix `scaffold-`), so the default
 batch does not change. Each runs on the Codex harness, on the one model the ruling names, at
-medium effort, one run a side. A run is `UNVERIFIED` until the maintainer grants it.
+medium effort, one run a side. The runs of 1.6.0 and their results are recorded in
+[E26](../../evaluations.md#e26-160-pass-field-derived-tasks-and-the-lifecycle-scaffold-on-codex); what
+they do not establish stays `UNVERIFIED`, and a later run needs the maintainer's grant.
 
 **Arms.** The comparison is current against earlier, as for the composable-lifecycle fixtures:
 both sides run the runner's `current` arm, from two checkouts. The `current` side is the checkout
 that holds the scaffold. The `earlier` side is a checkout of the tree before the scaffold's verb,
 templates and reference text landed, which holds the three fixtures and their grader unchanged.
-The landing order makes that tree: first the grader-isolation change of the runner
-(`evals/README.md`, "Graders stay outside the workspace", a design on this branch that
-`evals/run.py` and the tests do not hold yet: `OUTCOMEBOUND_GRADER_DIR`, the stage argument and
-`tests/test_eval_grader_isolation.py`), then the fixtures and their grader, then the verb, the
-templates and the reference text. The fixtures' commit is the `earlier` side. This `earlier` is not the
+The landing order made that tree: first the grader-isolation change of the runner
+(`evals/README.md`, "Graders stay outside the workspace": `OUTCOMEBOUND_GRADER_DIR`, the stage
+argument and `tests/test_eval_grader_isolation.py`), then the fixtures and their grader, then the
+verb, the templates and the reference text. The fixtures' commit is the `earlier` side. This `earlier` is not the
 runner's `earlier` arm, whose kernel wording is older and which installs this checkout's core
 skill. The hypothesis: with the scaffold, an agent gives a new project its preset's file set and no
 more, and leaves each gate owner open.
@@ -847,9 +846,9 @@ that fixture reads them, and:
 The checks read words and files, not meaning. A pass establishes only its named mechanical claim;
 `review.md` names what a reviewer reads in the saved answer, the files and the session.
 
-## Shipped text that must change
+## Shipped text
 
-The implementation changes these files. This design does not edit them.
+The implementation changed these files in 1.6.0. Each row below has shipped.
 
 | File | What changes |
 | --- | --- |

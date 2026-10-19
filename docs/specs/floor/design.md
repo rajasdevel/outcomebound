@@ -14,7 +14,10 @@ names the decision that allowed it. A project that already has findings adopts t
 it holds is recorded, and what each change adds is gated. The invariant the floor holds: a finding
 that no baseline line holds fails `check`, and a loosening fails `check --base` unless the commit
 that makes it names the decision that allowed it. How: `outcomebound_tools/floor.py`,
-which opens with what it decides, and `outcomebound floor --help`.
+which opens with what it decides, and `outcomebound floor --help`. This design also owns the plan
+runner `outcomebound validation` (`outcomebound_tools/validation.py`, `validation_record.py`,
+`programs.py` for process control, and `schemas/validation-plan.schema.json`,
+`schemas/validation-result.schema.json`), its retained results and `validation status`.
 
 ## Decisions
 
@@ -183,8 +186,8 @@ scan; shellcheck 0.9.0, 0.10.0 and 0.11.0 print the same `json1` report over one
 
 `outcomebound validation <plan>` (and `outcomebound tickets verify`, which runs the same function) keeps one result record for each attempt of each claim it runs, in
 the check folder beside the plan: `<log stem>.<attempt>.result.json`, with the attempt's output in
-`<log stem>.<attempt>.out` (`unit.20261018T080100605650Z.result.json`; the attempt is the UTC start
-time to the microsecond). An attempt is never rewritten by a later one, so the output of a failure
+`<log stem>.<attempt>.out` (`unit.20261018T080100605650Z.result.json`; the attempt is the UTC time at which
+the record is written, after the claim has ended, to the microsecond; the record's `started` field holds the start). An attempt is never rewritten by a later one, so the output of a failure
 survives a later pass; the plain `<log stem>.log` stays the latest output, as before. The folder grows
 by one record and one output for each attempt; the engine prunes nothing, since a limit with no evidence
 behind it would delete the one attempt a reader needs. Each attempt has its own files, so runs never
@@ -217,6 +220,8 @@ runs the plan without `--claim`. A claim not run keeps its earlier record.
 `outcomebound tickets verify` selects claims by a ticket's `done-when` and runs them through the same
 `run_plan` with the same records; its verdict and exits are its own ([tickets design](../tickets/design.md)).
 
+A claim may name `required_paths`: files or folders that must exist for the claim to run (a relative path is taken from the plan's working directory). Where one is missing, the claim reads `UNVERIFIED` and the command does not start. `paths` are what `status` compares; `required_paths` are what must exist, and what `tickets check` compares with a ticket's `bounds`.
+
 A claim may name `environment` variables whose values can change its result; `status` reads a claim as
 `UNVERIFIED` where one now differs from the run's. A claim may declare `paths`: the files and folders, relative to the plan's working directory, whose
 change can change its result (`.` is the whole working directory; `[]` is the same as none declared;
@@ -225,7 +230,7 @@ the command to check it (the tickets design explains why reading argv is only a 
 
 `outcomebound validation status <plan>` reads the plan and the records and runs nothing and writes
 nothing. The state of each claim comes from `validation.claim_states`, the one reader of it; `outcomebound where`
-([lifecycle](../lifecycle/design.md)) reads the same answer. It opens with one line of counts (`status: 2 CURRENT, 1 CHANGED, 1 UNVERIFIED of 4 claims`),
+([lifecycle](../lifecycle/design.md)) reads the same answer. It opens with one line of counts (`status: 2 CURRENT, 1 CHANGED, 1 UNVERIFIED of 4 claims (no verdict; you judge)`; the counts name all three states, zeros included),
 then prints for each claim, in plan order, the newest attempt (verdict, exit code, end time, commit, whether its output was written)
 and one of:
 

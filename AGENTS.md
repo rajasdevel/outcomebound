@@ -108,7 +108,7 @@ standard library only.
 | Source | Role |
 | --- | --- |
 | `OutcomeBound.md` | the operating contract |
-| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check (retired), sources, review, size, research, lifecycle, scaffold |
+| `docs/specs/<area>/design.md` | the one current design for each area: install, distribution, skills, floor, tickets, decision support, instructions, finish check (retired), sources, review, size, workspace, research, lifecycle, scaffold |
 | `docs/prompt-standard.md`, `docs/evaluations.md` | the prompt standard and this project's own evaluation record; read only when a task needs them |
 | [outcomebound-research](https://github.com/rajasdevel/outcomebound-research), read with `scripts/outcomebound research <path>` | the research behind them: models, harnesses, providers, practices, one advice file per model (`models/`) and implementer tiers (`applications/implementer-tiers.md`); read only when a task needs them |
 | Released `CHANGELOG.md` sections | history |
@@ -118,14 +118,15 @@ standard library only.
 | Command | Does |
 | --- | --- |
 | `make gate` | the standard-library boundary over `outcomebound_tools/` and `scripts/` |
-| `make check` | `make gate`, then this repository's quality floor against `OB_BASE` (default `origin/main`) |
+| `make check` | `make gate`, then this repository's quality floor against `OB_BASE` (default `origin/main`), then this repository's own install check (`adopt . --check`) |
 | `make test` | the suite, spread across CPUs |
 | `make test-containers` | the suite in CI's two container images (slim as root, Alpine), on a clean clone of HEAD, with Docker; `PYTEST_ARGS=` narrows it; before a pull request that touches processes, files, paths, shells or eval fixtures |
 | `make scrub` | the public-text check plus the local list of private names `OB_SCRUB_LIST` names, over the tracked files and the commits since `OB_BASE`; `UNVERIFIED` without the list |
 | `make canary` | this checkout's engine beside the installed release, on each project of the local list `OB_CANARY_LIST` names, under Python 3.10 and the installed release's Python: `adopt --dry-run`, `adopt --check` and `instructions check`, `floor check --base HEAD` where a floor is installed, `tickets check --draft` on each draft set the project's claims plan names, and `tickets check` on an `issues.json` export in the project root (else `UNVERIFIED`; it calls no tracker); fails on a candidate crash, refusal or invalid report, or on a difference in the before/after Git status or ignored-entry list; inspect custom floor commands first and use an owned isolated checkout where they may write (CONTRIBUTING.md); state checks detect changes after execution, not prevent them; reports by project number and records the verdict for HEAD's tree; `UNVERIFIED` without the list; run before a pull request that changes adopt, tickets, floor, instructions or discovery lands (one run on a commit that holds every change of several such pull requests covers all of them, before the first of them lands), and on the committed release commit (docs/VERSIONING.md gives the release sequence) |
-| `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: a PASS record of `make canary` for this tree, `VERSION`, changelog, README and CI templates agree (and, once named, the tag, and a passing CI run on main for its commit), the install is current, `make scrub` passes, and gate, floor and suite pass (with `TAG=`, the CI run on main for that commit stands in for gate, floor and suite) |
-| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `research`, `sources`, `explorable`, `review`, `size`, `scaffold`, `home` |
+| `make release-check [TAG=v<VERSION>]` | on a release commit, before the tag: no open code-scanning, Dependabot or secret-scanning alert, no open finding in any review file under the main checkout's `.agents/work` (`review sweep`), a PASS record of `make canary` for this tree, `VERSION`, changelog, README and CI templates agree (and, once named, the tag, and a passing CI run on main for its commit), the install is current, `make scrub` passes, and gate, floor and suite pass (with `TAG=`, the CI run on main for that commit stands in for gate, floor and suite) |
+| `scripts/outcomebound <verb> --help` | the engine's verbs: `adopt`, `floor`, `tickets`, `brief`, `validation`, `fragments`, `discovery`, `instructions`, `research`, `sources`, `explorable`, `review`, `size`, `workspace`, `scaffold`, `where`, `home`, `version` |
 | `scripts/outcomebound adopt . --check` | whether this repository's own install is current, as CI checks it |
+| `make kits` | each kit under `kits/` packed as a zip and a Markdown file under `dist/kits`, the two files a release attaches |
 | `bash scripts/new-spec.sh <slug> [--with-plan]` | scaffold a design under `docs/specs/<slug>/` from `templates/spec/design.md`, and with `--with-plan` a plan from `templates/spec/plan.md` |
 | `python3 scripts/build_backend.py [--sdist]` | build the package adopters install, into `dist/` |
 | `.agents/tools/runner <command> ...` | run a command with this checkout's engine: `OUTCOMEBOUND_HOME` set to it and its launcher first on `PATH`, since in a worktree `outcomebound` on `PATH` runs the checkout its link points into |
@@ -138,12 +139,14 @@ outcomebound_tools/   the engine
 scripts/              the `outcomebound` launcher, the package's build backend and this repository's scripts
 pyproject.toml        names the build backend; the package's metadata is in the backend
 skills/               the fourteen working skills, and the adopt skill, which stays in this checkout
+kits/                 self-contained skills for a person outside the repository, attached to each release
 fragments/            stack and setup guidance, copied under .outcomebound/fragments/ and pointed at from AGENTS.md
 templates/            the kernel block; the spec (design, plan), goal envelope, ticket and CI templates;
                       the lifecycle comparisons and the scaffold sets (scaffold/, with its manifest);
                       outcomebound.mk, Make targets a project may include for the floor and a validation plan
 adapters/             harnesses.json, the harness table adopt routes by; surfaces.json, which surfaces render Mermaid;
                       cloud.json, where each cloud surface keeps its setup step, with source and read date
+                      council.json, the flags of each review-council harness, with source and read date
 schemas/              wire formats
 docs/                 designs, references, guides
 references/           portability.md, the harness matrix as adapters/harnesses.json records it

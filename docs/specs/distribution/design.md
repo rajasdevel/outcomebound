@@ -7,13 +7,13 @@ status: ratified
 
 ## Outcome
 
-An adopter installs OutcomeBound with one line,
-`uv tool install git+https://github.com/rajasdevel/outcomebound@v<VERSION>`, and gets
-`outcomebound` on `PATH`, running the engine and the files a checkout of that tag runs, on
-Windows, macOS, Linux and in containers; a team and its CI pin one release in that line. From
-1.6.0 each release is also on PyPI, so that `uv tool install outcomebound==<VERSION>` installs
-the same files; the tagged Git URL stays a supported route, and the README names PyPI as a route
-only after the first version is there and a person has checked it (the release sequence in
+An adopter installs OutcomeBound with one line, `uv tool install outcomebound==<VERSION>`
+(PyPI), and gets `outcomebound` on `PATH`, running the engine and the files a checkout of that tag
+runs, on Windows, macOS, Linux and in containers; a team and its CI pin one release in that line.
+Each release since 1.6.0 is on PyPI, and the README and the cloud note of `adopt` give that line.
+The tagged Git URL, `uv tool install git+https://github.com/rajasdevel/outcomebound@v<VERSION>`,
+installs the same files and stays a supported route. A release names PyPI as a route in the README
+only after the version is there and a person has checked it (the release sequence in
 `docs/VERSIONING.md`). Someone
 working on OutcomeBound itself uses a clone, whose `scripts/outcomebound` runs that checkout.
 How: `pyproject.toml`, `scripts/build_backend.py`, `scripts/outcomebound`,
@@ -93,13 +93,14 @@ or lock generator is not required by that decision.
 | The launcher runs the engine as a child process on every platform; no exemption of the quality floor's S606 rule is sought (maintainer, 2026-10-07): the child process already keeps exit codes and signals, and CI tests it on every platform | an exemption for the launcher, so that a POSIX launcher replaces its process with `os.execv`: it loosens the floor for no observed failure | user | decided |
 | A checkout keeps its POSIX sh launcher, `scripts/outcomebound`, for contributors, this repository's scripts and its CI, and it is not in the wheel. It resolves its own path through any link, whatever `CDPATH` the caller exports, using the selected Python's standard library and no external dirname or readlink, and runs the first `python3` or `python` that an absolute `PATH` entry names and that runs as Python 3.10 or later, with `-I -X utf8` and the checkout first on its path: a relative entry, a Store stub that opens a store and a Python 2 are passed over. On Windows it runs under Git for Windows' `sh`, with Python on `PATH`, and `make` is a separate install; that is UNVERIFIED until a contributor or a CI job runs it there | one Python launcher for both: its `#!/usr/bin/env python3` line searches `PATH` with its relative entries, and the checkout's scripts and `.agents/tools/runner` start it as a command; a second launcher file in the wheel, so that `bin/` holds two files named `outcomebound` | agent | decided |
 | A failure of a launcher or of the verb table exits 127 where there is no Python or no engine to run, and 1 for no verb or a verb the table does not hold, and never 2 | exit 2 for a usage error, as `argparse` does, which a harness's stop hook reads as holding the turn, so that a missing Python or an old hook entry would hold every turn end | agent | decided |
+| The `version` verb (also `--version` and `-V`) prints the engine version, read from the `VERSION` file beside the engine's own files, and the folder of those files; The `home` verb prints that folder alone. Both are answered by the verb table before any other verb is loaded, so they work with no project | a version read only from package metadata, which a checkout has not; a flag on each verb | agent | decided |
 | Every verb's stdout and stderr are UTF-8 with LF line ends on every platform: `__main__.main` reconfigures both streams, each keeping its own error handler, and the launchers add `-X utf8`. A script, a path or a JSON document the engine prints reads the same through a pipe or a redirect | the console's code page and `\r\n`, which stop a verb with `UnicodeEncodeError` on a character outside cp1252 and add a carriage return to `$(outcomebound home)` and to a printed script; `PYTHONUTF8` and `PYTHONIOENCODING`, which `-I` makes the engine ignore; an encoding chosen verb by verb | agent | decided |
 | The wheel and the source archive mark a file executable when it starts with a `#!` line | `os.access`, which is true for every file on Windows, so a wheel built there differs from the release wheel; Git's mode (`git ls-files -s`), which a source archive unpacked on Windows has lost | agent | decided |
 | The supported routes are `uv tool install`, `pipx install` and `pip install` into a virtual environment | `pip install --user`, which puts the engine in the user site that `-I` leaves out, so its command cannot find the engine and exits 1 | agent | decided |
 | The engine's files ship inside the package, beside the code that reads them | files installed into a shared data directory, where another package can overwrite them | agent | decided |
 | What the engine prints for a person or writes for a harness names the launcher, `outcomebound`, never a path to it | a path into one checkout or one environment | agent | decided |
 | Builds are reproducible: entries sorted and dated from `SOURCE_DATE_EPOCH`, or 1980-01-01 | the build machine's timestamps, which make two builds of one tree differ | agent | decided |
-| The packaging path refuses a checkout whose Git cannot list its files, and `build_backend.py` does not set `safe.directory`: it is the maintainer's own path, run in their own checkout. The CI container job, whose checkout belongs to another user than the container's root, runs `git config --system --add safe.directory "$GITHUB_WORKSPACE"` after the checkout, so that the suite's isolated home (which hides a `--global` setting) still sees it, and the engine is not changed to suit that job | `-c safe.directory` in the build or in the engine's Git reads, which trusts a target for the user; `--global`, which the suite's isolated `HOME` hides | agent | decided |
+| The packaging path refuses a checkout whose Git cannot list its files, and `build_backend.py` does not set `safe.directory`: it is the maintainer's own path, run in their own checkout. The CI container job, whose checkout belongs to another user than the container's root, runs, in its script `scripts/container-suite.sh`, `git config --system --add safe.directory "$(pwd)"`, so that the suite's isolated home (which hides a `--global` setting) still sees it, and the engine is not changed to suit that job | `-c safe.directory` in the build or in the engine's Git reads, which trusts a target for the user; `--global`, which the suite's isolated `HOME` hides | agent | decided |
 | `scripts/check-structure.py` runs a tracked executable through the interpreter its `#!` line names where the platform has no `#!` (Windows): a Python file under the Python that runs the check, a shell file under the shell of Git for Windows (never the Windows Subsystem for Linux launcher in the Windows folder), and a first line that names another interpreter reads as a problem, not as a pass. On POSIX the file itself runs, since its mode bit is the promise. It imports the standard library only | running every file directly, which cannot start a `.sh` or `.py` file on Windows; skipping the check on Windows, which leaves a script that fails its help unseen there | agent | decided |
 | The CI test command is plain text: the temporary folder of each job reaches `--basetemp` through the environment variable `PYTEST_BASETEMP` (`$PYTEST_BASETEMP` in a POSIX shell, `$env:PYTEST_BASETEMP` in PowerShell, the Windows job's default shell), set in the step's `env:` where the `${{ }}` expression is, so that the project facts read each CI test command and name none as `runs an expression` | an expression in the command line, which the facts cannot settle | agent | decided |
 
@@ -137,5 +138,5 @@ UTF-8, exit 1 for an unknown verb, UTF-8 with LF into a stream that is cp1252 wi
 entry point (its command line, the child's exit code, Ctrl-C left to the child, SIGTERM passed
 on, and exit 127 where Python cannot start), and the checkout's sh launcher where `sh` runs. A
 real Windows run is the Windows CI job. `make release-check`
-checks that every install line in the README and the CI templates pins the release `VERSION`
-names.
+checks that every install line in the README, the CI templates and the CI workflow that the
+scaffold writes (`templates/scaffold/common/ci.yml`) pins the release `VERSION` names.

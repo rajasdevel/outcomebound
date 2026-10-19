@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "urn:outcomebound:schema:validation-result:1",
   "title": "OutcomeBound validation result v1",
-  "description": "What one attempt of one validation-plan claim observed, kept as .outcomebound-checks/<log stem>.<attempt>.result.json beside the attempt's log <log stem>.<attempt>.log. An attempt is never rewritten by a later one, so a failure's output survives a later pass. It records an observation; it is no proof that the result still holds, and `outcomebound validation status` reads the newest attempt to say which declared paths changed since.",
+  "description": "What one attempt of one validation-plan claim observed, kept as .outcomebound-checks/<log stem>.<attempt>.result.json beside the attempt's output <log stem>.<attempt>.out. An attempt is never rewritten by a later one, so a failure's output survives a later pass. It records an observation; it is no proof that the result still holds, and `outcomebound validation status` reads the newest attempt to say which declared paths changed since.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -118,7 +118,7 @@
     },
     "claim_digest": {
       "type": "string",
-      "description": "SHA-256 of what decides how the claim ran and is judged: command, working directory, paths, required_paths, timeout_seconds, executes_tests and produces. A result stands only for the claim that has this digest."
+      "description": "SHA-256 of what decides how the claim ran and is judged: command, working directory, paths, required_paths, timeout_seconds, executes_tests, produces and environment. A result stands only for the claim that has this digest."
     },
     "environment": {
       "type": "object",

@@ -4,11 +4,13 @@ family: setup
 applies: projects that declare a ticket store
 condition: when reading, working or changing this project's tickets or their declaration
 detect: []
-version: 14
+version: 15
 ---
 **Context** — `.outcomebound/tickets.json` declares where this project's tickets live; the
-engine reads them and reports, and writes nothing. How work lands here is what `CONTRIBUTING.md`
-or `AGENTS.md` says, else what the goal envelope says; where none of them says, land it as local
+engine reads them and reports. It writes nothing, except that `outcomebound tickets verify` runs
+the claims a ticket's `done-when` names and keeps each claim's output and result in
+`.outcomebound-checks/` beside the claims plan; it never writes to the tracker. How work lands
+here is what `CONTRIBUTING.md` or `AGENTS.md` says, else what the goal envelope says; where none of them says, land it as local
 commits on the current branch in the style the history shows, put how it should land in the
 handover as a decision brief, and go on to the next ticket.
 **Bounds** — a ticket's `bounds` are the paths its work may write. An edit outside them that only
