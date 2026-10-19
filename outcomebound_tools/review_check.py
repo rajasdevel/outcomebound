@@ -390,7 +390,8 @@ def render_sweep_json(swept: Swept) -> str:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="outcomebound review",
-        description="Check a review file: every finding ends in a disposition.",
+        description="Check a review file (every finding ends in a disposition), see what changed "
+        "since the ref it read, or ask other reviewers for a read-only review.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     checked = commands.add_parser(

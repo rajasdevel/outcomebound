@@ -59,6 +59,7 @@
             }
           },
           "required_paths": {
+            "description": "Paths that must exist before the command runs; a relative path is taken from the plan's working directory. A missing one makes the claim UNVERIFIED and the command does not start.",
             "type": "array",
             "items": {
               "type": "string"

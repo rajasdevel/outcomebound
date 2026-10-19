@@ -5,17 +5,17 @@ status: ratified
 
 # Review — design
 
-This design lands with the change that adds `outcomebound review`. The release canary
-(`make canary`) must pass before that change lands, because it adds a verb to the engine.
-
 ## Outcome
 
 Where a project keeps a review as a file, a person can see that each finding ended in a
 disposition, and an agent cannot leave a finding open, or call it accepted, without the check
 saying so. The one invariant `outcomebound review check` holds: the file says which revision it
 read, and every finding in it has one disposition of `fixed`, `rejected` or `deferred`, with the
-place or the reason written. How: `outcomebound_tools/review_check.py` (the verb and its checks);
-the wire format of the report is `schemas/review-report.schema.json`.
+place or the reason written. How: `outcomebound_tools/review_check.py` (the verb, `check` and
+`sweep`, and their checks); `outcomebound_tools/review_since.py` (`since`);
+`outcomebound_tools/review_council.py` (`council`). The wire format of the check report is
+`schemas/review-report.schema.json`; that of `since` is `schemas/review-since.schema.json`; that of
+the council file is `schemas/council-config.schema.json`.
 
 The check does not say that a fix is right, that a rejection is right, or that the place a
 disposition names holds what it says. Each report line says so.
@@ -31,7 +31,7 @@ a code fence are not read.
 
 ## The council
 
-`outcomebound review council (--plan | --accept)` asks reviewers of other harnesses and models
+`outcomebound review council (--plan | --accept | --defaults)` asks reviewers of other harnesses and models
 for one independent, read-only review of a change, and writes one review file for each reviewer
 that answers. How: `outcomebound_tools/review_council.py`; the flags of each harness are data in
 `adapters/council.json`. The verb does not judge or merge: the session's agent reads each finding
@@ -68,11 +68,12 @@ credits; each reviewer with the program it would start, its exact argv (for a ha
 of the prompt file, which the plan names and does not print), its working folder, its
 timeout, its answer and review files, its cost note; each flag that is a read-only safeguard with
 the day it was read, where, and whether a run showed it (`UNVERIFIED` unless the table says
-`tested`); a line for what no run has shown; and a plan id, a digest of the revision, the lens and
-each reviewer's argv, environment and timeout. `--accept`, with the same arguments and
-`--plan-id` set to that id, builds the argv, refuses a run whose id differs (for one, where
-`ANTHROPIC_API_KEY` was set or unset after the plan and so changed Claude's login and flags), makes
-the snapshot, and runs every reviewer in parallel. The person's yes is given to
+`tested`); a line for what no run has shown; and a plan id, a digest of the revision, what is reviewed, the lens and
+each reviewer's argv, environment, timeout and working folder. `--accept`, with the same arguments, builds the argv. Where `--plan-id` is set to that id, it
+refuses a run whose id differs (for one, where `ANTHROPIC_API_KEY` was set or unset after the plan
+and so changed Claude's login and flags). The `review-council` skill always sets `--plan-id`; the
+verb also accepts a run without it, and then makes no comparison. It makes the snapshot and runs
+every reviewer in parallel. The person's yes is given to
 the plan, in chat; the verb has no prompt of its own, because an agent has no terminal to answer
 it, and `--accept` is the act that spends.
 
@@ -99,7 +100,9 @@ permission keys but not what they cover, and gives no way to skip the folder's o
 and configuration. The plan prints `READ-ONLY NOT CONFIRMED BY DOCUMENTATION` for each; neither is
 in the default council, so each is run only where the person's plan names it. Neither documents
 standard input, so the prompt is their last argument (`prompt_via` argument; standard input is
-closed), and each has its read-only settings given by environment variables the plan prints. A multi-line argument through a Windows `.cmd` shim loses its newlines, so these two rows are `UNVERIFIED` on Windows and their accepted-run test is skipped there.
+closed), and each has environment variables that the plan prints: for Cursor, an empty
+configuration folder of its own; for OpenCode, its permission keys and the switches that turn off
+outside plugins, Claude Code inputs and automatic updates. A multi-line argument through a Windows `.cmd` shim loses its newlines, so these two rows are `UNVERIFIED` on Windows and their accepted-run test is skipped there.
 A
 reviewer that does not start, exits non-zero, passes the timeout (its process group is killed),
 writes no answer or an empty one, whose answer does not begin with `Verdict: FAIL`,
@@ -109,13 +112,13 @@ reviewer's verdict and finding count. A `PASS` or `UNVERIFIED` verdict over a bo
 reviewer could not read the code is filed, since no check can tell it from a clean review; the
 acting agent reads each file.
 
-A review file is `<run folder>/<tag>-<harness>.md` (tag `r1`, `r2`, in the order given): the
+A review file is `<run folder>/<tag>-<harness>.md` (the reviewer label `r1`, `r2`, in the order given): the
 engine's line `Reviewed: <full revision>`, a title, then the reviewer's answer. Lines of the answer
 that start `Reviewed:` or `Disposition:` outside a code fence are left out, and a note says how
 many, because the first is the engine's to write and the second belongs to whoever acts on a
 finding. A fresh file reads FAIL under `review check` (`DISPOSITION_MISSING`) until dispositions
 are written, and `review sweep` therefore holds a release back while a council's findings stay
-open. The default run folder is `.agents/work/council/<revision>/`; it also holds `council.json`
+open. The default run folder is `.agents/work/council/<revision>/`, where `<revision>` is the first 12 characters of the reviewed revision; it also holds `council.json`
 (each reviewer's argv, status, seconds, the cost the harness reported, citation counts), and an
 existing folder is refused, so a run never overwrites one.
 
@@ -146,10 +149,11 @@ Exits: 0 every reviewer wrote a file; 1 a refusal, or a reviewer failed; 2 a usa
 | For Codex and Claude the prompt goes in by standard input from a file the verb writes, and not by an argument with standard input from `/dev/null`; Cursor and OpenCode take it as the last argument, with standard input closed, since they document no standard input. A diff can pass the size an argument may have; the prompt file ends, so the reviewer cannot wait for more input, which is what `/dev/null` was to guarantee | the prompt as an argument; an open pipe, on which a reviewer waits | agent | assumed |
 | The reviewer reads a snapshot of the reviewed revision made with `git archive` in a temporary folder, not the person's work tree. The reviewer sees the revision the review claims, no uncommitted file, no `.git` and no hook of the work tree; a write by a reviewer reaches a folder that is thrown away. `review sweep` and Git never read it. The snapshot leaves out the instruction files and folders of the harnesses, since a harness loads them as instructions and a change under review could edit them (found by the independent review of this design) | the work tree as the working folder, where a reviewer reads uncommitted text and a project's own settings; `git worktree add`, which writes to the repository | agent | assumed |
 | Claude runs with `--bare` where `ANTHROPIC_API_KEY` is set and with `--restricted --safe-mode` where it is not, always with a tool list of `Read`, `Grep` and `Glob` and the write and command tools denied by name. `--bare` is the documented mode for scripted calls and skips hooks, plugins, skills, MCP servers and instruction-file discovery, but the installed tool's help says it reads no login and takes `ANTHROPIC_API_KEY` only, so the run bills the key and not the person's login (the maintainer accepts that for limited use, 2026-10-18); the plan says which login a Claude reviewer uses. Without a key, `--restricted` ignores the settings files and removes the command tools, and `--safe-mode` disables plugins, hooks and instruction files; the help of `--safe-mode` says the login still works, and for the two together it is `UNVERIFIED`. One smoke run (2026-10-19, no API key set) showed the `--restricted --safe-mode` variant working with the account login; the `--bare` variant was not run, since no key was set. That any of these flags stops a write is `UNVERIFIED`: no write was attempted | `--bare` alone, which fails for a person logged in without a key; `--dangerously-skip-permissions` or any bypass flag, which the table test refuses; a hook-disabling settings string, which leaves the other settings loaded | user | decided |
-| The built-in default council is one reviewer, `codex:gpt-6-astra:high`. The verb reads an optional council file, the project's `.outcomebound/council.json` first and the `.outcomebound/council.json` in the person's home folder if the project has none, and `--reviewer` wins for a run; the plan prints which of the three supplied the reviewers (maintainer, 2026-10-19). A model name changes faster than this file, so the default is an example that a file or a `--reviewer` entry overrides. The adopt skill asks the adopter once, offering the default, and writes the project's file only if they name other reviewers. The ruling of 2026-10-18 for a default of five reviewers was replaced: five reviewers at the person's expense is too many for a default, and a project that wants a council names it | a default of one reviewer for each harness; a default of five; a file merged from both places, where the person cannot tell which source ran; the person's file before the project's, which a committed choice could not set | user | decided |
-| The flags are data in `adapters/council.json`: each with its reason, its source, the day it was read, whether the installed tool's help listed it (`codex exec --help` of codex-cli 0.163.0 and `claude --help` of Claude Code 2.1.302, both read 2026-10-18, with no model run) and whether a run showed its effect (`tested` or `UNVERIFIED`) and, where a run tried it, an `observed` note with its day. Two smoke runs (2026-10-19, one Codex reviewer and one Claude reviewer on a one-line change in a throwaway repository, with the maintainer's approval) showed that the Codex and Claude rows run and return a readable answer, that the model and effort named reached Codex's run header, that the snapshot and the throwaway repository held the same files before and after, that `--ephemeral` left no session file, and that the Claude row works with an account login. They did not try a write, so no sandbox, tool-list or permission flag is shown to stop one, and both rows' other flags stay `UNVERIFIED` with the note of what was seen. Cursor and OpenCode were not run. A harness is a row. The table holds Codex and Claude, and Cursor and OpenCode as unconfirmed rows (maintainer, 2026-10-18; their headless facts, read 2026-10-18, are in the research record). Gemini CLI has no row: its read-only plan mode is documented to switch to unrestricted approval when a plan runs headless, the folder's `GEMINI.md` and hooks have no documented switch, and it has been offered only to paid, Enterprise and API-key users since 2026-06-18, so a read-only setup is not confirmed. Copilot has none (maintainer). The model ids in it are examples that change faster than the file | flags in the code, where a change of a tool needs a code change; a model default stated as a rule (it is an example that a `--reviewer` entry overrides) | agent | assumed |
+| The built-in default council is one reviewer, the Codex entry that `default_council` in `adapters/council.json` names. The verb reads an optional council file, the project's `.outcomebound/council.json` first and the `.outcomebound/council.json` in the person's home folder if the project has none, and `--reviewer` wins for a run; the plan prints which of the three supplied the reviewers (maintainer, 2026-10-19). A model name changes faster than this design, so the table holds it, and it is an example that a file or a `--reviewer` entry overrides. The adopt skill asks the adopter once, offering the default, and writes the project's file only if they name other reviewers. The ruling of 2026-10-18 for a default of five reviewers was replaced: five reviewers at the person's expense is too many for a default, and a project that wants a council names it | a default of one reviewer for each harness; a default of five; a file merged from both places, where the person cannot tell which source ran; the person's file before the project's, which a committed choice could not set | user | decided |
+| The flags are data in `adapters/council.json`: each with its reason, its source, the day it was read, whether the installed tool's help listed it (`codex exec --help` of codex-cli 0.163.0, `claude --help` of Claude Code 2.1.302, `cursor-agent --help` of 2026.10.16 and `opencode run --help` of v2.0.32, all read 2026-10-18, with no model run) and whether a run showed its effect (`tested` or `UNVERIFIED`) and, where a run tried it, an `observed` note with its day. Two smoke runs (2026-10-19, one Codex reviewer and one Claude reviewer on a one-line change in a throwaway repository, with the maintainer's approval) showed that the Codex and Claude rows run and return a readable answer, that the model and effort named reached Codex's run header, that the snapshot and the throwaway repository held the same files before and after, that `--ephemeral` left no session file, and that the Claude row works with an account login. They did not try a write, so no sandbox, tool-list or permission flag is shown to stop one, and both rows' other flags stay `UNVERIFIED` with the note of what was seen. Cursor and OpenCode were not run. A harness is a row. The table holds Codex and Claude, and Cursor and OpenCode as unconfirmed rows (maintainer, 2026-10-18; their headless facts, read 2026-10-18, are in the research record). Gemini CLI has no row: its read-only plan mode is documented to switch to unrestricted approval when a plan runs headless, the folder's `GEMINI.md` and hooks have no documented switch, and it has been offered only to paid, Enterprise and API-key users since 2026-06-18, so a read-only setup is not confirmed. Copilot has none (maintainer). The model ids in it are examples that change faster than the file | flags in the code, where a change of a tool needs a code change; a model default stated as a rule (it is an example that a `--reviewer` entry overrides) | agent | assumed |
 | An answer must begin with a `Verdict:` line, and a `FAIL` verdict needs a finding, or the reviewer is `unreadable`, the answer is kept as `<tag>-<harness>.raw.txt` and no review file is written. A model that refuses or answers off the form would otherwise leave a file with no finding, which `review check` passes. The prompt puts the list of what was not read under a `## Not read` heading, so that its paths are not read as the last finding's citations | filing every answer; guessing findings from prose | agent | assumed |
 | Citations are looked up, flagged and kept, never removed. A finding with a place that is not in the revision may still be right about another place, and a count of flags tells the acting agent where to read first | dropping a finding with a missing path, which hides a claim a reader would want to see; a model call to repair the citations | agent | assumed |
+| The council starts each harness through its own command line, with the flags of `adapters/council.json`. The Agent Client Protocol (ACP) is a standard JSON-RPC interface that some harnesses expose to editors. It was considered as the transport and is deferred. It could later replace the flags of each harness with one session interface. For 1.8.0, harness support for it, and its read-only guarantees, are not confirmed for every council harness, so the council keeps the command line. This is a later option (ticket: TBD) | ACP as the transport in 1.8.0, which rests on support and read-only behaviour that no source confirms for each council harness; a second transport beside the command line, which doubles the paths to check | agent | assumed |
 | The verb sets no spend cap and no run stop of its own choosing: `--budget-usd` is the person's number, passed to Claude's `--max-budget-usd` where the person gives one, and the timeout is the table's, from a Codex run seen to take up to thirty minutes (a public skill's page, read 2026-10-18; no source for a Claude run, `UNVERIFIED`). Codex has no spend cap flag in the installed help, so its timeout is its only bound, and the plan says so | a default cap or a round count chosen without evidence | agent | assumed |
 
 ## Checks
@@ -193,6 +197,9 @@ reads FAIL for missing dispositions only, and PASS once they are written; citati
 file, past the end and none are flagged and every word stays, and a named file is checked against
 the text given; a failed, empty, timed-out, missing and unreadable reviewer are each reported while
 the other writes its file and no file stands for the failed one; an existing run folder is refused
-with nothing started; every bad request is refused with its reason; the table holds a source and a
+with nothing started; every bad request is refused with its reason; the council file: the project's file is read before the person's, the command line wins, a file that does not validate
+is refused with its reason, a refused value from the file names the file, an empty `--lens` overrides the file's lens, the plan
+warns where the change under review supplies the file, and `--defaults` prints the built-in council and the file in effect and runs
+nothing; the table holds a source and a
 read day for each flag and no bypass flag. Stand-in `cursor-agent` and `opencode` programs show the prompt as the last argument with standard input closed, the environment variables set, the plan's unconfirmed-read-only line, and that effort-less harnesses refuse an effort part; the default council holds no unconfirmed harness; `--bare` appears only where an API key is set, and the plan never prints the key, and the text of a reviewer's standard error that a failure report prints has the value of any environment variable named like a key, token, secret or password replaced. No test starts a real `codex`, `claude`, `cursor-agent` or `opencode`: what the
 flags do on a real tool is `UNVERIFIED` unless the table's `observed` note records a run the person asked for.

@@ -754,7 +754,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tickets",
         metavar="FILE",
-        help=f"the ticket export to read (default {EXPORT} at the work tree's root)",
+        help=f"the ticket export to read (default {EXPORT} at the work tree's root, else at the "
+        "main checkout's)",
     )
     parser.add_argument(
         "--plan",
@@ -772,7 +773,8 @@ def _parser() -> argparse.ArgumentParser:
         "--base",
         metavar="REF",
         help="the commit that tells which reviews concern this branch (default: the merge base "
-        "with the upstream, else with origin/HEAD)",
+        "of HEAD with origin/HEAD, else the base `size` chooses: the merge base with the "
+        "upstream, then with origin/HEAD)",
     )
     parser.add_argument(
         "--offline", action="store_true", help="do not run gh: pull requests read UNVERIFIED"

@@ -1,14 +1,15 @@
 """`outcomebound sources ...`: turn a source of requirements into items with a stable identity,
-and check that a ledger gives every item a disposition (`docs/specs/sources/design.md`).
+check that a ledger gives every item a disposition, and check the links of Markdown files
+(`docs/specs/sources/design.md`).
 
-What this module decides: the two subcommands and their options, where `import` writes (one
-manifest, `<name>.json`, in `.outcomebound/sources/` unless `--out` or `--track` says otherwise,
-and a `.gitignore` of `*` beside it there), and the exits: 0 PASS; 1 FAIL or a refusal; 2
-UNVERIFIED or a usage error, as `outcomebound tickets` exits.
+What this module decides: the three subcommands (`import`, `check`, `links`) and their options,
+where `import` writes (one manifest, `<name>.json`, in `.outcomebound/sources/` unless `--out` or
+`--track` says otherwise, and a `.gitignore` of `*` beside it there), and the exits: 0 PASS; 1 FAIL
+or a refusal; 2 UNVERIFIED or a usage error, as `outcomebound tickets` exits.
 
 What it does not decide: what a source means, or whether a requirement is right. It reads only
-the files it is given, runs nothing, opens no connection, and writes only the manifest and that
-ignore file. Standard library only.
+the files it is given, runs no process but `git` (for `links`), opens no connection, and writes
+only the manifest and that ignore file. Standard library only.
 """
 
 from __future__ import annotations
@@ -35,7 +36,8 @@ _EXITS = "Exits: 0 PASS; 1 FAIL or a refusal; 2 UNVERIFIED or a usage error."
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="outcomebound sources",
-        description="Read a source of requirements as items, and check a ledger of dispositions.",
+        description="Read a source of requirements as items, check a ledger of dispositions, and "
+        "check the links of Markdown files.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
     imported = commands.add_parser(
@@ -151,7 +153,7 @@ def _parser() -> argparse.ArgumentParser:
         ),
         epilog=(
             "Exits: 0 nothing broken; 1 something broken; 2 a usage error or an input that is "
-            "not there. The last line is `VERDICT: PASS` or `VERDICT: FAIL` with counts."
+            "not there. The first line is `VERDICT: PASS` or `VERDICT: FAIL` with counts."
         ),
     )
     linked.add_argument("paths", nargs="+", metavar="PATH", help="a Markdown file or a folder")

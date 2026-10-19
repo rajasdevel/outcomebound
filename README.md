@@ -83,7 +83,8 @@ outcomebound adopt .          # every managed file current; an edited block is k
 outcomebound adopt . --remove # takes out what the install owns
 ```
 
-After an upgrade, `adopt --check` reads each managed file as `stale` until `adopt` runs. The
+After an upgrade, `adopt --check` reads the operating-contract block, and each managed file that the
+release changed, as `stale` until `adopt` runs. The `version` verb prints the engine version and the folder of its files. The
 finish-check hook entries that 1.6.0 and earlier wrote do nothing from 1.7.0, and `adopt` takes them
 out.
 
@@ -149,6 +150,20 @@ harness trust and branch protection enforce authority; OutcomeBound's checks inf
   `outcomebound floor apply . --floor floor.json --accept`; see the [floor design](docs/specs/floor/design.md).
 - **Review and source checks:** `outcomebound review check <file>` and `outcomebound sources check`
   check accounting (a disposition for each finding, a digest for each source), not correctness.
+  `outcomebound review since <file>` lists what changed since the ref a review read, and
+  `outcomebound sources links <path>` reports broken links and references in Markdown files.
+- **A second opinion:** `outcomebound review council --plan` prints how reviewers of other harnesses
+  and models would review a change, read-only, and runs nothing. `--accept` runs them and spends
+  your credits, so run it only after you have seen the plan and said yes; see the
+  [review design](docs/specs/review/design.md) and the [review-council skill](skills/review-council/SKILL.md).
+- **Work in flight:** `outcomebound where` prints one line for each open item (pull requests, tickets,
+  worktrees, validation results, reviews, decision briefs, the newest handoff), with its source and a
+  verdict, and names the skill that serves the next step; it writes nothing; see the
+  [lifecycle design](docs/specs/lifecycle/design.md). `outcomebound brief open` lists the decision
+  briefs with no recorded answer, and `outcomebound brief lookup` finds one with its answer;
+  `outcomebound validation status` and `outcomebound tickets verify` read and run a validation plan's
+  claims; see the [floor design](docs/specs/floor/design.md) and the
+  [ticket guide](docs/tickets.md).
 - **Size of a change:** `outcomebound size [--base REF]` says how many lines the work tree adds and
   removes against a base (for stability work, the release tag in production), and how many of them
   are code, tests, docs, config or records; see the [size design](docs/specs/size/design.md).

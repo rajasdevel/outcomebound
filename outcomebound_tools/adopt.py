@@ -2287,7 +2287,10 @@ refuses a harness that cannot be made to load AGENTS.md and, without --force, to
 remove a block or file whose bytes are not what it recorded, save bytes it writes there itself,
 which it records and names on a kept line, and a pointers block that is the recorded render with
 only the local fragment's own edit in it, which it writes again and names on a render line. A
-refusal writes nothing.
+refusal writes nothing. An install, a dry run and --check end with one note on how to install
+the outcomebound command in a cloud session, which starts from a fresh clone; the note writes
+no file. --check also prints one warn line for each other worktree of the project whose install
+is older than this engine.
 
 --detect prints the install command this target's files suggest alone on its first line, with
 --setup for the project's own entry point (a Make target or package.json script named setup or
@@ -2338,8 +2341,9 @@ def _parser() -> argparse.ArgumentParser:
     verb.add_argument(
         "--check",
         action="store_true",
-        help="print current, edited, stale or missing for each record, then the command that "
-        "makes each current; write nothing",
+        help="print current, edited, stale or missing for each record, then the drift lines, the "
+        "cloud note, the worktree warnings, and the command that makes each current; write "
+        "nothing",
     )
     verb.add_argument("--remove", action="store_true", help="remove every recorded block and file")
     # The flags of 1.6.0 and earlier for the finish check: accepted, hidden, and each prints a note.

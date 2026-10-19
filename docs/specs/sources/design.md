@@ -5,9 +5,6 @@ status: ratified
 
 # Sources — design
 
-This design lands with the change that adds `outcomebound sources`. The release canary
-(`make canary`) must pass before that change lands, because it adds a verb to the engine.
-
 ## Outcome
 
 Where requirements come from a document, an issue or a transcript, a person can see which part of
@@ -16,8 +13,9 @@ the check saying so. The one invariant `outcomebound sources check` holds: every
 declared input set has exactly one row in the ledger, each row's item exists, and each row was
 written against the item's current revision. How: `outcomebound_tools/sources.py` (the verb),
 `sources_manifest.py` (items and the manifest), `sources_ledger.py` (the ledger),
-`sources_check.py` (the checks); the wire formats are `schemas/sources-manifest.schema.json` and
-`schemas/sources-report.schema.json`.
+`sources_check.py` (the checks), `sources_image.py` (image items), `sources_links.py` (`links`);
+the wire formats are `schemas/sources-manifest.schema.json`, `schemas/sources-report.schema.json`
+and `schemas/sources-links-report.schema.json`.
 
 The check does not say that a requirement keeps what its source meant. A row for an item that
 holds five constraints, linked to one requirement, passes; the report says so on each line.
