@@ -50,8 +50,8 @@ Confidence: high, the brought-in-material clause's effect UNVERIFIED; direction:
 Checks: `hidden-characters`, `concealed-content`, `override-phrases`, `harness-config`,
 `instruction-change`
 
-**S5** Make done a runnable pass-or-fail check; reports name what was checked and call the rest
-unverified\
+**S5** Make done a runnable pass-or-fail check; reports name what was checked and, in a record
+another reader acts on, call the rest unverified\
 Evidence: `deterministic-28` (M), `deterministic-8` (L), `forward-15` (M),
 `capability-tier-readers-11` (M)\
 Tiers: frontier, small\

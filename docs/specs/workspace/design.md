@@ -36,8 +36,8 @@ as `prunable`. With `--json` the same data is one object: `version`, `default_br
 Exits: 0 a report; 1 Git failed or the target is outside a work tree; 2 a usage error, which
 includes a target that is not a folder (`WORKSPACE_TARGET_NOT_FOLDER`).
 
-No skill or fragment names the verb. A person or an agent finds it through `outcomebound --help`
-and `README.md`.
+The `workspace` fragment names the verb once, for resuming work and after a compaction. A person
+also finds it through `outcomebound --help` and `README.md`.
 
 ## The facts
 
@@ -66,6 +66,7 @@ classification of this audit, so a change to the state rules here changes `where
 | Reachability is tested from the worktree's HEAD commit, not from its branch name | The branch name: a detached worktree or a renamed branch would then read wrong | agent | decided |
 | Ignored files are not counted | Counting them: a walk over build folders makes the audit slow, and the fragment leaves their worth to the agent | agent | decided |
 | The verb has no remove or prune option | A `--remove` flag: deletion stays an act of the agent that holds the task | agent | decided |
+| `removable` states only what the tool can know: a linked worktree whose commits are merged or pushed and that has no changed or untracked path. Whether the task is finished and whether an ignored file is still needed are not known to the tool, and the report says so | A verdict that a worktree is finished, drawn from its age or its branch name, which would make an agent remove work that it cannot show is done | agent | decided |
 
 ## Validation
 

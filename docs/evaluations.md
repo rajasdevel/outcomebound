@@ -56,7 +56,8 @@ model judge scored them.
 - **Models.** Every candidate model under Results is an OpenAI model that ran through codex,
   except E19 and E20, which ran Claude Sonnet 5.5 through Claude Code subagents, once per
   case and arm, and E23 and E24, which ran Claude Sonnet 5.5 (and, in E23, Claude Haiku 5.5)
-  through Claude Code subagents, as their sections say. Claude models also
+  through Claude Code subagents, as their sections say. E31 is not a run of a fixture: one person
+  rated replies from one model family. Claude models also
   appear under "Results not kept here": as the judge of one proposal-only sample, and as
   candidates in the slicing arms. Behavior on other model families and other harnesses is not
   measured.
@@ -113,11 +114,12 @@ recorded run, because a model call does not repeat exactly.
 | Core work by default: ten-fixture comparison of `earlier` and the text of E27, a settling pass, and the honing round with its deploy-sentence follow-up | 2026-10-17 | gpt-6.1-sol medium | 132 | E28 | E28 |
 | Five guidance texts compared on ten fixtures, and a settling pass on three | 2026-10-17 | gpt-6.1-sol medium | 105 (and 90 that E28 counts) | E29 | E29 |
 | Spot check of the held-edit text after the first-principles round, five fixtures | 2026-10-17 | gpt-6.1-sol medium | 15 | E30 | E30 |
+| Blind reads of agent reports under different report guidance, two rounds | 2026-10-18 | one model family, not named here | not counted here | E31 | E31 |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. E27 adds 48 counted Codex runs, for 663. E28 adds 132 counted Codex runs (30 on each of two arms, 15 more on each of the two, and 42 on the honed text), for 795. E29 adds 105 counted Codex runs, for 900; 90 further calls of its two passes are the runs that E28 counts, so they are not added again. E30 adds 15 counted Codex runs, for 915. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. E27 adds 48 counted Codex runs, for 663. E28 adds 132 counted Codex runs (30 on each of two arms, 15 more on each of the two, and 42 on the honed text), for 795. E29 adds 105 counted Codex runs, for 900; 90 further calls of its two passes are the runs that E28 counts, so they are not added again. E30 adds 15 counted Codex runs, for 915. E31 rates replies that model runs wrote; this record does not count those runs, so the total stays 915. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -127,7 +129,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E30). Other documents may cite the id.
+Each finding has an id (E1 to E31). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -2442,3 +2444,67 @@ the fixture where a repository invites the most process?
 
 One model, one arm, three runs a fixture, synthetic tasks of about a minute. The pass has no
 control arm of its own. The effect in an adopter's long sessions is `UNVERIFIED`.
+
+## E31. Report guidance: two blind reads of agent replies
+
+Date: 2026-10-18. Model calls: the replies come from model runs that this record does not count.
+No probe. A person rated the replies; no model judged them.
+
+### Question
+
+The kernel told the agent how to report in one long sentence, and Simplified Technical English
+applied to every text, replies in conversation included. Field sessions showed readers who asked
+what a label or an id meant when they had not used it; those records are private, so this is
+`UNVERIFIED` here. Is that report text better for a reader than shorter text, or than none, and
+does shorter text still keep the agent honest about failed and unrun checks?
+
+### Method
+
+- Material: short synthetic work notes. Each one described a small piece of work with a failed or
+  unrun check, a label that only the project used, or both. For each note, an agent wrote the final
+  reply that it would give the person.
+- Round 1 compared three kinds of guidance: no report guidance, the report text of the previous
+  release, and a longer sentence that asked for plain words and kept the style standard out of
+  conversation. The agent wrote one reply for each note under each kind.
+- Round 2 compared no report guidance with the two short rules that the kernel now holds: never
+  claim a check that did not run and always report a failure, and explain in plain words or leave
+  out a label or id that the person did not use. The agent wrote one reply for each note under each
+  kind.
+- One rater, who did not know which guidance wrote which reply. In round 1 the rater ranked the
+  three replies for each note. In round 2 the rater picked the better reply for each note.
+- Beside the ranking, the replies were checked by reading for two facts: whether each failure and
+  each unrun check was reported, and whether a label that the person could not know was left
+  unexplained.
+
+### Result
+
+- Round 1: the reply with no guidance ranked first more often than the others, and the previous
+  release's text ranked next. The longer plain-words sentence ranked last more often than not,
+  although its replies were the shortest and left no unexplained label. Why it lost is not
+  established: it was not the length alone, and not the number of headings alone.
+- Round 1 and round 2: every reply under every kind of guidance reported each failure and each
+  unrun check. This held with no guidance too, on these notes.
+- Round 2: the two short rules and no guidance tied on the picks. The replies under the two rules
+  left slightly fewer labels unexplained than the replies under no guidance.
+- The previous release's text left an internal label unexplained in a reply, and so did no
+  guidance. The short rules were chosen because they read as well as no guidance, keep the rule
+  on unrun checks in writing, and leave fewer stray labels.
+
+### What it shows, and what it does not
+
+- It shows that, on these notes, the two short rules did not make replies read worse than no
+  guidance, and that the longer sentence and the style standard in conversation did.
+- It does not show that the rules make replies more honest. Replies under no guidance were
+  honest about checks too, so this material cannot separate the arms on that fact. Whether
+  replies now skip unrun checks is `UNVERIFIED` until the fixtures that measure report text run
+  again.
+- It does not show why a reader prefers one reply. The difference in unexplained labels is small
+  and rests on a reading by one person.
+
+### Limits
+
+One rater. One model family wrote the replies; behaviour on other model families is not measured.
+One reply for each note and kind of guidance, so a rerun can pick differently. The notes are short
+and synthetic, and a reply in a long session may read differently. The ranking and the picks are
+a strong hint and not proof. The fixtures that measure report text were not rerun for this
+change.
