@@ -53,6 +53,9 @@ harness can also have requirements of its own.
 | Floor provisioning | pip, only for missing ruff or mypy | Installs into the project's Python only with `--accept`. It prints gitleaks and ShellCheck installation routes instead of downloading them. Go or a system package manager is needed only if the user chooses such a route. |
 | Research reads | A configured OBR clone | Reads the documents offline. Only accepted clone or pull acts need Git and network access. |
 | GitHub ticket export or publication | GitHub CLI and access to GitHub | Produces a local export or performs the separately authorized tracker act. Engine ticket checks read the export and call no tracker. |
+| Review council (`outcomebound review council`) | One or more reviewer CLIs of [`adapters/council.json`](../adapters/council.json), each with the person's own login | Runs the read-only reviewers and spends the person's credits. Only the reviewers named in the plan are needed. `--plan` runs nothing. |
+| Work in flight (`outcomebound where`) | GitHub CLI, optional | Reads pull requests. With `--offline`, or with no `gh`, the pull requests read `UNVERIFIED`. |
+| Ticket claims (`outcomebound tickets verify`) | The check tools of the project's claims plan | Runs the commands of the plan. |
 | Optional spec scaffold | Bash, cat, grep, dirname, mkdir and sed | Creates draft files from the shipped templates. |
 | Lifecycle scaffold (`outcomebound scaffold`) | Python and Git | Lists the files a lifecycle needs; writes only absent files, and only with `--accept`. |
 

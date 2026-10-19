@@ -2,7 +2,8 @@
 
 Use this layer when you cut large work into tickets that a person accepts, and you want a check
 that each ticket is well formed. `outcomebound tickets` reads a project's tickets from a tracker
-export and reports what they say. It also prints the brief that an implementer receives.
+export and reports what they say. It also prints the brief that an implementer receives, and
+`verify` runs the claims of one ticket.
 
 The layer is optional. It does nothing until the project declares a store. With no
 `.outcomebound/tickets.json`, every verb refuses. Nothing in OutcomeBound writes that file for
@@ -50,8 +51,9 @@ names no test plan, because which tests to write is the implementer's decision.
 
 ## What the layer does, and what it never does
 
-- **It calls no tracker.** It opens no network connection, reads no credential and writes
-  nothing. Every report is about the export that it was given, and the report states the age of
+- **It calls no tracker.** It opens no network connection and reads no credential. Apart
+  from `verify`, it writes nothing. `verify` keeps the output and the result of each claim in
+  `.outcomebound-checks/` beside the claims plan, and never writes to the tracker. Every report is about the export that it was given, and the report states the age of
   that export. For an export read from standard input, the report says that the age is unknown.
   To publish drafts, `publish` prints the `gh` commands, and `gh` runs them with the login of
   the person or agent who runs the script.

@@ -99,6 +99,11 @@ unverified row is never installed as fact.
 Each row also has a `recheck_on` date. After that date, `outcomebound instructions check` reads
 the loading facts of that harness as `UNVERIFIED`, until someone checks the row again.
 
+Two other tables are not this table. The setup places of the cloud surfaces are in
+[cloud-sessions.md](../docs/cloud-sessions.md) and `adapters/cloud.json`. The reviewers of
+`outcomebound review council` are a separate list in `adapters/council.json`. Neither changes what
+`adopt` installs.
+
 These are the first-party skills pages as they stood when the rows were verified, in 2026-08 and
 2026-09. A page may have moved since.
 
