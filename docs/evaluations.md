@@ -2550,6 +2550,30 @@ Every claim that needs the grader folder failed in both arms. The results above 
 kept runs again with `--regrade` and absolute paths. That grading makes no model call. The runner now
 makes `--out`, `--workspace-root` and `--regrade` absolute before it uses them.
 
+### Method change after this pass: two graders
+
+Two of the four shared failures came from the test side. They are not model failures, and the
+numbers above are kept as graded. Later passes measure the changed graders, so they do not compare
+claim for claim with this pass on these two fixtures.
+
+- `dirty-review`, claim `worktree-unchanged`. The fixture records its baseline hashes in its setup,
+  and the runner then rewrote `AGENTS.md` for an installed arm. The check saw the install as an edit
+  by the model. The runner now records the hashes of the rewritten notes again after the install, in
+  the grading stage and before it is sealed. The check keeps its purpose: a review that edits the
+  uncommitted work of the user still fails it.
+- `explain-spec`, claim `design-rows-kept`. The check asked for the first cell of each seeded
+  decision row, word for word. The seeded row ("retried 4 times in all") can be read two ways, and the
+  skill allows a clarifying edit that keeps the decision and its bounds. The check now requires the
+  why cell and the rejected cell of every seeded row word for word, and lets the decision cell be
+  reworded where it keeps its numbers and code names (4 and 30 for the first row). A decision cell
+  with no number or code name is still kept word for word. We chose this over a new seeded row
+  because the ambiguous row is the realistic case and tests that the skill keeps the decision.
+- The kept runs of this pass cannot be graded again with the new graders: `--regrade` uses the
+  graders sealed with each run. The new checks were run by hand on copies of the kept workspaces.
+  With the new checks, `worktree-unchanged` and `design-rows-kept` pass in both arms. The v1.7.0 arm of
+  `explain-spec` still fails `each-decision-explained-with-what-it-rejected`, which is not changed.
+- The other two failures (`requirements-replay`, `visual-reference`) are not changed here.
+
 ### What it shows, and what it does not
 
 - It shows no regression: the pass counts are equal, and the one-claim difference is within what one

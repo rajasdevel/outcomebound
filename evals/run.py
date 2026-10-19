@@ -553,6 +553,23 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     return ""
 
 
+def refresh_baseline_hashes(workdir: Path, stage: Path) -> None:
+    """Re-record the notes `as_installed` rewrote in a fixture's `baseline-hashes`, which its
+    setup wrote before the install; without it a check that compares the tree to that baseline
+    counts the install as the model's edit. Only the lines of those notes change."""
+
+    path = stage / "checks" / "baseline-hashes"
+    if not path.is_file():
+        return
+    lines = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        _digest, _, name = line.partition("  ")
+        if name in ("./AGENTS.md", "./README.md") and (workdir / name).is_file():
+            line = f"{hashlib.sha256((workdir / name).read_bytes()).hexdigest()}  {name}"
+        lines.append(line)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def install(workdir: Path, files: dict[str, bytes]) -> None:
     """Write the arm's files into a fixture before its setup.sh runs, which commits everything
     its target holds in its first commit: the files are part of the seed, and of any baseline
@@ -870,6 +887,8 @@ def build_workspace(
         extra["error"] = f"fixture setup exited {built.returncode}"
         return report, {}, None, ""
     unfit = as_installed(workdir, arm) or installed(workdir, arm.files)
+    if not unfit:
+        refresh_baseline_hashes(workdir, stage)
     if unfit:
         extra["error"] = unfit
         return report, {}, None, ""
