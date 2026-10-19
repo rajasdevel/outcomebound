@@ -1337,10 +1337,14 @@ def test_dirty_review_baseline_is_taken_after_the_install_rewrites_the_note(
     assert failure is None
     check = ["bash", str(stage / "checks" / "unchanged.sh")]
     env = {**RUN.child_env(), **RUN.HERMETIC_GIT}
-    kept = subprocess.run(check, cwd=workdir, capture_output=True, text=True, env=env)
+    kept = subprocess.run(
+        check, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+    )
     assert kept.returncode == 0, kept.stderr
     (workdir / "notes.md").write_text("edited\n", encoding="utf-8")
-    edited = subprocess.run(check, cwd=workdir, capture_output=True, text=True, env=env)
+    edited = subprocess.run(
+        check, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+    )
     assert edited.returncode == 1
 
 
@@ -1413,6 +1417,7 @@ def test_explain_spec_rows_allow_a_clarified_decision_but_not_a_changed_one(
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     assert (done.returncode == 0) is kept, done.stdout
 
