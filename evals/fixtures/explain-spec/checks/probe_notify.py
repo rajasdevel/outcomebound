@@ -11,7 +11,8 @@ understanding: they read what the run explained, asked, reported and left unchan
                    alternative, one about the assumed row and one about an edge
     understanding  a line reports the person's understanding as `UNVERIFIED` or not checked, and no
                    line says that the person understands the design
-    rows           each decision and assumed row of the seed's design is still in it
+    rows           each decision and assumed row of the seed's design is still in it: its why and
+                   rejected cells unchanged, its decision cell clarified at most, numbers kept
 
 The answer checks read lines for the words each must carry, not meaning. Each exits 0 where it
 holds and 1 naming what does not. The seed is the commit OUTCOMEBOUND_SEED_SHA names, else the
@@ -176,23 +177,45 @@ def understanding() -> list[str]:
     return lacking
 
 
-def _rows(text: str) -> list[str]:
-    """The first cell of each decision and assumed row of a design's tables."""
+def _rows(text: str) -> list[list[str]]:
+    """The cells of each decision and assumed row of a design's tables."""
 
     return [
-        line.split("|")[1].strip()
+        [cell.strip() for cell in line.strip().strip("|").split("|")]
         for line in text.splitlines()
         if line.startswith("| ") and not line.startswith(("| ---", "| Decision", "| Row"))
     ]
 
 
+VALUES = re.compile(r"`[^`]+`|\d+")
+
+
 def rows() -> list[str]:
+    """Each seed row stays in the design. The cells after the first (why, the rejected
+    alternative, what would reverse it) are kept word for word. The first cell may be clarified,
+    which the skill allows, as long as it keeps its values: the numbers and the code names it
+    holds; a first cell with none is kept word for word."""
+
     seed = _rows(_git("show", f"{_seed()}:{SPEC}"))
     try:
-        now = Path(SPEC).read_text(encoding="utf-8")
+        now = _rows(Path(SPEC).read_text(encoding="utf-8"))
     except OSError:
         return [f"{SPEC} is gone"]
-    return [f"the row {row[:50]!r} is gone from the design" for row in seed if row not in now]
+    lacking = []
+    for row in seed:
+        first, rest = row[0], row[1:]
+        same = [other for other in now if other[1:] == rest]
+        values = VALUES.findall(first)
+        kept = any(
+            other[0] == first
+            or (values and all(value in VALUES.findall(other[0]) for value in values))
+            for other in same
+        )
+        if not same:
+            lacking.append(f"the row {first[:50]!r} is gone, or its why or rejected cell changed")
+        elif not kept:
+            lacking.append(f"the row {first[:50]!r} lost its decision or its values {values}")
+    return lacking
 
 
 CHECKS = {

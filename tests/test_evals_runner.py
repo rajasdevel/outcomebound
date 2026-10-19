@@ -1319,6 +1319,109 @@ def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
     assert not (workdir / "checks").exists()
 
 
+@needs_posix_bash
+def test_dirty_review_baseline_is_taken_after_the_install_rewrites_the_note(
+    tmp_path: Path,
+) -> None:
+    """The install rewrites AGENTS.md after setup records `baseline-hashes`; the unchanged check
+    must pass on the built tree, and still fail where a review edits the user's dirty work."""
+
+    loaded = RUN.load_arm("current", RUN.selected_fragments("dirty-review"))
+    workdir = tmp_path / "w"
+    workdir.mkdir()
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    failure, _protected, _seed, _prompt = RUN.build_workspace(
+        "dirty-review", loaded, workdir, {}, stage
+    )
+    assert failure is None
+    check = ["bash", str(stage / "checks" / "unchanged.sh")]
+    env = {**RUN.child_env(), **RUN.HERMETIC_GIT}
+    kept = subprocess.run(
+        check, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+    )
+    assert kept.returncode == 0, kept.stderr
+    (workdir / "notes.md").write_text("edited\n", encoding="utf-8")
+    edited = subprocess.run(
+        check, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+    )
+    assert edited.returncode == 1
+
+
+SEED_DESIGN = """# Design
+
+| Decision | Why | Rejected alternative |
+| --- | --- | --- |
+| A failed send is retried 4 times in all, 30 seconds apart | outages are short | backoff |
+| An order is keyed by its id | no duplicates | send again |
+
+## Assumed
+
+| Row | Assumed | Would reverse it |
+| --- | --- | --- |
+| Retrying is safe | a failed send sent nothing | a timeout for a sent mail |
+"""
+
+
+@needs_posix_bash
+@pytest.mark.parametrize(
+    ("old", "new", "kept"),
+    [
+        (
+            "retried 4 times in all, 30 seconds apart",
+            "tried 4 times in all, 30 seconds apart",
+            True,
+        ),
+        (
+            "retried 4 times in all, 30 seconds apart",
+            "given 4 attempts, with a 30-second wait after each failure",
+            True,
+        ),
+        (
+            "retried 4 times in all, 30 seconds apart",
+            "retried 5 times in all, 30 seconds apart",
+            False,
+        ),
+        (
+            "retried 4 times in all, 30 seconds apart",
+            "retried 4 times in all, 60 seconds apart",
+            False,
+        ),
+        ("outages are short", "outages are rare", False),
+        ("An order is keyed by its id", "An order is keyed by its number", False),
+        ("a failed send sent nothing", "a failed send might have sent", False),
+    ],
+)
+def test_explain_spec_rows_allow_a_clarified_decision_but_not_a_changed_one(
+    tmp_path: Path, old: str, new: str, kept: bool
+) -> None:
+    probe = tmp_path / "probe_notify.py"
+    shutil.copy(RUN.FIXTURES / "explain-spec" / "checks" / "probe_notify.py", probe)
+    shutil.copy(ROOT / "evals" / "graders" / "transcript_commands.py", tmp_path)
+    repo = tmp_path / "repo"
+    (repo / "docs/specs/notify").mkdir(parents=True)
+    design = repo / "docs/specs/notify/design.md"
+    design.write_text(SEED_DESIGN, encoding="utf-8")
+    env = {**RUN.child_env(), **RUN.HERMETIC_GIT}
+    for command in (
+        ["init", "-q", "."],
+        ["add", "-A"],
+        ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "seed"],
+        ["tag", "seed"],
+    ):
+        subprocess.run(["git", *command], cwd=repo, check=True, env=env, capture_output=True)
+    design.write_text(SEED_DESIGN.replace(old, new), encoding="utf-8")
+    done = subprocess.run(
+        [sys.executable, "-B", str(probe), "rows"],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert (done.returncode == 0) is kept, done.stdout
+
+
 def test_missing_observed_model_does_not_count_as_requested_model():
     assert RUN.call_error(0, "Finished", {"model_observed": None}, "requested")
     assert RUN.call_error(0, "Finished", {"model_observed": "requested"}, "requested") == ""
