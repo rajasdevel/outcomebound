@@ -1399,7 +1399,12 @@ def test_explain_spec_rows_allow_a_clarified_decision_but_not_a_changed_one(
     design = repo / "docs/specs/notify/design.md"
     design.write_text(SEED_DESIGN, encoding="utf-8")
     env = {**RUN.child_env(), **RUN.HERMETIC_GIT}
-    for command in (["init", "-q", "."], ["add", "-A"], ["commit", "-qm", "seed"], ["tag", "seed"]):
+    for command in (
+        ["init", "-q", "."],
+        ["add", "-A"],
+        ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "seed"],
+        ["tag", "seed"],
+    ):
         subprocess.run(["git", *command], cwd=repo, check=True, env=env, capture_output=True)
     design.write_text(SEED_DESIGN.replace(old, new), encoding="utf-8")
     done = subprocess.run(
