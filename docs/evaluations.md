@@ -1,5 +1,5 @@
 ---
-last_checked: 2026-10-17
+last_checked: 2026-10-19
 volatility: STABLE (dated results of named models and codex versions; the method) / MONITOR (codex isolation and sign-in facts under Method)
 sources:
   - https://learn.chatgpt.com/docs/agent-approvals-security
@@ -115,11 +115,12 @@ recorded run, because a model call does not repeat exactly.
 | Five guidance texts compared on ten fixtures, and a settling pass on three | 2026-10-17 | gpt-6.1-sol medium | 105 (and 90 that E28 counts) | E29 | E29 |
 | Spot check of the held-edit text after the first-principles round, five fixtures | 2026-10-17 | gpt-6.1-sol medium | 15 | E30 | E30 |
 | Blind reads of agent reports under different report guidance, two rounds | 2026-10-18 | one model family, not named here | not counted here | E31 | E31 |
+| The 1.8.0 install against v1.7.0, 31 default fixtures, one run each | 2026-10-19 | gpt-6.1-sol medium | 62 | E32 | E32 |
 
 Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
 and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
 (sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. E27 adds 48 counted Codex runs, for 663. E28 adds 132 counted Codex runs (30 on each of two arms, 15 more on each of the two, and 42 on the honed text), for 795. E29 adds 105 counted Codex runs, for 900; 90 further calls of its two passes are the runs that E28 counts, so they are not added again. E30 adds 15 counted Codex runs, for 915. E31 rates replies that model runs wrote; this record does not count those runs, so the total stays 915. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
+retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. E27 adds 48 counted Codex runs, for 663. E28 adds 132 counted Codex runs (30 on each of two arms, 15 more on each of the two, and 42 on the honed text), for 795. E29 adds 105 counted Codex runs, for 900; 90 further calls of its two passes are the runs that E28 counts, so they are not added again. E30 adds 15 counted Codex runs, for 915. E31 rates replies that model runs wrote; this record does not count those runs, so the total stays 915. E32 adds 62 counted Codex runs, for 977. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
 an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
 
 Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
@@ -129,7 +130,7 @@ of 2026-08 were kept as result files. These are not in the repository either.
 
 ## Key findings
 
-Each finding has an id (E1 to E31). Other documents may cite the id.
+Each finding has an id (E1 to E32). Other documents may cite the id.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -2508,3 +2509,54 @@ One reply for each note and kind of guidance, so a rerun can pick differently. T
 and synthetic, and a reply in a long session may read differently. The ranking and the picks are
 a strong hint and not proof. The fixtures that measure report text were not rerun for this
 change.
+
+## E32. The 1.8.0 install against v1.7.0, on all 31 default fixtures, on Codex
+
+Date: 2026-10-19. Model calls: 62 Codex calls, all counted, none failed. No probe.
+
+### Question
+
+Does the 1.8.0 install change the result on the 31 default kernel and skill fixtures, against the
+v1.7.0 install?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Arms: `current`, the 1.8.0 install made from main, and `earlier`, the full install of v1.7.0.
+- Fixtures: the 31 default fixtures. One run each, so 31 calls on each arm.
+- Grading is by deterministic post-checks.
+
+### Result
+
+| | 1.8.0 | v1.7.0 |
+| --- | --- | --- |
+| Fixtures that passed every required claim | 27 of 31 | 27 of 31 |
+| Claims that passed | 114 of 119 | 113 of 119 |
+| Report claims (unrun checks marked `UNVERIFIED`, reported checks) | 12 of 12 | 12 of 12 |
+
+- Four fixtures failed in both arms. Each failure is known from earlier passes:
+  `dirty-review` (the worktree was not left unchanged), `explain-spec` (the design rows were not
+  kept; v1.7.0 also missed the claim that each decision is explained with what it rejected),
+  `requirements-replay` (a requirement was not tied to its source), and `visual-reference` (the
+  picture requirements were not marked inferred, and the picture gaps were not named).
+- `decision` and `explorable` passed in both arms.
+
+### The first grading was void
+
+The first grading was given the output folder as a relative path (`--out evals/results/raw/<name>`).
+The runner passed it unchanged as `OUTCOMEBOUND_GRADER_DIR`. Each grader command runs in the fixture
+repository, so it resolved the relative folder inside that repository, found no grader, and failed.
+Every claim that needs the grader folder failed in both arms. The results above come from grading the
+kept runs again with `--regrade` and absolute paths. That grading makes no model call. The runner now
+makes `--out`, `--workspace-root` and `--regrade` absolute before it uses them.
+
+### What it shows, and what it does not
+
+- It shows no regression: the pass counts are equal, and the one-claim difference is within what one
+  run of each arm can vary.
+- It does not show a gain.
+
+### Limits
+
+One model, one run for each fixture and arm, so a rerun can differ in any claim. The fixtures are
+synthetic and short. The four shared failures are known and are not a measure of the change.
