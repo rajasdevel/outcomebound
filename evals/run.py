@@ -1791,8 +1791,12 @@ def _main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.summary:
         return summarize([Path(item) for item in args.summary])
+    # Absolute before any use: the grader commands run in the fixture repository, where a
+    # relative path would resolve to another place.
+    args.out = str(Path(args.out).resolve()) if args.out else ""
+    args.workspace_root = str(Path(args.workspace_root).resolve()) if args.workspace_root else ""
     if args.regrade:
-        return regrade(Path(args.regrade), Path(args.out) if args.out else RAW / uuid.uuid4().hex)
+        return regrade(Path(args.regrade).resolve(), Path(args.out or RAW / uuid.uuid4().hex))
     names = checked_fixtures(parser, args)
     set_earlier_ref(parser, args)
     run_id = uuid.uuid4().hex

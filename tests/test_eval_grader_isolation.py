@@ -450,6 +450,27 @@ def test_regrade_runs_the_sealed_copy_not_the_checkout(
     )
 
 
+def test_a_relative_regrade_path_gives_the_grader_commands_an_absolute_grader_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--regrade` and `--out` named relative to the current folder: the grader commands run in
+    the fixture repository, so a relative `OUTCOMEBOUND_GRADER_DIR` would resolve inside it."""
+
+    _evals, _meta, out = _kept(tmp_path, monkeypatch)
+    seen: list[str] = []
+    real = RUN.bounded_command
+
+    def spy(command: Any, **keywords: Any) -> Any:
+        seen.append(keywords["env"][RUN.GRADER_DIR_ENV])
+        return real(command, **keywords)
+
+    monkeypatch.setattr(RUN, "bounded_command", spy)
+    monkeypatch.chdir(tmp_path)
+    assert RUN._main(["--regrade", out.name, "--out", "relative-out"]) == 0
+    assert seen and all(os.path.isabs(item) for item in seen), seen
+    assert Path(seen[0]).is_relative_to(tmp_path.resolve())
+
+
 def test_regrade_refuses_a_sealed_copy_that_differs_from_its_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
