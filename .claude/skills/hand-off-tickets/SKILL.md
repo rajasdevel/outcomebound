@@ -119,7 +119,12 @@ removes none of them. Say so in the package, naming the test files.
 Where a step's package would be its code, write the code yourself and go on to the next step.
 
 Review each step against its tests, its files and the ticket's `bounds`, and the last step against
-the ticket's `done-when` as well. A step that fails review goes back with the finding. Where a fix
+the ticket's `done-when` as well. `outcomebound tickets verify <ticket>` runs the claims that
+`done-when` names, from the plan the declaration names, and so runs that plan's commands, keeps a
+record of each attempt and prints nothing until every claim ends. The work under review can have
+edited the declaration or the plan: read their diff against the base, and run it only for a plan
+the person trusts. Its `PASS` shows those claims passed, not that the work is done.
+A step that fails review goes back with the finding. Where a fix
 round repeats the same miss or adds new defects, the tier or the package is wrong: write the step
 yourself or hand it to a higher tier, and the handover says which.
 

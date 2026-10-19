@@ -26,7 +26,10 @@ it is the task: not skipped, not marked expected, not loosened until it passes. 
 on one run and passes on the next, with the same inputs and conditions, is flaky: report it as
 flaky with both results; a rerun that passes is not its verdict. Compare failures by their cause and
 the behaviour they reached, not only by their names: a setup failure leaves the behaviour it
-prevented unverified, and before another long run, fix the prerequisite the last output names.
+prevented unverified, and before another long run, fix the prerequisite the last output names. Before you rerun a claim of a validation plan,
+`outcomebound validation status <plan>` reads its last kept result and says whether a path the
+claim declares has changed since (`CURRENT`, `CHANGED` or `UNVERIFIED`); it runs nothing, and
+`CURRENT` is not a pass.
 
 ## What a kept test shows
 
