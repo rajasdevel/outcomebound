@@ -437,6 +437,13 @@ def _parser() -> argparse.ArgumentParser:
     swept.add_argument("--json", action="store_true", help="print one JSON object, not text")
     swept.add_argument("--verbose", action="store_true", help="also print the checks that passed")
     commands.add_parser(
+        "council",
+        prog="outcomebound review council",
+        help="ask reviewers of other harnesses and models for a read-only review (spends credits; "
+        "see `council --help`)",
+        add_help=False,
+    )
+    commands.add_parser(
         "since",
         prog="outcomebound review since",
         help="what changed since the ref a review read (reads Git; see `since --help`)",
@@ -452,6 +459,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from outcomebound_tools import review_since
 
         return review_since.main(arguments[1:])
+    if arguments[:1] == ["council"]:
+        # Its own module: it starts programs and reads Git, which `check` and `sweep` never do.
+        from outcomebound_tools import review_council
+
+        return review_council.main(arguments[1:])
     options = _parser().parse_args(arguments)
     if options.command == "sweep":
         folder = Path(options.folder)

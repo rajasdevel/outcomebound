@@ -30,7 +30,7 @@ agent reads the code, and a summary of it adds text without adding a fact.
    (Done, Setup, the CI test command, irreversible edges, precedence); and the pointers, the `local`
    fragment in full and a `- <condition>: read <path>` line per fragment and skill. It copies the
    selected fragments under `.outcomebound/fragments/`, the skills per harness, each folder whole:
-   the thirteen every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
+   the fourteen every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
    import a harness needs to load it, and `.outcomebound/manifest.json` last. It refuses a harness
    that would not load the contract. It also refuses to overwrite an owned file someone edited,
    unless `--force` is given. Running it again from a newer release or checkout is the upgrade. An upgrade
@@ -133,7 +133,13 @@ Put what the target cannot show in one decision brief (`outcomebound brief --hel
 the users where the README does not say, irreversible acts no file shows, why a Done command fails
 on the base, what must never be touched, and each `UNVERIFIED` item only the person can settle,
 such as a secret or production access. Each question names the line that raised it and the default
-you take without an answer, and the work that does not wait on it goes on.
+you take without an answer, and the work that does not wait on it goes on. Include one question
+on the review council: which reviewers the person wants for a second opinion, as
+`harness:model[:effort]` entries, offering the built-in default that
+`outcomebound review council --defaults` prints, with any council file already in effect. If they name others, write them as
+`.outcomebound/council.json` (`{"version": 1, "reviewers": ["harness:model"]}`; the
+`review-council` skill and `$(outcomebound home)/schemas/council-config.schema.json` give the rest); if they keep the
+default, write nothing.
 
 ## Offer; each changes CI or tooling, so act only on the person's yes
 

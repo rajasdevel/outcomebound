@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:outcomebound:schema:council-config:1",
+  "title": "OutcomeBound review council configuration v1",
+  "description": "The optional file `.outcomebound/council.json` of a project, or `.outcomebound/council.json` in the home folder of a person, that `outcomebound review council` reads: the reviewers that run when `--reviewer` names none, and optional settings the command line overrides. The project's file is read first; where it exists the person's is not read.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "reviewers"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "reviewers": {
+      "description": "Each entry is `harness:model[:effort]`, as `--reviewer` takes it. A harness with no built-in default needs its model; an effort left out leaves the tool's own effort.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "lens": {
+      "description": "What the reviewers look at, as `--lens` gives it.",
+      "type": "string",
+      "minLength": 1
+    },
+    "timeout_seconds": {
+      "description": "The time limit for each reviewer, as `--timeout` gives it.",
+      "type": "integer"
+    },
+    "budget_usd": {
+      "description": "A spend cap for Claude reviewers, as `--budget-usd` gives it: a number of US dollars as text.",
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?$"
+    }
+  }
+}
