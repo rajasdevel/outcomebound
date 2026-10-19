@@ -171,6 +171,16 @@ accepts authority only from your messages sees them. Text that is for you, such 
 the run, is outside that block. A handoff does not name a copy of itself in a different
 repository. If a copy exists, it is a snapshot, and the run does not update it.
 
+## Resume work
+
+Three commands only read. `outcomebound where` prints the work in flight (open briefs, failed
+claims, review findings, pull requests) and names the next skill for an unfinished item;
+`--offline` does not start `gh`. `outcomebound workspace audit` lists each worktree and marks it
+`removable` only when it is a linked worktree with no changed path, no untracked path and all
+commits kept (a squash merge reads local or pushed). It never removes a worktree.
+`outcomebound sources links <handoff>` checks that the paths, links and refs a handoff names still
+exist. The designs are [workspace](specs/workspace/design.md) and [sources](specs/sources/design.md).
+
 ## Check the notes before you rely on them
 
 Notes are text that the next session reads, as it reads your instruction files. A note that
@@ -205,6 +215,10 @@ Then, before the agent uses a fact from a note, it checks that fact against its 
   `CLAUDE.md`, or its `AGENTS.md` where no `CLAUDE.md` is found. `outcomebound instructions check`
   names each such file, and `adopt` warns about it. With `--harness generic`, you check that your harness loads
   the file.
+- `adopt --check` warns one time for each other worktree whose install is older than the engine.
+- A cloud session starts from the pushed branch. The person adds the install line that `adopt`
+  prints to the setup step of the environment, and the session puts its handover in the pull
+  request description. See [cloud-sessions.md](cloud-sessions.md).
 - Codex's default sandbox keeps `.agents/` and `.git` read-only. The fragment tells the agent to
   ask you one time to make two folders writable roots, and not to ask for each write. The two
   folders are `<repository>/.agents` and the Git common directory, which is `<repository>/.git`

@@ -137,7 +137,7 @@ give them to your agents, add them to your `local` fragment.
 - **Timeouts**, when `timeout` is installed (macOS does not have it; Homebrew coreutils gives
   `gtimeout`): `timeout 120 <command>` only for a network call that can hang, such as a request
   to a server that does not answer. Exit code 124 means that the command was stopped. Report that
-  result as UNVERIFIED. Do not use a timeout on a test suite, a build, a migration or any other
+  result as not finished (in a handover or a check report, `UNVERIFIED`). Do not use a timeout on a test suite, a build, a migration or any other
   command that can take a long time and then end: run it in the background (see
   [Commands that end after a long time](#habits-that-prevent-a-wait)). Do not use a timeout on
   `git` or `npm install`, because a stopped command can leave a lock file.
@@ -162,4 +162,4 @@ out.
 The fragment is guidance that your agent reads. It does not stop a command, and an agent that
 ignores it is not stopped. A habit that you write on the command line is the only protection in a
 harness that gives a command a terminal. Report a command that was stopped or timed out as
-`UNVERIFIED`. It is not a pass.
+not finished. It is not a pass. Use the label `UNVERIFIED` only in a record.

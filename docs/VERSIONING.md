@@ -60,6 +60,7 @@ At a release, these places name the same version:
 - the heading and the link of the changelog section
 - the `v=` of the operating-contract block that `adopt` installs
 - every install line in the README and in `templates/ci/` (`…/outcomebound@v<VERSION>`)
+- the install line in `templates/scaffold/common/ci.yml`
 
 Between two releases, the README on `main` can describe a change that the version its install
 lines name does not have, because those lines change only with `VERSION` in the release commit.
