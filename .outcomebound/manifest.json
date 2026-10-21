@@ -32,12 +32,12 @@
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "e1af70423aaf3a05c927ea7fac60c39a828e60ad9f3c0f5487ee6730a2331cd0"
+        ".outcomebound/fragments/workspace.md": "2c73ed2ca5c532ea16eb297348a66c01f7da802eaf9a0a14c7142f821e3fcb76"
       },
       "style": [
         "ste"
       ],
-      "sha256": "58d99223313f622fda9433dab33368fc716cf5df5d9b5492fea99b4d91ef7f4b"
+      "sha256": "02eb642df7089de532e33e26c52efc2c10ec1b3de3f739c727c22083bfd54359"
     },
     {
       "kind": "block",
@@ -56,7 +56,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "e1af70423aaf3a05c927ea7fac60c39a828e60ad9f3c0f5487ee6730a2331cd0"
+      "sha256": "2c73ed2ca5c532ea16eb297348a66c01f7da802eaf9a0a14c7142f821e3fcb76"
     },
     {
       "kind": "fragment",

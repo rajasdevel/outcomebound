@@ -287,7 +287,8 @@ def test_runner_the_current_arm_is_what_adopt_installs_in_the_field(
     assert "<!-- outcomebound:begin id=operating-contract" in agents
     assert (
         "- Done: `make check` and `make test`"
-        " (the full suite: run it where the change reaches what it tests)"
+        " (the full suite: run it where focused checks do not cover the changed"
+        " risk, or the project's own instructions require it)"
     ) in agents
     assert _git(workdir, "status", "--porcelain") == ""
     assert _git(workdir, "rev-parse", "HEAD") == _git(workdir, "rev-parse", "seed^{commit}")
@@ -568,7 +569,8 @@ def test_runner_the_dump_of_the_current_arm_shows_its_install(
     )
     assert (
         "  | - Done: `make check` and `make test`"
-        " (the full suite: run it where the change reaches what it tests)"
+        " (the full suite: run it where focused checks do not cover the changed"
+        " risk, or the project's own instructions require it)"
     ) in printed
     assert not isolated["calls"].exists()
 

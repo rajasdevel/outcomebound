@@ -118,7 +118,8 @@ def done_line(done: Sequence[str]) -> str:
 
     return (
         f"- Done: {both([code(command) for command in done])} "
-        "(the full suite: run it where the change reaches what it tests)"
+        "(the full suite: run it where focused checks do not cover the changed"
+        " risk, or the project's own instructions require it)"
     )
 
 

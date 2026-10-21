@@ -37,9 +37,10 @@ keeps, and names the next skill for an unfinished item; `outcomebound workspace 
 worktree with its commits merged, pushed only or local only (a squash merge reads local or pushed).
 Both only read, and can be slow in a large repository; `where --offline` skips `gh`.
 **Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
-worktrees are preserved state. Work where the person put you, on their branch, unless other agents
-work in that checkout or the work runs in parallel or across sessions; then work in a worktree you
-created, keep it while its task or an agent
+worktrees are preserved state. Work in the checkout and branch the person put you in unless another
+task uses it or the project requires isolation; for parallel work or work across sessions, create
+or resume a worktree for this task, carry its uncommitted and ignored task state with you, keep it
+while its task or an agent
 that may resume it needs it, and remove it only when the task is finished, its commits are reachable
 from a kept branch, and nothing uncommitted or ignored in it is still needed. A worktree's commits
 land as the project's instructions or the goal envelope say work lands, the rule the tickets

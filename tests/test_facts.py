@@ -440,20 +440,25 @@ def test_done_names_every_command_in_run_order(tmp_path: Path) -> None:
     for done, line in [
         (
             ["make test"],
-            "- Done: `make test` (the full suite: run it where the change reaches what it tests)",
+            (
+                "- Done: `make test` (the full suite: run it where focused checks do not cover"
+                " the changed risk, or the project's own instructions require it)"
+            ),
         ),
         (
             ["make check", "make test"],
             (
                 "- Done: `make check` and `make test`"
-                " (the full suite: run it where the change reaches what it tests)"
+                " (the full suite: run it where focused checks do not cover the changed"
+                " risk, or the project's own instructions require it)"
             ),
         ),
         (
             ["a", "b", "c"],
             (
                 "- Done: `a`, `b` and `c`"
-                " (the full suite: run it where the change reaches what it tests)"
+                " (the full suite: run it where focused checks do not cover the changed"
+                " risk, or the project's own instructions require it)"
             ),
         ),
     ]:
