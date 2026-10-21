@@ -104,17 +104,38 @@ def _read_text(path: Path, what: str) -> str:
 EDGE_SEPARATOR = ";"
 
 
-def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
-    """The `edges:` list: a JSON list of non-empty one-line strings, none holding the
-    separator the facts line joins them with."""
+# A list key's form, shown in each refusal of another form.
+_EXAMPLE = {
+    "edges": '["pushing a tag", "publishing a release"]',
+    "detect": '["pyproject.toml", "setup.cfg"]',
+}
+
+
+def _json_list(key: str, value: str, span: int, source: str, number: int) -> list[Any]:
+    """The value of a list-valued key, which takes one form: a JSON list on the key's own line.
+    Any other form is refused with the lines read (the key's line and the `span` lines after
+    it that belong to its value) and the form, by example; no corrected line is offered, since
+    reading another form's items as YAML does needs a YAML reader the engine does not carry."""
 
     try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as error:
-        raise FragmentError(f"{source}:{number}: edges must be a JSON list: {error}") from error
-    if not isinstance(parsed, list) or not all(
-        isinstance(item, str) and item.strip() for item in parsed
-    ):
+        parsed = json.loads(value) if value else None
+    except json.JSONDecodeError:
+        parsed = None
+    if isinstance(parsed, list) and not span:
+        return parsed
+    where = f"lines {number}-{number + span}" if span else f"line {number}"
+    raise FragmentError(
+        f"{source}:{number}: {key} must be a JSON list on the key's own line, each item in "
+        f"double quotes, as in `{key}: {_EXAMPLE[key]}`; {where} hold another form: write it "
+        "in that form"
+    )
+
+
+def _edges(parsed: list[Any], source: str, number: int) -> tuple[str, ...]:
+    """The `edges:` list: non-empty one-line strings, none holding the separator the facts line
+    joins them with."""
+
+    if not all(isinstance(item, str) and item.strip() for item in parsed):
         raise FragmentError(f"{source}:{number}: edges must be a JSON list of non-empty strings")
     for item in parsed:
         if "\n" in item or "\r" in item:
@@ -128,7 +149,7 @@ def _edges(value: str, source: str, number: int) -> tuple[str, ...]:
     return tuple(item.strip() for item in parsed)
 
 
-def _detect_patterns(value: str, source: str, number: int) -> tuple[str, ...]:
+def _detect_patterns(parsed: list[Any], source: str, number: int) -> tuple[str, ...]:
     """Parse and constrain the detect list.
 
     Detection walks a target repository the operator did not necessarily write,
@@ -137,11 +158,7 @@ def _detect_patterns(value: str, source: str, number: int) -> tuple[str, ...]:
     caught when the fragment is parsed rather than when a glob runs.
     """
 
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError as error:
-        raise FragmentError(f"{source}:{number}: detect must be a JSON list: {error}") from error
-    if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
+    if not all(isinstance(item, str) for item in parsed):
         raise FragmentError(f"{source}:{number}: detect must be a JSON list of strings")
     for pattern in parsed:
         if not pattern.strip():
@@ -158,17 +175,18 @@ def _detect_patterns(value: str, source: str, number: int) -> tuple[str, ...]:
     return tuple(parsed)
 
 
-# The keys whose value is a JSON list, each with its parser.
+# The keys whose value is a JSON list, each with its parser of the list's items.
 LISTS = {"detect": _detect_patterns, "edges": _edges}
 
 
 def _frontmatter_value(
-    key: str, value: str, source: str, number: int
+    key: str, value: str, source: str, number: int, span: int = 0
 ) -> str | int | tuple[str, ...]:
-    """Read one declared field after its key and uniqueness were checked."""
+    """Read one declared field after its key and uniqueness were checked; `span` is how many
+    lines after the key's own belong to its value, which only a list key's refusal reads."""
 
     if key in LISTS:
-        return LISTS[key](value, source, number)
+        return LISTS[key](_json_list(key, value, span, source, number), source, number)
     if key == "version":
         if not value.isdigit():
             raise FragmentError(f"{source}:{number}: version must be an integer")
@@ -176,6 +194,27 @@ def _frontmatter_value(
     if not value:
         raise FragmentError(f"{source}:{number}: {key} must not be empty")
     return value
+
+
+# A frontmatter line that opens a key of its own: a name at the start of the line, then `:`.
+_KEY_LINE = re.compile(r"[A-Za-z_][\w-]*[ \t]*:")
+
+
+def _value_span(following: Sequence[str]) -> int:
+    """How many of the lines after a key belong to its value in another form: every line up to
+    the last that is not blank before the next line that opens a key of its own, or the end.
+    That holds a block list's items, a flow list's continued lines and its closing `]`, at any
+    indent, and comment and continued lines. After a key that is not a list key, the first
+    such line is refused as not 'key: value'."""
+
+    span = 0
+    for offset, line in enumerate(following, 1):
+        if not line.strip():
+            continue
+        if _KEY_LINE.match(line):
+            break
+        span = offset
+    return span
 
 
 def _frontmatter(text: str, source: str) -> tuple[dict[str, Any], str]:
@@ -186,9 +225,12 @@ def _frontmatter(text: str, source: str) -> tuple[dict[str, Any], str]:
         raise FragmentError(f"{source}: frontmatter block is not closed with '---'")
     raw, body = text[4:end], text[end + 5 :]
     fields: dict[str, Any] = {}
-    for number, line in enumerate(raw.splitlines(), 2):
+    lines = raw.splitlines()
+    for index, line in enumerate(lines):
+        number = index + 2
         if not line.strip():
             continue
+        span = _value_span(lines[index + 1 :])
         key, separator, value = line.partition(":")
         if not separator:
             raise FragmentError(f"{source}:{number}: frontmatter line is not 'key: value'")
@@ -205,7 +247,7 @@ def _frontmatter(text: str, source: str) -> tuple[dict[str, Any], str]:
             )
         if key in fields:
             raise FragmentError(f"{source}:{number}: duplicate frontmatter key {key!r}")
-        fields[key] = _frontmatter_value(key, value, source, number)
+        fields[key] = _frontmatter_value(key, value, source, number, span)
     missing = [key for key in FRONTMATTER_KEYS if key not in fields]
     if missing:
         raise FragmentError(f"{source}: frontmatter is missing {', '.join(missing)}")

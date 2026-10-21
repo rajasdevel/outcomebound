@@ -17,8 +17,9 @@ out. A hidden character
 in an agents' note reads UNVERIFIED for that note, where in an instruction file it is a FAIL.
 Also reported, and not changing the result: each instruction file a harness's row says it
 loads from a folder above the target (`ancestors`), which this module names and never opens,
-where every row was selected, the loading facts of a row that loads no file of the
-target that another row does not load too, and each stale reference (`stale_references`):
+each loading fact of a row of OutcomeBound's harness table that reads UNVERIFIED (what `generic`
+loads beside AGENTS.md, an unverified or overdue row, unsettled key categories), which nothing in
+the target settles, and each stale reference (`stale_references`):
 only an inline code span of project-owned Markdown text is read for one, as text, and nothing
 a makefile or `package.json` holds is run. An occurrence of a retired term, path or command is a
 FAIL, since the project's own list says it is retired; for that check alone the project's data
@@ -69,6 +70,7 @@ from outcomebound_tools import (
     walk,
 )
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
+from outcomebound_tools.identity import SENTINEL_BEGIN, SENTINEL_END
 from outcomebound_tools.textio import decode as _decode
 from outcomebound_tools.textio import plain as _plain
 from outcomebound_tools.textio import quote as _quote
@@ -110,7 +112,6 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "load-resolution": ("loading", "gate", "S7"),
 }
 
-_MARKERS = ("outcomebound:begin ", "outcomebound:end ")
 _RUN_LENGTH = 60
 _BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
 # A commit or checksum pin, 40 or 64 hex characters, is no payload: alone, after `name=`, or glued
@@ -491,6 +492,10 @@ def _scope(harnesses: Sequence[str]) -> _Scope:
     config: dict[str, list[str]] = {}
     for harness in harnesses:
         row = _row(harness)
+        if row is None and harness == GENERIC:
+            # `generic` is any harness that reads AGENTS.md: the root's and each nested one.
+            exact.add("AGENTS.md")
+            globs.add("**/AGENTS.md")
         if row is None:
             continue
         paths, patterns = _row_scope(row)
@@ -752,27 +757,53 @@ def _hidden_characters(path: str, text: str) -> list[Finding]:
     ]
 
 
-def _is_marker(line: str) -> bool:
-    """A line that is only one of OutcomeBound's managed-block marker comments."""
+def _is_marker(text: str) -> bool:
+    """Whether `text`, spaces around it aside, is exactly one of OutcomeBound's managed-block
+    markers as the block grammar writes them (`identity.SENTINEL_BEGIN`, `SENTINEL_END`): a
+    begin with its id, an optional hash and its version, or an end with its id, and nothing
+    else. A comment that only starts like one is audited as any comment is."""
 
-    text = line.strip()
-    for end in ("-->", "--!>"):
-        if text.startswith("<!--") and text.endswith(end) and len(text) >= 4 + len(end):
-            return text[4 : -len(end)].strip().startswith(_MARKERS)
-    return False
+    text = text.strip()
+    return any(marker.fullmatch(text) for marker in (SENTINEL_BEGIN, SENTINEL_END))
+
+
+# The forms a block writer gives a marker's hash and version (`identity.format_managed_block`):
+# a sha256 digest, and dotted numbers. The id's form is the grammar's own.
+_MARKER_HASH = re.compile(r"[0-9a-f]{64}")
+_MARKER_VERSION = re.compile(r"\d+(?:\.\d+)*")
+
+
+def _marker_attributes(line: str) -> list[str]:
+    """What is wrong with a block marker's hash or version, where `line` is a begin marker;
+    each is a fact for `concealed-content`. Its id, hash and version are also read with the
+    rest of the line for encoded runs, as any text is."""
+
+    begin = SENTINEL_BEGIN.fullmatch(line.strip())
+    if not begin:
+        return []
+    facts = []
+    digest, version = begin.group("hash"), begin.group("v")
+    if digest is not None and not _MARKER_HASH.fullmatch(digest):
+        facts.append(f"a block marker whose hash is no sha256 digest: {_quote(digest[:40])}")
+    if not _MARKER_VERSION.fullmatch(version):
+        facts.append(f"a block marker whose version is no version: {_quote(version)}")
+    return facts
 
 
 def _comments(text: str) -> Iterator[tuple[int, str]]:
-    """Each HTML comment's first line and text, OutcomeBound's block markers excepted. A comment
-    ends at `-->` or at `--!>`, as a browser ends it, or at the end of the text."""
+    """Each HTML comment's first line and text, OutcomeBound's block markers excepted: a
+    comment alone on one physical line that is exactly a marker (`_is_marker`). A comment ends
+    at `-->` or at `--!>`, as a browser ends it, or at the end of the text."""
 
     for match in re.finditer(r"<!--(.*?)(--!?>|\Z)", text, re.DOTALL):
         number = text.count("\n", 0, match.start()) + 1
         line_start = text.rfind("\n", 0, match.start()) + 1
         line_end = text.find("\n", match.end())
         whole = text[line_start : line_end if line_end >= 0 else len(text)].strip()
-        inner = match.group(1).strip()
-        if whole == match.group(0).strip() and inner.startswith(_MARKERS):
+        # Only a marker wholly on one physical line is passed over; a comment split over lines
+        # is reported, since the line checks read a marker's attributes one line at a time.
+        one_line = "\n" not in match.group(0)
+        if one_line and whole == match.group(0).strip() and _is_marker(whole):
             continue
         yield number, match.group(0)
 
@@ -878,8 +909,11 @@ def _concealed_content(path: str, text: str) -> list[Finding]:
         for n, c in _comments(text)
     ]
     for number, line in _lines(text):
-        if _is_marker(line):
-            continue
+        # A block marker is passed over as an HTML comment only; its line is read as any line.
+        found += [
+            _finding("concealed-content", path, number, UNVERIFIED, fact)
+            for fact in _marker_attributes(line)
+        ]
         for run in _BASE64_RUN.finditer(line):
             if not _payload(run.group(0)):
                 continue
@@ -2267,9 +2301,13 @@ def _loading(
     harnesses: Sequence[str], configured: set[str], unused: frozenset[str] = frozenset()
 ) -> list[Finding]:
     """Per harness, whether its row's loading facts are verified and current, and, where its
-    configuration was read, which of its key categories the table leaves unsettled. A harness
-    in `unused`, selected only because every row was and loading no file the target holds, is
-    reported and does not change the result."""
+    configuration was read, which of its key categories the table leaves unsettled. Each is a
+    fact about a row of OutcomeBound's harness table, which nothing in the target settles, so an
+    UNVERIFIED one is reported on every run and does not change the result; so is what
+    `generic` loads beside AGENTS.md. A harness no row names is no such fact: what it loads is
+    left unread, and naming a harness the table holds settles that, so it changes the result.
+    A harness in `unused`, selected only because every row was, says that the target holds no
+    file it loads."""
 
     found = []
     for harness in harnesses:
@@ -2280,10 +2318,8 @@ def _loading(
             "",
         )
         verdict = UNVERIFIED if state else PASS
-        decides = True
         if state and harness in unused:
             fact += "; the target holds no file this harness loads"
-            decides = False
         found.append(
             _finding(
                 "load-resolution",
@@ -2292,7 +2328,7 @@ def _loading(
                 verdict,
                 fact,
                 next=step,
-                decides=decides,
+                decides=_row(harness) is None and harness != GENERIC,
             )
         )
         keys = (row.get("config") or {}).get("keys") or {}
@@ -2303,7 +2339,9 @@ def _loading(
                 f"{adapters.or_list(tuple(unsettled))}; its configuration was read for the rest"
             )
             found.append(
-                _finding("load-resolution", "adapters/harnesses.json", 0, UNVERIFIED, fact)
+                _finding(
+                    "load-resolution", "adapters/harnesses.json", 0, UNVERIFIED, fact, decides=False
+                )
             )
     return found
 
@@ -2682,6 +2720,13 @@ def render(report: Report, *, verbose: bool = False) -> str:
             "nothing failed: exit 2 here means a fact was not settled (UNVERIFIED), as in the "
             "other verbs, and --strict counts it as a failure"
         )
+        holding = [f for f in report.findings if f.decides and f.verdict != PASS]
+        if all(f.id for f in holding):
+            lines.append(
+                "each finding that holds exit 2 here prints an id: a person settles it by ruling "
+                f"it at a terminal (outcomebound instructions rule {report.target} <id>), or a "
+                "change to its file does; running check again settles none of them"
+            )
     lines.extend(_line(f) for f in report.findings if f.verdict != PASS)
     if verbose:
         lines.extend(_line(f) for f in report.findings if f.verdict == PASS)

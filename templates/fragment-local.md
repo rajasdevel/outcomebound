@@ -13,7 +13,8 @@ Optional lifecycle lines go here, each only where it changes a decision an agent
 on a change of route, "Changed —", one line for each stream, the older one removed. The adopt
 skill says how to propose them.
 **Bounds** — which actions are irreversible, protected, or outside default authority. Each
-irreversible act also goes in `edges:` as its own list item, one line with no `;`, so it joins the
+irreversible act also goes in `edges:` as its own item of that one-line JSON list, in double
+quotes and with no `;`, as in `edges: ["pushing a tag"]`, so it joins the
 Irreversible edges fact; a project that publishes without selecting `ci-release` lists
 `publishing a package` there itself. A harness that reads its own ask rules can ask before each
 edge: examples are under `$(outcomebound home)/templates/harness/`. Optional lines here: "Gates —"
