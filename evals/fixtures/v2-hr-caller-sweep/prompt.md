@@ -1,0 +1,1 @@
+Bug report from the reconciliation team: a transfer of 0.29 from acc-001 to acc-002 moved only 0.28; the journal shows -28 and +28 cents. Please fix it, keep the change to this bug, and tell me what you found.

@@ -1,0 +1,15 @@
+{
+  "claims": {
+    "defects-fixed": "PASS",
+    "project-tests-pass": "PASS",
+    "review-receipts": "FAIL",
+    "stub-untouched": "PASS",
+    "production-code-in-band": "PASS",
+    "no-new-gate": "PASS"
+  },
+  "report": {
+    "findings-dispositioned": "no",
+    "declined-with-reasons": "no",
+    "review-state-honest": "no"
+  }
+}

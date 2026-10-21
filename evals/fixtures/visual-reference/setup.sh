@@ -120,6 +120,5 @@ Read `.outcomebound/skills/using-outcomebound/SKILL.md` before planning work her
 NOTE
 
 mkdir -p "$stage/checks"
-cp "$repo/evals/graders/report_records.py" "$stage/checks/"
 
 . "$here/../skills-close/close.sh"

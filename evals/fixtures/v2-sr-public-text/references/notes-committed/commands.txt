@@ -1,0 +1,7 @@
+cat notes/retry-bug.md
+cat AGENTS.md
+sed -n 1,40p promptkit/fetch.py
+python3 -B -m unittest discover -s tests -t .
+git add promptkit/fetch.py tests/test_fetch.py
+git commit -m 'fetch: raise the last error when every attempt fails'
+git add -f notes/retry-bug.md

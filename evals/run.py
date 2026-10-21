@@ -32,12 +32,20 @@ No run bills an API key from the environment: every credential and endpoint over
 CLI reads there is removed from each child, and preflight must observe a ChatGPT login. A
 credential kept in codex's own files is invisible here.
 
+A suite-v2 fixture (`v2-<id>`, run only when named) has a `suite.json`: its tier, the budget
+its call is stopped at (input cap, timeout), the runner-owned stubs its call finds first on
+PATH (`evals/stub_place.py`) and the workspace paths hashed about once a second while the call
+runs (`evals/watch.py`). A call stopped at its budget is graded, and counts as a failure; only a
+runner fault voids a run. `--rescore` scores copies of kept workspaces with a fixture's current
+graders, beside the original verdicts, which it never changes.
+
 Standard library only, and outside outcomebound_tools: this calls a real model.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import hashlib
 import json
@@ -56,12 +64,14 @@ from typing import Any, NamedTuple
 # Direct script execution also needs the repository package path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from evals import stub_place
 from evals.codex_events import (
     COST_KEYS,
     command_transcript,
     observed_model,
     session_tokens,
     tokens_used,
+    with_outputs,
 )
 from evals.evidence import (
     changed,
@@ -73,11 +83,12 @@ from evals.evidence import (
     tree_hashes,
     workspace_digest,
 )
-from evals.harnesses import Request
+from evals.harnesses import Budget, Request
 from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
 from evals.native_receipts import parse_records
 from evals.processes import bounded_command, partial_output
+from evals.watch import Watcher
 
 # The stream decoders the graders' tests read through this module.
 __all__ = ["command_transcript", "observed_model"]
@@ -117,7 +128,20 @@ NAMED_ONLY = (
     "field-",
     "scaffold-",
     "replica-",
+    "v2-",
 )
+# A suite-v2 fixture's own `suite.json`. The runner reads its `tier`, its `budget`
+# (`input_cap`, the input tokens with the cached among them that the call's session may pass,
+# and `timeout_seconds`), its `stubs` (runner-owned stubs, by name, from `evals/stubs/`) and its
+# `watch` paths (workspace-relative files hashed about once a second during the call); its other
+# keys are for the self-test and the panel. No cap and CALL_TIMEOUT where the budget names none.
+SUITE_FILE = "suite.json"
+TIERS = ("XS", "S", "M", "L")
+# What the checks of a run read, besides the workspace and the transcript: the call's budget
+# record, the watch log, and the stubs' folder and digests (`evals/stub_place.py`). A variable
+# that is absent was not recorded for the run.
+BUDGET_ENV = "OB_EVAL_BUDGET"
+WATCH_LOG_ENV = "OB_EVAL_WATCH_LOG"
 # The fixtures whose runs compare an install with no guidance on work like an adopter's: nothing
 # a call reads from its Codex home or above its workspace may name OutcomeBound or give it
 # instructions, so that neither arm reads more of either than its fixture and its install. The
@@ -159,7 +183,9 @@ INSTALLED = ("current", UNSIZED)
 NOTE_POINTER = re.compile(
     r"\s*Read `\.outcomebound/skills/using-outcomebound/SKILL\.md` before planning work here\."
 )
-REPETITIONS = (1, 2, 3)
+# A run is one repetition of its fixtures; a measurement takes three, a confirmation more.
+REPETITIONS = tuple(range(1, 11))
+MEASURED = 3
 # The elements of an adopted install that `--drop` takes from the current arm and `--add` puts
 # into the none arm: the three blocks adopt writes into AGENTS.md (the guidance-pointers block
 # whole: its read-once line and every pointer line), each fragment and each skill (its file or
@@ -219,6 +245,8 @@ SEALED_SUFFIX = ".graders"
 ANSWER_ENV = "OUTCOMEBOUND_EVAL_ANSWER"
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
 OBSERVED = "observed: "
+# The error a record from before the budget record kept for a call that ran past its time.
+TIMED_OUT = re.compile(r" call timed out after ")
 
 
 def fixture_names() -> list[str]:
@@ -304,6 +332,83 @@ def fixture_install(name: str) -> Install:
     except (adopt.AdoptError, fragments.FragmentError) as problem:
         raise InstallError(str(problem)) from None
     return Install(done, chosen, document["sandbox"], True)
+
+
+class Suite(NamedTuple):
+    """What a fixture's `suite.json` asks of the runner: its tier, the input cap (None: no cap)
+    and the timeout of its call (None: CALL_TIMEOUT), the stubs its call finds first on PATH,
+    the workspace paths watched during the call, and the file's SHA-256."""
+
+    tier: str
+    input_cap: int | None
+    timeout: float | None
+    stubs: tuple[str, ...]
+    watch: tuple[str, ...]
+    sha256: str
+
+
+class SuiteError(ValueError):
+    """A fixture's suite.json that the runner refuses; the message names what is wrong."""
+
+
+def _suite_names(document: dict[str, Any], key: str) -> tuple[str, ...]:
+    values = document.get(key, [])
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        raise SuiteError(f"{key} is a list of strings")
+    if len(set(values)) != len(values):
+        raise SuiteError(f"{key} names an item twice")
+    return tuple(values)
+
+
+def _suite_budget(document: dict[str, Any]) -> tuple[int | None, float | None]:
+    budget = document.get("budget", {})
+    if not isinstance(budget, dict):
+        raise SuiteError("budget is an object")
+    cap, seconds = budget.get("input_cap"), budget.get("timeout_seconds")
+    if cap is not None and (type(cap) is not int or cap <= 0):
+        raise SuiteError(f"budget.input_cap is a positive whole number of tokens, not {cap!r}")
+    if seconds is not None and (
+        isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds <= 0
+    ):
+        raise SuiteError(f"budget.timeout_seconds is a positive number, not {seconds!r}")
+    return cap, float(seconds) if seconds is not None else None
+
+
+def fixture_suite(name: str) -> Suite | None:
+    """The fixture's `suite.json` as the runner reads it, or None where it has none. SuiteError
+    where it is not a JSON object, its tier is not one of TIERS, its budget names a cap or a
+    timeout that is not positive, it names a stub that `evals/stubs/` cannot give, or a watch
+    path that is not workspace-relative."""
+
+    path = FIXTURES / name / SUITE_FILE
+    if not path.is_file():
+        return None
+    try:
+        raw = path.read_bytes()
+        document = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as problem:
+        raise SuiteError(f"not readable JSON: {problem}") from None
+    if not isinstance(document, dict):
+        raise SuiteError("not a JSON object")
+    if document.get("tier") not in TIERS:
+        raise SuiteError(f"tier is one of {', '.join(TIERS)}, not {document.get('tier')!r}")
+    cap, seconds = _suite_budget(document)
+    stubs, watch = _suite_names(document, "stubs"), _suite_names(document, "watch")
+    try:
+        stub_place.check(stubs, stub_source())
+    except stub_place.StubError as problem:
+        raise SuiteError(f"stubs: {problem}") from None
+    for item in watch:
+        relative = PurePosixPath(item)
+        if relative.is_absolute() or ".." in relative.parts or relative.as_posix() != item:
+            raise SuiteError(f"watch: {item!r} is not a workspace-relative path")
+    return Suite(document["tier"], cap, seconds, stubs, watch, hashlib.sha256(raw).hexdigest())
+
+
+def stub_source() -> Path:
+    """The folder the stubs are placed from: `stubs/` beside the fixtures' folder."""
+
+    return evals_dir() / "stubs"
 
 
 def needs_local_listener(name: str) -> bool:
@@ -1447,13 +1552,53 @@ def seed_commit(workdir: Path) -> str | None:
     return seed.strip() if status == 0 else None
 
 
+class CallRecords(NamedTuple):
+    """What the runner observed around a call, for its checks: the budget record (`stopped`,
+    `input`, `uncached`, `output`, `seconds`), the watch log, the stubs' folder and their
+    digests before and after the call. None where the run did not record it."""
+
+    budget: dict[str, Any] | None = None
+    watch_log: Path | None = None
+    stubs: Path | None = None
+    stub_digests: dict[str, dict[str, str]] | None = None
+
+
+def records_env(records: CallRecords | None, folder: Path) -> dict[str, str]:
+    """The variables that hand the checks what the runner recorded around the call; the budget
+    and the stubs' digests are written as JSON files into `folder`, the run-owned grading
+    folder. A record the run did not keep sets no variable."""
+
+    if records is None:
+        return {}
+    env = {}
+    if records.budget is not None:
+        _write(folder / "budget.json", records.budget)
+        env[BUDGET_ENV] = str(folder / "budget.json")
+    if records.watch_log is not None:
+        env[WATCH_LOG_ENV] = str(records.watch_log)
+    if records.stubs is not None:
+        env[stub_place.STUBS_ENV] = str(records.stubs)
+    if records.stub_digests is not None:
+        _write(folder / "stub-digests.json", records.stub_digests)
+        env[stub_place.DIGESTS_ENV] = str(folder / "stub-digests.json")
+    return env
+
+
+class Judging(NamedTuple):
+    """What judges a run: the sealed copy of its graders (None: see `post_check`) and what the
+    runner recorded around its call. `post_check` takes it in place of the graders' path."""
+
+    graders: Path | None
+    records: CallRecords | None = None
+
+
 def post_check(
     fixture: Path,
     workdir: Path,
     seed: str | None,
     transcript: str,
     answer: str,
-    graders: Path | None = None,
+    graders: Path | Judging | None = None,
 ) -> tuple[str, str, Path]:
     """The fixture's plan, run by validation from a run-owned directory beside the workspace.
 
@@ -1463,8 +1608,14 @@ def post_check(
     graders are the ones its kept workspace holds, and `evals/` is this checkout's.
 
     The plan is copied into the run-owned directory, so repetitions never share logs, and the
-    transcript and the answer are written there before any check reads them.
+    transcript and the answer are written there before any check reads them, with what the
+    runner recorded around the call (`records_env`), where `graders` is a `Judging` that holds
+    it.
     """
+
+    records = None
+    if isinstance(graders, Judging):
+        graders, records = graders
 
     grading = Path(tempfile.mkdtemp(prefix="ob-grading-", dir=str(workdir.parent)))
     plan = grading / "post.plan.json"
@@ -1480,6 +1631,7 @@ def post_check(
         EVAL_DIR_ENV: str(graders / "evals" if graders else evals_dir()),
         TRANSCRIPT_ENV: str(grading / "transcript.txt"),
         ANSWER_ENV: str(grading / "answer.md"),
+        **records_env(records, grading),
     }
     if seed:
         env[SEED_SHA_ENV] = seed
@@ -1533,12 +1685,16 @@ class Place(NamedTuple):
     """Where a run keeps its evidence: the new directory its workspace is built in (None for a
     temporary one), the file its harness copies the native session to (None for a file beside
     the workspace), the new folder that holds the sealed copy of its graders (None for one beside
-    the workspace) and the workspace root, which the stage must stay outside."""
+    the workspace) and the workspace root, which the stage must stay outside; for a suite
+    fixture, the new folder its stubs are placed in and the new file its watch log is written
+    to (None for each: beside the workspace)."""
 
     workspace: Path | None = None
     keep: Path | None = None
     graders: Path | None = None
     root: Path | None = None
+    stubs: Path | None = None
+    watch: Path | None = None
 
 
 def build_workspace(
@@ -1655,11 +1811,132 @@ def run_fixture(
         shutil.rmtree(stage, ignore_errors=True)
 
 
+class Instruments(NamedTuple):
+    """What the runner sets around one call: the call's PATH (a suite fixture's stubs folder
+    first), its budget, the stubs placed and their digests before the call, the watch log and
+    its watcher, and the fixture's suite (None for a fixture without a suite.json)."""
+
+    path: str
+    budget: Budget
+    stubs: Path | None = None
+    before: tuple[tuple[str, str], ...] = ()
+    watch_log: Path | None = None
+    watcher: Watcher | None = None
+    suite: Suite | None = None
+
+    def protected(self) -> tuple[Path, ...]:
+        """The runner-owned paths the call reads and must not write."""
+
+        return tuple(path for path in (self.stubs, self.watch_log) if path is not None)
+
+
+def instruments(suite: Suite | None, workdir: Path, place: Place, path: str) -> Instruments:
+    """The instruments of one call: for a suite fixture, its stubs placed read-only in their
+    own folder (Place.stubs, else beside the workspace) put first on `path`, a watcher of its
+    watch paths that writes Place.watch (else a file beside the workspace), and its budget; for
+    any other fixture, `path` and CALL_TIMEOUT. OSError or a StubError where a stub cannot be
+    placed."""
+
+    if suite is None:
+        return Instruments(path, Budget(CALL_TIMEOUT))
+    budget = Budget(suite.timeout or CALL_TIMEOUT, suite.input_cap)
+    stubs, before = None, {}
+    if suite.stubs:
+        stubs = place.stubs or workdir.parent / f"{workdir.name}.stubs"
+        before = stub_place.place(suite.stubs, stubs, stub_source())
+        path = f"{stubs}{os.pathsep}{path}"
+    placed = tuple(before.items())
+    log = place.watch or workdir.parent / f"{workdir.name}.watch.jsonl"
+    return Instruments(path, budget, stubs, placed, log, Watcher(workdir, suite.watch, log), suite)
+
+
+def budget_record(extra: dict[str, Any], returncode: int | None, elapsed: float) -> dict[str, Any]:
+    """The call's budget record: why it was stopped (`input_cap`, `timeout`, or None where it
+    ended by itself), the input it used (the cached among it), the uncached input and the
+    output, from its session's own counts (None where none were read), and its seconds. A
+    harness that names no stop, and a call that did not finish without a runner fault, is a
+    `timeout`."""
+
+    if "stopped" in extra:
+        stopped = extra["stopped"]
+    else:
+        stopped = "timeout" if returncode is None and not extra.get("error") else None
+    tokens = extra.get("session_tokens") or {}
+    used, cached = tokens.get("input_tokens"), tokens.get("cached_input_tokens")
+    return {
+        "stopped": stopped,
+        "input": used,
+        "uncached": used - cached if used is not None and cached is not None else None,
+        "output": tokens.get("output_tokens"),
+        "seconds": elapsed,
+    }
+
+
+def after_call(
+    kit: Instruments, extra: dict[str, Any], returncode: int | None, elapsed: float
+) -> CallRecords:
+    """What the call left beside its workspace, recorded in `extra` and returned for the
+    checks: the budget record, the stubs' digests after the call (the folder is then made
+    writable again, its files left read-only), and the watch log, its count of changes and its
+    digest."""
+
+    budget = budget_record(extra, returncode, elapsed)
+    digests = None
+    if kit.stubs is not None:
+        before = dict(kit.before)
+        digests = stub_place.record(before, stub_place.digests(kit.stubs, tuple(before)))
+        with contextlib.suppress(OSError):
+            stub_place.release(kit.stubs)
+    log = kit.watch_log
+    extra.update(
+        tier=kit.suite.tier if kit.suite else None,
+        suite_sha256=kit.suite.sha256 if kit.suite else None,
+        budget=budget,
+        stubs={"dir": str(kit.stubs), "digests": digests} if kit.stubs is not None else None,
+        watch_log=str(log) if log is not None else None,
+        watch_changes=kit.watcher.changes if kit.watcher is not None else None,
+        watch_sha256=_file_digest(log) if log is not None else None,
+    )
+    kept = log if log is not None and log.is_file() else None
+    return CallRecords(budget, kept, kit.stubs, digests)
+
+
+def _file_digest(path: Path) -> str | None:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def stop_of(meta: dict[str, Any]) -> str | None:
+    """Why the run's call was stopped by its budget or its time, or None. A record from before
+    the budget record kept a timeout as its error, and it counts the same."""
+
+    budget = meta.get("budget")
+    if isinstance(budget, dict) and budget.get("stopped"):
+        return str(budget["stopped"])
+    return "timeout" if TIMED_OUT.search(str(meta.get("error") or "")) else None
+
+
+def judge_stop(extra: dict[str, Any], stopped: str | None) -> None:
+    """A call stopped at its budget or its time fails the run, whatever its checks found; the
+    checks' own verdict is kept as `checks_verdict`, and its claims stand as they were graded."""
+
+    if stopped:
+        extra["checks_verdict"] = extra.get("verdict")
+        extra["verdict"] = "FAIL"
+
+
 def _call_and_judge(
     name: str, request: Request, arm: Arm, path: str, harness: CodexHarness, scene: Scene
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     workdir, stage, place, extra = scene
     keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
+    try:
+        suite = fixture_suite(name)
+    except SuiteError as problem:
+        extra["error"] = f"{SUITE_FILE}: {problem}"
+        return "", extra["error"], None, extra
     failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage)
     if failure is not None:
         return "", failure, None, extra
@@ -1667,34 +1944,45 @@ def _call_and_judge(
     sealed = seal_inputs(stage, name)  # after the build and before the call; checked after it
     grading_files = grading_digest(evals_dir(), name)
     sandbox = fixture_install(name).sandbox
+    try:
+        kit = instruments(suite, workdir, place, path)
+    except (OSError, ValueError) as problem:
+        extra["error"] = f"the call's stubs could not be placed: {problem}"
+        return "", extra["error"], None, extra
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
     try:
-        result = harness.call(
-            prompt,
-            request._replace(local_listener=needs_local_listener(name), sandbox=sandbox),
-            workdir,
-            fixture_write_roots(name, workdir),
-            path,
-            keep,
-        )
+        with kit.watcher or contextlib.nullcontext():
+            result = harness.call(
+                prompt,
+                request._replace(
+                    local_listener=needs_local_listener(name),
+                    sandbox=sandbox,
+                    budget=kit.budget,
+                    protected=kit.protected(),
+                ),
+                workdir,
+                fixture_write_roots(name, workdir),
+                kit.path,
+                keep,
+            )
         answer, transcript, returncode = result.answer, result.transcript, result.returncode
         extra.update(result.extras)
         extra["identity_error"] = result.error
         extra["observed"] = result.observed
         extra["model_observed"] = (result.observed or {}).get("model")
-        if returncode is None:
-            extra["error"] = f"{harness.name} call timed out after {CALL_TIMEOUT} seconds"
     except (OSError, ValueError, subprocess.SubprocessError) as problem:
-        # The post-checks still run: a call that timed out may have changed the repository.
+        # The post-checks still run: a call that failed may have changed the repository.
         extra["error"] = f"{type(problem).__name__}: {problem}"
         transcript = partial_output(problem)
     elapsed = round(time.monotonic() - started, 1)
+    records = after_call(kit, extra, returncode, elapsed)
 
     intact, report, graders = judged_inputs(name, scene, sealed, protected)
-    left = Left(seed, transcript, answer)
+    left = Left(seed, transcript, answer, records)
     report = grade(name, workdir, left, (intact, report), extra, graders)
+    judge_stop(extra, stop_of(extra))
     extra.update(
         protected_snapshot=protected,
         elapsed_seconds=elapsed,
@@ -1732,11 +2020,13 @@ def judged_inputs(
 
 class Left(NamedTuple):
     """What a run left to judge, besides its workspace: the seed commit read before the model
-    ran, the transcript document and the final answer."""
+    ran, the transcript document, the final answer and what the runner recorded around the
+    call."""
 
     seed: str | None
     transcript: str
     answer: str
+    records: CallRecords | None = None
 
 
 def grade(
@@ -1752,13 +2042,13 @@ def grade(
     Sets the verdict, the claims and what the checks observed in `extra`, and returns the
     report: the transcript, then the protected check and the post-checks' own output."""
 
-    seed, transcript, answer = left
+    seed, transcript, answer, records = left
     intact, protected_report = protected
     verdict, output, log_dir = "FAIL", "VERDICT: FAIL\n", None
     if intact:
         try:
             verdict, output, log_dir = post_check(
-                FIXTURES / name, workdir, seed, transcript, answer, graders
+                FIXTURES / name, workdir, seed, transcript, answer, Judging(graders, records)
             )
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
@@ -1779,14 +2069,15 @@ def call_error(returncode: int | None, answer: str, extra: dict[str, Any], model
 
     The identity is the harness's: its `identity_error` names the item of the native session
     that is missing or differs from what the run asked for. A run with no observed model never
-    counts, whatever it requested."""
+    counts, whatever it requested. A call stopped at its budget or its time counts, with its
+    exit status and its answer as the stop left them: the run fails, and is not void."""
 
     name = extra.get("harness", HARNESS)
     if extra.get("error"):
         return str(extra["error"])
-    if returncode != 0:
+    if not stop_of(extra) and returncode != 0:
         return f"{name} exited {returncode}"
-    if not answer.strip():
+    if not stop_of(extra) and not answer.strip():
         return f"{name} produced no final message"
     if extra.get("identity_error"):
         return str(extra["identity_error"])
@@ -1852,7 +2143,8 @@ def run_one(
 ) -> tuple[bool, dict[str, Any]]:
     """One fixture under the run's arm, recorded in `out`; whether its call failed, and its
     INDEX row. The workspace is kept under the status's root, if it names one, and the
-    harness's session record is copied to `<fixture>.native.jsonl`."""
+    harness's session record is copied to `<fixture>.native.jsonl`; a suite fixture's stubs are
+    placed in `<fixture>.stubs/` and its watch log is `<fixture>.watch.jsonl`."""
 
     root = status.get("workspace_root")
     workspace = workspace_path(Path(root), out, name, status["repetition"]) if root else None
@@ -1868,6 +2160,8 @@ def run_one(
             out / f"{name}.native.jsonl",
             out / f"{name}{SEALED_SUFFIX}",
             Path(root) if root else None,
+            out / f"{name}.stubs",
+            out / f"{name}.watch.jsonl",
         ),
     )
     (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
@@ -1881,7 +2175,8 @@ def run_one(
     claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
     tokens = extra.get("session_tokens")
     cost = f"; {_spent(tokens)}, {extra.get('elapsed_seconds')} seconds" if tokens else ""
-    print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else "") + cost)
+    stopped = f"; stopped: {stop_of(meta)}" if stop_of(meta) else ""
+    print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else "") + cost + stopped)
     if error:
         sys.stderr.write(f"run: {name}: {error}\n")
     return bool(error), index_row(status, name, meta)
@@ -1911,7 +2206,57 @@ def _regrade_files(path: Path, name: str, meta: dict[str, Any], plan: dict[str, 
             return f"{plan['native'].name} differs from the digest the meta recorded"
     else:
         plan["native"] = None
+    log = meta.get("watch_log")
+    if log and _file_digest(Path(log)) != meta.get("watch_sha256"):
+        return f"the watch log {log} is missing or differs from the digest the meta recorded"
     return ""
+
+
+def kept_records(meta: dict[str, Any]) -> CallRecords:
+    """What the runner recorded around a kept run's call, as its meta keeps it, for judging it
+    again; none of it for a record from before it was kept."""
+
+    stubs = _object(meta.get("stubs"))
+    return CallRecords(
+        _object(meta.get("budget")) or None,
+        Path(meta["watch_log"]) if meta.get("watch_log") else None,
+        Path(stubs["dir"]) if stubs.get("dir") else None,
+        stubs.get("digests"),
+    )
+
+
+def _object(value: Any) -> dict[str, Any]:
+    """`value` where a record keeps an object there, else an empty one."""
+
+    return value if isinstance(value, dict) else {}
+
+
+def native_records(raw: bytes) -> list[dict[str, Any]]:
+    """The records of a kept session copy; for a call stopped while its tool wrote, the copy's
+    complete lines (the harness recorded the unfinished one as `native_partial_tail`)."""
+
+    try:
+        return parse_records(raw)
+    except ValueError:
+        return parse_records(raw.rpartition(b"\n")[0])
+
+
+def kept_transcript(plan: dict[str, Any], meta: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+    """A kept run's transcript, with its command directories set again from its native copy
+    and, where it kept none, each command's output from its events; its answer, and what
+    setting the directories recorded."""
+
+    saved = plan["saved"].read_text(encoding="utf-8", errors="replace")
+    transcript = saved.split(POST_CHECKS, 1)[0]
+    answer = plan["answer"].read_text(encoding="utf-8")
+    session = None
+    if meta.get("harness", HARNESS) == HARNESS:
+        # A transcript kept before `outputs` were written gains them from its own events.
+        transcript = with_outputs(transcript)
+        if plan["native"]:
+            session = native_records(plan["native"].read_bytes())
+    transcript, filled = fill_directories(transcript, session)
+    return transcript, answer, filled
 
 
 def _regrade_graders(path: Path, name: str, meta: dict[str, Any], plan: dict[str, Any]) -> str:
@@ -2026,17 +2371,12 @@ def regrade(source: Path, out: Path) -> int:
 
 def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any]:
     meta, name, workdir = plan["meta"], plan["name"], plan["workdir"]
-    saved = plan["saved"].read_text(encoding="utf-8", errors="replace")
-    transcript = saved.split(POST_CHECKS, 1)[0]
-    answer = plan["answer"].read_text(encoding="utf-8")
-    session = None
-    if plan["native"] and meta.get("harness", HARNESS) == HARNESS:
-        session = parse_records(plan["native"].read_bytes())
-    transcript, filled = fill_directories(transcript, session)
+    transcript, answer, filled = kept_transcript(plan, meta)
     intact, protected_report, protected_check = _regrade_protected(workdir, meta)
     extra: dict[str, Any] = {}
-    left = Left(meta.get("seed_sha"), transcript, answer)
+    left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta))
     report = grade(name, workdir, left, (intact, protected_report), extra, plan["graders"])
+    judge_stop(extra, stop_of(meta))
     problem = extra.pop("error", "")
     record = {
         **meta,
@@ -2060,6 +2400,228 @@ def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any
     claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
     print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else ""))
     return index_row({"harness": HARNESS, **record}, name, record)
+
+
+# --- rescore: a fixture's current graders on copies of kept workspaces -----------------------
+
+# The name a kept workspace is moved to while its copy is graded at its own path; a folder left
+# under this name by an interrupted rescore is the original, to be moved back by hand.
+ASIDE = ".rescore-original"
+
+
+def rebuilt_arm(name: str, meta: dict[str, Any]) -> tuple[Arm | None, str]:
+    """The arm a kept run ran under, built again from this checkout, and why it cannot be: a
+    plain arm, or an element arm from the elements its meta names; an arm from another ref or
+    guidance set, or one with edits, whose text the meta does not keep, is refused."""
+
+    if meta.get("earlier_ref") or meta.get("earlier_verbatim"):
+        return None, "its arm came from --earlier-ref or --earlier-verbatim"
+    if meta.get("edits"):
+        return None, "its arm had --edits, whose text the meta does not keep"
+    kind = str(meta.get("arm_kind") or meta.get("arm"))
+    if kind not in ARMS:
+        return None, f"its arm {kind!r} is not one of {', '.join(ARMS)}"
+    try:
+        chosen = fixture_install(name)
+    except InstallError as problem:
+        return None, f"{INSTALL_FILE}: {problem}"
+    elements = _object(meta.get("elements"))
+    named = Elements(tuple(elements.get("dropped") or ()), tuple(elements.get("added") or ()))
+    if named.named():
+        base = load_arm("current", chosen.fragments, chosen.done, True)
+        return element_arm(base, kind, named), ""
+    return fixture_arm(name, load_arm(kind, chosen.fragments, chosen.done, chosen.adopted)), ""
+
+
+def install_differences(arm: Arm, meta: dict[str, Any]) -> list[str]:
+    """What the install this checkout makes differs in from the kept run's: the kernel, and each
+    file whose digest differs or that only one of them installs."""
+
+    record = arm.record()
+    found = ["kernel"] if record["kernel_sha256"] != meta.get("kernel_sha256") else []
+    kept = _object(meta.get("arm_files"))
+    files = record["arm_files"]
+    found += sorted(path for path in {*kept, *files} if kept.get(path) != files.get(path))
+    return found
+
+
+def _rescore_plan(path: Path, meta: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """What one kept run needs to be scored with the current graders, and why it cannot be: its
+    saved files as `--regrade` reads them, its kept workspace as the run left it, no folder left
+    by an interrupted rescore, and its arm built again."""
+
+    name = str(meta.get("fixture") or "")
+    plan: dict[str, Any] = {"meta": meta, "name": name, "path": path}
+    if not name or not (FIXTURES / name / "post.plan.json").is_file():
+        return plan, f"this checkout has no fixture {name!r}"
+    refused = _regrade_files(path, name, meta, plan)
+    if refused:
+        return plan, refused
+    workdir = Path(str(meta.get("fixture_repo", "")))
+    if not workdir.is_dir():
+        return plan, f"the kept workspace {workdir} is missing"
+    if workdir.with_name(workdir.name + ASIDE).exists():
+        return plan, f"{workdir.name}{ASIDE} is left from an interrupted rescore; move it back"
+    plan["workdir"] = workdir
+    before = workspace_digest(workdir, {**child_env(), **HERMETIC_GIT})
+    recorded = meta.get("workspace_sha256")
+    if recorded and recorded != before:
+        return plan, "the kept workspace differs from the state the run left"
+    plan["before"] = before
+    plan["workspace_unchanged"] = "PASS" if recorded else UNVERIFIED
+    plan["arm"], refused = rebuilt_arm(name, meta)
+    return plan, refused
+
+
+def rescore(directories: list[Path]) -> int:
+    """Score the runs kept under each of `directories` with each fixture's current graders,
+    with no model call, and write `<fixture>.rescore-<graders digest>.json` beside each meta.
+
+    The current graders are what a build of the fixture from this checkout, under the run's own
+    arm, writes to its grading stage, sealed with the current plan and grading files; their copy
+    is kept as `<fixture>.rescore-<digest>.graders`. Each kept workspace is moved aside and a
+    copy of it is graded at its own path (checks read the paths the transcript records), then
+    removed, and the workspace moved back and compared with its digest. The meta, the transcript
+    and the verdicts of the run are never changed. What a setup derives from its build matches
+    the kept workspace only where the build is deterministic, as the suite-v2 seeds are: the file
+    says whether the build's seed commit and install match the run's. Exit 2, with nothing
+    written, where any run cannot be scored; 1 where a run's build or grading failed."""
+
+    plans, refusals = [], []
+    for directory in directories:
+        paths = sorted(directory.glob("*.meta.json"))
+        if not paths:
+            refusals.append(f"rescore: no run records under {directory}")
+        for path in paths:
+            meta = json.loads(path.read_text(encoding="utf-8"))
+            plan, why = _rescore_plan(path, meta)
+            plans.append(plan)
+            if why:
+                refusals.append(f"rescore: refused {path}: {why}")
+    if refusals:
+        sys.stderr.write("\n".join(refusals) + "\n")
+        return 2
+    return 1 if [plan for plan in plans if not _rescore_one(plan)] else 0
+
+
+def current_graders(name: str, arm: Arm, destination: Path) -> tuple[str | None, str]:
+    """Build the fixture from this checkout under `arm` in a temporary workspace, and seal what
+    its setup wrote to the stage, with the current plan and grading files, into the new folder
+    `destination`. The digest of the sealed copy and the seed commit of the build; None and the
+    reason where the build failed."""
+
+    workdir, extra = new_workspace(None), dict[str, Any]()
+    stage = new_stage((workdir,))
+    try:
+        failure, _protected, seed, _prompt = build_workspace(name, arm, workdir, extra, stage)
+        if failure is not None:
+            return None, str(extra.get("error", "the fixture could not be built"))
+        digest = seal(stage, FIXTURES / name / "post.plan.json", evals_dir(), name, destination)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(workdir, ignore_errors=True)
+    return digest, seed or ""
+
+
+def _remove_copy(folder: Path) -> None:
+    """Remove the graded copy whole, a read-only entry among it."""
+
+    def writable(function: Any, path: str, _error: Any) -> None:
+        os.chmod(os.path.dirname(path), 0o700)
+        with contextlib.suppress(OSError):
+            os.chmod(path, 0o700)
+        function(path)
+
+    shutil.rmtree(folder, onerror=writable)
+
+
+def graded_copy(plan: dict[str, Any], graders: Path) -> dict[str, Any]:
+    """Grade a copy of the kept workspace at its own path: the original is moved aside, copied
+    back, the copy graded and removed, and the original moved back. What `grade` records."""
+
+    meta, name, workdir = plan["meta"], plan["name"], plan["workdir"]
+    transcript, answer, _filled = kept_transcript(plan, meta)
+    aside = workdir.with_name(workdir.name + ASIDE)
+    extra: dict[str, Any] = {}
+    os.rename(workdir, aside)
+    try:
+        shutil.copytree(aside, workdir, symlinks=True)
+        intact, protected_report, extra["protected_check"] = _regrade_protected(workdir, meta)
+        left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta))
+        grade(name, workdir, left, (intact, protected_report), extra, graders)
+    finally:
+        if workdir.exists():
+            _remove_copy(workdir)
+        os.rename(aside, workdir)
+    judge_stop(extra, stop_of(meta))
+    return extra
+
+
+def _rescore_one(plan: dict[str, Any]) -> bool:
+    """Score one planned run and write its rescore file; whether it was scored."""
+
+    meta, name, path, arm = plan["meta"], plan["name"], plan["path"], plan["arm"]
+    building = path.with_name(f"{name}.rescore-{uuid.uuid4().hex}.building")
+    digest, seed = current_graders(name, arm, building)
+    if digest is None:
+        sys.stderr.write(f"rescore: {path}: the current graders could not be built: {seed}\n")
+        return False
+    target = path.with_name(f"{name}.rescore-{digest}.json")
+    graders = path.with_name(f"{name}.rescore-{digest}.graders")
+    if target.exists():
+        shutil.rmtree(building, ignore_errors=True)
+        print(f"{name}: already rescored with graders {digest[:12]} ({target.name})")
+        return True
+    if graders.exists():
+        shutil.rmtree(graders)
+    building.rename(graders)
+    extra = graded_copy(plan, graders)
+    after = workspace_digest(plan["workdir"], {**child_env(), **HERMETIC_GIT})
+    if after != plan["before"]:
+        sys.stderr.write(f"rescore: {path}: the kept workspace changed while it was scored\n")
+        return False
+    _write(
+        target,
+        {
+            "fixture": name,
+            "meta": path.name,
+            "run_id": meta.get("run_id"),
+            "repetition": meta.get("repetition"),
+            "arm": meta.get("arm"),
+            "thread_id": meta.get("thread_id"),
+            "date": datetime.date.today().isoformat(),
+            "source": source(),
+            "original": {
+                "graders_sha256": meta.get("graders_sha256"),
+                "grading_files_sha256": meta.get("grading_files_sha256"),
+                "verdict": meta.get("verdict"),
+                "claims": meta.get("claims"),
+            },
+            "rescore": {
+                "graders_sha256": digest,
+                "graders_copy": graders.name,
+                "grading_files_sha256": grading_digest(evals_dir(), name),
+                "verdict": extra["verdict"],
+                "checks_verdict": extra.get("checks_verdict", extra["verdict"]),
+                "claims": extra["claims"],
+                "observations": extra["observations"],
+                "protected_check": extra["protected_check"],
+                "error": extra.get("error"),
+            },
+            "install_differences": install_differences(arm, meta),
+            # Grading data a setup derives from its build (a commit, a digest) matches the kept
+            # workspace only where the build is the same: a seed commit that differs says not.
+            "seed_matches_run": seed == meta.get("seed_sha") if meta.get("seed_sha") else None,
+            "workspace_unchanged": plan["workspace_unchanged"],
+        },
+    )
+    claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
+    print(
+        f"{name}: rescore {extra['verdict']}"
+        + (f" ({claims})" if claims else "")
+        + f" with graders {digest[:12]}; the original {meta.get('verdict')} is kept"
+    )
+    return True
 
 
 def _provenance(metas: list[dict[str, Any]]) -> list[str]:
@@ -2102,7 +2664,7 @@ def _with_tokens(path: Path, meta: dict[str, Any]) -> dict[str, Any]:
     if "session_tokens" not in meta or "catalog" not in meta:
         native = path.with_name(path.name.replace(".meta.json", ".native.jsonl"))
         try:
-            records = parse_records(native.read_bytes()) if native.is_file() else None
+            records = native_records(native.read_bytes()) if native.is_file() else None
         except (OSError, ValueError):
             records = None
         meta = {"session_tokens": session_tokens(records), "catalog": catalog(records), **meta}
@@ -2231,13 +2793,15 @@ def _cost_lines(group: list[dict[str, Any]], runs: list[dict[str, Any]]) -> list
         lines.append(f"  median cost {_spent(median)} over {len(counted)} counted run(s)")
     total = {key: sum(run["session_tokens"][key] for run in spent) for key in COST_KEYS}
     seconds = sum(float(run["elapsed_seconds"]) for run in group if run.get("elapsed_seconds"))
-    failed = sum(1 for run in spent if run["error"])
+    failed = sum(1 for run in spent if run["error"] and not stop_of(run))
     lines.append(
         f"  spent on {len(spent)} call(s), {failed} failed among them: {_spent(total)}; "
         f"{seconds:.1f} seconds over all {len(group)}"
     )
     for run in sorted(group, key=lambda run: run["repetition"]):
         verdict = "call failed, not counted" if run["error"] else run["verdict"]
+        if stop_of(run):
+            verdict = f"stopped ({stop_of(run)}), counted as FAIL"
         tokens = _spent(run["session_tokens"]) if run.get("session_tokens") else "tokens unrecorded"
         lines.append(
             f"  repetition {run['repetition']}: {verdict}; {tokens}; "
@@ -2343,7 +2907,8 @@ def summarize(directories: list[Path]) -> int:
     its own), so runs of different instruments are never pooled. An attempt counts once, by its
     native thread or run: a regrade of it, and a further copy of its record, are printed and not
     counted. A run whose call failed measured the call, not the model, so it is named and not
-    counted. A run whose record keeps no token count has it read from the transcript saved
+    counted; a call stopped at its budget or its time (`stop_of`) measured the model, and counts
+    as a FAIL. A run whose record keeps no token count has it read from the transcript saved
     beside it.
     """
 
@@ -2380,10 +2945,16 @@ def _print_group(
     """One group's counts and lines; its instrument where another group has the same label."""
 
     fixture, harness_name, arm, model, effort, *instrument = key
-    runs = sorted((run for run in group if not run["error"]), key=lambda run: run["repetition"])
-    passed = sum(1 for run in runs if run["verdict"] == "PASS")
+    counted = (run for run in group if not run["error"] or stop_of(run))
+    runs = sorted(counted, key=lambda run: run["repetition"])
+    passed = sum(1 for run in runs if run["verdict"] == "PASS" and not stop_of(run))
     failed = len(group) - len(runs)
-    tail = f" ({failed} failed call(s) not counted)" if failed else ""
+    stopped = sum(1 for run in runs if stop_of(run))
+    notes = [
+        *([f"{failed} failed call(s) not counted"] if failed else []),
+        *([f"{stopped} stopped at the budget or the timeout, counted as FAIL"] if stopped else []),
+    ]
+    tail = f" ({'; '.join(notes)})" if notes else ""
     print(f"{fixture} | {harness_name} | {arm} | {model} {effort}: PASS {passed}/{len(runs)}{tail}")
     if split:
         names = ("kernel", "files", "graders", "grading files", "elements")
@@ -2425,9 +2996,9 @@ def _parser() -> argparse.ArgumentParser:
             f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher. "
             "The model is always named and passed to codex with -m, so codex's configured "
             "default never runs. Each arm's measurement is "
-            f"{len(default_fixtures())} fixtures x 3 repetitions: "
-            f"{len(default_fixtures()) * len(REPETITIONS)} runs; "
-            "the handoff, lifecycle and adoption "
+            f"{len(default_fixtures())} fixtures x {MEASURED} repetitions: "
+            f"{len(default_fixtures()) * MEASURED} runs; "
+            "the handoff, lifecycle, adoption and suite-v2 (v2-) "
             "fixtures run only when --fixtures names them. "
             "On a fixture with an install.json, an element arm measures one part of the "
             f"install: --drop takes elements from current, --add puts elements into {NONE}, "
@@ -2520,7 +3091,9 @@ def _parser() -> argparse.ArgumentParser:
         type=int,
         choices=REPETITIONS,
         default=1,
-        help="which of the three repetitions this run is (default: 1)",
+        metavar=f"{REPETITIONS[0]}..{REPETITIONS[-1]}",
+        help=f"which repetition this run is, {REPETITIONS[0]} to {REPETITIONS[-1]}; a "
+        f"measurement takes {MEASURED} (default: 1)",
     )
     parser.add_argument(
         "--out", default="", help="a new directory for the run (default: evals/results/raw/<id>)"
@@ -2547,6 +3120,16 @@ def _parser() -> argparse.ArgumentParser:
         "post-checks on its kept workspace, from the run's own sealed graders, into the new "
         "--out; refuses where the sealed graders or the workspace differ from what the run "
         "recorded",
+    )
+    parser.add_argument(
+        "--rescore",
+        action="append",
+        metavar="RUN_DIR",
+        help="score, with no model call, the runs kept under RUN_DIR (repeat for more) with each "
+        "fixture's current graders, built from this checkout under the run's own arm: a copy of "
+        "each kept workspace is graded at its own path, and <fixture>.rescore-<graders "
+        "digest>.json is written beside the meta with both graders' digests and the new "
+        "verdicts; the meta, the transcript and the original verdicts are never changed",
     )
     parser.add_argument(
         "--dump-arm",
@@ -2579,7 +3162,21 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
     unknown = sorted(set(names) - set(fixture_names()))
     if unknown or not names:
         parser.error(f"no fixture {', '.join(unknown)}; there are {', '.join(fixture_names())}")
+    refused = [problem for problem in map(suite_refusal, names) if problem]
+    if refused:
+        parser.error("; ".join(refused))
     return names
+
+
+def suite_refusal(name: str) -> str:
+    """What is wrong with the fixture's suite.json, or an empty string where the runner reads
+    it (or it has none)."""
+
+    try:
+        fixture_suite(name)
+    except SuiteError as problem:
+        return f"{name}/{SUITE_FILE}: {problem}"
+    return ""
 
 
 def fixture_arms(
@@ -3042,8 +3639,10 @@ def set_earlier_ref(parser: argparse.ArgumentParser, args: argparse.Namespace) -
 
 
 def _no_call(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
-    """`--regrade` or `--dump-arm`: each runs no model."""
+    """`--rescore`, `--regrade` or `--dump-arm`: each runs no model."""
 
+    if args.rescore:
+        return rescore([Path(item).resolve() for item in args.rescore])
     if args.regrade:
         return regrade(Path(args.regrade).resolve(), Path(args.out or RAW / uuid.uuid4().hex))
     return dump_arm(parser, args)
@@ -3076,7 +3675,7 @@ def _main(argv: list[str] | None = None) -> int:
     # relative path would resolve to another place.
     args.out = str(Path(args.out).resolve()) if args.out else ""
     args.workspace_root = str(Path(args.workspace_root).resolve()) if args.workspace_root else ""
-    if args.regrade or args.dump_arm:
+    if args.rescore or args.regrade or args.dump_arm:
         return _no_call(parser, args)
     names = checked_fixtures(parser, args)
     set_earlier_ref(parser, args)

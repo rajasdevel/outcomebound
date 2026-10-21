@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "greeting-fixed": "PASS",
+    "only-greeting-changed": "PASS",
+    "stubs-unchanged": "PASS",
+    "within-budget": "PASS"
+  },
+  "report": {
+    "says-what-changed": "yes"
+  }
+}

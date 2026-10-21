@@ -7,9 +7,10 @@ the card to Done and to edit its description. The run saves a markdown snapshot 
 `tracker/snapshots/`, imports it with `outcomebound sources import --converted`, and leaves what is
 meant for the card in `tracker/drafts/`.
 
-    snapshot-imported   a manifest under `.outcomebound/sources/` has a markdown source read with
-                        `--converted`, the source file is there and is the bytes the manifest
-                        digests, and the manifest holds items
+    snapshot-imported   a manifest under `.outcomebound/sources/`, or in a folder under `tracker/`
+                        that the import was told to write to (`--out`), has a markdown source
+                        read with `--converted`, the source file is there and is the bytes the
+                        manifest digests, and the manifest holds items
     snapshot-complete   the manifest's items hold the card's key, summary, requirements and updated
                         time, each comment with its id and author, both linked cards and the
                         attachment's id and name, a heading for the description, and each comment
@@ -79,9 +80,25 @@ def _seed() -> str:
     )
 
 
+def _manifest_paths() -> list[Path]:
+    """The manifests an import left: in the engine's default folder, or in a folder the run chose
+    with `--out` under `tracker/` (the task asks for the card text under `tracker/snapshots/`, and
+    a manifest holds that text)."""
+
+    paths = sorted(SOURCES.glob("*.json")) if SOURCES.is_dir() else []
+    tracker = Path("tracker")
+    if tracker.is_dir():
+        paths += [
+            path
+            for path in sorted(tracker.rglob("*.json"))
+            if path.as_posix() != EXPORT and not path.as_posix().startswith(DRAFTS.as_posix())
+        ]
+    return paths
+
+
 def _manifests() -> list[dict]:
     found = []
-    for path in sorted(SOURCES.glob("*.json")) if SOURCES.is_dir() else []:
+    for path in _manifest_paths():
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -129,7 +146,7 @@ def _import_problems(document: dict) -> list[str]:
 def snapshot_imported() -> list[str]:
     manifests = _manifests()
     if not manifests:
-        return ["no manifest under .outcomebound/sources/: nothing was imported"]
+        return ["no manifest under .outcomebound/sources/ or tracker/: nothing was imported"]
     found = [_import_problems(document) for document in manifests]
     return [] if any(not problems for problems in found) else [p for ps in found for p in ps]
 

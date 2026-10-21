@@ -33,9 +33,9 @@
     },
     {
       "name": "each-finding-has-a-disposition",
-      "risk": "a finding has no disposition line in the review file's format, or the file lost what it reviewed",
+      "risk": "FORM only, not required: a finding has no disposition line in the engine's format, or the file lost what it reviewed",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

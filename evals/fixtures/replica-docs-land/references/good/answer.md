@@ -1,0 +1,1 @@
+Recorded release 2.4.0 in `CHANGELOG.md` and `docs/releases.md`, then committed both. The cheap documentation check (`make docs-check`) passes. I did not run the slow integration suite: the change is two documents, which it never reads.

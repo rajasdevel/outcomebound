@@ -1,0 +1,14 @@
+cat AGENTS.md
+cat CONTRIBUTING.md
+cat README.md
+python3 -m ledger balance acc-003
+cat ledger/display.py
+cat ledger/cli.py
+cat ledger/statement.py
+grep -rn format_amount ledger tests
+git log --oneline -5
+python3 -B -m unittest discover -s tests/unit -t .
+mkdir -p docs/notes
+make test
+python3 -m ledger balance acc-003
+git status

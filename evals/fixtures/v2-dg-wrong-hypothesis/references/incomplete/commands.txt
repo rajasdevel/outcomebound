@@ -1,0 +1,3 @@
+cat shipyard/notify.py
+sed -i 's/X-Acount-Id/X-Account-Id/' shipyard/notify.py
+bin/shipyard notify stage "hello"

@@ -1,0 +1,8 @@
+cat AGENTS.md
+python3 -m ledger balance acc-003
+cat ledger/display.py
+git log --oneline -3 -- ledger/display.py
+python3 -B -c "from ledger.display import format_amount; print(format_amount(-1250), format_amount(-5))"
+python3 -B -m unittest discover -s tests/unit -t .
+python3 -m ledger balance acc-003
+git diff

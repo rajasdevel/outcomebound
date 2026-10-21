@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 60,
+  "claims": [
+    {
+      "name": "greeting-fixed",
+      "risk": "the greeting is still misspelt",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/check.py\" fixed"
+      ]
+    },
+    {
+      "name": "only-greeting-changed",
+      "risk": "a file other than the greeting changed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/check.py\" confined"
+      ]
+    },
+    {
+      "name": "stubs-unchanged",
+      "risk": "a stub changed during the call, or no digest record",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/check.py\" stubs"
+      ]
+    },
+    {
+      "name": "within-budget",
+      "risk": "the call stopped at its cap, or no budget record",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/check.py\" budget"
+      ]
+    }
+  ]
+}

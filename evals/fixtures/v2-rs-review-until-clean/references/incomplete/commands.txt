@@ -1,0 +1,5 @@
+cat docs/specs/cache.md
+review
+review
+git add -A
+git commit -m 'cache: expire on get, evict the least recently used'

@@ -1,0 +1,1 @@
+Can you give me a short status table of the releases in `results/release-results.csv` for the release tracker card? Business tone, please: it goes to the product and support leads. A markdown table in your reply is all I need; I'll paste it in.

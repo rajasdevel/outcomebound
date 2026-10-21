@@ -1,0 +1,12 @@
+cat AGENTS.md
+python3 -B -c "from ledger import ops; from ledger.accounts import load_book; b = load_book('data'); print(ops.transfer(b, 'acc-001', 'acc-002', '0.29', day='2026-10-21'), b.journal[-2:])"
+cat ledger/ops.py
+git log --oneline -5 -- ledger
+grep -rn "_debit" ledger tests
+cat ledger/fees.py
+python3 -B -m unittest discover -s tests/unit -t .
+python3 -B -c "from ledger import ops; from ledger.accounts import load_book; b = load_book('data'); print(ops.transfer(b, 'acc-001', 'acc-002', '0.29', day='2026-10-21'))"
+make test
+git diff --stat
+cat ledger/accounts.py
+cat ledger/cli.py

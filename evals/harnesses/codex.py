@@ -5,12 +5,16 @@ directory. Each is read from the session record the CLI keeps under its home (th
 folder of `$CODEX_HOME`, else of the default Codex home): found by the stream's thread id,
 checked, copied byte for byte, and compared with what the run asked for. Nothing is inferred
 from the arguments, and a missing record or field makes the call an error.
+
+While the call runs, the same record is read as it grows, about once a second, for the input
+the session has used so far (`SessionMeter`): a call whose input passes its budget's cap is
+stopped, as one that runs past its time is.
 """
 
 from __future__ import annotations
 
+import json
 import sqlite3
-import subprocess
 import tempfile
 from collections.abc import Callable
 from contextlib import closing
@@ -27,10 +31,17 @@ from evals.codex_events import (
     unknown_types,
     warnings,
 )
-from evals.harnesses import CallResult, Request
+from evals.harnesses import Budget, CallResult, Request
 from evals.native_commands import fill_directories
-from evals.native_receipts import NativeCapture, copy_exact, find_session, thread_id
-from evals.processes import bounded_command
+from evals.native_receipts import (
+    NativeCapture,
+    copy_exact,
+    find_session,
+    parse_records,
+    temporary_write_roots,
+    thread_id,
+)
+from evals.watch import watched_command
 
 NAME = "codex"
 # These keep most of the operator's own codex setup out of every arm: without them a call loads
@@ -195,26 +206,38 @@ class CodexHarness:
 
         sessions = self.home() / "sessions"
         NativeCapture(sessions, keep).check_roots((cwd, *write_roots))
-        with tempfile.NamedTemporaryFile("r+", suffix=".md", delete=False) as handle:
+        check_protected(request.protected, (cwd, *write_roots))
+        budget = request.budget or Budget(self._timeout)
+        meter = SessionMeter(sessions)
+
+        def over_cap(printed: Callable[[], str]) -> str | None:
+            if budget.input_cap is None:
+                return None
+            used = meter.input(printed())
+            return "input_cap" if used is not None and used > budget.input_cap else None
+
+        with tempfile.NamedTemporaryFile(
+            "r+", suffix=".md", delete=False, encoding="utf-8"
+        ) as handle:
             last_message = Path(handle.name)
         try:
-            try:
-                done = bounded_command(
-                    self.argv(request, cwd, last_message, write_roots),
-                    input=prompt,
-                    env={**self._env(), "PATH": path},
-                    cwd=str(cwd),
-                    timeout=self._timeout,
-                )
-                stdout, stderr, code = _text(done.stdout), _text(done.stderr), done.returncode
-            except subprocess.TimeoutExpired as problem:
-                stdout, stderr, code = _text(problem.stdout), _text(problem.stderr), None
+            done = watched_command(
+                self.argv(request, cwd, last_message, write_roots),
+                input=prompt,
+                env={**self._env(), "PATH": path},
+                cwd=str(cwd),
+                timeout=budget.seconds,
+                poll=over_cap,
+            )
+            stdout, stderr, code = done.stdout, done.stderr, done.returncode
             answer = last_message.read_text(encoding="utf-8") if last_message.is_file() else ""
         finally:
             last_message.unlink(missing_ok=True)
         transcript = command_transcript(stdout, stderr)
         events = parse_events(stdout) or []
-        observed, extras, checks, session = identify(stdout, sessions, keep, request, cwd)
+        observed, extras, checks, session = identify(
+            stdout, sessions, keep, request, cwd, stopped=bool(done.stopped)
+        )
         # The stream gives no working directory for a command; the native session does.
         transcript, filled = fill_directories(transcript, session)
         extras.update(filled)
@@ -229,6 +252,9 @@ class CodexHarness:
             identity_checks=checks,
             local_listener=request.local_listener,
             sandbox=request.sandbox,
+            stopped=done.stopped,
+            budget_requested={"seconds": budget.seconds, "input_cap": budget.input_cap},
+            input_seen_at_stop=meter.last if done.stopped else None,
         )
         failed = next((check[2] for check in checks if check[1] == "FAIL"), "")
         return CallResult(answer, transcript, code, observed, extras, failed, checks)
@@ -251,8 +277,89 @@ class CodexHarness:
         return str(row[0]) if row and row[0] is not None else None
 
 
-def _text(value: str | bytes | None) -> str:
-    return value.decode("utf-8", "replace") if isinstance(value, bytes) else value or ""
+def check_protected(protected: tuple[Path, ...], roots: tuple[Path, ...]) -> None:
+    """ValueError, before the model runs, where a runner-owned path the call must only read
+    lies inside a path the model may write: the workspace, an added root, or a temporary folder
+    the sandbox grants."""
+
+    writable = [root.resolve() for root in (*roots, *temporary_write_roots())]
+    for path in protected:
+        if any(path.resolve().is_relative_to(root) for root in writable):
+            raise ValueError(f"{path} is inside a path the model may write")
+
+
+def _first_thread(printed: str) -> str | None:
+    """The thread id of the stream's first line, once that line is complete and is a
+    `thread.started` event; None before that."""
+
+    first, newline, _rest = printed.partition("\n")
+    if not newline:
+        return None
+    try:
+        event = json.loads(first)
+    except ValueError:
+        return None
+    if not isinstance(event, dict) or event.get("type") != "thread.started":
+        return None
+    key = event.get("thread_id")
+    return key if isinstance(key, str) and key else None
+
+
+class SessionMeter:
+    """The input a running call has used, read from its native session as the file grows.
+
+    The session is found once, by the stream's first `thread.started` id, as the one file
+    `*-<id>.jsonl` under `sessions`; each read takes only the bytes written since the last one
+    and the complete lines among them. The input is the running total (`input_tokens`, cached
+    input among it) of the last `token_count` event; None until one is read. This bounds spend
+    only: identity and cost are read from the copied session after the call."""
+
+    def __init__(self, sessions: Path) -> None:
+        self._sessions = sessions
+        self._file: Path | None = None
+        self._offset = 0
+        self._tail = b""
+        self.last: int | None = None
+
+    def input(self, printed: str) -> int | None:
+        if self._file is None:
+            key = _first_thread(printed)
+            if key is None or not self._sessions.is_dir():
+                return None
+            matches = list(self._sessions.rglob(f"*-{key}.jsonl"))
+            if len(matches) != 1:
+                return None
+            self._file = matches[0]
+        try:
+            with self._file.open("rb") as handle:
+                handle.seek(self._offset)
+                data = handle.read()
+        except OSError:
+            return self.last
+        self._offset += len(data)
+        *lines, self._tail = (self._tail + data).split(b"\n")
+        for line in lines:
+            total = _running_input(line)
+            if total is not None:
+                self.last = total
+        return self.last
+
+
+def _running_input(line: bytes) -> int | None:
+    """The `input_tokens` of a `token_count` event's running total, or None for any other
+    line."""
+
+    try:
+        record = json.loads(line)
+    except ValueError:
+        return None
+    payload = record.get("payload") if isinstance(record, dict) else None
+    if not isinstance(payload, dict) or payload.get("type") != "token_count":
+        return None
+    info = payload.get("info")
+    total = info.get("total_token_usage") if isinstance(info, dict) else None
+    value = total.get("input_tokens") if isinstance(total, dict) else None
+    return value if type(value) is int else None
 
 
 def catalog(records: list[dict[str, Any]] | None) -> dict[str, Any] | None:
@@ -330,6 +437,37 @@ def _agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]
 Records = list[dict[str, Any]]
 
 
+def _session(
+    sessions: Path, key: str, stopped: bool, extras: dict[str, Any]
+) -> tuple[Path, bytes, Records]:
+    """`find_session`; for a call the harness stopped, whose tool was ended while it wrote, the
+    same file read again with the unfinished last line left out of the records (the copy keeps
+    every byte). ValueError as `find_session` gives it, for any other problem."""
+
+    try:
+        return find_session(sessions, key)
+    except ValueError:
+        if not stopped:
+            raise
+        matches = list(sessions.rglob(f"*-{key}.jsonl"))
+        source = matches[0] if len(matches) == 1 else None
+        if source is None or source.is_symlink():
+            raise
+        raw = source.read_bytes()
+        complete, _newline, tail = raw.rpartition(b"\n")
+        if not tail or not source.resolve().is_relative_to(sessions.resolve()):
+            raise
+        records = parse_records(complete)
+        first = records[0] if records and isinstance(records[0], dict) else {}
+        payload = first.get("payload")
+        if not isinstance(payload, dict) or first.get("type") != "session_meta":
+            raise
+        if payload.get("id") != key:
+            raise
+        extras["native_partial_tail"] = len(tail)
+        return source, raw, records
+
+
 def _notes_unwritable(records: Records, cwd: Path) -> tuple[bool, str]:
     """Whether every `turn_context` record gives the sandbox's writable roots and none of them
     is the workspace's `.agents/work` or a folder inside it, and the problem otherwise."""
@@ -376,16 +514,18 @@ def _network_access(records: list[dict[str, Any]]) -> tuple[bool | None, str]:
 
 
 def identify(
-    stdout: str, sessions: Path, keep: Path, request: Request, cwd: Path
+    stdout: str, sessions: Path, keep: Path, request: Request, cwd: Path, stopped: bool = False
 ) -> tuple[dict[str, str | None] | None, dict[str, Any], list[list[str]], Records | None]:
     """What the call's native session says it ran, set against what was asked for.
 
     Returns the observed identity (None where no session was read), the meta entries for the
     session, one check per item, and the session's records (None where none were read). A check
     that fails carries, as its detail, the text of the call error. The sandbox must allow
-    network access exactly where the fixture asked for a local listener."""
+    network access exactly where the fixture asked for a local listener. A call the harness
+    `stopped` may have left its session's last line unfinished: its records are the complete
+    lines, and `native_partial_tail` gives the bytes left over."""
 
-    model, effort, local_listener, sandbox = request
+    model, effort, local_listener, sandbox = request[:4]
     events = parse_events(stdout) or []
     checks: list[list[str]] = []
 
@@ -404,7 +544,7 @@ def identify(
     check("thread-id", True, key, "")
     extras["thread_id"] = key
     try:
-        source, raw, records = find_session(sessions, key)
+        source, raw, records = _session(sessions, key, stopped, extras)
         extras["native_sha256"] = copy_exact(source, raw, keep)
     except (OSError, ValueError) as problem:
         check("native-session", False, "", f"no native session for {key}: {problem}")

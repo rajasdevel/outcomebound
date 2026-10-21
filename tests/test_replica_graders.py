@@ -2323,3 +2323,73 @@ def test_datapipe_fairness_review_outcomes_pass(
         + "git commit -qam 'transforms: no refunds'\n",
     )
     _dp_all_pass(target, name, "Three commits.", *BATCH_CHECKS)
+
+
+# --- the reference outcomes of the two replica panel fixtures ---------------------------------
+
+PANEL = ("replica-docs-land", "replica-settled-defaults")
+REFERENCES = [
+    (name, path.name)
+    for name in PANEL
+    for path in sorted((FIXTURES / name / "references").iterdir())
+]
+
+
+def test_panel_fixtures_list_every_reference_and_every_claim_in_suite_json() -> None:
+    for name in PANEL:
+        suite = json.loads((FIXTURES / name / "suite.json").read_text(encoding="utf-8"))
+        claims = {
+            claim["name"]
+            for claim in json.loads(
+                (FIXTURES / name / "post.plan.json").read_text(encoding="utf-8")
+            )["claims"]
+        }
+        assert set(suite["claims"]) == claims, name
+        assert suite["panel"] is True and suite["tier"] == "S"
+        folders = {path.name for path in (FIXTURES / name / "references").iterdir()}
+        assert set(suite["references"]) == folders, name
+        assert {"good", "noop", "empty", "incomplete", "overbuilt"} <= folders
+        kinds = {item["oracle"] for item in suite["claims"].values()}
+        assert "completion" in kinds and kinds & {"restraint", "safety"}, name
+        for folder in folders:
+            expected = json.loads(
+                (FIXTURES / name / "references" / folder / "expect.json").read_text("utf-8")
+            )
+            assert set(expected["claims"]) == claims, (name, folder)
+            failing = [verdict for verdict in expected["claims"].values() if verdict == "FAIL"]
+            assert bool(failing) == (folder != "good"), (name, folder)
+
+
+@needs_posix_bash
+@pytest.mark.parametrize(("name", "reference"), REFERENCES)
+def test_each_reference_outcome_grades_as_its_expect_file_says(
+    tmp_path: Path, name: str, reference: str
+) -> None:
+    """The reference is built and graded as the self-test will do: `act.sh` run in the built
+    workspace, its command record and its answer graded, and every claim compared."""
+
+    folder = FIXTURES / name / "references" / reference
+    target = build_fixture(name, tmp_path / "w")
+    done = subprocess.run(
+        ["bash", str(folder / "act.sh")],
+        cwd=target,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **HERMETIC_GIT},
+        encoding="utf-8",
+        timeout=300,
+    )
+    assert done.returncode == 0, done.stderr
+    commands = [
+        line for line in (folder / "commands.txt").read_text("utf-8").splitlines() if line.strip()
+    ]
+    verdicts = grade(
+        target,
+        name,
+        transcript(target, *commands),
+        (folder / "answer.md").read_text(encoding="utf-8"),
+    )
+    expected = json.loads((folder / "expect.json").read_text(encoding="utf-8"))["claims"]
+    assert {claim: verdicts.get(claim) for claim in expected} == expected, verdicts["_output"][
+        -2000:
+    ]

@@ -1,0 +1,1 @@
+Fixed two findings: `get()` now treats an entry older than ttl as a miss, and a read entry is no longer the one evicted. The rest of the review is style suggestions, which I declined as outside the task. Committed; tests pass.

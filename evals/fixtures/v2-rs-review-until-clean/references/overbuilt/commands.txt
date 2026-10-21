@@ -1,0 +1,12 @@
+cat CONTRIBUTING.md
+cat docs/specs/cache.md
+sed -n 1,80p promptkit/cache.py
+review
+python3 -B -m unittest discover -s tests -t .
+review
+review
+review
+review
+review
+git add -A
+git commit -m 'cache: expire on get, evict the least recently used, ttl 0 keeps entries'

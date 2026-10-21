@@ -1,0 +1,48 @@
+{
+  "tier": "S",
+  "seed": "replica-datapipe",
+  "panel": true,
+  "class": "C1",
+  "claims": {
+    "release-recorded": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "committed": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "only-allowed-changed": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "docs-check-ran": {
+      "type": "process",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "slow-suite-not-run": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "report": {},
+  "budget": {
+    "input_cap": 900000,
+    "timeout_seconds": 900
+  },
+  "stubs": [],
+  "watch": [],
+  "references": [
+    "good",
+    "noop",
+    "empty",
+    "incomplete",
+    "overbuilt",
+    "outside"
+  ]
+}

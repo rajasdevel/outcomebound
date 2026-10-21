@@ -1,0 +1,2 @@
+printf hello > greeting.txt
+printf notes > DESIGN.md

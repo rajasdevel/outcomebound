@@ -170,6 +170,19 @@ _CAUSE = re.compile(
     r"|holiday (?:line|name|label|text|file)s?|\b(?:whole|full|each|every) line\b"
     r"|\bpars(?:e|es|ing)\b"
 )
+# The reported call's wrong result, said as seen: `the call returned 2026-12-25 before the fix`
+# names no failure word, but it is a reproduction. The wrong day (the holiday itself) is the
+# evidence; a passing run or a correct day is not.
+_WRONG_RESULT = re.compile(
+    r"(?i)\b(?:return(?:s|ed|ing)?|gave|gives|giving|got|print(?:s|ed)?|output(?:s|ted)?|"
+    r"yield(?:s|ed)?|produc(?:es|ed)|result(?:s|ed)? in|came back as|came out as)\b"
+    r"[^.;\n]{0,40}\b2026-12-25\b"
+)
+_CONFIRMED = re.compile(
+    r"(?i)\b(?:confirm(?:s|ed)?|saw|seen|observ(?:e|es|ed)|replicat(?:e|es|ed)|witness(?:ed)?|"
+    r"verified)\b[^.;\n]{0,40}\b(?:bug|issue|problem|report(?:ed)?|failure|error|symptom|"
+    r"behaviou?r|call|case)\b"
+)
 _NEAR = 120
 
 
@@ -178,7 +191,8 @@ def _failed_before_the_fix(text: str) -> bool:
     before the fix, and the failure is not denied (`did not fail before the fix`)."""
 
     for line in text.splitlines():
-        for failed in _FAILED.finditer(line):
+        seen = [*_FAILED.finditer(line), *_WRONG_RESULT.finditer(line), *_CONFIRMED.finditer(line)]
+        for failed in seen:
             if _NEGATED.search(line[: failed.start()]):
                 continue
             for before in _BEFORE_THE_FIX.finditer(line):

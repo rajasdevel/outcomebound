@@ -1,0 +1,7 @@
+{
+  "claims": {
+    "greeting-fixed": "PASS",
+    "stubs-unchanged": "FAIL"
+  },
+  "report": {}
+}

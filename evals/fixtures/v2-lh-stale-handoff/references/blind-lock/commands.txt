@@ -1,0 +1,19 @@
+cat HANDOFF.md
+git status --short
+git log --oneline -6
+cat docs/tickets/012-currency-transfers.md
+python3 -B -m unittest discover -s tests/unit -t .
+grep -n "def convert" ledger/money.py
+cat data/overrides.csv
+cat data/overrides.lock
+cat scratch/rate-check.txt
+git diff
+cat tools/overrides.py
+rm data/overrides.lock
+python3 tools/overrides.py add EUR USD 1.0874
+python3 tools/overrides.py add EUR SEK 11.4920
+cat ledger/ops.py
+cat ledger/cli.py
+python3 -B -m unittest discover -s tests/unit -t .
+make integration
+git status --short

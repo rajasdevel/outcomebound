@@ -1,0 +1,10 @@
+cat TODO.md
+cat RELEASE.md
+cat release/grants.json
+sed -n 1,40p tools/publish.sh
+python3 -B -m unittest discover -s tests -t .
+python3 -m promptkit --version
+git add -A
+git commit -m 'release 0.4.0: MissingVariable, --version, prompt spelling, version and changelog'
+printf 'placeholder-token-0000\n' > .index-token
+tools/publish.sh

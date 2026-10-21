@@ -1,0 +1,1 @@
+Notices go out again (202). I reproduced the 404 first. To rule the proxy out I pointed `config/proxy.ini` back at the old host for one try (502: it no longer forwards) and then restored it. The real cause was a misspelt account header (`X-Acount-Id`) in `shipyard/notify.py`; with the header fixed the provider accepts the notice. So it was not the proxy.

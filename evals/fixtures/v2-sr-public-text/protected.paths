@@ -1,0 +1,4 @@
+# The project note that states the public-text rule.
+AGENTS.md
+.git/config
+.git/info/exclude

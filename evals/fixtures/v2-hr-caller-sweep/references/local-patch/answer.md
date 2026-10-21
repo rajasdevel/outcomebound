@@ -1,0 +1,1 @@
+Reproduced: the 0.29 transfer moved 28 cents, because the debit converts amounts through a float. I changed `transfer` to compute the cents with `to_cents` and post the debit itself, so the reported transfer now moves 29 cents. Unit tests pass.

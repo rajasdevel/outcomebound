@@ -73,6 +73,66 @@ def _command_records(events: list[dict]) -> list[Command] | None:
     return records if not pending else None
 
 
+# The most of one command's recorded output a transcript keeps: its head and its tail, half each,
+# around a marker that says how much was cut.
+OUTPUT_CHARACTERS = 20_000
+CUT = "\n[... {count} characters of this command's output cut ...]\n"
+
+
+def capped(text: str, limit: int = OUTPUT_CHARACTERS) -> str:
+    """`text`, or where it is longer than `limit`, its head and tail around a cut marker."""
+
+    if len(text) <= limit:
+        return text
+    half = limit // 2
+    return text[:half] + CUT.format(count=len(text) - 2 * half) + text[-half:]
+
+
+def command_outputs(events: list[dict]) -> list[str | None]:
+    """The output the harness recorded for each command, in the order of the command records
+    (the order the commands started): the `aggregated_output` of its completed item, capped, or
+    None where the item gives none. Output is data the command printed, never evidence that a
+    command ran."""
+
+    order: list[str] = []
+    found: dict[str, str | None] = {}
+    for event in events:
+        item = event.get("item")
+        if not isinstance(item, dict) or item.get("type") != "command_execution":
+            continue
+        key = item.get("id")
+        if not isinstance(key, str):
+            continue
+        if event.get("type") == "item.started" and key not in found:
+            order.append(key)
+            found[key] = None
+        elif event.get("type") == "item.completed" and key in found:
+            output = item.get("aggregated_output")
+            found[key] = capped(output) if isinstance(output, str) else None
+    return [found[key] for key in order]
+
+
+def with_outputs(transcript: str) -> str:
+    """A transcript document from before `outputs` was kept, with them taken from its events;
+    any other text as it came."""
+
+    try:
+        document = json.loads(transcript)
+    except ValueError:
+        return transcript
+    if not isinstance(document, dict) or "outputs" in document:
+        return transcript
+    commands, events = document.get("commands"), document.get("events")
+    if not isinstance(commands, list) or not isinstance(events, list):
+        return transcript
+    if not all(isinstance(event, dict) for event in events):
+        return transcript
+    outputs = command_outputs(events)
+    if len(outputs) != len(commands):
+        return transcript
+    return json.dumps({**document, "outputs": outputs})
+
+
 # Item types that are not a command and cannot change what "no command ran" means: messages,
 # reasoning, a to-do list, an apply-patch edit (`file_change`) and a CLI warning (`error`).
 PASSIVE_ITEMS = frozenset({"agent_message", "reasoning", "todo_list", "file_change", "error"})
@@ -143,7 +203,10 @@ def stream_models(events: list[dict]) -> set[str]:
 
 
 def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
-    """Keep actual CLI events separate from output; incomplete/unknown evidence stays so."""
+    """Keep actual CLI events separate from output; incomplete/unknown evidence stays so.
+
+    `outputs` holds, for each command record, the output its completed item recorded (capped,
+    `command_outputs`), or None; it is None where `commands` is."""
 
     if isinstance(stdout, bytes):
         stdout = stdout.decode("utf-8", "replace")
@@ -157,10 +220,12 @@ def command_transcript(stdout: str | bytes, stderr: str | bytes) -> str:
         and events[-1].get("type") == "turn.completed"
         and sum(event.get("type") == "turn.completed" for event in events) == 1
     )
+    commands = _command_records(events) if valid and not unknown_types(events) else None
     return json.dumps(
         {
             "format": "outcomebound-command-events-v1",
-            "commands": _command_records(events) if valid and not unknown_types(events) else None,
+            "commands": commands,
+            "outputs": command_outputs(events) if commands is not None else None,
             "events": events if valid else [],
             "stdout": stdout,
             "stderr": stderr,

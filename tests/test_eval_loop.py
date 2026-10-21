@@ -19,7 +19,7 @@ RUNNER = SimpleNamespace(
     ARMS=("earlier", "current", "unsized", "none"),
     NONE="none",
     PREFLIGHT_EXIT=3,
-    fixture_names=lambda: ["alpha", "beta", "gamma"],
+    fixture_names=lambda: ["alpha", "beta", "gamma", "delta"],
     ELEMENT=re.compile(r"kernel|facts|pointers|launcher|(?:fragment|skill):[a-z0-9][a-z0-9-]*"),
     InstallError=ValueError,
     Elements=lambda dropped, added: (dropped, added),
@@ -110,12 +110,12 @@ def test_argv_carries_drop_add_and_edits(tmp_path: Path) -> None:
     tail = ["--model", "model-x", "--effort", "medium", "--repetition", "1", "--fixtures", "alpha"]
     roots = ["--workspace-root", str(tmp_path / "workspaces" / "loop1")]
     assert found["minus"] == [
-        "evals/run.py", "--arm", "current", "--drop", "fragment:commands", "--drop",
-        "skill:diagnose", "--arm-label", "minus", *tail,
+        "evals/run.py", "--harness", "codex", "--arm", "current", "--drop", "fragment:commands",
+        "--drop", "skill:diagnose", "--arm-label", "minus", *tail,
         "--out", str(out / "minus-r1-alpha"), *roots,
     ]  # fmt: skip
-    assert found["plus"][:6] == ["evals/run.py", "--arm", "none", "--add", "kernel", "--arm-label"]
-    assert found["edited"][3:5] == ["--edits", str(tmp_path / "edits.json")]
+    assert found["plus"][3:8] == ["--arm", "none", "--add", "kernel", "--arm-label"]
+    assert found["edited"][5:7] == ["--edits", str(tmp_path / "edits.json")]
 
 
 def test_done_cells_are_skipped_and_max_runs_bounds_new_ones(tmp_path: Path) -> None:
@@ -222,3 +222,160 @@ def test_element_refusals_come_before_any_cell(
     assert code == 2
     assert started == []
     assert message in capsys.readouterr().err
+
+
+# Suite-v2 plans: packs from each fixture's suite.json, the harness and profile recorded, up to
+# ten repetitions, and a pass-level spend limit checked before each cell.
+REFS = ["good", "noop", "empty", "incomplete", "overbuilt"]
+SUITES = {
+    "alpha": {"tier": "XS", "panel": True, "budget": {"input_cap": 300}, "references": REFS},
+    "beta": {"tier": "S", "panel": True, "budget": {"input_cap": 900}, "references": REFS},
+    "gamma": {"tier": "S", "panel": False, "budget": {"input_cap": 900}, "references": REFS},
+    "delta": {"tier": "XS", "report": {}},  # report-only: in no pack
+}
+TEN = SimpleNamespace(**{**vars(RUNNER), "REPETITIONS": tuple(range(1, 11))})
+
+
+@pytest.fixture
+def suites(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    fixtures = tmp_path / "fixtures"
+    for name, document in SUITES.items():
+        (fixtures / name).mkdir(parents=True)
+        (fixtures / name / "suite.json").write_text(json.dumps(document), encoding="utf-8")
+    monkeypatch.setattr(LOOP, "FIXTURES", fixtures)
+    return fixtures
+
+
+def pack_plan(tmp_path: Path, **changes: Any) -> Path:
+    path = write_plan(tmp_path, **changes)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if "pack" in changes:
+        del document["fixtures"]
+    path.write_text(json.dumps(document), encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize(
+    ("pack", "fixtures"),
+    [("XS", ("alpha",)), ("S", ("beta", "gamma")), ("panel", ("alpha", "beta"))],
+)
+def test_a_pack_resolves_its_fixtures_from_suite_json(
+    tmp_path: Path, suites: Path, pack: str, fixtures: tuple[str, ...]
+) -> None:
+    plan = LOOP.read_plan(pack_plan(tmp_path, pack=pack, arms=ARMS[:2]), RUNNER)
+    assert plan.fixtures == fixtures and plan.pack == pack
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"pack": "XL"}, "pack is one of"),
+        ({"pack": "M"}, "no fixture's suite.json puts it in pack M"),
+        ({"harness": "claude-code"}, "harness claude-code cannot run yet"),
+        ({"repetitions": [1, 11]}, "repetitions are distinct values"),
+        ({"spend_limit": 0}, "spend_limit is a positive number"),
+    ],
+)
+def test_suite_v2_plan_refusals_start_nothing(
+    tmp_path: Path,
+    suites: Path,
+    changes: dict[str, Any],
+    message: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    runner = FakeRunner()
+    path = pack_plan(tmp_path, arms=ARMS[:2], **changes)
+    assert LOOP.main([str(path)], runner=runner, module=TEN) == 2
+    assert runner.calls == []
+    assert message in capsys.readouterr().err
+
+
+def test_a_plan_with_both_fixtures_and_a_pack_is_refused(tmp_path: Path, suites: Path) -> None:
+    with pytest.raises(LOOP.PlanError, match="fixtures or a pack"):
+        LOOP.read_plan(write_plan(tmp_path, pack="XS"), RUNNER)
+
+
+def test_a_spend_limit_needs_every_fixture_s_input_cap(tmp_path: Path, suites: Path) -> None:
+    (suites / "gamma" / "suite.json").write_text(
+        json.dumps({"tier": "S", "references": REFS}), encoding="utf-8"
+    )
+    with pytest.raises(LOOP.PlanError, match="gamma has none"):
+        LOOP.read_plan(pack_plan(tmp_path, pack="S", spend_limit=10_000), RUNNER)
+
+
+def test_ten_repetitions_run_and_the_harness_and_profile_are_recorded(
+    tmp_path: Path, suites: Path
+) -> None:
+    runner = FakeRunner()
+    path = write_plan(
+        tmp_path, repetitions=list(range(1, 11)), fixtures=["alpha"], arms=ARMS[:2], profile="attr"
+    )
+    assert LOOP.main([str(path)], runner=runner, module=TEN) == 0
+    assert len(runner.calls) == 20
+    assert {words[words.index("--repetition") + 1] for words in runner.calls} == {
+        str(n) for n in range(1, 11)
+    }
+    recorded = json.loads((tmp_path / "results" / "loop1" / "LOOP.json").read_text("utf-8"))
+    assert (recorded["harness"], recorded["profile"], recorded["fixtures"]) == (
+        "codex", "attr", ["alpha"],
+    )  # fmt: skip
+    changed = write_plan(tmp_path, fixtures=["alpha"], arms=ARMS[:2], profile="field-codex")
+    assert LOOP.main([str(changed)], runner=FakeRunner(), module=TEN) == 2
+
+
+class SpendingRunner(FakeRunner):
+    """A FakeRunner whose every cell records `spend` input tokens in its meta file."""
+
+    def __init__(self, spend: int) -> None:
+        super().__init__()
+        self.spend = spend
+
+    def __call__(self, words: tuple[str, ...], log: Path, cwd: Path) -> int:
+        code = super().__call__(words, log, cwd)
+        out = Path(words[words.index("--out") + 1])
+        fixture = words[words.index("--fixtures") + 1]
+        meta = {"fixture": fixture, "session_tokens": {"input_tokens": self.spend}}
+        (out / f"{fixture}.meta.json").write_text(json.dumps(meta), encoding="utf-8")
+        return code
+
+
+def test_the_spend_limit_stops_before_a_cell_that_could_pass_it(
+    tmp_path: Path, suites: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Cells of alpha (cap 300) each record 100 input tokens; with a limit of 1000 the loop runs
+    a cell while what is recorded before it plus one cap stays within it: before the ninth, 800 is
+    recorded and 800 + 300 passes 1000, so eight run."""
+
+    path = write_plan(
+        tmp_path, repetitions=list(range(1, 11)), fixtures=["alpha"], arms=ARMS[:2],
+        spend_limit=1000,
+    )  # fmt: skip
+    runner = SpendingRunner(100)
+    assert LOOP.main([str(path)], runner=runner, module=TEN) == 0
+    assert len(runner.calls) == 8
+    printed = capsys.readouterr().out
+    assert "stopped: before a cell that could pass the spend limit 1000" in printed
+    assert "800 recorded so far" in printed
+    again = SpendingRunner(100)
+    assert LOOP.main([str(path)], runner=again, module=TEN) == 0
+    assert again.calls == []
+
+
+def test_a_cell_that_ran_without_a_record_counts_as_its_cap(tmp_path: Path, suites: Path) -> None:
+    path = write_plan(tmp_path, fixtures=["alpha"], arms=ARMS[:2], spend_limit=650)
+    plan = LOOP.read_plan(path, RUNNER)
+    ordered = LOOP.cells(plan)
+    ordered[0].out.mkdir(parents=True)
+    assert LOOP.spent_so_far(plan, ordered) == 300
+    assert LOOP.over_limit(plan, ordered, ordered[1]) == ""
+    ordered[1].out.mkdir(parents=True)
+    assert "could take up to 300" in LOOP.over_limit(plan, ordered, ordered[2])
+
+
+def test_dry_run_shows_the_spend_projection(
+    tmp_path: Path, suites: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = pack_plan(tmp_path, pack="panel", arms=ARMS[:2], spend_limit=10_000)
+    assert LOOP.main([str(path), "--dry-run"], runner=FakeRunner(), module=RUNNER) == 0
+    printed = capsys.readouterr().out
+    assert "0 recorded so far, worst case of the cells to run 4800" in printed

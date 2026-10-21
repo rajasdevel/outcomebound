@@ -1,0 +1,43 @@
+{
+  "tier": "S",
+  "seed": "ledger",
+  "panel": true,
+  "class": "C3",
+  "claims": {
+    "all-callers-fixed": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "unit-tests-pass": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-unrelated-diff": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "report": {
+    "reproduction-and-cause": {
+      "question": "Does the answer say whether the reported failure was reproduced, and name the shared debit as the cause, with the other callers it reaches?",
+      "must_always": false
+    }
+  },
+  "budget": {
+    "input_cap": 900000,
+    "timeout_seconds": 900
+  },
+  "stubs": [],
+  "watch": [],
+  "references": [
+    "good",
+    "noop",
+    "empty",
+    "incomplete",
+    "overbuilt",
+    "local-patch"
+  ]
+}

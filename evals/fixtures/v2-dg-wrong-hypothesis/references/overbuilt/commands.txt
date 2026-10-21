@@ -1,0 +1,6 @@
+bin/shipyard notify stage "hello"
+cat config/proxy.ini
+sed -i 's/X-Acount-Id/X-Account-Id/' shipyard/notify.py
+printf 'connect_timeout = 30\n' >> config/proxy.ini
+bin/shipyard notify stage "hello"
+make test

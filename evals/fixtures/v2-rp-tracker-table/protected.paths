@@ -1,0 +1,5 @@
+# The project note (with the card rule) and the repository's exclusion state, as setup left them.
+# The CSV is read by the checks from the seed commit, never from the workspace.
+AGENTS.md
+.git/config
+.git/info/exclude

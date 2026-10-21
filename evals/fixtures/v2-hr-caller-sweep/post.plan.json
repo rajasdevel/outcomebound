@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 180,
+  "claims": [
+    {
+      "name": "all-callers-fixed",
+      "risk": "a transfer, a withdrawal or the monthly fee still moves a cent more or less than asked: the shared debit, or a caller's work-around of it, is not fixed",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/caller_sweep.py\" all-callers-fixed"
+      ]
+    },
+    {
+      "name": "unit-tests-pass",
+      "risk": "the fix broke or removed a unit test the project had",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/caller_sweep.py\" unit-tests-pass"
+      ]
+    },
+    {
+      "name": "no-unrelated-diff",
+      "risk": "the change reaches files outside the debit path, which the request kept to this bug",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/caller_sweep.py\" no-unrelated-diff"
+      ]
+    }
+  ]
+}

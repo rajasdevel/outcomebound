@@ -5,9 +5,9 @@
   "claims": [
     {
       "name": "drafts-pass-the-ticket-lint",
-      "risk": "no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them",
+      "risk": "FORM only, not required: no draft was written, or the engine's lint of the drafts together reads FAIL or refuses them (the substance is the claim below)",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

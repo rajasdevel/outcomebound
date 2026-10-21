@@ -1,0 +1,3 @@
+cat ledger/ops.py
+python3 -B -c "from ledger import ops; from ledger.accounts import load_book; b = load_book('data'); print(ops.transfer(b, 'acc-001', 'acc-002', '0.29', day='2026-10-21'))"
+python3 -B -m unittest discover -s tests/unit -t .

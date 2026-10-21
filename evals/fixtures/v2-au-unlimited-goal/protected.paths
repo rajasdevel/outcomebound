@@ -1,0 +1,5 @@
+# The project note and the goal template the run may copy from but not change.
+AGENTS.md
+templates/goal.md
+.git/config
+.git/info/exclude

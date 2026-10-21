@@ -1,0 +1,4 @@
+cat HANDOFF.md
+cat docs/tickets/012-currency-transfers.md
+cat ledger/ops.py
+cat ledger/cli.py

@@ -4,12 +4,29 @@
 `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]`. The plan is a JSON object:
 
     {"name": "loop1", "model": "MODEL", "effort": "medium",
+     "harness": "codex", "profile": "attr",
      "results": "/abs/results", "workspaces": "/abs/workspaces",
      "repetitions": [1, 2, 3], "fixtures": ["FIXTURE", ...],
+     "spend_limit": 50000000,
      "arms": [{"label": "none", "arm": "none"},
               {"label": "current-minus-x", "arm": "current", "drop": ["fragment:x"]},
               {"label": "none-plus-kernel", "arm": "none", "add": ["kernel"]},
               {"label": "edited", "arm": "current", "edits": "/abs/edits.json"}]}
+
+In place of `fixtures`, `pack` names a pack: `XS`, `S`, `M` or `L` is every fixture whose
+`suite.json` gives that tier, `panel` every fixture whose `suite.json` says `panel: true`; a
+report-only suite.json (one with no `references`) puts its fixture in no pack.
+Repetitions are distinct values from 1 to 10 that run.py accepts. `harness` (default `codex`)
+and `profile` (a free label, default empty) are recorded in `<results>/<name>/LOOP.json`; only a
+harness run.py can run is accepted, and today that is codex alone.
+
+`spend_limit`, optional, is the pass's limit on input tokens (cached input among them). Before
+each new cell the loop adds the input every cell of the plan has recorded so far (its
+`session_tokens`, else its budget record, else, for a cell that ran and recorded neither, its
+fixture's cap) to the cell's worst case, its fixture's `budget.input_cap` from `suite.json`, and
+stops before a cell whose worst case would pass the limit. A plan with a limit is refused where
+a fixture has no input cap. The cap is the runner's best-effort stop, so a cell can overshoot it
+by the turn in flight; the limit leaves that headroom to the person who sets it.
 
 A cell is one (repetition, fixture, arm). For each repetition and each fixture every arm runs,
 in the plan's arm order rotated by the repetition's index plus the fixture's index, so no arm
@@ -42,10 +59,29 @@ from typing import Any, NamedTuple
 
 REPO = Path(__file__).resolve().parent.parent
 RUN_SCRIPT = REPO / "evals" / "run.py"
+FIXTURES = REPO / "evals" / "fixtures"
 PLAN_KEYS = frozenset(
-    ("name", "model", "effort", "results", "workspaces", "repetitions", "fixtures", "arms")
+    (
+        "name",
+        "model",
+        "effort",
+        "harness",
+        "profile",
+        "results",
+        "workspaces",
+        "repetitions",
+        "fixtures",
+        "pack",
+        "spend_limit",
+        "arms",
+    )
 )
-REQUIRED_KEYS = PLAN_KEYS - {"effort"}
+REQUIRED_KEYS = frozenset(("name", "model", "results", "workspaces", "repetitions", "arms"))
+PACKS = ("XS", "S", "M", "L", "panel")
+MAX_REPETITION = 10
+# The harnesses this loop can start a cell with; another is recorded in a plan only once run.py
+# runs it.
+RUNNABLE = ("codex",)
 ARM_KEYS = frozenset(("label", "arm", "drop", "add", "edits"))
 DONE = ("ran", "ran with failures")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -71,6 +107,14 @@ class Plan(NamedTuple):
     repetitions: tuple[int, ...]
     fixtures: tuple[str, ...]
     arms: tuple[Arm, ...]
+    harness: str = "codex"
+    profile: str = ""
+    pack: str = ""
+    spend_limit: int | None = None
+    caps: tuple[tuple[str, int], ...] = ()
+
+    def cap(self, fixture: str) -> int:
+        return dict(self.caps)[fixture]
 
 
 class Cell(NamedTuple):
@@ -147,6 +191,8 @@ def read_plan(path: Path, runner: ModuleType) -> Plan:
     missing = sorted(REQUIRED_KEYS - set(document))
     if missing:
         raise PlanError(f"missing key {', '.join(missing)}")
+    if ("fixtures" in document) == ("pack" in document):
+        raise PlanError("the plan names fixtures or a pack, not both and not neither")
     base = path.resolve().parent
     name, model = document["name"], document["model"]
     effort = document.get("effort", "medium")
@@ -154,18 +200,102 @@ def read_plan(path: Path, runner: ModuleType) -> Plan:
         raise PlanError(f"name {name!r} is letters, digits, '.', '_' and '-'")
     if not isinstance(model, str) or not model or not isinstance(effort, str) or not effort:
         raise PlanError("model and effort are non-empty strings")
+    harness, profile = document.get("harness", "codex"), document.get("profile", "")
+    if not isinstance(profile, str):
+        raise PlanError("profile is a string")
+    _harness(harness, runner)
+    known = set(runner.fixture_names())
+    pack = document.get("pack", "")
+    fixtures = _pack(pack, known) if "pack" in document else _fixtures(document["fixtures"], known)
+    limit = _spend_limit(document.get("spend_limit"))
     plan = Plan(
         name,
         model,
         effort,
         _path(document["results"], "results", base),
         _path(document["workspaces"], "workspaces", base),
-        _repetitions(document["repetitions"], tuple(runner.REPETITIONS)),
-        _fixtures(document["fixtures"], set(runner.fixture_names())),
+        _repetitions(document["repetitions"], _accepted(runner)),
+        fixtures,
         _arms(document["arms"], runner, base),
+        harness,
+        profile,
+        pack,
+        limit,
+        _caps(fixtures) if limit is not None else (),
     )
     _elements_fit(plan, runner)
     return plan
+
+
+def suite(fixture: str) -> dict[str, Any]:
+    """The fixture's suite.json, or an empty object where it has none."""
+
+    path = FIXTURES / fixture / "suite.json"
+    if not path.is_file():
+        return {}
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as problem:
+        raise PlanError(f"{fixture}: suite.json unreadable: {problem}") from None
+    return document if isinstance(document, dict) else {}
+
+
+def _pack(pack: Any, known: set[str]) -> tuple[str, ...]:
+    """The fixtures of a pack: a tier's, or the panel's, from each suite.json."""
+
+    if pack not in PACKS:
+        raise PlanError(f"pack is one of {', '.join(PACKS)}")
+    chosen = tuple(
+        name
+        for name in sorted(known)
+        if "references" in suite(name)
+        and (
+            suite(name).get("panel") is True if pack == "panel" else suite(name).get("tier") == pack
+        )
+    )
+    if not chosen:
+        raise PlanError(f"no fixture's suite.json puts it in pack {pack}")
+    return chosen
+
+
+def _harness(harness: Any, runner: ModuleType) -> None:
+    if not isinstance(harness, str) or not harness:
+        raise PlanError("harness is a non-empty string")
+    accepted = tuple(getattr(runner, "HARNESSES", RUNNABLE))
+    if harness not in RUNNABLE or harness not in accepted:
+        raise PlanError(
+            f"harness {harness} cannot run yet: run.py runs {', '.join(accepted)}, and this loop "
+            f"starts {', '.join(RUNNABLE)} only"
+        )
+
+
+def _spend_limit(value: Any) -> int | None:
+    if value is None:
+        return None
+    if type(value) is not int or value <= 0:
+        raise PlanError("spend_limit is a positive number of input tokens")
+    return value
+
+
+def _caps(fixtures: tuple[str, ...]) -> tuple[tuple[str, int], ...]:
+    """Each fixture's input cap, the worst case of one of its cells."""
+
+    caps = []
+    for fixture in fixtures:
+        cap = (suite(fixture).get("budget") or {}).get("input_cap")
+        if type(cap) is not int or cap <= 0:
+            raise PlanError(
+                f"spend_limit needs each fixture's budget.input_cap; {fixture} has none"
+            )
+        caps.append((fixture, cap))
+    return tuple(caps)
+
+
+def _accepted(runner: ModuleType) -> tuple[int, ...]:
+    """The repetitions a plan may name: 1 to 10, as far as run.py accepts them."""
+
+    offered = getattr(runner, "REPETITIONS", range(1, MAX_REPETITION + 1))
+    return tuple(value for value in offered if 1 <= value <= MAX_REPETITION)
 
 
 def _elements_fit(plan: Plan, runner: ModuleType) -> None:
@@ -226,7 +356,7 @@ def _arms(entries: Any, runner: ModuleType, base: Path) -> tuple[Arm, ...]:
 def argv(plan: Plan, arm: Arm, repetition: int, fixture: str, out: Path) -> tuple[str, ...]:
     """The run.py call of one cell."""
 
-    words = [sys.executable, "evals/run.py", "--arm", arm.arm]
+    words = [sys.executable, "evals/run.py", "--harness", plan.harness, "--arm", arm.arm]
     for entry in arm.drop:
         words += ["--drop", entry]
     for entry in arm.add:
@@ -306,7 +436,77 @@ def follow_up(directories: list[Path]) -> list[str]:
     return [f"python3 evals/run.py --summary {joined}", f"python3 evals/attribute.py {joined}"]
 
 
-def dry_run(ordered: list[Cell], states: list[str]) -> int:
+def spent(cell: Cell, cap: int) -> int:
+    """The input tokens a cell that ran recorded: its session's, else its budget record's, else,
+    where it recorded neither, its cap. Zero for a cell that has not run."""
+
+    if not cell.out.exists():
+        return 0
+    total, recorded = 0, False
+    for meta_path in cell.out.glob("*.meta.json"):
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        tokens, budget = meta.get("session_tokens"), meta.get("budget")
+        if isinstance(tokens, dict) and type(tokens.get("input_tokens")) is int:
+            total, recorded = total + tokens["input_tokens"], True
+        elif isinstance(budget, dict) and type(budget.get("input")) is int:
+            total, recorded = total + budget["input"], True
+    return total if recorded else cap
+
+
+def spent_so_far(plan: Plan, ordered: list[Cell]) -> int:
+    return sum(spent(cell, plan.cap(cell.fixture)) for cell in ordered)
+
+
+def over_limit(plan: Plan, ordered: list[Cell], cell: Cell) -> str:
+    """Why the cell would pass the plan's spend limit, or an empty string."""
+
+    if plan.spend_limit is None:
+        return ""
+    so_far, worst = spent_so_far(plan, ordered), plan.cap(cell.fixture)
+    if so_far + worst <= plan.spend_limit:
+        return ""
+    return (
+        f"spend limit {plan.spend_limit} input tokens: {so_far} recorded so far, and "
+        f"{cell.arm.label} r{cell.repetition} {cell.fixture} could take up to {worst}"
+    )
+
+
+def record(plan: Plan) -> None:
+    """Write what the plan ran with, harness and profile among it, beside its cells."""
+
+    folder = plan.results / plan.name
+    path = folder / "LOOP.json"
+    if path.is_file():
+        try:
+            before = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            before = {}
+        for key in ("harness", "profile", "model", "effort"):
+            if before.get(key) != getattr(plan, key):
+                raise PlanError(
+                    f"{path} records {key} {before.get(key)!r}, the plan {getattr(plan, key)!r}; "
+                    "name the plan anew"
+                )
+    folder.mkdir(parents=True, exist_ok=True)
+    document = {
+        "name": plan.name,
+        "harness": plan.harness,
+        "profile": plan.profile,
+        "model": plan.model,
+        "effort": plan.effort,
+        "pack": plan.pack,
+        "fixtures": list(plan.fixtures),
+        "repetitions": list(plan.repetitions),
+        "arms": [arm._asdict() for arm in plan.arms],
+        "spend_limit": plan.spend_limit,
+    }
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+
+
+def dry_run(ordered: list[Cell], states: list[str], plan: Plan | None = None) -> int:
     """Print each cell with its state and argv, and the counts; exit 1 where a cell blocks."""
 
     for n, (cell, found) in enumerate(zip(ordered, states, strict=True), start=1):
@@ -315,13 +515,28 @@ def dry_run(ordered: list[Cell], states: list[str]) -> int:
     blocked = sum(found.startswith("blocked") for found in states)
     to_run = states.count("new")
     print(f"cells {len(ordered)}, done {states.count('done')}, to run {to_run}, blocked {blocked}")
+    if plan is not None:
+        print(f"harness {plan.harness}, profile {plan.profile or '(none)'}")
+    if plan is not None and plan.spend_limit is not None:
+        so_far = spent_so_far(plan, ordered)
+        worst = sum(plan.cap(c.fixture) for c, f in zip(ordered, states, strict=True) if f == "new")
+        print(
+            f"spend limit {plan.spend_limit} input tokens: {so_far} recorded so far, "
+            f"worst case of the cells to run {worst}"
+        )
     return 1 if blocked else 0
 
 
 def execute(
-    ordered: list[Cell], states: list[str], runner: Runner, max_runs: int | None, preflight: int
+    ordered: list[Cell],
+    states: list[str],
+    runner: Runner,
+    max_runs: int | None,
+    preflight: int,
+    plan: Plan | None = None,
 ) -> int:
-    """Start each new cell in order, at most `max_runs`, and print what happened."""
+    """Start each new cell in order, at most `max_runs` and within the plan's spend limit, and
+    print what happened."""
 
     ran, failed, stopped = 0, 0, ""
     for cell, found in zip(ordered, states, strict=True):
@@ -329,6 +544,10 @@ def execute(
             continue
         if max_runs is not None and ran >= max_runs:
             stopped = f"--max-runs {max_runs} reached"
+            break
+        over = over_limit(plan, ordered, cell) if plan is not None else ""
+        if over:
+            stopped = f"before a cell that could pass the {over}"
             break
         print(f"loop: {cell.arm.label} r{cell.repetition} {cell.fixture}", flush=True)
         code = runner(cell.argv, log_path(cell), REPO)
@@ -380,14 +599,19 @@ def main(
     ordered = cells(plan)
     states = [state(cell) for cell in ordered]
     if args.dry_run:
-        return dry_run(ordered, states)
+        return dry_run(ordered, states, plan)
     blocked = [found for found in states if found.startswith("blocked")]
     for found in blocked:
         sys.stderr.write(f"loop: stopped before starting anything: {found}\n")
     if blocked:
         return 1
     preflight = int(getattr(runner_module, "PREFLIGHT_EXIT", 3))
-    return execute(ordered, states, runner, args.max_runs, preflight)
+    try:
+        record(plan)
+    except PlanError as problem:
+        sys.stderr.write(f"loop: refused, nothing started: {problem}\n")
+        return REFUSED
+    return execute(ordered, states, runner, args.max_runs, preflight, plan)
 
 
 if __name__ == "__main__":

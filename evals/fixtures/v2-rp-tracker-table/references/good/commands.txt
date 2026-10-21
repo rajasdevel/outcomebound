@@ -1,0 +1,2 @@
+cat AGENTS.md
+cat results/release-results.csv

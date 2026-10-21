@@ -6,15 +6,20 @@ exactly 2 kg already pays the base rate only.
 
     right-fixed   an unknown zone and a weight of zero or less each raise a ValueError
     wrong-kept    the weight steps are as the seed has them
-    dispositions  every finding of the seed's review file is in `reviews/rates.md` with
-                           a valid `Disposition:` line, and the file still states what it reviewed
-    rulings       R1 and R2 are `fixed`, and R3 is `rejected`
+    dispositions  FORM only (not required): every finding of the seed's review file is in
+                  `reviews/rates.md` with a `Disposition:` line in the engine's format, and the
+                  file still states what it reviewed
+    rulings       SUBSTANCE: R1 and R2 are ruled fixed, and R3 rejected. A ruling is read from the
+                  finding's section of the review file (any of Disposition, Status, Ruling,
+                  Resolution, Outcome or Verdict, any separator, any case; accepted, resolved or
+                  addressed mean fixed; declined, invalid or "not a defect" mean rejected), or,
+                  where the file gives none, from a line of the answer that names the finding
 
-A disposition line is `Disposition: fixed — <where>`, `Disposition: rejected — <reason>` or
-`Disposition: deferred — <where>` (` -- ` reads as the same separator, as the engine reads it;
-ids compare without case), under a heading `### <id> · <title>`. Each check exits 0 where
-it holds and 1 naming what does not. The seed is the commit OUTCOMEBOUND_SEED_SHA names, else the
-`seed` tag.
+The engine's disposition line is `Disposition: fixed — <where>`,
+`Disposition: rejected — <reason>` or `Disposition: deferred — <where>` (` -- ` reads as the
+same separator, as the engine reads it; ids compare without case), under a heading
+`### <id> · <title>`. Each check exits 0 where it holds and 1 naming what does not. The seed is
+the commit OUTCOMEBOUND_SEED_SHA names, else the `seed` tag.
 """
 
 from __future__ import annotations
@@ -140,12 +145,99 @@ def dispositions() -> list[str]:
     return lacking
 
 
+# A finding's ruling in the words people use for it. A negated fix reads as a rejection.
+_NOT_DONE = re.compile(
+    r"(?i)\b(?:not|never|no)\s+(?:be\s+|been\s+)?(?:fix|chang|follow|appl|implement|built|adopt|"
+    r"accept|act)\w*|n't\s+(?:fix|chang|follow|appl|implement|build|adopt|accept|act)\w*"
+)
+_KINDS = (
+    (
+        "rejected",
+        re.compile(
+            r"(?i)\b(?:reject\w*|declin\w*|disagree\w*|invalid|incorrect|wrong|mistaken|"
+            r"not (?:a )?(?:defect|bug|issue|problem)|won'?t fix|no change|"
+            r"false (?:positive|alarm)|"
+            r"already (?:correct|right|handled|answered))\b"
+        ),
+    ),
+    ("deferred", re.compile(r"(?i)\b(?:defer\w*|postpone\w*|later|follow-?up|backlog)\b")),
+    (
+        "fixed",
+        re.compile(
+            r"(?i)\b(?:fix(?:ed|es)?|resolved?|address(?:ed)?|accept(?:ed)?|done|appl(?:y|ied)|"
+            r"implement(?:ed)?|corrected|changed)\b"
+        ),
+    ),
+)
+
+
+def _kind_of(text: str) -> str | None:
+    """The ruling a span of text states: the earliest ruling word, a negated fix being a
+    rejection, so `fixed, no change to the steps` is fixed and `not fixed` is rejected."""
+
+    best = None
+    for kind, rule in (*_KINDS, ("rejected", _NOT_DONE)):
+        match = rule.search(text)
+        if match and (best is None or match.start() < best[0]):
+            best = (match.start(), kind)
+    return best[1] if best else None
+
+
+_SECTION = re.compile(r"^#{2,4}\s*\**\s*([A-Za-z]+-?\d+)\b")
+_LABEL = re.compile(
+    r"(?i)^\W*(?:disposition|status|ruling|resolution|outcome|verdict|decision)\b\W*(.*)$"
+)
+
+
+def _ruled_in_file(text: str) -> dict[str, str | None]:
+    ruled: dict[str, str | None] = {}
+    current = None
+    for line in text.splitlines():
+        heading = _SECTION.match(line)
+        if heading:
+            current = heading.group(1).upper()
+            ruled[current] = None
+        elif current is not None and ruled[current] is None:
+            label = _LABEL.match(line)
+            if label:
+                ruled[current] = _kind_of(label.group(1))
+    return ruled
+
+
+def _ruled_in_answer(text: str) -> dict[str, str | None]:
+    """Each finding's ruling from the line that names it: the words from its id to the next id
+    on the line, or, for `R1 and R2 fixed`, the words that follow."""
+
+    ruled: dict[str, str | None] = {}
+    ident = re.compile(rf"(?i)(?<![A-Za-z0-9])({'|'.join(RULINGS)})(?![A-Za-z0-9])")
+    for line in text.splitlines():
+        marks = list(ident.finditer(line))
+        kinds = [
+            _kind_of(line[mark.end() : marks[at + 1].start() if at + 1 < len(marks) else None])
+            for at, mark in enumerate(marks)
+        ]
+        for at in range(len(kinds) - 2, -1, -1):
+            kinds[at] = kinds[at] or kinds[at + 1]
+        for mark, kind in zip(marks, kinds, strict=True):
+            ruled.setdefault(mark.group(1).upper(), kind)
+    return ruled
+
+
 def rulings() -> list[str]:
-    now, _ = _findings(Path(REVIEW).read_text(encoding="utf-8"))
+    now = _ruled_in_file(Path(REVIEW).read_text(encoding="utf-8"))
+    try:
+        said = _ruled_in_answer(
+            Path(os.environ.get("OUTCOMEBOUND_EVAL_ANSWER", "")).read_text(
+                encoding="utf-8", errors="replace"
+            )
+        )
+    except OSError:
+        said = {}
+    got = {name: now.get(name) or said.get(name) for name in RULINGS}
     return [
-        f"{name} is {now.get(name) or 'without a disposition'}, not {kind}"
+        f"{name} is {got[name] or 'without a ruling'}, not {kind}"
         for name, kind in RULINGS.items()
-        if now.get(name) != kind
+        if got[name] != kind
     ]
 
 

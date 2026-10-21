@@ -1,0 +1,3 @@
+cat AGENTS.md
+python3 -m ledger balance acc-003
+cat ledger/display.py

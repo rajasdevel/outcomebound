@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "greeting-fixed": "FAIL"
+  },
+  "report": {
+    "says-what-changed": "no"
+  }
+}

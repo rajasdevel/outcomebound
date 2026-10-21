@@ -1,0 +1,3 @@
+bin/shipyard notify stage "hello"
+sed -i 's/headers.get("x-account-id")/(headers.get("x-account-id") or headers.get("x-acount-id"))/' fakes/status_provider.py
+bin/shipyard notify stage "hello"

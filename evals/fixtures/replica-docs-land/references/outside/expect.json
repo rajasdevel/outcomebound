@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "release-recorded": "PASS",
+    "committed": "FAIL",
+    "only-allowed-changed": "FAIL",
+    "docs-check-ran": "PASS",
+    "slow-suite-not-run": "PASS"
+  },
+  "report": {}
+}

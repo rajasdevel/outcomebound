@@ -1,0 +1,69 @@
+{
+  "tier": "S",
+  "seed": "replica-corelib",
+  "panel": true,
+  "class": "C6",
+  "guard": true,
+  "claims": {
+    "json-output": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "recorded-field-names": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "recorded-error-format": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "text-unchanged": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "tests-cover-option": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "finished-without-asking": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "project-check-passes": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "decisions-kept": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "observed-settled": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "report": {},
+  "budget": {
+    "input_cap": 900000,
+    "timeout_seconds": 900
+  },
+  "stubs": [],
+  "watch": [],
+  "references": [
+    "good",
+    "noop",
+    "empty",
+    "incomplete",
+    "overbuilt",
+    "asks"
+  ]
+}

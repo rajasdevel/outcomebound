@@ -1,0 +1,1 @@
+Added `tally report --output json`: it prints one object with the rows and the total minutes, with the recorded field names, and a JSON error on stderr with exit status 2 (D-03, D-04). Text output stays the default and is unchanged. Added a unit test and the option to `docs/cli.md`; `make check` passes.

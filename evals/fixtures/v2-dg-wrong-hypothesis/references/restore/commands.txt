@@ -1,0 +1,6 @@
+bin/shipyard notify stage "hello"
+sed -i 's/egress-2/egress-1/' config/proxy.ini
+bin/shipyard notify stage "hello"
+sed -i 's/egress-1/egress-2/' config/proxy.ini
+sed -i 's/X-Acount-Id/X-Account-Id/' shipyard/notify.py
+bin/shipyard notify stage "hello"
