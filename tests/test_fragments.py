@@ -752,3 +752,97 @@ def test_a_quoted_item_that_holds_a_comma_stays_one_item_in_the_copy_ready_line(
         FragmentError, match=re.escape('edges: ["a tag, then a push", "publishing"]')
     ):
         parse_fragment(text, "x.md")
+
+
+def _with_edges(block: str) -> str:
+    """GOOD with `block` written after its `applies:` line, which is line 4, so the block
+    starts on line 5."""
+
+    return GOOD.replace("applies: sample projects\n", f"applies: sample projects\n{block}\n")
+
+
+def _repaired(text: str, message: str) -> str:
+    """The fragment with the refusal's copy-ready line pasted over the lines it names."""
+
+    found = re.search(r"replace lines? (\d+)(?:-(\d+))? with: (.+)$", message)
+    assert found, message
+    first, last = int(found[1]), int(found[2] or found[1])
+    lines = text.split("\n")
+    return "\n".join([*lines[: first - 1], found[3], *lines[last:]])
+
+
+# What a builder writes, and the items the copy-ready line must hold: quotes that hold a comma
+# or a doubled quote, escapes, comments after the value or an item, and blank or comment lines
+# between the items of a block list.
+COPY_READY = [
+    (
+        "doubled single quote",
+        "edges: ['don''t publish, ever', publishing]",
+        ["don't publish, ever", "publishing"],
+    ),
+    ("escaped double quote", 'edges: ["a \\"quoted\\" act", b]', ['a "quoted" act', "b"]),
+    ("unicode escape", 'edges: ["push\\u0020a tag", other]', ["push a tag", "other"]),
+    ("comment after a flow list", "edges: [first, second] # the two acts", ["first", "second"]),
+    ("comment after a bare value", "edges: pushing a tag # irreversible", ["pushing a tag"]),
+    ("hash inside a word", "edges: issue#12 push", ["issue#12 push"]),
+    ("blank line between items", "edges:\n  - first\n\n  - second", ["first", "second"]),
+    ("comment line between items", "edges:\n  - first\n  # why\n  - second", ["first", "second"]),
+    ("comment after an item", "edges:\n  - first # one\n  - 'second'", ["first", "second"]),
+]
+
+
+@pytest.mark.parametrize(("form", "block", "items"), COPY_READY, ids=[c[0] for c in COPY_READY])
+def test_the_copy_ready_line_holds_the_items_as_written_and_the_fragment_then_parses(
+    form, block, items
+):
+    """The line the refusal gives keeps each item's value, and pasted over the lines it names,
+    the fragment parses to those items."""
+
+    text = _with_edges(block)
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(text, "x.md")
+    message = str(raised.value)
+    assert message.endswith(f"edges: {json.dumps(items, ensure_ascii=False)}"), message
+    assert parse_fragment(_repaired(text, message), "x.md").edges == tuple(items)
+
+
+def test_a_detect_value_with_a_comment_is_read_without_it():
+    text = GOOD.replace('detect: ["sample.toml"]', "detect: [src/*.py] # sources")
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(text, "x.md")
+    message = str(raised.value)
+    assert message.endswith('detect: ["src/*.py"]'), message
+    assert parse_fragment(_repaired(text, message), "x.md").detect == ("src/*.py",)
+
+
+AMBIGUOUS = [
+    ("nested list", "edges: [a, [b, c]]"),
+    ("unterminated quote", 'edges: ["pushing a tag]'),
+    ("mapping item", "edges:\n  - act: push\n  - publish"),
+    ("value beside a block list", "edges: first\n  - second"),
+    ("text after a quoted item", "edges: ['a' b, c]"),
+]
+
+
+@pytest.mark.parametrize(("form", "block"), AMBIGUOUS, ids=[a[0] for a in AMBIGUOUS])
+def test_a_value_that_cannot_be_read_unambiguously_gets_no_suggested_line(form, block):
+    """Where the items cannot be read without a guess, the refusal says so and shows the form,
+    and offers no line to paste."""
+
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(_with_edges(block), "x.md")
+    message = str(raised.value)
+    assert message.startswith("x.md:5: edges must be a JSON list on one line"), message
+    assert "replace line" not in message, message
+    assert "cannot be read as a list without a guess" in message, message
+    assert 'edges: ["pushing a tag"]' in message, message
+
+
+def test_a_block_list_written_with_crlf_and_a_blank_line_gets_a_line_that_parses():
+    text = _with_edges("edges:\n  - first\n\n  - second").replace("\n", "\r\n")
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(text, "x.md")
+    message = str(raised.value)
+    assert "replace lines 5-8 with" in message, message
+    repaired = _repaired(text.replace("\r\n", "\n"), message)
+    assert parse_fragment(repaired, "x.md").edges == ("first", "second")

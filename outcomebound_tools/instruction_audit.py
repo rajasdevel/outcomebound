@@ -17,9 +17,9 @@ out. A hidden character
 in an agents' note reads UNVERIFIED for that note, where in an instruction file it is a FAIL.
 Also reported, and not changing the result: each instruction file a harness's row says it
 loads from a folder above the target (`ancestors`), which this module names and never opens,
-each loading fact of OutcomeBound's harness table that reads UNVERIFIED (`generic`, a harness
-with no row, an unverified or overdue row, unsettled key categories), which nothing in the target
-settles, and each stale reference (`stale_references`):
+each loading fact of a row of OutcomeBound's harness table that reads UNVERIFIED (what `generic`
+loads beside AGENTS.md, an unverified or overdue row, unsettled key categories), which nothing in
+the target settles, and each stale reference (`stale_references`):
 only an inline code span of project-owned Markdown text is read for one, as text, and nothing
 a makefile or `package.json` holds is run. An occurrence of a retired term, path or command is a
 FAIL, since the project's own list says it is retired; for that check alone the project's data
@@ -492,6 +492,10 @@ def _scope(harnesses: Sequence[str]) -> _Scope:
     config: dict[str, list[str]] = {}
     for harness in harnesses:
         row = _row(harness)
+        if row is None and harness == GENERIC:
+            # `generic` is any harness that reads AGENTS.md: the root's and each nested one.
+            exact.add("AGENTS.md")
+            globs.add("**/AGENTS.md")
         if row is None:
             continue
         paths, patterns = _row_scope(row)
@@ -2269,9 +2273,12 @@ def _loading(
 ) -> list[Finding]:
     """Per harness, whether its row's loading facts are verified and current, and, where its
     configuration was read, which of its key categories the table leaves unsettled. Each is a
-    fact about OutcomeBound's harness table, which nothing in the target settles, so an
-    UNVERIFIED one is reported on every run and does not change the result. A harness in
-    `unused`, selected only because every row was, says that the target holds no file it loads."""
+    fact about a row of OutcomeBound's harness table, which nothing in the target settles, so an
+    UNVERIFIED one is reported on every run and does not change the result; so is what
+    `generic` loads beside AGENTS.md. A harness no row names is no such fact: what it loads is
+    left unread, and naming a harness the table holds settles that, so it changes the result.
+    A harness in `unused`, selected only because every row was, says that the target holds no
+    file it loads."""
 
     found = []
     for harness in harnesses:
@@ -2292,7 +2299,7 @@ def _loading(
                 verdict,
                 fact,
                 next=step,
-                decides=False,
+                decides=_row(harness) is None and harness != GENERIC,
             )
         )
         keys = (row.get("config") or {}).get("keys") or {}

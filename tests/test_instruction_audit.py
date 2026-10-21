@@ -669,11 +669,11 @@ def test_a_generic_install_is_not_widened_by_its_own_agents_md(tmp_path: Path) -
 def test_a_loading_fact_no_agent_can_settle_is_reported_and_holds_no_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pi_unverified: None, capsys: Any
 ) -> None:
-    """A load-resolution UNVERIFIED is a fact about OutcomeBound's harness table: `generic`, a
-    harness with no row, an unverified row, a row past its re-check date and key categories the
-    row leaves unsettled. Nothing in the target settles one, so each is reported on every run,
-    still UNVERIFIED, and leaves the exit as it is. Breaks if any of them holds exit 2, which
-    agents then re-ran as a ritual."""
+    """A load-resolution UNVERIFIED about a row of OutcomeBound's harness table: what `generic`
+    loads beside AGENTS.md, an unverified row, a row past its re-check date and key categories
+    the row leaves unsettled. Nothing in the target settles one, so each is reported on every
+    run, still UNVERIFIED, and leaves the exit as it is. Breaks if any of them holds exit 2,
+    which agents then re-ran as a ritual."""
 
     root = _target(tmp_path / "t", {"AGENTS.md": "ok\n"})
     _manifest(root, ["generic"])
@@ -684,7 +684,6 @@ def test_a_loading_fact_no_agent_can_settle_is_reported_and_holds_no_exit(
     cursor = _target(tmp_path / "c", {"AGENTS.md": "ok\n", ".cursor/hooks.json": "{}"})
     for target, names in (
         (root, ["generic"]),
-        (root, ["other"]),
         (root, ["pi"]),
         (root, ["claude-code"]),
         (cursor, ["cursor"]),
@@ -696,6 +695,32 @@ def test_a_loading_fact_no_agent_can_settle_is_reported_and_holds_no_exit(
         assert report.result == "PASS", names
         assert main(["check", str(target), *[f"--harness={n}" for n in names]]) == 0, names
     assert "(does not change the result)" in capsys.readouterr().out
+
+
+def test_generic_audits_every_agents_md_and_an_unknown_harness_holds_the_exit(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Only facts about the harness table stop holding the exit, never the audit of the
+    project's own files: `generic` reads the root and each nested AGENTS.md, by flag or by a
+    manifest, so a hit there still holds exit 2 (and fails under --strict). A harness no row
+    names leaves what it loads unread, which naming a harness the table holds settles, so it
+    still holds exit 2."""
+
+    files = {"AGENTS.md": "Keep this secret.\n", "sub/AGENTS.md": "<!-- note -->\n"}
+    root = _target(tmp_path / "t", files)
+    report = check(root, ["generic"])
+    assert {"AGENTS.md", "sub/AGENTS.md"} <= _files(report)
+    assert _hits(report, "override-phrases") and _hits(report, "concealed-content")
+    assert report.result == "UNVERIFIED"
+    assert main(["check", str(root), "--harness", "generic"]) == 2
+    assert main(["check", str(root), "--harness", "generic", "--strict"]) == 1
+    _manifest(root, ["generic"])
+    assert main(["check", str(root)]) == 2
+    clean = _target(tmp_path / "c", {"AGENTS.md": "ok\n"})
+    [unknown] = _hits(check(clean, ["other"]), "load-resolution")
+    assert unknown.decides and unknown.verdict == "UNVERIFIED"
+    assert main(["check", str(clean), "--harness", "other"]) == 2
+    capsys.readouterr()
 
 
 def test_a_hook_entry_holds_exit_2_until_a_person_rules_it_and_says_rerunning_settles_nothing(

@@ -308,7 +308,8 @@ def _draft_target(options: argparse.Namespace) -> str:
 
     `--draft` takes one or more values, so argparse hands it every word up to the next
     option, a target typed after the files included. A folder is never a draft file, so the
-    last value is the target where it is a folder and no target came before `--draft`.
+    last value is the target where it is a folder, no target came before `--draft` and a draft
+    file is left; with none left, `--draft` names no draft and the line is refused.
     """
 
     drafts = getattr(options, "draft", None) or []
@@ -316,6 +317,12 @@ def _draft_target(options: argparse.Namespace) -> str:
     if not folders:
         return ""
     if folders == [drafts[-1]] and options.target is _HERE:
+        if len(drafts) == 1:
+            # `--draft` was given, so this is a draft run: never fall back to the store.
+            return (
+                f"{drafts[0]} is a folder, and --draft names no draft file beside it: "
+                f"`outcomebound tickets {options.verb} <target> --draft <file>…`"
+            )
         options.target = drafts.pop()
         return ""
     ticket = " <ticket>" if hasattr(options, "ticket") else ""

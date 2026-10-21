@@ -629,6 +629,27 @@ def test_a_folder_among_the_draft_files_is_a_usage_error_that_says_where_the_tar
         assert "<target> --draft <file>" in err, err
 
 
+def test_a_folder_that_is_the_only_draft_value_is_a_usage_error_not_an_export_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--draft` was given, so the run is a draft run: a folder that is its only value leaves
+    no draft file to lint, and the run neither reads the export nor drops `--draft`."""
+
+    root = checkout(tmp_path)
+    exported = tmp_path / "export.json"
+    exported.write_text("[]", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    for arguments in (
+        ["check", "--draft", str(root), "--input", str(exported)],
+        ["check", "--draft", str(root)],
+    ):
+        with pytest.raises(SystemExit) as stopped:
+            main(arguments)
+        assert stopped.value.code == 2, arguments
+        err = capsys.readouterr().err
+        assert "no draft file" in err, err
+
+
 def test_draft_with_input_is_a_usage_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
