@@ -704,165 +704,51 @@ def test_the_fragment_proposal_form_names_the_keys_the_parser_reads() -> None:
     assert sorted(optional) == sorted(OPTIONAL_KEYS)
 
 
-# Each form a builder may write for a list-valued key, with the lines its refusal names (the
-# block starts on line 5, after the id, family and applies lines).
-LIST_FORMS = [
-    ("yaml block list", "{key}:\n  - {a}\n  - '{b}'", (5, 7)),
-    ("unquoted flow list", "{key}: [{a}, {b}]", (5, 5)),
-    ("one bare value", "{key}: {a}", (5, 5)),
+# Each other form a builder may write for a list-valued key, written after the `applies:` line
+# (line 4), and the lines its refusal names.
+OTHER_FORMS = [
+    ("yaml block list", "{key}:\n  - {a}\n  - '{b}'", "lines 5-7"),
+    ("block list with a blank line", "{key}:\n- {a}\n\n- {b}", "lines 5-8"),
+    (
+        "block list with a comment and a continuation",
+        "{key}:\n  - {a}\n  # why\n    more",
+        "lines 5-8",
+    ),
+    ("continued bare value", "{key}: {a}\n  continued", "lines 5-6"),
+    ("unquoted flow list", "{key}: [{a}, {b}]", "line 5"),
+    ("flow list with a comment", "{key}: [{a}, {b}] # two", "line 5"),
+    ("one bare value", "{key}: {a}", "line 5"),
+    ("no value", "{key}:", "line 5"),
 ]
 
+EXAMPLES = {
+    "edges": 'edges: ["pushing a tag", "publishing a release"]',
+    "detect": 'detect: ["pyproject.toml", "setup.cfg"]',
+}
 
+
+@pytest.mark.parametrize("crlf", [False, True], ids=["lf", "crlf"])
 @pytest.mark.parametrize("key", ["edges", "detect"])
-@pytest.mark.parametrize(
-    ("form", "written", "span"), LIST_FORMS, ids=[form for form, _, _ in LIST_FORMS]
-)
-def test_a_list_key_in_another_list_form_is_refused_with_a_copy_ready_line(
-    key, form, written, span
+@pytest.mark.parametrize(("form", "written", "where"), OTHER_FORMS, ids=[f[0] for f in OTHER_FORMS])
+def test_a_list_key_in_another_form_is_refused_naming_the_lines_and_the_form(
+    key, form, written, where, crlf
 ):
-    """Each list-valued key takes one form, a JSON list on one line; a refusal of another form
-    prints the line to paste in its place, and the fragment with that line pasted parses."""
+    """Each list-valued key takes one form, a JSON list on the key's own line. Another form is
+    refused naming the lines it read and the form by example, and offers no corrected line:
+    reading another form's items as YAML does needs a YAML reader the engine does not carry."""
 
-    a, b = {"edges": ("pushing a tag", "publishing a package"), "detect": ("a.toml", "b/*.cfg")}[
-        key
-    ]
-    block = written.format(key=key, a=a, b=b)
+    block = written.format(key=key, a="first", b="second")
     text = GOOD.replace('detect: ["sample.toml"]\n', "").replace(
         "applies: sample projects\n", f"applies: sample projects\n{block}\n"
     )
     if key == "edges":
         text = text.replace("version: 1\n", 'detect: ["sample.toml"]\nversion: 1\n')
-    expected = [a] if form == "one bare value" else [a, b]
-    fixed = f"{key}: {json.dumps(expected)}"
-    first, last = span
-    where = f"line {first}" if first == last else f"lines {first}-{last}"
+    if crlf:
+        text = text.replace("\n", "\r\n")
     with pytest.raises(FragmentError) as raised:
         parse_fragment(text, "x.md")
     message = str(raised.value)
-    assert message.startswith(f"x.md:{first}: {key} must be a JSON list"), message
-    assert message.endswith(f"replace {where} with: {fixed}"), message
-    lines = text.split("\n")
-    repaired = "\n".join([*lines[: first - 1], fixed, *lines[last:]])
-    assert getattr(parse_fragment(repaired, "x.md"), key) == tuple(expected)
-
-
-def test_a_quoted_item_that_holds_a_comma_stays_one_item_in_the_copy_ready_line():
-    text = GOOD.replace("version: 1", "edges: ['a tag, then a push', publishing]\nversion: 1")
-    with pytest.raises(
-        FragmentError, match=re.escape('edges: ["a tag, then a push", "publishing"]')
-    ):
-        parse_fragment(text, "x.md")
-
-
-def _with_edges(block: str) -> str:
-    """GOOD with `block` written after its `applies:` line, which is line 4, so the block
-    starts on line 5."""
-
-    return GOOD.replace("applies: sample projects\n", f"applies: sample projects\n{block}\n")
-
-
-def _repaired(text: str, message: str) -> str:
-    """The fragment with the refusal's copy-ready line pasted over the lines it names."""
-
-    found = re.search(r"replace lines? (\d+)(?:-(\d+))? with: (.+)$", message)
-    assert found, message
-    first, last = int(found[1]), int(found[2] or found[1])
-    lines = text.split("\n")
-    return "\n".join([*lines[: first - 1], found[3], *lines[last:]])
-
-
-# The simple forms a suggestion takes, and the items the copy-ready line must hold: one string
-# per item, plain or quoted, with quotes that hold a comma or a doubled quote and escapes read.
-COPY_READY = [
-    (
-        "doubled single quote",
-        "edges: ['don''t publish, ever', publishing]",
-        ["don't publish, ever", "publishing"],
-    ),
-    ("escaped double quote", 'edges: ["a \\"quoted\\" act", b]', ['a "quoted" act', "b"]),
-    ("unicode escape", 'edges: ["push\\u0020a tag", other]', ["push a tag", "other"]),
-    ("hash inside a word", "edges: issue#12 push", ["issue#12 push"]),
-    ("block list", "edges:\n  - first\n  - 'second'", ["first", "second"]),
-    ("block list at column 0", "edges:\n- first\n- second", ["first", "second"]),
-]
-
-
-@pytest.mark.parametrize(("form", "block", "items"), COPY_READY, ids=[c[0] for c in COPY_READY])
-def test_the_copy_ready_line_holds_the_items_as_written_and_the_fragment_then_parses(
-    form, block, items
-):
-    """The line the refusal gives keeps each item's value, and pasted over the lines it names,
-    the fragment parses to those items."""
-
-    text = _with_edges(block)
-    with pytest.raises(FragmentError) as raised:
-        parse_fragment(text, "x.md")
-    message = str(raised.value)
-    assert message.endswith(f"edges: {json.dumps(items, ensure_ascii=False)}"), message
-    assert parse_fragment(_repaired(text, message), "x.md").edges == tuple(items)
-
-
-AMBIGUOUS = [
-    ("nested list", "edges: [a, [b, c]]"),
-    ("unterminated quote", 'edges: ["pushing a tag]'),
-    ("mapping item", "edges:\n  - act: push\n  - publish"),
-    ("value beside a block list", "edges: first\n  - second"),
-    ("text after a quoted item", "edges: ['a' b, c]"),
-    ("comment after a flow list", "edges: [first, second] # the two acts"),
-    ("comment after a bare value", "edges: pushing a tag # irreversible"),
-    ("comment after an item", "edges:\n  - first # one\n  - second"),
-    ("comment line between items", "edges:\n  - first\n  # why\n  - second"),
-    ("blank line between items", "edges:\n  - first\n\n  - second"),
-    ("indented comment after the items", "edges:\n  - first\n  - second\n  # done"),
-    ("deeper item", "edges:\n  - first\n    - second"),
-    ("continuation line", "edges:\n  - first\n    continued\n  - second"),
-    ("values that are no strings", "edges: [null, true, 42] # values"),
-    ("a bare null", "edges: null"),
-    ("a bare number", "edges: 42"),
-    ("no value", "edges:"),
-]
-
-
-@pytest.mark.parametrize(("form", "block"), AMBIGUOUS, ids=[a[0] for a in AMBIGUOUS])
-def test_a_value_that_cannot_be_read_unambiguously_gets_no_suggested_line(form, block):
-    """Where the items cannot be read without a guess, the refusal says so and shows the form,
-    and offers no line to paste."""
-
-    with pytest.raises(FragmentError) as raised:
-        parse_fragment(_with_edges(block), "x.md")
-    message = str(raised.value)
-    assert message.startswith("x.md:5: edges must be a JSON list on one line"), message
-    assert "replace line" not in message, message
-    assert "cannot be read as a list without a guess" in message, message
-    assert 'edges: ["pushing a tag"]' in message, message
-
-
-def test_with_crlf_a_simple_block_list_gets_a_line_and_a_continuation_gets_none():
-    text = _with_edges("edges:\n  - first\n  - second").replace("\n", "\r\n")
-    with pytest.raises(FragmentError) as raised:
-        parse_fragment(text, "x.md")
-    message = str(raised.value)
-    assert "replace lines 5-7 with" in message, message
-    repaired = _repaired(text.replace("\r\n", "\n"), message)
-    assert parse_fragment(repaired, "x.md").edges == ("first", "second")
-    continued = _with_edges("edges:\n  - first\n    continued").replace("\n", "\r\n")
-    with pytest.raises(FragmentError, match="no line is suggested"):
-        parse_fragment(continued, "x.md")
-
-
-def test_a_detect_pattern_yaml_reads_as_an_alias_gets_no_line():
-    """`*.tf` unquoted is a YAML alias, not a string, so no line is guessed for it."""
-
-    text = GOOD.replace('detect: ["sample.toml"]', "detect: [*.tf]")
-    with pytest.raises(FragmentError, match="no line is suggested"):
-        parse_fragment(text, "x.md")
-
-
-def test_items_that_break_a_rule_of_the_key_get_that_rule_and_no_line():
-    with pytest.raises(FragmentError) as raised:
-        parse_fragment(_with_edges("edges: [a; b, c]"), "x.md")
-    message = str(raised.value)
-    assert "holds ';'" in message and "replace line" not in message, message
-    text = GOOD.replace('detect: ["sample.toml"]', "detect: [../up.toml]")
-    with pytest.raises(FragmentError, match="must not leave the target root"):
-        parse_fragment(text, "x.md")
+    assert message.startswith(f"x.md:5: {key} must be a JSON list on the key's own line"), message
+    assert f"`{EXAMPLES[key]}`" in message, message
+    assert f"{where} hold another form" in message, message
+    assert "replace" not in message, message

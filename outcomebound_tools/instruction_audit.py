@@ -767,6 +767,29 @@ def _is_marker(text: str) -> bool:
     return any(marker.fullmatch(text) for marker in (SENTINEL_BEGIN, SENTINEL_END))
 
 
+# The forms a block writer gives a marker's hash and version (`identity.format_managed_block`):
+# a sha256 digest, and dotted numbers. The id's form is the grammar's own.
+_MARKER_HASH = re.compile(r"[0-9a-f]{64}")
+_MARKER_VERSION = re.compile(r"\d+(?:\.\d+)*")
+
+
+def _marker_attributes(line: str) -> list[str]:
+    """What is wrong with a block marker's hash or version, where `line` is a begin marker;
+    each is a fact for `concealed-content`. Its id, hash and version are also read with the
+    rest of the line for encoded runs, as any text is."""
+
+    begin = SENTINEL_BEGIN.fullmatch(line.strip())
+    if not begin:
+        return []
+    facts = []
+    digest, version = begin.group("hash"), begin.group("v")
+    if digest is not None and not _MARKER_HASH.fullmatch(digest):
+        facts.append(f"a block marker whose hash is no sha256 digest: {_quote(digest[:40])}")
+    if not _MARKER_VERSION.fullmatch(version):
+        facts.append(f"a block marker whose version is no version: {_quote(version)}")
+    return facts
+
+
 def _comments(text: str) -> Iterator[tuple[int, str]]:
     """Each HTML comment's first line and text, OutcomeBound's block markers excepted: a
     comment alone on its line that is exactly a marker (`_is_marker`). A comment ends at `-->`
@@ -883,8 +906,11 @@ def _concealed_content(path: str, text: str) -> list[Finding]:
         for n, c in _comments(text)
     ]
     for number, line in _lines(text):
-        if _is_marker(line):
-            continue
+        # A block marker is passed over as an HTML comment only; its line is read as any line.
+        found += [
+            _finding("concealed-content", path, number, UNVERIFIED, fact)
+            for fact in _marker_attributes(line)
+        ]
         for run in _BASE64_RUN.finditer(line):
             if not _payload(run.group(0)):
                 continue
