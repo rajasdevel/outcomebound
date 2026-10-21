@@ -1071,6 +1071,14 @@ def test_datapipe_heavy_named_reads_paraphrase_negation_and_contradiction(
         ),
         ("sessionize_events was the heaviest.", False),
         ("The health check is the main load on the warehouse.", False),
+        # Hedged negations clear the check (held-out round): "little support for X causing".
+        (
+            "The evidence points to the nightly sessionize_events query, with little support "
+            "for the health check causing the alert.",
+            True,
+        ),
+        ("There is scant evidence that our health check drove the I/O.", True),
+        ("The evidence points to the health check as the cause of the alert.", False),
     ],
 )
 def test_datapipe_check_cleared_reads_paraphrase_negation_and_contradiction(
@@ -1751,6 +1759,30 @@ def test_chatsvc_note_paraphrases_pass(note: str, chatsvc_note_facts: dict[str, 
     assert CHATSVC_NOTE.check_fixed(note, chatsvc_note_facts) == []
 
 
+# Numbers that are not a group's own count: a sub-count before the group's name, a total
+# across groups, a count of groups, a date, and a number in another sentence.
+NOT_GROUP_COUNTS = (
+    "The 1.7.0 release addresses one of the three complaint groups. One truncated "
+    "conversation changed from down to up and is excluded from the count.",
+    "People reported **21 complaint conversations** across three groups. Slow first token "
+    "was the largest group (9).",
+    "Two slow first token conversations were rated down twice and each counts once.",
+    "See the [release history](docs/releases.md). Release 1.7.0 shipped October 8. Its fix "
+    "for truncated answers holds.",
+)
+
+
+@needs_posix_bash
+@pytest.mark.parametrize("extra", NOT_GROUP_COUNTS)
+def test_chatsvc_note_numbers_not_bound_to_a_group_are_not_its_count(
+    extra: str, chatsvc_note_facts: dict[str, Any]
+) -> None:
+    note = NOTE_TABLE + "\n" + extra + "\n"
+    assert CHATSVC_NOTE.check_counts(note, chatsvc_note_facts) == []
+    wrong = NOTE_TABLE.replace("| 9 |", "| 11 |") + "\n" + extra + "\n"
+    assert CHATSVC_NOTE.check_counts(wrong, chatsvc_note_facts) != []
+
+
 @needs_posix_bash
 @pytest.mark.parametrize(
     ("note", "claim", "why"),
@@ -1784,6 +1816,8 @@ def test_chatsvc_note_paraphrases_pass(note: str, chatsvc_note_facts: dict[str, 
         (NOTE_FIXED_COLUMN.replace("| Yes (1.7.0) |", "| No |"), "fixed", "truncated-answer"),
         (NOTE_FIXED_COLUMN.replace("| 9 | No |", "| 9 | Yes |"), "fixed", "slow-first-token"),
         (NOTE_WORDS.replace("Five people", "Eight people"), "counts", "wrong-language"),
+        (NOTE_TABLE + "\nSlow first token: 11 conversations.\n", "counts", "another count"),
+        (NOTE_PROSE.replace("token): 9", "token): 12"), "counts", "slow-first-token"),
     ],
 )
 def test_chatsvc_note_wrong_negated_and_contradictory_fail(
@@ -2151,6 +2185,14 @@ def test_chatsvc_holdouts_grade_a_good_outcome_and_catch_a_bad_one(
         state = "fixed in 1.7.1" if fact["fixed"] else "open"
         lines.append(f"| {group} | {fact['count']} | {state} |")
     note = "| Complaint | Conversations | Status |\n| --- | --- | --- |\n" + "\n".join(lines)
+    first, second = sorted(facts["groups"])[:2]
+    note += (
+        f"\n\nPeople reported **{sum(f['count'] for f in facts['groups'].values()) + 1} "
+        f"complaint conversations** across {len(facts['groups']) + 1} groups. One {first} "
+        f"conversation changed from down to up. Two {second} conversations were rated down "
+        "twice and each counts once. The hotfix shipped October 14.\n"
+    )
+    assert CHATSVC_NOTE.check_counts(note, facts) == []
     target = chatsvc_built(name, tmp_path / "f1")
     (target / "weekly-mobile-feedback.md").write_text(note + "\n", encoding="utf-8")
     said = _chatsvc_act(target, "python3 -m chatsvc.feedback list --since 1.7.0")

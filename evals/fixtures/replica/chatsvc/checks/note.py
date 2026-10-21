@@ -193,7 +193,39 @@ def mentions(text: str, facts: dict[str, Any]) -> dict[str, list[tuple[str, str 
     return found
 
 
+SENTENCE_END = re.compile(r"[.;!?](?:\s|$)")
+BOUND_WORDS = 6
+
+
+def bound_counts(piece: str, pattern: str) -> list[int]:
+    """The numbers a piece gives as the group's own count: in a table row, its first cell that
+    holds a number alone; elsewhere, the first count after a mention of the group, in the same
+    sentence and within a few words of it ("Voice input: 9 conversations", "slow first token
+    11"). A number before the mention (a sub-count such as "one upload conversation changed"),
+    a total across groups, or a number in another sentence is not bound to the group."""
+
+    if "|" in piece:
+        row = [cell.strip(" *") for cell in piece.strip().strip("|").split("|")]
+        return next(([int(cell)] for cell in row[1:] if re.fullmatch(r"\d{1,5}", cell)), [])
+    found = []
+    for match in re.finditer(pattern, piece, re.I):
+        tail = piece[match.end() :]
+        end = SENTENCE_END.search(tail)
+        tail = tail[: end.start()] if end else tail
+        counts = answers.counts(tail)
+        if not counts:
+            continue
+        number = re.search(rf"(?<![\w.,/#:$-]){counts[0]}(?![\w%]|[.,:/-]\d)", tail)
+        before = tail[: number.start()] if number else tail
+        if number and len(before.split()) <= BOUND_WORDS and not re.search(pattern, before, re.I):
+            found.append(counts[0])
+    return found
+
+
 def check_counts(text: str, facts: dict[str, Any]) -> list[str]:
+    """Each group is given its count somewhere, and no number is given as the group's own count
+    that is not its count."""
+
     problems = []
     found = mentions(text, facts)
     for name, group in facts["groups"].items():
@@ -205,7 +237,7 @@ def check_counts(text: str, facts: dict[str, Any]) -> list[str]:
         if not any(want in answers.counts(piece) for piece, _, _ in places):
             problems.append(f"the note never gives the {name} group its count, {want}")
         for piece, _, alone in places:
-            got = answers.counts(piece)
+            got = bound_counts(piece, group["words"])
             if alone and got and want not in got and not RAW.search(piece):
                 problems.append(f"the note gives the {name} group another count: {piece.strip()!r}")
     return problems

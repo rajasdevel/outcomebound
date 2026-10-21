@@ -276,7 +276,9 @@ _QUOTES = {0x2019: "'", 0x2018: "'", 0x201C: '"', 0x201D: '"'}
 NEG = re.compile(
     r"\b(?:not|no|never|neither|nor|none|cannot|rather than|instead of|ruled out|rules out"
     r"|rule out|excluded?|unlikely|innocent|exonerat\w*|isn't|wasn't|aren't|weren't|didn't"
-    r"|doesn't|don't|can't|couldn't|won't|hasn't|haven't|nothing)\b|n't\b",
+    r"|doesn't|don't|can't|couldn't|won't|hasn't|haven't|nothing|hardly|barely|scant|doubtful"
+    r"|poor suspect|(?:little|scant|weak) (?:\w+ )?(?:support|evidence|sign|indication|reason))\b"
+    r"|n't\b",
     re.IGNORECASE,
 )
 _CLAUSE = re.compile(
