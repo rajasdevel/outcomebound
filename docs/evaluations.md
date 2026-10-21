@@ -1359,6 +1359,13 @@ Git). `OUTCOMEBOUND_FIXTURE_ROOT` keeps fixture repositories outside any Git che
 arms within one fixture and one model. The hand-off fixtures run only when `--fixtures` names
 them. `evals/README.md` gives their cells.
 
+To measure one part of the install, `--drop ELEMENT` (with `--arm current`) and `--add ELEMENT`
+(with `--arm none`) build the install less, or the plain arm plus, one element: the kernel, the
+facts block, the pointers, one fragment, one skill or the launcher. `evals/loop.py PLAN.json` runs
+a plan of such arms over fixtures and repetitions, with the arms interleaved, and
+`evals/attribute.py DIR ...` reads the kept runs and charges each run's input tokens to what
+caused them. `evals/README.md` gives the details.
+
 ## Sources
 
 - **Fixtures:** [`evals/fixtures/`](../evals/fixtures/).

@@ -136,7 +136,7 @@ def test_classes() -> None:
     # Only the OutcomeBound install is guidance; a personal plugin's SKILL.md is a read.
     assert classed("cat .agents/skills/diagnose/SKILL.md") == "guidance-read"
     assert classed("cat .agents/skills/my-own/SKILL.md") == "read"
-    assert classed("cat ~/.codex/skills/pdf/SKILL.md") == "read"
+    assert classed("cat $CODEX_HOME/skills/pdf/SKILL.md") == "read"
     assert classed("outcomebound where") == "guidance-read"
     assert classed("rg -n outcomebound docs") == "read"
     # A here-document is data, not a command.

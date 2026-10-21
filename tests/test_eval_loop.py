@@ -210,13 +210,15 @@ def test_the_real_runner_accepts_the_plan_interface() -> None:
     ],
 )
 def test_element_refusals_come_before_any_cell(
-    tmp_path: Path, change: dict[str, Any], message: str
+    tmp_path: Path, change: dict[str, Any], message: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     started: list[Any] = []
-    code = LOOP.main(
-        [str(write_plan(tmp_path, **change))],
-        runner=lambda *args, **kwargs: started.append(args) or 0,
-        module=RUNNER,
-    )
+
+    def runner(*args: Any, **kwargs: Any) -> int:
+        started.append(args)
+        return 0
+
+    code = LOOP.main([str(write_plan(tmp_path, **change))], runner=runner, module=RUNNER)
     assert code == 2
     assert started == []
+    assert message in capsys.readouterr().err
