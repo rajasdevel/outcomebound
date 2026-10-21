@@ -716,6 +716,8 @@ OTHER_FORMS = [
     ),
     ("continued bare value", "{key}: {a}\n  continued", "lines 5-6"),
     ("unquoted flow list", "{key}: [{a}, {b}]", "line 5"),
+    ("multiline flow list", '{key}: [\n  "{a}",\n  "{b}"\n]', "lines 5-8"),
+    ("unindented multiline flow list", '{key}: [\n"{a}",\n"{b}"\n]', "lines 5-8"),
     ("flow list with a comment", "{key}: [{a}, {b}] # two", "line 5"),
     ("one bare value", "{key}: {a}", "line 5"),
     ("no value", "{key}:", "line 5"),

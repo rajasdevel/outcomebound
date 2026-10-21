@@ -792,15 +792,18 @@ def _marker_attributes(line: str) -> list[str]:
 
 def _comments(text: str) -> Iterator[tuple[int, str]]:
     """Each HTML comment's first line and text, OutcomeBound's block markers excepted: a
-    comment alone on its line that is exactly a marker (`_is_marker`). A comment ends at `-->`
-    or at `--!>`, as a browser ends it, or at the end of the text."""
+    comment alone on one physical line that is exactly a marker (`_is_marker`). A comment ends
+    at `-->` or at `--!>`, as a browser ends it, or at the end of the text."""
 
     for match in re.finditer(r"<!--(.*?)(--!?>|\Z)", text, re.DOTALL):
         number = text.count("\n", 0, match.start()) + 1
         line_start = text.rfind("\n", 0, match.start()) + 1
         line_end = text.find("\n", match.end())
         whole = text[line_start : line_end if line_end >= 0 else len(text)].strip()
-        if whole == match.group(0).strip() and _is_marker(whole):
+        # Only a marker wholly on one physical line is passed over; a comment split over lines
+        # is reported, since the line checks read a marker's attributes one line at a time.
+        one_line = "\n" not in match.group(0)
+        if one_line and whole == match.group(0).strip() and _is_marker(whole):
             continue
         yield number, match.group(0)
 

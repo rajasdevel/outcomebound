@@ -86,7 +86,8 @@ The same rules hold for the project's own `local` fragment, which starts from
 - A list-valued key (`detect:`, `edges:`) takes one form, a JSON list on the key's own line,
   each item in double quotes. A parse refuses any other form (a YAML block list, a flow list
   with unquoted items, one bare value, no value, a comment or a continued line) and names the
-  lines it read, the key's line and the lines after it that belong to the value, with the form
+  lines it read, the key's line and every line after it up to the next line that opens a key
+  (a block list's items, a flow list's continued lines and its closing `]`, at any indent), with the form
   by example, as `edges: ["pushing a tag", "publishing a release"]`. It suggests no corrected
   line.
 `fragments compose` renders both blocks for a selection; `--inline` emits the kernel, the skills

@@ -196,20 +196,24 @@ def _frontmatter_value(
     return value
 
 
+# A frontmatter line that opens a key of its own: a name at the start of the line, then `:`.
+_KEY_LINE = re.compile(r"[A-Za-z_][\w-]*[ \t]*:")
+
+
 def _value_span(following: Sequence[str]) -> int:
-    """How many of the lines after a key belong to its value in another form: each line up
-    to the last of a run of `- ` items, indented, comment or blank lines, before the next key
-    or the end. After a key that is not a list key, the first such line is refused as not
-    'key: value'."""
+    """How many of the lines after a key belong to its value in another form: every line up to
+    the last that is not blank before the next line that opens a key of its own, or the end.
+    That holds a block list's items, a flow list's continued lines and its closing `]`, at any
+    indent, and comment and continued lines. After a key that is not a list key, the first
+    such line is refused as not 'key: value'."""
 
     span = 0
     for offset, line in enumerate(following, 1):
         if not line.strip():
             continue
-        if line[0] in " \t-#":
-            span = offset
-            continue
-        break
+        if _KEY_LINE.match(line):
+            break
+        span = offset
     return span
 
 

