@@ -116,7 +116,10 @@ def done_line(done: Sequence[str]) -> str:
     kernel's completion bar runs only where the changed risk reaches it or the project requires
     it."""
 
-    return f"- Done: {both([code(command) for command in done])} (the full suite)"
+    return (
+        f"- Done: {both([code(command) for command in done])} "
+        "(the full suite: run it where the change reaches what it tests)"
+    )
 
 
 def code(text: str) -> str:

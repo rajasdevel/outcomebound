@@ -4,7 +4,7 @@ family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 13
+version: 14
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -37,7 +37,9 @@ keeps, and names the next skill for an unfinished item; `outcomebound workspace 
 worktree with its commits merged, pushed only or local only (a squash merge reads local or pushed).
 Both only read, and can be slow in a large repository; `where --offline` skips `gh`.
 **Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
-worktrees are preserved state: work in a worktree you created, keep it while its task or an agent
+worktrees are preserved state. Work where the person put you, on their branch, unless other agents
+work in that checkout or the work runs in parallel or across sessions; then work in a worktree you
+created, keep it while its task or an agent
 that may resume it needs it, and remove it only when the task is finished, its commits are reachable
 from a kept branch, and nothing uncommitted or ignored in it is still needed. A worktree's commits
 land as the project's instructions or the goal envelope say work lands, the rule the tickets

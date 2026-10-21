@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "e9627da59573958eb3769cee5219fb9b09c7f422b87017c9e9b3dba11d7d6dab"
+      "sha256": "4b987fc906e3586f81b7f47703bdbe7b025a53209f43ba4cdc0202e3ff409855"
     },
     {
       "kind": "block",
@@ -32,12 +32,12 @@
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "79e8188cc76a3e7197b4ef21798ba5b2e5a233cc7ee19cd99e36975abccc1483"
+        ".outcomebound/fragments/workspace.md": "e1af70423aaf3a05c927ea7fac60c39a828e60ad9f3c0f5487ee6730a2331cd0"
       },
       "style": [
         "ste"
       ],
-      "sha256": "3cf27ec40b92f7e2bc9987d06b447e1bed6293f79dfc16c4d754b18b1d47a1ac"
+      "sha256": "58d99223313f622fda9433dab33368fc716cf5df5d9b5492fea99b4d91ef7f4b"
     },
     {
       "kind": "block",
@@ -56,7 +56,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "79e8188cc76a3e7197b4ef21798ba5b2e5a233cc7ee19cd99e36975abccc1483"
+      "sha256": "e1af70423aaf3a05c927ea7fac60c39a828e60ad9f3c0f5487ee6730a2331cd0"
     },
     {
       "kind": "fragment",

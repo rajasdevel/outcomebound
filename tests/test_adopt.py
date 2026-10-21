@@ -1731,7 +1731,10 @@ def test_the_facts_are_read_from_their_sources(tmp_path: Path, capsys: Capture) 
     edges = fragments.load_all(ROOT)["ci-release"].edges
     lines = facts_lines(target)
     assert list(lines) == ["Done", "CI test", "Irreversible edges", "Precedence"]
-    assert lines["Done"] == "`make check` and `make test` (the full suite)"
+    assert lines["Done"] == (
+        "`make check` and `make test`"
+        " (the full suite: run it where the change reaches what it tests)"
+    )
     assert lines["CI test"] == "`make test` (.github/workflows/ci.yml)"
     assert lines["Irreversible edges"] == "; ".join([*edges, LOCAL_EDGE, facts.FLOOR_EDGE])
     assert "AGENTS.md" in lines["Precedence"] and "CLAUDE.md" in lines["Precedence"]

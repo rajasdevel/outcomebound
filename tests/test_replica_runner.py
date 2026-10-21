@@ -285,7 +285,10 @@ def test_runner_the_current_arm_is_what_adopt_installs_in_the_field(
         assert path in installed, path
     agents = (workdir / "AGENTS.md").read_text(encoding="utf-8")
     assert "<!-- outcomebound:begin id=operating-contract" in agents
-    assert "- Done: `make check` and `make test` (the full suite)" in agents
+    assert (
+        "- Done: `make check` and `make test`"
+        " (the full suite: run it where the change reaches what it tests)"
+    ) in agents
     assert _git(workdir, "status", "--porcelain") == ""
     assert _git(workdir, "rev-parse", "HEAD") == _git(workdir, "rev-parse", "seed^{commit}")
     assert ".outcomebound/manifest.json" in _git(workdir, "ls-files").split()
@@ -563,7 +566,10 @@ def test_runner_the_dump_of_the_current_arm_shows_its_install(
     assert "/.agents/work" not in printed.split("--- prompt ---")[0], (
         "a field call has no notes grant"
     )
-    assert "  | - Done: `make check` and `make test` (the full suite)" in printed
+    assert (
+        "  | - Done: `make check` and `make test`"
+        " (the full suite: run it where the change reaches what it tests)"
+    ) in printed
     assert not isolated["calls"].exists()
 
 
