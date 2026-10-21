@@ -1,0 +1,120 @@
+import dataclasses
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from chatsvc import config
+from chatsvc.app import ChatService, build_service
+from fakeprovider import FakeProvider
+
+
+def service(provider=None, **options):
+    settings = config.load("config")
+    scratch = Path(tempfile.mkdtemp())
+    settings = dataclasses.replace(settings, feedback_path=scratch / "feedback.jsonl")
+    options.setdefault("sleep", lambda seconds: None)
+    options.setdefault("log", lambda line: None)
+    return ChatService(settings, provider or FakeProvider(), **options)
+
+
+def post(svc, path, payload, key="tenant-1"):
+    status, headers, body = svc.handle(
+        "POST", path, {"x-api-key": key}, json.dumps(payload).encode()
+    )
+    return status, headers, json.loads(body)
+
+
+HELLO = {"messages": [{"role": "user", "content": "hello"}]}
+
+
+class ChatTest(unittest.TestCase):
+    def test_health(self):
+        status, _, body = service().handle("GET", "/healthz", {}, b"")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["status"], "ok")
+
+    def test_a_chat_reaches_the_default_model(self):
+        provider = FakeProvider()
+        status, _, body = post(service(provider), "/v1/chat", HELLO)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["model"], "chat-large-3")
+        self.assertEqual(provider.paths(), ["/v1/models/chat-large-3:generate"])
+
+    def test_an_alias_is_resolved(self):
+        provider = FakeProvider()
+        status, _, body = post(service(provider), "/v1/chat", {**HELLO, "model": "small"})
+        self.assertEqual((status, body["model"]), (200, "chat-small-3"))
+
+    def test_an_unknown_model_is_a_502_after_one_attempt(self):
+        provider = FakeProvider()
+        status, _, body = post(service(provider), "/v1/chat", {**HELLO, "model": "nope"})
+        self.assertEqual((status, body["status"]), (502, 404))
+        self.assertEqual(provider.count(), 1)
+
+    def test_a_busy_provider_is_retried_then_reported(self):
+        provider = FakeProvider(quota=1, window=60)
+        svc = service(provider)
+        self.assertEqual(post(svc, "/v1/chat", HELLO)[0], 200)
+        status, headers, body = post(svc, "/v1/chat", HELLO)
+        self.assertEqual((status, body["error"]), (503, "provider_busy"))
+        self.assertIn("retry-after", headers)
+        self.assertEqual(provider.count(status=429), 3)
+
+    def test_missing_key(self):
+        status, _, _ = service().handle("POST", "/v1/chat", {}, b"{}")
+        self.assertEqual(status, 401)
+
+    def test_bad_requests(self):
+        svc = service()
+        self.assertEqual(post(svc, "/v1/chat", {"messages": []})[0], 400)
+        self.assertEqual(post(svc, "/v1/chat", {**HELLO, "max_tokens": 0})[0], 400)
+        bad_role = {"messages": [{"role": "robot", "content": "x"}]}
+        self.assertEqual(post(svc, "/v1/chat", bad_role)[0], 400)
+        status, _, _ = svc.handle("POST", "/v1/chat", {"x-api-key": "k"}, b"not json")
+        self.assertEqual(status, 400)
+
+    def test_our_own_limit_answers_429_from_chatsvc(self):
+        svc = service()
+        answers = [post(svc, "/v1/chat", HELLO, key="busy") for _ in range(40)]
+        limited = [body for status, _, body in answers if status == 429]
+        self.assertTrue(limited)
+        self.assertEqual(limited[0]["by"], "chatsvc")
+
+    def test_unknown_route(self):
+        self.assertEqual(post(service(), "/v9/nothing", {})[0], 404)
+
+    def test_build_service_takes_a_transport(self):
+        provider = FakeProvider()
+        svc = build_service("config", provider, log=lambda line: None)
+        self.assertIs(svc.transport, provider)
+
+
+class EmbedTest(unittest.TestCase):
+    def test_inputs_are_sent_in_batches_the_provider_accepts(self):
+        provider = FakeProvider(quota=100)
+        inputs = [f"text {n}" for n in range(40)]
+        status, _, body = post(service(provider), "/v1/embed", {"inputs": inputs})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(body["vectors"]), 40)
+        self.assertEqual(provider.count(), 3)
+
+    def test_inputs_must_be_strings(self):
+        self.assertEqual(post(service(), "/v1/embed", {"inputs": [1]})[0], 400)
+
+
+class FeedbackRouteTest(unittest.TestCase):
+    def test_feedback_is_stored(self):
+        svc = service()
+        status, _, body = post(
+            svc, "/v1/feedback", {"conversation_id": "c1", "rating": "down", "release": "1.7.0"}
+        )
+        self.assertEqual(status, 201)
+        self.assertTrue(body["id"].startswith("fb_"))
+
+    def test_bad_feedback_is_refused(self):
+        self.assertEqual(post(service(), "/v1/feedback", {"rating": "meh"})[0], 400)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,6 @@
+# The project note and repository exclusion state. The recorded decisions are not
+# protected here: a new decision may be added, and the decisions-kept claim holds the
+# recorded ones word for word.
+AGENTS.md
+.git/config
+.git/info/exclude

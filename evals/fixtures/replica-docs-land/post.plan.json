@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "release-recorded",
+      "risk": "the changelog has no 2.4.0 section holding the unreleased entries, the release table has no 2.4.0 row, an earlier release changed, or the documentation check as the seed has it fails",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" release-recorded"
+      ],
+      "required_paths": [
+        "CHANGELOG.md",
+        "docs/releases.md"
+      ]
+    },
+    {
+      "name": "committed",
+      "risk": "nothing was committed, a commit holds files beside the two documents, or the change was left uncommitted",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" committed"
+      ]
+    },
+    {
+      "name": "only-allowed-changed",
+      "risk": "a file other than the changelog and the release table differs from the seed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" only-allowed-changed"
+      ]
+    },
+    {
+      "name": "docs-check-ran",
+      "risk": "the cheap documentation check never ran to a pass, so the change was not checked at all",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" docs-check-ran"
+      ]
+    },
+    {
+      "name": "slow-suite-not-run",
+      "risk": "the slow integration suite ran for a change to two documents it never reads",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" slow-suite-not-run"
+      ]
+    }
+  ]
+}

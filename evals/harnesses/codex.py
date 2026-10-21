@@ -21,6 +21,7 @@ from evals.codex_events import (
     command_transcript,
     item_types,
     parse_events,
+    session_tokens,
     stream_models,
     tokens_used,
     unknown_types,
@@ -54,6 +55,11 @@ STATE_DATABASE = "state_5.sqlite"
 # a command bind a port. codex-cli 0.163.0 offers it as one switch for all network access, the
 # loopback interface and the internet alike; the sandbox refuses a bind without it.
 LISTENER_SETTING = "sandbox_workspace_write.network_access=true"
+# The sandbox of an adopter's own session (`Request.sandbox`): no grant for `.agents/work`, which
+# codex keeps read-only inside the workspace, so a working file there is refused as in the field.
+FIELD = "field"
+SANDBOXES = ("eval", FIELD)
+NOTES = Path(".agents") / "work"
 Run = Callable[..., Any]
 
 
@@ -100,12 +106,14 @@ class CodexHarness:
         write_roots: tuple[Path, ...] = (),
         local_listener: bool = False,
     ) -> list[str]:
-        """The `codex exec` argv for one call: the model named, the operator's setup left out.
+        """The `codex exec` argv for one call in the `eval` sandbox: the model named, the
+        operator's setup left out.
 
         The call may write the workspace and, where it is a Git repository, its `.git`, which
         `workspace-write` otherwise keeps read-only: a fixture would measure the sandbox, not
         the model, if a commit were impossible. Only `.agents/work` is added for task notes;
-        the installed skills and the rest of `.agents` retain their default protection.
+        the installed skills and the rest of `.agents` retain their default protection. `argv`
+        gives a `field` call, which adds no `.agents/work`.
 
         `workspace-write` also refuses a command a port to listen on. Only where the fixture
         needs a local listener (`local_listener`) is `LISTENER_SETTING` added; every other call
@@ -135,9 +143,27 @@ class CodexHarness:
             argv += ["-c", LISTENER_SETTING]
         if (Path(cwd) / ".git").is_dir():
             argv += ["--add-dir", str(Path(cwd) / ".git")]
-        argv += ["--add-dir", str(Path(cwd) / ".agents" / "work")]
+        argv += ["--add-dir", str(Path(cwd) / NOTES)]
         for root in write_roots:
             argv += ["--add-dir", str(root)]
+        return argv
+
+    def argv(
+        self, request: Request, cwd: Path, last_message: Path, write_roots: tuple[Path, ...] = ()
+    ) -> list[str]:
+        """The `codex exec` argv for `request`: `command`, and in a `field` sandbox without the
+        grant of `.agents/work`, which an adopter's call does not have: codex keeps `.agents`
+        read-only, and where the model keeps a record is measured. ValueError for a sandbox
+        this harness does not know."""
+
+        if request.sandbox not in SANDBOXES:
+            raise ValueError(f"no sandbox {request.sandbox!r}; there is {', '.join(SANDBOXES)}")
+        argv = self.command(
+            request.model, request.effort, cwd, last_message, write_roots, request.local_listener
+        )
+        if request.sandbox == FIELD:
+            grant = argv.index(str(Path(cwd) / NOTES))
+            del argv[grant - 1 : grant + 1]
         return argv
 
     def call(
@@ -161,14 +187,7 @@ class CodexHarness:
         try:
             try:
                 done = bounded_command(
-                    self.command(
-                        request.model,
-                        request.effort,
-                        cwd,
-                        last_message,
-                        write_roots,
-                        request.local_listener,
-                    ),
+                    self.argv(request, cwd, last_message, write_roots),
                     input=prompt,
                     env={**self._env(), "PATH": path},
                     cwd=str(cwd),
@@ -192,8 +211,10 @@ class CodexHarness:
             item_types=item_types(events),
             unknown_item_types=unknown_types(events),
             tokens_used=tokens_used(transcript),
+            session_tokens=session_tokens(session, events),
             identity_checks=checks,
             local_listener=request.local_listener,
+            sandbox=request.sandbox,
         )
         failed = next((check[2] for check in checks if check[1] == "FAIL"), "")
         return CallResult(answer, transcript, code, observed, extras, failed, checks)
@@ -240,6 +261,34 @@ def _agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]
 Records = list[dict[str, Any]]
 
 
+def _notes_unwritable(records: Records, cwd: Path) -> tuple[bool, str]:
+    """Whether every `turn_context` record gives the sandbox's writable roots and none of them
+    is the workspace's `.agents/work` or a folder inside it, and the problem otherwise."""
+
+    notes = (Path(cwd) / NOTES).resolve()
+    # A grant of `.agents/work`, of a folder inside it, or of `.agents` itself reaches the notes.
+    reaching = (notes, notes.parent)
+    seen = 0
+    for record in records:
+        if record.get("type") != "turn_context" or not isinstance(record.get("payload"), dict):
+            continue
+        policy = record["payload"].get("sandbox_policy")
+        roots = policy.get("writable_roots") if isinstance(policy, dict) else None
+        if not isinstance(roots, list) or not all(isinstance(root, str) for root in roots):
+            return False, "the native session gives no sandbox writable_roots"
+        seen += 1
+        granted = [
+            root
+            for root in roots
+            if Path(root).resolve() in reaching or notes in Path(root).resolve().parents
+        ]
+        if granted:
+            return False, f"the native session grants {granted[0]} in a field sandbox"
+    if not seen:
+        return False, "the native session has no turn_context"
+    return True, ""
+
+
 def _network_access(records: list[dict[str, Any]]) -> tuple[bool | None, str]:
     """Whether the sandbox policy of the session allows network access, as every `turn_context`
     record gives it, and the problem where the records give none or disagree."""
@@ -267,7 +316,7 @@ def identify(
     that fails carries, as its detail, the text of the call error. The sandbox must allow
     network access exactly where the fixture asked for a local listener."""
 
-    model, effort, local_listener = request
+    model, effort, local_listener, sandbox = request
     events = parse_events(stdout) or []
     checks: list[list[str]] = []
 
@@ -342,6 +391,11 @@ def identify(
         network_problem
         or f"the native session reports network_access {network}, not {local_listener}",
     )
+    if sandbox == FIELD:
+        unwritable, notes_problem = _notes_unwritable(records, cwd)
+        check(
+            "native-field-sandbox", unwritable, f"{NOTES} not writable == requested", notes_problem
+        )
     named = stream_models(events)
     if named:
         check(

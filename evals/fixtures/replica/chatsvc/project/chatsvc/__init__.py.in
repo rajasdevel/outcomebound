@@ -1,0 +1,21 @@
+"""chatsvc: a chat service in front of a hosted model provider."""
+
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def version():
+    """The release in the VERSION file next to the package, or 'unknown'."""
+    try:
+        return (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "unknown"
+
+
+def revision():
+    """The commit this copy was built from: the REVISION file a deploy writes, else 'dev'."""
+    try:
+        return (ROOT / "REVISION").read_text(encoding="utf-8").strip()
+    except OSError:
+        return "dev"

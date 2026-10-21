@@ -1,0 +1,155 @@
+"""The integration suite: the service end to end against the offline provider, in real time.
+
+It paces traffic at the configured limits and at the provider's quota, so it takes as long as the
+traffic it sends: about a minute and a half. `make test-integration` runs it; CI runs it on every
+pull request. Each scenario prints its result; the exit status is 1 if any failed.
+"""
+
+import dataclasses
+import json
+import sys
+import tempfile
+import threading
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from chatsvc import config
+from chatsvc.app import ChatService
+from fakeprovider import FakeProvider
+
+HELLO = {"messages": [{"role": "user", "content": "hello there"}]}
+
+
+def service(provider):
+    settings = config.load("config")
+    scratch = Path(tempfile.mkdtemp())
+    settings = dataclasses.replace(settings, feedback_path=scratch / "feedback.jsonl")
+    return ChatService(settings, provider, log=lambda line: None)
+
+
+def post(svc, path, payload, key):
+    status, headers, body = svc.handle(
+        "POST", path, {"x-api-key": key}, json.dumps(payload).encode()
+    )
+    return status, headers, json.loads(body)
+
+
+def paced(count, per_second, act):
+    """Call act(n) `count` times at `per_second`, and return what each call returned."""
+    start = time.monotonic()
+    results = []
+    for n in range(count):
+        delay = start + n / per_second - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+        results.append(act(n))
+    return results
+
+
+def chat_under_the_limit():
+    """Traffic just under a caller's limit is never refused by chatsvc."""
+    svc = service(FakeProvider(quota=10_000))
+    answers = paced(110, 9.0, lambda n: post(svc, "/v1/chat", HELLO, "steady")[0])
+    refused = answers.count(429)
+    return refused == 0, f"{len(answers)} requests at 9/s, {refused} refused"
+
+
+def chat_over_the_limit():
+    """A caller over its limit is refused by chatsvc, and the next caller is not."""
+    svc = service(FakeProvider(quota=10_000))
+    burst = [post(svc, "/v1/chat", HELLO, "greedy")[0] for _ in range(40)]
+    other = post(svc, "/v1/chat", HELLO, "polite")[0]
+    ok = 15 <= burst.count(429) <= 20 and other == 200
+    return ok, f"burst of 40: {burst.count(429)} refused; another caller got {other}"
+
+
+def provider_quota_paced():
+    """Traffic at the provider key's quota gets through with few retries."""
+    provider = FakeProvider()
+    svc = service(provider)
+    answers = paced(60, 3.0, lambda n: post(svc, "/v1/chat", HELLO, f"tenant-{n % 3}")[0])
+    refused = provider.count(status=429)
+    return answers.count(200) == 60 and refused <= 2, f"60 at 3/s: {refused} provider 429s"
+
+
+def provider_quota_burst():
+    """A concurrent burst over the quota is absorbed by waiting as the provider asks."""
+    provider = FakeProvider()
+    svc = service(provider)
+    results = []
+
+    def worker(name):
+        for _ in range(4):
+            results.append(post(svc, "/v1/chat", HELLO, name)[0])
+
+    threads = [threading.Thread(target=worker, args=(f"t{n}",)) for n in range(3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    calls = provider.count()
+    ok = set(results) <= {200, 503} and calls <= len(results) * 3
+    return ok, f"12 concurrent: {results.count(200)} ok, {results.count(503)} busy, {calls} calls"
+
+
+def embed_bulk():
+    """A large embedding request is split into batches the provider accepts."""
+    provider = FakeProvider()
+    svc = service(provider)
+    inputs = [f"document {n}" for n in range(150)]
+    status, _, body = post(svc, "/v1/embed", {"inputs": inputs}, "indexer")
+    over = provider.count(status=400)
+    ok = status == 200 and len(body.get("vectors", [])) == 150 and over == 0
+    return ok, f"150 inputs: status {status}, {provider.count()} calls, {over} refused as too big"
+
+
+def embed_paced_at_its_zone():
+    """The embedding zone's slow rate admits traffic paced to it."""
+    svc = service(FakeProvider(quota=10_000))
+    answers = paced(14, 1 / 3.05, lambda n: post(svc, "/v1/embed", {"inputs": ["x"]}, "slow")[0])
+    return answers.count(429) == 0, f"14 at one per 3 s: {answers.count(429)} refused"
+
+
+def feedback_round_trip():
+    svc = service(FakeProvider())
+    status, _, body = post(
+        svc, "/v1/feedback", {"conversation_id": "c-int", "rating": "down", "release": "1.7.0"}, "w"
+    )
+    saved = svc.feedback.records()
+    ok = status == 201 and len(saved) == 1 and saved[0]["id"] == body["id"]
+    return ok, f"status {status}, {len(saved)} stored"
+
+
+SCENARIOS = (
+    chat_under_the_limit,
+    chat_over_the_limit,
+    provider_quota_paced,
+    provider_quota_burst,
+    embed_bulk,
+    embed_paced_at_its_zone,
+    feedback_round_trip,
+)
+
+
+def main():
+    failed = 0
+    began = time.monotonic()
+    for scenario in SCENARIOS:
+        start = time.monotonic()
+        try:
+            ok, detail = scenario()
+        except Exception as error:  # a scenario that raises is a failure, reported as such
+            ok, detail = False, f"raised {type(error).__name__}: {error}"
+        failed += not ok
+        verdict = "ok  " if ok else "FAIL"
+        print(f"{verdict} {scenario.__name__:<26} {time.monotonic() - start:5.1f}s  {detail}")
+        sys.stdout.flush()
+    print(f"integration: {len(SCENARIOS) - failed} of {len(SCENARIOS)} passed"
+          f" in {time.monotonic() - began:.0f}s")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

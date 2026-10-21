@@ -1,0 +1,71 @@
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+
+from chatsvc import feedback
+
+
+def record(conversation, created, release, rating, label=None):
+    return {
+        "id": f"fb_{conversation}{created}",
+        "conversation_id": conversation,
+        "created": created,
+        "release": release,
+        "rating": rating,
+        "label": label,
+        "channel": "web",
+        "comment": "",
+    }
+
+
+RECORDS = [
+    record("a", "2026-09-01T10:00:00Z", "1.5.0", "down", "old"),
+    record("b", "2026-09-20T10:00:00Z", "1.6.0", "down", "slow"),
+    record("b", "2026-09-21T10:00:00Z", "1.6.0", "down", "slow"),
+    record("c", "2026-09-22T10:00:00Z", "1.6.1", "down", "slow"),
+    record("c", "2026-09-23T10:00:00Z", "1.6.1", "up"),
+    record("d", "2026-09-24T10:00:00Z", "1.10.0", "down"),
+]
+
+
+class FeedbackTest(unittest.TestCase):
+    def test_release_order_is_numeric(self):
+        self.assertLess(feedback.release_key("1.9.0"), feedback.release_key("1.10.0"))
+
+    def test_since_includes_the_release_named(self):
+        chosen = feedback.select(RECORDS, since="1.6.0")
+        self.assertEqual([r["conversation_id"] for r in chosen], ["b", "b", "c", "c", "d"])
+
+    def test_summary_counts_submissions(self):
+        self.assertEqual(
+            feedback.summary(RECORDS, since="1.6.0"), {"slow": 3, "unlabelled": 1}
+        )
+
+    def test_summary_by_conversation_counts_the_latest_rating(self):
+        self.assertEqual(
+            feedback.summary(RECORDS, since="1.6.0", by_conversation=True),
+            {"slow": 1, "unlabelled": 1},
+        )
+
+    def test_add_writes_one_line(self):
+        path = Path(tempfile.mkdtemp()) / "fb.jsonl"
+        store = feedback.FeedbackStore(path)
+        when = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        saved = store.add({"conversation_id": "x", "rating": "up", "release": "1.7.0"}, now=when)
+        self.assertEqual(store.records(), [saved])
+        self.assertEqual(saved["created"], "2026-10-01T00:00:00Z")
+
+    def test_add_refuses_a_bad_rating(self):
+        store = feedback.FeedbackStore(Path(tempfile.mkdtemp()) / "fb.jsonl")
+        with self.assertRaises(feedback.FeedbackError):
+            store.add({"conversation_id": "x", "rating": "meh", "release": "1.7.0"})
+
+    def test_the_shipped_store_reads(self):
+        records = feedback.FeedbackStore("data/feedback.jsonl").records()
+        self.assertTrue(records)
+        self.assertTrue(all(set(feedback.FIELDS) <= set(r) for r in records))
+
+
+if __name__ == "__main__":
+    unittest.main()

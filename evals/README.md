@@ -64,6 +64,23 @@ done
   also prints the `memory_mode` of the thread from `$CODEX_HOME/state_5.sqlite`, read-only, as an
   `observed:` line that never fails it. It runs no fixture, makes exactly one model call, and
   exits 1 on any `FAIL`. Run it after a new Codex version and before a pass.
+- `python3 evals/run.py --dump-arm FIXTURE --arm ARM --model MODEL` builds one fixture under one
+  arm and prints, with no model call, what its codex call would receive: the argv (the prompt is
+  its stdin), the prompt, each `AGENTS.md` and `AGENTS.override.md` from the workspace up to the
+  root (the text of each), the Codex home in use with what in it reaches the call, the PATH
+  entries that hold an `outcomebound`, and the files of the install. Then it prints each isolation
+  rule as `PASS` or `FAIL`: `launcher-on-path` (the only `outcomebound` on the PATH is the arm's
+  own), `codex-home-neutral` (nothing the call reads from the home, from
+  `$HOME/.agents/skills`, from `/etc/codex/skills` or from a folder above the workspace names
+  OutcomeBound or is an `AGENTS.md` or `AGENTS.override.md` with text; what the home gives every
+  arm alike, the operator's own skills and agent roles, is listed and passes),
+  `nothing-above-workspace` (no instruction file in a folder above the workspace), and, for an
+  arm with no OutcomeBound text (`none`, `--earlier-verbatim`),
+  `no-outcomebound-text` (the prompt and the instruction files never name OutcomeBound, and the
+  workspace has no `.outcomebound/` and no core skill) and `no-engine-import` (the call's
+  `python3` cannot import the engine from the workspace). The workspace is kept under
+  `--workspace-root`, else in a temporary folder. It exits 1 where a rule fails, 2 where the
+  fixture cannot be built. Run it on each arm before a pass of a family that compares arms.
 - `python3 evals/run.py --regrade RESULTS_DIR --out NEW_DIR` judges the kept runs of a pass
   again, with no model call. For each `<fixture>.meta.json` it reads the kept workspace, the saved
   transcript, answer and native copy; rebuilds the command records from the native copy (see
@@ -155,6 +172,16 @@ fixture, as in `small-fix.meta.json`:
 Runs of one fixture that installed different files are flagged as not comparable. A PASS
 establishes only what its check reads, for that model on that day.
 
+Each meta file also records what the call spent: `elapsed_seconds`, the runner's wall time of the
+call, and `session_tokens`, the input tokens (cached input among them), the output tokens
+(reasoning among them) and `source`. With `source` `native`, they are the running total of the
+last `token_count` event of the native session, which is the sum over the session; with
+`stream`, no session was read and they are the sum of the stream's `turn.completed` usage. A
+failed call records them too. The line each run prints, and `--summary` for each group, give
+them beside the verdict: the median over the runs counted, the sum over every call with the
+failed ones among them, and each run's own. A record from before `session_tokens` was kept has
+them read from its `<fixture>.native.jsonl`.
+
 The entrypoints coordinate fixture setup, source records and grading. `processes.py` bounds
 subprocess lifetimes, `codex_events.py` and `claude_events.py` decode their declared event forms,
 `harnesses/` holds the tool that runs the model behind one contract, and `native_receipts.py`
@@ -195,6 +222,11 @@ harness must meet these items, and `--probe` shows which one it does not:
   `local_listener` and the `sandbox_network_access` that the native session shows, and a call
   whose session differs from the request is an error (`native-sandbox-network`). The Claude arm
   ignores the file.
+- **The field sandbox drops one grant.** A fixture whose `install.json` names the `field`
+  sandbox asks for it in `Request.sandbox`; its call adds no `--add-dir` for `.agents/work` and
+  keeps the one for `.git`. Its native session must show writable roots, none of them
+  `.agents/work`, a folder inside it or `.agents`; otherwise the call is an error
+  (`native-field-sandbox`).
 - **Results are keyed by harness.** The meta file and the `INDEX.json` row carry `harness`, and
   `--summary` groups by it, so runs of different harnesses never merge.
 
@@ -211,6 +243,27 @@ harness must meet these items, and `--probe` shows which one it does not:
     `hand-off-tickets` and `explorable`.
   - A fixture can have a `fragments` file that names fragments, one id a line. That fixture installs
     as adopt does with those fragments selected.
+  - A fixture can have an `install.json` in its place (the replica fixtures have one):
+    `{"done": [...], "fragments": [...], "sandbox": "eval"}`, with exactly those three keys. `done`
+    lists the commands the facts block records as Done, in order, rendered as
+    `outcomebound adopt --done` renders them (`- Done: ... (the full suite)`); the `none` arm
+    gets no facts block, so the Done line is measured as OutcomeBound's. `fragments` lists the
+    fragments the install selects. `sandbox` is `eval` (the call may write `.agents/work`, as
+    for every other fixture) or `field` (it may not, as an adopter's call may not: codex keeps
+    `.agents` read-only). A file that is not exactly this, a Done command that adopt refuses, a
+    fragment the engine does not ship, or a fixture that also has a `fragments` file refuses the
+    run (exit 2) before anything is built. The meta file records the Done commands as
+    `arm_done` and the sandbox as `sandbox`.
+  - For a fixture with an `install.json`, the `current` arm is installed as an adopter installs
+    it, by the engine itself: after the fixture's `setup.sh`, this checkout's launcher runs
+    `outcomebound adopt <workspace> --harness codex --fragments <list> --done <command>...`,
+    which writes the kernel, facts and pointers blocks into `AGENTS.md` (ahead of the note), the
+    skills, the fragments, `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what
+    its own ignore files keep out, is folded into the seed commit. The kernel is then not in the
+    prompt: the prompt of both `current` and `none` is `Task:` and the task. The run checks that
+    adopt wrote the skill and fragment files the arm's record names, byte for byte, and the meta
+    records `arm_adopted`. `unsized` and `earlier` keep the install described above on these
+    fixtures too, and every fixture without an `install.json` keeps it under `current`.
   - The `AGENTS.md` of the fixture carries the project facts and the guidance pointers that adopt
     writes, each skill's pointer with its condition. They replace the line of the note that sends
     the model to the core skill.
@@ -256,8 +309,22 @@ are in the seed commit, and in any baseline that the setup records. No post-chec
 a change by the model. The run refuses a fixture whose setup did not commit them. They are
 protected like the graders.
 
-An `outcomebound` that is already on your PATH reaches the `earlier` and `none` arms too. Each run
-records the one that its calls resolve, as `outcomebound_on_path`.
+An `outcomebound` that is already on your PATH reaches no arm: each PATH entry that holds one is
+replaced, for the call, by a new folder of links to that entry's other commands, so every other
+command resolves as before and the arm's own launcher, where it has one, is the only
+`outcomebound` a call reaches. Each run records the one that its calls resolve, as
+`outcomebound_on_path` (none for `none`).
+
+Every arm runs with the Codex home and login in use (`$CODEX_HOME`, else `$HOME/.codex`), whose
+sessions persist. `STATUS.json` records the home as `codex_home`, with what in it reaches a call
+as `codex_home_reach`: its `AGENTS.md` and `AGENTS.override.md`, the operator's own skills (all
+but codex's own `skills/.system`), its agent roles, and the skills under `$HOME/.agents/skills`
+and `/etc/codex/skills`. Both arms read these alike, so a run prints them and goes on. A run
+that names a replica fixture refuses (exit 2), before anything is built or started, where one of
+them, or an instruction file at or above the folder its workspaces are made in, names
+OutcomeBound in any case or is an `AGENTS.md` or `AGENTS.override.md` with text: either would
+give the `none` arm guidance. Whether codex loads the plugins in a home's `plugins/cache` when
+the call ignores `config.toml` is `UNVERIFIED`; `--dump-arm` lists them.
 
 The runner hashes the graders of each fixture, and reads its seed commit, before the model runs. A
 changed grader fails the run unexecuted. No fixture keeps a grader in its workspace: the next

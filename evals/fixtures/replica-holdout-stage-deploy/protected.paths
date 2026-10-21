@@ -1,0 +1,8 @@
+# The project note, the environments' operator and repository exclusion state, copied into the
+# candidate-writable fixture. The environments' own state under .envs/ is not here: it is what
+# the task changes, and the graders compare it with the baseline in the stage.
+AGENTS.md
+bin/envctl
+fakeprovider/__init__.py
+.git/config
+.git/info/exclude

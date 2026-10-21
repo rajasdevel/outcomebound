@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -50,7 +51,13 @@ from typing import Any, NamedTuple
 # Direct script execution also needs the repository package path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from evals.codex_events import command_transcript, observed_model, tokens_used
+from evals.codex_events import (
+    COST_KEYS,
+    command_transcript,
+    observed_model,
+    session_tokens,
+    tokens_used,
+)
 from evals.evidence import (
     changed,
     grading_digest,
@@ -74,6 +81,12 @@ REPO = Path(__file__).resolve().parent.parent
 FIXTURES = REPO / "evals" / "fixtures"
 # A fixture's own file naming the fragments its install selects, one id a line.
 FRAGMENTS_FILE = "fragments"
+# A fixture's own `install.json` (the replica fixtures have one): the Done commands its install
+# records, the fragments it selects and the sandbox of its call, `eval` (the task-note folder
+# `.agents/work` granted) or `field` (as an adopter's call runs: `.agents` stays read-only).
+INSTALL_FILE = "install.json"
+INSTALL_KEYS = ("done", "fragments", "sandbox")
+SANDBOXES = ("eval", "field")
 # A fixture's own empty file (a comment may explain it) that marks it as needing a local listener:
 # the run lets the model's commands bind a port, for this fixture only.
 LISTENER_FILE = "local-listener"
@@ -98,7 +111,13 @@ NAMED_ONLY = (
     "business-requirements-",
     "field-",
     "scaffold-",
+    "replica-",
 )
+# The fixtures whose runs compare an install with no guidance on work like an adopter's: nothing
+# a call reads from its Codex home or above its workspace may name OutcomeBound or give it
+# instructions, so that neither arm reads more of either than its fixture and its install. The
+# operator's own skills and agent roles, which both arms read alike, are recorded, not refused.
+CLEAN_HOME = ("replica-",)
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
@@ -199,6 +218,70 @@ def selected_fragments(name: str) -> tuple[str, ...]:
         return ()
     ids = (line.split("#", 1)[0].strip() for line in path.read_text("utf-8").splitlines())
     return tuple(item for item in ids if item)
+
+
+class Install(NamedTuple):
+    """What a fixture's install records: the Done commands, in run order, as `adopt --done`
+    takes them; the fragments it selects; the sandbox of its call; and whether the `current`
+    arm is installed by the engine's own adopt, as in the field (an install.json says so)."""
+
+    done: tuple[str, ...] = ()
+    fragments: tuple[str, ...] = ()
+    sandbox: str = "eval"
+    adopted: bool = False
+
+
+class InstallError(ValueError):
+    """A fixture's install.json that the runner refuses; the message names what is wrong."""
+
+
+def _install_list(document: dict[str, Any], key: str) -> tuple[str, ...]:
+    """The list of strings `key` names: each one line, not blank, with no surrounding space and
+    no duplicate."""
+
+    values = document[key]
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        raise InstallError(f"{key} is a list of strings")
+    for value in values:
+        if not value.strip() or value != value.strip() or "\n" in value or "\r" in value:
+            raise InstallError(f"{key}: {value!r} is not one line with no surrounding space")
+    if len(set(values)) != len(values):
+        raise InstallError(f"{key} names an item twice")
+    return tuple(values)
+
+
+def fixture_install(name: str) -> Install:
+    """The fixture's install: its `install.json`, checked whole, or, where it has none, no Done
+    command, the fragments its `fragments` file names and the `eval` sandbox. InstallError where
+    the file is not exactly `{"done": [...], "fragments": [...], "sandbox": "eval"|"field"}`,
+    where a Done command is one `adopt --done` refuses or a fragment one the engine does not ship,
+    or where the fixture names its fragments in both files."""
+
+    path = FIXTURES / name / INSTALL_FILE
+    if not path.is_file():
+        return Install((), selected_fragments(name), "eval")
+    if (FIXTURES / name / FRAGMENTS_FILE).exists():
+        raise InstallError(f"{FRAGMENTS_FILE} and {INSTALL_FILE} both name fragments; keep one")
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as problem:
+        raise InstallError(f"not readable JSON: {problem}") from None
+    if not isinstance(document, dict) or sorted(document) != sorted(INSTALL_KEYS):
+        keys = sorted(document) if isinstance(document, dict) else type(document).__name__
+        raise InstallError(f"an object with exactly {', '.join(INSTALL_KEYS)}; found {keys}")
+    done, chosen = _install_list(document, "done"), _install_list(document, "fragments")
+    if document["sandbox"] not in SANDBOXES:
+        raise InstallError(f"sandbox is {' or '.join(SANDBOXES)}, not {document['sandbox']!r}")
+    from outcomebound_tools import adopt, fragments
+
+    try:
+        if list(done) != adopt._commands(done):
+            raise InstallError("a Done command adopt would change")
+        if chosen:
+            fragments.select(fragments.load_all(REPO), chosen)
+    except (adopt.AdoptError, fragments.FragmentError) as problem:
+        raise InstallError(str(problem)) from None
+    return Install(done, chosen, document["sandbox"], True)
 
 
 def needs_local_listener(name: str) -> bool:
@@ -403,9 +486,12 @@ class Arm(NamedTuple):
     selected: tuple[str, ...] = ()
     skills: tuple[tuple[str, str], ...] = ()
     agents: str = ""
+    done: tuple[str, ...] = ()
+    adopted: bool = False
 
     def record(self) -> dict[str, Any]:
-        """The arm's contents as the run's metadata keeps them: digests and the launcher."""
+        """The arm's contents as the run's metadata keeps them: digests, the launcher and the
+        Done commands its facts block records."""
 
         return {
             "kernel_sha256": sha256_text(self.kernel),
@@ -414,6 +500,8 @@ class Arm(NamedTuple):
             },
             "arm_launcher": str(self.launcher) if self.launcher else None,
             **({"agents_sha256": sha256_text(self.agents)} if self.agents else {}),
+            **({"arm_done": list(self.done)} if self.done else {}),
+            **({"arm_adopted": True} if self.adopted else {}),
         }
 
 
@@ -434,12 +522,16 @@ def carried_skills(root: Path) -> tuple[str, ...]:
     return tuple(skill for skill in fragments.SKILLS if skill in present)
 
 
-def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
-    """The arm as it runs, for an install that selects the fragments `selected`. `current`
-    mirrors a codex install of this checkout: the whole folder of each skill that install
-    carries, which is every install's ten, at the skill path the harness table gives codex, and
-    this checkout's launcher. The earlier arm is its kernel alone and the kernel-off arm has
-    nothing, whatever is selected."""
+def load_arm(
+    name: str, selected: tuple[str, ...] = (), done: tuple[str, ...] = (), adopted: bool = False
+) -> Arm:
+    """The arm as it runs, for an install that selects the fragments `selected` and records the
+    Done commands `done`; `adopted`, for `current` alone, installs it with the engine's own
+    adopt after the build (`adopt_install`), its kernel in AGENTS.md and not in the prompt.
+    `current` mirrors a codex install of this checkout: the whole folder of each skill that
+    install carries, which is every install's ten, at the skill path the harness table gives
+    codex, and this checkout's launcher. The earlier arm is its kernel alone and the kernel-off
+    arm has nothing, whatever is selected or recorded."""
 
     text = kernel(name)
     if verbatim_install(name):
@@ -473,7 +565,16 @@ def load_arm(name: str, selected: tuple[str, ...] = ()) -> Arm:
         )
     except (adopt.AdoptError, fragments.FragmentError) as error:
         raise SystemExit(f"run: the current arm cannot read what adopt installs: {error}") from None
-    return Arm(name, text, files, REPO / LAUNCHER, tuple(selected), pointers)
+    return Arm(
+        name,
+        text,
+        files,
+        REPO / LAUNCHER,
+        tuple(selected),
+        pointers,
+        done=tuple(done),
+        adopted=adopted and name == "current",
+    )
 
 
 def fixture_arm(name: str, arm: Arm) -> Arm:
@@ -511,8 +612,9 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     AGENTS.md, and fold it into the seed commit; why it could not, or an empty string.
 
     The fixture's note keeps its project text and loses its own pointer to the core skill;
-    AGENTS.md gains the project facts and the guidance pointers, each skill's with its
-    condition, rendered by the engine as an install renders them. An arm that is another guidance
+    AGENTS.md gains the project facts, with the arm's Done commands as `adopt --done` records
+    them, and the guidance pointers, each skill's with its condition, rendered by the engine as
+    an install renders them. An arm that is another guidance
     set's own files writes that set's AGENTS.md above the note instead, and no facts or pointers.
     """
 
@@ -524,6 +626,8 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         path = workdir / note
         if path.is_file():
             path.write_text(NOTE_POINTER.sub("", path.read_text(encoding="utf-8")), "utf-8")
+    if arm.adopted:
+        return adopt_install(workdir, arm)
     agents = workdir / "AGENTS.md"
     if arm.agents:
         # Another guidance set's AGENTS.md, as it is, ahead of the fixture's own project note.
@@ -532,7 +636,7 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     else:
         root = earlier_source() if arm.name == EARLIER else REPO
         chosen = fragments.select(fragments.load_all(root), arm.selected) if arm.selected else []
-        rendered = facts.render(workdir, chosen, [], ["AGENTS.md"], list(arm.skills))
+        rendered = facts.render(workdir, chosen, list(arm.done), ["AGENTS.md"], list(arm.skills))
         head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
         blocks = [rendered.facts, *([rendered.pointers] if rendered.pointers else [])]
         agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
@@ -550,6 +654,50 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         )
         if done.returncode != 0:
             return f"the install could not be folded into the seed: {done.stderr.strip()}"
+    return ""
+
+
+def adopt_install(workdir: Path, arm: Arm) -> str:
+    """Install the arm into the built fixture as an adopter does: this checkout's launcher runs
+    `outcomebound adopt --harness codex` with the arm's fragments and Done commands, which writes
+    the kernel, facts and pointers blocks into AGENTS.md, the skills, the fragments,
+    `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what its own ignore files
+    keep out, is folded into the seed commit; the setup's other uncommitted edits stay so. Why
+    it could not, or an empty string."""
+
+    env = {**child_env(), **HERMETIC_GIT}
+    argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", HARNESS]
+    argv += ["--fragments", ",".join(arm.selected)] if arm.selected else []
+    for line in arm.done:
+        argv += ["--done", line]
+    before = tree_hashes(workdir)
+    done = bounded_command(argv, cwd=str(workdir), env=env, timeout=SETUP_TIMEOUT)
+    if done.returncode != 0:
+        return f"adopt exited {done.returncode}: {(done.stdout + done.stderr).strip()[-600:]}"
+    after = tree_hashes(workdir)
+    written = sorted(path for path in {*before, *after} if before.get(path) != after.get(path))
+    ignored = subprocess.run(
+        ["git", "check-ignore", "--stdin"],
+        input="\n".join(written),
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=env,
+        encoding="utf-8",
+    ).stdout.splitlines()
+    kept = [path for path in written if path not in ignored]
+    if not kept:
+        return "adopt wrote nothing into the fixture"
+    for command in (
+        ["git", "add", "-A", "--", *kept],
+        ["git", "commit", "-q", "--amend", "--no-edit"],
+        ["git", "tag", "-f", "seed"],
+    ):
+        folded = subprocess.run(
+            command, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+        )
+        if folded.returncode != 0:
+            return f"the install could not be folded into the seed: {folded.stderr.strip()}"
     return ""
 
 
@@ -597,16 +745,129 @@ def installed(workdir: Path, files: dict[str, bytes]) -> str:
     return "" if status == 0 else f"setup did not commit the arm's files: {error.strip()}"
 
 
+def without_launchers(path: str, root: str | None) -> str:
+    """`path` with no `outcomebound`: each entry that holds one is replaced by a new folder, in
+    `root`, of links to its other entries, so every other command resolves as it did."""
+
+    kept = []
+    for entry in path.split(os.pathsep):
+        if not entry or not shutil.which("outcomebound", path=entry):
+            kept.append(entry)
+            continue
+        mirror = Path(tempfile.mkdtemp(prefix="ob-path-", dir=root))
+        for name in _entries(Path(entry)):
+            if Path(name).stem != "outcomebound":
+                (mirror / name).symlink_to(Path(entry) / name)
+        kept.append(str(mirror))
+    return os.pathsep.join(kept)
+
+
 def call_path(arm: Arm, root: str | None) -> str:
     """The PATH codex and the model's commands get: the arm's launcher, alone in a directory
-    of its own, ahead of this environment's PATH."""
+    of its own, ahead of this environment's PATH less every other `outcomebound`, so the arm's
+    launcher is the only one a call reaches, and an arm with none reaches none."""
 
-    path = child_env().get("PATH", os.defpath)
+    path = without_launchers(child_env().get("PATH", os.defpath), root)
     if arm.launcher is None:
         return path
     directory = Path(tempfile.mkdtemp(prefix="ob-launcher-", dir=root))
     (directory / "outcomebound").symlink_to(arm.launcher)
     return f"{directory}{os.pathsep}{path}"
+
+
+# --- what a call reaches besides its prompt -------------------------------------------------
+
+# The instruction files codex reads from its home and from each folder on its project path.
+INSTRUCTIONS = ("AGENTS.md", "AGENTS.override.md")
+# codex's own bundled skills, which it writes into every home it runs with: the harness's, not
+# the operator's, so both arms read them as every adopter's session does.
+SYSTEM_SKILLS = ".system"
+# Skill folders codex reads outside its home: the user's and the machine's.
+OUTSIDE_SKILLS = (Path.home() / ".agents" / "skills", Path("/etc/codex/skills"))
+
+
+def launchers(path: str) -> list[str]:
+    """Each PATH entry that holds an executable `outcomebound`, with what it resolves to."""
+
+    found = []
+    for entry in path.split(os.pathsep):
+        hit = shutil.which("outcomebound", path=entry) if entry else None
+        if hit:
+            found.append(f"{entry} -> {os.path.realpath(hit)}")
+    return found
+
+
+def _entries(folder: Path) -> list[str]:
+    try:
+        return sorted(item.name for item in folder.iterdir())
+    except OSError:
+        return []
+
+
+def home_leaks(home: Path) -> list[str]:
+    """What the Codex home `home`, and the skill folders codex reads outside it, give a call
+    beyond its fixture and its install: an instruction file, the operator's skills, an agent
+    role. codex's own bundled skills are not counted."""
+
+    found = [f"{home / name}" for name in INSTRUCTIONS if (home / name).exists()]
+    found += [f"{home / 'skills' / name}" for name in _entries(home / "skills")]
+    found = [item for item in found if Path(item).name != SYSTEM_SKILLS]
+    found += [f"{home / 'agents' / name}" for name in _entries(home / "agents")]
+    found += [f"{folder / name}" for folder in OUTSIDE_SKILLS for name in _entries(folder)]
+    return found
+
+
+def _names_outcomebound(path: Path) -> bool:
+    """Whether a file, or any file under a folder, holds the word OutcomeBound in any case."""
+
+    files = [path] if path.is_file() else [item for item in path.rglob("*") if item.is_file()]
+    return any(b"outcomebound" in _bytes(item).lower() for item in files)
+
+
+def _bytes(path: Path) -> bytes:
+    """A file's bytes; one that cannot be read reads as naming OutcomeBound, never as clean."""
+
+    try:
+        return path.read_bytes()
+    except OSError:
+        return b"outcomebound (unreadable)"
+
+
+def _instructing(path: Path) -> bool:
+    """Whether `path` is an instruction file with text in it."""
+
+    return path.name in INSTRUCTIONS and path.is_file() and bool(path.read_bytes().strip())
+
+
+def guiding_reach(home: Path, where: Path) -> list[str]:
+    """What a call would read, from the Codex home `home` (its instruction files, the
+    operator's skills and agent roles, the skill folders outside it) or from the instruction
+    files at and above `where`, that names OutcomeBound or is an instruction file with text."""
+
+    reached = [*home_leaks(home), *instructions_above(where)]
+    return [item for item in reached if _instructing(Path(item)) or _names_outcomebound(Path(item))]
+
+
+def unclean_reach(names: list[str], home: Path, where: Path | None) -> list[str]:
+    """For a run of a fixture that needs a clean reach (`CLEAN_HOME`): `guiding_reach` of the
+    Codex home `home` and of the folder its workspaces are made in, `where` (None: the system's
+    temporary folder)."""
+
+    if not any(name.startswith(CLEAN_HOME) for name in names):
+        return []
+    return guiding_reach(home, where or Path(tempfile.gettempdir()))
+
+
+def instructions_above(folder: Path) -> list[str]:
+    """Each instruction file in `folder` or a folder above it."""
+
+    resolved = folder.resolve()
+    return [
+        str(place / name)
+        for place in (resolved, *resolved.parents)
+        for name in INSTRUCTIONS
+        if (place / name).is_file()
+    ]
 
 
 def task_text(name: str, workdir: Path) -> str:
@@ -867,7 +1128,8 @@ def build_workspace(
     """
 
     fixture = FIXTURES / name
-    install(workdir, arm.files)
+    if not arm.adopted:
+        install(workdir, arm.files)
     try:
         built = bounded_command(
             ["bash", str(fixture / "setup.sh"), str(workdir), str(stage)],
@@ -905,7 +1167,8 @@ def build_workspace(
     seed = seed_commit(workdir)
     (workdir / ".agents" / "work").mkdir(parents=True, exist_ok=True)
     try:
-        prompt = build_prompt(arm.kernel, task_text(name, workdir))
+        # An adopted install keeps its kernel in AGENTS.md: the prompt is the task alone.
+        prompt = build_prompt("" if arm.adopted else arm.kernel, task_text(name, workdir))
     except (OSError, ValueError, subprocess.SubprocessError) as problem:
         extra["error"] = f"the fixture's task could not be written: {problem}"
         return report + partial_output(problem), {}, None, ""
@@ -974,13 +1237,14 @@ def _call_and_judge(
     extra["prompt"] = prompt
     sealed = seal_inputs(stage, name)  # after the build and before the call; checked after it
     grading_files = grading_digest(evals_dir(), name)
+    sandbox = fixture_install(name).sandbox
 
     started = time.monotonic()
     answer, transcript, returncode = "", "", None
     try:
         result = harness.call(
             prompt,
-            request._replace(local_listener=needs_local_listener(name)),
+            request._replace(local_listener=needs_local_listener(name), sandbox=sandbox),
             workdir,
             fixture_write_roots(name, workdir),
             path,
@@ -1186,7 +1450,9 @@ def run_one(
     meta = {**record, "returncode": returncode, "error": error, **extra}
     _write(out / f"{name}.meta.json", meta)
     claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
-    print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else ""))
+    tokens = extra.get("session_tokens")
+    cost = f"; {_spent(tokens)}, {extra.get('elapsed_seconds')} seconds" if tokens else ""
+    print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else "") + cost)
     if error:
         sys.stderr.write(f"run: {name}: {error}\n")
     return bool(error), index_row(status, name, meta)
@@ -1397,12 +1663,20 @@ def _provenance(metas: list[dict[str, Any]]) -> list[str]:
 
 
 def _with_tokens(path: Path, meta: dict[str, Any]) -> dict[str, Any]:
-    """The record, with its tokens read from the saved transcript where it kept none."""
+    """The record, with its tokens read from the saved transcript where it kept none, and its
+    session's cost from the native copy beside it where it kept none."""
 
     if "tokens_used" not in meta:
         saved = path.with_name(path.name.replace(".meta.json", ".transcript.txt"))
         text = saved.read_text(encoding="utf-8", errors="replace") if saved.is_file() else ""
         meta = {**meta, "tokens_used": tokens_used(text)}
+    if "session_tokens" not in meta:
+        native = path.with_name(path.name.replace(".meta.json", ".native.jsonl"))
+        try:
+            records = parse_records(native.read_bytes()) if native.is_file() else None
+        except (OSError, ValueError):
+            records = None
+        meta = {**meta, "session_tokens": session_tokens(records)}
     return meta
 
 
@@ -1421,6 +1695,48 @@ def _medians(runs: list[dict[str, Any]]) -> str:
         if values:
             parts.append(f"{label} {_median(values):g}")
     return ", ".join(parts)
+
+
+def _spent(tokens: dict[str, Any]) -> str:
+    return (
+        f"input {round(tokens['input_tokens'])} (cached {round(tokens['cached_input_tokens'])}), "
+        f"output {round(tokens['output_tokens'])} "
+        f"(reasoning {round(tokens['reasoning_output_tokens'])}) tokens"
+    )
+
+
+def _cost_lines(group: list[dict[str, Any]], runs: list[dict[str, Any]]) -> list[str]:
+    """What the group's calls spent: the median tokens and seconds of the runs counted; then,
+    from each session's own token counts, the median over the runs counted, the sum over every
+    call, failed ones among them, and each run's own beside its verdict, where any call kept
+    them."""
+
+    lines = [f"  median {_medians(runs)}"] if _medians(runs) else []
+    spent = [run for run in group if run.get("session_tokens")]
+    if not spent:
+        return lines
+    counted = [run for run in runs if run.get("session_tokens")]
+    if counted:
+        median = {
+            key: _median([float(run["session_tokens"][key]) for run in counted])
+            for key in COST_KEYS
+        }
+        lines.append(f"  median cost {_spent(median)} over {len(counted)} counted run(s)")
+    total = {key: sum(run["session_tokens"][key] for run in spent) for key in COST_KEYS}
+    seconds = sum(float(run["elapsed_seconds"]) for run in group if run.get("elapsed_seconds"))
+    failed = sum(1 for run in spent if run["error"])
+    lines.append(
+        f"  spent on {len(spent)} call(s), {failed} failed among them: {_spent(total)}; "
+        f"{seconds:.1f} seconds over all {len(group)}"
+    )
+    for run in sorted(group, key=lambda run: run["repetition"]):
+        verdict = "call failed, not counted" if run["error"] else run["verdict"]
+        tokens = _spent(run["session_tokens"]) if run.get("session_tokens") else "tokens unrecorded"
+        lines.append(
+            f"  repetition {run['repetition']}: {verdict}; {tokens}; "
+            f"{_recorded(run.get('elapsed_seconds'))} seconds"
+        )
+    return lines
 
 
 UNRECORDED = "unrecorded"
@@ -1559,9 +1875,8 @@ def _print_group(
         names = ("kernel", "files", "graders", "grading files")
         found = zip(names, instrument, strict=True)
         print("  instrument: " + ", ".join(f"{name} {_short(value)}" for name, value in found))
-    spent = _medians(runs)
-    if spent:
-        print(f"  median {spent}")
+    for line in _cost_lines(group, runs):
+        print(line)
     for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
         count = sum(1 for run in runs if run["claims"].get(claim) == "PASS")
         print(f"  {claim}: PASS {count}/{len(runs)}")
@@ -1686,6 +2001,14 @@ def _parser() -> argparse.ArgumentParser:
         "recorded",
     )
     parser.add_argument(
+        "--dump-arm",
+        metavar="FIXTURE",
+        help="build FIXTURE under --arm and print, with no model call, what its codex call would "
+        "receive (argv, prompt, instruction files from the workspace up, the Codex home, the "
+        "launchers on PATH, the install's files) and each isolation rule as PASS or FAIL; exit 1 "
+        "where a rule fails",
+    )
+    parser.add_argument(
         "--summary",
         nargs="+",
         metavar="DIR",
@@ -1708,6 +2031,21 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
     if unknown or not names:
         parser.error(f"no fixture {', '.join(unknown)}; there are {', '.join(fixture_names())}")
     return names
+
+
+def fixture_arms(parser: argparse.ArgumentParser, arm: str, names: list[str]) -> dict[str, Arm]:
+    """The arm each fixture runs under, with its install's fragments and Done commands; a
+    fixture whose install.json the runner refuses exits 2, before anything is built."""
+
+    arms = {}
+    for name in names:
+        try:
+            chosen = fixture_install(name)
+        except InstallError as problem:
+            parser.error(f"{name}/{INSTALL_FILE}: {problem}")
+        installed = load_arm(arm, chosen.fragments, chosen.done, chosen.adopted)
+        arms[name] = fixture_arm(name, installed)
+    return arms
 
 
 PROBE_PROMPT = "Reply with the word ok. Do not run commands.\n"
@@ -1782,6 +2120,158 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
     return 1 if failed else 0
 
 
+def _section(title: str, body: list[str]) -> list[str]:
+    return [f"--- {title} ---", *(body or ["(none)"])]
+
+
+def _instruction_files(workdir: Path) -> list[str]:
+    """Each instruction file on the path from the workspace up, with its size and, for the ones
+    inside the workspace, its text."""
+
+    lines = []
+    for found in instructions_above(workdir):
+        place = Path(found)
+        inside = workdir.resolve() in (place.parent, *place.parent.parents)
+        lines.append(
+            f"{found} ({place.stat().st_size} bytes, {'in' if inside else 'above'} the workspace)"
+        )
+        if inside or place.stat().st_size:
+            lines += [
+                "  | " + line for line in place.read_text("utf-8", errors="replace").splitlines()
+            ]
+    return lines
+
+
+def _engine_import(workdir: Path, path: str) -> str:
+    """Where the call's `python3`, in the workspace, imports the engine from, or an empty
+    string where it cannot."""
+
+    python = shutil.which("python3", path=path)
+    if not python:
+        return ""
+    done = bounded_command(
+        [python, "-c", "import outcomebound_tools as e; print(e.__file__)"],
+        cwd=str(workdir),
+        env={**child_env(), "PATH": path},
+        timeout=60,
+    )
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def isolation(arm: Arm, workdir: Path, prompt: str, path: str, home: Path) -> list[list[str]]:
+    """Each isolation rule of the call, as `[rule, PASS|FAIL, detail]`: the only `outcomebound`
+    on its PATH is the arm's own; its Codex home and the folders above its workspace give it no
+    instructions or skills; and an arm that carries no OutcomeBound text reaches none."""
+
+    own = [os.path.realpath(arm.launcher)] if arm.launcher else []
+    reached = launchers(path)
+    rows: list[tuple[str, bool, str]] = [
+        (
+            "launcher-on-path",
+            [item.rsplit(" -> ", 1)[1] for item in reached] == own,
+            f"{reached or 'no outcomebound'}; the arm's own: {own or 'none'}",
+        ),
+        (
+            "codex-home-neutral",
+            not guiding_reach(home, workdir.parent),
+            f"{guiding_reach(home, workdir.parent) or 'nothing names OutcomeBound or instructs'}; "
+            f"reached alike by every arm: {home_leaks(home) or 'nothing'}",
+        ),
+        (
+            "nothing-above-workspace",
+            not instructions_above(workdir.parent),
+            f"{instructions_above(workdir.parent) or 'no instruction file'}",
+        ),
+    ]
+    if arm.name == NONE or verbatim_install(arm):
+        texts = [
+            prompt,
+            *(Path(f).read_text("utf-8", "replace") for f in instructions_above(workdir)),
+        ]
+        named = [text for text in texts if "outcomebound" in text.lower()]
+        carried = [
+            str(item.relative_to(workdir))
+            for item in (
+                workdir / ".outcomebound",
+                *(workdir / root / "using-outcomebound" for root in SKILL_ROOTS),
+            )
+            if item.exists()
+        ]
+        rows.append(
+            (
+                "no-outcomebound-text",
+                not named and not carried,
+                f"{len(named)} text(s) name OutcomeBound; carried: {carried or 'nothing'}",
+            )
+        )
+        engine = _engine_import(workdir, path)
+        rows.append(("no-engine-import", not engine, engine or "python3 cannot import the engine"))
+    return [[rule, "PASS" if ok else "FAIL", detail] for rule, ok, detail in rows]
+
+
+def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """Build one fixture under one arm and print, with no model call, what its codex call would
+    receive: argv, prompt, instruction files, Codex home, launchers on PATH and the install's
+    files, then each isolation rule as PASS or FAIL. The workspace is kept. Exit 0 where every
+    rule passes, 1 where one fails, 2 where the fixture cannot be built."""
+
+    name = args.dump_arm
+    if not args.model or args.arm is None:
+        parser.error("--dump-arm needs --arm and --model")
+    if name not in fixture_names():
+        parser.error(f"no fixture {name}; there are {', '.join(fixture_names())}")
+    set_earlier_ref(parser, args)
+    arm = fixture_arms(parser, args.arm, [name])[name]
+    root = workspace_root(args.workspace_root)
+    workspace = root / f"dump-{uuid.uuid4().hex[:12]}" / f"{name}-{arm.name}" if root else None
+    refused = refuse_workspaces(root, [workspace]) if root and workspace else ""
+    if refused:
+        raise SystemExit(f"run: {refused}")
+    tool = make_harness(args.harness)
+    workdir = new_workspace(workspace)
+    extra: dict[str, Any] = {}
+    stage = new_stage((workdir, *((root,) if root else ())))
+    try:
+        failure, _protected, _seed, prompt = build_workspace(name, arm, workdir, extra, stage)
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+    if failure is not None:
+        sys.stderr.write(f"run: {name} could not be built: {extra.get('error')}\n{failure}\n")
+        return 2
+    install = fixture_install(name)
+    path = call_path(arm, str(root) if root else None)
+    request = Request(args.model, args.effort, needs_local_listener(name), install.sandbox)
+    argv = tool.argv(
+        request, workdir, Path("<last-message file>"), fixture_write_roots(name, workdir)
+    )
+    home = tool.home()
+    rows = isolation(arm, workdir, prompt, path, home)
+    lines = [
+        f"fixture {name}, arm {arm.name}; workspace {workdir} (kept)",
+        *_section("argv (the prompt is its stdin)", [" ".join(shlex.quote(a) for a in argv)]),
+        *_section("prompt", prompt.splitlines()),
+        *_section("instruction files from the workspace up", _instruction_files(workdir)),
+        *_section(
+            f"codex home {home} ({'$CODEX_HOME' if child_env().get('CODEX_HOME') else 'default'})",
+            [
+                *(f"reaches the call: {item}" for item in home_leaks(home)),
+                f"codex's own skills: {_entries(home / 'skills' / SYSTEM_SKILLS) or 'none'}",
+                f"plugin cache (enabled only by the config.toml the call ignores; UNVERIFIED): "
+                f"{_entries(home / 'plugins' / 'cache') or 'none'}",
+            ],
+        ),
+        *_section("PATH entries holding outcomebound", launchers(path)),
+        *_section(
+            f"install: {install.sandbox} sandbox, Done {list(arm.done) or 'none'}, "
+            f"fragments {list(arm.selected) or 'none'}",
+            [f"{sha}  {file}" for file, sha in arm.record()["arm_files"].items()],
+        ),
+        *_section("isolation", [" ".join(row) for row in rows]),
+    ]
+    print("\n".join(lines))
+    return 1 if any(row[1] == "FAIL" for row in rows) else 0
+
+
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
 
 
@@ -1805,6 +2295,32 @@ def set_earlier_ref(parser: argparse.ArgumentParser, args: argparse.Namespace) -
         verbatim_guidance()
 
 
+def _no_call(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
+    """`--regrade` or `--dump-arm`: each runs no model."""
+
+    if args.regrade:
+        return regrade(Path(args.regrade).resolve(), Path(args.out or RAW / uuid.uuid4().hex))
+    return dump_arm(parser, args)
+
+
+def refuse_unclean(
+    parser: argparse.ArgumentParser, names: list[str], home: Path, where: Path | None
+) -> None:
+    """Exit 2, before anything is built, where a call of a fixture that needs a clean reach
+    would read OutcomeBound text or an instruction file with text from its Codex home or above
+    its workspace (`unclean_reach`); otherwise print what the home gives every call alike."""
+
+    reached = unclean_reach(names, home, where)
+    if reached:
+        parser.error(
+            f"a {'/'.join(CLEAN_HOME)} fixture's calls read nothing that names OutcomeBound or "
+            f"instructs from the Codex home or above the workspace, and these would: "
+            f"{', '.join(reached)}; empty or move them, or name another --workspace-root"
+        )
+    if any(name.startswith(CLEAN_HOME) for name in names) and home_leaks(home):
+        print(f"codex home {home} gives every call alike: {', '.join(home_leaks(home))}")
+
+
 def _main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
@@ -1814,8 +2330,8 @@ def _main(argv: list[str] | None = None) -> int:
     # relative path would resolve to another place.
     args.out = str(Path(args.out).resolve()) if args.out else ""
     args.workspace_root = str(Path(args.workspace_root).resolve()) if args.workspace_root else ""
-    if args.regrade:
-        return regrade(Path(args.regrade).resolve(), Path(args.out or RAW / uuid.uuid4().hex))
+    if args.regrade or args.dump_arm:
+        return _no_call(parser, args)
     names = checked_fixtures(parser, args)
     set_earlier_ref(parser, args)
     run_id = uuid.uuid4().hex
@@ -1824,10 +2340,11 @@ def _main(argv: list[str] | None = None) -> int:
     tool = make_harness(args.harness)
     if args.probe:
         return probe(args, out, root)
+    refuse_unclean(parser, names, tool.home(), root / out.name if root else None)
     arm = load_arm(args.arm)
-    # Each fixture's install, read before anything runs: a fragment it names that the engine
-    # does not ship stops the run here.
-    arms = {name: fixture_arm(name, load_arm(args.arm, selected_fragments(name))) for name in names}
+    # Each fixture's install, read before anything runs: an install.json the runner refuses, or
+    # a fragment the engine does not ship, stops the run here.
+    arms = fixture_arms(parser, args.arm, names)
     if root:
         wanted = [workspace_path(root, out, name, args.repetition) for name in names]
         refused = refuse_workspaces(root, wanted)
@@ -1856,6 +2373,9 @@ def _main(argv: list[str] | None = None) -> int:
         "cli_version": tool.version(),
         "api_keys_stripped": list(STRIP_POLICY),
         "api_keys_removed_from_environment": stripped_from_environment(),
+        # What the Codex home gives each call besides its fixture and install.
+        "codex_home": str(tool.home()),
+        "codex_home_reach": home_leaks(tool.home()),
     }
     login = tool.preflight()
     status.update({key: login[key] for key in ("auth", "auth_evidence", "preflight")})

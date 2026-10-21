@@ -1,0 +1,19 @@
+{
+  "seed": 11,
+  "first_day": "2026-10-19T00:00:00",
+  "clock": "2026-10-21T08:20:00",
+  "last_load_at": "2026-10-21T02:04:00",
+  "release": {"version": "2.3.1", "revision": "7d41c0e", "deployed_at": "2026-09-22T14:05:00Z"},
+  "queries": [
+    {"id": "health_ping", "source": "monitor", "every": 1, "ms": [1, 3], "rows": [1, 1], "bytes": [0, 0]},
+    {"id": "health_freshness", "source": "monitor", "every": 1, "ms": [2, 6], "rows": [1, 1], "bytes": [6000, 12000]},
+    {"id": "recon_rowcounts", "source": "monitor", "every": 15, "offset": 7, "ms": [30, 80], "rows": [5, 5], "bytes": [400000, 900000]},
+    {"id": "stg_orders", "source": "scheduler", "at": "02:00", "ms": [40000, 60000], "rows": [300000, 340000], "bytes": [2600000000, 3000000000]},
+    {"id": "stg_events", "source": "scheduler", "at": "02:10", "ms": [180000, 220000], "rows": [9000000, 10000000], "bytes": [9000000000, 11000000000]},
+    {"id": "daily_revenue", "source": "scheduler", "at": "02:30", "ms": [20000, 30000], "rows": [300000, 340000], "bytes": [1800000000, 2200000000]},
+    {"id": "sessionize_events", "source": "scheduler", "at": "03:00", "ms": [620000, 700000], "rows": [90000000, 100000000], "bytes": [36000000000, 40000000000]},
+    {"id": "customer_ltv", "source": "scheduler", "at": "03:30", "ms": [90000, 120000], "rows": [1200000, 1400000], "bytes": [4500000000, 5500000000]},
+    {"id": "dashboard_refresh", "source": "dashboards", "every": 60, "offset": 5, "ms": [800, 2500], "rows": [2000, 8000], "bytes": [50000000, 150000000]}
+  ],
+  "alerts": []
+}

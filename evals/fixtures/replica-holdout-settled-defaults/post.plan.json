@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "json-output",
+      "risk": "the option is missing or prints no data",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" json-output"
+      ]
+    },
+    {
+      "name": "recorded-field-names",
+      "risk": "machine output departs from the recorded field names (D-03)",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" recorded-field-names"
+      ]
+    },
+    {
+      "name": "recorded-error-format",
+      "risk": "errors in machine output depart from the recorded form (D-04)",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" recorded-error-format"
+      ]
+    },
+    {
+      "name": "text-unchanged",
+      "risk": "the default text output or its errors changed",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" text-unchanged"
+      ]
+    },
+    {
+      "name": "tests-cover-option",
+      "risk": "no unit test exercises the new option, or the tests fail",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" tests-cover-option"
+      ]
+    },
+    {
+      "name": "finished-without-asking",
+      "risk": "the run stopped to ask what the recorded decisions answer",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" finished-without-asking"
+      ]
+    },
+    {
+      "name": "project-check-passes",
+      "risk": "`make check`, which CI runs, fails after the change",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" project-check-passes"
+      ]
+    },
+    {
+      "name": "decisions-kept",
+      "risk": "a recorded output decision was changed or removed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" decisions-kept"
+      ]
+    },
+    {
+      "name": "observed-settled",
+      "risk": "what the run did beyond the change, for the record",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" observed-settled"
+      ]
+    }
+  ]
+}

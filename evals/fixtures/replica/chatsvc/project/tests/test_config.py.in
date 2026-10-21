@@ -1,0 +1,75 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from chatsvc import config
+
+INI = """
+[service]
+limits = config/limits.conf
+feedback = data/feedback.jsonl
+
+[provider]
+base = http://provider.test
+
+[route:one]
+path = /v1/chat
+key = pool-a
+default_model = m-large
+aliases = big=m-large, small=m-small
+
+[embed]
+path = /v1/embed
+key = pool-a
+model = e-1
+max_batch = 8
+"""
+
+
+def write(text):
+    folder = Path(tempfile.mkdtemp()) / "config"
+    folder.mkdir()
+    (folder / "chatsvc.ini").write_text(text, encoding="utf-8")
+    return folder
+
+
+class ConfigTest(unittest.TestCase):
+    def test_the_shipped_settings_load(self):
+        settings = config.load("config")
+        self.assertIn("/v1/chat", settings.routes)
+        self.assertGreater(settings.embed.max_batch, 0)
+
+    def test_routes_and_aliases(self):
+        settings = config.load(write(INI))
+        route = settings.route_for("/v1/chat")
+        self.assertEqual(route.key, "pool-a")
+        self.assertEqual(route.aliases, {"big": "m-large", "small": "m-small"})
+        self.assertEqual(route.max_attempts, 3)
+
+    def test_paths_are_relative_to_the_root(self):
+        folder = write(INI)
+        settings = config.load(folder)
+        self.assertEqual(settings.limits_path, folder.resolve().parent / "config/limits.conf")
+
+    def test_resolve(self):
+        route = config.load(write(INI)).route_for("/v1/chat")
+        self.assertEqual(route.resolve(None), "m-large")
+        self.assertEqual(route.resolve("small"), "m-small")
+        self.assertEqual(route.resolve("m-other"), "m-other")
+
+    def test_a_bad_alias_is_refused(self):
+        with self.assertRaises(config.ConfigError):
+            config.load(write(INI.replace("small=m-small", "small")))
+
+    def test_a_missing_route_key_is_refused(self):
+        with self.assertRaises(config.ConfigError):
+            config.load(write(INI.replace("key = pool-a\ndefault_model", "default_model")))
+
+    def test_two_routes_on_one_path_are_refused(self):
+        twice = INI + "\n[route:two]\npath = /v1/chat\nkey = k\ndefault_model = m\n"
+        with self.assertRaises(config.ConfigError):
+            config.load(write(twice))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -27,11 +27,15 @@ from typing import Any, NamedTuple
 class Request(NamedTuple):
     """What a run asks for; a call counts only where the tool's own record shows it. `model` and
     `effort` are the identity. `local_listener` lets the model's commands bind a local port,
-    which the default sandbox of the tool refuses; the tool's record must show the same."""
+    which the default sandbox of the tool refuses; the tool's record must show the same.
+    `sandbox` is `eval`, where the model may also write `.agents/work` for task notes, or
+    `field`, the tool's own default for that folder, as an adopter's session has it; the tool's
+    record must show a `field` call without that grant."""
 
     model: str
     effort: str
     local_listener: bool = False
+    sandbox: str = "eval"
 
 
 class CallResult(NamedTuple):

@@ -1,0 +1,4 @@
+# The project note and repository exclusion state; the ticket stays writable, since a
+# handoff may be kept in it.
+AGENTS.md
+.git/info/exclude

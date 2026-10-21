@@ -1,0 +1,76 @@
+"""The service: one `handle` for every request, whatever server runs it.
+
+`build_service(config_dir, transport)` is how the server, the tests, the replay script and the
+environments' smoke check all build it. Pass a transport to call something other than the real
+provider (tests pass `fakeprovider.FakeProvider`).
+"""
+
+import json
+import sys
+import time
+from pathlib import Path
+
+import chatsvc
+from chatsvc import config, limits, routes
+from chatsvc.feedback import FeedbackError, FeedbackStore
+from chatsvc.provider import HttpTransport, ProviderClient
+
+
+class ChatService:
+    def __init__(self, settings, transport, limiter=None, sleep=time.sleep, log=None):
+        self.settings = settings
+        self.transport = transport
+        self.limiter = limiter or limits.Limiter(limits.load(settings.limits_path))
+        self.sleep = sleep
+        self.log = log or (lambda line: print(line, file=sys.stderr))
+        self.feedback = FeedbackStore(settings.feedback_path)
+
+    def client(self, key, policy):
+        return ProviderClient(self.transport, key, policy, sleep=self.sleep, log=self.log)
+
+    def handle(self, method, path, headers, body):
+        """(status, headers, body) for one request. `headers` keys are lower-case."""
+        if method == "GET" and path == "/healthz":
+            return routes.reply(
+                200, {"status": "ok", "version": chatsvc.version(), "revision": chatsvc.revision()}
+            )
+        if method != "POST":
+            return routes.reply(405, {"error": "method_not_allowed"})
+        caller = headers.get("x-api-key", "")
+        if not caller:
+            return routes.reply(401, {"error": "missing_api_key"})
+        refused = self.limiter.check(path, caller, len(body))
+        if refused is not None:
+            status, wait = refused
+            extra = {"retry-after": str(max(1, round(wait)))} if status == 429 else {}
+            return routes.reply(status, {"error": "rate_limited", "by": "chatsvc"}, extra)
+        try:
+            request = json.loads(body or b"{}")
+            if not isinstance(request, dict):
+                raise routes.BadRequest("the body must be a JSON object")
+            return self._dispatch(path, request)
+        except ValueError:
+            return routes.reply(400, {"error": "bad_json"})
+        except routes.BadRequest as problem:
+            return routes.reply(400, {"error": "bad_request", "detail": str(problem)})
+
+    def _dispatch(self, path, request):
+        route = self.settings.route_for(path)
+        if route is not None:
+            return routes.chat(self, route, request)
+        if path == self.settings.embed.path:
+            return routes.embed(self, request)
+        if path == "/v1/feedback":
+            try:
+                saved = self.feedback.add(request)
+            except FeedbackError as problem:
+                return routes.reply(400, {"error": "bad_feedback", "detail": str(problem)})
+            return routes.reply(201, {"id": saved["id"]})
+        return routes.reply(404, {"error": "no_such_route"})
+
+
+def build_service(config_dir="config", transport=None, root=None, **options):
+    settings = config.load(Path(config_dir), root)
+    if transport is None:
+        transport = HttpTransport(settings.provider_base)
+    return ChatService(settings, transport, **options)

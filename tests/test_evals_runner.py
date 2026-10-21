@@ -57,7 +57,8 @@ METERED = (
 # (the first command ran in a subfolder of the session's cwd); `count` (one item missing);
 # `text` (the first item's script differs). The record's sandbox policy allows network access
 # where the argv carries `sandbox_workspace_write.network_access=true`; $OB_FAKE_NETWORK (`true`
-# or `false`) sets it to the opposite of what the argv asked for, for a test of the check.
+# or `false`) sets it to the opposite of what the argv asked for, for a test of the check. Its
+# writable roots are the argv's `--add-dir` folders, as codex-cli 0.163.0 records them.
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
@@ -126,7 +127,9 @@ if mode != "none" and os.environ.get("CODEX_HOME"):
     if os.environ.get("OB_FAKE_NETWORK"):
         allowed=not allowed
     context={"cwd":cwd,"model":model,"effort":effort,"approval_policy":"never",
-             "sandbox_policy":{"type":"workspace-write","network_access":allowed}}
+             "sandbox_policy":{"type":"workspace-write","network_access":allowed,
+                               "writable_roots":[argv[i+1] for i,a in enumerate(argv)
+                                                 if a=="--add-dir"]}}
     records=[{"type":"session_meta","payload":meta}]
     if mode!="no-turn-context":
         records.append({"type":"turn_context","payload":context})

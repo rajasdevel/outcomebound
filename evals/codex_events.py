@@ -186,6 +186,46 @@ def tokens_used(transcript: str) -> int | None:
     return int(found[-1].replace(",", "")) if found else None
 
 
+# The four token counts a run's cost is read as, in the names codex gives them.
+COST_KEYS = ("input_tokens", "cached_input_tokens", "output_tokens", "reasoning_output_tokens")
+
+
+def _counts(usage: object) -> dict[str, int] | None:
+    if not isinstance(usage, dict) or not all(type(usage.get(key)) is int for key in COST_KEYS):
+        return None
+    return {key: usage[key] for key in COST_KEYS}
+
+
+def session_tokens(
+    records: list[dict] | None, events: list[dict] | None = None
+) -> dict[str, int | str] | None:
+    """What a call spent, summed over its session: input (cached input among it), output and
+    reasoning (among the output) tokens, and the record they were read from.
+
+    The native session's `token_count` events carry the session's running total, so the last
+    one with a total is the sum (`source` `native`). Where no session was read, the stream's
+    `turn.completed` usage stands (`stream`); None where neither gives every count."""
+
+    for record in reversed(records or []):
+        if not isinstance(record, dict) or record.get("type") != "event_msg":
+            continue
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("type") != "token_count" or not isinstance(payload.get("info"), dict):
+            continue
+        counts = _counts(payload["info"].get("total_token_usage"))
+        if counts is not None:
+            return {**counts, "source": "native"}
+    totals = [_counts(e.get("usage")) for e in events or [] if e.get("type") == "turn.completed"]
+    if totals and all(item is not None for item in totals):
+        return {
+            **{key: sum(item[key] for item in totals if item) for key in COST_KEYS},
+            "source": "stream",
+        }
+    return None
+
+
 def observed_model(transcript: str) -> str | None:
     """The model codex's own header names, after its `workdir:` line, or None."""
 

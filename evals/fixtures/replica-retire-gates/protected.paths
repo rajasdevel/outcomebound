@@ -1,0 +1,6 @@
+# The project note, the package the gates guard and repository exclusion state.
+AGENTS.md
+tally/__init__.py
+tally/errors.py
+.git/config
+.git/info/exclude

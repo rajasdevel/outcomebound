@@ -1,0 +1,1 @@
+Since yesterday the indexer's bulk embedding requests fail: some with 400, the rest with 429. A sample of its traffic is in `traffic/embed-2026-10-20.jsonl`. Find the root cause, fix it, and verify the fix.

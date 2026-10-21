@@ -1,0 +1,49 @@
+"""When to try a provider call again, and how long to wait first (docs/specs/provider-routing.md).
+
+A 429 or a 5xx is worth another attempt; any other status is the answer. The wait honours the
+provider's `retry-after-ms` header, else `retry-after` in seconds, else grows from `base_delay`,
+doubling each attempt up to `max_delay`.
+"""
+
+import time
+from dataclasses import dataclass
+
+RETRYABLE = frozenset({429, 500, 502, 503, 504})
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    max_attempts: int = 3
+    base_delay: float = 0.1
+    max_delay: float = 2.0
+
+    def delay(self, attempt, headers):
+        """Seconds to wait after attempt number `attempt` (1-based) answered with `headers`."""
+        hinted = _hint(headers)
+        if hinted is not None:
+            return min(hinted, self.max_delay * 4)
+        return min(self.base_delay * (2 ** (attempt - 1)), self.max_delay)
+
+
+def _hint(headers):
+    for name, scale in (("retry-after-ms", 0.001), ("retry-after", 1.0)):
+        value = headers.get(name)
+        if value is None:
+            continue
+        try:
+            return max(0.0, float(value) * scale)
+        except ValueError:
+            continue
+    return None
+
+
+def call_with_retry(send, policy, sleep=time.sleep):
+    """Call `send()` until it answers with a status not worth retrying, or the attempts run out.
+    Returns the last response and the number of attempts made."""
+    attempt = 0
+    while True:
+        attempt += 1
+        response = send()
+        if response.status not in RETRYABLE or attempt >= policy.max_attempts:
+            return response, attempt
+        sleep(policy.delay(attempt, response.headers))

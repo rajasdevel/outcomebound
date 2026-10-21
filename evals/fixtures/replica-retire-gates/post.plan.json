@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "redundant-retired",
+      "risk": "a gate that protects nothing is still run",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" redundant-retired"
+      ]
+    },
+    {
+      "name": "protective-kept",
+      "risk": "a gate that protects a live property was removed or weakened",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" protective-kept"
+      ]
+    },
+    {
+      "name": "check-passes",
+      "risk": "`make check` fails after the change",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" check-passes"
+      ]
+    },
+    {
+      "name": "package-and-tests-intact",
+      "risk": "the package or its tests were changed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/corelib.py\" package-and-tests-intact"
+      ]
+    }
+  ]
+}

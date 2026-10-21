@@ -1,0 +1,1 @@
+For this week's status, summarize what mobile app users told us about 1.7.x (1.7.0 and the 1.7.1 hotfix): their complaints grouped, with how many conversations each, and which of them 1.7.1 fixed. Write it to `weekly-mobile-feedback.md`.

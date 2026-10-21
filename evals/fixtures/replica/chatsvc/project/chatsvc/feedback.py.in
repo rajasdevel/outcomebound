@@ -1,0 +1,142 @@
+"""The feedback store: one JSON object a line in data/feedback.jsonl (docs/feedback.md).
+
+Each record is one submission from the feedback widget: a conversation's rating (`up` or
+`down`), an optional comment, the release that answered, and the label triage gave it. A person
+can rate the same conversation again; the latest submission for a conversation is the one that
+counts.
+
+    python3 -m chatsvc.feedback list [--since 1.6.0] [--rating down] [--label L] [--json]
+    python3 -m chatsvc.feedback summary [--since 1.6.0] [--by-conversation]
+    python3 -m chatsvc.feedback releases
+"""
+
+import argparse
+import hashlib
+import json
+import sys
+import threading
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+
+FIELDS = ("id", "conversation_id", "created", "release", "rating", "label", "channel", "comment")
+
+
+class FeedbackError(Exception):
+    """A submission the store refuses."""
+
+
+def release_key(text):
+    """A release string as a tuple of numbers, so 1.10.0 sorts after 1.9.0."""
+    try:
+        return tuple(int(part) for part in text.split("."))
+    except (AttributeError, ValueError):
+        raise FeedbackError(f"bad release {text!r}") from None
+
+
+class FeedbackStore:
+    def __init__(self, path):
+        self.path = Path(path)
+        self._lock = threading.Lock()
+
+    def records(self):
+        if not self.path.exists():
+            return []
+        with open(self.path, encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle if line.strip()]
+
+    def add(self, submission, now=None):
+        conversation = submission.get("conversation_id")
+        rating = submission.get("rating")
+        release = submission.get("release")
+        if not isinstance(conversation, str) or not conversation:
+            raise FeedbackError("conversation_id is required")
+        if rating not in ("up", "down"):
+            raise FeedbackError("rating must be up or down")
+        release_key(release)
+        created = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        digest = hashlib.sha256(f"{conversation}|{created}|{rating}".encode()).hexdigest()
+        record = {
+            "id": "fb_" + digest[:8],
+            "conversation_id": conversation,
+            "created": created,
+            "release": release,
+            "rating": rating,
+            "label": None,
+            "channel": submission.get("channel", "web"),
+            "comment": str(submission.get("comment", ""))[:2000],
+        }
+        with self._lock, open(self.path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+        return record
+
+
+def select(records, since=None, rating=None, label=None):
+    floor = release_key(since) if since else None
+    return [
+        record
+        for record in records
+        if (floor is None or release_key(record["release"]) >= floor)
+        and (rating is None or record["rating"] == rating)
+        and (label is None or record.get("label") == label)
+    ]
+
+
+def latest_per_conversation(records):
+    """The latest submission of each conversation, in the order they were made."""
+    latest = {}
+    for record in sorted(records, key=lambda r: r["created"]):
+        latest[record["conversation_id"]] = record
+    return sorted(latest.values(), key=lambda r: r["created"])
+
+
+def summary(records, since=None, by_conversation=False):
+    """Counts of `down` ratings by label. By default every submission counts; with
+    `by_conversation`, only the latest submission of each conversation does."""
+    chosen = select(records, since=since)
+    if by_conversation:
+        chosen = latest_per_conversation(chosen)
+    return Counter(r.get("label") or "unlabelled" for r in chosen if r["rating"] == "down")
+
+
+def _main(argv=None):
+    parser = argparse.ArgumentParser(prog="python3 -m chatsvc.feedback")
+    parser.add_argument("--store", default="data/feedback.jsonl")
+    commands = parser.add_subparsers(dest="command", required=True)
+    listing = commands.add_parser("list", help="the submissions, oldest first")
+    listing.add_argument("--since", help="the first release to include, such as 1.6.0")
+    listing.add_argument("--rating", choices=("up", "down"))
+    listing.add_argument("--label")
+    listing.add_argument("--json", action="store_true", help="one JSON object a line")
+    counts = commands.add_parser("summary", help="down ratings by label")
+    counts.add_argument("--since")
+    counts.add_argument(
+        "--by-conversation",
+        action="store_true",
+        help="count only the latest submission of each conversation",
+    )
+    commands.add_parser("releases", help="submissions by release")
+    args = parser.parse_args(argv)
+    records = FeedbackStore(args.store).records()
+    if args.command == "list":
+        for record in select(records, args.since, args.rating, args.label):
+            if args.json:
+                print(json.dumps(record, sort_keys=True))
+            else:
+                print(
+                    f"{record['created'][:10]}  {record['release']:<7} {record['rating']:<5}"
+                    f" {record.get('label') or '-':<18} {record['comment']}"
+                )
+    elif args.command == "summary":
+        for label, count in summary(records, args.since, args.by_conversation).most_common():
+            print(f"{count:>4}  {label}")
+    else:
+        for release, count in sorted(
+            Counter(r["release"] for r in records).items(), key=lambda item: release_key(item[0])
+        ):
+            print(f"{release:<8} {count}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(_main())
