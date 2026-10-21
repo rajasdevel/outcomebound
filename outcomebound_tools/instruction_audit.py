@@ -17,8 +17,9 @@ out. A hidden character
 in an agents' note reads UNVERIFIED for that note, where in an instruction file it is a FAIL.
 Also reported, and not changing the result: each instruction file a harness's row says it
 loads from a folder above the target (`ancestors`), which this module names and never opens,
-where every row was selected, the loading facts of a row that loads no file of the
-target that another row does not load too, and each stale reference (`stale_references`):
+each loading fact of OutcomeBound's harness table that reads UNVERIFIED (`generic`, a harness
+with no row, an unverified or overdue row, unsettled key categories), which nothing in the target
+settles, and each stale reference (`stale_references`):
 only an inline code span of project-owned Markdown text is read for one, as text, and nothing
 a makefile or `package.json` holds is run. An occurrence of a retired term, path or command is a
 FAIL, since the project's own list says it is retired; for that check alone the project's data
@@ -2267,9 +2268,10 @@ def _loading(
     harnesses: Sequence[str], configured: set[str], unused: frozenset[str] = frozenset()
 ) -> list[Finding]:
     """Per harness, whether its row's loading facts are verified and current, and, where its
-    configuration was read, which of its key categories the table leaves unsettled. A harness
-    in `unused`, selected only because every row was and loading no file the target holds, is
-    reported and does not change the result."""
+    configuration was read, which of its key categories the table leaves unsettled. Each is a
+    fact about OutcomeBound's harness table, which nothing in the target settles, so an
+    UNVERIFIED one is reported on every run and does not change the result. A harness in
+    `unused`, selected only because every row was, says that the target holds no file it loads."""
 
     found = []
     for harness in harnesses:
@@ -2280,10 +2282,8 @@ def _loading(
             "",
         )
         verdict = UNVERIFIED if state else PASS
-        decides = True
         if state and harness in unused:
             fact += "; the target holds no file this harness loads"
-            decides = False
         found.append(
             _finding(
                 "load-resolution",
@@ -2292,7 +2292,7 @@ def _loading(
                 verdict,
                 fact,
                 next=step,
-                decides=decides,
+                decides=False,
             )
         )
         keys = (row.get("config") or {}).get("keys") or {}
@@ -2303,7 +2303,9 @@ def _loading(
                 f"{adapters.or_list(tuple(unsettled))}; its configuration was read for the rest"
             )
             found.append(
-                _finding("load-resolution", "adapters/harnesses.json", 0, UNVERIFIED, fact)
+                _finding(
+                    "load-resolution", "adapters/harnesses.json", 0, UNVERIFIED, fact, decides=False
+                )
             )
     return found
 
@@ -2682,6 +2684,13 @@ def render(report: Report, *, verbose: bool = False) -> str:
             "nothing failed: exit 2 here means a fact was not settled (UNVERIFIED), as in the "
             "other verbs, and --strict counts it as a failure"
         )
+        holding = [f for f in report.findings if f.decides and f.verdict != PASS]
+        if all(f.id for f in holding):
+            lines.append(
+                "each finding that holds exit 2 here prints an id: a person settles it by ruling "
+                f"it at a terminal (outcomebound instructions rule {report.target} <id>), or a "
+                "change to its file does; running check again settles none of them"
+            )
     lines.extend(_line(f) for f in report.findings if f.verdict != PASS)
     if verbose:
         lines.extend(_line(f) for f in report.findings if f.verdict == PASS)

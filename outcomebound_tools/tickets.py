@@ -295,6 +295,36 @@ class _CommandLine(argparse.ArgumentParser):
     verbs: Mapping[str, argparse.ArgumentParser] = MappingProxyType({})
 
 
+class _Default(str):
+    """The target's default, told apart by identity from a `.` a person typed."""
+
+
+_HERE = _Default(".")
+
+
+def _draft_target(options: argparse.Namespace) -> str:
+    """Read a target typed after the draft files as the target, or say why a folder among
+    them is refused; "" where the line is fine.
+
+    `--draft` takes one or more values, so argparse hands it every word up to the next
+    option, a target typed after the files included. A folder is never a draft file, so the
+    last value is the target where it is a folder and no target came before `--draft`.
+    """
+
+    drafts = getattr(options, "draft", None) or []
+    folders = [path for path in drafts if Path(path).is_dir()]
+    if not folders:
+        return ""
+    if folders == [drafts[-1]] and options.target is _HERE:
+        options.target = drafts.pop()
+        return ""
+    ticket = " <ticket>" if hasattr(options, "ticket") else ""
+    return (
+        f"{folders[0]} is a folder, not a draft file: --draft takes files, so name the target "
+        f"before it: `outcomebound tickets {options.verb} <target>{ticket} --draft <file>…`"
+    )
+
+
 def build_parser() -> _CommandLine:
     """The command line: the verbs, and every option's name and default."""
 
@@ -313,7 +343,7 @@ def build_parser() -> _CommandLine:
         command.add_argument(
             "target",
             nargs="?",
-            default=".",
+            default=_HERE,
             help="the checkout to read (default: the current directory)",
         )
         # The verb's own arguments come next, so its positionals follow the
@@ -375,7 +405,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     # A verb's own usage rule, from its row above, printed by that verb's own
     # parser: one line of argparse's own and exit 2, never a refusal raised from
     # inside a run.
-    refused = _SURFACE[options.verb].usage(options)
+    refused = _draft_target(options) or _SURFACE[options.verb].usage(options)
     if refused:
         parser.verbs[options.verb].error(refused)
     try:

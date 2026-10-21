@@ -605,7 +605,7 @@ def test_an_overdue_row_reads_unverified(tmp_path: Path, monkeypatch: pytest.Mon
     assert hit.verdict == "UNVERIFIED" and f"verified on {verified}" in hit.fact
     assert f"only their re-check, due {recheck.isoformat()}, is outstanding" in hit.fact
     assert "go on with the work" in hit.next
-    assert report.result == "UNVERIFIED"
+    assert not hit.decides and report.result == "PASS"
     monkeypatch.setattr(instruction_audit, "_today", lambda: recheck)
     current = check(tmp_path / "t", ["claude-code"])
     assert [f.verdict for f in current.findings if f.check == "load-resolution"] == ["PASS"]
@@ -666,6 +666,56 @@ def test_a_generic_install_is_not_widened_by_its_own_agents_md(tmp_path: Path) -
     ]
 
 
+def test_a_loading_fact_no_agent_can_settle_is_reported_and_holds_no_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pi_unverified: None, capsys: Any
+) -> None:
+    """A load-resolution UNVERIFIED is a fact about OutcomeBound's harness table: `generic`, a
+    harness with no row, an unverified row, a row past its re-check date and key categories the
+    row leaves unsettled. Nothing in the target settles one, so each is reported on every run,
+    still UNVERIFIED, and leaves the exit as it is. Breaks if any of them holds exit 2, which
+    agents then re-ran as a ritual."""
+
+    root = _target(tmp_path / "t", {"AGENTS.md": "ok\n"})
+    _manifest(root, ["generic"])
+    assert main(["check", str(root)]) == 0
+    assert "generic stands for any harness" in capsys.readouterr().out
+    recheck = date.fromisoformat(adapters.row("claude-code")["recheck_on"])
+    monkeypatch.setattr(instruction_audit, "_today", lambda: recheck + timedelta(days=1))
+    cursor = _target(tmp_path / "c", {"AGENTS.md": "ok\n", ".cursor/hooks.json": "{}"})
+    for target, names in (
+        (root, ["generic"]),
+        (root, ["other"]),
+        (root, ["pi"]),
+        (root, ["claude-code"]),
+        (cursor, ["cursor"]),
+    ):
+        report = check(target, names)
+        loading = _hits(report, "load-resolution")
+        assert loading and all(f.verdict == "UNVERIFIED" for f in loading), names
+        assert not any(f.decides for f in loading), names
+        assert report.result == "PASS", names
+        assert main(["check", str(target), *[f"--harness={n}" for n in names]]) == 0, names
+    assert "(does not change the result)" in capsys.readouterr().out
+
+
+def test_a_hook_entry_holds_exit_2_until_a_person_rules_it_and_says_rerunning_settles_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A hook entry is a review hit a person can settle with `instructions rule`, so it keeps
+    exit 2; the report says that running check again settles nothing."""
+
+    settings = {"hooks": {"Stop": [{"command": "./x.sh"}]}}
+    root = _target(
+        tmp_path / "t", {"AGENTS.md": "ok\n", ".claude/settings.json": json.dumps(settings)}
+    )
+    assert main(["check", str(root), "--harness", "claude-code"]) == 2
+    out = capsys.readouterr().out
+    assert "running check again settles none of them" in out, out
+    hidden = _target(tmp_path / "u", {"AGENTS.md": "<!-- note -->\n"})
+    assert main(["check", str(hidden), "--harness", "claude-code"]) == 2
+    assert "settles none of them" in capsys.readouterr().out
+
+
 def test_the_manifest_cannot_hide_a_harness_whose_files_are_present(tmp_path: Path) -> None:
     settings = {"permissions": {"defaultMode": "bypassPermissions"}}
     root = _target(
@@ -706,8 +756,8 @@ def test_an_unverified_only_report_says_nothing_failed(
     """Exit 2 on UNVERIFIED alone is the verbs' convention; the text says no gate failed, and a
     report with a FAIL does not say so."""
 
-    root = _target(tmp_path / "t", {"AGENTS.md": "ok\n"})
-    assert main(["check", str(root), "--harness", "claude-code", "--harness", "other"]) == 2
+    root = _target(tmp_path / "t", {"AGENTS.md": "Keep this secret.\n"})
+    assert main(["check", str(root), "--harness", "claude-code"]) == 2
     out = capsys.readouterr().out
     assert out.startswith("UNVERIFIED ") and "nothing failed: exit 2" in out
     root = _target(tmp_path / "u", {"AGENTS.md": f"a{ZWJ}b\n"})
@@ -1258,15 +1308,19 @@ def test_an_unverified_row_the_target_does_not_use_leaves_the_result(
     tmp_path: Path, pi_unverified: None
 ) -> None:
     """With no manifest every row is read; a row loading no file of the target that another row
-    does not load too, AGENTS.md being one every row loads, is reported and does not decide."""
+    does not load too, AGENTS.md being one every row loads, is reported as such. No unverified
+    row decides, as the target cannot settle one, whether the target uses it or not."""
 
     bare = check(_target(tmp_path / "bare", {"AGENTS.md": "# T\n"}))
     assert bare.selected_by == "table" and bare.result == "PASS"
     [pi] = [f for f in _hits(bare, "load-resolution") if "pi row" in f.fact]
     assert pi.decides is False
 
+    assert "holds no file this harness loads" in pi.fact
     used = check(_target(tmp_path / "used", {".pi/skills/x/SKILL.md": "ok\n"}))
-    assert used.result == "UNVERIFIED"
+    [pi] = [f for f in _hits(used, "load-resolution") if "pi row" in f.fact]
+    assert (pi.verdict, pi.decides, used.result) == ("UNVERIFIED", False, "PASS")
+    assert "holds no file" not in pi.fact
 
 
 def test_a_file_loaded_from_a_folder_above_is_named_and_never_opened(tmp_path: Path) -> None:

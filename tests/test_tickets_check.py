@@ -588,6 +588,47 @@ def test_a_single_draft_repeats_nothing(tmp_path: Path, capsys: pytest.CaptureFi
     assert repeated(report(root, "--draft", files[0], capsys=capsys, expect=0)) == []
 
 
+def test_a_target_written_after_the_draft_files_is_read_as_the_target(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--draft` takes one or more files, so argparse hands it a target typed after them.
+    A folder is never a draft: the last one is the target where none was named before
+    `--draft`, so the run reads that checkout's declaration and lints the files alone."""
+
+    root, written = drafts(tmp_path, only=draft_text(brief=outcome("One thing is true.")))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+
+    code = main(["check", "--json", "--draft", *written, str(root)])
+    captured = capsys.readouterr()
+
+    assert (code, captured.err) == (0, ""), captured.err
+    found = json.loads(captured.out)
+    assert [row["id"] for row in rows(found)] == ["only"]
+    assert every_code(found) == []
+
+
+def test_a_folder_among_the_draft_files_is_a_usage_error_that_says_where_the_target_goes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A folder that cannot be the target (one was named already, or it is not the last
+    value) is refused before any run, with the order that reads it."""
+
+    root, written = drafts(tmp_path, only=draft_text())
+    for arguments in (
+        ["check", str(root), "--draft", *written, str(root)],
+        ["check", "--draft", str(root), *written],
+        ["publish", str(root), "--draft", *written, str(root)],
+    ):
+        with pytest.raises(SystemExit) as stopped:
+            main(arguments)
+        assert stopped.value.code == 2, arguments
+        err = capsys.readouterr().err
+        assert "is a folder, not a draft file" in err, err
+        assert "<target> --draft <file>" in err, err
+
+
 def test_draft_with_input_is_a_usage_error(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

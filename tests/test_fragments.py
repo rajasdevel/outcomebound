@@ -702,3 +702,53 @@ def test_the_fragment_proposal_form_names_the_keys_the_parser_reads() -> None:
     optional = re.findall(r"`([a-z_]+)`", optional_sentence)
     assert tuple(required) == FRONTMATTER_KEYS
     assert sorted(optional) == sorted(OPTIONAL_KEYS)
+
+
+# Each form a builder may write for a list-valued key, with the lines its refusal names (the
+# block starts on line 5, after the id, family and applies lines).
+LIST_FORMS = [
+    ("yaml block list", "{key}:\n  - {a}\n  - '{b}'", (5, 7)),
+    ("unquoted flow list", "{key}: [{a}, {b}]", (5, 5)),
+    ("one bare value", "{key}: {a}", (5, 5)),
+]
+
+
+@pytest.mark.parametrize("key", ["edges", "detect"])
+@pytest.mark.parametrize(
+    ("form", "written", "span"), LIST_FORMS, ids=[form for form, _, _ in LIST_FORMS]
+)
+def test_a_list_key_in_another_list_form_is_refused_with_a_copy_ready_line(
+    key, form, written, span
+):
+    """Each list-valued key takes one form, a JSON list on one line; a refusal of another form
+    prints the line to paste in its place, and the fragment with that line pasted parses."""
+
+    a, b = {"edges": ("pushing a tag", "publishing a package"), "detect": ("a.toml", "b/*.cfg")}[
+        key
+    ]
+    block = written.format(key=key, a=a, b=b)
+    text = GOOD.replace('detect: ["sample.toml"]\n', "").replace(
+        "applies: sample projects\n", f"applies: sample projects\n{block}\n"
+    )
+    if key == "edges":
+        text = text.replace("version: 1\n", 'detect: ["sample.toml"]\nversion: 1\n')
+    expected = [a] if form == "one bare value" else [a, b]
+    fixed = f"{key}: {json.dumps(expected)}"
+    first, last = span
+    where = f"line {first}" if first == last else f"lines {first}-{last}"
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(text, "x.md")
+    message = str(raised.value)
+    assert message.startswith(f"x.md:{first}: {key} must be a JSON list"), message
+    assert message.endswith(f"replace {where} with: {fixed}"), message
+    lines = text.split("\n")
+    repaired = "\n".join([*lines[: first - 1], fixed, *lines[last:]])
+    assert getattr(parse_fragment(repaired, "x.md"), key) == tuple(expected)
+
+
+def test_a_quoted_item_that_holds_a_comma_stays_one_item_in_the_copy_ready_line():
+    text = GOOD.replace("version: 1", "edges: ['a tag, then a push', publishing]\nversion: 1")
+    with pytest.raises(
+        FragmentError, match=re.escape('edges: ["a tag, then a push", "publishing"]')
+    ):
+        parse_fragment(text, "x.md")
