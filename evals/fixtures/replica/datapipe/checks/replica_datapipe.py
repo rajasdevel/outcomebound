@@ -340,8 +340,16 @@ def negated(clause: str) -> bool:
 HEAVY = (
     r"\b(?:heav\w*|most (?:i/?o|io|bytes|disk|data|reads?|expensive|costly|load)|largest|biggest"
     r"|top|dominat\w*|bulk|majority|responsible|caus\w*|drove|driv\w*|culprit|behind|accounts?"
-    r" for|spike|main|primary|ranks? first|first by)\b"
+    r" for|spike|main|primary|ranks? first|first by|points? to|likely source|explains?)\b"
 )
+# A lead-in or a table header that ranks what follows by bytes read, and one that ranks by calls.
+BYTES_LEAD = (
+    r"\b(?:rank\w*|sort\w*|order\w*)\b[^\n]*\b(?:bytes?|reads?|read volume|i/?o)\b"
+    r"|\bby (?:bytes|read volume|bytes read)\b"
+)
+BYTES_HEADER = r"\b(?:read|reads|bytes|bytes_read|read volume)\b"
+CALLS_LEAD = r"\bby (?:calls?|count|frequency)\b"
+_LIST_ITEM = re.compile(r"^\s*(?:\||[-*+]\s|\d+[.)]\s)")
 # The narrower words that make a sentence name THE heaviest query or THE cause.
 STRONG = (
     r"\b(?:heaviest|most (?:i/?o|io|bytes|disk|data|reads?|expensive|costly)|largest|biggest"
@@ -390,7 +398,7 @@ def first_known_after(lines: list[str], start: int, known: str) -> str | None:
 
 def heaviest_in_a_list(value: str, heavy: str, known: str) -> bool:
     """A heading or lead-in that names the heavy ones, then a list or table whose first query
-    is the heavy query."""
+    is the heavy query; or a list or table ranked by bytes read whose first query is."""
 
     lines = plain(value).splitlines()
     for index, line in enumerate(lines):
@@ -401,7 +409,60 @@ def heaviest_in_a_list(value: str, heavy: str, known: str) -> bool:
         first = first_known_after(lines, index, known + "|" + heavy)
         if first is not None and re.fullmatch(heavy, first, re.IGNORECASE):
             return True
-    return False
+    return any(
+        re.fullmatch(heavy, first, re.IGNORECASE) for first in ranked_by_bytes(value, heavy, known)
+    )
+
+
+def _next_line(lines: list[str], index: int) -> str:
+    return next((line for line in lines[index + 1 :] if line.strip()), "")
+
+
+def _previous_line(lines: list[str], index: int) -> str:
+    return next((line for line in reversed(lines[:index]) if line.strip()), "")
+
+
+def _first_in_table(lines: list[str], header: int, known: str) -> str | None:
+    for line in lines[header + 1 :]:
+        if not line.lstrip().startswith("|"):
+            return None
+        match = re.search(known, line, re.IGNORECASE)
+        if match:
+            return match.group(0)
+    return None
+
+
+def ranked_by_bytes(value: str, heavy: str, known: str) -> list[str]:
+    """The first query of each list or table that a lead-in or its header ranks by bytes read
+    (a lead-in that ranks by calls takes precedence over the header)."""
+
+    lines = plain(value).splitlines()
+    names = known + "|" + heavy
+    firsts = []
+    for index, line in enumerate(lines):
+        is_table = line.lstrip().startswith("|")
+        if not is_table:
+            if not re.search(BYTES_LEAD, line, re.IGNORECASE) or re.search(names, line, re.I):
+                continue
+            if re.search(CALLS_LEAD, line, re.IGNORECASE) or not _LIST_ITEM.match(
+                _next_line(lines, index)
+            ):
+                continue
+            first = first_known_after(lines, index, names)
+        else:
+            lead = _previous_line(lines, index)
+            if lead.lstrip().startswith("|") or re.search(BYTES_LEAD, lead, re.IGNORECASE):
+                continue  # a table row, or a header whose lead-in is read above
+            if re.search(CALLS_LEAD, lead, re.IGNORECASE) or re.search(
+                r"\bcalls?\b", line, re.IGNORECASE
+            ):
+                continue
+            if not re.search(BYTES_HEADER, line, re.IGNORECASE):
+                continue
+            first = _first_in_table(lines, index, names)
+        if first is not None:
+            firsts.append(first)
+    return firsts
 
 
 def _other_is_heaviest(clause: str, sentence: str, heavy: str, others: str) -> bool:
@@ -446,6 +507,11 @@ def heaviest_named(value: str, heavy: str, others: str) -> list[str]:
     lacking += [
         f"another query is named the heaviest: {s[:100]}"
         for s in wrong_heaviest(value, heavy, others)
+    ]
+    lacking += [
+        f"a list ranked by bytes puts another query first: {first}"
+        for first in ranked_by_bytes(value, heavy, others)
+        if not re.fullmatch(heavy, first, re.IGNORECASE)
     ]
     return lacking
 

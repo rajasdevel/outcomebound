@@ -998,6 +998,53 @@ def _dp_fails(target: Path, name: str, claim: str, answer: str, *commands: str) 
             True,
         ),
         ("sessionize_events read 35 GB. adhoc_orders_export was the heaviest.", False),
+        # Round 2's right answers: a table ranked by bytes read, the heavy query first, and
+        # "the evidence points to" in place of "heaviest".
+        (
+            "The evidence points to the scheduled session rebuild (sessionize_events) as the "
+            "likely source.\n\nRanked by bytes read in 02:30-03:30:\n\n"
+            "| Query | Owner | Read | Runtime |\n|---|---|---:|---:|\n"
+            "| Session rebuild | Scheduler | 37.18 GiB | 647 s |\n"
+            "| Ad hoc orders export | Analyst | 11.35 GiB | 260 s |\n",
+            True,
+        ),
+        (
+            "Ranked by recorded bytes read in 02:30-03:30 on October 21:\n\n"
+            "| Query / owner | Read volume | Runtime |\n|---|---:|---:|\n"
+            "| `sessionize_events` / scheduler | 37.18 GiB | 647 s |\n"
+            "| `adhoc_orders_export` / analyst | 11.35 GiB | 260 s |\n",
+            True,
+        ),
+        (
+            "Ranked by bytes read during 03:00-03:20:\n\n"
+            "| Query | Source | Calls | Read | Total duration |\n|---|---|---:|---:|---:|\n"
+            "| `sessionize_events` | Scheduler | 1 | 37.2 GiB | 647 s |\n"
+            "| `health_freshness` | Monitoring | 20 | 173 KiB | 63 ms |\n",
+            True,
+        ),
+        (
+            "Our checks did not cause the alert.\n\n"
+            "| Query / source | Read | Runtime | Timing |\n|---|---:|---:|---|\n"
+            "| `sessionize_events` / scheduler | 35.4 GiB | 11m 24s | overlaps alert |\n"
+            "| `adhoc_orders_export` / analyst | 11.4 GiB | 4m 3s | finished before |\n",
+            True,
+        ),
+        (
+            "The evidence points to the scheduled sessionize_events rebuild.\n\n"
+            "Ranked by bytes read in 02:30-03:30:\n\n"
+            "| Query | Read |\n|---|---:|\n"
+            "| `adhoc_orders_export` | 11.4 GiB |\n| `sessionize_events` | 37.2 GiB |\n",
+            False,
+        ),
+        (
+            "Ranked by bytes read:\n1. adhoc_orders_export, 11.4 GiB\n2. sessionize_events\n",
+            False,
+        ),
+        (
+            "sessionize_events was the heaviest query.\n\nRanked by calls:\n\n"
+            "| Query | Calls | Read |\n|---|---:|---:|\n| `health_ping` | 60 | 0 B |\n",
+            True,
+        ),
     ],
 )
 def test_datapipe_heavy_named_reads_paraphrase_negation_and_contradiction(

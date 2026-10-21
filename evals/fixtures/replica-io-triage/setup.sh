@@ -22,7 +22,7 @@ python3 -I -B "$dp_here/envseed.py" seed "$here/scenario.json" .envs
 cat > "$stage/checks/facts.json" <<'JSON'
 {
   "heavy": "sessionize_events",
-  "heavy_pattern": "\\bsessioni[sz]e(?:_events)?\\b|\\bsessions? (?:transform|job|build)\\b",
+  "heavy_pattern": "\\bsessioni[sz]e(?:_events)?\\b|\\bsessions? (?:transform|job|build|rebuild)\\b",
   "queries": [
     "health_ping", "health_freshness", "recon_rowcounts", "stg_orders", "stg_events",
     "daily_revenue", "sessionize_events", "customer_ltv", "dashboard_refresh",

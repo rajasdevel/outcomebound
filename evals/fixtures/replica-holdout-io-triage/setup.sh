@@ -21,7 +21,7 @@ python3 -I -B "$dp_here/envseed.py" seed "$here/scenario.json" .envs
 cat > "$stage/checks/facts.json" <<'JSON'
 {
   "heavy": "customer_ltv",
-  "heavy_pattern": "\\bcustomer[_ ]ltv\\b|\\blifetime[- ]value\\b|\\bltv (?:transform|job|build|table)\\b",
+  "heavy_pattern": "\\bcustomer[_ ]ltv\\b|\\blifetime[- ]value\\b|\\bltv (?:transform|job|build|rebuild|table)\\b",
   "queries": [
     "health_ping", "health_freshness", "recon_rowcounts", "stg_orders", "stg_events",
     "daily_revenue", "sessionize_events", "customer_ltv", "dashboard_refresh",
