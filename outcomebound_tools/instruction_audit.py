@@ -70,6 +70,7 @@ from outcomebound_tools import (
     walk,
 )
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
+from outcomebound_tools.identity import SENTINEL_BEGIN, SENTINEL_END
 from outcomebound_tools.textio import decode as _decode
 from outcomebound_tools.textio import plain as _plain
 from outcomebound_tools.textio import quote as _quote
@@ -111,7 +112,6 @@ CHECKS: dict[str, tuple[str, str, str]] = {
     "load-resolution": ("loading", "gate", "S7"),
 }
 
-_MARKERS = ("outcomebound:begin ", "outcomebound:end ")
 _RUN_LENGTH = 60
 _BASE64_RUN = re.compile(rf"[A-Za-z0-9+/=]{{{_RUN_LENGTH},}}")
 # A commit or checksum pin, 40 or 64 hex characters, is no payload: alone, after `name=`, or glued
@@ -757,27 +757,27 @@ def _hidden_characters(path: str, text: str) -> list[Finding]:
     ]
 
 
-def _is_marker(line: str) -> bool:
-    """A line that is only one of OutcomeBound's managed-block marker comments."""
+def _is_marker(text: str) -> bool:
+    """Whether `text`, spaces around it aside, is exactly one of OutcomeBound's managed-block
+    markers as the block grammar writes them (`identity.SENTINEL_BEGIN`, `SENTINEL_END`): a
+    begin with its id, an optional hash and its version, or an end with its id, and nothing
+    else. A comment that only starts like one is audited as any comment is."""
 
-    text = line.strip()
-    for end in ("-->", "--!>"):
-        if text.startswith("<!--") and text.endswith(end) and len(text) >= 4 + len(end):
-            return text[4 : -len(end)].strip().startswith(_MARKERS)
-    return False
+    text = text.strip()
+    return any(marker.fullmatch(text) for marker in (SENTINEL_BEGIN, SENTINEL_END))
 
 
 def _comments(text: str) -> Iterator[tuple[int, str]]:
-    """Each HTML comment's first line and text, OutcomeBound's block markers excepted. A comment
-    ends at `-->` or at `--!>`, as a browser ends it, or at the end of the text."""
+    """Each HTML comment's first line and text, OutcomeBound's block markers excepted: a
+    comment alone on its line that is exactly a marker (`_is_marker`). A comment ends at `-->`
+    or at `--!>`, as a browser ends it, or at the end of the text."""
 
     for match in re.finditer(r"<!--(.*?)(--!?>|\Z)", text, re.DOTALL):
         number = text.count("\n", 0, match.start()) + 1
         line_start = text.rfind("\n", 0, match.start()) + 1
         line_end = text.find("\n", match.end())
         whole = text[line_start : line_end if line_end >= 0 else len(text)].strip()
-        inner = match.group(1).strip()
-        if whole == match.group(0).strip() and inner.startswith(_MARKERS):
+        if whole == match.group(0).strip() and _is_marker(whole):
             continue
         yield number, match.group(0)
 

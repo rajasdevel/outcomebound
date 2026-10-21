@@ -771,9 +771,8 @@ def _repaired(text: str, message: str) -> str:
     return "\n".join([*lines[: first - 1], found[3], *lines[last:]])
 
 
-# What a builder writes, and the items the copy-ready line must hold: quotes that hold a comma
-# or a doubled quote, escapes, comments after the value or an item, and blank or comment lines
-# between the items of a block list.
+# The simple forms a suggestion takes, and the items the copy-ready line must hold: one string
+# per item, plain or quoted, with quotes that hold a comma or a doubled quote and escapes read.
 COPY_READY = [
     (
         "doubled single quote",
@@ -782,12 +781,9 @@ COPY_READY = [
     ),
     ("escaped double quote", 'edges: ["a \\"quoted\\" act", b]', ['a "quoted" act', "b"]),
     ("unicode escape", 'edges: ["push\\u0020a tag", other]', ["push a tag", "other"]),
-    ("comment after a flow list", "edges: [first, second] # the two acts", ["first", "second"]),
-    ("comment after a bare value", "edges: pushing a tag # irreversible", ["pushing a tag"]),
     ("hash inside a word", "edges: issue#12 push", ["issue#12 push"]),
-    ("blank line between items", "edges:\n  - first\n\n  - second", ["first", "second"]),
-    ("comment line between items", "edges:\n  - first\n  # why\n  - second", ["first", "second"]),
-    ("comment after an item", "edges:\n  - first # one\n  - 'second'", ["first", "second"]),
+    ("block list", "edges:\n  - first\n  - 'second'", ["first", "second"]),
+    ("block list at column 0", "edges:\n- first\n- second", ["first", "second"]),
 ]
 
 
@@ -806,21 +802,24 @@ def test_the_copy_ready_line_holds_the_items_as_written_and_the_fragment_then_pa
     assert parse_fragment(_repaired(text, message), "x.md").edges == tuple(items)
 
 
-def test_a_detect_value_with_a_comment_is_read_without_it():
-    text = GOOD.replace('detect: ["sample.toml"]', "detect: [src/*.py] # sources")
-    with pytest.raises(FragmentError) as raised:
-        parse_fragment(text, "x.md")
-    message = str(raised.value)
-    assert message.endswith('detect: ["src/*.py"]'), message
-    assert parse_fragment(_repaired(text, message), "x.md").detect == ("src/*.py",)
-
-
 AMBIGUOUS = [
     ("nested list", "edges: [a, [b, c]]"),
     ("unterminated quote", 'edges: ["pushing a tag]'),
     ("mapping item", "edges:\n  - act: push\n  - publish"),
     ("value beside a block list", "edges: first\n  - second"),
     ("text after a quoted item", "edges: ['a' b, c]"),
+    ("comment after a flow list", "edges: [first, second] # the two acts"),
+    ("comment after a bare value", "edges: pushing a tag # irreversible"),
+    ("comment after an item", "edges:\n  - first # one\n  - second"),
+    ("comment line between items", "edges:\n  - first\n  # why\n  - second"),
+    ("blank line between items", "edges:\n  - first\n\n  - second"),
+    ("indented comment after the items", "edges:\n  - first\n  - second\n  # done"),
+    ("deeper item", "edges:\n  - first\n    - second"),
+    ("continuation line", "edges:\n  - first\n    continued\n  - second"),
+    ("values that are no strings", "edges: [null, true, 42] # values"),
+    ("a bare null", "edges: null"),
+    ("a bare number", "edges: 42"),
+    ("no value", "edges:"),
 ]
 
 
@@ -838,11 +837,32 @@ def test_a_value_that_cannot_be_read_unambiguously_gets_no_suggested_line(form, 
     assert 'edges: ["pushing a tag"]' in message, message
 
 
-def test_a_block_list_written_with_crlf_and_a_blank_line_gets_a_line_that_parses():
-    text = _with_edges("edges:\n  - first\n\n  - second").replace("\n", "\r\n")
+def test_with_crlf_a_simple_block_list_gets_a_line_and_a_continuation_gets_none():
+    text = _with_edges("edges:\n  - first\n  - second").replace("\n", "\r\n")
     with pytest.raises(FragmentError) as raised:
         parse_fragment(text, "x.md")
     message = str(raised.value)
-    assert "replace lines 5-8 with" in message, message
+    assert "replace lines 5-7 with" in message, message
     repaired = _repaired(text.replace("\r\n", "\n"), message)
     assert parse_fragment(repaired, "x.md").edges == ("first", "second")
+    continued = _with_edges("edges:\n  - first\n    continued").replace("\n", "\r\n")
+    with pytest.raises(FragmentError, match="no line is suggested"):
+        parse_fragment(continued, "x.md")
+
+
+def test_a_detect_pattern_yaml_reads_as_an_alias_gets_no_line():
+    """`*.tf` unquoted is a YAML alias, not a string, so no line is guessed for it."""
+
+    text = GOOD.replace('detect: ["sample.toml"]', "detect: [*.tf]")
+    with pytest.raises(FragmentError, match="no line is suggested"):
+        parse_fragment(text, "x.md")
+
+
+def test_items_that_break_a_rule_of_the_key_get_that_rule_and_no_line():
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(_with_edges("edges: [a; b, c]"), "x.md")
+    message = str(raised.value)
+    assert "holds ';'" in message and "replace line" not in message, message
+    text = GOOD.replace('detect: ["sample.toml"]', "detect: [../up.toml]")
+    with pytest.raises(FragmentError, match="must not leave the target root"):
+        parse_fragment(text, "x.md")

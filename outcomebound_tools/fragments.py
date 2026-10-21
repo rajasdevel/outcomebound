@@ -105,119 +105,93 @@ EDGE_SEPARATOR = ";"
 
 
 class _Unclear(ValueError):
-    """A list value that cannot be read as items without a guess."""
+    """A list value whose string items cannot be read with certainty."""
 
 
-# What a plain item may not start with, since YAML reads it as structure, not as text.
-_STRUCTURE = tuple("[]{}&*!|>%@`")
+class _Suggestion(Exception):
+    """A list key in a simple other form: its string items, and how many lines after the key's
+    own line the form spans. `_frontmatter` checks the line it builds before it shows it."""
+
+    def __init__(self, items: list[str], span: int) -> None:
+        super().__init__(items, span)
+        self.items, self.span = items, span
 
 
-def _quoted(text: str, start: int) -> tuple[str, int]:
-    """The quoted scalar at `start`, its escapes read, and where it ends: a double-quoted one as
-    JSON reads it, a single-quoted one with `''` as one quote."""
+# A plain item a suggestion takes: text that YAML reads as that same string. It does not start
+# with structure or a quote, holds no `: `, ` #`, `,`, `[`, `]`, `{` or `}`, and does not end in
+# `:`; a plain item that YAML reads as another type is refused below.
+_PLAIN = re.compile(r"(?![-?:,\[\]{}#&*!|>'\"%@`\s])(?:(?!: | #)[^,\[\]{}\n])*(?<![\s:])")
+_NOT_A_STRING = re.compile(
+    r"~|null|true|false|yes|no|on|off|[-+]?(?:\d[\d_]*(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?"
+    r"|[-+]?\.inf|\.nan|0x[0-9a-f]+|0o[0-7]+",
+    re.IGNORECASE,
+)
 
-    if text[start] == '"':
-        index = start + 1
-        while index < len(text) and text[index] != '"':
-            index += 2 if text[index] == "\\" else 1
-        if index >= len(text):
+
+# One quoted item of a flow list, up to the comma or the end that follows it.
+_QUOTED = re.compile(r"""'(?:[^']|'')*'|"(?:[^"\\]|\\.)*"(?=\s*(?:,|\Z))""")
+
+
+def _string(text: str) -> str:
+    """`text`, the whole of one item, as the string YAML reads, where nothing is left to a
+    guess: a plain string, or one quoted string, its escapes read (`''` in single quotes;
+    double quotes as JSON reads them)."""
+
+    if len(text) >= 2 and text[0] == text[-1] == "'":
+        inner = text[1:-1]
+        if "'" in inner.replace("''", ""):
             raise _Unclear
+        return inner.replace("''", "'")
+    if len(text) >= 2 and text[0] == text[-1] == '"':
         try:
-            value = json.loads(text[start : index + 1])
+            value = json.loads(text)
         except ValueError as error:
             raise _Unclear from error
-        return value, index + 1
-    out: list[str] = []
-    index = start + 1
-    while index < len(text):
-        if text[index] == "'":
-            if text[index + 1 : index + 2] != "'":
-                return "".join(out), index + 1
-            index += 1
-        out.append(text[index])
-        index += 1
-    raise _Unclear
-
-
-def _skip(text: str, index: int) -> int:
-    while index < len(text) and text[index] in " \t":
-        index += 1
-    return index
-
-
-def _scalar(text: str, start: int, flow: bool) -> tuple[str, int]:
-    """One item at `start`, after spaces: quoted, or plain up to a comment (` #`), and in a flow
-    list up to `,` or `]`; where it ends, spaces after it skipped."""
-
-    start = _skip(text, start)
-    if start < len(text) and text[start] in "'\"":
-        value, end = _quoted(text, start)
-        return value, _skip(text, end)
-    end = start
-    while end < len(text):
-        if (flow and text[end] in ",]") or (
-            text[end] == "#" and end > 0 and text[end - 1] in " \t"
-        ):
-            break
-        end += 1
-    value = text[start:end].strip()
-    # Empty, or structure YAML would read (a nested list or mapping, a key, a dash), is no item.
-    mapping = ": " in value or value.endswith(":")
-    if not value or value.startswith(_STRUCTURE) or value.startswith("- ") or mapping:
-        raise _Unclear
-    return value, end
-
-
-def _ended(text: str, index: int) -> None:
-    """Nothing may follow a value but a comment."""
-
-    index = _skip(text, index)
-    if index < len(text) and text[index] != "#":
-        raise _Unclear
-
-
-def _flow(text: str) -> list[str]:
-    """The items of a flow list `[a, 'b', "c"]`, with a comment after it."""
-
-    items: list[str] = []
-    index = _skip(text, 1)
-    if text[index : index + 1] == "]":
-        _ended(text, index + 1)
-        return items
-    while True:
-        value, index = _scalar(text, index, flow=True)
-        items.append(value)
-        if text[index : index + 1] == ",":
-            index += 1
-        elif text[index : index + 1] == "]":
-            _ended(text, index + 1)
-            return items
-        else:
+        if not isinstance(value, str):
             raise _Unclear
+        return value
+    if not _PLAIN.fullmatch(text) or _NOT_A_STRING.fullmatch(text):
+        raise _Unclear
+    return text
+
+
+def _flow_items(text: str) -> list[str]:
+    """The items of a flow list of strings, `[a, 'b', "c"]`, with nothing after it."""
+
+    if not (text.startswith("[") and text.endswith("]")):
+        raise _Unclear
+    inner = text[1:-1].strip()
+    if not inner:
+        return []
+    items: list[str] = []
+    rest = inner
+    while True:
+        quoted = _QUOTED.match(rest)
+        stop = quoted.end() if quoted else (rest.find(",") if "," in rest else len(rest))
+        items.append(_string(rest[:stop].strip()))
+        rest = rest[stop:].lstrip()
+        if not rest:
+            return items
+        if not rest.startswith(","):
+            raise _Unclear
+        rest = rest[1:].lstrip()
 
 
 def _written(value: str, block: Sequence[str]) -> list[str]:
-    """The items a builder wrote in another list form, read as YAML reads them."""
+    """The string items of a simple other form: a block list, a flow list, or one string."""
 
     if block:
         if value:
             raise _Unclear
-        items = []
-        for item in block:
-            scalar, end = _scalar(item, 0, flow=False)
-            _ended(item, end)
-            items.append(scalar)
-        return items
-    if not value or value.startswith("#"):
-        return []
+        return [_string(item) for item in block]
+    if not value:
+        raise _Unclear
     if value.startswith("["):
-        return _flow(value)
-    scalar, end = _scalar(value, 0, flow=False)
-    _ended(value, end)
-    return [scalar]
+        return _flow_items(value)
+    return [_string(value)]
 
 
-# A list key's form, shown in a refusal that suggests no line.
+# A list key's form, shown in each refusal.
 _EXAMPLE = {"edges": '["pushing a tag"]', "detect": '["pyproject.toml"]'}
 
 
@@ -225,10 +199,9 @@ def _json_list(
     key: str, value: str, block: tuple[tuple[str, ...], int], source: str, number: int
 ) -> list[Any]:
     """The value of a list-valued key, which takes one form: a JSON list on the key's own line.
-    Another form a builder may write (a YAML block list, whose item lines and the count of
-    lines it spans are `block`; a flow list with unquoted items; one bare value) is refused
-    with the line to paste in place of the lines it spans, whose items are those written. A
-    value read only by a guess is refused with the form and no line."""
+    A simple other form (a block list of one string per line, a flow list of strings, one
+    string) raises `_Suggestion` for `_frontmatter` to check and show; any other form is refused
+    with the form and no line, since what it holds is not certain."""
 
     items, span = block
     try:
@@ -237,19 +210,21 @@ def _json_list(
         parsed = None
     if isinstance(parsed, list) and not items:
         return parsed
-    where = f"lines {number}-{number + span}" if items else f"line {number}"
-    head = f"{source}:{number}: {key} must be a JSON list on one line, each item in double quotes"
     try:
-        written = [parsed] if isinstance(parsed, str) and not items else _written(value, items)
+        written = _written(value, items) if span >= 0 else None
     except _Unclear:
-        raise FragmentError(
-            f"{head}, as in `{key}: {_EXAMPLE[key]}`; {where} cannot be read as a list without "
-            "a guess, so no line is suggested: write the items in that form"
-        ) from None
-    fixed = json.dumps(written, ensure_ascii=False)
-    if json.loads(fixed) != written:
-        raise AssertionError("a suggested line must read back as the items written")
-    raise FragmentError(f"{head}; replace {where} with: {key}: {fixed}")
+        written = None
+    if written is not None:
+        raise _Suggestion(written, span)
+    raise _unclear(key, source, number)
+
+
+def _unclear(key: str, source: str, number: int) -> FragmentError:
+    return FragmentError(
+        f"{source}:{number}: {key} must be a JSON list on one line, each item in double quotes, "
+        f"as in `{key}: {_EXAMPLE[key]}`; what is written here cannot be read as a list without "
+        "a guess, so no line is suggested: write the items in that form"
+    )
 
 
 def _edges(parsed: list[Any], source: str, number: int) -> tuple[str, ...]:
@@ -322,21 +297,60 @@ def _frontmatter_value(
 
 
 def _block_items(following: Sequence[str]) -> tuple[tuple[str, ...], int]:
-    """The YAML block-list items that open `following`, each line's text after its `-`, and how
-    many lines they span, blank and comment lines between them included; a list key's refusal
-    names them. A list key with any is refused before they are read, and after another key the
-    first is refused as not 'key: value'."""
+    """The YAML block-list items that open `following`, each item line's text after its `- `,
+    and how many lines they span; a list key's refusal reads them. The span is -1 where the
+    block is no simple list: items at different indents, or an indented, comment or blank line
+    among or right after them (a continuation, a nested item or a comment). A list key with any
+    item is refused before they are read, and after another key the first is refused as not
+    'key: value'."""
 
     items: list[str] = []
-    span = 0
+    indent = None
     for offset, line in enumerate(following, 1):
-        bare = line.strip()
-        if bare == "-" or bare.startswith("- "):
-            items.append(bare[1:])
-            span = offset
-        elif bare and not bare.startswith("#"):
-            break
-    return tuple(items), span
+        bare = line.lstrip(" ")
+        if not bare.startswith("- "):
+            # The first line after the items, past any blank lines, must be a key of its own.
+            after = next((rest for rest in following[offset - 1 :] if rest.strip()), "")
+            if items and after and (after[0] in " \t#"):
+                return tuple(items), -1
+            return tuple(items), offset - 1
+        if indent is not None and len(line) - len(bare) != indent:
+            return tuple(items), -1
+        indent = len(line) - len(bare)
+        items.append(bare[2:].strip())
+    return tuple(items), len(items)
+
+
+def _suggestion(
+    text: str, raw: str, index: int, key: str, suggested: _Suggestion, source: str
+) -> FragmentError:
+    """The refusal of a list key in a simple other form: the line to paste in place of the
+    lines it spans, shown only where the fragment with that line pasted reads the key as those
+    items and reads every line up to it; else the refusal with no line."""
+
+    number = index + 2
+    fixed = f"{key}: {json.dumps(suggested.items, ensure_ascii=False)}"
+    lines = raw.splitlines()
+    pasted = [*lines[:index], fixed, *lines[index + 1 + suggested.span :]]
+    repaired = "---\n" + "\n".join(pasted) + text[4 + len(raw) :]
+    try:
+        fields, _ = _frontmatter(repaired, source)
+        holds = fields.get(key) == tuple(suggested.items)
+    except FragmentError as later:
+        found = re.match(rf"{re.escape(source)}:(\d+):", str(later))
+        if found and int(found.group(1)) == number:
+            # The items as written break a rule of the key (an edge holding `;`, a pattern
+            # leaving the target): that rule is the refusal, with no line that would break it.
+            return later
+        holds = not found or int(found.group(1)) > number
+    if not holds:
+        return _unclear(key, source, number)
+    last = number + suggested.span
+    where = f"lines {number}-{last}" if last > number else f"line {number}"
+    return FragmentError(
+        f"{source}:{number}: {key} must be a JSON list on one line, each item in double quotes; "
+        f"replace {where} with: {fixed}"
+    )
 
 
 def _frontmatter(text: str, source: str) -> tuple[dict[str, Any], str]:
@@ -369,7 +383,10 @@ def _frontmatter(text: str, source: str) -> tuple[dict[str, Any], str]:
             )
         if key in fields:
             raise FragmentError(f"{source}:{number}: duplicate frontmatter key {key!r}")
-        fields[key] = _frontmatter_value(key, value, source, number, block)
+        try:
+            fields[key] = _frontmatter_value(key, value, source, number, block)
+        except _Suggestion as suggested:
+            raise _suggestion(text, raw, index, key, suggested, source) from None
     missing = [key for key in FRONTMATTER_KEYS if key not in fields]
     if missing:
         raise FragmentError(f"{source}: frontmatter is missing {', '.join(missing)}")
