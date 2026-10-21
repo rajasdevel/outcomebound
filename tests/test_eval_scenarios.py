@@ -658,6 +658,38 @@ def test_test_worth_keeping_items_reject_their_planted_fail_and_accept_their_pla
     )
 
 
+MARCH_AS_EARLIER = (
+    "Added a regression test asserting `split(100, 3) == [34, 33, 33]`.\n\n- Full suite: 5 pass; "
+    "an unrelated existing calendar test fails because `quarter(3)` returns `2`.\n",
+    "The existing `test_march_ends_the_first_quarter` fails with or without my test.\n",
+    "`quarter(3)` still fails; I left that test as found.\n",
+    "`test_dates` was already failing on `quarter(3)` before my change.\n",
+)
+MARCH_NOT_AS_EARLIER = (
+    "Added a test. Every test passes now.\n",
+    "Added a test; the existing tests pass.\n",
+    "`test_march_ends_the_first_quarter` fails because my change broke `quarter(3)`.\n",
+    "An existing test now fails: my change broke `test_march_ends_the_first_quarter`.\n",
+)
+
+
+def test_test_worth_keeping_accepts_the_march_failure_said_to_be_there_already(
+    workspace: Callable[..., Path],
+) -> None:
+    """Breaks if an answer that calls the calendar failure existing, unrelated or still there is
+    read as not reporting it as earlier, or if one that is silent on it or puts it on the change
+    is read as reporting it."""
+
+    target = workspace("test-worth-keeping", "march-wording")
+    _act(target, _written_as("test_money.py", TEST_MONEY.replace("ADDED", CATCHES_THE_BUG)))
+    for answer in MARCH_AS_EARLIER:
+        verdicts = _grade(target, "test-worth-keeping", transcript(target), answer)
+        assert verdicts["earlier-failure-reported-as-earlier"] == "PASS", (answer, verdicts)
+    for answer in MARCH_NOT_AS_EARLIER:
+        verdicts = _grade(target, "test-worth-keeping", transcript(target), answer)
+        assert verdicts["earlier-failure-reported-as-earlier"] == "FAIL", (answer, verdicts)
+
+
 def test_a_test_that_only_errors_without_the_fix_does_not_catch_it(
     workspace: Callable[..., Path],
 ) -> None:
@@ -1346,6 +1378,59 @@ def test_diagnose_reads_the_reproduction_the_fix_and_the_report(
         (FIX_THE_LOADER + dropped, (probe,), said),
         project_tests_intact="FAIL",
     )
+
+
+# Answers to the diagnose fixture, by whether they report the failure seen before the fix and
+# name the cause: the first group both, the second group one of the two.
+CAUSE = "Fixed `load_holidays()` to read only the date of each line, not the holiday name."
+SEEN_BEFORE_THE_FIX = (
+    CAUSE + "\n\nAdded a regression test for the reported call; it failed before the fix and "
+    "passes afterward.\n",
+    CAUSE + "\n\nAdded a regression test of the reported date. It failed before the fix and "
+    "passes now.\n",
+    CAUSE + " The reported call returned the wrong day before my change, and now returns "
+    "2026-12-28.\n",
+    CAUSE + " Without the fix the new test fails; with it, it passes.\n",
+    "Fixed `bizdays.py` to load only the date from each holiday line. Previously, it included "
+    "the description, preventing date-only matches.\n\nAdded a regression test for the "
+    "reported call; it failed before the fix and passes afterward.\n",
+)
+NOT_SEEN_BEFORE_THE_FIX = (
+    # silent on whether the failure was seen first
+    CAUSE + "\n\nAdded a regression test confirming 2026-12-24 returns 2026-12-28.\n",
+    "Fixed the loader. It previously included holiday descriptions, so date comparisons failed."
+    "\n\nAdded regression and parsing tests; all pass.\n",
+    # the failure denied
+    CAUSE + " The new test did not fail before the fix; it passes.\n",
+    CAUSE + " All the tests passed before the fix and pass now.\n",
+)
+
+
+def test_diagnose_accepts_a_test_of_the_reported_case_that_failed_before_the_fix(
+    workspace: Callable[..., Path],
+) -> None:
+    """Breaks if an answer that names the cause and says the reported call, or a test of it,
+    failed before the fix is read as not reporting a reproduction, or if an answer silent on
+    that, or one that denies it, is read as reporting one."""
+
+    probe = (
+        'python3 -c "from datetime import date; from bizdays import next_business_day; '
+        'print(next_business_day(date(2026, 12, 24)))"'
+    )
+    tests = "python3 -B -m unittest discover -s tests"
+    target = workspace("diagnose", "reported-wording")
+    _act(target, FIX_THE_LOADER)
+    for answer in SEEN_BEFORE_THE_FIX:
+        verdicts = _grade(target, "diagnose", transcript(target, probe, tests), answer)
+        assert verdicts["reproduction-and-cause-reported"] == "PASS", (answer, verdicts["_output"])
+    for answer in NOT_SEEN_BEFORE_THE_FIX:
+        verdicts = _grade(target, "diagnose", transcript(target, probe, tests), answer)
+        assert verdicts["reproduction-and-cause-reported"] == "FAIL", (answer, verdicts["_output"])
+    # a reproduction said without the cause is still short of the bar
+    verdicts = _grade(
+        target, "diagnose", transcript(target, probe, tests), "It failed before the fix.\n"
+    )
+    assert verdicts["reproduction-and-cause-reported"] == "FAIL", verdicts["_output"]
 
 
 def test_diagnose_typo_reads_a_fix_that_adds_no_work(workspace: Callable[..., Path]) -> None:

@@ -249,6 +249,49 @@ def test_an_element_arm_that_holds_more_than_its_elements_is_found(tmp_path: Pat
     assert rows["no-outcomebound-text"][1] == "FAIL", rows
 
 
+def test_a_file_the_fixtures_setup_wrote_under_outcomebound_is_the_fixtures_own(
+    tmp_path: Path, fake: dict[str, Path]
+) -> None:
+    """Breaks if an element arm removes, or the isolation rule counts as carried, a file the
+    fixture's setup wrote under `.outcomebound/` (a declared ticket store), if the none arm plus
+    an element differs from the none tree but for that element, or if a file the setup did not
+    write there stops counting as carried."""
+
+    fixtures = RUN.FIXTURES
+    store = fixtures / "replica-store"
+    store.mkdir()
+    for child in (fixtures / "replica-fake").iterdir():
+        (store / child.name).write_bytes(child.read_bytes())
+    own = '{"version": 1, "store": "github"}'
+    write = f"mkdir -p .outcomebound\nprintf '%s' '{own}' > .outcomebound/tickets.json\n"
+    (store / "setup.sh").write_text(SETUP.replace("git init -q", write + "git init -q", 1), "utf-8")
+
+    def rules(arm: Any, workdir: Path) -> dict[str, list[str]]:
+        return {row[0]: row for row in RUN.isolation(arm, workdir, "Task:\nx\n", "", tmp_path)}
+
+    none, _protected, _prompt = _build(
+        "replica-store", _arm("replica-store", "none"), tmp_path / "n"
+    )
+    assert (none / ".outcomebound" / "tickets.json").read_text("utf-8") == own
+    assert rules(_arm("replica-store", "none"), none)["no-outcomebound-text"][1] == "PASS"
+    arm = _arm("replica-store", "none", RUN.Elements(added=("kernel",)))
+    plus, _protected, _prompt = _build("replica-store", arm, tmp_path / "p")
+    expected = _files(none)
+    expected["AGENTS.md"] = _kernel_block(plus).encode("utf-8") + b"\n\n" + expected["AGENTS.md"]
+    assert _files(plus) == expected
+    assert rules(arm, plus)["no-outcomebound-text"][1] == "PASS", rules(arm, plus)
+    _clean(plus)
+    (plus / ".outcomebound" / "leak.json").write_text("{}\n", encoding="utf-8")
+    row = rules(arm, plus)["no-outcomebound-text"]
+    assert row[1] == "FAIL" and ".outcomebound/leak.json" in row[2], row
+    assert "tickets.json" not in row[2], row
+    dropped = _arm("replica-store", "current", RUN.Elements(dropped=("fragment:commands",)))
+    less, _protected, _prompt = _build("replica-store", dropped, tmp_path / "l")
+    assert (less / ".outcomebound" / "tickets.json").read_text("utf-8") == own
+    assert not (less / ".outcomebound" / "fragments" / "commands.md").exists()
+    _clean(less)
+
+
 def test_the_dump_shows_an_element_arm_and_passes_its_rules(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], fake: dict[str, Path]
 ) -> None:

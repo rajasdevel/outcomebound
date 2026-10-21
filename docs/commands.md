@@ -71,11 +71,16 @@ the agent reads the fragment only when it runs a command.
   - Source: harness documentation (Claude Code, Codex, Gemini CLI timeouts); Codex issue
     <https://github.com/openai/codex/issues/3951> (Vitest watch mode).
 - **Commands that end after a long time.** A full test suite, a build or a migration ends, but it
-  can take longer than the foreground limit of the harness. Run it in the background, and write
-  its output and its exit code to a file. Wait until it ends, then read the file. Use the
-  harness's background mode, or the shell:
+  can take longer than the foreground limit of the harness. Use the harness's own way to wait for
+  it: a running session that the harness returns and lets you poll, or a background task that the
+  harness reports when it ends. Only where the harness has neither, run it in the background with
+  the shell, and write its output and its exit code to a file. Wait until it ends, then read the
+  file:
   `(make test > .agents/work/<task>/test.log 2>&1; echo "exit=$?" >> .agents/work/<task>/test.log) < /dev/null &`.
-  - Fixes: the harness stops a long command in the foreground after 2 to 5 minutes. The output
+  - Fixes: in a sandboxed eval, jobs that the shell started with `&` failed to start, were started
+    again, and the agent spent calls to poll them, where the harness's own session needed none.
+  - Fixes: a harness with no running session to poll stops a long command in the foreground after
+    2 to 5 minutes. The output
     is lost, and the check has no verdict.
   - A slow command is not a command that hangs. Do not shorten, skip or stop a check because it
     takes a long time. Let it run to its end. A check that the agent stops has no verdict, and
@@ -138,8 +143,8 @@ give them to your agents, add them to your `local` fragment.
   `gtimeout`): `timeout 120 <command>` only for a network call that can hang, such as a request
   to a server that does not answer. Exit code 124 means that the command was stopped. Report that
   result as not finished (in a handover or a check report, `UNVERIFIED`). Do not use a timeout on a test suite, a build, a migration or any other
-  command that can take a long time and then end: run it in the background (see
-  [Commands that end after a long time](#habits-that-prevent-a-wait)). Do not use a timeout on
+  command that can take a long time and then end: wait for it as
+  [Commands that end after a long time](#habits-that-prevent-a-wait) says. Do not use a timeout on
   `git` or `npm install`, because a stopped command can leave a lock file.
   - Source: test on 2026-10-03. `timeout 3 sleep 10` stopped with exit code 124 after 3
     seconds. Stock macOS has no `timeout` command.

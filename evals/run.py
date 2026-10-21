@@ -142,6 +142,9 @@ _EARLIER_SOURCE: dict[str, Path] = {}
 # block, pointer or launcher.
 EARLIER_VERBATIM = ""
 _VERBATIM: dict[str, tuple[str, dict[str, bytes]]] = {}
+# The files a fixture's setup wrote, by built workspace, as `as_installed` found them before any
+# install: the fixture's own, such as a declared ticket store under `.outcomebound/`.
+_FIXTURE_FILES: dict[Path, frozenset[str]] = {}
 # The kernel-off arm: the task alone, in a fixture that carries no OutcomeBound text.
 NONE = "none"
 # The current arm less the kernel's sizing paragraph, the one that opens with this phrase.
@@ -1013,6 +1016,7 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     (`shape_install`); the none arm plus elements keeps the note as the none arm's setup left it.
     """
 
+    _FIXTURE_FILES[workdir] = frozenset(tree_hashes(workdir))
     installs = arm.name in INSTALLED or (arm.name == EARLIER and (EARLIER_REF or arm.agents))
     if not installs and not arm.adopted:
         return ""
@@ -2843,9 +2847,28 @@ def outside_elements(text: str, arm: Arm) -> str:
     return text.replace(found.decode("utf-8"), "\n".join([lines[0], *left, lines[-1]]), 1)
 
 
+def _setup_file(workdir: Path, path: str) -> bool:
+    """Whether the fixture's setup wrote `path` (relative to `workdir`) and no element owns it:
+    the fixture's own file, which no install adds, takes away or counts as carried."""
+
+    return path in _FIXTURE_FILES.get(workdir, frozenset()) and element_of(path) is None
+
+
+def _setup_only(workdir: Path, item: Path) -> bool:
+    """Whether every file under `item` is one the fixture's setup wrote (`_setup_file`)."""
+
+    names = (
+        [item.relative_to(workdir).as_posix()]
+        if item.is_file()
+        else [(item / path).relative_to(workdir).as_posix() for path in tree_hashes(item)]
+    )
+    return all(_setup_file(workdir, name) for name in names)
+
+
 def _carried_outside(workdir: Path, arm: Arm) -> list[str]:
     """What the none arm plus elements carries outside them: a file under `.outcomebound/`, or
-    an OutcomeBound skill's folder at a skill root, that no added element owns."""
+    an OutcomeBound skill's folder at a skill root, that no added element owns and the fixture's
+    setup did not write."""
 
     from outcomebound_tools import fragments
 
@@ -2853,6 +2876,7 @@ def _carried_outside(workdir: Path, arm: Arm) -> list[str]:
         f".outcomebound/{path}"
         for path in tree_hashes(workdir / ".outcomebound")
         if not arm.keeps(element_of(f".outcomebound/{path}") or "")
+        and not _setup_file(workdir, f".outcomebound/{path}")
     ]
     found += [
         f"{root}{skill}"
@@ -2911,7 +2935,7 @@ def isolation(arm: Arm, workdir: Path, prompt: str, path: str, home: Path) -> li
                     workdir / ".outcomebound",
                     *(workdir / root / "using-outcomebound" for root in SKILL_ROOTS),
                 )
-                if item.exists()
+                if item.exists() and not _setup_only(workdir, item)
             ]
         )
         rows.append(
