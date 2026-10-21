@@ -1,7 +1,8 @@
 """A codex call is isolated from the operator's own codex setup, and names its model.
 
 A run sees its fixture and nothing of the operator's: a call ignores the operator's codex
-config (whose writable roots and defaults are not the run's), rules and memories.
+config (whose writable roots and defaults are not the run's), rules and memories, and the
+account's remote plugins, whose sync made the skill catalog differ between calls.
 `workspace-write` keeps `.git` read-only, so a call in a git workspace adds that directory,
 and the run can commit. The operator's configured default model need not be the one a run
 chose, so every call names the model itself. A call keeps its session, since the model, effort
@@ -39,6 +40,7 @@ def test_every_call_names_its_model_and_ignores_the_operators_setup(tmp_path: Pa
     assert argv[argv.index("features.memories=false") - 1] == "-c"
     assert argv[argv.index("memories.generate_memories=false") - 1] == "-c"
     assert argv[argv.index("memories.use_memories=false") - 1] == "-c"
+    assert argv[argv.index("features.remote_plugin=false") - 1] == "-c", "remote plugins vary"
 
 
 def test_a_call_in_a_git_workspace_may_write_its_git_directory(tmp_path: Path) -> None:

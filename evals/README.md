@@ -101,6 +101,17 @@ done
   these digests were kept is not refused: `workspace_unchanged` and `grading_files_unchanged` say
   `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
+- `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]` runs a plan of (repetition,
+  fixture, arm) cells, one `evals/run.py` call each. The plan names the model, effort, results and
+  workspace folders, repetitions, fixtures, and arms (each a label, `current` or `none`, and
+  optional `drop`, `add` or `edits`). For each repetition and fixture it runs every arm, with the
+  arm order rotated so no arm always goes first and the arms of one fixture run side by side in
+  time. It skips a cell that already ran (a cell whose call failed, `ran with failures`, counts as
+  run and is not started again), stops at a cell folder in any other state or at a preflight
+  failure, refuses before anything starts a plan run.py would refuse (an unknown element, a
+  missing edits file, an element a fixture's install cannot give), and prints the
+  `--summary` and `evals/attribute.py` commands for what it ran. `--dry-run` prints every cell's
+  argv and starts nothing.
 
 ## Reading a result
 
@@ -114,6 +125,25 @@ the arms within one fixture.
 
 Three runs an arm cannot show a small effect. A claim that moves from 0/3 to 3/3 deserves a closer
 look. Anything smaller is not shown.
+
+The summary gives each cost as input (cached, uncached) and output (reasoning). It also gives each
+group's skill catalog, and flags a group whose calls saw different catalogs and a fixture whose
+arms were given different plugin skills. A record with no catalog reads it from the native copy
+beside it, else shows `unrecorded`. Element arms with different elements or edits are never
+pooled.
+
+`python3 evals/attribute.py DIR [DIR ...] [--json]` reads kept run directories and calls no model.
+By arm, and by fixture and arm, it gives the median model calls and the input, cached, uncached,
+output and reasoning tokens, and the catalog each run saw, flagging a group whose skill lists
+differ. It charges each run's input to what caused it: the first call's input to the preamble,
+and each later rise to the tool calls of the call before it (the output of a tool call enters the
+next call), in proportion to their output size and weighted by the calls that re-send it. Each
+tool call takes one class (`guidance-read`, `suite-run`, `poll`, `checks`, `git`, `env`, `write`,
+`read`, `other`); a compound shell command is one call and takes one class, and output that a
+running command gives through a later wait goes to `poll`. It lists each OutcomeBound file read,
+with its direct cost and the failed required claims of the runs that read it against those of the
+same arm that did not, and the slow-suite launches beside the runs each workspace's
+`.runs/integration.log` records as completed.
 
 Each run directory holds five files and a folder for each fixture. Each name starts with the
 fixture, as in `small-fix.meta.json`:
@@ -294,6 +324,33 @@ harness must meet these items, and `--probe` shows which one it does not:
     summary, in place of its kind (the kind stays in `arm_kind`). Use it when several refs stand
     for variants of the guidance, so five arms do not all read `earlier`. Give each variant its own
     `--out` and `--workspace-root`.
+  - Element arms measure one part of the install, on a fixture with an `install.json`.
+    `--drop ELEMENT` (repeatable, with `--arm current`) is the current install less that element;
+    `--add ELEMENT` (repeatable, with `--arm none`) is the `none` arm plus exactly that element.
+    The elements are `kernel` (the operating-contract block), `facts` (the project-facts block),
+    `pointers` (the guidance-pointers block whole: its read-once line and every pointer line),
+    `fragment:<id>` (its file under `.outcomebound/fragments/` and its pointer line),
+    `skill:<name>` (its folder at each skill root and its pointer line) and `launcher` (this
+    checkout's launcher first on the call's PATH). Both kinds are built from adopt's own install,
+    before it joins the seed commit, so the model starts on a clean `git status`, and the prompt
+    is the task alone. The fixture's setup runs with `OB_EVAL_ARM` set to the arm the build starts
+    from (`current` or `none`). A pointer line kept without its block keeps the block's markers
+    and read-once line. Adopt also writes `.agents/.gitignore`, `.outcomebound/.gitignore` and
+    `.outcomebound/manifest.json`, which no element owns: the current arm less any element keeps
+    them, and the `none` arm plus any element has none of them. `--edits FILE` applies a JSON list
+    of `{"path", "old", "new"}` to the installed `AGENTS.md`, skill or fragment files after the
+    install; each `old` must occur exactly once, or the run exits 2 before it starts (an edit of
+    `AGENTS.md` is tried in a temporary build first); an empty `new` deletes the text. It needs
+    `--arm-label`. The default label is `current-minus-<element>[-...]` or
+    `none-plus-<element>[-...]`, with `:` written as `.`. The runner refuses an unknown element, a
+    fragment the install does not select, a skill it does not carry, and a fixture with no
+    `install.json`. The build fails if the workspace does not hold exactly the arm's elements;
+    `--dump-arm` shows the elements and that rule. Codex lists every skill folder at its skill
+    path in the catalog whatever `AGENTS.md` points at, so dropping `pointers` keeps the skills
+    listed; drop `skill:<name>` to take one out. The current arm less an element keeps adopt's
+    `.outcomebound/manifest.json`, which still names the dropped element's files. `STATUS.json` and each meta record
+    `arm_kind`, `elements` and, for edits, the file's digest and each edit's path and old and new
+    digests.
 
 The prompt is the block of the arm, `Task:`, and the `prompt.md` of the fixture. For the hand-off
 fixtures it is what `task.sh` prints, in place of `prompt.md`. The prompt of the `none` arm is
@@ -324,7 +381,14 @@ that names a replica fixture refuses (exit 2), before anything is built or start
 them, or an instruction file at or above the folder its workspaces are made in, names
 OutcomeBound in any case or is an `AGENTS.md` or `AGENTS.override.md` with text: either would
 give the `none` arm guidance. Whether codex loads the plugins in a home's `plugins/cache` when
-the call ignores `config.toml` is `UNVERIFIED`; `--dump-arm` lists them.
+the call ignores `config.toml` is `UNVERIFIED`; `--dump-arm` lists them. Every call turns codex's
+remote plugin sync off (`-c features.remote_plugin=false`): with the user config ignored, that
+sync was the one source of skills that varied between calls, since it runs asynchronously and the
+account's remote plugins joined the skill catalog in some calls and not in others. That the
+setting removes them from an `exec` call is `UNVERIFIED` until a run's catalog record shows it.
+Each run's meta records the catalog its call was given (`catalog`: the characters of the
+developer messages before the first user message, the entries of their skill list, and each
+plugin with its skill count), read from the native session.
 
 The runner hashes the graders of each fixture, and reads its seed commit, before the model runs. A
 changed grader fails the run unexecuted. No fixture keeps a grader in its workspace: the next

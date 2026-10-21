@@ -442,7 +442,7 @@ def test_runner_a_field_fixture_asks_its_call_for_the_field_sandbox_and_records_
     assert isinstance(meta["elapsed_seconds"], float)
     printed = capsys.readouterr().out
     assert "replica-fake: PASS" in printed
-    assert "input 1000 (cached 800), output 50 (reasoning 20) tokens" in printed
+    assert "input 1000 (cached 800, uncached 200), output 50 (reasoning 20) tokens" in printed
 
 
 # --- the arm isolation audit ----------------------------------------------------------------
@@ -686,8 +686,8 @@ def test_runner_the_summary_gives_each_runs_cost_beside_its_verdict_failed_calls
     printed = capsys.readouterr().out.splitlines()
     assert printed[0] == "replica-fake | codex | current | m medium: PASS 1/1", printed
     assert (
-        "  repetition 1: PASS; input 1000 (cached 800), output 50 (reasoning 20) tokens; "
-        "unrecorded seconds" in printed
+        "  repetition 1: PASS; input 1000 (cached 800, uncached 200), output 50 (reasoning 20) "
+        "tokens; unrecorded seconds" in printed
     )
     none = printed[
         printed.index(
@@ -695,14 +695,14 @@ def test_runner_the_summary_gives_each_runs_cost_beside_its_verdict_failed_calls
         ) :
     ]
     assert (
-        "  median cost input 1500 (cached 1200), output 75 (reasoning 30) tokens over 2 "
-        "counted run(s)" in none
+        "  median cost input 1500 (cached 1200, uncached 300), output 75 (reasoning 30) tokens "
+        "over 2 counted run(s)" in none
     )
     assert (
-        "  spent on 3 call(s), 1 failed among them: input 4000 (cached 3200), output 200 "
-        "(reasoning 80) tokens; 30.0 seconds over all 3" in none
+        "  spent on 3 call(s), 1 failed among them: input 4000 (cached 3200, uncached 800), "
+        "output 200 (reasoning 80) tokens; 30.0 seconds over all 3" in none
     )
     assert (
-        "  repetition 3: call failed, not counted; input 1000 (cached 800), output 50 "
-        "(reasoning 20) tokens; 10.0 seconds" in none
+        "  repetition 3: call failed, not counted; input 1000 (cached 800, uncached 200), "
+        "output 50 (reasoning 20) tokens; 10.0 seconds" in none
     )

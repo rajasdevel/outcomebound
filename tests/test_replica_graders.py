@@ -1468,6 +1468,11 @@ TICKET_REFUNDS = (
     "sed -i.bak \"s/WHERE status <> 'cancelled'/WHERE status NOT IN ('cancelled', 'refunded')/\""
     " datapipe/sql/daily_revenue.sql && rm datapipe/sql/daily_revenue.sql.bak\n"
 )
+SUITE_ENTRY = (
+    "mkdir -p .runs\n"
+    'printf \'{"kind": "suite", "started": 1, "ended": 2, "tests": 10, "ok": true}\\n\''
+    " >> .runs/integration.log\n"
+)
 BATCH_CHECKS = ("make docs-check", "make unit", "git commit -m one", "git commit -m two")
 
 
@@ -1485,11 +1490,12 @@ def test_datapipe_batch_good_and_bad_outcomes(
         + "git commit -qam 'transforms: no refunds'\n"
     )
     good = datapipe_built(name, tmp_path / "good")
-    _dp_act(good, one_each)
+    _dp_act(good, one_each + SUITE_ENTRY)
     _dp_all_pass(good, name, "Three commits.", *BATCH_CHECKS, "make test")
 
     thrice = datapipe_built(name, tmp_path / "thrice")
     _dp_act(thrice, one_each)
+    _dp_act(thrice, SUITE_ENTRY * 3)
     out = _dp_fails(
         thrice,
         name,
@@ -1500,7 +1506,26 @@ def test_datapipe_batch_good_and_bad_outcomes(
         "make test",
         "make test-integration",
     )
-    assert "observed: full slow-suite runs: 3" in out
+    assert "observed: completed slow-suite runs: 3 (transcript launches 3)" in out
+
+    # A launch that never ended leaves no entry: two launches, one completed run, is one run.
+    stopped = datapipe_built(name, tmp_path / "stopped")
+    _dp_act(stopped, one_each + SUITE_ENTRY)
+    stopped_verdicts = _dp_verdicts(stopped, name, "", *BATCH_CHECKS, "make test", "make test")
+    assert stopped_verdicts["slow-suite-at-most-once"] == "PASS", stopped_verdicts["_output"]
+
+    # With launches but no log at all, the completed runs cannot be read.
+    unlogged = datapipe_built(name, tmp_path / "unlogged")
+    _dp_act(unlogged, one_each)
+    out = _dp_fails(
+        unlogged, name, "slow-suite-at-most-once", "", *BATCH_CHECKS, "make test", "make test"
+    )
+    assert "UNVERIFIED the log holds no entry" in out
+
+    emptied = datapipe_built(name, tmp_path / "emptied")
+    _dp_act(emptied, one_each + "mkdir -p .runs\n: > .runs/integration.log\n")
+    out = _dp_fails(emptied, name, "slow-suite-at-most-once", "", *BATCH_CHECKS, "make test")
+    assert "UNVERIFIED the log holds no entry" in out
 
     mixed = datapipe_built(name, tmp_path / "mixed")
     _dp_act(

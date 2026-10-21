@@ -39,6 +39,12 @@ NAME = "codex"
 # session record is where a run reads what codex ran. They do not keep out agent role files
 # under `$CODEX_HOME/agents/`, which codex read in every recorded run (codex-cli 0.158.0 to
 # 0.162.1); docs/evaluations.md states it as a limit.
+#
+# With the user config ignored, codex's remote plugin sync was the one source of skills that
+# still varied between calls: it runs asynchronously, so the account's remote plugins joined the
+# skill catalog in some calls and not in others, which changed both the prompt's size and what
+# the model read. `features.remote_plugin=false` turns the sync off (codex-cli 0.163.0 accepts
+# it); each run's `catalog` record shows which skills its call was given.
 ISOLATION = (
     "--ignore-user-config",
     "--ignore-rules",
@@ -48,7 +54,12 @@ ISOLATION = (
     "memories.generate_memories=false",
     "-c",
     "memories.use_memories=false",
+    "-c",
+    "features.remote_plugin=false",
 )
+# The heading of the skill list in codex's developer message; each entry under it is one line,
+# `- <name>: <description> (file: <path>)`, a plugin's skill named `<plugin>:<skill>`.
+SKILL_LIST = "### Available skills"
 # The thread table of codex's state database keeps whether the thread could read memories.
 STATE_DATABASE = "state_5.sqlite"
 # What a fixture that needs a local listener adds: the `workspace-write` option of codex that lets
@@ -212,6 +223,7 @@ class CodexHarness:
             unknown_item_types=unknown_types(events),
             tokens_used=tokens_used(transcript),
             session_tokens=session_tokens(session, events),
+            catalog=catalog(session),
             identity_checks=checks,
             local_listener=request.local_listener,
             sandbox=request.sandbox,
@@ -239,6 +251,61 @@ class CodexHarness:
 
 def _text(value: str | bytes | None) -> str:
     return value.decode("utf-8", "replace") if isinstance(value, bytes) else value or ""
+
+
+def catalog(records: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    """What codex put ahead of a call's first user message, from its native session: the
+    characters of the developer messages, the entries of the skill list they hold, and each
+    plugin whose skills are among them, with its count. None where the session holds no
+    developer message before a user message."""
+
+    texts: list[str] = []
+    for record in records or []:
+        if not isinstance(record, dict) or record.get("type") != "response_item":
+            continue
+        payload = record.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        if payload.get("type") != "message" or payload.get("role") not in ("developer", "user"):
+            continue
+        if payload["role"] == "user":
+            break
+        parts = payload.get("content")
+        texts += [
+            part["text"]
+            for part in (parts if isinstance(parts, list) else [])
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        ]
+    else:
+        return None
+    if not texts:
+        return None
+    names = [name for text in texts for name in _skill_names(text)]
+    plugins: dict[str, int] = {}
+    for name in names:
+        if ":" in name:
+            plugin = name.split(":", 1)[0]
+            plugins[plugin] = plugins.get(plugin, 0) + 1
+    return {
+        "developer_characters": sum(len(text) for text in texts),
+        "skills": len(names),
+        "plugins": dict(sorted(plugins.items())),
+    }
+
+
+def _skill_names(text: str) -> list[str]:
+    """The name of each entry of the skill list in `text`: the lines that open `- ` under its
+    heading, up to the next heading or tag."""
+
+    if SKILL_LIST not in text:
+        return []
+    names = []
+    for line in text.split(SKILL_LIST, 1)[1].splitlines()[1:]:
+        if line.startswith(("#", "<")):
+            break
+        if line.startswith("- "):
+            names.append(line[2:].split(": ", 1)[0].strip())
+    return names
 
 
 def _agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]:

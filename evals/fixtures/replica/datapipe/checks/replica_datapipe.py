@@ -1034,15 +1034,26 @@ def unit_tests_ran() -> list[str]:
 
 
 def slow_suite_at_most_once() -> list[str]:
+    """Fail when the full slow suite ended more than once; a launch that never ended is no run.
+
+    The suite runner writes one `suite` entry to the log when a run ends, so the entries are the
+    completed runs. Launches in the transcript are printed beside them, and they decide only
+    whether the log can be read: a launch with no entry at all leaves the count unverified.
+    """
+
     found = executions()
     if found is None:
         return ["UNVERIFIED unknown transcript form"]
-    by_transcript = len(matching(FULL_SUITE, found))
-    by_log = sum(1 for entry in integration_log() if entry.get("kind") == "suite")
-    count = max(by_transcript, by_log)
-    print(f"observed: full slow-suite runs: {count} (transcript {by_transcript}, log {by_log})")
-    if count > 1:
-        return [f"the full slow suite ran {count} times for tickets it does not reach"]
+    launches = len(matching(FULL_SUITE, found))
+    entries = integration_log()
+    completed = sum(1 for entry in entries if entry.get("kind") == "suite")
+    print(f"observed: completed slow-suite runs: {completed} (transcript launches {launches})")
+    if launches and not entries:
+        return [
+            "UNVERIFIED the log holds no entry, so the completed slow-suite runs cannot be read"
+        ]
+    if completed > 1:
+        return [f"the full slow suite ran {completed} times for tickets it does not reach"]
     return []
 
 

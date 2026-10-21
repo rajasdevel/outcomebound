@@ -23,6 +23,11 @@ arm can also be the install of a Git ref (`--earlier-ref`) or another guidance s
 (`--earlier-verbatim`), and `--arm-label` names it in the records. The model is
 always named and passed to codex, so codex's configured default never runs.
 
+On a fixture whose install adopt makes (an `install.json`), an element arm measures one part of
+the install: `--drop` takes elements from the current arm, `--add` puts elements into the none
+arm, and `--edits` changes the installed text; each is built from adopt's own install, with no
+model call, and `--dump-arm` shows it.
+
 No run bills an API key from the environment: every credential and endpoint override a
 CLI reads there is removed from each child, and preflight must observe a ChatGPT login. A
 credential kept in codex's own files is invisible here.
@@ -45,7 +50,7 @@ import sys
 import tempfile
 import time
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, NamedTuple
 
 # Direct script execution also needs the repository package path.
@@ -69,7 +74,7 @@ from evals.evidence import (
     workspace_digest,
 )
 from evals.harnesses import Request
-from evals.harnesses.codex import CodexHarness
+from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
 from evals.native_receipts import parse_records
 from evals.processes import bounded_command, partial_output
@@ -152,6 +157,20 @@ NOTE_POINTER = re.compile(
     r"\s*Read `\.outcomebound/skills/using-outcomebound/SKILL\.md` before planning work here\."
 )
 REPETITIONS = (1, 2, 3)
+# The elements of an adopted install that `--drop` takes from the current arm and `--add` puts
+# into the none arm: the three blocks adopt writes into AGENTS.md (the guidance-pointers block
+# whole: its read-once line and every pointer line), each fragment and each skill (its file or
+# folder and its pointer line), and this checkout's launcher first on the call's PATH.
+KERNEL_ELEMENT, FACTS_ELEMENT, POINTERS_ELEMENT = "kernel", "facts", "pointers"
+LAUNCHER_ELEMENT = "launcher"
+ELEMENT = re.compile(r"kernel|facts|pointers|launcher|(?:fragment|skill):[a-z0-9][a-z0-9-]*")
+# A pointer line of the guidance-pointers block, and the file it names.
+POINTER_LINE = re.compile(r"^- .+: read (\S+)$")
+# The elements that own a pointer line.
+LINED = ("fragment:", "skill:")
+# The note an install writes its blocks into, and the only installed file besides the skills and
+# fragments that `--edits` may change.
+NOTE = "AGENTS.md"
 
 # Every variable a supported CLI reads for a credential, or for routing a call somewhere
 # other than the subscription endpoint: an override bills a metered endpoint without ever
@@ -470,11 +489,43 @@ def without_sizing(text: str) -> str:
     return "\n\n".join(kept)
 
 
+class Edit(NamedTuple):
+    """One edit of a `--edits` file: in the installed file `path`, workspace-relative, the one
+    occurrence of `old` becomes `new` (empty: the text is deleted)."""
+
+    path: str
+    old: str
+    new: str
+
+
+class EditsError(ValueError):
+    """A `--edits` file, or one of its edits, that the runner refuses; the message says why."""
+
+
+class Elements(NamedTuple):
+    """What `--drop`, `--add` and `--edits` ask of an arm: the elements taken from the current
+    install, the elements put into the none arm, the edits, and the SHA-256 of their file."""
+
+    dropped: tuple[str, ...] = ()
+    added: tuple[str, ...] = ()
+    edits: tuple[Edit, ...] = ()
+    edits_sha256: str = ""
+
+    def named(self) -> bool:
+        return bool(self.dropped or self.added or self.edits)
+
+
+# What a run without --drop, --add or --edits asks: no element arm.
+NO_ELEMENTS = Elements()
+
+
 class Arm(NamedTuple):
     """What one arm hands the model: its kernel, ahead of the task; the files an install
     writes, by fixture-relative path; the launcher put first on the call's PATH; and, for an
     arm that stands for an install, the fragments selected and each skill's pointer, which
-    `as_installed` writes into the fixture's AGENTS.md.
+    `as_installed` writes into the fixture's AGENTS.md. An element arm (`element_arm`) also
+    names the elements it drops from the current install or adds to the none arm, and its edits;
+    its `name` is the arm it builds from, `current` or `none`.
 
     A named tuple, not a dataclass: the tests load this file by path, outside sys.modules.
     """
@@ -488,11 +539,36 @@ class Arm(NamedTuple):
     agents: str = ""
     done: tuple[str, ...] = ()
     adopted: bool = False
+    dropped: tuple[str, ...] = ()
+    added: tuple[str, ...] = ()
+    edits: tuple[Edit, ...] = ()
+    edits_sha256: str = ""
+
+    def shaped(self) -> bool:
+        """Whether the arm is an element arm: the current install less some elements, the none
+        arm plus some, or either with edits."""
+
+        return bool(self.dropped or self.added or self.edits)
+
+    def keeps(self, element: str) -> bool:
+        """Whether the arm holds `element`: the current arm all but what it drops, the none arm
+        only what it adds."""
+
+        return element in self.added if self.name == NONE else element not in self.dropped
 
     def record(self) -> dict[str, Any]:
-        """The arm's contents as the run's metadata keeps them: digests, the launcher and the
-        Done commands its facts block records."""
+        """The arm's contents as the run's metadata keeps them: digests, the launcher, the
+        Done commands its facts block records, the elements it drops or adds, and for edits the
+        digest of their file and of each edit's text."""
 
+        edits = [
+            {
+                "path": edit.path,
+                "old_sha256": sha256_text(edit.old),
+                "new_sha256": sha256_text(edit.new),
+            }
+            for edit in self.edits
+        ]
         return {
             "kernel_sha256": sha256_text(self.kernel),
             "arm_files": {
@@ -502,6 +578,8 @@ class Arm(NamedTuple):
             **({"agents_sha256": sha256_text(self.agents)} if self.agents else {}),
             **({"arm_done": list(self.done)} if self.done else {}),
             **({"arm_adopted": True} if self.adopted else {}),
+            "elements": {"dropped": list(self.dropped), "added": list(self.added)},
+            **({"edits": {"sha256": self.edits_sha256, "items": edits}} if self.edits else {}),
         }
 
 
@@ -596,6 +674,321 @@ def fixture_arm(name: str, arm: Arm) -> Arm:
     return arm._replace(files=files)
 
 
+# --- element arms ---------------------------------------------------------------------------
+
+
+def element_of(path: str) -> str | None:
+    """The element a workspace file belongs to: `skill:<name>` for a file under a skill copy's
+    folder, `fragment:<id>` for an installed fragment; None for any other file."""
+
+    from outcomebound_tools import facts
+
+    for root in SKILL_ROOTS:
+        if path.startswith(root) and "/" in path[len(root) :]:
+            return f"skill:{path[len(root) :].split('/', 1)[0]}"
+    folder, _, name = path.rpartition("/")
+    if folder == facts.FRAGMENT_DIR and name.endswith(".md"):
+        return f"fragment:{name[: -len('.md')]}"
+    return None
+
+
+def install_elements(arm: Arm) -> tuple[str, ...]:
+    """Every element an adopted install of the arm's fragments holds, in the order of the
+    pointers: the blocks, each fragment, each skill this checkout's install carries, the
+    launcher."""
+
+    return (
+        KERNEL_ELEMENT,
+        FACTS_ELEMENT,
+        POINTERS_ELEMENT,
+        *(f"fragment:{item}" for item in arm.selected),
+        *(f"skill:{skill}" for skill in carried_skills(REPO)),
+        LAUNCHER_ELEMENT,
+    )
+
+
+def read_edits(path: Path) -> tuple[tuple[Edit, ...], str]:
+    """The edits a `--edits` file lists, in order, and the file's SHA-256. EditsError where the
+    file is not a JSON list of `{"path", "old", "new"}` objects of strings, where an `old` is
+    empty, or where a path is not workspace-relative."""
+
+    try:
+        raw = path.read_bytes()
+        document = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError) as problem:
+        raise EditsError(f"not readable JSON: {problem}") from None
+    if not isinstance(document, list) or not document:
+        raise EditsError('a list of {"path": ..., "old": ..., "new": ...} objects, not empty')
+    edits = []
+    for item in document:
+        if not isinstance(item, dict) or sorted(item) != ["new", "old", "path"]:
+            raise EditsError('each edit is exactly {"path": ..., "old": ..., "new": ...}')
+        if not all(isinstance(value, str) for value in item.values()):
+            raise EditsError("each edit's path, old and new are strings")
+        relative = PurePosixPath(item["path"])
+        if relative.is_absolute() or ".." in relative.parts or relative.as_posix() != item["path"]:
+            raise EditsError(f"{item['path']!r} is not a workspace-relative path")
+        if not item["old"]:
+            raise EditsError(f"{item['path']}: old is empty; name the text the edit replaces")
+        edits.append(Edit(item["path"], item["old"], item["new"]))
+    return tuple(edits), hashlib.sha256(raw).hexdigest()
+
+
+def edited(text: str, edit: Edit) -> str:
+    """`text` with the edit applied; EditsError where its `old` does not occur exactly once."""
+
+    count = text.count(edit.old)
+    if count != 1:
+        raise EditsError(
+            f"{edit.path}: the text to replace occurs {count} times, not once: {edit.old[:80]!r}"
+        )
+    return text.replace(edit.old, edit.new, 1)
+
+
+def element_arm(base: Arm, kind: str, elements: Elements) -> Arm:
+    """The element arm built from `base`, the current arm of an adopted install: as `current`,
+    the install less each dropped element; as `none`, only the added elements. Its files, kernel
+    and launcher are what the build installs, the edits applied to the files they name (and an
+    edit of AGENTS.md to the kernel, where its text occurs there once), so `record()` gives the
+    digests of what is installed. EditsError where an edit's text does not occur once."""
+
+    arm = base._replace(
+        name=kind,
+        dropped=elements.dropped,
+        added=elements.added,
+        edits=elements.edits,
+        edits_sha256=elements.edits_sha256,
+    )
+    files = {path: data for path, data in base.files.items() if arm.keeps(element_of(path) or "")}
+    skills = tuple(
+        (condition, path)
+        for condition, path in base.skills
+        if arm.keeps(element_of(path) or "") and arm.keeps(POINTERS_ELEMENT)
+    )
+    kernel = base.kernel if arm.keeps(KERNEL_ELEMENT) else ""
+    for edit in elements.edits:
+        if edit.path in files:
+            try:
+                files[edit.path] = edited(files[edit.path].decode("utf-8"), edit).encode("utf-8")
+            except UnicodeDecodeError:
+                raise EditsError(f"{edit.path} is not UTF-8 text") from None
+        elif edit.path == NOTE and kernel.count(edit.old) == 1:
+            kernel = kernel.replace(edit.old, edit.new, 1)
+    launcher = base.launcher if arm.keeps(LAUNCHER_ELEMENT) else None
+    return arm._replace(kernel=kernel, files=files, launcher=launcher, skills=skills)
+
+
+def element_refusal(install: Install, elements: Elements) -> str:
+    """Why a fixture whose install is `install` cannot run the element arm, or an empty string:
+    it has no install.json, a fragment its install does not select, a skill no install carries,
+    or an edit of a file the install does not write."""
+
+    if not install.adopted:
+        return (
+            f"an element arm is built from an adopted install, and the fixture has no "
+            f"{INSTALL_FILE}"
+        )
+    for element in (*elements.dropped, *elements.added):
+        kind, _, item = element.partition(":")
+        if kind == "fragment" and item not in install.fragments:
+            selected = ", ".join(install.fragments) or "none"
+            return (
+                f"{element}: its {INSTALL_FILE} selects no fragment {item} (it selects {selected})"
+            )
+        if kind == "skill" and item not in carried_skills(REPO):
+            return f"{element}: the install carries no skill {item}"
+    for edit in elements.edits:
+        if edit.path != NOTE and element_of(edit.path) is None:
+            return (
+                f"--edits names {edit.path}; an edit changes {NOTE} or an installed skill or "
+                "fragment file"
+            )
+    return ""
+
+
+def element_label(kind: str, elements: Elements) -> str:
+    """The default name of an element arm: `current-minus-<element>[-<element>...]` or
+    `none-plus-<element>[...]`, each `:` written as `.`; the arm's own name otherwise."""
+
+    named = elements.dropped if kind != NONE else elements.added
+    if not named:
+        return kind
+    joined = "-".join(element.replace(":", ".") for element in named)
+    return f"{kind}-{'plus' if kind == NONE else 'minus'}-{joined}"
+
+
+def _pointer_element(line: str) -> str | None:
+    """The element a pointer line points into, or None for any other line of the block."""
+
+    found = POINTER_LINE.match(line)
+    return element_of(found.group(1)) if found else None
+
+
+def _line_kept(arm: Arm, line: str) -> bool:
+    """Whether the element arm keeps one line of the guidance-pointers block. A pointer line
+    belongs to its fragment or skill and to the block whole: the current arm keeps it while it
+    keeps both, the none arm adds it with either. Any other line belongs to the block alone."""
+
+    element = _pointer_element(line)
+    if element is None:
+        return arm.keeps(POINTERS_ELEMENT)
+    owners = (arm.keeps(POINTERS_ELEMENT), arm.keeps(element))
+    return any(owners) if arm.name == NONE else all(owners)
+
+
+def shaped_note(text: str, arm: Arm) -> str:
+    """AGENTS.md as the element arm has it, from the text adopt wrote: each block the arm does
+    not keep cut as adopt cuts it, and the guidance-pointers block left with the lines the arm
+    keeps. Where the none arm adds a pointer line without the block, the block keeps its markers,
+    its read-once line and that line only."""
+
+    from outcomebound_tools import adopt, facts
+
+    for element, block in ((KERNEL_ELEMENT, adopt.KERNEL), (FACTS_ELEMENT, facts.FACTS)):
+        if not arm.keeps(element):
+            text = adopt.cut(text, block)
+    found = adopt.block_text(text, facts.POINTERS)
+    if found is None:
+        return text
+    lines = found.decode("utf-8").split("\n")
+    kept = [line for line in lines[1:-1] if _line_kept(arm, line)]
+    if not arm.keeps(POINTERS_ELEMENT):
+        if not kept:
+            return adopt.cut(text, facts.POINTERS)
+        kept = [facts.ONCE, *kept]
+    return text.replace(found.decode("utf-8"), "\n".join([lines[0], *kept, lines[-1]]), 1)
+
+
+def _remove(workdir: Path, relative: str, data: bytes | None) -> None:
+    """Put a file back as it was before the install (`data`), or remove it where it was not
+    there, with each folder the removal leaves empty."""
+
+    path = workdir / relative
+    if data is not None:
+        path.write_bytes(data)
+        return
+    path.unlink(missing_ok=True)
+    for folder in path.parents:
+        if folder == workdir or not folder.is_dir() or any(folder.iterdir()):
+            break
+        folder.rmdir()
+
+
+def apply_edits(workdir: Path, edits: tuple[Edit, ...]) -> str:
+    """Apply the edits to the built workspace's files, in order; why one could not be, or an
+    empty string."""
+
+    for edit in edits:
+        path = workdir / edit.path
+        if not path.is_file():
+            return f"--edits: the install wrote no {edit.path}"
+        try:
+            path.write_bytes(edited(path.read_bytes().decode("utf-8"), edit).encode("utf-8"))
+        except UnicodeDecodeError:
+            return f"--edits: {edit.path} is not UTF-8 text"
+        except EditsError as problem:
+            return f"--edits: {problem}"
+    return ""
+
+
+def _shed_files(workdir: Path, arm: Arm, before: dict[str, bytes], written: list[str]) -> None:
+    """Take from adopt's install the files the element arm does not hold: the current arm each
+    dropped element's (a skill's copies at each skill root among them), the none arm every file
+    adopt wrote (`written`) but an added element's, each put back as it was before the install
+    (`before`). AGENTS.md is left to `shaped_note`."""
+
+    if arm.name == NONE:
+        for path in written:
+            if path != NOTE and not arm.keeps(element_of(path) or ""):
+                _remove(workdir, path, before.get(path))
+        return
+    for path in sorted(tree_hashes(workdir)):
+        element = element_of(path)
+        if element is not None and not arm.keeps(element):
+            _remove(workdir, path, None)
+
+
+def shape_install(workdir: Path, arm: Arm, before: dict[str, bytes], written: list[str]) -> str:
+    """Make adopt's install in `workdir` the element arm's, before it joins the seed: its files
+    as `_shed_files` leaves them, AGENTS.md as `shaped_note` gives it (removed where adopt wrote
+    it and nothing is left), then the edits applied. Why it could not be made so, or an empty
+    string; the kernel block left in AGENTS.md must be the arm's kernel, which its record
+    digests."""
+
+    from outcomebound_tools import adopt
+
+    _shed_files(workdir, arm, before, written)
+    note = workdir / NOTE
+    if note.is_file():
+        text = note.read_bytes().decode("utf-8")
+        shaped = shaped_note(text, arm)
+        if not shaped and NOTE not in before:
+            _remove(workdir, NOTE, None)
+        elif shaped != text:
+            note.write_bytes(shaped.encode("utf-8"))
+    unfit = apply_edits(workdir, arm.edits)
+    if unfit:
+        return unfit
+    text = note.read_bytes().decode("utf-8") if note.is_file() else ""
+    block = adopt.block_text(text, adopt.KERNEL)
+    if (block.decode("utf-8") if block else "") != arm.kernel:
+        return "the kernel block in AGENTS.md is not the arm's kernel"
+    return ""
+
+
+def element_problems(workdir: Path, arm: Arm) -> list[str]:
+    """What the built workspace of an element arm holds that differs from its elements: a block,
+    fragment file, skill folder or pointer line present that the arm does not keep, or absent
+    that it keeps; for the none arm, a file adopt writes that no element owns."""
+
+    from outcomebound_tools import adopt, facts
+
+    note = workdir / NOTE
+    text = note.read_text("utf-8") if note.is_file() else ""
+    found = adopt.block_text(text, facts.POINTERS)
+    lines = found.decode("utf-8").split("\n")[1:-1] if found else []
+    pointed = {_pointer_element(line) for line in lines} - {None}
+    problems = []
+
+    def expect(what: str, wanted: bool, present: bool) -> None:
+        if wanted != present:
+            problems.append(f"{what} {'missing' if wanted else 'present'}")
+
+    for element in install_elements(arm):
+        kind, _, item = element.partition(":")
+        if element in (KERNEL_ELEMENT, FACTS_ELEMENT):
+            block = adopt.KERNEL if element == KERNEL_ELEMENT else facts.FACTS
+            expect(
+                f"the {block} block", arm.keeps(element), adopt.block_text(text, block) is not None
+            )
+        elif element == POINTERS_ELEMENT:
+            lined = [item for item in install_elements(arm) if item.startswith(LINED)]
+            wanted = arm.keeps(element) or (arm.name == NONE and any(map(arm.keeps, lined)))
+            expect(f"the {facts.POINTERS} block", wanted, found is not None)
+        elif kind == "fragment":
+            fragment = f"{facts.FRAGMENT_DIR}/{item}.md"
+            expect(f"{element}'s file", arm.keeps(element), (workdir / fragment).is_file())
+            line = f"- x: read {fragment}"
+            expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+        elif kind == "skill":
+            present = any((workdir / root / item).exists() for root in SKILL_ROOTS)
+            expect(f"{element}'s folder", arm.keeps(element), present)
+            line = f"- x: read {SKILL_ROOTS[-1]}{item}/SKILL.md"
+            expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+    if arm.name == NONE:
+        for path in (adopt.WORKSPACE_IGNORE, adopt.LOCAL_IGNORE, adopt.MANIFEST):
+            expect(path, False, (workdir / path).exists())
+    return problems
+
+
+def element_problem(workdir: Path, arm: Arm) -> str:
+    """Why the built workspace of an element arm does not hold exactly its elements, or an empty
+    string (for any other arm too)."""
+
+    problems = element_problems(workdir, arm) if arm.shaped() else []
+    return "the arm does not hold exactly its elements: " + "; ".join(problems) if problems else ""
+
+
 def fixture_write_roots(name: str, workdir: Path) -> tuple[Path, ...]:
     """Only the upgrade case grants nested Git and exact managed skill directories."""
 
@@ -616,18 +1009,24 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     them, and the guidance pointers, each skill's with its condition, rendered by the engine as
     an install renders them. An arm that is another guidance
     set's own files writes that set's AGENTS.md above the note instead, and no facts or pointers.
+    An element arm is installed by adopt as the current arm is, and then made its own
+    (`shape_install`); the none arm plus elements keeps the note as the none arm's setup left it.
     """
 
-    if arm.name not in INSTALLED and not (arm.name == EARLIER and (EARLIER_REF or arm.agents)):
+    installs = arm.name in INSTALLED or (arm.name == EARLIER and (EARLIER_REF or arm.agents))
+    if not installs and not arm.adopted:
         return ""
     from outcomebound_tools import facts, fragments
 
-    for note in ("AGENTS.md", "README.md"):
+    rewritten = []
+    for note in ("AGENTS.md", "README.md") if arm.name != NONE else ():
         path = workdir / note
         if path.is_file():
-            path.write_text(NOTE_POINTER.sub("", path.read_text(encoding="utf-8")), "utf-8")
+            text = path.read_text(encoding="utf-8")
+            path.write_text(NOTE_POINTER.sub("", text), "utf-8")
+            rewritten += [note] if NOTE_POINTER.search(text) else []
     if arm.adopted:
-        return adopt_install(workdir, arm)
+        return adopt_install(workdir, arm, tuple(rewritten))
     agents = workdir / "AGENTS.md"
     if arm.agents:
         # Another guidance set's AGENTS.md, as it is, ahead of the fixture's own project note.
@@ -657,13 +1056,15 @@ def as_installed(workdir: Path, arm: Arm) -> str:
     return ""
 
 
-def adopt_install(workdir: Path, arm: Arm) -> str:
+def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> str:
     """Install the arm into the built fixture as an adopter does: this checkout's launcher runs
     `outcomebound adopt --harness codex` with the arm's fragments and Done commands, which writes
     the kernel, facts and pointers blocks into AGENTS.md, the skills, the fragments,
     `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what its own ignore files
-    keep out, is folded into the seed commit; the setup's other uncommitted edits stay so. Why
-    it could not, or an empty string."""
+    keep out, and the notes `as_installed` rewrote (`rewritten`) are folded into the seed
+    commit; the setup's other uncommitted edits stay so. An
+    element arm's install is made its own (`shape_install`) before it is folded in, and may
+    leave nothing to fold. Why it could not, or an empty string."""
 
     env = {**child_env(), **HERMETIC_GIT}
     argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", HARNESS]
@@ -671,11 +1072,22 @@ def adopt_install(workdir: Path, arm: Arm) -> str:
     for line in arm.done:
         argv += ["--done", line]
     before = tree_hashes(workdir)
+    saved = {
+        path: (workdir / path).read_bytes()
+        for path, digest in before.items()
+        if arm.shaped() and not digest.startswith("link:")
+    }
     done = bounded_command(argv, cwd=str(workdir), env=env, timeout=SETUP_TIMEOUT)
     if done.returncode != 0:
         return f"adopt exited {done.returncode}: {(done.stdout + done.stderr).strip()[-600:]}"
     after = tree_hashes(workdir)
     written = sorted(path for path in {*before, *after} if before.get(path) != after.get(path))
+    if arm.shaped():
+        unfit = shape_install(workdir, arm, saved, written)
+        if unfit:
+            return unfit
+        after = tree_hashes(workdir)
+        written = sorted(path for path in {*before, *after} if before.get(path) != after.get(path))
     ignored = subprocess.run(
         ["git", "check-ignore", "--stdin"],
         input="\n".join(written),
@@ -685,9 +1097,12 @@ def adopt_install(workdir: Path, arm: Arm) -> str:
         env=env,
         encoding="utf-8",
     ).stdout.splitlines()
-    kept = [path for path in written if path not in ignored]
+    # A note whose pointer to the core skill `as_installed` took out joins the seed even where
+    # the install leaves it as it was: an element arm may cut every block adopt wrote into it.
+    kept = sorted({*(path for path in written if path not in ignored), *rewritten})
     if not kept:
-        return "adopt wrote nothing into the fixture"
+        # An element arm may keep nothing adopt wrote: the none arm plus the launcher alone.
+        return "" if arm.shaped() else "adopt wrote nothing into the fixture"
     for command in (
         ["git", "add", "-A", "--", *kept],
         ["git", "commit", "-q", "--amend", "--no-edit"],
@@ -923,14 +1338,17 @@ def protected_snapshot(
     workdir: Path,
     installed_files: tuple[str, ...] = (),
     without_skills: bool = False,
+    dropped: tuple[str, ...] = (),
 ) -> dict[str, str]:
     """Digests of the grading inputs the model could rewrite, taken while the build is trusted.
 
     `protected.paths` stays beside the fixture's definition, outside the workspace, and the
     digests stay in this process: the model can edit the files, never this baseline. The
     files the arm installed are protected beside them. An arm `without_skills`, the kernel-off
-    arm or another guidance set's own files, protects no OutcomeBound skill copy: each the list
-    names must be absent, since that arm has none; the skills it installs are protected.
+    arm or another guidance set's own files, protects no OutcomeBound skill copy it does not
+    install: each the list names must be absent, since that arm has none; the skills it installs
+    are protected. The same holds for the copies of each skill in `dropped`, which an element arm
+    takes from the current install.
     """
 
     snapshot = {}
@@ -942,7 +1360,9 @@ def protected_snapshot(
         relative = Path(name)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"protected path is not fixture-relative: {name}")
-        if without_skills and listed and name.startswith(SKILL_ROOTS):
+        skill = (element_of(name) or "").partition(":")[2]
+        absent = without_skills or skill in dropped
+        if absent and listed and name.startswith(SKILL_ROOTS) and name not in installed_files:
             if (workdir / relative).exists():
                 raise ValueError(f"the arm carries no skill, yet the build holds {name}")
             continue
@@ -1148,7 +1568,9 @@ def build_workspace(
     if built.returncode != 0:
         extra["error"] = f"fixture setup exited {built.returncode}"
         return report, {}, None, ""
-    unfit = as_installed(workdir, arm) or installed(workdir, arm.files)
+    unfit = (
+        as_installed(workdir, arm) or installed(workdir, arm.files) or element_problem(workdir, arm)
+    )
     if not unfit:
         refresh_baseline_hashes(workdir, stage)
     if unfit:
@@ -1160,6 +1582,9 @@ def build_workspace(
             workdir,
             tuple(arm.files),
             without_skills=arm.name == NONE or verbatim_install(arm),
+            dropped=tuple(
+                item.split(":", 1)[1] for item in arm.dropped if item.startswith("skill:")
+            ),
         )
     except (OSError, ValueError) as problem:
         extra["error"] = f"protected fixture setup failed: {problem}"
@@ -1664,19 +2089,19 @@ def _provenance(metas: list[dict[str, Any]]) -> list[str]:
 
 def _with_tokens(path: Path, meta: dict[str, Any]) -> dict[str, Any]:
     """The record, with its tokens read from the saved transcript where it kept none, and its
-    session's cost from the native copy beside it where it kept none."""
+    session's cost and skill catalog from the native copy beside it where it kept none."""
 
     if "tokens_used" not in meta:
         saved = path.with_name(path.name.replace(".meta.json", ".transcript.txt"))
         text = saved.read_text(encoding="utf-8", errors="replace") if saved.is_file() else ""
         meta = {**meta, "tokens_used": tokens_used(text)}
-    if "session_tokens" not in meta:
+    if "session_tokens" not in meta or "catalog" not in meta:
         native = path.with_name(path.name.replace(".meta.json", ".native.jsonl"))
         try:
             records = parse_records(native.read_bytes()) if native.is_file() else None
         except (OSError, ValueError):
             records = None
-        meta = {**meta, "session_tokens": session_tokens(records)}
+        meta = {"session_tokens": session_tokens(records), "catalog": catalog(records), **meta}
     return meta
 
 
@@ -1698,11 +2123,89 @@ def _medians(runs: list[dict[str, Any]]) -> str:
 
 
 def _spent(tokens: dict[str, Any]) -> str:
+    """Tokens as a line gives them: input, with the cached and the uncached among it, and
+    output, with the reasoning among it."""
+
+    cached = round(tokens["cached_input_tokens"])
+    uncached = round(tokens["input_tokens"] - tokens["cached_input_tokens"])
     return (
-        f"input {round(tokens['input_tokens'])} (cached {round(tokens['cached_input_tokens'])}), "
+        f"input {round(tokens['input_tokens'])} (cached {cached}, uncached {uncached}), "
         f"output {round(tokens['output_tokens'])} "
         f"(reasoning {round(tokens['reasoning_output_tokens'])}) tokens"
     )
+
+
+def _catalog_text(found: dict[str, Any] | None) -> str:
+    """A call's skill catalog as a line gives it, or `unrecorded`."""
+
+    if not found:
+        return UNRECORDED
+    plugins = ", ".join(f"{name} {count}" for name, count in found["plugins"].items())
+    return (
+        f"{found['skills']} skills, plugin skills {plugins or 'none'}; "
+        f"developer messages {found['developer_characters']} characters"
+    )
+
+
+def _catalog_shape(found: dict[str, Any] | None) -> str:
+    """What two calls' catalogs are compared by: the count of skills and each plugin's count.
+    The developer messages' size is not among it: it holds the workspace's path."""
+
+    if not found:
+        return UNRECORDED
+    return json.dumps([found["skills"], found["plugins"]], sort_keys=True)
+
+
+def _catalog_lines(group: list[dict[str, Any]]) -> list[str]:
+    """The skill catalog each call of the group was given, one line where all were given the
+    same; a group whose calls saw different catalogs is flagged. Nothing for a group whose
+    records come from before a native session was read."""
+
+    if not any(run.get("session_tokens") or run.get("catalog") for run in group):
+        return []
+    runs = sorted(group, key=lambda run: run["repetition"])
+    shapes = {_catalog_shape(run.get("catalog")) for run in runs}
+    if len(shapes) == 1:
+        sizes = sorted(run["catalog"]["developer_characters"] for run in runs if run.get("catalog"))
+        found = runs[0].get("catalog")
+        if found and sizes[0] != sizes[-1]:
+            size = f"{sizes[0]} to {sizes[-1]}"
+            found = {**found, "developer_characters": size}
+        return [f"  catalog: {_catalog_text(found)}"]
+    lines = [f"  UNVERIFIED: these calls saw {len(shapes)} different skill catalogs"]
+    lines += [
+        f"  repetition {run['repetition']} catalog: {_catalog_text(run.get('catalog'))}"
+        for run in runs
+    ]
+    return lines
+
+
+def _catalog_comparison(metas: list[dict[str, Any]]) -> list[str]:
+    """For each fixture that more than one arm ran, a line where the arms' calls were given
+    different plugin skills: the arms' own skills differ by design, the plugins should not."""
+
+    lines = []
+    for fixture in sorted({str(meta.get("fixture")) for meta in metas}):
+        runs = [meta for meta in metas if str(meta.get("fixture")) == fixture]
+        arms = sorted({str(meta["arm"]) for meta in runs})
+        seen = {
+            arm: sorted(
+                {
+                    json.dumps(meta["catalog"]["plugins"], sort_keys=True)
+                    if meta.get("catalog")
+                    else UNRECORDED
+                    for meta in runs
+                    if meta["arm"] == arm
+                }
+            )
+            for arm in arms
+        }
+        if len(arms) > 1 and len({item for items in seen.values() for item in items}) > 1:
+            lines.append(
+                f"UNVERIFIED: the arms on {fixture} were given different plugin skills: "
+                + "; ".join(f"{arm} {' or '.join(items)}" for arm, items in seen.items())
+            )
+    return lines
 
 
 def _cost_lines(group: list[dict[str, Any]], runs: list[dict[str, Any]]) -> list[str]:
@@ -1748,16 +2251,23 @@ def _recorded(value: Any) -> str:
     return UNRECORDED if value is None else str(value)
 
 
-def _instrument(meta: dict[str, Any]) -> tuple[str, str, str, str]:
+def _instrument(meta: dict[str, Any]) -> tuple[str, str, str, str, str]:
     """What the run was measured with: its kernel, the files its install wrote, the graders that
-    judged it and the grading files they read. Records that differ in one are not one group."""
+    judged it, the grading files they read, and an element arm's elements and edits (none for
+    any other arm, whether its record names them or not). Records that differ in one are not one
+    group."""
 
     files = meta.get("arm_files")
+    elements = meta.get("elements") or {}
+    shape = {key: value for key, value in elements.items() if value}
+    if meta.get("edits"):
+        shape["edits"] = meta["edits"].get("sha256")
     return (
         _recorded(meta.get("kernel_sha256")),
         UNRECORDED if files is None else json.dumps(files, sort_keys=True),
         _recorded(meta.get("graders_sha256")),
         _recorded(meta.get("grading_files_sha256")),
+        json.dumps(shape, sort_keys=True) if shape else "none",
     )
 
 
@@ -1804,7 +2314,7 @@ def _attempts(
 
 
 def _short(text: str) -> str:
-    return text if text == UNRECORDED else hashlib.sha256(text.encode()).hexdigest()[:12]
+    return text if text in (UNRECORDED, "none") else hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
 def _regrade_line(run: dict[str, Any], other: dict[str, Any]) -> str:
@@ -1851,7 +2361,7 @@ def summarize(directories: list[Path]) -> int:
     labels = [group_key[:5] for group_key in groups]
     for group_key, group in sorted(groups.items()):
         _print_group(group_key, group, labels.count(group_key[:5]) > 1, alternates, copies)
-    for line in _provenance(metas):
+    for line in [*_provenance(metas), *_catalog_comparison(counted)]:
         print(line)
     return 0
 
@@ -1872,10 +2382,10 @@ def _print_group(
     tail = f" ({failed} failed call(s) not counted)" if failed else ""
     print(f"{fixture} | {harness_name} | {arm} | {model} {effort}: PASS {passed}/{len(runs)}{tail}")
     if split:
-        names = ("kernel", "files", "graders", "grading files")
+        names = ("kernel", "files", "graders", "grading files", "elements")
         found = zip(names, instrument, strict=True)
         print("  instrument: " + ", ".join(f"{name} {_short(value)}" for name, value in found))
-    for line in _cost_lines(group, runs):
+    for line in [*_cost_lines(group, runs), *_catalog_lines(group)]:
         print(line)
     for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
         count = sum(1 for run in runs if run["claims"].get(claim) == "PASS")
@@ -1914,7 +2424,16 @@ def _parser() -> argparse.ArgumentParser:
             f"{len(default_fixtures())} fixtures x 3 repetitions: "
             f"{len(default_fixtures()) * len(REPETITIONS)} runs; "
             "the handoff, lifecycle and adoption "
-            "fixtures run only when --fixtures names them."
+            "fixtures run only when --fixtures names them. "
+            "On a fixture with an install.json, an element arm measures one part of the "
+            f"install: --drop takes elements from current, --add puts elements into {NONE}, "
+            "and --edits changes the installed text; elements are "
+            f"{KERNEL_ELEMENT} (the operating-contract block), {FACTS_ELEMENT} (the "
+            f"project-facts block), {POINTERS_ELEMENT} (the guidance-pointers block whole), "
+            "fragment:<id> (its file and pointer line), skill:<name> (its folder and pointer "
+            f"line) and {LAUNCHER_ELEMENT} (on the call's PATH). Each is built from adopt's own "
+            "install with no model call; --dump-arm shows it, and STATUS.json and each meta "
+            "record arm_kind, elements and the edits' digests."
         ),
     )
     parser.add_argument(
@@ -1923,6 +2442,30 @@ def _parser() -> argparse.ArgumentParser:
         help=f"{EARLIER}: an earlier wording of the kernel; current: what adopt "
         f"installs for {HARNESS}, and the launcher on PATH; {UNSIZED}: current without the "
         f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher",
+    )
+    parser.add_argument(
+        "--drop",
+        action="append",
+        metavar="ELEMENT",
+        help="with --arm current: the install less ELEMENT (kernel, facts, pointers, "
+        "fragment:<id>, skill:<name> or launcher); repeat for more; the default label is "
+        "current-minus-<element>[-<element>...], each ':' written as '.'",
+    )
+    parser.add_argument(
+        "--add",
+        action="append",
+        metavar="ELEMENT",
+        help=f"with --arm {NONE}: the {NONE} arm plus exactly ELEMENT, from adopt's own install; "
+        f"repeat for more; the default label is {NONE}-plus-<element>[-<element>...]",
+    )
+    parser.add_argument(
+        "--edits",
+        default="",
+        metavar="FILE",
+        help='apply FILE, a JSON list of {"path", "old", "new"}, to the installed files after the '
+        "install (AGENTS.md, a skill's or a fragment's file); each old occurs exactly once in its "
+        "file, else the run exits 2 before it starts; an empty new deletes the text; with --arm "
+        f"current (and --drop) or --arm {NONE} with --add, under --arm-label",
     )
     parser.add_argument(
         "--earlier-ref",
@@ -1945,7 +2488,8 @@ def _parser() -> argparse.ArgumentParser:
         default="",
         metavar="NAME",
         help="name the arm NAME in STATUS.json, the metas, INDEX.json and the summary, in place "
-        "of its kind (for a ref that stands for a variant of the guidance)",
+        "of its kind or an element arm's default label (for a ref, or edits, that stand for a "
+        "variant of the guidance)",
     )
     parser.add_argument(
         "--harness",
@@ -2012,7 +2556,8 @@ def _parser() -> argparse.ArgumentParser:
         "--summary",
         nargs="+",
         metavar="DIR",
-        help="print the verdicts the runs under each DIR recorded, and run nothing",
+        help="print the verdicts the runs under each DIR recorded, what their calls spent "
+        "(uncached input among it) and the skill catalog each call was given, and run nothing",
     )
     return parser
 
@@ -2033,9 +2578,13 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
     return names
 
 
-def fixture_arms(parser: argparse.ArgumentParser, arm: str, names: list[str]) -> dict[str, Arm]:
-    """The arm each fixture runs under, with its install's fragments and Done commands; a
-    fixture whose install.json the runner refuses exits 2, before anything is built."""
+def fixture_arms(
+    parser: argparse.ArgumentParser, arm: str, names: list[str], elements: Elements = NO_ELEMENTS
+) -> dict[str, Arm]:
+    """The arm each fixture runs under, with its install's fragments and Done commands, and the
+    elements and edits `elements` names; a fixture whose install.json the runner refuses, or
+    that cannot run the element arm (`element_refusal`, an edit whose text does not occur once
+    in an installed skill or fragment file), exits 2, before anything is built."""
 
     arms = {}
     for name in names:
@@ -2043,9 +2592,92 @@ def fixture_arms(parser: argparse.ArgumentParser, arm: str, names: list[str]) ->
             chosen = fixture_install(name)
         except InstallError as problem:
             parser.error(f"{name}/{INSTALL_FILE}: {problem}")
-        installed = load_arm(arm, chosen.fragments, chosen.done, chosen.adopted)
-        arms[name] = fixture_arm(name, installed)
+        if not elements.named():
+            installed = load_arm(arm, chosen.fragments, chosen.done, chosen.adopted)
+            arms[name] = fixture_arm(name, installed)
+            continue
+        refused = element_refusal(chosen, elements)
+        if refused:
+            parser.error(f"{name}: {refused}")
+        base = load_arm("current", chosen.fragments, chosen.done, True)
+        try:
+            arms[name] = element_arm(base, arm, elements)
+        except EditsError as problem:
+            parser.error(f"{name}: --edits: {problem}")
+        missing = [
+            edit.path for edit in elements.edits if edit.path not in (NOTE, *arms[name].files)
+        ]
+        if missing:
+            parser.error(f"{name}: --edits: the arm installs no {', '.join(missing)}")
     return arms
+
+
+def element_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> Elements:
+    """The elements and edits the options name, checked: `--drop` with `--arm current`, `--add`
+    with `--arm none`, each a known element and named once, and `--edits` a readable file, for
+    the current arm or the none arm plus elements, under `--arm-label`. A refusal exits 2."""
+
+    dropped, added = tuple(args.drop or ()), tuple(args.add or ())
+    if dropped and args.arm != "current":
+        parser.error("--drop takes an element from the current install: use --arm current")
+    if added and args.arm != NONE:
+        parser.error(f"--add puts an element into the {NONE} arm: use --arm {NONE}")
+    for element in (*dropped, *added):
+        if not ELEMENT.fullmatch(element):
+            parser.error(
+                f"no element {element!r}; there are {KERNEL_ELEMENT}, {FACTS_ELEMENT}, "
+                f"{POINTERS_ELEMENT}, fragment:<id>, skill:<name> and {LAUNCHER_ELEMENT}"
+            )
+    for named in (dropped, added):
+        if len(set(named)) != len(named):
+            parser.error("name each element once")
+    return Elements(dropped, added, *edits_option(parser, args, added))
+
+
+def edits_option(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, added: tuple[str, ...]
+) -> tuple[tuple[Edit, ...], str]:
+    """The edits `--edits` names and the digest of their file, or none; it changes the current
+    arm or the none arm plus elements, under `--arm-label`. A refusal exits 2."""
+
+    if not args.edits:
+        return (), ""
+    if args.arm not in ("current", NONE) or (args.arm == NONE and not added):
+        parser.error(f"--edits changes an install: use --arm current, or --arm {NONE} with --add")
+    if not args.arm_label:
+        parser.error("--edits needs --arm-label: name the variant the edits make")
+    try:
+        return read_edits(Path(args.edits))
+    except EditsError as problem:
+        parser.error(f"--edits {args.edits}: {problem}")
+
+
+def run_arm(kind: str, elements: Elements) -> Arm:
+    """The arm a run's STATUS.json records, with no fixture's fragments: the named arm, or the
+    element arm built from the current install."""
+
+    if not elements.named():
+        return load_arm(kind)
+    return element_arm(load_arm("current", adopted=True), kind, elements)
+
+
+def tried_edits(parser: argparse.ArgumentParser, arms: dict[str, Arm]) -> None:
+    """Exit 2, before the run starts, where an edit of AGENTS.md does not apply: each fixture
+    whose arm edits it is built once in a temporary folder, with no model call, and removed."""
+
+    for name, arm in arms.items():
+        if all(edit.path != NOTE for edit in arm.edits):
+            continue
+        workdir = new_workspace(None)
+        stage = new_stage((workdir,))
+        extra: dict[str, Any] = {}
+        try:
+            failure = build_workspace(name, arm, workdir, extra, stage)[0]
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+            shutil.rmtree(workdir, ignore_errors=True)
+        if failure is not None:
+            parser.error(f"{name}: {extra.get('error', 'the fixture could not be built')}")
 
 
 PROBE_PROMPT = "Reply with the word ok. Do not run commands.\n"
@@ -2158,10 +2790,85 @@ def _engine_import(workdir: Path, path: str) -> str:
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
+def _elements_text(arm: Arm) -> str:
+    """An element arm's elements, as the dump and the isolation rule name them."""
+
+    named = f"dropped {list(arm.dropped)}" if arm.name != NONE else f"added {list(arm.added)}"
+    edits = f"; {len(arm.edits)} edit(s), file {arm.edits_sha256[:12]}" if arm.edits else ""
+    return f"{arm.name} arm, {named}{edits}"
+
+
+def _element_lines(arm: Arm) -> list[str]:
+    """An element arm's elements, each kept or not, and its edits, for the dump."""
+
+    lines = [
+        f"{'kept' if arm.keeps(element) else 'not held'}: {element}"
+        for element in install_elements(arm)
+    ]
+    lines.insert(0, _elements_text(arm))
+    lines += [
+        f"edit {edit.path}: old {sha256_text(edit.old)[:12]}, new {sha256_text(edit.new)[:12]}"
+        for edit in arm.edits
+    ]
+    return lines
+
+
+def outside_elements(text: str, arm: Arm) -> str:
+    """An instruction file's text less what the none arm's added elements put there: each added
+    block, and an added pointer line with the read-once line and markers it keeps. What is left
+    is the text a call reaches outside the arm's elements."""
+
+    if arm.name != NONE or not arm.added:
+        return text
+    from outcomebound_tools import adopt, facts
+
+    for element, block in (
+        (KERNEL_ELEMENT, adopt.KERNEL),
+        (FACTS_ELEMENT, facts.FACTS),
+        (POINTERS_ELEMENT, facts.POINTERS),
+    ):
+        if arm.keeps(element):
+            text = adopt.cut(text, block)
+    found = adopt.block_text(text, facts.POINTERS)
+    if found is None:
+        return text
+    lines = found.decode("utf-8").split("\n")
+    left = [
+        line
+        for line in lines[1:-1]
+        if line != facts.ONCE and not arm.keeps(_pointer_element(line) or "")
+    ]
+    if not left:
+        return adopt.cut(text, facts.POINTERS)
+    return text.replace(found.decode("utf-8"), "\n".join([lines[0], *left, lines[-1]]), 1)
+
+
+def _carried_outside(workdir: Path, arm: Arm) -> list[str]:
+    """What the none arm plus elements carries outside them: a file under `.outcomebound/`, or
+    an OutcomeBound skill's folder at a skill root, that no added element owns."""
+
+    from outcomebound_tools import fragments
+
+    found = [
+        f".outcomebound/{path}"
+        for path in tree_hashes(workdir / ".outcomebound")
+        if not arm.keeps(element_of(f".outcomebound/{path}") or "")
+    ]
+    found += [
+        f"{root}{skill}"
+        for root in SKILL_ROOTS
+        for skill in fragments.SKILLS
+        if (workdir / root / skill).exists() and not arm.keeps(f"skill:{skill}")
+    ]
+    return found
+
+
 def isolation(arm: Arm, workdir: Path, prompt: str, path: str, home: Path) -> list[list[str]]:
     """Each isolation rule of the call, as `[rule, PASS|FAIL, detail]`: the only `outcomebound`
     on its PATH is the arm's own; its Codex home and the folders above its workspace give it no
-    instructions or skills; and an arm that carries no OutcomeBound text reaches none."""
+    instructions or skills; an arm that carries no OutcomeBound text reaches none; and an
+    element arm holds exactly its elements, the none arm plus elements reaching no OutcomeBound
+    text, skill or launcher outside them."""
 
     own = [os.path.realpath(arm.launcher)] if arm.launcher else []
     reached = launchers(path)
@@ -2183,20 +2890,30 @@ def isolation(arm: Arm, workdir: Path, prompt: str, path: str, home: Path) -> li
             f"{instructions_above(workdir.parent) or 'no instruction file'}",
         ),
     ]
+    if arm.shaped():
+        problems = element_problems(workdir, arm)
+        rows.append(("elements", not problems, "; ".join(problems) or _elements_text(arm)))
     if arm.name == NONE or verbatim_install(arm):
         texts = [
             prompt,
-            *(Path(f).read_text("utf-8", "replace") for f in instructions_above(workdir)),
+            *(
+                outside_elements(Path(f).read_text("utf-8", "replace"), arm)
+                for f in instructions_above(workdir)
+            ),
         ]
         named = [text for text in texts if "outcomebound" in text.lower()]
-        carried = [
-            str(item.relative_to(workdir))
-            for item in (
-                workdir / ".outcomebound",
-                *(workdir / root / "using-outcomebound" for root in SKILL_ROOTS),
-            )
-            if item.exists()
-        ]
+        carried = (
+            _carried_outside(workdir, arm)
+            if arm.shaped()
+            else [
+                str(item.relative_to(workdir))
+                for item in (
+                    workdir / ".outcomebound",
+                    *(workdir / root / "using-outcomebound" for root in SKILL_ROOTS),
+                )
+                if item.exists()
+            ]
+        )
         rows.append(
             (
                 "no-outcomebound-text",
@@ -2221,9 +2938,11 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if name not in fixture_names():
         parser.error(f"no fixture {name}; there are {', '.join(fixture_names())}")
     set_earlier_ref(parser, args)
-    arm = fixture_arms(parser, args.arm, [name])[name]
+    elements = element_options(parser, args)
+    arm = fixture_arms(parser, args.arm, [name], elements)[name]
+    label = args.arm_label or element_label(args.arm, elements)
     root = workspace_root(args.workspace_root)
-    workspace = root / f"dump-{uuid.uuid4().hex[:12]}" / f"{name}-{arm.name}" if root else None
+    workspace = root / f"dump-{uuid.uuid4().hex[:12]}" / f"{name}-{label}" if root else None
     refused = refuse_workspaces(root, [workspace]) if root and workspace else ""
     if refused:
         raise SystemExit(f"run: {refused}")
@@ -2246,8 +2965,9 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     )
     home = tool.home()
     rows = isolation(arm, workdir, prompt, path, home)
+    fragments = [item for item in arm.selected if not arm.shaped() or arm.keeps(f"fragment:{item}")]
     lines = [
-        f"fixture {name}, arm {arm.name}; workspace {workdir} (kept)",
+        f"fixture {name}, arm {label}; workspace {workdir} (kept)",
         *_section("argv (the prompt is its stdin)", [" ".join(shlex.quote(a) for a in argv)]),
         *_section("prompt", prompt.splitlines()),
         *_section("instruction files from the workspace up", _instruction_files(workdir)),
@@ -2256,16 +2976,18 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
             [
                 *(f"reaches the call: {item}" for item in home_leaks(home)),
                 f"codex's own skills: {_entries(home / 'skills' / SYSTEM_SKILLS) or 'none'}",
-                f"plugin cache (enabled only by the config.toml the call ignores; UNVERIFIED): "
-                f"{_entries(home / 'plugins' / 'cache') or 'none'}",
+                "plugin cache (the call ignores the config.toml that enables plugins and turns "
+                "the remote plugin sync off; a run's catalog record shows the skills a call was "
+                f"given): {_entries(home / 'plugins' / 'cache') or 'none'}",
             ],
         ),
         *_section("PATH entries holding outcomebound", launchers(path)),
         *_section(
             f"install: {install.sandbox} sandbox, Done {list(arm.done) or 'none'}, "
-            f"fragments {list(arm.selected) or 'none'}",
+            f"fragments {fragments or 'none'}",
             [f"{sha}  {file}" for file, sha in arm.record()["arm_files"].items()],
         ),
+        *(_section("elements", _element_lines(arm)) if arm.shaped() else []),
         *_section("isolation", [" ".join(row) for row in rows]),
     ]
     print("\n".join(lines))
@@ -2334,6 +3056,7 @@ def _main(argv: list[str] | None = None) -> int:
         return _no_call(parser, args)
     names = checked_fixtures(parser, args)
     set_earlier_ref(parser, args)
+    elements = element_options(parser, args)
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     root = workspace_root(args.workspace_root)
@@ -2341,10 +3064,12 @@ def _main(argv: list[str] | None = None) -> int:
     if args.probe:
         return probe(args, out, root)
     refuse_unclean(parser, names, tool.home(), root / out.name if root else None)
-    arm = load_arm(args.arm)
-    # Each fixture's install, read before anything runs: an install.json the runner refuses, or
-    # a fragment the engine does not ship, stops the run here.
-    arms = fixture_arms(parser, args.arm, names)
+    # Each fixture's install, read before anything runs: an install.json the runner refuses, a
+    # fragment the engine does not ship, an element the install does not hold or an edit that
+    # does not apply stops the run here.
+    arms = fixture_arms(parser, args.arm, names, elements)
+    tried_edits(parser, arms)
+    arm = run_arm(args.arm, elements)
     if root:
         wanted = [workspace_path(root, out, name, args.repetition) for name in names]
         refused = refuse_workspaces(root, wanted)
@@ -2359,7 +3084,7 @@ def _main(argv: list[str] | None = None) -> int:
         "run_id": run_id,
         "date": datetime.date.today().isoformat(),
         "harness": tool.name,
-        "arm": args.arm_label or args.arm,
+        "arm": args.arm_label or element_label(args.arm, elements),
         "arm_kind": args.arm,
         "earlier_ref": EARLIER_REF or None,
         "earlier_verbatim": EARLIER_VERBATIM or None,
