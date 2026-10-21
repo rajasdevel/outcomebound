@@ -260,7 +260,7 @@ def test_the_dump_shows_an_element_arm_and_passes_its_rules(
     assert "--- elements ---\nnone arm, added ['kernel']\nkept: kernel\nnot held: facts" in printed
     for rule in ("launcher-on-path", "elements", "no-outcomebound-text", "no-engine-import"):
         assert f"{rule} PASS" in printed, printed
-    assert "features.remote_plugin=false" in printed
+    assert "features.plugins=false" in printed
     assert RUN._main([*arguments, "--arm", "current", "--drop", "fragment:commands"]) == 0
     printed = capsys.readouterr().out
     assert "arm current-minus-fragment.commands;" in printed
@@ -550,10 +550,10 @@ def test_the_catalog_is_read_from_the_developer_messages_before_the_first_user_m
     }
 
 
-def test_every_call_turns_the_remote_plugin_sync_off(tmp_path: Path) -> None:
+def test_every_call_turns_plugins_off(tmp_path: Path) -> None:
     argv = RUN.make_harness().command("m", "medium", tmp_path, tmp_path / "last.md")
-    assert argv[argv.index("features.remote_plugin=false") - 1] == "-c"
-    assert argv.index("features.remote_plugin=false") < argv.index("-m")
+    assert argv[argv.index("features.plugins=false") - 1] == "-c"
+    assert argv.index("features.plugins=false") < argv.index("-m")
 
 
 BASE = {

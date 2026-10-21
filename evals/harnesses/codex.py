@@ -40,11 +40,13 @@ NAME = "codex"
 # under `$CODEX_HOME/agents/`, which codex read in every recorded run (codex-cli 0.158.0 to
 # 0.162.1); docs/evaluations.md states it as a limit.
 #
-# With the user config ignored, codex's remote plugin sync was the one source of skills that
-# still varied between calls: it runs asynchronously, so the account's remote plugins joined the
-# skill catalog in some calls and not in others, which changed both the prompt's size and what
-# the model read. `features.remote_plugin=false` turns the sync off (codex-cli 0.163.0 accepts
-# it); each run's `catalog` record shows which skills its call was given.
+# With the user config ignored, the account's plugins still reached the skill catalog: with the
+# remote plugin sync on, they joined it in some calls and not in others (the sync runs
+# asynchronously); with the sync off, codex read them from its plugin cache in every call. Both
+# change the prompt's size and what the model reads. `features.plugins=false` keeps every plugin
+# out and leaves the workspace's own skills and codex's system skills (codex-cli 0.163.0,
+# observed with `codex debug prompt-input`, which calls no model); each run's `catalog` record
+# shows which skills its call was given.
 ISOLATION = (
     "--ignore-user-config",
     "--ignore-rules",
@@ -55,7 +57,7 @@ ISOLATION = (
     "-c",
     "memories.use_memories=false",
     "-c",
-    "features.remote_plugin=false",
+    "features.plugins=false",
 )
 # The heading of the skill list in codex's developer message; each entry under it is one line,
 # `- <name>: <description> (file: <path>)`, a plugin's skill named `<plugin>:<skill>`.

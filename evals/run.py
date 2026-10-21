@@ -2977,7 +2977,7 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
                 *(f"reaches the call: {item}" for item in home_leaks(home)),
                 f"codex's own skills: {_entries(home / 'skills' / SYSTEM_SKILLS) or 'none'}",
                 "plugin cache (the call ignores the config.toml that enables plugins and turns "
-                "the remote plugin sync off; a run's catalog record shows the skills a call was "
+                "plugins off; a run's catalog record shows the skills a call was "
                 f"given): {_entries(home / 'plugins' / 'cache') or 'none'}",
             ],
         ),

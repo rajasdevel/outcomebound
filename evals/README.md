@@ -380,12 +380,12 @@ and `/etc/codex/skills`. Both arms read these alike, so a run prints them and go
 that names a replica fixture refuses (exit 2), before anything is built or started, where one of
 them, or an instruction file at or above the folder its workspaces are made in, names
 OutcomeBound in any case or is an `AGENTS.md` or `AGENTS.override.md` with text: either would
-give the `none` arm guidance. Whether codex loads the plugins in a home's `plugins/cache` when
-the call ignores `config.toml` is `UNVERIFIED`; `--dump-arm` lists them. Every call turns codex's
-remote plugin sync off (`-c features.remote_plugin=false`): with the user config ignored, that
-sync was the one source of skills that varied between calls, since it runs asynchronously and the
-account's remote plugins joined the skill catalog in some calls and not in others. That the
-setting removes them from an `exec` call is `UNVERIFIED` until a run's catalog record shows it.
+give the `none` arm guidance. With the user config ignored, the account's plugins still reached
+the skill catalog: with codex's remote plugin sync on, they joined it in some calls and not in
+others, since the sync runs asynchronously; with the sync off, codex read them from its plugin
+cache (`plugins/cache`, which `--dump-arm` lists) in every call. So every call turns plugins off
+(`-c features.plugins=false`), which keeps the workspace's own skills and codex's system skills
+(observed with `codex debug prompt-input`, which calls no model).
 Each run's meta records the catalog its call was given (`catalog`: the characters of the
 developer messages before the first user message, the entries of their skill list, and each
 plugin with its skill count), read from the native session.
