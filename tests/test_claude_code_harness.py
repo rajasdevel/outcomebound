@@ -8,9 +8,11 @@ CLI's own start event, describe them; every stream below is synthetic.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -207,27 +209,78 @@ def _verdicts(rows: list[list[str]]) -> dict[str, str]:
 OB_SKILLS = ("diagnose", "using-outcomebound")
 
 
-def test_a_cell_that_loads_what_its_arm_gives_passes_and_what_no_event_names_stays_unverified() -> (
-    None
-):
-    expected = cs.Expected((), ("diagnose",), ("using-outcomebound",))
-    rows = cs.loading_check([_start(skills=["update-config", "diagnose"])], expected)
+def _attached(attachment: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "attachment", "sessionId": SESSION, "attachment": attachment}
+
+
+def _loaded(*paths: str, kind: str = "Project") -> dict[str, Any]:
+    files = [{"path": path, "type": kind, "content": ""} for path in paths]
+    return _attached({"type": "instructions", "files": files})
+
+
+def _listing(*names: str) -> dict[str, Any]:
+    return _attached({"type": "skill_listing", "names": list(names), "skillCount": len(names)})
+
+
+def _expected(workdir: Path | None = None, plugins: tuple[Path, ...] = ()) -> cs.Expected:
+    return cs.Expected(plugins, ("diagnose",), ("using-outcomebound",), workdir, ("AGENTS.md",))
+
+
+def test_a_cell_that_loads_what_its_arm_gives_passes_and_what_no_record_names_stays_unverified(
+    tmp_path: Path,
+) -> None:
+    start = _start(skills=["update-config", "diagnose"])
+    rows = cs.loading_check([start], _expected(tmp_path))
     assert _verdicts(rows) == {
         "start-event": "PASS",
         "plugins": "PASS",
         "skills": "PASS",
+        "skill-listing": "UNVERIFIED",
         "mcp-servers": "PASS",
         "hooks": "UNVERIFIED",
         "instruction-files": "UNVERIFIED",
     }
+    records = [_loaded(str(tmp_path / "AGENTS.md")), _listing("diagnose", "update-config")]
+    found = _verdicts(cs.loading_check([start], _expected(tmp_path), records))
+    assert found["instruction-files"] == "PASS" and found["skill-listing"] == "PASS"
+    assert cs.isolation_verdict(cs.loading_check([start], _expected(tmp_path), records)) == (
+        "UNVERIFIED",
+        ["hooks"],
+    )
+
+
+@pytest.mark.parametrize(
+    ("records", "why"),
+    [
+        ([_loaded("/user/.claude/rules/keep.md", kind="User")], "a user-level rules file"),
+        ([_loaded("/somewhere/AGENTS.md")], "an instruction file outside the workspace"),
+        ([_loaded()], "the workspace's AGENTS.md did not load"),
+    ],
+)
+def test_NEGATIVE_CONTROL_an_instruction_file_the_arm_does_not_give_fails_the_cell(
+    tmp_path: Path, records: list[dict[str, Any]], why: str
+) -> None:
+    start = _start(skills=["diagnose"])
+    rows = _verdicts(cs.loading_check([start], _expected(tmp_path), records))
+    assert rows["instruction-files"] == "FAIL", why
+
+
+def test_the_workspace_s_claude_md_hides_its_agents_md_from_the_expected_files(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "AGENTS.md").write_text("x\n", encoding="utf-8")
+    assert cs.workspace_instructions(tmp_path) == ("AGENTS.md",)
+    (tmp_path / "CLAUDE.md").write_text("x\n", encoding="utf-8")
+    assert cs.workspace_instructions(tmp_path) == ("CLAUDE.md",)
 
 
 @pytest.mark.parametrize(
     ("change", "item"),
     [
         ({"plugins": [{"name": "stray", "path": "/p/stray", "source": "stray@market"}]}, "plugins"),
-        ({"skills": ["using-outcomebound"]}, "skills"),
-        ({"skills": ["stray:tidy"]}, "skills"),
+        ({"skills": ["diagnose", "using-outcomebound"]}, "skills"),
+        ({"skills": ["diagnose", "stray:tidy"]}, "skills"),
+        ({"skills": ["diagnose", "stray-skill"]}, "skills"),
         ({"skills": []}, "skills"),
         ({"mcp_servers": [{"name": "claude.ai Mail", "status": "connected"}]}, "mcp-servers"),
     ],
@@ -235,16 +288,60 @@ def test_a_cell_that_loads_what_its_arm_gives_passes_and_what_no_event_names_sta
 def test_NEGATIVE_CONTROL_a_plugin_skill_or_server_the_arm_does_not_add_fails_the_cell(
     change: dict[str, Any], item: str
 ) -> None:
-    expected = cs.Expected((), ("diagnose",), ("using-outcomebound",))
     start = _start(**{"skills": ["diagnose"], **change})
-    assert _verdicts(cs.loading_check([start], expected))[item] == "FAIL"
+    assert _verdicts(cs.loading_check([start], _expected()))[item] == "FAIL"
+
+
+def test_a_built_in_skill_and_a_built_in_plugin_s_skill_are_accepted_and_named() -> None:
+    builtin = {"name": "agents-md", "path": "/built/in", "source": "agents-md@builtin"}
+    start = _start(plugins=[builtin], skills=["diagnose", "update-config", "agents-md:read"])
+    row = next(r for r in cs.loading_check([start], _expected()) if r[0] == "skills")
+    assert row[1] == "PASS" and "update-config" in row[2]
+    listing = [_listing("diagnose", "stray-skill")]
+    rows = _verdicts(cs.loading_check([start], _expected(), listing))
+    assert rows["skill-listing"] == "FAIL", "a stray skill told to the model fails the cell"
 
 
 def test_NEGATIVE_CONTROL_a_hook_that_runs_in_an_arm_that_adds_none_fails_the_cell() -> None:
     start = _start()
     events = cs.leaked_start(start)
     rows = _verdicts(cs.loading_check(events, cs.Expected()))
-    assert rows["hooks"] == "FAIL" and rows["plugins"] == "FAIL"
+    assert rows["hooks"] == "FAIL" and rows["plugins"] == "FAIL" and rows["skills"] == "FAIL"
+
+
+def _hook(name: str = "SessionStart:startup", **source: str) -> dict[str, Any]:
+    event = {"type": "system", "subtype": "hook_started", "hook_id": "h", "hook_name": name}
+    return {**event, "hook_event": name.split(":")[0], "session_id": SESSION, **source}
+
+
+def _ran(command: str, name: str = "SessionStart:startup") -> dict[str, Any]:
+    return _attached({"type": "hook_success", "hookName": name, "command": command})
+
+
+def test_a_hook_of_a_built_in_plugin_or_the_managed_policy_is_recorded_and_does_not_void() -> None:
+    builtin = {"name": "agents-md", "path": "/built/in", "source": "agents-md@builtin"}
+    start = _start(plugins=[builtin])
+    for event in (_hook(source="agents-md@builtin"), _hook(hook_source="policySettings")):
+        row = next(r for r in cs.loading_check([start, event], cs.Expected()) if r[0] == "hooks")
+        assert row[1] == "PASS", row
+    by_command = [_ran("/built/in/hooks/start.sh")]
+    rows = _verdicts(cs.loading_check([start, _hook()], cs.Expected(), by_command))
+    assert rows["hooks"] == "PASS"
+
+
+def test_NEGATIVE_CONTROL_a_hook_command_outside_the_arm_s_plugin_fails_a_plugin_arm(
+    tmp_path: Path,
+) -> None:
+    clone = tmp_path / "tidy"
+    clone.mkdir()
+    own = {"name": "tidy", "path": str(clone), "source": "tidy@inline"}
+    start = _start(plugins=[own])
+    expected = cs.Expected((clone,))
+    rows = _verdicts(cs.loading_check([start, _hook()], expected, [_ran(f"{clone}/h.sh")]))
+    assert rows["hooks"] == "PASS"
+    rows = _verdicts(cs.loading_check([start, _hook()], expected, [_ran("/user/hooks/h.sh")]))
+    assert rows["hooks"] == "FAIL"
+    assert _verdicts(cs.loading_check([start, _hook()], expected))["hooks"] == "UNVERIFIED"
 
 
 @pytest.mark.parametrize("field", ["plugins", "skills", "mcp_servers"])
@@ -257,7 +354,7 @@ def test_NEGATIVE_CONTROL_a_field_the_start_event_lacks_is_unverified_never_a_pa
     assert _verdicts(cs.loading_check([], cs.Expected())) == {"start-event": "FAIL"}
 
 
-def test_a_plugin_arm_passes_with_its_own_plugin_and_skills_and_fails_without_them(
+def test_a_plugin_arm_passes_with_its_own_plugin_and_fails_with_a_folder_that_shares_its_prefix(
     tmp_path: Path,
 ) -> None:
     clone = tmp_path / "third-party" / "tidy"
@@ -265,27 +362,61 @@ def test_a_plugin_arm_passes_with_its_own_plugin_and_skills_and_fails_without_th
     expected = cs.Expected((clone,), (), OB_SKILLS)
     own = {"name": "tidy", "path": str(clone), "source": "tidy@inline"}
     start = _start(plugins=[own], skills=["tidy:trim", "update-config"])
-    hook = cs.leaked_start(start)[1]
-    rows = _verdicts(cs.loading_check([start, hook], expected))
-    assert rows["plugins"] == "PASS" and rows["skills"] == "PASS" and rows["hooks"] == "UNVERIFIED"
+    rows = _verdicts(cs.loading_check([start], expected))
+    assert rows["plugins"] == "PASS" and rows["skills"] == "PASS"
     assert _verdicts(cs.loading_check([_start()], expected))["plugins"] == "FAIL"
+    carried = _start(plugins=[own], skills=["tidy:trim", "tidy:using-outcomebound"])
+    rows = _verdicts(cs.loading_check([carried], expected))
+    assert rows["skills"] == "FAIL", "an OutcomeBound skill the arm lacks, under the arm's plugin"
+    twin = {"name": "tidy", "path": f"{clone}-other", "source": "tidy@inline"}
+    assert _verdicts(cs.loading_check([_start(plugins=[twin])], expected))["plugins"] == "FAIL"
+
+
+def test_parallel_bash_calls_keep_each_its_own_status() -> None:
+    events = [
+        _start(),
+        _reply(1, _use("p1", "Bash", command="make a"), _use("p2", "Bash", command="make b")),
+        _result("p2", "b failed", error=True),
+        _result("p1", "a done"),
+        _end(),
+    ]
+    assert cs.decode(events).commands == [("make a", "succeeded", ""), ("make b", "failed", "")]
+
+
+def test_a_system_event_after_the_result_still_ends_the_stream() -> None:
+    late = _hook("SessionEnd")
+    assert cs.result_event([*WHOLE, late]) is WHOLE[-1]
+    assert cs.result_event([*WHOLE, _reply(9)]) is None, "a message after the result is not one"
+    assert cs.result_event([*WHOLE, WHOLE[-1]]) is None, "two results are not one"
 
 
 # --- what a call reaches before it runs --------------------------------------------------------
 
 
-def test_NEGATIVE_CONTROL_an_instruction_or_rules_file_above_the_workspace_fails_the_reach(
+@pytest.mark.parametrize(
+    "name", ["CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md", ".claude/AGENTS.md"]
+)
+def test_NEGATIVE_CONTROL_each_instruction_file_above_the_workspace_fails_the_reach(
+    tmp_path: Path, name: str
+) -> None:
+    workdir = tmp_path / "root" / "ws"
+    workdir.mkdir(parents=True)
+    assert _verdicts(cs.reach_rows(workdir))["nothing-above-workspace"] == "PASS"
+    (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / name).write_text("Be brief.\n", encoding="utf-8")
+    row = next(r for r in cs.reach_rows(workdir) if r[0] == "nothing-above-workspace")
+    assert row[1] == "FAIL" and name in row[2]
+
+
+def test_NEGATIVE_CONTROL_a_rules_file_above_or_a_used_cell_folder_fails_the_reach(
     tmp_path: Path,
 ) -> None:
     workdir = tmp_path / "root" / "ws"
     workdir.mkdir(parents=True)
-    clean = _verdicts(cs.reach_rows(workdir))
-    assert clean["nothing-above-workspace"] == "PASS"
     (tmp_path / ".claude" / "rules").mkdir(parents=True)
     (tmp_path / ".claude" / "rules" / "keep.md").write_text("Keep.\n", encoding="utf-8")
-    (tmp_path / "root" / "CLAUDE.md").write_text("Be brief.\n", encoding="utf-8")
     row = next(r for r in cs.reach_rows(workdir) if r[0] == "nothing-above-workspace")
-    assert row[1] == "FAIL" and "CLAUDE.md" in row[2] and "keep.md" in row[2]
+    assert row[1] == "FAIL" and "keep.md" in row[2]
     (workdir / "x").mkdir()
     fresh = _verdicts(cs.reach_rows(tmp_path / "other", (workdir,)))
     assert fresh["fresh-home"] == "FAIL", "a cell folder that holds something is not new"
@@ -305,19 +436,34 @@ def test_a_managed_policy_that_loads_code_or_instructions_fails_and_other_keys_a
     assert cs.managed("elsewhere") == ([], [])
 
 
+def test_NEGATIVE_CONTROL_the_reach_check_reads_this_machine_s_managed_policy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cs, "MANAGED", {sys.platform: tmp_path / "managed"})
+    (tmp_path / "managed").mkdir()
+    (tmp_path / "managed" / "CLAUDE.md").write_text("Policy.\n", encoding="utf-8")
+    (tmp_path / "ws").mkdir()
+    assert _verdicts(cs.reach_rows(tmp_path / "ws"))["managed-policy"] == "FAIL"
+
+
 # --- the harness, with a fake claude ------------------------------------------------------------
 
 # claude, faked as a Python program. `--version` and `auth status` answer at once. A call
-# records its argv, environment and prompt to $FAKE_RECORD, prints the start event, then either
-# runs to its end (a Bash call of the `probe` stub where one is on PATH, a Read, an Edit, a
-# denied Bash call, the result event), or, with $FAKE_SLOW, prints an assistant message of 1000
-# input tokens every fifth of a second and never ends; with $FAKE_TOUCH it rewrites
-# notes.txt and puts it back once the watch log the call protects holds the write. It writes
-# the native session under $CLAUDE_CONFIG_DIR/projects/ as it goes, the model and effort on
-# each assistant record ($FAKE_EFFORT overrides the effort). $FAKE_STRAY adds a plugin the arm
-# does not give, $FAKE_HOOK a hook event.
+# records its argv, environment and prompt to $FAKE_RECORD, prints the start event, and writes
+# the native session under $CLAUDE_CONFIG_DIR/projects/ as it goes: the model and effort on each
+# assistant record, an `instructions` record of the workspace's instruction file and a
+# `skill_listing` record. Then it either runs to its end (a Bash call of the `probe` stub, a
+# Read, an Edit, a denied Bash call, the result event), or, with $FAKE_SLOW, prints an assistant
+# message of 1000 input tokens every fifth of a second and never ends (with $FAKE_TOUCH it first
+# rewrites notes.txt and puts it back once the watch log the call protects holds the write), or,
+# for the sandbox probe's prompt, runs each numbered command with bash as a sandbox would: a
+# write outside the workspace refused and the hidden token unset, unless $FAKE_LEAKY.
+# Knobs: $FAKE_EFFORT (or "none": no effort recorded), $FAKE_MESSAGE_MODEL, $FAKE_INIT_MODEL,
+# $FAKE_SUFFIX (appended to both models), $FAKE_API_KEY_SOURCE, $FAKE_PERMISSION_MODE,
+# $FAKE_CWD, $FAKE_STRAY (a plugin), $FAKE_HOOK (a hook event), $FAKE_USER_RULES (a user-level
+# instruction file loaded).
 FAKE_CLAUDE = r"""#!/usr/bin/env python3
-import json, os, subprocess, sys, time
+import json, os, shutil, subprocess, sys, time
 from pathlib import Path
 
 argv = sys.argv[1:]
@@ -328,15 +474,18 @@ if argv[:2] == ["auth", "status"]:
     print(os.environ.get("FAKE_AUTH", "{}"))
     sys.exit(0)
 prompt = sys.stdin.read()
+env = os.environ
 def opt(name):
     return argv[argv.index(name) + 1] if name in argv else None
 cwd = os.getcwd()
-if os.environ.get("FAKE_RECORD"):
-    Path(os.environ["FAKE_RECORD"]).write_text(json.dumps(
-        {"argv": argv, "env": dict(os.environ), "prompt": prompt, "cwd": cwd}))
+if env.get("FAKE_RECORD"):
+    Path(env["FAKE_RECORD"]).write_text(json.dumps(
+        {"argv": argv, "env": dict(env), "prompt": prompt, "cwd": cwd}))
 key = "3f6c2a10-1111-4222-8333-444455556666"
-model, effort = opt("--model"), os.environ.get("FAKE_EFFORT") or opt("--effort")
-folder = Path(os.environ["CLAUDE_CONFIG_DIR"], "projects", cwd.replace("/", "-"))
+suffix = env.get("FAKE_SUFFIX", "")
+model = (env.get("FAKE_MESSAGE_MODEL") or opt("--model")) + suffix
+effort = env.get("FAKE_EFFORT") or opt("--effort")
+folder = Path(env["CLAUDE_CONFIG_DIR"], "projects", cwd.replace("/", "-"))
 folder.mkdir(parents=True, exist_ok=True)
 session = open(folder / f"{key}.jsonl", "w")
 def native(record):
@@ -347,16 +496,25 @@ def emit(event):
 dirs = [argv[i + 1] for i, word in enumerate(argv) if word == "--plugin-dir"]
 plugins = [{"name": Path(d).name, "path": d, "source": Path(d).name + "@inline"} for d in dirs]
 plugins.append({"name": "agents-md", "path": "/built/in", "source": "agents-md@builtin"})
-if os.environ.get("FAKE_STRAY"):
+if env.get("FAKE_STRAY"):
     plugins.append({"name": "stray", "path": "/p/stray", "source": "stray@market"})
 skills = sorted(p.parent.name for p in Path(cwd, ".claude", "skills").glob("*/SKILL.md"))
 skills += ["update-config"] + [Path(d).name + ":trim" for d in dirs]
 native({"type": "user", "cwd": cwd, "message": {"role": "user", "content": prompt}})
-emit({"type": "system", "subtype": "init", "cwd": cwd, "model": model,
-      "permissionMode": opt("--permission-mode"), "apiKeySource": "none",
+files = [{"path": str(Path(cwd, n)), "type": "Project", "content": ""}
+         for n in ("AGENTS.md",) if Path(cwd, n).is_file()]
+if env.get("FAKE_USER_RULES"):
+    files.append({"path": "/user/.claude/rules/keep.md", "type": "User", "content": ""})
+for attached in ({"type": "instructions", "files": files},
+                 {"type": "skill_listing", "names": skills, "skillCount": len(skills)}):
+    native({"type": "attachment", "cwd": cwd, "attachment": attached})
+emit({"type": "system", "subtype": "init", "cwd": env.get("FAKE_CWD") or cwd,
+      "model": (env.get("FAKE_INIT_MODEL") or opt("--model")) + suffix,
+      "permissionMode": env.get("FAKE_PERMISSION_MODE") or opt("--permission-mode"),
+      "apiKeySource": env.get("FAKE_API_KEY_SOURCE", "none"),
       "claude_code_version": "2.1.999", "tools": ["Bash", "Read", "Edit", "Write"],
       "mcp_servers": [], "skills": skills, "plugins": plugins})
-if os.environ.get("FAKE_HOOK"):
+if env.get("FAKE_HOOK"):
     emit({"type": "system", "subtype": "hook_started", "hook_id": "h", "hook_name": "x",
           "hook_event": "SessionStart"})
 usage = {"input_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 800,
@@ -364,15 +522,27 @@ usage = {"input_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_inpu
 def reply(n, *parts):
     message = {"id": f"msg_{n}", "role": "assistant", "model": model, "content": list(parts),
                "usage": usage}
-    native({"type": "assistant", "cwd": cwd, "effort": effort, "isSidechain": False,
-            "message": message})
+    record = {"type": "assistant", "cwd": cwd, "isSidechain": False, "message": message}
+    if effort != "none":
+        record["effort"] = effort
+    native(record)
     emit({"type": "assistant", "message": message, "parent_tool_use_id": None})
 def answer(key, content, error=False):
     part = {"type": "tool_result", "tool_use_id": key, "content": content, "is_error": error}
     emit({"type": "user", "message": {"role": "user", "content": [part]},
           "parent_tool_use_id": None})
-if os.environ.get("FAKE_SLOW"):
-    if os.environ.get("FAKE_TOUCH"):
+def use(key, name, **args):
+    return {"type": "tool_use", "id": key, "name": name, "input": args}
+def finish(turns, denials=()):
+    emit({"type": "result", "subtype": "success", "is_error": False, "num_turns": turns,
+          "result": "Done.", "total_cost_usd": 0.02, "usage": {**usage, "output_tokens": 40},
+          "modelUsage": {model: {"inputTokens": 800, "outputTokens": 40,
+                                 "cacheReadInputTokens": 3200, "cacheCreationInputTokens": 0,
+                                 "costUSD": 0.02}},
+          "permission_denials": [{"tool_name": "Bash", "tool_use_id": d, "tool_input": {}}
+                                 for d in denials]})
+if env.get("FAKE_SLOW"):
+    if env.get("FAKE_TOUCH"):
         settings = json.loads(opt("--settings"))
         log = next(Path(p) for p in settings["sandbox"]["filesystem"]["denyWrite"]
                    if p.endswith(".watch.jsonl"))
@@ -387,11 +557,25 @@ if os.environ.get("FAKE_SLOW"):
         reply(n, {"type": "text", "text": "working"})
         time.sleep(0.2)
     sys.exit(0)
-ran = subprocess.run(["probe"], capture_output=True, text=True)
-def use(key, name, **args):
-    return {"type": "tool_use", "id": key, "name": name, "input": args}
+if "ob-probe-stub" in prompt:
+    commands = [line.split(". ", 1)[1] for line in prompt.splitlines() if line[:2] in
+                ("1.", "2.", "3.", "4.", "5.")]
+    shell = {k: v for k, v in env.items()
+             if env.get("FAKE_LEAKY") or k != "CLAUDE_CODE_OAUTH_TOKEN"}
+    for n, command in enumerate(commands, start=1):
+        reply(n, use(f"c{n}", "Bash", command=command))
+        if command.startswith("touch ") and not env.get("FAKE_LEAKY"):
+            answer(f"c{n}", "touch: Operation not permitted", True)
+            continue
+        done = subprocess.run(["bash", "-c", command], capture_output=True, text=True, env=shell)
+        answer(f"c{n}", done.stdout + done.stderr, done.returncode != 0)
+    reply(9, {"type": "text", "text": "done"})
+    finish(len(commands) + 1)
+    sys.exit(0)
+probe = shutil.which("probe", path=env.get("PATH"))
+ran = subprocess.run([probe or "false"], capture_output=True, text=True)
 reply(1, use("t1", "Bash", command=f"cd {cwd} && probe"))
-answer("t1", ran.stdout if ran.returncode == 0 else ran.stderr, ran.returncode != 0)
+answer("t1", ran.stdout if ran.returncode == 0 else "probe: not found", ran.returncode != 0)
 reply(2, use("t2", "Read", file_path=f"{cwd}/notes.txt"),
       use("t3", "Edit", file_path=f"{cwd}/notes.txt"))
 answer("t2", "seed")
@@ -399,12 +583,7 @@ answer("t3", "edited")
 reply(3, use("t4", "Bash", command="curl example.com"))
 answer("t4", "Permission to use Bash has been denied.", True)
 reply(4, {"type": "text", "text": "Done."})
-emit({"type": "result", "subtype": "success", "is_error": False, "num_turns": 4, "result": "Done.",
-      "total_cost_usd": 0.02,
-      "usage": {**usage, "output_tokens": 40},
-      "modelUsage": {model: {"inputTokens": 800, "outputTokens": 40, "cacheReadInputTokens": 3200,
-                             "cacheCreationInputTokens": 0, "costUSD": 0.02}},
-      "permission_denials": [{"tool_name": "Bash", "tool_use_id": "t4", "tool_input": {}}]})
+finish(4, ["t4"])
 """
 
 STUB = '#!/bin/sh\necho "probe ran"\n'
@@ -445,9 +624,12 @@ OPERATOR = {
     "ANTHROPIC_MODEL": "other-model",
     "PONYTAIL_HOME": "/somewhere",
     "XDG_CONFIG_HOME": "/operator/config",
+    "XDG_DATA_DIRS": "/operator/share",
     "DISABLE_MICROCOMPACT": "1",
     "MCP_TIMEOUT": "5",
     "API_TIMEOUT_MS": "1",
+    "OLDPWD": "/operator/before",
+    "SSH_AUTH_SOCK": "/operator/agent.sock",
 }
 
 
@@ -463,6 +645,7 @@ def _workspace(tmp_path: Path) -> Path:
     (workspace / ".claude" / "skills" / "diagnose").mkdir(parents=True)
     (workspace / ".claude" / "skills" / "diagnose" / "SKILL.md").write_text("x", encoding="utf-8")
     (workspace / "notes.txt").write_text("seed\n", encoding="utf-8")
+    (workspace / "AGENTS.md").write_text("Project note.\n", encoding="utf-8")
     return workspace
 
 
@@ -495,7 +678,9 @@ def test_a_claude_code_call_is_identified_decoded_costed_and_checked_for_what_it
 ) -> None:
     result, _seen = _call(tmp_path, trusted, fake)
     assert result.error == "", result.checks
-    assert {row[1] for row in result.checks} == {"PASS"}
+    verdicts = {row[0]: row[1] for row in result.checks}
+    assert verdicts.pop("isolation") == "UNVERIFIED", "no record names the hooks"
+    assert set(verdicts.values()) == {"PASS"}
     assert result.observed == {
         "model": MODEL,
         "effort": "high",
@@ -515,20 +700,30 @@ def test_a_claude_code_call_is_identified_decoded_costed_and_checked_for_what_it
     assert extras["session_tokens"]["cost_usd"] == 0.02
     assert extras["session_tokens"]["input_tokens"] == 4000
     assert extras["void"] is None and extras["unknown_item_types"] == []
-    assert not [row for row in extras["isolation"] if row[1] == "FAIL"]
+    assert (extras["isolation_verdict"], extras["isolation_unverified"]) == (
+        "UNVERIFIED",
+        ["hooks"],
+    )
+    rows = {row[0]: row[1] for row in extras["isolation"]}
+    assert rows["instruction-files"] == "PASS" and rows["skill-listing"] == "PASS"
     kept = trusted / "kept.native.jsonl"
     assert kept.is_file() and Path(extras["native_session"]).read_bytes() == kept.read_bytes()
     cell = trusted / "kept.claude-home"
     assert extras["claude_home"] == str(cell) and cell.is_dir(), "the cell and its session stay"
+    assert "OutcomeBound eval" in (cell / "home" / ".gitconfig").read_text(encoding="utf-8")
 
 
 def test_a_call_runs_in_a_fresh_cell_with_none_of_the_operator_s_claude_setup(
     tmp_path: Path, trusted: Path, fake: Path
 ) -> None:
     """Breaks if the operator's Claude, Anthropic, Ponytail or XDG setting reaches a call, or
-    the call's sandbox, permission mode or sources change."""
+    the call's sandbox, permission mode, sources or synced skills and plugins change."""
 
-    _result, seen = _call(tmp_path, trusted, fake)
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    (trusted / "other.claude-home").mkdir()
+    request = Request(MODEL, "high", unreadable=(stage,))
+    _result, seen = _call(tmp_path, trusted, fake, request=request)
     env, argv = seen["env"], seen["argv"]
     cell = trusted / "kept.claude-home"
     assert env["HOME"] == str(cell / "home")
@@ -537,9 +732,9 @@ def test_a_call_runs_in_a_fresh_cell_with_none_of_the_operator_s_claude_setup(
     assert env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] == "1"
     assert env["CLAUDE_CODE_OAUTH_TOKEN"] == OPERATOR["CLAUDE_CODE_OAUTH_TOKEN"]
     inherited = ("CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "ANTHROPIC_MODEL", "PONYTAIL_HOME")
-    for name in (*inherited, "DISABLE_MICROCOMPACT", "MCP_TIMEOUT", "API_TIMEOUT_MS"):
+    dropped = ("DISABLE_MICROCOMPACT", "MCP_TIMEOUT", "API_TIMEOUT_MS", "XDG_DATA_DIRS")
+    for name in (*inherited, *dropped, "OLDPWD", "SSH_AUTH_SOCK", "ANTHROPIC_API_KEY"):
         assert name not in env, name
-    assert "ANTHROPIC_API_KEY" not in env
     assert argv[:5] == [
         "-p",
         "--output-format",
@@ -557,13 +752,23 @@ def test_a_call_runs_in_a_fresh_cell_with_none_of_the_operator_s_claude_setup(
         index = argv.index(pair[0])
         assert argv[index : index + 2] == pair
     assert "--strict-mcp-config" in argv and "--plugin-dir" not in argv
-    sandbox = json.loads(argv[argv.index("--settings") + 1])["sandbox"]
+    settings = json.loads(argv[argv.index("--settings") + 1])
+    assert settings["syncClaudeAiSkills"] is False and settings["syncClaudeAiPlugins"] is False
+    sandbox = settings["sandbox"]
     assert sandbox["enabled"] and sandbox["failIfUnavailable"]
     assert not sandbox["allowUnsandboxedCommands"]
-    assert sandbox["network"] == {"allowLocalBinding": False}
+    assert sandbox["network"] == {
+        "allowedDomains": [],
+        "strictAllowlist": True,
+        "allowLocalBinding": False,
+    }
     assert sandbox["credentials"]["envVars"] == [
         {"name": "CLAUDE_CODE_OAUTH_TOKEN", "mode": "deny"}
     ]
+    denied = sandbox["filesystem"]["denyRead"]
+    assert str(stage) in denied and str(trusted / "other.claude-home") in denied
+    assert str(cell) not in denied and str(trusted / "kept.native.jsonl") not in denied
+    assert not [path for path in denied if (tmp_path / "ws").resolve().is_relative_to(path)]
     assert seen["prompt"] == "Task: tidy.\n"
 
 
@@ -572,7 +777,13 @@ def test_a_call_runs_in_a_fresh_cell_with_none_of_the_operator_s_claude_setup(
     [
         ({"FAKE_STRAY": "1"}, "isolation: plugins"),
         ({"FAKE_HOOK": "1"}, "isolation: hooks"),
+        ({"FAKE_USER_RULES": "1"}, "isolation: instruction-files"),
         ({"FAKE_EFFORT": "low"}, "effort low, not high"),
+        ({"FAKE_MESSAGE_MODEL": "model-other"}, "native session reports model model-other"),
+        ({"FAKE_INIT_MODEL": "model-other"}, "stream reports model"),
+        ({"FAKE_API_KEY_SOURCE": "ANTHROPIC_API_KEY"}, "API key source 'ANTHROPIC_API_KEY'"),
+        ({"FAKE_PERMISSION_MODE": "bypassPermissions"}, "permission mode bypassPermissions"),
+        ({"FAKE_CWD": "/elsewhere"}, "working directory /elsewhere"),
     ],
 )
 def test_NEGATIVE_CONTROL_a_call_that_loaded_more_or_ran_otherwise_does_not_count(
@@ -582,6 +793,23 @@ def test_NEGATIVE_CONTROL_a_call_that_loaded_more_or_ran_otherwise_does_not_coun
     assert words in result.error, result.error
     if words.startswith("isolation"):
         assert result.extras["void"] == "isolation"
+
+
+def test_an_effort_no_record_names_is_unverified_and_a_context_suffix_names_the_same_model(
+    tmp_path: Path, trusted: Path, fake: Path
+) -> None:
+    result, _seen = _call(tmp_path, trusted, fake, env={"FAKE_EFFORT": "none"})
+    assert result.error == "", result.checks
+    assert {row[0]: row[1] for row in result.checks}["native-effort"] == "UNVERIFIED"
+    assert result.observed is not None and result.observed["effort"] is None
+    other = tmp_path / "second"
+    other.mkdir()
+    shutil.rmtree(trusted)
+    trusted.mkdir()
+    result, _seen = _call(other, trusted, fake, env={"FAKE_SUFFIX": "[1m]"})
+    assert result.error == "", result.checks
+    assert result.observed is not None and result.observed["model"] == MODEL
+    assert f"{MODEL}[1m]" in result.extras["models_raw"]
 
 
 def test_a_call_whose_input_passes_its_cap_is_stopped_and_still_identified(
@@ -620,6 +848,7 @@ def test_NEGATIVE_CONTROL_a_call_that_would_read_a_file_above_its_workspace_is_r
     with pytest.raises(ValueError, match="nothing-above-workspace"):
         _call(tmp_path, trusted, fake)
     assert not (tmp_path / "record.json").exists(), "the fake claude never started"
+    assert not (trusted / "kept.claude-home").exists(), "the refused call's cell is removed"
 
 
 def test_NEGATIVE_CONTROL_a_cell_that_exists_or_lies_in_the_model_s_reach_is_refused_first(
@@ -634,6 +863,15 @@ def test_NEGATIVE_CONTROL_a_cell_that_exists_or_lies_in_the_model_s_reach_is_ref
         harness.call(
             "x", Request(MODEL, "high"), workspace, (), os.environ["PATH"], workspace / "k.jsonl"
         )
+    assert not (tmp_path / "record.json").exists()
+
+
+def test_NEGATIVE_CONTROL_a_protected_path_inside_the_workspace_is_refused_first(
+    tmp_path: Path, trusted: Path, fake: Path
+) -> None:
+    request = Request(MODEL, "high", protected=(tmp_path / "ws" / "stubs",))
+    with pytest.raises(ValueError, match="inside a path the model may write"):
+        _call(tmp_path, trusted, fake, request=request)
     assert not (tmp_path / "record.json").exists()
 
 
@@ -663,7 +901,8 @@ def test_a_plugin_arm_passes_its_clone_and_loads_it(
     [
         ({"loggedIn": True, "authMethod": "claude.ai"}, True),
         ({"loggedIn": True, "authMethod": "oauth_token"}, True),
-        ({"loggedIn": True, "authMethod": "api_key", "apiKeySource": "ANTHROPIC_API_KEY"}, False),
+        ({"loggedIn": True, "authMethod": "api_key"}, False),
+        ({"loggedIn": True, "authMethod": "claude.ai", "apiKeySource": "ANTHROPIC_API_KEY"}, False),
         ({"loggedIn": False, "authMethod": "none"}, False),
     ],
 )
@@ -683,6 +922,40 @@ def test_preflight_observes_a_subscription_sign_in_from_a_fresh_cell_with_no_mod
     (env,) = seen
     assert env["HOME"] != os.environ.get("HOME") and "CLAUDECODE" not in env
     assert not Path(env["HOME"]).exists(), "the preflight's cell is removed after"
+
+
+@pytest.mark.parametrize("leaky", [False, True])
+def test_the_probe_shows_what_the_sandbox_gives_a_model_s_commands(
+    tmp_path: Path,
+    trusted: Path,
+    fake: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    leaky: bool,
+) -> None:
+    """The second probe's rows come from what the commands printed and what the runner finds
+    after them; a fake that leaks the token and writes outside the workspace must fail it."""
+
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", OPERATOR["CLAUDE_CODE_OAUTH_TOKEN"])
+    monkeypatch.setenv("PATH", f"{fake}{os.pathsep}{os.environ['PATH']}")
+    auth = json.dumps({"loggedIn": True, "authMethod": "oauth_token"})
+    env = {"FAKE_AUTH": auth, **({"FAKE_LEAKY": "1"} if leaky else {})}
+    harness = _harness(tmp_path / "record.json", env)
+    args = argparse.Namespace(model=MODEL, effort="high", repetition=1)
+    out = trusted / "probe"
+    code = RUN.probe(args, out, None, harness)
+    printed = capsys.readouterr().out
+    rows = {
+        line.split(" ")[1]: line.split(" ")[0] for line in printed.splitlines() if " - " in line
+    }
+    assert rows["sandbox-stub-on-path"] == "PASS" and rows["sandbox-path-first"] == "PASS"
+    assert rows["sandbox-git-commit"] == "PASS", "the cell's Git identity lets a commit through"
+    if leaky:
+        assert rows["sandbox-write-outside-denied"] == "FAIL"
+        assert rows["sandbox-token-hidden"] == "FAIL" and code == 1
+    else:
+        assert rows["sandbox-write-outside-denied"] == "PASS"
+        assert rows["sandbox-token-hidden"] == "PASS" and code == 0, printed
 
 
 # --- run.py and loop.py ---------------------------------------------------------------------
@@ -819,7 +1092,11 @@ print("records reached the check")
 
 
 def test_a_suite_run_on_claude_code_is_stopped_at_its_cap_with_its_watch_log_and_stubs(
-    tmp_path: Path, trusted: Path, fake: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    trusted: Path,
+    fake: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Breaks if the budget stop, the watcher or the stubs stop working for this harness: the
     fake rewrites a watched file and puts it back, and runs on until the cap stops it."""
@@ -842,6 +1119,10 @@ def test_a_suite_run_on_claude_code_is_stopped_at_its_cap_with_its_watch_log_and
     assert meta["harness"] == row["harness"] == "claude-code" and row["thread_id"] == SESSION
     assert (trusted / f"{NAME}.native.jsonl").is_file()
     assert (trusted / f"{NAME}.claude-home" / "config" / "projects").is_dir()
+    assert meta["isolation_verdict"] == "UNVERIFIED"
+    capsys.readouterr()
+    RUN.summarize([trusted])
+    assert "repetition 1 isolation: UNVERIFIED (" in capsys.readouterr().out
 
 
 def test_the_dry_run_builds_a_claude_code_cell_and_checks_the_loading_check_with_no_call(

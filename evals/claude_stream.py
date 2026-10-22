@@ -84,10 +84,14 @@ def start_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def result_event(events: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """The `result` event, where it is the stream's last event and its only one; else None."""
+    """The stream's one `result` event, where every event after it is a `system` event (a hook
+    or other notice the CLI prints as it shuts down); else None."""
 
-    found = [e for e in events if e.get("type") == "result"]
-    return found[0] if len(found) == 1 and events and events[-1] is found[0] else None
+    found = [i for i, e in enumerate(events) if e.get("type") == "result"]
+    if len(found) != 1:
+        return None
+    after = events[found[0] + 1 :]
+    return events[found[0]] if all(e.get("type") == "system" for e in after) else None
 
 
 def session_id(events: list[dict[str, Any]]) -> str:
@@ -150,17 +154,18 @@ class _Call(NamedTuple):
     background: bool
 
 
-def _status(result: dict[str, Any], key: str, denied: set[str], overlap: bool) -> str:
-    """A finished call's status: `declined` where the CLI denied it, `failed` for an error
-    result, `succeeded` for a result with content, `unverified` where it overlapped another
-    command or gave no content."""
+def _status(result: dict[str, Any], key: str, denied: set[str]) -> str:
+    """A finished call's status, from its own result, which the CLI links to it by id (so a
+    call that ran beside another keeps its own): `declined` where the CLI denied it, `failed`
+    for an error result, `succeeded` for a result with content, `unverified` where it gave no
+    content."""
 
     if key in denied:
         return "declined"
     if result.get("is_error") is True:
         return "failed"
     if result.get("is_error", False) is False and _text(result.get("content")) is not None:
-        return "unverified" if overlap else "succeeded"
+        return "succeeded"
     return "unverified"
 
 
@@ -177,7 +182,6 @@ class _Decoder:
         self.skills: list[str] = []
         self.pending: dict[str, _Call] = {}
         self.seen: set[str] = set()
-        self.overlapping: set[int] = set()
         self.broken = False
 
     def call(self, part: dict[str, Any]) -> None:
@@ -214,11 +218,6 @@ class _Decoder:
             self.broken = True
             return
         index = len(self.commands)
-        active = {
-            c.slot for c in self.pending.values() if c.kind == "command" and c.slot is not None
-        }
-        if active:
-            self.overlapping.update({*active, index})
         cwd = self.directories.get(key, "")
         self.commands.append(Command(_without_cd(command, cwd) if cwd else command, "", cwd))
         self.outputs.append(None)
@@ -235,9 +234,9 @@ class _Decoder:
         if call.slot is None:
             return
         if call.kind == "file":
-            self.files[call.slot][2] = _status(part, key, self.denied, False)
+            self.files[call.slot][2] = _status(part, key, self.denied)
             return
-        status = _status(part, key, self.denied, call.slot in self.overlapping)
+        status = _status(part, key, self.denied)
         if call.background and status == "succeeded":
             status = "unverified"  # started in the background, not seen to finish
         old = self.commands[call.slot]
@@ -531,6 +530,32 @@ def agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]:
     return values[0], ""
 
 
+def effort_of(records: list[dict[str, Any]]) -> tuple[str | None, str]:
+    """The effort the native session's main-thread assistant records give, and why there is
+    none. Records that name no effort (a model without effort support, an older CLI) do not
+    count against it; values that differ do, and none recorded at all is `unrecorded`."""
+
+    replies = _main_replies(records)
+    if not replies:
+        return None, "the native session has no assistant record"
+    named = {r["effort"] for r in replies if isinstance(r.get("effort"), str) and r["effort"]}
+    if not named:
+        return None, "unrecorded"
+    if len(named) != 1:
+        return None, f"the native session gives conflicting effort values: {sorted(named)}"
+    return named.pop(), ""
+
+
+# A context-window suffix a model name may carry (`[1m]`), which names no other model.
+CONTEXT_SUFFIX = re.compile(r"\[[^\]]*\]$")
+
+
+def model_base(name: str | None) -> str | None:
+    """`name` without a context-window suffix such as `[1m]`."""
+
+    return CONTEXT_SUFFIX.sub("", name).strip() if isinstance(name, str) else None
+
+
 def directories(records: list[dict[str, Any]]) -> dict[str, str]:
     """The working directory of each tool call, by its tool-use id, as the native session's
     assistant record that holds the call gives it (an absolute path), else nothing."""
@@ -575,14 +600,71 @@ MANAGED = {
 LOADING_KEYS = ("hooks", "enabledPlugins", "statusLine", "apiKeyHelper", "mcpServers")
 
 
+# The skills Claude Code itself ships, by name, as the 2.1.308 binary registers them: a bare
+# skill name in a start event or a skill listing is the arm's only where its workspace holds it
+# or it is one of these. A listed name outside both voids the cell; a built-in this list lacks
+# shows as such in the first probe, and is added here.
+BUILTIN_SKILLS = frozenset(
+    {
+        "artifact-capabilities",
+        "artifact-components",
+        "artifact-design",
+        "artifact-diagramming",
+        "artifact-pr-review",
+        "batch",
+        "claude-api",
+        "claude-code-docs",
+        "claude-in-chrome",
+        "code-review",
+        "commit",
+        "commit-push-pr",
+        "cowork-plugin",
+        "dataviz",
+        "debug",
+        "design",
+        "design-sync",
+        "doctor",
+        "explain-usage",
+        "fewer-permission-prompts",
+        "init",
+        "keybindings-help",
+        "loop",
+        "memory-types",
+        "plugin-authoring",
+        "pr",
+        "prototype",
+        "review",
+        "run",
+        "run-skill-generator",
+        "schedule",
+        "security-review",
+        "setup-claude",
+        "simplify",
+        "update-config",
+        "verify",
+        "workflow-authoring",
+        "workshop",
+    }
+)
+# Instruction files Claude Code loads from the working directory at start: these, and the
+# AGENTS.md pair only where none of these exists.
+WORKSPACE_INSTRUCTIONS = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
+WORKSPACE_AGENTS = ("AGENTS.md", ".claude/AGENTS.md")
+# The native session's hook records, which name the command a hook ran.
+HOOK_RECORDS = ("hook_success", "hook_non_blocking_error", "hook_blocking_error", "hook_cancelled")
+
+
 class Expected(NamedTuple):
     """What a cell may load beyond Claude Code's own: the plugin folders its arm adds, the skills
-    its workspace holds under `.claude/skills/`, and the OutcomeBound skills it does not carry,
-    which must not appear."""
+    its workspace holds under `.claude/skills/`, the OutcomeBound skills it does not carry, which
+    must not appear, its workspace, and the instruction files Claude Code should load from it
+    (workspace-relative)."""
 
     plugin_dirs: tuple[Path, ...] = ()
     skills: tuple[str, ...] = ()
     foreign_skills: tuple[str, ...] = ()
+    workdir: Path | None = None
+    instructions: tuple[str, ...] = ()
 
 
 def workspace_skills(workdir: Path) -> tuple[str, ...]:
@@ -590,6 +672,15 @@ def workspace_skills(workdir: Path) -> tuple[str, ...]:
     `SKILL.md`."""
 
     return tuple(sorted(p.parent.name for p in (workdir / ".claude" / "skills").glob("*/SKILL.md")))
+
+
+def workspace_instructions(workdir: Path) -> tuple[str, ...]:
+    """The instruction files Claude Code should load from `workdir` at start: each
+    `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` there, or, where it has none of them,
+    each `AGENTS.md` and `.claude/AGENTS.md`."""
+
+    found = tuple(name for name in WORKSPACE_INSTRUCTIONS if (workdir / name).is_file())
+    return found or tuple(name for name in WORKSPACE_AGENTS if (workdir / name).is_file())
 
 
 def _row(item: str, verdict: str, detail: str) -> list[str]:
@@ -603,16 +694,24 @@ def _inside(path: Any, folders: tuple[Path, ...]) -> bool:
     return any(resolved.is_relative_to(folder.resolve()) for folder in folders)
 
 
-def _plugins_row(
-    start: dict[str, Any], expected: Expected
-) -> tuple[list[str], list[str], list[str]]:
-    """The plugins row, and the names of the arm's own plugins and of the built-in ones."""
+class Plugins(NamedTuple):
+    """The start event's plugins, sorted: the arm's own and the built-in ones, by name and by
+    folder."""
 
-    own: list[str] = []
-    builtin: list[str] = []
+    own: tuple[str, ...] = ()
+    builtin: tuple[str, ...] = ()
+    builtin_paths: tuple[Path, ...] = ()
+
+
+def _plugins_row(start: dict[str, Any], expected: Expected) -> tuple[list[str], Plugins]:
+    """The plugins row, and the arm's own and the built-in plugins it names."""
+
     plugins = start.get("plugins")
     if not isinstance(plugins, list):
-        return _row("plugins", "UNVERIFIED", "the start event names no plugins"), own, builtin
+        return _row("plugins", "UNVERIFIED", "the start event names no plugins"), Plugins()
+    own: list[str] = []
+    builtin: list[str] = []
+    paths: list[Path] = []
     foreign = []
     for plugin in plugins:
         entry = plugin if isinstance(plugin, dict) else {"name": str(plugin)}
@@ -621,6 +720,8 @@ def _plugins_row(
             own.append(name)
         elif source.endswith(BUILTIN) or name.endswith(BUILTIN):
             builtin.append(name.removesuffix(BUILTIN))
+            if isinstance(entry.get("path"), str) and entry["path"]:
+                paths.append(Path(entry["path"]))
         else:
             foreign.append(f"{name} ({entry.get('path')})")
     missing = [
@@ -631,72 +732,237 @@ def _plugins_row(
     problems = [f"not the arm's: {', '.join(foreign)}"] if foreign else []
     problems += [f"the arm's plugin did not load: {', '.join(missing)}"] if missing else []
     detail = "; ".join(problems) or f"the arm's {own or 'none'}; built in {builtin or 'none'}"
-    return _row("plugins", "FAIL" if problems else "PASS", detail), own, builtin
+    found = Plugins(tuple(own), tuple(builtin), tuple(paths))
+    return _row("plugins", "FAIL" if problems else "PASS", detail), found
 
 
-def _skills_row(start: dict[str, Any], expected: Expected, plugins: list[str]) -> list[str]:
-    """The skills row: every workspace skill listed, no OutcomeBound skill the arm does not
-    carry, and no plugin skill but of the plugins named in `plugins`."""
+def _stray(name: str, expected: Expected, namespaces: tuple[str, ...]) -> bool:
+    """Whether one listed skill is not the arm's: an OutcomeBound skill it does not carry, a
+    plugin skill of a plugin outside `namespaces`, or a bare name neither the workspace's nor
+    built in."""
+
+    space, _colon, bare = name.rpartition(":")
+    if bare in expected.foreign_skills:
+        return True
+    if space:
+        return space not in namespaces
+    return bare not in expected.skills and bare not in BUILTIN_SKILLS
+
+
+def _skill_problems(names: list[str], expected: Expected, plugins: Plugins) -> list[str]:
+    """What is wrong with a list of skill names: a plugin skill of a plugin that is neither
+    the arm's nor built in, an OutcomeBound skill the arm does not carry, a bare name that is
+    neither the workspace's nor built in, and a workspace skill the list lacks."""
+
+    namespaces = (*plugins.own, *plugins.builtin)
+    stray = [name for name in names if _stray(name, expected, namespaces)]
+    listed = {name.rpartition(":")[2] for name in names}
+    missing = [name for name in expected.skills if name not in listed]
+    problems = [f"not the arm's: {', '.join(stray)}"] if stray else []
+    problems += [f"the workspace's skills did not load: {', '.join(missing)}"] if missing else []
+    return problems
+
+
+def _skills_row(start: dict[str, Any], expected: Expected, plugins: Plugins) -> list[str]:
+    """The skills row, from the start event's skill names (`_skill_problems`)."""
 
     skills = start.get("skills")
     if not isinstance(skills, list):
         return _row("skills", "UNVERIFIED", "the start event names no skills")
     names = [str(s.get("name") if isinstance(s, dict) else s) for s in skills]
-    bare = {name.split(":", 1)[-1] for name in names}
-    stray = [
-        name
-        for name in names
-        if (":" in name and name.split(":", 1)[0] not in plugins)
-        or name.split(":", 1)[-1] in expected.foreign_skills
-    ]
-    missing = [name for name in expected.skills if name not in bare]
-    problems = [f"not the arm's: {', '.join(stray)}"] if stray else []
-    problems += [f"the workspace's skills did not load: {', '.join(missing)}"] if missing else []
-    detail = "; ".join(problems) or f"{len(names)} listed"
+    problems = _skill_problems(names, expected, plugins)
+    built = sorted({n for n in names if n in BUILTIN_SKILLS})
+    detail = "; ".join(problems) or f"{len(names)} listed; built in accepted: {built or 'none'}"
     return _row("skills", "FAIL" if problems else "PASS", detail)
 
 
-def _hooks_row(events: list[dict[str, Any]], expected: Expected) -> list[str]:
-    """The hooks row: the start event names no hooks, so a hook the stream shows running in an
-    arm that adds no plugin fails, and anything else stays UNVERIFIED."""
+def attachments(records: list[dict[str, Any]] | None, kind: str) -> list[dict[str, Any]]:
+    """The native session's attachments of type `kind`, in order."""
 
-    hooks = hook_events(events)
-    if hooks and not expected.plugin_dirs:
-        return _row("hooks", "FAIL", f"hooks ran in an arm that adds none: {', '.join(hooks)}")
-    if hooks:
-        detail = f"ran with the arm's plugin, whose hooks they may not all be: {', '.join(hooks)}"
-    else:
-        detail = "no hook event in the stream; the start event names no hooks"
-    return _row("hooks", "UNVERIFIED", detail)
+    found = []
+    for record in records or []:
+        attached = record.get("attachment") if record.get("type") == "attachment" else None
+        if isinstance(attached, dict) and attached.get("type") == kind:
+            found.append(attached)
+    return found
 
 
-def loading_check(events: list[dict[str, Any]], expected: Expected) -> list[list[str]]:
-    """What the call loaded, from its start event and its hook events, each item `PASS`, `FAIL`
-    or `UNVERIFIED`. A field the start event does not carry is UNVERIFIED, never a pass; a
-    plugin, skill, MCP server or hook the arm does not add is a FAIL."""
+def _listing_row(
+    records: list[dict[str, Any]] | None, expected: Expected, plugins: Plugins
+) -> list[str]:
+    """The skill-listing row: the skills the native session shows the model was told of (its
+    `skill_listing` attachments' names), checked as the start event's are; UNVERIFIED where the
+    session holds no such record."""
+
+    listings = attachments(records, "skill_listing")
+    names = [str(n) for item in listings for n in item.get("names") or [] if isinstance(n, str)]
+    if not listings:
+        return _row("skill-listing", "UNVERIFIED", "the native session holds no skill listing")
+    problems = _skill_problems(sorted(set(names)), expected, plugins)
+    detail = "; ".join(problems) or f"{len(set(names))} skills listed to the model"
+    return _row("skill-listing", "FAIL" if problems else "PASS", detail)
+
+
+def _instructions_row(records: list[dict[str, Any]] | None, expected: Expected) -> list[str]:
+    """The instruction-files row, from the native session's `instructions` attachments (each
+    `files: [{path, type, content}]`): every file loaded lies in the workspace, and every file
+    the workspace should give at start loaded. UNVERIFIED where the session holds no such
+    record or the workspace is not known."""
+
+    loaded = [
+        item
+        for attached in attachments(records, "instructions")
+        for item in attached.get("files") or []
+        if isinstance(item, dict)
+    ]
+    if expected.workdir is None or not attachments(records, "instructions"):
+        detail = "the native session holds no instructions record"
+        return _row("instruction-files", "UNVERIFIED", detail)
+    workdir = expected.workdir.resolve()
+    outside = [
+        f"{item.get('path')} ({item.get('type')})"
+        for item in loaded
+        if not _inside(item.get("path"), (workdir,))
+    ]
+    seen = {
+        Path(str(item["path"])).resolve().relative_to(workdir).as_posix()
+        for item in loaded
+        if _inside(item.get("path"), (workdir,))
+    }
+    missing = [name for name in expected.instructions if name not in seen]
+    problems = [f"not the workspace's: {', '.join(outside)}"] if outside else []
+    problems += [f"the workspace's did not load: {', '.join(missing)}"] if missing else []
+    detail = "; ".join(problems) or f"loaded {sorted(seen) or 'none'}, all in the workspace"
+    return _row("instruction-files", "FAIL" if problems else "PASS", detail)
+
+
+def _hook_owners(
+    records: list[dict[str, Any]] | None, expected: Expected, plugins: Plugins
+) -> dict[str, set[str]]:
+    """Whose each hook the native session shows running is, by hook name: `arm` where the
+    command it ran lies in a plugin folder the arm adds, `builtin` where it lies in a built-in
+    plugin's folder, `other` for any other command."""
+
+    owners: dict[str, set[str]] = {}
+    for kind in HOOK_RECORDS:
+        for attached in attachments(records, kind):
+            command = attached.get("command")
+            if not isinstance(command, str) or not command:
+                continue
+            words = [w for w in command.replace("'", " ").replace('"', " ").split() if "/" in w]
+            if any(_inside(w, expected.plugin_dirs) for w in words):
+                owner = "arm"
+            elif any(_inside(w, plugins.builtin_paths) for w in words):
+                owner = "builtin"
+            else:
+                owner = "other"
+            owners.setdefault(str(attached.get("hookName")), set()).add(owner)
+    return owners
+
+
+def _named_source(event: dict[str, Any], plugins: Plugins) -> str | None:
+    """`builtin` or `managed` where a hook event names its source as a built-in plugin or the
+    managed policy; None where it names none."""
+
+    for key in ("source", "hook_source", "hookSource", "plugin"):
+        value = event.get(key)
+        if not isinstance(value, str):
+            continue
+        if value.endswith(BUILTIN) or value.removeprefix("plugin:") in plugins.builtin:
+            return "builtin"
+        if value in ("policySettings", "managed"):
+            return "managed"
+    return None
+
+
+def _hook_kinds(
+    events: list[dict[str, Any]], owners: dict[str, set[str]], plugins: Plugins
+) -> dict[str, list[str]]:
+    """Each hook the stream or the native session shows, by whose it is: the source its event
+    names, else its native record's owner (`_hook_owners`), else `unattributed`."""
+
+    kinds: dict[str, list[str]] = {}
+
+    def add(kind: str, name: str) -> None:
+        if name not in kinds.setdefault(kind, []):
+            kinds[kind].append(name)
+
+    for event in events:
+        if event.get("type") == "system" and event.get("subtype") in HOOK_EVENTS:
+            name = str(event.get("hook_name"))
+            named = _named_source(event, plugins)
+            for kind in {named} if named else owners.get(name, {"unattributed"}):
+                add(kind, name)
+    for name, found in owners.items():
+        for kind in found:
+            add(kind, name)
+    return kinds
+
+
+def _hooks_row(
+    events: list[dict[str, Any]],
+    expected: Expected,
+    plugins: Plugins,
+    records: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """The hooks row. A hook is attributed by the source its event names, or by the command its
+    native record shows (`_hook_owners`): one of a built-in plugin or the managed policy is
+    recorded and never voids the cell; one that ran a command outside the arm's and the
+    built-in plugins' folders fails it; one with no attribution fails an arm that adds no
+    plugin and stays UNVERIFIED in an arm that does. No hook event at all stays UNVERIFIED:
+    the start event names no hooks."""
+
+    sorted_hooks = _hook_kinds(events, _hook_owners(records, expected, plugins), plugins)
+    if not sorted_hooks:
+        detail = "no hook event in the stream or the session; the start event names no hooks"
+        return _row("hooks", "UNVERIFIED", detail)
+    detail = "; ".join(
+        f"{kind}: {', '.join(names)}" for kind, names in sorted(sorted_hooks.items())
+    )
+    if "other" in sorted_hooks or ("unattributed" in sorted_hooks and not expected.plugin_dirs):
+        return _row("hooks", "FAIL", f"a hook the arm does not add ran: {detail}")
+    if "unattributed" in sorted_hooks:
+        return _row("hooks", "UNVERIFIED", f"not all attributed to the arm's plugin: {detail}")
+    return _row("hooks", "PASS", detail)
+
+
+def loading_check(
+    events: list[dict[str, Any]],
+    expected: Expected,
+    records: list[dict[str, Any]] | None = None,
+) -> list[list[str]]:
+    """What the call loaded, from its start event, its hook events and its native session's
+    records (`records`), each item `PASS`, `FAIL` or `UNVERIFIED`. A field or record the call
+    does not carry is UNVERIFIED, never a pass; a plugin, skill, MCP server, hook or
+    instruction file the arm does not add is a FAIL."""
 
     start = start_event(events)
     if start is None:
         return [_row("start-event", "FAIL", "the stream has no single start event")]
-    plugins, own, builtin = _plugins_row(start, expected)
-    rows = [_row("start-event", "PASS", "one system init event"), plugins]
-    rows.append(_skills_row(start, expected, [*own, *builtin]))
+    plugins_row, plugins = _plugins_row(start, expected)
+    rows = [_row("start-event", "PASS", "one system init event"), plugins_row]
+    rows.append(_skills_row(start, expected, plugins))
+    rows.append(_listing_row(records, expected, plugins))
     servers = start.get("mcp_servers")
     if not isinstance(servers, list):
         rows.append(_row("mcp-servers", "UNVERIFIED", "the start event names no MCP servers"))
     else:
         named = [str(s.get("name") if isinstance(s, dict) else s) for s in servers]
         rows.append(_row("mcp-servers", "FAIL" if named else "PASS", ", ".join(named) or "none"))
-    rows.append(_hooks_row(events, expected))
-    rows.append(
-        _row(
-            "instruction-files",
-            "UNVERIFIED",
-            "the start event names no instruction file; the folders above the workspace and the "
-            "cell's own home were checked before the call",
-        )
-    )
+    rows.append(_hooks_row(events, expected, plugins, records))
+    rows.append(_instructions_row(records, expected))
     return rows
+
+
+def isolation_verdict(rows: list[list[str]]) -> tuple[str, list[str]]:
+    """The cell's isolation verdict over its rows: FAIL where any fails, else UNVERIFIED where
+    any is unverified, else PASS; and the items behind it."""
+
+    for verdict in ("FAIL", "UNVERIFIED"):
+        items = [row[0] for row in rows if row[1] == verdict]
+        if items:
+            return verdict, items
+    return "PASS", []
 
 
 def _has_text(path: Path) -> bool:
@@ -810,9 +1076,35 @@ def expected_start(workdir: Path, model: str, expected: Expected, session: str) 
     }
 
 
+def expected_records(expected: Expected, session: str) -> list[dict[str, Any]]:
+    """Synthetic native records for a cell that loads exactly what it should: the instruction
+    files its workspace gives, and its skills listed to the model."""
+
+    workdir = expected.workdir or Path("/workspace")
+    files = [
+        {"path": str(workdir / name), "type": "Project", "content": ""}
+        for name in expected.instructions
+    ]
+    listing = {"type": "skill_listing", "names": [*expected.skills], "skillCount": 0}
+    return [
+        {"type": "attachment", "sessionId": session, "attachment": attached}
+        for attached in ({"type": "instructions", "files": files}, listing)
+    ]
+
+
+def leaked_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The synthetic native records with a user-level rules file loaded, as a person's own
+    setup would add: records the check must fail."""
+
+    session = str(records[0].get("sessionId")) if records else ""
+    stray = {"path": "/user/.claude/rules/stray.md", "type": "User", "content": ""}
+    attached = {"type": "instructions", "files": [stray]}
+    return [*records, {"type": "attachment", "sessionId": session, "attachment": attached}]
+
+
 def leaked_start(start: dict[str, Any]) -> list[dict[str, Any]]:
-    """The synthetic start event with a plugin and a hook the arm does not add, as a leak from a
-    person's own setup would show: the events of a cell the check must fail."""
+    """The synthetic start event with a plugin, a skill and a hook the arm does not add, as a
+    leak from a person's own setup would show: the events of a cell the check must fail."""
 
     plugin = {"name": "stray", "path": "/stray/plugin", "source": "stray@market"}
     hook = {
@@ -823,7 +1115,9 @@ def leaked_start(start: dict[str, Any]) -> list[dict[str, Any]]:
         "hook_event": "SessionStart",
         "session_id": start["session_id"],
     }
-    return [{**start, "plugins": [*start["plugins"], plugin]}, hook]
+    leaked = {**start, "plugins": [*start["plugins"], plugin]}
+    leaked["skills"] = [*start["skills"], "stray-skill"]
+    return [leaked, hook]
 
 
 def model_names(events: list[dict[str, Any]]) -> set[str]:
@@ -842,7 +1136,7 @@ def model_names(events: list[dict[str, Any]]) -> set[str]:
     return found
 
 
-TOKEN = re.compile(r"(?i)(token|key|secret|password)")
+TOKEN = re.compile(r"(?i)(token|key|secret|password|auth|credential)")
 
 
 def shown_env(env: dict[str, str]) -> dict[str, str]:

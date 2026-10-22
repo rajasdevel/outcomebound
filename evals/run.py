@@ -73,7 +73,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from evals import stub_place
 from evals.claude_stream import above as claude_above
 from evals.claude_stream import (
+    expected_records,
     expected_start,
+    leaked_records,
     leaked_start,
     loading_check,
     reach_rows,
@@ -99,7 +101,7 @@ from evals.evidence import (
     workspace_digest,
 )
 from evals.harnesses import Budget, Request
-from evals.harnesses.claude_code import ClaudeCodeHarness, cell_for
+from evals.harnesses.claude_code import ClaudeCodeHarness, cell_for, unreadable
 from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
 from evals.native_receipts import parse_records
@@ -2196,6 +2198,7 @@ def _call_and_judge(
                     sandbox=sandbox,
                     budget=kit.budget,
                     protected=kit.protected(),
+                    unreadable=(stage,),
                 ),
                 workdir,
                 fixture_write_roots(name, workdir),
@@ -3204,6 +3207,21 @@ def summarize(directories: list[Path]) -> int:
     return 0
 
 
+def _isolation_lines(group: list[dict[str, Any]]) -> list[str]:
+    """Each Claude Code cell's isolation verdict (PASS, UNVERIFIED with the items no record
+    names, or FAIL), one line a repetition; nothing for a run that records none."""
+
+    lines = []
+    for run in sorted(group, key=lambda run: run["repetition"]):
+        if run.get("isolation_verdict"):
+            items = run.get("isolation_unverified") or []
+            named = f" ({', '.join(items)})" if items else ""
+            lines.append(
+                f"  repetition {run['repetition']} isolation: {run['isolation_verdict']}{named}"
+            )
+    return lines
+
+
 def _print_group(
     key: tuple[str, ...],
     group: list[dict[str, Any]],
@@ -3229,7 +3247,7 @@ def _print_group(
         names = ("kernel", "files", "graders", "grading files", "elements")
         found = zip(names, instrument, strict=True)
         print("  instrument: " + ", ".join(f"{name} {_short(value)}" for name, value in found))
-    for line in [*_cost_lines(group, runs), *_catalog_lines(group)]:
+    for line in [*_cost_lines(group, runs), *_catalog_lines(group), *_isolation_lines(group)]:
         print(line)
     for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
         count = sum(1 for run in runs if run["claims"].get(claim) == "PASS")
@@ -3570,12 +3588,159 @@ def tried_edits(parser: argparse.ArgumentParser, arms: dict[str, Arm]) -> None:
 
 
 PROBE_PROMPT = "Reply with the word ok. Do not run commands.\n"
+# The second probe of a Claude Code call: commands whose results show what the call's sandbox
+# and cell give a model's commands. The runner observes the write and the commit itself; the
+# PATH, the stub and the token are read from the commands' recorded output.
+SANDBOX_STUB = "ob-probe-stub"
+SANDBOX_HEAD = (
+    "This is a check of the environment, not a task. Run each command below with your shell "
+    "tool, one call for each command, exactly as written, in this order, even where one fails. "
+    "Change nothing else. Then reply with the word done.\n\n"
+)
+# Each command of the sandbox probe; `{stub}` and `{outside}` are filled in.
+SANDBOX_COMMANDS = (
+    "command -v {stub}",
+    "printf '%s\\n' \"$PATH\" | cut -d: -f1",
+    "touch {outside}",
+    'if [ -n "${{CLAUDE_CODE_OAUTH_TOKEN:-}}" ]; then echo token-visible;'
+    " else echo token-hidden; fi",
+    "git init -q probe-repo && printf 'x\\n' > probe-repo/f && git -C probe-repo add f"
+    " && git -C probe-repo commit -q -m probe && git -C probe-repo rev-parse HEAD",
+)
+
+
+def _probe_output(transcript: str, command: str) -> tuple[bool, str | None]:
+    """Whether the call ran `command` (its whole recorded command), and the output recorded
+    for it (None where none was)."""
+
+    try:
+        document = json.loads(transcript)
+    except ValueError:
+        return False, None
+    commands, outputs = document.get("commands") or [], document.get("outputs") or []
+    for index, record in enumerate(commands):
+        if record[0].strip() == command.strip():
+            found = outputs[index] if index < len(outputs) else None
+            return True, found if isinstance(found, str) else None
+    return False, None
+
+
+def sandbox_rows(
+    transcript: str, commands: list[str], work: Path, outside: Path, stubs: Path
+) -> list[list[str]]:
+    """What the sandbox probe's call shows, each `PASS`, `FAIL` or `UNVERIFIED` (the model did
+    not run the command): the stub found first on PATH, the PATH's first entry as the model's
+    commands see it (a login shell can put its own entries first), a write outside the
+    workspace denied (the runner looks for the file), the subscription token hidden from the
+    model's commands, and a Git commit made under the cell's fresh home (the runner reads it)."""
+
+    stub, first, touch, token, commit = commands
+    rows = []
+    ran, out = _probe_output(transcript, stub)
+    wanted = str(stubs / SANDBOX_STUB)
+    rows.append(
+        _probe_row(
+            "sandbox-stub-on-path",
+            ran,
+            (out or "").strip() == wanted,
+            f"{(out or '').strip()} (wanted {wanted})",
+        )
+    )
+    ran, out = _probe_output(transcript, first)
+    rows.append(
+        _probe_row(
+            "sandbox-path-first",
+            ran,
+            (out or "").strip() == str(stubs),
+            f"first PATH entry {(out or '').strip()} (wanted {stubs})",
+        )
+    )
+    ran, _out = _probe_output(transcript, touch)
+    rows.append(
+        _probe_row(
+            "sandbox-write-outside-denied",
+            ran,
+            not outside.exists(),
+            f"{outside} {'exists' if outside.exists() else 'absent'} after the call",
+        )
+    )
+    ran, out = _probe_output(transcript, token)
+    if "CLAUDE_CODE_OAUTH_TOKEN" not in child_env():
+        rows.append(
+            ["sandbox-token-hidden", "UNVERIFIED", "CLAUDE_CODE_OAUTH_TOKEN is not set here"]
+        )
+    else:
+        rows.append(
+            _probe_row(
+                "sandbox-token-hidden",
+                ran and "token-" in (out or ""),
+                "token-hidden" in (out or ""),
+                (out or "").strip() or "no output",
+            )
+        )
+    ran, _out = _probe_output(transcript, commit)
+    status, head, _error = _run(["git", "-C", str(work / "probe-repo"), "rev-parse", "HEAD"])
+    rows.append(
+        _probe_row(
+            "sandbox-git-commit", ran, status == 0, head.strip() or "no commit in probe-repo"
+        )
+    )
+    return rows
+
+
+def _probe_row(item: str, ran: bool, ok: bool, detail: str) -> list[str]:
+    if not ran:
+        return [item, "UNVERIFIED", f"the model did not run the command; {detail}"]
+    return [item, "PASS" if ok else "FAIL", detail]
+
+
+def sandbox_probe(
+    args: argparse.Namespace, out: Path, root: Path | None, tool: ClaudeCodeHarness
+) -> list[list[str]]:
+    """The second probe of a Claude Code call: one more model call, in a workspace of its own,
+    with a runner-owned stub folder first on its PATH, that runs the commands of
+    `SANDBOX_PROMPT`; its rows (`sandbox_rows`) and the call's own checks."""
+
+    workspace = workspace_path(root, out, "probe-sandbox", args.repetition) if root else None
+    work = new_workspace(workspace)
+    stubs = out / "probe.stubs"
+    stubs.mkdir()
+    (stubs / SANDBOX_STUB).write_text("#!/bin/sh\necho probe stub\n", encoding="utf-8")
+    (stubs / SANDBOX_STUB).chmod(0o555)
+    stubs.chmod(0o555)
+    outside = out / "probe-outside-write.txt"
+    commands = [
+        command.format(stub=SANDBOX_STUB, outside=shlex.quote(str(outside)))
+        for command in SANDBOX_COMMANDS
+    ]
+    prompt = SANDBOX_HEAD + "".join(f"{n}. {c}\n" for n, c in enumerate(commands, start=1))
+    path = f"{stubs}{os.pathsep}{child_env().get('PATH', os.defpath)}"
+    try:
+        result = tool.call(
+            prompt,
+            Request(args.model, args.effort, protected=(stubs,)),
+            work,
+            (),
+            path,
+            out / "probe-sandbox.native.jsonl",
+        )
+    finally:
+        stubs.chmod(0o755)
+    _write(
+        out / "probe-sandbox.json",
+        {"workspace": str(work), "checks": result.checks, **result.extras},
+    )
+    return [
+        *sandbox_rows(result.transcript, commands, work, outside, stubs),
+        *([f"sandbox-call-{item}", verdict, detail] for item, verdict, detail in result.checks),
+    ]
 
 
 def probe(args: argparse.Namespace, out: Path, root: Path | None, tool: Harness) -> int:
     """One minimal call through the same code path as a counted one; each item of the run
-    contract printed as PASS or FAIL. Exit 3 without a login, 1 on any FAIL. One model call,
-    no retry."""
+    contract printed as PASS, FAIL or UNVERIFIED. For Claude Code, a second call runs the
+    commands of the sandbox probe (`sandbox_probe`). Exit 3 without a login, 1 on any FAIL.
+    One model call (two for Claude Code), no retry."""
 
     login = tool.preflight()
     if not login["ok"]:
@@ -3621,6 +3786,8 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None, tool: Harness)
             f"seen {result.extras.get('item_types', [])}; unknown {unknown}",
         ]
     )
+    if isinstance(tool, ClaudeCodeHarness):
+        rows += sandbox_probe(args, out, root, tool)
     key = result.extras.get("thread_id")
     memory = tool.memory_mode(key) if key and isinstance(tool, CodexHarness) else None
     for item, verdict, detail in rows:
@@ -3959,10 +4126,14 @@ def claude_dump(
     cell = cell_for(workdir.parent / f"{workdir.name}.native.jsonl")
     env = shown_env(tool.cell_env(cell, path))
     expected = tool.expected(workdir)
-    start = expected_start(workdir, request.model, expected, str(uuid.uuid4()))
-    clean = loading_check([start], expected)
-    leak = loading_check(leaked_start(start), expected)
-    caught = {row[0] for row in leak if row[1] == "FAIL"} >= {"plugins", "hooks"}
+    session = str(uuid.uuid4())
+    start = expected_start(workdir, request.model, expected, session)
+    records = expected_records(expected, session)
+    clean = loading_check([start], expected, records)
+    leak = loading_check(leaked_start(start), expected, leaked_records(records))
+    leaked = {"plugins", "skills", "hooks", "instruction-files"}
+    caught = {row[0] for row in leak if row[1] == "FAIL"} >= leaked
+    denied = unreadable(request, workdir, workdir.parent / f"{workdir.name}.native.jsonl")
     rows = isolation(arm, workdir, prompt, path, None)
     rows.append(
         [
@@ -3975,7 +4146,7 @@ def claude_dump(
         [
             "loading-check-leak",
             "PASS" if caught else "FAIL",
-            "; ".join(failed_rows(leak)) or "a stray plugin and hook were not caught",
+            "; ".join(failed_rows(leak)) or "a stray plugin, skill, hook and rules file passed",
         ]
     )
     inside = workdir.resolve()
@@ -3985,7 +4156,8 @@ def claude_dump(
     ]
     lines = [
         *_section(
-            "argv (the prompt is its stdin)", [shlex.join(tool.argv(request, workdir, write_roots))]
+            "argv (the prompt is its stdin)",
+            [shlex.join(tool.argv(request, workdir, write_roots, denied))],
         ),
         *_section(
             f"environment of the cell {cell.root} (made new at the call)",
@@ -4005,7 +4177,14 @@ def claude_dump(
             [json.dumps(start, sort_keys=True)],
         ),
         *_section("loading check, the expected load", [" ".join(row) for row in clean]),
-        *_section("loading check, with a stray plugin and hook", [" ".join(row) for row in leak]),
+        *_section(
+            "synthetic native records (stand in for the CLI's own)",
+            [json.dumps(record, sort_keys=True) for record in records],
+        ),
+        *_section(
+            "loading check, with a stray plugin, skill, hook and rules file",
+            [" ".join(row) for row in leak],
+        ),
         *_section("isolation", [" ".join(row) for row in rows]),
     ]
     return lines, rows
@@ -4086,7 +4265,8 @@ def refuse_claude_reach(parser: argparse.ArgumentParser, where: Path | None) -> 
         parser.error(
             "a Claude Code call reads what is above its workspace, and these would reach it: "
             + "; ".join(problems)
-            + "; name a --workspace-root with no CLAUDE.md, AGENTS.md or .claude/rules above it"
+            + "; name a --workspace-root outside your home folder (which holds your user-level "
+            "Claude folder), with no CLAUDE.md, AGENTS.md or .claude/rules above it"
         )
     return rows
 

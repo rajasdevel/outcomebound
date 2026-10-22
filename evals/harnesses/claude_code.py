@@ -52,11 +52,14 @@ from evals.claude_stream import (
     StreamMeter,
     agreed,
     directories,
+    effort_of,
     event_types,
     failed,
     find_native,
     hook_events,
+    isolation_verdict,
     loading_check,
+    model_base,
     model_names,
     reach_rows,
     result_event,
@@ -64,12 +67,13 @@ from evals.claude_stream import (
     session_tokens,
     start_event,
     stream_transcript,
+    workspace_instructions,
     workspace_skills,
 )
 from evals.codex_events import parse_events
 from evals.harnesses import Budget, CallResult, Request
 from evals.harnesses.codex import check_protected
-from evals.native_receipts import NativeCapture, copy_exact
+from evals.native_receipts import NativeCapture, copy_exact, temporary_write_roots
 from evals.watch import watched_command
 
 NAME = "claude-code"
@@ -110,10 +114,15 @@ DROPPED = (
     "SLASH_COMMAND_TOOL_CHAR_BUDGET",
     "IS_DEMO",
     "IS_SANDBOX",
+    "OLDPWD",
+    "SSH_AUTH_SOCK",
 )
 KEPT = ("CLAUDE_CODE_OAUTH_TOKEN",)
 # Set in every cell: no auto memory (codex runs with memories off too), no update mid-run.
 CELL_SETTINGS = {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", "DISABLE_AUTOUPDATER": "1"}
+# The Git identity every cell's fresh home gives, alike for every arm: a fixture's own repository
+# config, where its setup writes one, takes precedence over it.
+GIT_IDENTITY = ("OutcomeBound eval", "eval@example.invalid")
 SUFFIX = ".native.jsonl"
 CELL = ".claude-home"
 # The skills an OutcomeBound install can carry: an arm that does not carry one must not load it.
@@ -165,26 +174,59 @@ def ob_skills() -> tuple[str, ...]:
     return (*fragments.SKILLS, *OB_EXTRA_SKILLS)
 
 
-def settings(request: Request, write_roots: tuple[Path, ...] = ()) -> dict[str, Any]:
-    """The `--settings` of a call: Bash in the sandbox, allowed there and nowhere else, its
-    writes confined to the workspace, the roots the fixture adds and the temporary folders, the
-    runner's protected paths denied, a local port only where the fixture asks, and the one
-    credential a cell inherits hidden from the model's commands."""
+def settings(
+    request: Request, write_roots: tuple[Path, ...] = (), unreadable: tuple[Path, ...] = ()
+) -> dict[str, Any]:
+    """The `--settings` of a call: no skill or plugin synced from claude.ai; Bash in the
+    sandbox, allowed there and nowhere else, its writes confined to the workspace, the roots the
+    fixture adds and the temporary folders, the runner's protected paths denied, the `unreadable`
+    paths denied to its reads, no network host (the allow list is empty and strict), a local
+    port only where the fixture asks, and the one credential a cell inherits hidden from the
+    model's commands."""
 
     return {
+        "syncClaudeAiSkills": False,
+        "syncClaudeAiPlugins": False,
         "sandbox": {
             "enabled": True,
             "failIfUnavailable": True,
             "autoAllowBashIfSandboxed": True,
             "allowUnsandboxedCommands": False,
-            "network": {"allowLocalBinding": request.local_listener},
+            "network": {
+                "allowedDomains": [],
+                "strictAllowlist": True,
+                "allowLocalBinding": request.local_listener,
+            },
             "filesystem": {
                 "allowWrite": [str(root) for root in write_roots],
                 "denyWrite": [str(path) for path in request.protected],
+                "denyRead": [str(path) for path in unreadable],
             },
             "credentials": {"envVars": [{"name": name, "mode": "deny"} for name in KEPT]},
-        }
+        },
     }
+
+
+def unreadable(request: Request, cwd: Path, keep: Path) -> tuple[Path, ...]:
+    """What a call's commands must not read: the request's `unreadable` paths (the grading
+    stage), the operator's user-level Claude folder, every other entry of the run's evidence
+    folder (other fixtures' cells, sealed graders and records) but the call's own cell, session
+    copy, stubs and watch log, and the other runs' folders beside it, unless that folder is the
+    file system's root, the home folder or a temporary folder. Only what exists when the call
+    starts; never the workspace or a folder that holds it."""
+
+    found = [*request.unreadable]
+    user = Path.home() / ".claude"
+    found += [user] if user.exists() else []
+    run = keep.parent
+    own = {cell_for(keep).root.resolve(), keep.resolve(), *(p.resolve() for p in request.protected)}
+    if run.is_dir():
+        found += [entry for entry in run.iterdir() if entry.resolve() not in own]
+    shared = {Path("/").resolve(), Path.home().resolve(), *temporary_write_roots()}
+    if run.parent.is_dir() and run.parent.resolve() not in shared:
+        found += [entry for entry in run.parent.iterdir() if entry.resolve() != run.resolve()]
+    workspace = cwd.resolve()
+    return tuple(p for p in found if not workspace.is_relative_to(p.resolve()))
 
 
 def _run_env(command: list[str], env: dict[str, str]) -> tuple[int | None, str, str]:
@@ -269,7 +311,13 @@ class ClaudeCodeHarness:
         folders = {key: str(folder) for key, folder in cell.folders().items()}
         return {**base, **folders, **CELL_SETTINGS, "PATH": path}
 
-    def argv(self, request: Request, cwd: Path, write_roots: tuple[Path, ...] = ()) -> list[str]:
+    def argv(
+        self,
+        request: Request,
+        cwd: Path,
+        write_roots: tuple[Path, ...] = (),
+        denied: tuple[Path, ...] = (),
+    ) -> list[str]:
         """The `claude -p` argv for `request` in `cwd`; the prompt is its stdin. ValueError for
         a call with no model or a sandbox this harness does not know."""
 
@@ -295,7 +343,7 @@ class ClaudeCodeHarness:
             "--setting-sources",
             "project,local",
             "--settings",
-            json.dumps(settings(request, write_roots), sort_keys=True),
+            json.dumps(settings(request, write_roots, denied), sort_keys=True),
             "--strict-mcp-config",
             "--no-chrome",
         ]
@@ -306,12 +354,12 @@ class ClaudeCodeHarness:
         return argv
 
     def expected(self, cwd: Path) -> Expected:
-        """What a call in `cwd` may load: the arm's plugins, the workspace's skills, and no
-        OutcomeBound skill the workspace does not hold."""
+        """What a call in `cwd` may load: the arm's plugins, the workspace's skills and
+        instruction files, and no OutcomeBound skill the workspace does not hold."""
 
         own = workspace_skills(cwd)
         foreign = tuple(skill for skill in ob_skills() if skill not in own)
-        return Expected(self.plugin_dirs, own, foreign)
+        return Expected(self.plugin_dirs, own, foreign, cwd, workspace_instructions(cwd))
 
     def call(
         self,
@@ -333,9 +381,15 @@ class ClaudeCodeHarness:
         expected = self.expected(cwd)
         reach = reach_rows(cwd, cell.make())
         if failed(reach):
+            shutil.rmtree(cell.root)  # made by this call, and holding no session yet
             raise ValueError(
                 "the call would read what its arm does not give it: " + "; ".join(failed(reach))
             )
+        identity = cell.folders()["HOME"] / ".gitconfig"
+        identity.write_text(
+            f"[user]\n\tname = {GIT_IDENTITY[0]}\n\temail = {GIT_IDENTITY[1]}\n", encoding="utf-8"
+        )
+        denied = unreadable(request, cwd, keep)
         budget = request.budget or Budget(self._timeout)
         meter = StreamMeter()
 
@@ -345,7 +399,7 @@ class ClaudeCodeHarness:
             used = meter.input(printed())
             return "input_cap" if used is not None and used > budget.input_cap else None
 
-        argv = self.argv(request, cwd, write_roots)
+        argv = self.argv(request, cwd, write_roots, denied)
         done = watched_command(
             argv,
             input=prompt,
@@ -361,11 +415,13 @@ class ClaudeCodeHarness:
         transcript, decoded = stream_transcript(
             done.stdout, done.stderr, directories(records or [])
         )
-        loading = loading_check(events, expected)
+        loading = loading_check(events, expected, records)
         void = failed(loading)
-        checks.append(
-            ["isolation", "FAIL" if void else "PASS", "; ".join(void) or "nothing the arm lacks"]
+        verdict, items = isolation_verdict(loading)
+        detail = "; ".join(void) or (
+            f"unverified: {', '.join(items)}" if items else "nothing the arm lacks"
         )
+        checks.append(["isolation", verdict, detail])
         tokens = session_tokens(events)
         result = result_event(events) or {}
         extras.update(
@@ -381,7 +437,10 @@ class ClaudeCodeHarness:
             catalog=None,
             identity_checks=checks,
             isolation=[*reach, *loading],
+            isolation_verdict=verdict,
+            isolation_unverified=items if verdict == "UNVERIFIED" else [],
             void="isolation" if void else None,
+            git_identity=list(GIT_IDENTITY),
             start=_start_record(events),
             hooks=hook_events(events),
             permission_denials=len(result.get("permission_denials") or []),
@@ -389,7 +448,7 @@ class ClaudeCodeHarness:
             num_turns=result.get("num_turns"),
             local_listener=request.local_listener,
             sandbox=request.sandbox,
-            settings=settings(request, write_roots),
+            settings=settings(request, write_roots, denied),
             plugin_dirs=[str(folder) for folder in self.plugin_dirs],
             stopped=done.stopped,
             budget_requested={"seconds": budget.seconds, "input_cap": budget.input_cap},
@@ -446,8 +505,12 @@ def identify(
 
     checks: list[list[str]] = []
 
-    def check(item: str, ok: bool, good: str, bad: str) -> None:
-        checks.append([item, "PASS" if ok else "FAIL", good if ok else bad])
+    def check(item: str, ok: bool | None, good: str, bad: str) -> None:
+        """One identity item: PASS, FAIL, or UNVERIFIED where `ok` is None (no record names
+        it; recorded, never a call error)."""
+
+        verdict = "UNVERIFIED" if ok is None else "PASS" if ok else "FAIL"
+        checks.append([item, verdict, bad if ok is False or ok is None else good])
 
     extras: dict[str, Any] = {"thread_id": None, "native_session": None, "native_sha256": None}
     check("stream-readable", bool(events), "events read", "the CLI stream has no events")
@@ -473,9 +536,12 @@ def identify(
     start = start_event(events) or {}
     _identity_checks(check, start, records, request, cwd, events)
     version = start.get("claude_code_version")
+    extras["models_raw"] = sorted(
+        {*model_names(events), *filter(None, [agreed(records, "model")[0]])}
+    )
     observed = {
-        "model": agreed(records, "model")[0],
-        "effort": agreed(records, "effort")[0],
+        "model": model_base(agreed(records, "model")[0]),
+        "effort": effort_of(records)[0],
         "cwd": start.get("cwd") if isinstance(start.get("cwd"), str) else None,
         "cli_version": version if isinstance(version, str) and version else None,
     }
@@ -483,7 +549,7 @@ def identify(
 
 
 def _identity_checks(
-    check: Callable[[str, bool, str, str], None],
+    check: Callable[[str, bool | None, str, str], None],
     start: dict[str, Any],
     records: Records,
     request: Request,
@@ -492,7 +558,8 @@ def _identity_checks(
 ) -> None:
     """The identity items: the CLI version, the model and effort of the native session, the
     working directory, permission mode and API key source of the start event, and the models
-    the stream names."""
+    the stream names. A model is compared without a context-window suffix (`[1m]`); an effort
+    no assistant record names is UNVERIFIED, one that differs is a FAIL."""
 
     version = start.get("claude_code_version")
     check(
@@ -501,19 +568,22 @@ def _identity_checks(
         str(version),
         "the start event names no claude_code_version",
     )
+    wanted = model_base(request.model)
     model, problem = agreed(records, "model")
     check(
         "native-model",
-        model == request.model,
+        model is not None and model_base(model) == wanted,
         f"{model} == requested",
         problem or f"the native session reports model {model}, not {request.model}",
     )
-    effort, problem = agreed(records, "effort")
+    effort, problem = effort_of(records)
     check(
         "native-effort",
-        effort == request.effort,
+        None if problem == "unrecorded" else effort == request.effort,
         f"{effort} == requested",
-        problem or f"the native session reports effort {effort}, not {request.effort}",
+        "no assistant record names an effort"
+        if problem == "unrecorded"
+        else problem or f"the native session reports effort {effort}, not {request.effort}",
     )
     seen = start.get("cwd")
     same = (
@@ -544,7 +614,7 @@ def _identity_checks(
     named = model_names(events)
     check(
         "stream-model",
-        named == {request.model},
+        {model_base(name) for name in named} == {wanted},
         f"{request.model} == requested",
         f"the stream reports model {sorted(named)}, not {request.model}",
     )

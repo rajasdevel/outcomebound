@@ -51,7 +51,9 @@ class Request(NamedTuple):
     harness's own timeout and no cap). `protected` names runner-owned paths outside the
     workspace that the model's commands read and never write (the stubs folder, the watch log):
     the harness refuses the call, before the model runs, where one lies inside a path the model
-    may write."""
+    may write. `unreadable` names runner-owned paths the model's commands should not read (the
+    grading stage); a harness that can deny reads denies them, and one that cannot ignores
+    them."""
 
     model: str
     effort: str
@@ -59,6 +61,7 @@ class Request(NamedTuple):
     sandbox: str = "eval"
     budget: Budget | None = None
     protected: tuple[Path, ...] = ()
+    unreadable: tuple[Path, ...] = ()
 
 
 class CallResult(NamedTuple):
