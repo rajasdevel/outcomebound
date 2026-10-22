@@ -312,7 +312,8 @@ model.
   sit under a folder with a `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, `AGENTS.md`,
   `.claude/AGENTS.md` or `.claude/rules/*.md`. Claude Code reads those from every folder above the
   working directory, and a `CLAUDE.md` also hides the install's `AGENTS.md`. Name a
-  `--workspace-root` with none above it; a folder in your own home has your `~/.claude/` above it.
+  `--workspace-root` with none above it; a folder in your own home has your user-level Claude
+folder above it.
   A managed policy that sets hooks, plugins, a status line, a key helper or MCP servers, or a
   managed `CLAUDE.md`, is refused too; other managed keys apply to every arm alike and are recorded.
 - **The call.** `--output-format stream-json --verbose --include-hook-events`, `--model`,
