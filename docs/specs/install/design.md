@@ -100,9 +100,9 @@ malformed record is. Omitted, a run keeps the recorded mode, so the upgrade stay
 `--full` returns to a full install. `--check` recomputes against the recorded mode, and a
 facts-only install whose files and records match it reads `current`. `--detect` proposes no mode.
 
-An engine before this mode does not know the field: its `--check` reads a facts-only install
-whose files are unchanged as `current`, and its next install writes the full install and drops
-`mode`. A project that uses this mode therefore moves every pin of the engine (CI, each machine,
+An engine before this mode does not know the field: its `--check` reads the facts block of a
+facts-only install `stale` (its Precedence line is the facts-only one), and its next install
+writes the full install and drops `mode`. A project that uses this mode therefore moves every pin of the engine (CI, each machine,
 each cloud setup step) to a release that knows it before it installs facts-only; the adopter steps
 of the release that ships the mode say so. The manifest stays format 2, for the reason the
 decision on `frame` gives: a format 3 would break each machine and CI job that pins an earlier
