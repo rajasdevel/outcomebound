@@ -30,6 +30,12 @@ install writes itself, which are no person's edit and are recorded as they are, 
 block that is the recorded render with only the local fragment's own edit in it. Git is the
 undo, so the target must be inside a Git work tree, and every write goes through
 `fileplan.write` with the manifest last.
+
+`--facts-only` installs the project's facts alone: AGENTS.md holds the facts block and, where
+`local` is selected, a pointers block with the local fragment inline and nothing else; no
+kernel, no fragment or skill pointer, no fragment copy, and skills only for a harness whose row
+records `native_skills`. The facts record holds `mode: "facts-only"`, which a run that names no
+mode keeps; `--full` returns to the full install (docs/specs/install/design.md, Facts-only).
 """
 
 from __future__ import annotations
@@ -44,7 +50,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence, Set
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +87,9 @@ IMPORT = "@AGENTS.md"
 KERNEL = "operating-contract"
 FACTS = facts.FACTS
 POINTERS = facts.POINTERS
+# The install modes: the full install, and the facts alone, which the facts record names.
+FULL = "full"
+FACTS_ONLY = "facts-only"
 # Where each block goes when it is new: directly after the block named here.
 AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
@@ -332,6 +341,17 @@ def guidance(
     return Guidance(rendered, files, names)
 
 
+def only_facts(made: Guidance, found_fragments: dict[str, fragments.Fragment]) -> Guidance:
+    """`made` as a facts-only install keeps it: the facts as rendered, the whole selection's
+    edges among them, and a pointers block that holds the local fragment inline alone, where it
+    is selected; no fragment file and no pointer line."""
+
+    local = [found_fragments[LOCAL]] if LOCAL in found_fragments else []
+    return replace(
+        made, rendered=replace(made.rendered, pointers=facts.pointers(local, [])), files={}
+    )
+
+
 def _fragment_bytes(fragment: fragments.Fragment) -> bytes:
     if fragment.path is None:
         raise AdoptError(f"the {fragment.id} fragment has no file to install")
@@ -385,14 +405,16 @@ def skill_files(source: Path, name: str) -> dict[str, bytes]:
 @dataclass(frozen=True)
 class Route:
     """How one harness reaches the contract: where its skills live, the file that must
-    import AGENTS.md (None when the harness reads AGENTS.md itself), and the files whose
-    absence lets it read AGENTS.md itself from version `since` (none: it always needs one)."""
+    import AGENTS.md (None when the harness reads AGENTS.md itself), the files whose
+    absence lets it read AGENTS.md itself from version `since` (none: it always needs one), and
+    whether it lists the skills in its skill directory itself (`native_skills`)."""
 
     harness: str
     skills: str
     host: str | None
     unless: tuple[str, ...] = ()
     since: str = ""
+    native: bool = False
 
 
 def _reads_itself(row: dict[str, Any]) -> tuple[tuple[str, ...], str]:
@@ -441,11 +463,13 @@ def route(name: str, row: object) -> Route | str:
     if not paths.admits(skills):
         return f"{name}: the harness table names no skill directory inside the target"
     mechanism = str(row.get("pointer_mechanism") or "")
+    native = row.get("native_skills") is True
     if mechanism in (AGENTS, "native"):
-        return Route(name, skills, None)
+        return Route(name, skills, None, native=native)
     host, _, reference = mechanism.partition("@")
     if reference == AGENTS and paths.admits(host):
-        return Route(name, skills, host, *_reads_itself(row))
+        unless, since = _reads_itself(row)
+        return Route(name, skills, host, unless, since, native)
     return f"{name} cannot be made to load AGENTS.md: the harness table routes it by {mechanism!r}"
 
 
@@ -710,6 +734,8 @@ def _check_record(record: Record) -> None:
     inputs = record.get("inputs", {})
     if not (isinstance(inputs, dict) and all(isinstance(v, str) for v in inputs.values())):
         raise AdoptError(f"{MANIFEST}: the inputs recorded for {path} are not paths and digests")
+    if record.get("mode", FULL) not in (FULL, FACTS_ONLY):
+        raise AdoptError(f"{MANIFEST}: the mode recorded for {path} is not {FULL} or {FACTS_ONLY}")
     frame = record.get("frame")
     if frame is not None and not (
         isinstance(frame, str) and len(frame) == 64 and set(frame) <= set("0123456789abcdef")
@@ -809,6 +835,16 @@ def recorded_setup(own: Sequence[Record]) -> list[str]:
     existed holds none."""
 
     return _recorded(own, "setup")
+
+
+def recorded_mode(own: Sequence[Record]) -> str:
+    """The install mode the facts record holds: `facts-only`, or the full install, which a record
+    without `mode` reads as; a mode this engine does not know is refused when the manifest loads."""
+
+    for record in own:
+        if record["kind"] == "block" and record["id"] == FACTS:
+            return FACTS_ONLY if record.get("mode") == FACTS_ONLY else FULL
+    return FULL
 
 
 def recorded_style(own: Sequence[Record]) -> list[str]:
@@ -1174,6 +1210,7 @@ def desired(
     found: Sequence[Route],
     ids: Sequence[str],
     chosen: Chosen,
+    mode: str = FULL,
 ) -> list[Want]:
     """What this engine installs for these harnesses, fragments and Done commands, in record
     order: the kernel, the facts, the pointers, the fragment files, the workspace's
@@ -1182,18 +1219,26 @@ def desired(
     A host no harness needs (`_unneeded`) gets no import block, and a record of one is dropped
     without writing its file again. Claude Code's host, CLAUDE.md, is itself one of the files
     that make it need one, so an existing CLAUDE.md keeps its block.
+
+    A facts-only install has no kernel and no fragment file, and its skills go only to the
+    harnesses that list them natively: nothing points at them.
     """
 
-    wants = [Want("block", AGENTS, KERNEL, kernel_block(source).encode("utf-8"))]
+    wants = []
+    if mode == FULL:
+        wants.append(Want("block", AGENTS, KERNEL, kernel_block(source).encode("utf-8")))
     imports = _imports_needed(run, found)
     written = [want.path for want in imports]
     found_fragments = catalog(source, run.target, ids)
     made = guidance(run.target, found, found_fragments, ids, chosen, written)
+    made = made if mode == FULL else only_facts(made, found_fragments)
     extra = {"fragments": list(ids), "done": list(chosen.done), "inputs": made.rendered.inputs}
     if chosen.style:
         extra["style"] = list(chosen.style)
     if chosen.setup:
         extra["setup"] = list(chosen.setup)
+    if mode == FACTS_ONLY:
+        extra["mode"] = FACTS_ONLY
     wants.append(Want("block", AGENTS, FACTS, made.rendered.facts.encode("utf-8"), extra))
     if made.rendered.pointers is not None:
         block = made.rendered.pointers
@@ -1212,7 +1257,8 @@ def desired(
     wants.extend(imports)
     if any(item.harness == GENERIC for item in found):
         run.restated.append(("UNVERIFIED", f"{GENERIC}: that the harness reads {AGENTS}"))
-    wants.extend(_skills(source, found, made.skills))
+    carriers = found if mode == FULL else [item for item in found if item.native]
+    wants.extend(_skills(source, carriers, made.skills))
     return wants
 
 
@@ -1622,6 +1668,7 @@ class Selection:
     done: list[str] | None = None
     style: list[str] | None = None
     setup: list[str] | None = None
+    mode: str | None = None
 
 
 def cloud_notes(source: Path, harnesses: Sequence[str], setup: Sequence[str]) -> Notes:
@@ -1678,9 +1725,10 @@ def install(
     done = recorded_done(own) if selection.done is None else selection.done
     style = recorded_style(own) if selection.style is None else selection.style
     setup = recorded_setup(own) if selection.setup is None else selection.setup
+    mode = recorded_mode(own) if selection.mode is None else selection.mode
     run = Run(target, force)
     table = harness_table(source)
-    wants = desired(run, source, found, ids, Chosen(done, style, setup))
+    wants = desired(run, source, found, ids, Chosen(done, style, setup), mode)
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
         run.keep(want, recorded.pop(want.key(), None))
@@ -1734,12 +1782,14 @@ def _observed(target: Path, record: Record) -> bytes | None:
 
 
 def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
-    """The facts and pointers the recorded selection gives against today's sources."""
+    """The facts and pointers the recorded selection and mode give against today's sources."""
 
     ids = recorded_fragments(own)
     found = routes(source, recorded_harnesses(own) or [GENERIC])
     chosen = Chosen(recorded_done(own), recorded_style(own), recorded_setup(own))
-    return guidance(target, found, catalog(source, target, ids), ids, chosen)
+    found_fragments = catalog(source, target, ids)
+    made = guidance(target, found, found_fragments, ids, chosen)
+    return made if recorded_mode(own) == FULL else only_facts(made, found_fragments)
 
 
 def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record]) -> bytes:
@@ -2255,13 +2305,14 @@ def detect(target: Path, source: Path) -> int:
 # --- Command line ---------------------------------------------------------------
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
-                            [--setup CMD]... [--human-style ste] [--dry-run] [--force]
+                            [--setup CMD]... [--human-style ste] [--facts-only | --full]
+                            [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
 Install or upgrade OutcomeBound in <target>, inside a Git work tree. A flag you omit keeps the
-value the manifest records (--harness, --fragments, --done, --setup, --human-style); pass only
-what changes. AGENTS.md gets three
+value the manifest records (--harness, --fragments, --done, --setup, --human-style, the mode
+--facts-only or --full); pass only what changes. A full install gives AGENTS.md three
 blocks: the operating contract; the project facts (Done: the --done commands; Setup: the
 --setup commands, which a person records and adopt never runs; CI test: the test
 command a GitHub Actions or GitLab CI file runs, read without running anything; Irreversible
@@ -2291,6 +2342,15 @@ refusal writes nothing. An install, a dry run and --check end with one note on h
 the outcomebound command in a cloud session, which starts from a fresh clone; the note writes
 no file. --check also prints one warn line for each other worktree of the project whose install
 is older than this engine.
+
+--facts-only installs the project facts alone: AGENTS.md gets the project facts block and, where
+the local fragment is selected, a guidance pointers block holding the local fragment inline and
+nothing else. There is no operating contract, no pointer to a fragment or a skill, and no copy
+under .outcomebound/fragments/; the selected fragments still give the Irreversible edges fact.
+The skills go only to a harness that lists them itself (the harness table's native_skills), so
+generic gets none. The import blocks and .outcomebound/.gitignore are as for a full install. The
+manifest records the mode, a run that names no mode keeps it, and --full returns to the full
+install; --check reads a facts-only install against its mode, and --remove takes it out.
 
 --detect prints the install command this target's files suggest alone on its first line, with
 --setup for the project's own entry point (a Make target or package.json script named setup or
@@ -2384,6 +2444,22 @@ def _parser() -> argparse.ArgumentParser:
         help="a style for documents an agent writes for a person to keep: 'ste' (ASD-STE100 "
         "Simplified Technical English; not replies in conversation); '' for none; omitted "
         "keeps the recorded one",
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--facts-only",
+        dest="mode",
+        action="store_const",
+        const=FACTS_ONLY,
+        help="install the project facts and the local fragment alone: no contract, no pointers, "
+        "skills only where the harness lists them itself; omitted keeps the recorded mode",
+    )
+    mode.add_argument(
+        "--full",
+        dest="mode",
+        action="store_const",
+        const=FULL,
+        help="install the contract, the facts and the pointers, after a facts-only install",
     )
     parser.add_argument(
         "--dry-run",
@@ -2523,6 +2599,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
             None if args.done is None else _commands(args.done),
             None if args.human_style is None else [args.human_style] if args.human_style else [],
             None if args.setup is None else _commands(args.setup, "--setup"),
+            args.mode,
         )
         planned, edited, notes = install(target, source, selection, args.force)
         notes = [*retired_notes(args), *notes]
@@ -2549,10 +2626,11 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
         parser.error("--dry-run and --force apply to an install and to --remove")
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.setup is not None
+    chosen = chosen or args.mode is not None
     if (args.detect or args.check or args.remove) and (chosen or retired_notes(args)):
         parser.error(
-            "--harness, --fragments, --done, --setup and --human-style apply to an install, and "
-            "the retired flags apply to none"
+            "--harness, --fragments, --done, --setup, --human-style, --facts-only and --full "
+            "apply to an install, and the retired flags apply to none"
         )
     target = Path(args.target).resolve()
     try:

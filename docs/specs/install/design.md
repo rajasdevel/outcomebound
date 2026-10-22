@@ -10,7 +10,8 @@ status: ratified
 An adopter runs one command, `outcomebound adopt`, and every harness they use loads the
 operating contract, the facts that settle work in this project, and a pointer to each piece of
 guidance with the condition that calls for it. Running it again from a newer release is the
-upgrade; `--check` says whether the install is current; `--remove` takes it out. How:
+upgrade; `--check` says whether the install is current; `--remove` takes it out. `--facts-only`
+installs the project's facts alone, without the contract and pointers (section Facts-only). How:
 `outcomebound_tools/adopt.py`, `outcomebound_tools/facts.py`, `outcomebound_tools/fragments.py` and `outcomebound_tools/textio.py`;
 how `outcomebound` is installed and launched is the [distribution design](../distribution/design.md).
 
@@ -63,6 +64,29 @@ the recomputation's read `edited`; a record other than the recomputation reads `
 fact that moved and each input that changed, or, where the bytes are the recomputation's, saying
 so.
 
+### Facts-only
+
+`adopt --facts-only` installs the facts a project would fumble without and none of
+OutcomeBound's general guidance. `AGENTS.md` carries the `project-facts` block, then, where the
+`local` fragment is selected, a `guidance-pointers` block that holds the `local` fragment inline
+and nothing else. It carries no kernel block, no fragment pointer and no skill pointer, and the
+install copies no fragment to `.outcomebound/fragments/`. The fragment selection is still
+recorded and still feeds the Irreversible edges fact. Skills are installed only for a harness
+whose row records `native_skills: true`, at that harness's skill path, where the harness lists
+each skill by its description and loads its body only when a task calls for it; a harness without
+native skills (`generic` among them) gets none, since nothing would point at them. The host
+import block (`@AGENTS.md`), the `.outcomebound/.gitignore` record and, where the `workspace`
+fragment is selected, `.agents/.gitignore` are as for a full install: they are not guidance.
+Harnesses are recorded on skill records, so `generic` named beside a native harness in this mode
+is not recorded, and a later run that names no harness drops it; it changes no file, only the
+report's notes for `generic`, and naming `--harness` again keeps it.
+
+The mode is recorded in the facts record as `mode: "facts-only"`; a record without `mode` is a
+full install, and a record whose `mode` is neither `full` nor `facts-only` is refused, as any
+malformed record is. Omitted, a run keeps the recorded mode, so the upgrade stays facts-only;
+`--full` returns to a full install. `--check` recomputes against the recorded mode, and a
+facts-only install whose files match it reads `current`. `--detect` proposes no mode.
+
 `guidance-pointers` holds the `local` fragment inline first, since only its author knows which of
 it every task needs; then `- <condition>: read <path>` per selected fragment, the path a verbatim
 copy at `.outcomebound/fragments/<id>.md` recorded as kind `fragment`; then one line per skill the
@@ -91,6 +115,7 @@ an install carries and the fragment bodies, for a delegate's role prompt.
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
 | One route to install OutcomeBound, `outcomebound adopt`. The scaffold verb is no install route: it writes a lifecycle's project files where they are absent, and installs nothing of OutcomeBound, no block, skill, fragment copy or hook, and records nothing in the manifest, so `adopt --check` never reads its files and `--remove` leaves them (maintainer, 2026-10-15; the [scaffold design](../scaffold/design.md)) | a second, modular install route beside it; scaffold files recorded in the manifest, which would make adopt watch files the project owns | user | decided |
+| A facts-only mode, `--facts-only` (back with `--full`), recorded in the facts record and kept on upgrade: `AGENTS.md` holds the project's facts and its own `local` fragment, no kernel, no pointers; skills only where the harness discovers them natively (maintainer, 2026-10-22). Guidance every session loads costs input on every task whether or not the task needs it; this mode lets a project, and this project's evals, keep only what the project would fumble without and measure what the rest adds | a `--minimal` flag that also drops the facts block; a facts-only mode that also drops skills, which the evals show each close a measured gap alone and cost only their descriptions until used; a separate install route | user | decided |
 | Re-running is the upgrade, and Git is the undo | three-way merges against copies of every release | user | decided |
 | No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records | user | decided |
 | The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last. Where the `local` fragment is selected, the `guidance-pointers` record also holds the optional field `frame`: the sha256 of the block with the local fragment's inline text (its `**local** (<family>) — <applies>` line, a blank line and its body, as the block renders it) replaced by the mark `\0local\0` (a NUL character, `local`, a NUL character). A record is read with or without it; an engine of 1.1.1 or earlier reads a record that holds it, ignores it and drops it when it writes the manifest again | per-artifact base caches, source receipts and bundle digests; a format 3 for the one field, which an engine of 1.1.1 or earlier refuses, so each machine and CI job that pins one breaks once a person upgrades; the local fragment's text in the record, which copies the project's own file into the manifest; the digests of the inputs alone, which show that the source changed but not that nothing else in the block changed; a digest of the render for each source version, which this engine cannot compute for the release that wrote the record | agent | decided |
