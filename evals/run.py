@@ -200,7 +200,23 @@ SIZING = "Satisfy all four completely"
 # Where a fixture's skill copies live: the path its note names, Claude Code's skill path and
 # codex's skill path (the last stays last: element checks name a pointer line under it).
 SKILL_ROOTS = (".outcomebound/skills/", ".claude/skills/", ".agents/skills/")
-ARMS = (EARLIER, "current", UNSIZED, NONE)
+# The facts-only arm: the fixture's own note, then what `outcomebound adopt --facts-only`
+# installs for the harness: the project-facts block, the local fragment inline where the fixture
+# selects it, and the skills where the harness lists skills itself; no kernel and no pointer.
+FACTS_ONLY = "facts-only"
+# The bare arm: no instruction file at all, the fixture's own note among them, and no
+# OutcomeBound file. Its fixture is built as the none arm's, then loses every file named below.
+BARE = "bare"
+ARMS = (EARLIER, "current", UNSIZED, NONE, FACTS_ONLY, BARE)
+# The arms whose fixture's setup runs as the none arm's: no core skill, no pointer to it.
+NOTE_ONLY = (NONE, FACTS_ONLY, BARE)
+# What the bare arm removes after the fixture's setup: each file of these names at any depth
+# (codex reads the first two, Claude Code the others and AGENTS.md, from `.claude/` too), each
+# `.claude/rules` folder at any depth, and at the workspace's root each skill root and the
+# fragment folder. A nested Git repository, the subject of a fixture's task, keeps its own.
+BARE_NAMES = ("AGENTS.md", "AGENTS.override.md", "CLAUDE.md", "CLAUDE.local.md")
+BARE_FOLDER = ".claude/rules"
+BARE_ROOTS = (*SKILL_ROOTS, ".outcomebound/fragments/")
 # The arms that stand for an install: their fixtures carry what adopt writes into AGENTS.md.
 INSTALLED = ("current", UNSIZED)
 # A fixture note's own pointer to the core skill, which an install replaces with its pointers.
@@ -598,7 +614,7 @@ def kernel(arm: str) -> str:
     """The arm's operating-contract block, sentinels included, as the model receives it; the
     kernel-off arm's is empty."""
 
-    if arm == NONE or verbatim_install(arm):
+    if arm in NOTE_ONLY or verbatim_install(arm):
         return ""
     if arm == EARLIER and not EARLIER_REF:
         return EARLIER_KERNEL.read_text(encoding="utf-8").strip("\n")
@@ -755,8 +771,10 @@ def load_arm(
             ) from None
         files = {f"{route.skills}/{path}": data for path, data in verbatim_guidance()[1].items()}
         return Arm(name, text, files, None, agents=verbatim_guidance()[0])
-    if name == NONE or (name == EARLIER and not EARLIER_REF):
+    if name in (NONE, BARE) or (name == EARLIER and not EARLIER_REF):
         return Arm(name, text, {}, None)
+    if name == FACTS_ONLY:
+        return facts_only_arm(selected, done)
     from outcomebound_tools import adopt, facts, fragments
 
     root = earlier_source() if name == EARLIER else REPO
@@ -789,11 +807,37 @@ def load_arm(
     )
 
 
+def facts_only_arm(selected: tuple[str, ...], done: tuple[str, ...]) -> Arm:
+    """The facts-only arm, for an install that selects the fragments `selected` and records the
+    Done commands `done`: always installed by this checkout's adopt with `--facts-only` after
+    the build, on any fixture. Its files are what that install writes besides AGENTS.md and the
+    ignore and manifest files: each skill the install carries, at the harness's skill path, where
+    the harness lists skills itself, and nothing elsewhere; no fragment file. It keeps this
+    checkout's launcher, as the current arm does, so the two differ in the installed text alone."""
+
+    from outcomebound_tools import adopt
+
+    try:
+        (route,) = adopt.routes(REPO, [INSTALL_HARNESS])
+        files = {
+            f"{route.skills}/{skill}/{relative}": data
+            for skill in (carried_skills(REPO) if route.native else ())
+            for relative, data in adopt.skill_files(REPO, skill).items()
+        }
+    except adopt.AdoptError as error:
+        raise SystemExit(
+            f"run: the facts-only arm cannot read what adopt installs: {error}"
+        ) from None
+    return Arm(
+        FACTS_ONLY, "", files, REPO / LAUNCHER, tuple(selected), done=tuple(done), adopted=True
+    )
+
+
 def fixture_arm(name: str, arm: Arm) -> Arm:
     """The adoption controller and the onboarding fixtures carry their subject skill; ordinary
-    installs do not."""
+    installs do not, nor the arms that build on the none arm's fixture."""
 
-    if not name.startswith(("adopt-", "onboard-")) or arm.name == NONE:
+    if not name.startswith(("adopt-", "onboard-")) or arm.name in NOTE_ONLY:
         return arm
     from outcomebound_tools import adopt
 
@@ -1204,6 +1248,7 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
 
     env = {**child_env(), **HERMETIC_GIT}
     argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", INSTALL_HARNESS]
+    argv += ["--facts-only"] if arm.name == FACTS_ONLY else []
     argv += ["--fragments", ",".join(arm.selected)] if arm.selected else []
     for line in arm.done:
         argv += ["--done", line]
@@ -1252,21 +1297,119 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
     return ""
 
 
-def refresh_baseline_hashes(workdir: Path, stage: Path) -> None:
+def refresh_baseline_hashes(workdir: Path, stage: Path, removed: tuple[str, ...] = ()) -> None:
     """Re-record the notes `as_installed` rewrote in a fixture's `baseline-hashes`, which its
     setup wrote before the install; without it a check that compares the tree to that baseline
-    counts the install as the model's edit. Only the lines of those notes change."""
+    counts the install as the model's edit. Only the lines of those notes change, and the lines
+    of `baseline-hashes` and `baseline-files` that name a path the bare arm removed (`removed`)
+    are dropped."""
 
+    def gone(name: str) -> bool:
+        return any(name == f"./{item}" or name.startswith(f"./{item}/") for item in removed)
+
+    listed = stage / "checks" / "baseline-files"
+    if removed and listed.is_file():
+        kept = [line for line in listed.read_text(encoding="utf-8").splitlines() if not gone(line)]
+        listed.write_text("".join(f"{line}\n" for line in kept), encoding="utf-8")
     path = stage / "checks" / "baseline-hashes"
     if not path.is_file():
         return
     lines = []
     for line in path.read_text(encoding="utf-8").splitlines():
         _digest, _, name = line.partition("  ")
+        if gone(name):
+            continue
         if name in ("./AGENTS.md", "./README.md") and (workdir / name).is_file():
             line = f"{hashlib.sha256((workdir / name).read_bytes()).hexdigest()}  {name}"
         lines.append(line)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+
+
+def _nested_repository(workdir: Path, path: Path) -> bool:
+    """Whether `path` lies inside a Git repository nested in `workdir`."""
+
+    return any((parent / ".git").exists() for parent in path.parents if workdir in parent.parents)
+
+
+def instruction_paths(workdir: Path) -> tuple[list[str], list[str]]:
+    """What the bare arm removes from the built `workdir` (`BARE_NAMES`, `BARE_FOLDER`,
+    `BARE_ROOTS`), and what it keeps because a nested Git repository holds it; each by
+    workspace-relative path, a folder as one entry."""
+
+    found = [root.rstrip("/") for root in BARE_ROOTS if (workdir / root).exists()]
+    for folder, subfolders, names in os.walk(workdir):
+        here = Path(folder)
+        subfolders[:] = sorted(name for name in subfolders if name != ".git")
+        for name in list(subfolders):
+            relative = (here / name).relative_to(workdir).as_posix()
+            if relative in found:
+                subfolders.remove(name)
+            elif relative == BARE_FOLDER or relative.endswith(f"/{BARE_FOLDER}"):
+                found.append(relative)
+                subfolders.remove(name)
+        found += [
+            (here / name).relative_to(workdir).as_posix() for name in names if name in BARE_NAMES
+        ]
+    removed = sorted(item for item in found if not _nested_repository(workdir, workdir / item))
+    return removed, sorted(set(found) - set(removed))
+
+
+def strip_instructions(workdir: Path, extra: dict[str, Any]) -> tuple[tuple[str, ...], str]:
+    """For the bare arm: remove each instruction file and OutcomeBound folder from the built
+    fixture (`instruction_paths`) and fold the removal into the seed commit, so a check that
+    compares the tree with the seed does not count it as the model's change. `extra` records
+    what was removed and what a nested repository kept. The paths removed, and why the removal
+    could not be folded in, or an empty string."""
+
+    removed, kept = instruction_paths(workdir)
+    extra["instructions_removed"] = removed
+    if kept:
+        extra["instructions_kept"] = kept
+    for item in removed:
+        path = workdir / item
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+    if not removed:
+        return (), ""
+    env = {**child_env(), **HERMETIC_GIT}
+    # Only the removed paths leave the index: a fixture's uncommitted edits stay as setup left
+    # them, as under `as_installed`.
+    for command in (
+        ["git", "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *removed],
+        ["git", "commit", "-q", "--amend", "--no-edit", "--allow-empty"],
+        ["git", "tag", "-f", "seed"],
+    ):
+        done = subprocess.run(
+            command, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+        )
+        if done.returncode != 0:
+            return tuple(
+                removed
+            ), f"the removal could not be folded into the seed: {done.stderr.strip()}"
+    return tuple(removed), ""
+
+
+def facts_only_problems(workdir: Path) -> list[str]:
+    """What the built workspace of the facts-only arm holds that adopt's facts-only install does
+    not: a kernel block, a pointer line, a fragment file, or no project-facts block."""
+
+    from outcomebound_tools import adopt, facts
+
+    note = workdir / NOTE
+    text = note.read_text("utf-8") if note.is_file() else ""
+    problems = []
+    if adopt.block_text(text, facts.FACTS) is None:
+        problems.append(f"the {facts.FACTS} block missing")
+    if adopt.block_text(text, adopt.KERNEL) is not None:
+        problems.append(f"the {adopt.KERNEL} block present")
+    found = adopt.block_text(text, facts.POINTERS)
+    lines = found.decode("utf-8").splitlines() if found else []
+    problems += [f"pointer line present: {line}" for line in lines if POINTER_LINE.match(line)]
+    fragments = sorted((workdir / facts.FRAGMENT_DIR).glob("*.md"))
+    problems += [f"fragment file present: {path.relative_to(workdir)}" for path in fragments]
+    return problems
 
 
 def install(workdir: Path, files: dict[str, bytes]) -> None:
@@ -1399,12 +1542,15 @@ def guiding_reach(home: Path, where: Path) -> list[str]:
     return [item for item in reached if _instructing(Path(item)) or _names_outcomebound(Path(item))]
 
 
-def unclean_reach(names: list[str], home: Path, where: Path | None) -> list[str]:
-    """For a run of a fixture that needs a clean reach (`CLEAN_HOME`): `guiding_reach` of the
-    Codex home `home` and of the folder its workspaces are made in, `where` (None: the system's
-    temporary folder)."""
+def unclean_reach(
+    names: list[str], home: Path, where: Path | None, bare: bool = False
+) -> list[str]:
+    """For a run of a fixture that needs a clean reach (`CLEAN_HOME`), or of the bare arm
+    (`bare`), whose measure is no instruction at all: `guiding_reach` of the Codex home `home`
+    and of the folder its workspaces are made in, `where` (None: the system's temporary
+    folder)."""
 
-    if not any(name.startswith(CLEAN_HOME) for name in names):
+    if not bare and not any(name.startswith(CLEAN_HOME) for name in names):
         return []
     return guiding_reach(home, where or Path(tempfile.gettempdir()))
 
@@ -1527,6 +1673,7 @@ def protected_snapshot(
     installed_files: tuple[str, ...] = (),
     without_skills: bool = False,
     dropped: tuple[str, ...] = (),
+    removed: tuple[str, ...] = (),
 ) -> dict[str, str]:
     """Digests of the grading inputs the model could rewrite, taken while the build is trusted.
 
@@ -1536,7 +1683,8 @@ def protected_snapshot(
     arm or another guidance set's own files, protects no OutcomeBound skill copy it does not
     install: each the list names must be absent, since that arm has none; the skills it installs
     are protected. The same holds for the copies of each skill in `dropped`, which an element arm
-    takes from the current install.
+    takes from the current install. A path the bare arm removed (`removed`, or under one) is not
+    there to protect: it is left out.
     """
 
     snapshot = {}
@@ -1548,6 +1696,8 @@ def protected_snapshot(
         relative = Path(name)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"protected path is not fixture-relative: {name}")
+        if any(name == item or name.startswith(f"{item}/") for item in removed):
+            continue
         skill = (element_of(name) or "").partition(":")[2]
         absent = without_skills or skill in dropped
         if absent and listed and name.startswith(SKILL_ROOTS) and name not in installed_files:
@@ -1794,7 +1944,7 @@ def build_workspace(
             ["bash", str(fixture / "setup.sh"), str(workdir), str(stage)],
             env={
                 **fixture_setup_env(),
-                "OB_EVAL_ARM": arm.name,
+                "OB_EVAL_ARM": NONE if arm.name in NOTE_ONLY else arm.name,
                 **({"OB_EVAL_SOURCE": str(earlier_source())} if earlier_install(arm) else {}),
                 **({"OB_EVAL_VERBATIM": "1"} if verbatim_install(arm) else {}),
             },
@@ -1810,8 +1960,13 @@ def build_workspace(
     unfit = (
         as_installed(workdir, arm) or installed(workdir, arm.files) or element_problem(workdir, arm)
     )
+    removed: tuple[str, ...] = ()
+    if not unfit and arm.name == BARE:
+        removed, unfit = strip_instructions(workdir, extra)
+    if not unfit and arm.name == FACTS_ONLY and facts_only_problems(workdir):
+        unfit = "the facts-only install differs: " + "; ".join(facts_only_problems(workdir))
     if not unfit:
-        refresh_baseline_hashes(workdir, stage)
+        refresh_baseline_hashes(workdir, stage, removed)
     if unfit:
         extra["error"] = unfit
         return report, {}, None, ""
@@ -1820,10 +1975,11 @@ def build_workspace(
             fixture,
             workdir,
             tuple(arm.files),
-            without_skills=arm.name == NONE or verbatim_install(arm),
+            without_skills=arm.name in NOTE_ONLY or verbatim_install(arm),
             dropped=tuple(
                 item.split(":", 1)[1] for item in arm.dropped if item.startswith("skill:")
             ),
+            removed=removed,
         )
     except (OSError, ValueError) as problem:
         extra["error"] = f"protected fixture setup failed: {problem}"
@@ -2195,6 +2351,21 @@ def refuse_workspaces(root: Path, paths: list[Path]) -> str:
     return "workspace already exists: " + ", ".join(taken) if taken else ""
 
 
+# What the bare arm records of each fixture: the instruction files and OutcomeBound folders it
+# removed, and those a nested repository kept.
+BARE_RECORDS = ("instructions_removed", "instructions_kept")
+
+
+def bare_record(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """What STATUS.json keeps of the bare arm's removals, by fixture; nothing for another arm."""
+
+    return {
+        key: {row["fixture"]: row[key] for row in rows if key in row}
+        for key in BARE_RECORDS
+        if any(key in row for row in rows)
+    }
+
+
 def index_row(status: dict[str, Any], name: str, meta: dict[str, Any]) -> dict[str, Any]:
     """One run's line in INDEX.json: what ran and where its evidence is."""
 
@@ -2209,6 +2380,7 @@ def index_row(status: dict[str, Any], name: str, meta: dict[str, Any]) -> dict[s
         "thread_id": meta.get("thread_id"),
         "native_session": meta.get("native_session"),
         "workspace": meta.get("fixture_repo"),
+        **{key: meta[key] for key in BARE_RECORDS if key in meta},
     }
 
 
@@ -3090,8 +3262,11 @@ def _parser() -> argparse.ArgumentParser:
             f"skill that install carries at {HARNESS}'s skill path (the fourteen every install "
             f"carries), and {LAUNCHER} "
             f"first on the call's PATH; {UNSIZED} is current without the kernel's sizing "
-            f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher. "
-            "The model is always named and passed to codex with -m, so codex's configured "
+            f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher; "
+            f"{FACTS_ONLY} is the fixture's note and what `outcomebound adopt --facts-only` "
+            "installs for the harness, with the launcher; "
+            f"{BARE} is {NONE} with no instruction file at all, the fixture's own note among "
+            "them. The model is always named and passed to codex with -m, so codex's configured "
             "default never runs. Each arm's measurement is "
             f"{len(default_fixtures())} fixtures x {MEASURED} repetitions: "
             f"{len(default_fixtures()) * MEASURED} runs; "
@@ -3113,7 +3288,8 @@ def _parser() -> argparse.ArgumentParser:
         choices=ARMS,
         help=f"{EARLIER}: an earlier wording of the kernel; current: what adopt "
         f"installs for {HARNESS}, and the launcher on PATH; {UNSIZED}: current without the "
-        f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher",
+        f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher; {FACTS_ONLY}: the "
+        f"facts-only install, and the launcher on PATH; {BARE}: {NONE} with no instruction file",
     )
     parser.add_argument(
         "--drop",
@@ -3326,6 +3502,11 @@ def element_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -
     the current arm or the none arm plus elements, under `--arm-label`. A refusal exits 2."""
 
     dropped, added = tuple(args.drop or ()), tuple(args.add or ())
+    if args.arm in (FACTS_ONLY, BARE) and (dropped or added or args.edits):
+        parser.error(
+            f"--arm {args.arm} takes no --drop, --add or --edits: it is measured as it is; "
+            f"build an element arm from --arm current or --arm {NONE}"
+        )
     if dropped and args.arm != "current":
         parser.error("--drop takes an element from the current install: use --arm current")
     if added and args.arm != NONE:
@@ -3639,7 +3820,19 @@ def isolation(
     if arm.shaped():
         problems = element_problems(workdir, arm)
         rows.append(("elements", not problems, "; ".join(problems) or _elements_text(arm)))
-    if arm.name == NONE or verbatim_install(arm):
+    if arm.name == FACTS_ONLY:
+        problems = facts_only_problems(workdir)
+        rows.append(("facts-only-install", not problems, "; ".join(problems) or "as adopt wrote"))
+    if arm.name == BARE:
+        left, kept = instruction_paths(workdir)
+        rows.append(
+            (
+                "no-instruction-file",
+                not left,
+                f"in the workspace: {left or 'none'}; a nested repository keeps: {kept or 'none'}",
+            )
+        )
+    if arm.name in (NONE, BARE) or verbatim_install(arm):
         files = instructions_above(workdir) if home is not None else claude_above(workdir)
         texts = [
             prompt,
@@ -3861,7 +4054,11 @@ def harness_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -
 
 
 def harness_reach(
-    parser: argparse.ArgumentParser, tool: Harness, names: list[str], where: Path | None
+    parser: argparse.ArgumentParser,
+    tool: Harness,
+    names: list[str],
+    where: Path | None,
+    bare: bool = False,
 ) -> dict[str, Any]:
     """Refuse, before anything is built, a run whose calls would read what their arm does not
     give them from outside their workspaces (`refuse_unclean`, `refuse_claude_reach`); else
@@ -3869,7 +4066,7 @@ def harness_reach(
     rows and the plugin folders with their commits."""
 
     if isinstance(tool, CodexHarness):
-        refuse_unclean(parser, names, tool.home(), where)
+        refuse_unclean(parser, names, tool.home(), where, bare)
         # What the Codex home gives each call besides its fixture and install.
         return {"codex_home": str(tool.home()), "codex_home_reach": home_leaks(tool.home())}
     return {
@@ -3928,16 +4125,22 @@ def _no_call(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
 
 
 def refuse_unclean(
-    parser: argparse.ArgumentParser, names: list[str], home: Path, where: Path | None
+    parser: argparse.ArgumentParser,
+    names: list[str],
+    home: Path,
+    where: Path | None,
+    bare: bool = False,
 ) -> None:
-    """Exit 2, before anything is built, where a call of a fixture that needs a clean reach
-    would read OutcomeBound text or an instruction file with text from its Codex home or above
-    its workspace (`unclean_reach`); otherwise print what the home gives every call alike."""
+    """Exit 2, before anything is built, where a call of a fixture that needs a clean reach, or
+    of the bare arm, would read OutcomeBound text or an instruction file with text from its Codex
+    home or above its workspace (`unclean_reach`); otherwise print what the home gives every
+    call alike."""
 
-    reached = unclean_reach(names, home, where)
+    reached = unclean_reach(names, home, where, bare)
     if reached:
+        whose = f"a {BARE} arm's" if bare else f"a {'/'.join(CLEAN_HOME)} fixture's"
         parser.error(
-            f"a {'/'.join(CLEAN_HOME)} fixture's calls read nothing that names OutcomeBound or "
+            f"{whose} calls read nothing that names OutcomeBound or "
             f"instructs from the Codex home or above the workspace, and these would: "
             f"{', '.join(reached)}; empty or move them, or name another --workspace-root"
         )
@@ -3966,7 +4169,7 @@ def _main(argv: list[str] | None = None) -> int:
     tool = make_harness(args.harness, plugins)
     if args.probe:
         return probe(args, out, root, tool)
-    reach = harness_reach(parser, tool, names, root / out.name if root else None)
+    reach = harness_reach(parser, tool, names, root / out.name if root else None, args.arm == BARE)
     # Each fixture's install, read before anything runs: an install.json the runner refuses, a
     # fragment the engine does not ship, an element the install does not hold or an edit that
     # does not apply stops the run here.
@@ -4031,6 +4234,7 @@ def _main(argv: list[str] | None = None) -> int:
             "fixtures": names,
             "completed_fixtures": completed,
             "failures": failures,
+            **bare_record(rows),
         },
     )
     return 1 if failures else 0

@@ -107,10 +107,10 @@ done
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
 - `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]` runs a plan of (repetition,
   fixture, arm) cells, one `evals/run.py` call each. The plan names the model, effort, results and
-  workspace folders, repetitions, fixtures, and arms (each a label, `current` or `none`, and
-  optional `drop`, `add` or `edits`). For each repetition and fixture it runs every arm, with the
-  arm order rotated so no arm always goes first and the arms of one fixture run side by side in
-  time. It skips a cell that already ran (a cell whose call failed, `ran with failures`, counts as
+  workspace folders, repetitions, fixtures, and arms (each a label, an arm of `evals/run.py`
+  such as `current`, `none`, `facts-only` or `bare`, and optional `drop`, `add` or `edits`).
+  For each repetition and fixture it runs every arm, with the arm order rotated so no arm
+  always goes first and the arms of one fixture run side by side in time. It skips a cell that already ran (a cell whose call failed, `ran with failures`, counts as
   run and is not started again), stops at a cell folder in any other state or at a preflight
   failure, refuses before anything starts a plan run.py would refuse (an unknown element, a
   missing edits file, an element a fixture's install cannot give), and prints the
@@ -299,7 +299,9 @@ model.
 - **Install.** The current arm is what `outcomebound adopt --harness claude-code` installs: the
   kernel, facts and pointers in `AGENTS.md`, which Claude Code reads where the workspace and the
   folders above it have no `CLAUDE.md`, and the skills at `.claude/skills/`. Element arms
-  (`--drop`, `--add`, `--edits`) work on that install as on codex's.
+  (`--drop`, `--add`, `--edits`) work on that install as on codex's. The `facts-only` arm is
+  what `outcomebound adopt --facts-only --harness claude-code` installs, and the `bare` arm
+  removes the same files as under codex.
 - **A fresh cell for each call.** The call runs with its own `HOME`, `CLAUDE_CONFIG_DIR` and
   `XDG_*` folders, in `<fixture>.claude-home/` beside the run's other files. None of the operator's
   user settings, `CLAUDE.md`, rules, plugins, skills, agents, memory or MCP servers reach it. The
@@ -425,6 +427,43 @@ What stays `UNVERIFIED` until that probe runs:
 - `none`: the task alone. It has no kernel, no skill and no launcher. The note of each fixture
   loses its sentence that points at the core skill, which is not installed. Against `current`, it
   measures what the text of OutcomeBound adds at all.
+- `facts-only`: the fixture's own note, as under `none`, and then what
+  `outcomebound adopt --facts-only --harness <harness>` installs from this checkout for the
+  harness the run uses, run by this checkout's launcher after the fixture's `setup.sh` on every
+  fixture, with the fragments and Done commands of its `install.json` where it has one. `AGENTS.md`
+  gets the project-facts block and, where the fixture selects the `local` fragment, a
+  guidance-pointers block that holds that fragment inline; there is no kernel block, no pointer
+  line and no fragment file. The skills go to the harness's skill path where the harness lists
+  skills itself (both harnesses here do), with nothing that points at them. This checkout's
+  launcher is first on the call's PATH, as under `current`, so the two arms differ only in the
+  text installed. The prompt is the task alone. The install joins the seed commit as `current`'s
+  does; the build fails where the workspace holds a kernel block, a pointer line or a fragment
+  file, or lacks the facts block, and `--dump-arm` shows that rule as `facts-only-install`. The
+  meta and `STATUS.json` record `arm_kind`, the skill files' digests, `arm_done` and
+  `arm_adopted`, as for `current`. Against `none`, it measures what the project facts add;
+  against `current`, what the contract and the pointers add over the facts.
+- `bare`: the `none` arm with no instruction file at all. After the fixture's `setup.sh` (run as
+  under `none`), the runner removes each `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` and
+  `CLAUDE.local.md` at any depth (the fixture's own note among them, and `.claude/CLAUDE.md`),
+  each `.claude/rules` folder at any depth, and at the workspace's root `.outcomebound/skills`,
+  `.claude/skills`, `.agents/skills` and `.outcomebound/fragments`. A file inside a Git repository
+  nested in the workspace, which is a fixture's subject, is kept. The removal joins the seed commit
+  and the `seed` tag, so a check that compares the tree with the seed reads a workspace the model
+  did not change as unchanged; a setup's `baseline-files` and `baseline-hashes` lose the lines of
+  the removed files, and `protected.paths` entries that were removed are not protected. The
+  prompt is the task alone; there is no kernel, skill or launcher. A fixture whose task or
+  graders rely on text in its own note still runs: the result is reported, not refused. Each meta
+  and `INDEX.json` row records `instructions_removed` and, where a nested repository kept one,
+  `instructions_kept`; `STATUS.json` records both by fixture. A codex run of `bare` refuses an
+  instruction file with text, or OutcomeBound text, in the Codex home or above its workspaces, for
+  every fixture, as a replica fixture's run does; a Claude Code run refuses one above its
+  workspaces for every arm. `--dump-arm` shows the rule `no-instruction-file`. Against `none`, it
+  measures what the project's own note is worth.
+  - `--drop`, `--add` and `--edits` are refused with `facts-only` and `bare` (exit 2): each arm is
+    measured as it is, and an element arm builds on `current` or `none`. A loop plan refuses
+    `edits` on them too.
+  - With `none` and `current`, the two make four steps, each adding one layer: `bare`, `none`,
+    `facts-only`, `current`.
 - `earlier`: an earlier wording of the kernel, kept in `evals/arms/earlier-kernel.md`. With
   `--earlier-ref REF` it is instead the install of this checkout's Git ref `REF` (for example a
   release tag): that ref's kernel, skills and fragments, written as `current` writes them, with

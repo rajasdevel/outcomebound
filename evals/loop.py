@@ -11,7 +11,9 @@
      "arms": [{"label": "none", "arm": "none"},
               {"label": "current-minus-x", "arm": "current", "drop": ["fragment:x"]},
               {"label": "none-plus-kernel", "arm": "none", "add": ["kernel"]},
-              {"label": "edited", "arm": "current", "edits": "/abs/edits.json"}]}
+              {"label": "edited", "arm": "current", "edits": "/abs/edits.json"},
+              {"label": "facts-only", "arm": "facts-only"},
+              {"label": "bare", "arm": "bare"}]}
 
 A Claude Code plan names `"harness": "claude-code"`, and may give an arm a plugin from a pinned
 clone: `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/third-party/ponytail"}`.
@@ -189,6 +191,10 @@ def _arm(entry: Any, arms: tuple[str, ...], kinds: tuple[str, str], base: Path) 
     if add and kind != none:
         raise PlanError(f"arm {label}: add applies to the {none} arm only")
     edits = str(_path(entry["edits"], f"arm {label}: edits", base)) if "edits" in entry else ""
+    if edits and kind != current and not (kind == none and add):
+        raise PlanError(
+            f"arm {label}: edits apply to the {current} arm, or the {none} arm with add"
+        )
     plugin = entry.get("plugin_dir")
     folder = str(_path(plugin, f"arm {label}: plugin_dir", base)) if "plugin_dir" in entry else ""
     return Arm(label, str(kind), drop, add, edits, folder)

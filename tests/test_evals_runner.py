@@ -475,14 +475,21 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     tmp_path: Path, arm: str
 ) -> None:
     """Breaks if the arms that stand for an install keep the fixture's own pointer to the core
-    skill, or lack the facts and the pointers, each skill's with adopt's condition; the other
-    arms keep the note as the fixture wrote it."""
+    skill, or lack the facts and the pointers, each skill's with adopt's condition; if the
+    facts-only arm lacks the facts or holds a pointer; or if the bare arm keeps any note; the
+    other arms keep the note as the fixture wrote it."""
 
     from outcomebound_tools import adopt
 
     arguments = ("--arm", arm, "--model", "gpt-6-sol", "--fixtures", "slice-a-spec")
     _done, out = _invoke(tmp_path, arguments, action=":")
     meta = _meta(out, "slice-a-spec")
+    if arm == RUN.BARE:
+        assert not (Path(meta["fixture_repo"]) / "AGENTS.md").exists()
+        assert "AGENTS.md" in meta["instructions_removed"]
+        status = json.loads((out / "STATUS.json").read_text(encoding="utf-8"))
+        assert status["instructions_removed"] == {"slice-a-spec": meta["instructions_removed"]}
+        return
     note = (Path(meta["fixture_repo"]) / "AGENTS.md").read_text(encoding="utf-8")
     seed_note = subprocess.run(
         ["git", "show", "seed:AGENTS.md"],
@@ -499,6 +506,10 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
         for skill in ("using-outcomebound", "slice-tickets"):
             assert f"- {adopt.CONDITIONS[skill]}: read .agents/skills/{skill}/SKILL.md" in note
         assert "read .outcomebound/fragments/tickets.md" in note
+        assert seed_note == note
+    elif arm == RUN.FACTS_ONLY:
+        assert pointer not in note and "id=project-facts" in note, note
+        assert "id=operating-contract" not in note and ": read " not in note, note
         assert seed_note == note
     else:
         assert "id=project-facts" not in note
