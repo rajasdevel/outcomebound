@@ -45,7 +45,8 @@ done
   three repetitions each: 36 runs.
 - `--fixtures` narrows the run. `--effort` sets the reasoning effort of codex (default `medium`).
   `--out` names the run directory (default `evals/results/raw/<id>/`, which Git ignores).
-  `--harness` names the tool that runs the model (default and only value today: `codex`).
+  `--harness` names the tool that runs the model: `codex` (the default) or `claude-code` (see
+  [Claude Code as the harness](#claude-code-as-the-harness)).
 - Each fixture repository is kept after the run, at
   `<root>/<run directory name>/<fixture>-r<repetition>`. The root is `--workspace-root DIR`, else
   `OUTCOMEBOUND_EVAL_ROOT`, else `OUTCOMEBOUND_FIXTURE_ROOT`; with none, each is a temporary
@@ -115,8 +116,12 @@ done
   missing edits file, an element a fixture's install cannot give), and prints the
   `--summary` and `evals/attribute.py` commands for what it ran. `--dry-run` prints every cell's
   argv and starts nothing. A plan can name a `pack` (`XS`, `S`, `M`, `L` or `panel`, read from
-  each fixture's `suite.json`) in place of `fixtures`. It can also name a `harness` (only `codex`
-  runs today) and a `profile`, both recorded in `<results>/<name>/LOOP.json`. A later run with
+  each fixture's `suite.json`) in place of `fixtures`. It can also name a `harness` (`codex` or
+  `claude-code`) and a `profile`, both recorded in `<results>/<name>/LOOP.json`. A profile of the
+  design (`attr`, `field-codex`, `claude-mid`, `claude-top`, `small`) must name its own harness;
+  another profile is a free label. On `claude-code`, an arm can add a plugin with `plugin_dir`
+  (for example `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/clone"}`); the
+  folder must be a clone inside the evals home's `third-party/` folder, as below. A later run with
   another harness, profile, model or effort under the same name is refused. A `spend_limit` (input
   tokens) stops the plan before a cell whose worst case, the fixture's `input_cap`, would pass the
   limit. Repetitions go from 1 to 10.
@@ -240,9 +245,11 @@ kept workspace and the files that grade a fixture, for `--regrade`.
 ## Adding a harness
 
 `evals/harnesses/__init__.py` states the contract (`preflight()`, `version()` and `call(...)`,
-which returns a `CallResult`), `evals/harnesses/codex.py` is the one implementation, and
-`make_harness` in `evals/run.py` names it. A new harness is one module there, one entry in
-`make_harness` and one in `HARNESSES`; the runner, the fixtures and the graders name no CLI. A
+which returns a `CallResult`), `evals/harnesses/codex.py` and `evals/harnesses/claude_code.py`
+are the implementations, and `make_harness` in `evals/run.py` names them. A new harness is one
+module there, one entry in `make_harness` and one in `HARNESSES`; the fixtures and the graders
+name no CLI, and the runner names one only where a harness installs or isolates differently
+(the skill path adopt installs to, the Codex home, the Claude Code cell). A
 harness must meet these items, and `--probe` shows which one it does not:
 
 - **Identity is observed, never inferred.** The model, effort and working directory of a call
@@ -281,6 +288,98 @@ harness must meet these items, and `--probe` shows which one it does not:
   cap. The harness stops the call when the cap is passed, and it says so in `extras["stopped"]`.
   `Request.protected` lists the runner's paths (stubs, watch log) that must stay outside every
   path the model may write; the harness refuses the call before the model runs if one does not.
+
+## Claude Code as the harness
+
+`--harness claude-code` runs each call with `claude -p` (`evals/harnesses/claude_code.py`), with
+the same build, budget stop, watcher, stubs, grading, transcript form and `STATUS.json` as a codex
+run. Name the model by its full id: a call counts only where the native session names the same
+model.
+
+- **Install.** The current arm is what `outcomebound adopt --harness claude-code` installs: the
+  kernel, facts and pointers in `AGENTS.md`, which Claude Code reads where the workspace and the
+  folders above it have no `CLAUDE.md`, and the skills at `.claude/skills/`. Element arms
+  (`--drop`, `--add`, `--edits`) work on that install as on codex's.
+- **A fresh cell for each call.** The call runs with its own `HOME`, `CLAUDE_CONFIG_DIR` and
+  `XDG_*` folders, in `<fixture>.claude-home/` beside the run's other files. None of the operator's
+  user settings, `CLAUDE.md`, rules, plugins, skills, agents, memory or MCP servers reach it. The
+  cell environment drops every variable that Claude Code reads (the `CLAUDE*`, `ANTHROPIC_*`, MCP,
+  Bash, thinking and feature variables), Ponytail's and the XDG ones. It keeps only
+  `CLAUDE_CODE_OAUTH_TOKEN`, which the sandbox hides from the model's commands. Auto memory is off.
+  The cell is kept: it holds the session the CLI wrote, and session history is never removed. A
+  cell that is already there is refused.
+- **Before the call.** The runner refuses a run, exit 2 and nothing built, whose workspaces would
+  sit under a folder with a `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, `AGENTS.md`,
+  `.claude/AGENTS.md` or `.claude/rules/*.md`. Claude Code reads those from every folder above the
+  working directory, and a `CLAUDE.md` also hides the install's `AGENTS.md`. Name a
+  `--workspace-root` with none above it; a folder in your own home has your `~/.claude/` above it.
+  A managed policy that sets hooks, plugins, a status line, a key helper or MCP servers, or a
+  managed `CLAUDE.md`, is refused too; other managed keys apply to every arm alike and are recorded.
+- **The call.** `--output-format stream-json --verbose --include-hook-events`, `--model`,
+  `--effort`, `--permission-mode acceptEdits --permission-prompts none` (an edit in the workspace
+  is allowed, anything that would ask a person is denied), `--setting-sources project,local`,
+  `--strict-mcp-config`, `--no-chrome`, and `--settings` with Claude Code's sandbox on for Bash: no
+  unsandboxed retry, refusal to start where the sandbox cannot run, commands allowed inside it,
+  writes confined to the workspace and the temporary folders, the runner's stubs and watch log
+  denied, and a local port only for a fixture with a `local-listener` file. A fixture's `field`
+  sandbox gives the same call, since Claude Code has no grant like codex's `.agents/work`; the
+  meta records it.
+- **Identity.** The session id, working directory, permission mode, API key source and CLI version
+  come from the stream's start event; the model and effort from the native session's assistant
+  records, under the cell's `config/projects/`, found by the session id and copied byte for byte
+  to `<fixture>.native.jsonl`. A missing or different item is a call error.
+- **What loaded.** The start event lists the plugins, skills and MCP servers, and the stream shows
+  each hook that runs. A plugin, skill, MCP server or hook that the arm does not add (an
+  OutcomeBound skill in an arm that does not carry it, a plugin that is not the arm's
+  `--plugin-dir`, a workspace skill that did not load) makes the call an error: the meta says
+  `void: isolation` and the run does not count. The start event names no instruction file and no
+  hook: those items read `UNVERIFIED`, never `PASS`. Every row is in the meta as `isolation`.
+- **Transcript.** `commands` holds the Bash calls, and `files` holds the Read, Edit and Write calls
+  as `[tool, path, status]`, so a file the model read or changed with a tool leaves a record. A
+  stream with a tool this decoder does not know (a subagent, a background shell) has no
+  `commands` and no `files`, as an unknown codex item has none. A call denied by the CLI is
+  `declined`.
+- **Cost.** `session_tokens` comes from the stream's result event (`modelUsage`, summed over every
+  model the session called): input with cache reads and writes among it, cached input (cache
+  reads), output, and `cost_usd`, the CLI's estimate at list prices, which `evals/panel.py` reads as
+  the priced total. The CLI counts thinking inside output: `reasoning_output_tokens` is 0 and the
+  summary says `reasoning counted in it`. A stopped call has no result event: its tokens are the
+  assistant messages' usage, each once, and no cost.
+- **Budget.** The runner reads the stream about once a second for the session's input so far and
+  stops the call past its cap, as for codex.
+- **Plugins.** `--plugin-dir DIR` (repeatable) adds a plugin to every call of the run. `DIR` must
+  be a folder inside the evals home's `third-party/` folder (`OB_EVALS_HOME`, else
+  `outcomebound-evals` beside the main checkout), so a plugin never comes from a plugin cache.
+  `STATUS.json` records each folder with its clone's commit. Ponytail's plugin arm uses the same
+  pinned clone as `evals/ponytail/`.
+- **Dry run, no model call.** `python3 evals/run.py --dump-arm FIXTURE --arm ARM --model MODEL
+  --harness claude-code [--plugin-dir DIR] --workspace-root DIR` builds the fixture with adopt's
+  Claude Code install and prints the exact argv, the cell's environment (each credential as
+  `<set>`), the prompt, the instruction files from the workspace up and the install. It then runs
+  the loading check on a synthetic start event twice: as the arm should load (it must pass), and
+  with a plugin and a hook that the arm does not add (it must fail). It exits 1 where a rule
+  fails. A dry run checks the setup and the check, never what a model loads.
+
+**Preflight, run by a person first.** No test and no dry run calls the CLI's sign-in. Before a
+pass, a person runs, in order:
+
+1. `python3 evals/run.py --dump-arm <fixture> --arm current --model <id> --harness claude-code
+   --workspace-root <root>`: no model call.
+2. `python3 evals/run.py --probe --harness claude-code --model <id> --effort <effort>
+   --workspace-root <root>`: the preflight (`claude auth status --json` from a fresh cell, no
+   model call), then one minimal model call through the counted path, with each item printed as
+   `PASS`, `FAIL` or `UNVERIFIED`. It must observe a subscription sign-in (`claude.ai`, or
+   `oauth_token` from `CLAUDE_CODE_OAUTH_TOKEN`); an API key is refused.
+
+What stays `UNVERIFIED` until that probe runs:
+- whether a subscription login is found from a fresh `CLAUDE_CONFIG_DIR` and `HOME`
+  (`CLAUDE_CODE_OAUTH_TOKEN`, made with `claude setup-token`, does not depend on it);
+- which fields the start event, the result event and the native session carry in a `-p` call:
+  the code reads the names that the Agent SDK types and the CLI's own start event give, and a
+  field that is missing is reported, never filled in;
+- whether the sandbox runs and confines as set, and whether Git can commit in it;
+- whether the start event lists built-in plugins and skills as the check expects;
+- the cost fields' meaning: `total_cost_usd` is the CLI's own estimate, not a bill.
 
 ## The arms
 

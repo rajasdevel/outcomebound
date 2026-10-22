@@ -2,8 +2,8 @@
 """Measure whether the OutcomeBound kernel, and the skills an install carries, change what a
 model does.
 
-A run builds each fixture's disposable repository, hands a harness (today `codex exec`) one
-arm's kernel and the fixture's task, and judges what the model left with the fixture's
+A run builds each fixture's disposable repository, hands a harness (`codex exec` or `claude -p`)
+one arm's kernel and the fixture's task, and judges what the model left with the fixture's
 deterministic post-checks, run through `outcomebound_tools.validation`. The post-checks are the
 verdict. The graders never enter the workspace: a fixture's setup writes them to a grading stage
 outside it, the runner seals the stage and the grading files before the call and checks them
@@ -29,8 +29,14 @@ arm, and `--edits` changes the installed text; each is built from adopt's own in
 model call, and `--dump-arm` shows it.
 
 No run bills an API key from the environment: every credential and endpoint override a
-CLI reads there is removed from each child, and preflight must observe a ChatGPT login. A
-credential kept in codex's own files is invisible here.
+CLI reads there is removed from each child, and preflight must observe a subscription login (a
+ChatGPT login for codex, a Claude subscription for Claude Code). A credential kept in codex's own
+files is invisible here.
+
+`--harness claude-code` runs each call with `claude -p` (evals/harnesses/claude_code.py): the
+current arm is then what `outcomebound adopt --harness claude-code` installs (the skills at
+`.claude/skills/`), each call gets a fresh home and config folder, and `--plugin-dir` adds a plugin
+from a pinned clone under the evals home's `third-party/` folder.
 
 A suite-v2 fixture (`v2-<id>`, run only when named) has a `suite.json`: its tier, the budget
 its call is stopped at (input cap, timeout), the runner-owned stubs its call finds first on
@@ -65,6 +71,15 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from evals import stub_place
+from evals.claude_stream import above as claude_above
+from evals.claude_stream import (
+    expected_start,
+    leaked_start,
+    loading_check,
+    reach_rows,
+    shown_env,
+)
+from evals.claude_stream import failed as failed_rows
 from evals.codex_events import (
     COST_KEYS,
     command_transcript,
@@ -84,6 +99,7 @@ from evals.evidence import (
     workspace_digest,
 )
 from evals.harnesses import Budget, Request
+from evals.harnesses.claude_code import ClaudeCodeHarness, cell_for
 from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
 from evals.native_receipts import parse_records
@@ -152,7 +168,14 @@ TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
 # The harness whose install the current arm mirrors, and the one `--harness` takes by default.
 HARNESS = "codex"
-HARNESSES = (HARNESS,)
+CLAUDE = "claude-code"
+HARNESSES = (HARNESS, CLAUDE)
+# The harness this run installs for: `--harness` sets it, and the current arm is what
+# `outcomebound adopt --harness <it>` installs, at its skill path.
+INSTALL_HARNESS = HARNESS
+# Where a plugin an arm adds must come from: a pinned clone in the private evals home's
+# `third-party/` folder, never a person's plugin cache.
+THIRD_PARTY = "third-party"
 # An earlier wording of the kernel, kept as a file so the arm runs in any checkout.
 EARLIER = "earlier"
 EARLIER_KERNEL = REPO / "evals" / "arms" / "earlier-kernel.md"
@@ -174,8 +197,9 @@ NONE = "none"
 # The current arm less the kernel's sizing paragraph, the one that opens with this phrase.
 UNSIZED = "unsized"
 SIZING = "Satisfy all four completely"
-# Where a fixture's skill copies live: the path its note names, and codex's skill path.
-SKILL_ROOTS = (".outcomebound/skills/", ".agents/skills/")
+# Where a fixture's skill copies live: the path its note names, Claude Code's skill path and
+# codex's skill path (the last stays last: element checks name a pointer line under it).
+SKILL_ROOTS = (".outcomebound/skills/", ".claude/skills/", ".agents/skills/")
 ARMS = (EARLIER, "current", UNSIZED, NONE)
 # The arms that stand for an install: their fixtures carry what adopt writes into AGENTS.md.
 INSTALLED = ("current", UNSIZED)
@@ -724,9 +748,11 @@ def load_arm(
         from outcomebound_tools import adopt
 
         try:
-            (route,) = adopt.routes(REPO, [HARNESS])
+            (route,) = adopt.routes(REPO, [INSTALL_HARNESS])
         except adopt.AdoptError as error:
-            raise SystemExit(f"run: the skill path of {HARNESS} is unknown: {error}") from None
+            raise SystemExit(
+                f"run: the skill path of {INSTALL_HARNESS} is unknown: {error}"
+            ) from None
         files = {f"{route.skills}/{path}": data for path, data in verbatim_guidance()[1].items()}
         return Arm(name, text, files, None, agents=verbatim_guidance()[0])
     if name == NONE or (name == EARLIER and not EARLIER_REF):
@@ -735,7 +761,7 @@ def load_arm(
 
     root = earlier_source() if name == EARLIER else REPO
     try:
-        (route,) = adopt.routes(root, [HARNESS])
+        (route,) = adopt.routes(root, [INSTALL_HARNESS])
         chosen = fragments.select(fragments.load_all(root), selected) if selected else []
         carried = carried_skills(root)
         files = {
@@ -771,7 +797,8 @@ def fixture_arm(name: str, arm: Arm) -> Arm:
         return arm
     from outcomebound_tools import adopt
 
-    root = ".agents/skills/adopt-outcomebound"
+    (route,) = adopt.routes(REPO, [INSTALL_HARNESS])
+    root = f"{route.skills}/adopt-outcomebound"
     files = {
         **arm.files,
         **{
@@ -1167,8 +1194,8 @@ def as_installed(workdir: Path, arm: Arm) -> str:
 
 def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> str:
     """Install the arm into the built fixture as an adopter does: this checkout's launcher runs
-    `outcomebound adopt --harness codex` with the arm's fragments and Done commands, which writes
-    the kernel, facts and pointers blocks into AGENTS.md, the skills, the fragments,
+    `outcomebound adopt --harness <INSTALL_HARNESS>` with the arm's fragments and Done commands,
+    which writes the kernel, facts and pointers blocks into AGENTS.md, the skills, the fragments,
     `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what its own ignore files
     keep out, and the notes `as_installed` rewrote (`rewritten`) are folded into the seed
     commit; the setup's other uncommitted edits stay so. An
@@ -1176,7 +1203,7 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
     leave nothing to fold. Why it could not, or an empty string."""
 
     env = {**child_env(), **HERMETIC_GIT}
-    argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", HARNESS]
+    argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", INSTALL_HARNESS]
     argv += ["--fragments", ",".join(arm.selected)] if arm.selected else []
     for line in arm.done:
         argv += ["--done", line]
@@ -1422,13 +1449,65 @@ def build_prompt(kernel_text: str, task: str) -> str:
     return f"{head}Task:\n{task.strip()}\n"
 
 
-def make_harness(name: str = HARNESS) -> CodexHarness:
-    """The named harness, wired to this runner's environment, short-command runner and call
-    timeout. Only `codex` exists; a new one is a module under evals/harnesses and a line here."""
+Harness = CodexHarness | ClaudeCodeHarness
 
-    if name != "codex":
+
+def make_harness(name: str = HARNESS, plugin_dirs: tuple[Path, ...] = ()) -> Harness:
+    """The named harness, wired to this runner's environment, short-command runner and call
+    timeout; a new one is a module under evals/harnesses and a line here. `plugin_dirs` are the
+    plugin folders a Claude Code arm adds; codex takes none."""
+
+    if name == CLAUDE:
+        return ClaudeCodeHarness(child_env, _run, CALL_TIMEOUT, plugin_dirs)
+    if name != HARNESS:
         raise ValueError(f"no harness {name}; there is {', '.join(HARNESSES)}")
+    if plugin_dirs:
+        raise ValueError(f"--plugin-dir adds a plugin to a {CLAUDE} call; {name} takes none")
     return CodexHarness(child_env, _run, CALL_TIMEOUT)
+
+
+def set_harness(name: str) -> None:
+    """Install for `name`: the current arm becomes what adopt installs for that harness."""
+
+    global INSTALL_HARNESS
+    INSTALL_HARNESS = name
+
+
+def evals_home() -> Path:
+    """The private evals home, as `evals/ponytail/driver.py` finds it: `OB_EVALS_HOME`, else
+    `outcomebound-evals` beside the main checkout."""
+
+    from evals.ponytail.driver import evals_home as found
+
+    return found()
+
+
+def plugin_dir_refusal(folder: str) -> str:
+    """Why `folder` cannot be a plugin an arm adds, or an empty string: it must be an existing
+    folder that resolves inside the evals home's `third-party/` folder (a pinned clone), so a
+    plugin never comes from a person's plugin cache."""
+
+    if not folder:
+        return "--plugin-dir names no folder"
+    path = Path(folder)
+    if not path.is_absolute():
+        return f"--plugin-dir {folder} is not an absolute path"
+    allowed = (evals_home() / THIRD_PARTY).resolve()
+    if not path.is_dir():
+        return f"--plugin-dir {folder} is not a folder"
+    if not path.resolve().is_relative_to(allowed) or path.resolve() == allowed:
+        return f"--plugin-dir {folder} is not inside {allowed}: a plugin comes from a pinned clone"
+    return ""
+
+
+def plugin_records(folders: tuple[Path, ...]) -> list[dict[str, Any]]:
+    """Each plugin folder with the commit its clone is at (None where Git names none)."""
+
+    found = []
+    for folder in folders:
+        status, commit, _error = _run(["git", "-C", str(folder), "rev-parse", "HEAD"])
+        found.append({"path": str(folder), "commit": commit.strip() if status == 0 else None})
+    return found
 
 
 def source() -> dict[str, Any]:
@@ -1775,7 +1854,7 @@ def run_fixture(
     request: Request,
     arm: Arm,
     path: str,
-    harness: CodexHarness | None = None,
+    harness: Harness | None = None,
     place: Place | None = None,
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     """Build the fixture, let the model act in it through the harness, then judge what it left.
@@ -1928,7 +2007,7 @@ def judge_stop(extra: dict[str, Any], stopped: str | None) -> None:
 
 
 def _call_and_judge(
-    name: str, request: Request, arm: Arm, path: str, harness: CodexHarness, scene: Scene
+    name: str, request: Request, arm: Arm, path: str, harness: Harness, scene: Scene
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     workdir, stage, place, extra = scene
     keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
@@ -2139,7 +2218,7 @@ def run_one(
     name: str,
     arm: Arm,
     path: str,
-    harness: CodexHarness,
+    harness: Harness,
 ) -> tuple[bool, dict[str, Any]]:
     """One fixture under the run's arm, recorded in `out`; whether its call failed, and its
     INDEX row. The workspace is kept under the status's root, if it names one, and the
@@ -2421,6 +2500,10 @@ def rebuilt_arm(name: str, meta: dict[str, Any]) -> tuple[Arm | None, str]:
     kind = str(meta.get("arm_kind") or meta.get("arm"))
     if kind not in ARMS:
         return None, f"its arm {kind!r} is not one of {', '.join(ARMS)}"
+    harness = str(meta.get("harness") or HARNESS)
+    if harness not in HARNESSES:
+        return None, f"its harness {harness!r} is not one of {', '.join(HARNESSES)}"
+    set_harness(harness)
     try:
         chosen = fixture_install(name)
     except InstallError as problem:
@@ -2694,10 +2777,14 @@ def _spent(tokens: dict[str, Any]) -> str:
 
     cached = round(tokens["cached_input_tokens"])
     uncached = round(tokens["input_tokens"] - tokens["cached_input_tokens"])
+    reasoning = (
+        "reasoning counted in it"
+        if tokens.get("reasoning_in_output")
+        else f"reasoning {round(tokens['reasoning_output_tokens'])}"
+    )
     return (
         f"input {round(tokens['input_tokens'])} (cached {cached}, uncached {uncached}), "
-        f"output {round(tokens['output_tokens'])} "
-        f"(reasoning {round(tokens['reasoning_output_tokens'])}) tokens"
+        f"output {round(tokens['output_tokens'])} ({reasoning}) tokens"
     )
 
 
@@ -2786,12 +2873,16 @@ def _cost_lines(group: list[dict[str, Any]], runs: list[dict[str, Any]]) -> list
         return lines
     counted = [run for run in runs if run.get("session_tokens")]
     if counted:
-        median = {
+        median: dict[str, Any] = {
             key: _median([float(run["session_tokens"][key]) for run in counted])
             for key in COST_KEYS
         }
+        median["reasoning_in_output"] = _reasoning_in_output(counted)
         lines.append(f"  median cost {_spent(median)} over {len(counted)} counted run(s)")
-    total = {key: sum(run["session_tokens"][key] for run in spent) for key in COST_KEYS}
+    total: dict[str, Any] = {
+        key: sum(run["session_tokens"][key] for run in spent) for key in COST_KEYS
+    }
+    total["reasoning_in_output"] = _reasoning_in_output(spent)
     seconds = sum(float(run["elapsed_seconds"]) for run in group if run.get("elapsed_seconds"))
     failed = sum(1 for run in spent if run["error"] and not stop_of(run))
     lines.append(
@@ -2811,6 +2902,12 @@ def _cost_lines(group: list[dict[str, Any]], runs: list[dict[str, Any]]) -> list
 
 
 UNRECORDED = "unrecorded"
+
+
+def _reasoning_in_output(runs: list[dict[str, Any]]) -> bool:
+    """Whether every run's tool counts reasoning inside its output, with no count of its own."""
+
+    return all(run["session_tokens"].get("reasoning_in_output") for run in runs)
 
 
 def _recorded(value: Any) -> str:
@@ -3070,7 +3167,16 @@ def _parser() -> argparse.ArgumentParser:
         "--harness",
         choices=HARNESSES,
         default=HARNESS,
-        help="the tool that runs the model (default: %(default)s)",
+        help=f"the tool that runs the model (default: %(default)s); with {CLAUDE} the current arm "
+        f"is what adopt installs for {CLAUDE}",
+    )
+    parser.add_argument(
+        "--plugin-dir",
+        action="append",
+        metavar="DIR",
+        help=f"with --harness {CLAUDE}: load the plugin in DIR for each call (repeat for more); "
+        f"DIR is a pinned clone inside the evals home's {THIRD_PARTY}/ folder, never a plugin "
+        "cache, and the record names its commit",
     )
     parser.add_argument(
         "--model",
@@ -3134,10 +3240,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dump-arm",
         metavar="FIXTURE",
-        help="build FIXTURE under --arm and print, with no model call, what its codex call would "
-        "receive (argv, prompt, instruction files from the workspace up, the Codex home, the "
-        "launchers on PATH, the install's files) and each isolation rule as PASS or FAIL; exit 1 "
-        "where a rule fails",
+        help="build FIXTURE under --arm and print, with no model call, what its call would "
+        "receive (argv, prompt, instruction files from the workspace up, the Codex home or the "
+        f"{CLAUDE} cell's environment, the launchers on PATH, the install's files) and each "
+        f"isolation rule as PASS or FAIL; with --harness {CLAUDE}, the loading check against a "
+        "synthetic start event too; exit 1 where a rule fails",
     )
     parser.add_argument(
         "--summary",
@@ -3284,15 +3391,16 @@ def tried_edits(parser: argparse.ArgumentParser, arms: dict[str, Arm]) -> None:
 PROBE_PROMPT = "Reply with the word ok. Do not run commands.\n"
 
 
-def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
+def probe(args: argparse.Namespace, out: Path, root: Path | None, tool: Harness) -> int:
     """One minimal call through the same code path as a counted one; each item of the run
     contract printed as PASS or FAIL. Exit 3 without a login, 1 on any FAIL. One model call,
     no retry."""
 
-    tool = make_harness(args.harness)
     login = tool.preflight()
     if not login["ok"]:
-        sys.stderr.write("probe: UNVERIFIED - preflight did not observe a ChatGPT login.\n")
+        sys.stderr.write(
+            f"probe: UNVERIFIED - preflight did not observe a subscription login for {tool.name}.\n"
+        )
         return PREFLIGHT_EXIT
     workspace = workspace_path(root, out, "probe", args.repetition) if root else None
     message = refuse_workspaces(root, [workspace]) if root and workspace else ""
@@ -3321,6 +3429,8 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
             "a final message" if result.answer.strip() else "no final message",
         ],
         *result.checks,
+        # A Claude Code call's reach and loading rows, UNVERIFIED where no record names an item.
+        *(result.extras.get("isolation") or []),
     ]
     unknown = result.extras.get("unknown_item_types", [])
     rows.append(
@@ -3331,7 +3441,7 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None) -> int:
         ]
     )
     key = result.extras.get("thread_id")
-    memory = tool.memory_mode(key) if key else None
+    memory = tool.memory_mode(key) if key and isinstance(tool, CodexHarness) else None
     for item, verdict, detail in rows:
         print(f"{verdict} {item} - {detail}")
     print(f"observed: memory_mode {memory if memory is not None else 'not readable'}")
@@ -3484,21 +3594,14 @@ def _carried_outside(workdir: Path, arm: Arm) -> list[str]:
     return found
 
 
-def isolation(arm: Arm, workdir: Path, prompt: str, path: str, home: Path) -> list[list[str]]:
-    """Each isolation rule of the call, as `[rule, PASS|FAIL, detail]`: the only `outcomebound`
-    on its PATH is the arm's own; its Codex home and the folders above its workspace give it no
-    instructions or skills; an arm that carries no OutcomeBound text reaches none; and an
-    element arm holds exactly its elements, the none arm plus elements reaching no OutcomeBound
-    text, skill or launcher outside them."""
+def _reach(workdir: Path, home: Path | None) -> list[tuple[str, bool, str]]:
+    """What the call reaches from outside its workspace: for codex (`home` its Codex home), the
+    home and the folders above the workspace; for Claude Code (`home` None, each call's home is
+    new), the folders above the workspace and the machine's managed policy."""
 
-    own = [os.path.realpath(arm.launcher)] if arm.launcher else []
-    reached = launchers(path)
-    rows: list[tuple[str, bool, str]] = [
-        (
-            "launcher-on-path",
-            [item.rsplit(" -> ", 1)[1] for item in reached] == own,
-            f"{reached or 'no outcomebound'}; the arm's own: {own or 'none'}",
-        ),
+    if home is None:
+        return [(item, verdict == "PASS", detail) for item, verdict, detail in reach_rows(workdir)]
+    return [
         (
             "codex-home-neutral",
             not guiding_reach(home, workdir.parent),
@@ -3511,16 +3614,36 @@ def isolation(arm: Arm, workdir: Path, prompt: str, path: str, home: Path) -> li
             f"{instructions_above(workdir.parent) or 'no instruction file'}",
         ),
     ]
+
+
+def isolation(
+    arm: Arm, workdir: Path, prompt: str, path: str, home: Path | None
+) -> list[list[str]]:
+    """Each isolation rule of the call, as `[rule, PASS|FAIL, detail]`: the only `outcomebound`
+    on its PATH is the arm's own; its Codex home (`home`; None for a Claude Code call, whose
+    home is new) and the folders above its workspace give it no instructions or skills; an arm
+    that carries no OutcomeBound text reaches none; and an element arm holds exactly its
+    elements, the none arm plus elements reaching no OutcomeBound text, skill or launcher outside
+    them."""
+
+    own = [os.path.realpath(arm.launcher)] if arm.launcher else []
+    reached = launchers(path)
+    rows: list[tuple[str, bool, str]] = [
+        (
+            "launcher-on-path",
+            [item.rsplit(" -> ", 1)[1] for item in reached] == own,
+            f"{reached or 'no outcomebound'}; the arm's own: {own or 'none'}",
+        ),
+        *_reach(workdir, home),
+    ]
     if arm.shaped():
         problems = element_problems(workdir, arm)
         rows.append(("elements", not problems, "; ".join(problems) or _elements_text(arm)))
     if arm.name == NONE or verbatim_install(arm):
+        files = instructions_above(workdir) if home is not None else claude_above(workdir)
         texts = [
             prompt,
-            *(
-                outside_elements(Path(f).read_text("utf-8", "replace"), arm)
-                for f in instructions_above(workdir)
-            ),
+            *(outside_elements(Path(f).read_text("utf-8", "replace"), arm) for f in files),
         ]
         named = [text for text in texts if "outcomebound" in text.lower()]
         carried = (
@@ -3560,6 +3683,7 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         parser.error(f"no fixture {name}; there are {', '.join(fixture_names())}")
     set_earlier_ref(parser, args)
     elements = element_options(parser, args)
+    plugins = harness_options(parser, args)
     arm = fixture_arms(parser, args.arm, [name], elements)[name]
     label = args.arm_label or element_label(args.arm, elements)
     root = workspace_root(args.workspace_root)
@@ -3567,7 +3691,7 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     refused = refuse_workspaces(root, [workspace]) if root and workspace else ""
     if refused:
         raise SystemExit(f"run: {refused}")
-    tool = make_harness(args.harness)
+    tool = make_harness(args.harness, plugins)
     workdir = new_workspace(workspace)
     extra: dict[str, Any] = {}
     stage = new_stage((workdir, *((root,) if root else ())))
@@ -3581,6 +3705,10 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     install = fixture_install(name)
     path = call_path(arm, str(root) if root else None)
     request = Request(args.model, args.effort, needs_local_listener(name), install.sandbox)
+    if isinstance(tool, ClaudeCodeHarness):
+        lines, rows = claude_dump(tool, arm, workdir, prompt, DumpCall(name, request, path))
+        print("\n".join([f"fixture {name}, arm {label}; workspace {workdir} (kept)", *lines]))
+        return 1 if any(row[1] == "FAIL" for row in rows) else 0
     argv = tool.argv(
         request, workdir, Path("<last-message file>"), fixture_write_roots(name, workdir)
     )
@@ -3613,6 +3741,157 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     ]
     print("\n".join(lines))
     return 1 if any(row[1] == "FAIL" for row in rows) else 0
+
+
+class DumpCall(NamedTuple):
+    """The call a dump shows: its fixture, its request and its PATH."""
+
+    name: str
+    request: Request
+    path: str
+
+
+def claude_dump(
+    tool: ClaudeCodeHarness, arm: Arm, workdir: Path, prompt: str, call: DumpCall
+) -> tuple[list[str], list[list[str]]]:
+    """What a Claude Code call of the built `workdir` would receive, with no model call: the
+    argv, the cell's environment (a credential's value shown as `<set>`), the prompt, the
+    instruction files from the workspace up, the launchers on PATH and the install's files; the
+    isolation rules; and the loading check run twice on a synthetic start event, once as the arm
+    should load and once with a plugin and a hook it does not add, which must fail. The lines
+    to print and every rule, a loading check that passes the leak among them as a FAIL."""
+
+    name, request, path = call
+    write_roots = fixture_write_roots(name, workdir)
+    cell = cell_for(workdir.parent / f"{workdir.name}.native.jsonl")
+    env = shown_env(tool.cell_env(cell, path))
+    expected = tool.expected(workdir)
+    start = expected_start(workdir, request.model, expected, str(uuid.uuid4()))
+    clean = loading_check([start], expected)
+    leak = loading_check(leaked_start(start), expected)
+    caught = {row[0] for row in leak if row[1] == "FAIL"} >= {"plugins", "hooks"}
+    rows = isolation(arm, workdir, prompt, path, None)
+    rows.append(
+        [
+            "loading-check-clean",
+            "FAIL" if failed_rows(clean) else "PASS",
+            "; ".join(failed_rows(clean)) or "the expected load passes",
+        ]
+    )
+    rows.append(
+        [
+            "loading-check-leak",
+            "PASS" if caught else "FAIL",
+            "; ".join(failed_rows(leak)) or "a stray plugin and hook were not caught",
+        ]
+    )
+    inside = workdir.resolve()
+    files = [
+        f"{item} ({'in' if Path(item).resolve().is_relative_to(inside) else 'above'} the workspace)"
+        for item in claude_above(workdir)
+    ]
+    lines = [
+        *_section(
+            "argv (the prompt is its stdin)", [shlex.join(tool.argv(request, workdir, write_roots))]
+        ),
+        *_section(
+            f"environment of the cell {cell.root} (made new at the call)",
+            [f"{k}={v}" for k, v in env.items()],
+        ),
+        *_section("prompt", prompt.splitlines()),
+        *_section("instruction and rules files from the workspace up", files),
+        *_section("PATH entries holding outcomebound", launchers(path)),
+        *_section(
+            f"install: {fixture_install_safe(name)}; skills Claude Code loads from the "
+            f"workspace: {list(expected.skills) or 'none'}",
+            [f"{sha}  {file}" for file, sha in arm.record()["arm_files"].items()],
+        ),
+        *(_section("elements", _element_lines(arm)) if arm.shaped() else []),
+        *_section(
+            "synthetic start event (stands in for the CLI's own)",
+            [json.dumps(start, sort_keys=True)],
+        ),
+        *_section("loading check, the expected load", [" ".join(row) for row in clean]),
+        *_section("loading check, with a stray plugin and hook", [" ".join(row) for row in leak]),
+        *_section("isolation", [" ".join(row) for row in rows]),
+    ]
+    return lines, rows
+
+
+def fixture_install_safe(name: str) -> str:
+    """A fixture's install as one line, or why it cannot be read."""
+
+    try:
+        install = fixture_install(name)
+    except InstallError as problem:
+        return f"unreadable ({problem})"
+    done, chosen = list(install.done) or "none", list(install.fragments) or "none"
+    return f"{install.sandbox} sandbox, Done {done}, fragments {chosen}"
+
+
+def no_login(out: Path, status: dict[str, Any], login: dict[str, Any]) -> int:
+    """Record a run whose preflight observed no subscription login, say why, and give the
+    preflight exit."""
+
+    _write(out / "STATUS.json", status)
+    hint = login.get("hint") or "Log in to codex interactively"
+    sys.stderr.write(
+        f"run: UNVERIFIED - preflight did not observe a subscription login for "
+        f"{status['harness']}. {hint}; this runner never falls back to an API key.\n"
+    )
+    return PREFLIGHT_EXIT
+
+
+def harness_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> tuple[Path, ...]:
+    """Install for `--harness` (`set_harness`), and give the plugin folders `--plugin-dir`
+    names, each checked (`plugin_dir_refusal`) and resolved; a plugin for a harness other than
+    Claude Code, or a folder outside the evals home's third-party clones, exits 2."""
+
+    set_harness(args.harness)
+    named = tuple(args.plugin_dir or ())
+    if named and args.harness != CLAUDE:
+        parser.error(f"--plugin-dir adds a plugin to a {CLAUDE} call: use --harness {CLAUDE}")
+    for folder in named:
+        refused = plugin_dir_refusal(folder)
+        if refused:
+            parser.error(refused)
+    if len(set(named)) != len(named):
+        parser.error("name each --plugin-dir once")
+    return tuple(Path(folder).resolve() for folder in named)
+
+
+def harness_reach(
+    parser: argparse.ArgumentParser, tool: Harness, names: list[str], where: Path | None
+) -> dict[str, Any]:
+    """Refuse, before anything is built, a run whose calls would read what their arm does not
+    give them from outside their workspaces (`refuse_unclean`, `refuse_claude_reach`); else
+    what the record keeps of it: the Codex home and what it gives each call, or the Claude Code
+    rows and the plugin folders with their commits."""
+
+    if isinstance(tool, CodexHarness):
+        refuse_unclean(parser, names, tool.home(), where)
+        # What the Codex home gives each call besides its fixture and install.
+        return {"codex_home": str(tool.home()), "codex_home_reach": home_leaks(tool.home())}
+    return {
+        "claude_reach": refuse_claude_reach(parser, where),
+        "plugin_dirs": plugin_records(tool.plugin_dirs),
+    }
+
+
+def refuse_claude_reach(parser: argparse.ArgumentParser, where: Path | None) -> list[list[str]]:
+    """Exit 2, before anything is built, where a Claude Code call of a workspace made in `where`
+    (None: the system's temporary folder) would read an instruction or rules file above it, or
+    a managed policy that loads code or instructions; otherwise the rows, for the record."""
+
+    rows = reach_rows((where or Path(tempfile.gettempdir())) / "workspace")
+    problems = failed_rows(rows)
+    if problems:
+        parser.error(
+            "a Claude Code call reads what is above its workspace, and these would reach it: "
+            + "; ".join(problems)
+            + "; name a --workspace-root with no CLAUDE.md, AGENTS.md or .claude/rules above it"
+        )
+    return rows
 
 
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
@@ -3679,14 +3958,15 @@ def _main(argv: list[str] | None = None) -> int:
         return _no_call(parser, args)
     names = checked_fixtures(parser, args)
     set_earlier_ref(parser, args)
+    plugins = harness_options(parser, args)
     elements = element_options(parser, args)
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     root = workspace_root(args.workspace_root)
-    tool = make_harness(args.harness)
+    tool = make_harness(args.harness, plugins)
     if args.probe:
-        return probe(args, out, root)
-    refuse_unclean(parser, names, tool.home(), root / out.name if root else None)
+        return probe(args, out, root, tool)
+    reach = harness_reach(parser, tool, names, root / out.name if root else None)
     # Each fixture's install, read before anything runs: an install.json the runner refuses, a
     # fragment the engine does not ship, an element the install does not hold or an edit that
     # does not apply stops the run here.
@@ -3721,19 +4001,12 @@ def _main(argv: list[str] | None = None) -> int:
         "cli_version": tool.version(),
         "api_keys_stripped": list(STRIP_POLICY),
         "api_keys_removed_from_environment": stripped_from_environment(),
-        # What the Codex home gives each call besides its fixture and install.
-        "codex_home": str(tool.home()),
-        "codex_home_reach": home_leaks(tool.home()),
+        **reach,
     }
     login = tool.preflight()
     status.update({key: login[key] for key in ("auth", "auth_evidence", "preflight")})
     if not login["ok"]:
-        _write(out / "STATUS.json", {**status, "status": "UNVERIFIED", "fixtures": names})
-        sys.stderr.write(
-            "run: UNVERIFIED - preflight did not observe a ChatGPT login. Log in to codex "
-            "interactively; this runner never falls back to an API key.\n"
-        )
-        return PREFLIGHT_EXIT
+        return no_login(out, {**status, "status": "UNVERIFIED", "fixtures": names}, login)
     path = call_path(arm, str(root) if root else None)
     found = shutil.which("outcomebound", path=path)
     status["outcomebound_on_path"] = os.path.realpath(found) if found else None

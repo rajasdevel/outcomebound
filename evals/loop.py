@@ -13,12 +13,18 @@
               {"label": "none-plus-kernel", "arm": "none", "add": ["kernel"]},
               {"label": "edited", "arm": "current", "edits": "/abs/edits.json"}]}
 
+A Claude Code plan names `"harness": "claude-code"`, and may give an arm a plugin from a pinned
+clone: `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/third-party/ponytail"}`.
+The folder must resolve inside the evals home's `third-party/` folder (run.py's
+`plugin_dir_refusal`), never a plugin cache, and run.py records its commit.
+
 In place of `fixtures`, `pack` names a pack: `XS`, `S`, `M` or `L` is every fixture whose
 `suite.json` gives that tier, `panel` every fixture whose `suite.json` says `panel: true`; a
 report-only suite.json (one with no `references`) puts its fixture in no pack.
-Repetitions are distinct values from 1 to 10 that run.py accepts. `harness` (default `codex`)
-and `profile` (a free label, default empty) are recorded in `<results>/<name>/LOOP.json`; only a
-harness run.py can run is accepted, and today that is codex alone.
+Repetitions are distinct values from 1 to 10 that run.py accepts. `harness` (default `codex`,
+or `claude-code`) and `profile` (default empty) are recorded in `<results>/<name>/LOOP.json`;
+only a harness run.py can run is accepted. A profile in PROFILES (`attr`, `field-codex`,
+`claude-mid`, `claude-top`, `small`) must name its own harness; any other profile is a free label.
 
 `spend_limit`, optional, is the pass's limit on input tokens (cached input among them). Before
 each new cell the loop adds the input every cell of the plan has recorded so far (its
@@ -81,8 +87,17 @@ PACKS = ("XS", "S", "M", "L", "panel")
 MAX_REPETITION = 10
 # The harnesses this loop can start a cell with; another is recorded in a plan only once run.py
 # runs it.
-RUNNABLE = ("codex",)
-ARM_KEYS = frozenset(("label", "arm", "drop", "add", "edits"))
+RUNNABLE = ("codex", "claude-code")
+# The named profiles of the suite's design and the harness each runs on; a plan's model and
+# effort are its own.
+PROFILES = {
+    "attr": "codex",
+    "field-codex": "codex",
+    "claude-mid": "claude-code",
+    "claude-top": "claude-code",
+    "small": "claude-code",
+}
+ARM_KEYS = frozenset(("label", "arm", "drop", "add", "edits", "plugin_dir"))
 DONE = ("ran", "ran with failures")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 REFUSED = 2
@@ -96,6 +111,7 @@ class Arm(NamedTuple):
     drop: tuple[str, ...]
     add: tuple[str, ...]
     edits: str
+    plugin_dir: str = ""
 
 
 class Plan(NamedTuple):
@@ -173,7 +189,9 @@ def _arm(entry: Any, arms: tuple[str, ...], kinds: tuple[str, str], base: Path) 
     if add and kind != none:
         raise PlanError(f"arm {label}: add applies to the {none} arm only")
     edits = str(_path(entry["edits"], f"arm {label}: edits", base)) if "edits" in entry else ""
-    return Arm(label, str(kind), drop, add, edits)
+    plugin = entry.get("plugin_dir")
+    folder = str(_path(plugin, f"arm {label}: plugin_dir", base)) if "plugin_dir" in entry else ""
+    return Arm(label, str(kind), drop, add, edits, folder)
 
 
 def read_plan(path: Path, runner: ModuleType) -> Plan:
@@ -204,6 +222,8 @@ def read_plan(path: Path, runner: ModuleType) -> Plan:
     if not isinstance(profile, str):
         raise PlanError("profile is a string")
     _harness(harness, runner)
+    if profile in PROFILES and PROFILES[profile] != harness:
+        raise PlanError(f"profile {profile} runs on {PROFILES[profile]}, not {harness}")
     known = set(runner.fixture_names())
     pack = document.get("pack", "")
     fixtures = _pack(pack, known) if "pack" in document else _fixtures(document["fixtures"], known)
@@ -224,7 +244,22 @@ def read_plan(path: Path, runner: ModuleType) -> Plan:
         _caps(fixtures) if limit is not None else (),
     )
     _elements_fit(plan, runner)
+    _plugins_fit(plan, runner)
     return plan
+
+
+def _plugins_fit(plan: Plan, runner: ModuleType) -> None:
+    """Refuse, before any cell starts, an arm's plugin on a harness that takes none, or a
+    plugin folder run.py refuses (one outside the evals home's third-party clones)."""
+
+    for arm in plan.arms:
+        if not arm.plugin_dir:
+            continue
+        if plan.harness != "claude-code":
+            raise PlanError(f"arm {arm.label}: plugin_dir needs harness claude-code")
+        refusal = runner.plugin_dir_refusal(arm.plugin_dir)
+        if refusal:
+            raise PlanError(f"arm {arm.label}: {refusal}")
 
 
 def suite(fixture: str) -> dict[str, Any]:
@@ -363,6 +398,8 @@ def argv(plan: Plan, arm: Arm, repetition: int, fixture: str, out: Path) -> tupl
         words += ["--add", entry]
     if arm.edits:
         words += ["--edits", arm.edits]
+    if arm.plugin_dir:
+        words += ["--plugin-dir", arm.plugin_dir]
     words += [
         "--arm-label",
         arm.label,

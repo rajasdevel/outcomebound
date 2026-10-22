@@ -271,7 +271,7 @@ def test_a_pack_resolves_its_fixtures_from_suite_json(
     [
         ({"pack": "XL"}, "pack is one of"),
         ({"pack": "M"}, "no fixture's suite.json puts it in pack M"),
-        ({"harness": "claude-code"}, "harness claude-code cannot run yet"),
+        ({"harness": "gemini"}, "harness gemini cannot run yet"),
         ({"repetitions": [1, 11]}, "repetitions are distinct values"),
         ({"spend_limit": 0}, "spend_limit is a positive number"),
     ],
