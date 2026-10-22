@@ -449,6 +449,7 @@ def decide(
 
 def headline(report: dict[str, Any]) -> dict[str, Any]:
     lists: dict[str, list[str]] = defaultdict(list)
+    regressed: set[str] = set()
     for fixture, row in report["fixtures"].items():
         label = f"{fixture} (guard)" if fixture in report["guards"] else fixture
         if "types" not in row:
@@ -460,12 +461,15 @@ def headline(report: dict[str, Any]) -> dict[str, Any]:
                 continue
             if entry["status"] == "confirmed":
                 lists[f"confirmed_{entry['flag']}"].append(name)
+                if entry["flag"] == "regression":
+                    regressed.add(fixture)
             else:
                 lists[f"candidate_{entry['flag']}"].append(f"{name} ({entry['status']})")
     return {
         "denominator": len(report["denominator"]),
         "guards": report["guards"],
         "material_regressions": lists["confirmed_regression"],
+        "regressed_fixtures": sorted(regressed),
         "candidate_regressions": lists["candidate_regression"],
         "confirmed_wins": lists["confirmed_win"],
         "candidate_wins": lists["candidate_win"],
@@ -493,8 +497,9 @@ def markdown(report: dict[str, Any]) -> str:
     lines = [
         f"# Panel: {arms['ob']} against {arms['none']}",
         "",
-        f"Material regressions, confirmed: {len(head['material_regressions'])} "
-        f"of {head['denominator']} fixtures in the frozen denominator"
+        f"Material regressions, confirmed: {len(head['material_regressions'])}, in "
+        f"{len(head['regressed_fixtures'])} of {head['denominator']} fixtures in the frozen "
+        "denominator"
         + (f", guards among them: {', '.join(head['guards'])}." if head["guards"] else "."),
     ]
     for title, key in (

@@ -164,7 +164,18 @@ def test_a_screen_regression_is_flagged_then_confirmed_by_fresh_runs(
     assert outcome["status"] == "confirmed" and outcome["fisher_p"] == pytest.approx(1 / 924)
     assert report["headline"]["material_regressions"] == ["alpha outcome"]
     markdown = PANEL.markdown(report)
-    assert "Material regressions, confirmed: 1 of 2 fixtures" in markdown
+    assert "Material regressions, confirmed: 1, in 1 of 2 fixtures" in markdown
+
+
+def test_the_headline_counts_fixtures_not_regressions(tmp_path: Path, fixtures: Path) -> None:
+    results = tmp_path / "results"
+    for repetition in range(1, 10):
+        write_run(results, "alpha", "current", repetition, {"done": "FAIL", "no-push": "FAIL"})
+        write_run(results, "alpha", "none", repetition, {"done": "PASS", "no-push": "PASS"})
+    report = decide(results, fixtures, ["alpha", "beta"])
+    assert len(report["headline"]["material_regressions"]) == 2
+    assert report["headline"]["regressed_fixtures"] == ["alpha"]
+    assert "Material regressions, confirmed: 2, in 1 of 2 fixtures" in PANEL.markdown(report)
 
 
 def test_a_flag_whose_fresh_runs_do_not_differ_is_uncertain(tmp_path: Path, fixtures: Path) -> None:
