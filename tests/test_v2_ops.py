@@ -30,7 +30,7 @@ from tests.portable import needs_posix_bash
 
 OPS_FIXTURES = ("v2-rp-tracker-table", "v2-dg-wrong-hypothesis", "v2-dg-baseline-red")
 REQUIRED_REFERENCES = {"good", "noop", "empty", "incomplete", "overbuilt"}
-TIER_BUDGET = {"XS": (300000, 600), "S": (900000, 900), "M": (4500000, 2400)}
+TIER_BUDGET = {"XS": (900000, 600), "S": (900000, 900), "M": (1500000, 2400)}
 _BUILT: dict[str, Path] = {}
 
 pytestmark = needs_posix_bash

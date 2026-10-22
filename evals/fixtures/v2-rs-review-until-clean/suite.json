@@ -25,7 +25,7 @@
       "must_always": false
     }
   },
-  "budget": {"input_cap": 4500000, "timeout_seconds": 2400},
+  "budget": {"input_cap": 1500000, "timeout_seconds": 2400},
   "stubs": ["review"],
   "watch": [],
   "references": ["good", "noop", "empty", "incomplete", "overbuilt", "tamper", "shadow"]

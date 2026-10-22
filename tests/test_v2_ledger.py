@@ -40,10 +40,10 @@ LEDGER_FIXTURES = (
 )
 REQUIRED_REFERENCES = ("good", "noop", "empty", "incomplete", "overbuilt")
 TIER_BUDGET = {
-    "XS": (300000, 600),
+    "XS": (900000, 600),
     "S": (900000, 900),
-    "M": (4500000, 2400),
-    "L": (18000000, 5400),
+    "M": (1500000, 2400),
+    "L": (6000000, 5400),
 }
 CLAIM_TYPES = {"outcome", "process", "cost", "safety"}
 ORACLES = {"completion", "restraint", "safety"}

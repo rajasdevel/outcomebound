@@ -44,7 +44,7 @@
     }
   },
   "budget": {
-    "input_cap": 4500000,
+    "input_cap": 1500000,
     "timeout_seconds": 2400
   },
   "stubs": [],

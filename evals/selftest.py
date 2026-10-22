@@ -59,7 +59,7 @@ CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
 
 TIERS = ("XS", "S", "M", "L")
 # The build contract: the input cap is 3 times the tier's input rate, and each tier's timeout.
-INPUT_CAP = {"XS": 300_000, "S": 900_000, "M": 4_500_000, "L": 18_000_000}
+INPUT_CAP = {"XS": 900_000, "S": 900_000, "M": 1_500_000, "L": 6_000_000}
 TIMEOUT_SECONDS = {"XS": 600, "S": 900, "M": 2400, "L": 5400}
 CLAIM_TYPES = ("outcome", "process", "cost", "safety")
 ORACLES = ("completion", "restraint", "safety")

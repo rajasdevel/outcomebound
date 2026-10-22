@@ -366,7 +366,7 @@ def test_selftest_checks_the_suite_file(tmp_path: Path) -> None:
         "claim within-budget has no type",
         "no restraint or safety oracle",
         "report item says-what-changed has no reading/says-what-changed.md",
-        "budget.input_cap 5 is not the XS default 300000 and gives no reason",
+        "budget.input_cap 5 is not the XS default 900000 and gives no reason",
         "reference noop is required",
         "reference empty has a non-empty answer",
     ):

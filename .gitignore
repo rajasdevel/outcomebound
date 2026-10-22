@@ -6,6 +6,8 @@ node_modules/
 
 # Logs
 *.log
+# A fixture reference's watch log is test data, not a log
+!evals/fixtures/*/references/*/watch.log
 
 # Validation-runner check logs, written beside the plan file
 .outcomebound-checks/

@@ -32,7 +32,7 @@
     }
   },
   "budget": {
-    "input_cap": 300000,
+    "input_cap": 900000,
     "timeout_seconds": 600,
     "reference": {
       "input": 100000,
