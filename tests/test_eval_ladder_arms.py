@@ -243,7 +243,14 @@ def test_the_facts_only_arm_is_adopts_facts_only_install(
     assert not (workdir / facts.FRAGMENT_DIR).exists()
     assert RUN.facts_only_problems(workdir) == []
     current, _protected, _prompt, _extra, _stage = _build(_arm("current"), tmp_path / "c")
-    assert _block(workdir, facts.FACTS) == _block(current, facts.FACTS) is not None
+    # The same facts as the current arm, save Precedence, which in a facts-only install names no
+    # OutcomeBound guidance (docs/specs/install/design.md, Facts-only).
+    only, full = _block(workdir, facts.FACTS), _block(current, facts.FACTS)
+    assert only is not None and full is not None
+    assert [line for line in only.splitlines() if not line.startswith("- Precedence:")] == [
+        line for line in full.splitlines() if not line.startswith("- Precedence:")
+    ]
+    assert "OutcomeBound" not in only and "OutcomeBound's" in full
     assert (workdir / "AGENTS.md").read_text("utf-8").endswith(NOTE)
     manifest = json.loads((workdir / ".outcomebound" / "manifest.json").read_text("utf-8"))
     assert RUN.FACTS_ONLY in json.dumps(manifest)

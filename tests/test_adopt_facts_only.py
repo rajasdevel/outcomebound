@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from outcomebound_tools import adopt, facts, fragments, identity
+from outcomebound_tools import adopt, facts, fragments, identity, instruction_audit, paths
 from tests.adopt_helpers import (
     ROOT,
     Capture,
@@ -229,3 +229,117 @@ def test_a_recorded_mode_this_engine_does_not_know_is_refused(
     assert code != 0
     assert "mode recorded" in err
     assert snapshot(target) == before
+
+
+def edit_facts_record(target: Path, **fields: object) -> None:
+    """Set fields of the facts record by hand, a key whose value is None taken out."""
+
+    path = target / adopt.MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    [record] = [r for r in data["artifacts"] if r["id"] == adopt.FACTS]
+    for key, value in fields.items():
+        if value is None:
+            record.pop(key, None)
+        else:
+            record[key] = value
+    write(path, json.dumps(data, indent=2) + "\n")
+
+
+def test_generic_stays_selected_through_facts_only_and_back(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the harnesses are read from the skill records alone: generic gets no skill in
+    facts-only, so `--full` would not give its skills back, and the instruction audit would
+    check every row of the table in place of generic."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    assert run(capsys, str(target), "--harness", "generic,codex")[0] == 0
+    full = snapshot(target)
+    assert facts_record(target)["harnesses"] == ["generic", "codex"]
+
+    assert run(capsys, str(target), "--facts-only")[0] == 0
+    assert not (target / adopt.GENERIC_SKILLS).exists()
+    assert facts_record(target)["harnesses"] == ["generic", "codex"]
+
+    assert run(capsys, str(target), "--full")[0] == 0
+    assert snapshot(target) == full
+
+    plain = repo(tmp_path / "plain", {"README.md": "# T\n"})
+    assert run(capsys, str(plain), "--harness", "generic", "--facts-only")[0] == 0
+    report = instruction_audit.check(plain)
+    assert (report.harnesses, report.selected_by) == (("generic",), "manifest")
+
+
+def test_a_manifest_written_before_the_harnesses_field_reads_them_from_the_skills(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    assert run(capsys, str(target), "--harness", "codex,generic")[0] == 0
+    edit_facts_record(target, harnesses=None)
+
+    assert adopt.recorded_harnesses(adopt.load_manifest(target).own) == ["codex", "generic"]
+    assert instruction_audit.check(target).harnesses == ("codex", "generic")
+    assert run(capsys, str(target))[0] == 0
+    assert facts_record(target)["harnesses"] == ["codex", "generic"]
+
+
+def test_check_reads_a_record_set_that_is_not_the_recorded_modes_as_not_current(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A valid mode changed by hand, or a record removed by hand, leaves files the next install
+    changes; `--check` names each record the install would add or remove."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    arguments = ("--harness", "generic", "--fragments", "local", "--facts-only")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    edit_facts_record(target, mode="full")
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    found = states(out)
+    assert code != 0
+    assert found[f"AGENTS.md ({adopt.KERNEL})"] == "missing"
+    assert found[".outcomebound/skills/using-outcomebound/SKILL.md"] == "missing"
+    assert f"next: outcomebound adopt {paths.shell_path(target)} makes" in out
+    assert run(capsys, str(target))[0] == 0
+    assert block_ids(target) == [adopt.KERNEL, adopt.FACTS, adopt.POINTERS]
+    assert all_current(capsys, target)
+
+    edit_facts_record(target, mode="facts-only")
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code != 0
+    assert states(out)[f"AGENTS.md ({adopt.KERNEL})"] == "stale"
+    assert adopt.UNWANTED in out
+
+    full = repo(tmp_path / "full", {"README.md": "# T\n"})
+    assert run(capsys, str(full), "--harness", "codex")[0] == 0
+    path = full / adopt.MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["artifacts"] = [r for r in data["artifacts"] if r["id"] != adopt.KERNEL]
+    write(path, json.dumps(data, indent=2) + "\n")
+    code, out, _ = run(capsys, str(full), "--check")
+    assert code == 1
+    assert states(out)[f"AGENTS.md ({adopt.KERNEL})"] == "missing"
+
+
+def test_facts_only_precedence_names_no_guidance_it_lacks_and_full_keeps_the_whole_line(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"CLAUDE.md": "# Notes\n"})
+    arguments = ("--harness", "claude-code", "--done", "make test", "--facts-only")
+    assert run(capsys, str(target), *arguments)[0] == 0
+    lines = body(target, adopt.FACTS).splitlines()
+
+    assert lines[-1] == (
+        "- Precedence: these facts over any other repository text that disagrees with them, "
+        "and the person's instruction in the session over these facts"
+    )
+    assert lines[0] == facts.done_line(["make test"])
+    assert "OutcomeBound" not in body(target, adopt.FACTS)
+
+    assert run(capsys, str(target), "--full")[0] == 0
+    precedence = body(target, adopt.FACTS).splitlines()[-1]
+    assert precedence.endswith(
+        "the project's own instructions in AGENTS.md or CLAUDE.md over OutcomeBound's; process "
+        "a project document only suggests is sized like any other step"
+    )

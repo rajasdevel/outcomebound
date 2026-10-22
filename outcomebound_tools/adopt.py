@@ -50,7 +50,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence, Set
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -88,8 +88,8 @@ KERNEL = "operating-contract"
 FACTS = facts.FACTS
 POINTERS = facts.POINTERS
 # The install modes: the full install, and the facts alone, which the facts record names.
-FULL = "full"
-FACTS_ONLY = "facts-only"
+FULL = facts.FULL
+FACTS_ONLY = facts.FACTS_ONLY
 # Where each block goes when it is new: directly after the block named here.
 AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
@@ -316,7 +316,9 @@ def guidance(
 
     The pointers name each skill where a generic install puts it, else its first native copy;
     the Precedence fact names AGENTS.md and each selected harness's import host that exists,
-    or that `importing` says this run writes an import block into.
+    or that `importing` says this run writes an import block into. A facts-only install
+    (`chosen.mode`) copies no fragment file and names no skill: its pointers block holds the
+    local fragment alone.
     """
 
     try:
@@ -324,7 +326,7 @@ def guidance(
     except fragments.FragmentError as error:
         raise AdoptError(str(error)) from error
     files: dict[str, bytes] = {}
-    for item in selected:
+    for item in selected if chosen.mode == FULL else []:
         if item.id != LOCAL:
             files[f"{facts.FRAGMENT_DIR}/{item.id}.md"] = _fragment_bytes(item)
     roots = sorted({item.skills for item in found})
@@ -339,17 +341,6 @@ def guidance(
     skills = skills if root else []
     rendered = facts.render_chosen(target, selected, chosen, hosts, skills)
     return Guidance(rendered, files, names)
-
-
-def only_facts(made: Guidance, found_fragments: dict[str, fragments.Fragment]) -> Guidance:
-    """`made` as a facts-only install keeps it: the facts as rendered, the whole selection's
-    edges among them, and a pointers block that holds the local fragment inline alone, where it
-    is selected; no fragment file and no pointer line."""
-
-    local = [found_fragments[LOCAL]] if LOCAL in found_fragments else []
-    return replace(
-        made, rendered=replace(made.rendered, pointers=facts.pointers(local, [])), files={}
-    )
 
 
 def _fragment_bytes(fragment: fragments.Fragment) -> bytes:
@@ -807,6 +798,12 @@ def load_manifest(target: Path) -> Manifest:
 
 
 def recorded_harnesses(own: Sequence[Record]) -> list[str]:
+    """The harnesses the facts record holds, in selection order; for a manifest written before
+    the facts record held them, those the skill records name."""
+
+    for record in own:
+        if record["kind"] == "block" and record["id"] == FACTS and "harnesses" in record:
+            return list(record["harnesses"])
     names = (
         name for record in own if record["kind"] == "skill" for name in record.get("harnesses", [])
     )
@@ -1210,7 +1207,6 @@ def desired(
     found: Sequence[Route],
     ids: Sequence[str],
     chosen: Chosen,
-    mode: str = FULL,
 ) -> list[Want]:
     """What this engine installs for these harnesses, fragments and Done commands, in record
     order: the kernel, the facts, the pointers, the fragment files, the workspace's
@@ -1220,10 +1216,12 @@ def desired(
     without writing its file again. Claude Code's host, CLAUDE.md, is itself one of the files
     that make it need one, so an existing CLAUDE.md keeps its block.
 
-    A facts-only install has no kernel and no fragment file, and its skills go only to the
-    harnesses that list them natively: nothing points at them.
+    The facts record holds the selection, the harnesses among them, whatever skills they get.
+    A facts-only install (`chosen.mode`) has no kernel and no fragment file, and its skills go
+    only to the harnesses that list them natively: nothing points at them.
     """
 
+    mode = chosen.mode
     wants = []
     if mode == FULL:
         wants.append(Want("block", AGENTS, KERNEL, kernel_block(source).encode("utf-8")))
@@ -1231,8 +1229,12 @@ def desired(
     written = [want.path for want in imports]
     found_fragments = catalog(source, run.target, ids)
     made = guidance(run.target, found, found_fragments, ids, chosen, written)
-    made = made if mode == FULL else only_facts(made, found_fragments)
-    extra = {"fragments": list(ids), "done": list(chosen.done), "inputs": made.rendered.inputs}
+    extra: dict[str, Any] = {
+        "harnesses": [item.harness for item in found],
+        "fragments": list(ids),
+        "done": list(chosen.done),
+        "inputs": made.rendered.inputs,
+    }
     if chosen.style:
         extra["style"] = list(chosen.style)
     if chosen.setup:
@@ -1728,7 +1730,7 @@ def install(
     mode = recorded_mode(own) if selection.mode is None else selection.mode
     run = Run(target, force)
     table = harness_table(source)
-    wants = desired(run, source, found, ids, Chosen(done, style, setup), mode)
+    wants = desired(run, source, found, ids, Chosen(done, style, setup, mode))
     recorded = {(record["kind"], record["path"], record["id"]): record for record in manifest.own}
     for want in wants:
         run.keep(want, recorded.pop(want.key(), None))
@@ -1786,10 +1788,10 @@ def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
 
     ids = recorded_fragments(own)
     found = routes(source, recorded_harnesses(own) or [GENERIC])
-    chosen = Chosen(recorded_done(own), recorded_style(own), recorded_setup(own))
-    found_fragments = catalog(source, target, ids)
-    made = guidance(target, found, found_fragments, ids, chosen)
-    return made if recorded_mode(own) == FULL else only_facts(made, found_fragments)
+    chosen = Chosen(
+        recorded_done(own), recorded_style(own), recorded_setup(own), recorded_mode(own)
+    )
+    return guidance(target, found, catalog(source, target, ids), ids, chosen)
 
 
 def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record]) -> bytes:
@@ -1958,25 +1960,74 @@ def next_step(target: Path, found: Sequence[str]) -> str | None:
     return None
 
 
+# What `--check` says of a record the recorded selection and mode no longer install, and of
+# one they install that the manifest does not hold.
+UNWANTED = "the recorded selection and mode no longer install it; adopt removes it"
+UNLISTED = "the recorded selection and mode install it, and the manifest holds no record of it"
+
+
+def wanted(target: Path, source: Path, own: Sequence[Record]) -> list[tuple[str, str, str]] | None:
+    """The (kind, path, id) of each record an install of the recorded selection and mode holds,
+    in record order; None where it cannot be planned, as each record's own state then says."""
+
+    chosen = Chosen(
+        recorded_done(own), recorded_style(own), recorded_setup(own), recorded_mode(own)
+    )
+    try:
+        found = routes(source, recorded_harnesses(own) or [GENERIC])
+        wants = desired(Run(target, False), source, found, recorded_fragments(own), chosen)
+    except AdoptError:
+        return None
+    return [want.key() for want in wants]
+
+
+def _record_line(
+    target: Path,
+    source: Path,
+    record: Record,
+    own: Sequence[Record],
+    keys: Sequence[tuple[str, str, str]] | None,
+) -> str:
+    """Print the `--check` line of one record and return its state; `keys` are the records the
+    recorded selection and mode install, None where they cannot be planned."""
+
+    found = state(target, source, record, own)
+    name = None if record["kind"] in FILE_KINDS else record["id"]
+    detail = ""
+    if (
+        record["kind"] != HOOK
+        and keys is not None
+        and (record["kind"], record["path"], record["id"]) not in keys
+    ):
+        found = "stale" if found == "current" else found
+        detail = UNWANTED
+    elif record["kind"] == HOOK:
+        detail = _retired_detail(target, record, found)
+    elif found == "stale" and unrecorded(target, record):
+        detail = unrecorded_detail(target, source, record, own)
+    elif found == "stale" and record["id"] == FACTS and record["kind"] == "block":
+        detail = moved(target, source, record, own)
+    print(f"{found:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
+    return found
+
+
 def check(target: Path, source: Path) -> int:
+    """Print each record's state, then each record the recorded selection and mode install that
+    the manifest does not hold as `missing`: a record set that is not the mode's is not
+    current. A record they no longer install reads `stale` where its bytes are current."""
+
     manifest = load_manifest(target)
     if manifest.raw is None:
         print(f"missing  {MANIFEST}")
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return 1
-    found: list[str] = []
-    for record in manifest.own:
-        found.append(state(target, source, record, manifest.own))
-        name = None if record["kind"] in FILE_KINDS else record["id"]
-        detail = ""
-        if record["kind"] == HOOK:
-            detail = _retired_detail(target, record, found[-1])
-        elif found[-1] == "stale" and unrecorded(target, record):
-            detail = unrecorded_detail(target, source, record, manifest.own)
-        elif found[-1] == "stale" and record["id"] == FACTS and record["kind"] == "block":
-            detail = moved(target, source, record, manifest.own)
-        print(f"{found[-1]:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
+    keys = wanted(target, source, manifest.own)
+    found = [_record_line(target, source, record, manifest.own, keys) for record in manifest.own]
+    recorded = {(record["kind"], record["path"], record["id"]) for record in manifest.own}
+    for kind, path, name in [key for key in keys or [] if key not in recorded]:
+        found.append("missing")
+        print(f"missing  {label(path, None if kind in FILE_KINDS else name)}: {UNLISTED}")
     for line in _drift_lines(target, source, manifest.own, facts.read_ci(target)):
         print(f"{'drift':<8} {line}")
     for verb, text in cloud_notes(
@@ -2348,9 +2399,14 @@ the local fragment is selected, a guidance pointers block holding the local frag
 nothing else. There is no operating contract, no pointer to a fragment or a skill, and no copy
 under .outcomebound/fragments/; the selected fragments still give the Irreversible edges fact.
 The skills go only to a harness that lists them itself (the harness table's native_skills), so
-generic gets none. The import blocks and .outcomebound/.gitignore are as for a full install. The
-manifest records the mode, a run that names no mode keeps it, and --full returns to the full
-install; --check reads a facts-only install against its mode, and --remove takes it out.
+generic gets none, though it stays recorded. Precedence names no OutcomeBound guidance. The import
+blocks and .outcomebound/.gitignore are as for a full install. The manifest records the mode, a
+run that names no mode keeps it, and --full returns to the full install; --check reads a
+facts-only install against its mode, and --remove takes it out. An engine before this mode
+installs in full on its next run, so move every pin of the engine first.
+
+--check also plans the install the recorded selection and mode give, writing nothing: a record it
+would add reads missing, and a current record it would remove reads stale.
 
 --detect prints the install command this target's files suggest alone on its first line, with
 --setup for the project's own entry point (a Make target or package.json script named setup or

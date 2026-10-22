@@ -2361,8 +2361,19 @@ def _artifacts(root: Path) -> list[Any]:
 
 
 def _manifest_harnesses(root: Path) -> list[str]:
-    """The harnesses the target's manifest records a skill copy for, in recorded order."""
+    """The harnesses the target's manifest records: those its facts record holds, in selection
+    order, as adopt reads them; for a manifest written before the facts record held them, each
+    one a skill copy is recorded for, in recorded order. A facts-only install records no skill
+    copy for a harness without native skills, so the facts record is read first."""
 
+    for artifact in _artifacts(root):
+        if (
+            isinstance(artifact, dict)
+            and (artifact.get("kind"), artifact.get("id")) == ("block", "project-facts")
+            and isinstance(artifact.get("harnesses"), list)
+        ):
+            listed = artifact["harnesses"]
+            return list(dict.fromkeys(n for n in listed if isinstance(n, str) and n))
     names: list[str] = []
     for artifact in _artifacts(root):
         if not isinstance(artifact, dict) or artifact.get("kind") != "skill":
