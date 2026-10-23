@@ -9,8 +9,10 @@ A report item is what a run's final answer must tell the person (`report` in a f
   `DIR/sheet.md` and `DIR/key.json`. The sheet groups the answers by fixture and report item,
   each item with its question and its reading sheet (`reading/<item>.md`); each answer has a
   random id, in a random order, with the run's workspace path replaced by `<workspace>`, and
-  a line `- [<item>] <id>:` for the reader's yes, no or unclear. The key maps each id to its run
-  and stays closed until the readings are imported.
+  a line `- [<item>] <id>:` for the reader's yes, no or unclear. Where the fixture names stubs,
+  each answer is followed by the outputs of the run's receipts of them (the harness's records,
+  `evals/stubs/receipts.py`), in order, by the stub's name alone, or `no receipt`. The key maps
+  each id to its run and stays closed until the readings are imported.
 - `python3 evals/reading.py import SHEET --key KEY [--reader NAME]` reads a filled sheet (the
   reader from `--reader`, else the sheet's `reader:` line) and writes each run's verdicts to
   `<fixture>.readings.json` beside its meta file, keeping other readers' verdicts. It refuses,
@@ -26,11 +28,14 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import importlib.util
 import json
 import math
 import random
 import re
+import shlex
 import sys
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -44,6 +49,9 @@ READER = re.compile(r"^reader:[ \t]*(?P<name>\S+)\s*$", re.MULTILINE)
 FENCE = re.compile(r"^(`{3,}|~{3,})")
 
 
+NO_RECEIPT = "no receipt"
+
+
 class ReadingError(Exception):
     """Something this tool refuses; nothing was written."""
 
@@ -54,6 +62,16 @@ def suite_report(fixture: str, fixtures: Path = FIXTURES) -> dict[str, dict[str,
         return {}
     report = json.loads(path.read_text(encoding="utf-8")).get("report") or {}
     return report if isinstance(report, dict) else {}
+
+
+def suite_stubs(fixture: str, fixtures: Path = FIXTURES) -> list[str]:
+    """The runner-owned stubs the fixture names (`stubs` in its `suite.json`)."""
+
+    path = fixtures / fixture / "suite.json"
+    if not path.is_file():
+        return []
+    names = json.loads(path.read_text(encoding="utf-8")).get("stubs") or []
+    return [name for name in names if isinstance(name, str)] if isinstance(names, list) else []
 
 
 def runs(directories: list[Path]) -> list[Path]:
@@ -117,6 +135,7 @@ def sheet(key: dict[str, Any], ids: list[str]) -> str:
     ]
     for fixture in sorted(by_fixture):
         items = key["items"][fixture]
+        stubs = suite_stubs(fixture, fixtures)
         for item, entry in items.items():
             guide = fixtures / fixture / "reading" / f"{item}.md"
             lines += [f"## {fixture}: {item}", "", f"**Question:** {entry['question']}", ""]
@@ -126,8 +145,80 @@ def sheet(key: dict[str, Any], ids: list[str]) -> str:
                 run = key["ids"][answer_id]
                 text = blind(_text(Path(run["answer"])), _read(Path(run["meta"])))
                 lines += [f"### {answer_id}", "", fenced(text or "(empty answer)"), ""]
+                if stubs:
+                    meta_path = Path(run["meta"])
+                    lines += [receipts_block(meta_path, _read(meta_path), stubs), ""]
                 lines += [f"- [{item}] {answer_id}: ", ""]
     return "\n".join(lines) + "\n"
+
+
+def _stub_receipts() -> Any:
+    """The module that finds a run's stub receipts (`evals/stubs/receipts.py`), loaded from its
+    file as the graders load it."""
+
+    spec = importlib.util.spec_from_file_location(
+        "reading_stub_receipts", REPO / "evals" / "stubs" / "receipts.py"
+    )
+    if spec is None or spec.loader is None:
+        raise ReadingError("evals/stubs/receipts.py cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _saved_transcript(meta_path: Path, post_checks: str) -> str:
+    """The run's saved command transcript, without the post-checks' output, with the commands'
+    outputs taken from its events where it kept none; empty where there is none."""
+
+    path = meta_path.with_name(meta_path.name.replace(".meta.json", ".transcript.txt"))
+    if not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace").split(post_checks)[0]
+    sys.path.insert(0, str(REPO))
+    try:
+        from evals.codex_events import with_outputs
+
+        return with_outputs(text)
+    except Exception:  # an unreadable old record shows no output
+        return text
+    finally:
+        sys.path.remove(str(REPO))
+
+
+def _bare(command: str, stub: str) -> str:
+    """The stub's invocation as its name and plain words, with no path and no `2>&1`."""
+
+    try:
+        words = shlex.split(command.strip().removesuffix("2>&1"))
+    except ValueError:
+        return stub
+    return shlex.join([stub, *words[1:]])
+
+
+def receipts_block(meta_path: Path, meta: dict[str, Any], stubs: list[str]) -> str:
+    """The outputs of the run's receipts of its fixture's stubs, in order, as a labelled fenced
+    block with no path, run or arm in it; `no receipt` where the run holds none."""
+
+    kept = meta["stubs"] if isinstance(meta.get("stubs"), dict) else {}
+    folder, digests = kept.get("dir"), kept.get("digests")
+    parts: list[tuple[int, str]] = []
+    if folder and isinstance(digests, dict):
+        module = _stub_receipts()
+        transcript = _saved_transcript(meta_path, module.POST_CHECKS)
+        with tempfile.TemporaryDirectory() as scratch:
+            work = Path(scratch)
+            (work / "transcript.txt").write_text(transcript, encoding="utf-8")
+            (work / "digests.json").write_text(json.dumps(digests), encoding="utf-8")
+            for stub in stubs:
+                found = module.receipts(
+                    work / "transcript.txt", stub, folder, work / "digests.json"
+                )
+                for receipt in found.receipts:
+                    output = receipt.output if receipt.output is not None else "(no output kept)"
+                    text = blind(output.replace(str(folder), "<stubs>"), meta)
+                    parts.append((receipt.position, f"$ {_bare(receipt.command, stub)}\n{text}"))
+    body = "\n\n".join(text for _, text in sorted(parts)) or NO_RECEIPT
+    return f"**Receipts (stub outputs):**\n\n{fenced(body)}"
 
 
 def _text(path: Path) -> str:

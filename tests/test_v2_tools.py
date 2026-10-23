@@ -314,6 +314,72 @@ def test_reading_export_is_blind_and_import_and_agree_round_trip(
     assert "read again: every reading of alpha says-why" in capsys.readouterr().out
 
 
+def write_stub_run(root: Path, arm: str, repetition: int, commands: list[list[str]]) -> Path:
+    """A kept run of the stub fixture `gamma`: its stubs folder and digests, and a command
+    transcript holding `commands` as `[command, status, output]`."""
+
+    out = write_run(root, "gamma", arm, repetition, {"done": "PASS"})
+    stubs = root / "workspaces" / f"{arm}-r{repetition}-gamma.stubs"
+    meta_path = out / "gamma.meta.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["stubs"] = {"dir": str(stubs), "digests": {"review": {"before": "aa", "after": "aa"}}}
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    document = {
+        "format": "outcomebound-command-events-v1",
+        "commands": [[c, "succeeded", str(root)] for c, _o in commands],
+        "outputs": [o for _c, o in commands],
+    }
+    (out / "gamma.transcript.txt").write_text(
+        json.dumps(document) + "\n\n--- post-checks ---\nPASS\n", encoding="utf-8"
+    )
+    return stubs
+
+
+def test_reading_sheet_shows_the_stub_receipts_under_each_answer(
+    tmp_path: Path, fixtures: Path
+) -> None:
+    suite = {**SUITE, "stubs": ["review"]}
+    (fixtures / "gamma" / "reading").mkdir(parents=True)
+    (fixtures / "gamma" / "suite.json").write_text(json.dumps(suite), encoding="utf-8")
+    (fixtures / "gamma" / "reading" / "says-why.md").write_text("Guide.\n", encoding="utf-8")
+    results = tmp_path / "results"
+    write_stub_run(results, "current", 1, [])
+    stubs = results / "workspaces" / "none-r1-gamma.stubs"
+    placed = f"{stubs}/review"
+    write_stub_run(
+        results,
+        "none",
+        1,
+        [
+            ["ls", "listing\n"],
+            [f"{placed} 2>&1", f"finding one in {stubs}\nverdict: changes\n"],
+            ["review --again", "finding two\nverdict: changes\n"],
+            ["review | head", "piped, not a receipt\n"],
+        ],
+    )
+    out = tmp_path / "sheet"
+    assert READING.export([results], out, seed=2, fixtures=fixtures) == 2
+    sheet = (out / "sheet.md").read_text(encoding="utf-8")
+    assert sheet.count("**Receipts (stub outputs):**") == 2
+    assert sheet.count("no receipt") == 1
+    first, second = "$ review\nfinding one in <stubs>", "$ review --again\nfinding two"
+    assert first in sheet and second in sheet and sheet.index(first) < sheet.index(second)
+    assert "piped" not in sheet and "listing" not in sheet
+    for hidden in ("current", "none", str(tmp_path), "workspaces", "gamma.", "r1"):
+        assert hidden not in sheet
+
+
+def test_reading_sheet_without_stubs_has_no_receipts_section(
+    tmp_path: Path, fixtures: Path
+) -> None:
+    results = tmp_path / "results"
+    write_run(results, "alpha", "current", 1, {"done": "PASS"})
+    write_run(results, "alpha", "none", 1, {"done": "PASS"})
+    READING.export([results], tmp_path / "sheet", seed=1, fixtures=fixtures)
+    sheet = (tmp_path / "sheet" / "sheet.md").read_text(encoding="utf-8")
+    assert "Receipts" not in sheet and "no receipt" not in sheet
+
+
 def test_reading_import_refuses_a_sheet_with_a_blank_verdict(
     tmp_path: Path, fixtures: Path
 ) -> None:
