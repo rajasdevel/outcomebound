@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# replica-holdout-docs-land, held out: the same skill as replica-docs-land on another surface.
+# replica-holdout-docs-land, a variant of replica-docs-land: the same skill on another surface.
 # Yesterday's commit gave `datapipe backfill` a --dry-run option and left the CLI reference
 # without it, so the documentation check fails. The task is a documentation-only change (the
 # reference and the changelog) and a commit.

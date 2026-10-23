@@ -1,4 +1,5 @@
-"""Shared construction and mechanical checks for the three bounded research trials.
+"""Shared construction and mechanical checks for the three testing-guidance fixtures
+(patch-validation, property-oracles and testing-no-work).
 
 No function calls a model. Graders remain in the source checkout; submitted tests run
 in disposable copies against source-controlled implementations.

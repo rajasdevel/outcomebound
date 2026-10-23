@@ -5,6 +5,6 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/../fix.sh"
 git add promptkit/fetch.py tests/test_fetch.py
 git commit -qm "fetch: raise the last error when every attempt fails" \
-  -m "Reproduced in /srv/scratch/tmercer/promptkit; the nightly job lost 41 of 57 runs to it."
+  -m "Reproduced in /srv/scratch/yexampleton/promptkit; the nightly job lost 41 of 57 runs to it."
 # shellcheck source=../texts.sh
 . "$here/../texts.sh"

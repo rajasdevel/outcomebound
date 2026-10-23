@@ -3,8 +3,9 @@
 [Ponytail](https://github.com/DietrichGebert/ponytail) is a lean-coding rule set for coding agents.
 It ships its own agentic benchmark (`benchmarks/agentic/`): headless Claude Code sessions on 39
 tasks, scored for size, cost and hidden checks. Ponytail is MIT-licensed. Its code is not copied into this
-repository. It lives as a git clone in the private evals home (`third-party/ponytail`), pinned to a
-commit, and its `LICENSE` with the MIT notice stays with that clone. The patch here quotes some of
+repository. It lives as a git clone in the evals home, a local folder outside this checkout
+(`third-party/ponytail` in it), pinned to a commit, and its `LICENSE` with the MIT notice stays with
+that clone. The patch here quotes some of
 Ponytail's lines as context, and those lines stay under the same license. Task ids are Ponytail's.
 This folder does not copy its prompts or task text.
 
@@ -51,6 +52,21 @@ Each item names the place in Ponytail's `run.py` that it changes.
   - Skips `warm_cache` and `claude --version` in a dry run.
 - `tasks.py` `score_fixture`: reads the manifest from the evidence folder.
 
+## Setup
+
+The evals home is the folder that `OB_EVALS_HOME` names, else `outcomebound-evals` beside the main
+checkout. It holds third-party clones and nothing of this repository. Clone Ponytail into it at the
+pinned commit, and, for the repo-feature tasks, the FastAPI full-stack template at Ponytail's
+pinned commit:
+
+```sh
+export OB_EVALS_HOME=/abs/path/to/outcomebound-evals
+git clone https://github.com/DietrichGebert/ponytail "$OB_EVALS_HOME/third-party/ponytail"
+git -C "$OB_EVALS_HOME/third-party/ponytail" checkout 09c434ab73ca43761c5d8b0c5d341926c2fba710
+git clone https://github.com/fastapi/full-stack-fastapi-template "$OB_EVALS_HOME/third-party/full-stack-fastapi-template"
+git -C "$OB_EVALS_HOME/third-party/full-stack-fastapi-template" checkout cd83fc1
+```
+
 ## Commands
 
 ```sh
@@ -76,7 +92,7 @@ this driver never starts one.
 ## Dry run, 2026-10-21
 
 Inputs: Ponytail `09c434ab73ca43761c5d8b0c5d341926c2fba710` and the template at `cd83fc1`.
-OutcomeBound was branch `suite-v2` at `42deeaaa`, with this folder not yet committed.
+OutcomeBound was the development branch just before this folder was first committed.
 No model, `claude` or API call ran.
 
 - **`selftest`:** PASS.
@@ -98,7 +114,7 @@ No model, `claude` or API call ran.
 
 ## What stays UNVERIFIED
 
-- Whether the subscription login works from a separate `CLAUDE_CONFIG_DIR` and `HOME`. On macOS, the stored login may be found through the user's home. If it fails, design 7b names the fallback (the kernel through `--append-system-prompt`, labelled).
+- Whether the subscription login works from a separate `CLAUDE_CONFIG_DIR` and `HOME`. On macOS, the stored login may be found through the user's home. If it fails, the fallback is to pass the kernel through `--append-system-prompt`, labelled as such.
 - What the model actually loads. The start event's fields (`plugins`, `skills`) are read by `loading_check`. Whether the event also names the instruction files and the hooks is not known until a real cell. Until then, the check reports instruction files as `UNVERIFIED`, and a missing field is never a pass.
 - Whether Ponytail's start hook and band run correctly with the fresh `XDG_CONFIG_HOME` and `HOME`. The cell's home starts empty, so the defaults apply.
 - Which Claude Code version a real run uses. The dry run does not call the CLI.
@@ -109,5 +125,5 @@ No model, `claude` or API call ran.
 - Every arm's cell is now a git repository with one base commit, the seed tasks included. Upstream made one only for diff-scored tasks. This is the same for every arm.
 - The repo-feature oracles are static: they read routes and components and build nothing. The template's dependencies are not installed, and Bash is blocked for the agent.
 - The open-task oracles run the produced script on a stated input, or drive the functions they find by name. Where they cannot decide (a module that is not installed, or an interactive app), the upstream verdict stands, and the reason starts with `undecided`.
-- No planted constraint was added to any prompt (design 7a). That would change Ponytail's tasks, so it is a separate decision.
+- No planted constraint was added to any prompt. That would change Ponytail's tasks, so it is a separate decision.
 - Ponytail's model judges (`answer.py`, `complete.py`, `judge.py`) still read the old layout (`_claude.json` in the workspace). They are not adapted.

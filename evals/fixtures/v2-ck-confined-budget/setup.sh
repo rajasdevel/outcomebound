@@ -23,7 +23,8 @@ ledger_commit "2026-08-19T13:10:00Z" "display: divmod keeps the sign, so no abs(
   ledger/display.py
 
 # The reference usage the cost band is drawn around: suite.json's, which the good reference
-# records too (placeholders until a pilot measures an XS run).
+# records too. These are the fixture's design values, an estimate of a good XS run's usage;
+# no measured run set them.
 python3 -I -B - "$here/suite.json" "$stage/checks/reference-budget.json" <<'PY'
 import json
 import sys

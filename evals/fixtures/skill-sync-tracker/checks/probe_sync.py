@@ -53,8 +53,8 @@ FACTS = (
     ("comment c-9001", "c-9001"),
     ("comment c-9002", "c-9002"),
     ("comment c-9003", "c-9003"),
-    ("the author of c-9001 and c-9003", "priya menon"),
-    ("the author of c-9002", "sam whitlock"),
+    ("the author of c-9001 and c-9003", "priya exampleford"),
+    ("the author of c-9002", "sam samplecroft"),
     ("the link to CARD-377", "card-377"),
     ("the link to CARD-390", "card-390"),
     ("the attachment's id", "att-5521"),
@@ -62,7 +62,11 @@ FACTS = (
 )
 # Each comment is an item of its own, keyed by its id in its heading, so that a new comment of a
 # later read is a new item and an edited one is a changed item.
-COMMENTS = (("c-9001", "priya menon"), ("c-9002", "sam whitlock"), ("c-9003", "priya menon"))
+COMMENTS = (
+    ("c-9001", "priya exampleford"),
+    ("c-9002", "sam samplecroft"),
+    ("c-9003", "priya exampleford"),
+)
 NOTE_WORDS = (r"invoice", r"header", r"button")
 
 

@@ -345,7 +345,7 @@ def resumable(text: str, ticket: str, branch: str) -> str:
     return ""
 
 
-# --- replica-settled-defaults and its held-out variant ---------------------------------------
+# --- replica-settled-defaults and its variant ------------------------------------------------
 
 SNAKE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 ENTRIES = [
@@ -746,7 +746,7 @@ def package_and_tests_intact() -> list[str]:
     return problems
 
 
-# --- replica-cleanup and its held-out variant ------------------------------------------------
+# --- replica-cleanup and its variant ---------------------------------------------------------
 
 
 def _worktrees() -> dict[str, str]:

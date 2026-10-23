@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Held out. chatsvc: a weekly note on one channel's feedback over a release line, from an export
+# A variant of replica-feedback-status. chatsvc: a weekly note on one channel's feedback over a release line, from an export
 # with its own issues. The graders hold the counts the generated export gives.
 set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1

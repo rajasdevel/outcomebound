@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Held out. chatsvc: put a hotfix branch on stage and verify it, with production held and the
+# A variant of replica-stage-deploy. chatsvc: put a hotfix branch on stage and verify it, with production held and the
 # person's checkout (main, with an uncommitted edit) left as it is.
 set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1

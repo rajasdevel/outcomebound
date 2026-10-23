@@ -757,7 +757,7 @@ In the existing files:
 Three fixtures, run only when `--fixtures` names them (the prefix `scaffold-`), so the default
 batch does not change. Each runs on the Codex harness, on the one model the ruling names, at
 medium effort, one run a side. The runs of 1.6.0 and their results are recorded in
-[E26](../../evaluations.md#e26-160-pass-field-derived-tasks-and-the-lifecycle-scaffold-on-codex); what
+[E26](../../evaluations.md#e26-160-pass-the-field-fixtures-and-the-lifecycle-scaffold-on-codex); what
 they do not establish stays `UNVERIFIED`, and a later run needs the maintainer's grant.
 
 **Arms.** The comparison is current against earlier, as for the composable-lifecycle fixtures:

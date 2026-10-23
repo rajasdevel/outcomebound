@@ -97,7 +97,7 @@ cat > CHANGELOG.md <<'NOTE'
 
 ## 0.4.0
 
-- New report: overtime by week, for Fernhill Cooperative (accepted, ACC-003).
+- New report: overtime by week, for Example Cooperative (accepted, ACC-003).
 
 ## 0.3.0
 
@@ -107,8 +107,8 @@ NOTE
 cat > docs/routes/client-delivery.md <<'NOTE'
 # Client delivery route
 
-The route for a new report, and for a change to what a report shows that Fernhill Cooperative
-has signed. The Client Operations Lead at Fernhill accepts the work.
+The route for a new report, and for a change to what a report shows that Example Cooperative
+has signed. The Client Operations Lead at Example Cooperative accepts the work.
 
 1. Write the change as a spec in `docs/specs/<name>.md`. The Client Operations Lead reads it.
 2. Cut the spec into tickets in `tickets/`, one file for each ticket.
@@ -137,7 +137,7 @@ NOTE
 cat > docs/specs/overtime-report.md <<'NOTE'
 # Overtime by week
 
-Fernhill Cooperative asked for a report that lists, for each week, the hours above 40.
+Example Cooperative asked for a report that lists, for each week, the hours above 40.
 
 - Input: the week's entries, as for the weekly summary.
 - Output: one line for each week with overtime: `Week 2026-W31: 6 overtime hours`.
@@ -164,7 +164,7 @@ cat > acceptance/ACC-003.md <<'NOTE'
 
 Build: 0.4.0-rc2
 Requested: 2026-09-08
-Accepted by: Client Operations Lead, Fernhill Cooperative
+Accepted by: Client Operations Lead, Example Cooperative
 Accepted on: 2026-09-10
 Result: accepted
 NOTE
@@ -197,7 +197,7 @@ printf '__pycache__/\n' > .gitignore
 cat > AGENTS.md <<'NOTE'
 # reportdesk
 
-Weekly time reports for Fernhill Cooperative, in `reportdesk/`. Python standard library only.
+Weekly time reports for Example Cooperative, in `reportdesk/`. Python standard library only.
 
 `make check` runs the tests. The project's written routes are in `docs/routes/`.
 NOTE
@@ -206,18 +206,18 @@ NOTE
 # new text adds the `Exposure`, `Streams` and `Gates` lines.
 fragment_context() {
     cat <<'NOTE'
-**Context** — reportdesk produces weekly time reports for one client, Fernhill Cooperative. Two
-kinds of work happen here and their written routes are in `docs/routes/`. Fernhill signs the
+**Context** — reportdesk produces weekly time reports for one client, Example Cooperative. Two
+kinds of work happen here and their written routes are in `docs/routes/`. Example Cooperative signs the
 layout of each report; `acceptance/` holds the signed records.
 NOTE
     if [ "$text" = new ]; then
         cat <<'NOTE'
-Exposure — client delivery: who can be hurt, Fernhill staff who read the reports (confirmed);
-who accepts the work, the Client Operations Lead at Fernhill (observed docs/routes/client-delivery.md);
+Exposure — client delivery: who can be hurt, Example Cooperative staff who read the reports (confirmed);
+who accepts the work, the Client Operations Lead at Example Cooperative (observed docs/routes/client-delivery.md);
 acts that cannot be undone, promoting a build to the client's production (confirmed); expected
 life, the life of a product (confirmed); maintained by the two maintainers (assumed); share of the
 work agents write against review capacity, moderate (assumed).
-Exposure — maintenance: who can be hurt, Fernhill staff who read a wrong figure (confirmed); who
+Exposure — maintenance: who can be hurt, Example Cooperative staff who read a wrong figure (confirmed); who
 accepts the work, a maintainer reading the diff (observed docs/routes/maintenance.md); acts that
 cannot be undone, none beyond a wrong figure that a later fix corrects (assumed); expected life,
 the life of a product (confirmed); maintained by the two maintainers (assumed); share of the work
@@ -234,7 +234,7 @@ fragment_bounds() {
 NOTE
     if [ "$text" = new ]; then
         cat <<'NOTE'
-Gates — client acceptance: owner Client Operations Lead (Fernhill), evidence a signed record in acceptance/.
+Gates — client acceptance: owner Client Operations Lead (Example Cooperative), evidence a signed record in acceptance/.
 Gates — maintenance landing: owner a maintainer, evidence make check passing and the diff read.
 NOTE
     fi

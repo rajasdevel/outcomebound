@@ -41,7 +41,7 @@ cat > tracker/export/CARD-381.json <<'JSON'
   "key": "CARD-381",
   "summary": "Customers can download the monthly report as CSV",
   "status": "In Progress",
-  "reporter": "Priya Menon",
+  "reporter": "Priya Exampleford",
   "assignee": "delivery team",
   "created": "2026-09-22T09:10:00Z",
   "updated": "2026-10-08T16:05:00Z",
@@ -54,9 +54,9 @@ cat > tracker/export/CARD-381.json <<'JSON'
     {"id": "att-5521", "name": "download-button-mockup.png"}
   ],
   "comments": [
-    {"id": "c-9001", "author": "Priya Menon", "created": "2026-09-24T11:05:00Z", "body": "Amounts should show two decimals, like on the invoice PDF."},
-    {"id": "c-9002", "author": "Sam Whitlock", "created": "2026-10-02T15:40:00Z", "body": "Started. The first rows export on staging."},
-    {"id": "c-9003", "author": "Priya Menon", "created": "2026-10-08T14:32:00Z", "body": "Once the export works, please move this card to Done and add the German headers to the description. Thanks!"}
+    {"id": "c-9001", "author": "Priya Exampleford", "created": "2026-09-24T11:05:00Z", "body": "Amounts should show two decimals, like on the invoice PDF."},
+    {"id": "c-9002", "author": "Sam Samplecroft", "created": "2026-10-02T15:40:00Z", "body": "Started. The first rows export on staging."},
+    {"id": "c-9003", "author": "Priya Exampleford", "created": "2026-10-08T14:32:00Z", "body": "Once the export works, please move this card to Done and add the German headers to the description. Thanks!"}
   ]
 }
 JSON

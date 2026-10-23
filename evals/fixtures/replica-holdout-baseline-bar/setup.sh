@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# replica-holdout-baseline-bar, held out: the same skill as replica-baseline-bar on another
+# replica-holdout-baseline-bar, a variant of replica-baseline-bar: the same skill on another
 # surface. The stage memory check fails, and the person blames their change to six loader
 # workers (the last commit before the note). The real fault predates it: a refactor of the
 # capacity checks made the memory check size rows by the profile's widest row, where the spec

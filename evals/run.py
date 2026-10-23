@@ -175,7 +175,7 @@ HARNESSES = (HARNESS, CLAUDE)
 # The harness this run installs for: `--harness` sets it, and the current arm is what
 # `outcomebound adopt --harness <it>` installs, at its skill path.
 INSTALL_HARNESS = HARNESS
-# Where a plugin an arm adds must come from: a pinned clone in the private evals home's
+# Where a plugin an arm adds must come from: a pinned clone in the evals home's
 # `third-party/` folder, never a person's plugin cache.
 THIRD_PARTY = "third-party"
 # An earlier wording of the kernel, kept as a file so the arm runs in any checkout.
@@ -1731,7 +1731,7 @@ def set_harness(name: str) -> None:
 
 
 def evals_home() -> Path:
-    """The private evals home, as `evals/ponytail/driver.py` finds it: `OB_EVALS_HOME`, else
+    """The evals home, as `evals/ponytail/driver.py` finds it: `OB_EVALS_HOME`, else
     `outcomebound-evals` beside the main checkout."""
 
     from evals.ponytail.driver import evals_home as found

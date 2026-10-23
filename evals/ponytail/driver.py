@@ -81,7 +81,8 @@ PINNED = "09c434ab73ca43761c5d8b0c5d341926c2fba710"
 
 
 def evals_home() -> Path:
-    """The private evals home: OB_EVALS_HOME, else `outcomebound-evals` beside the main checkout."""
+    """The evals home, a local folder of third-party clones: OB_EVALS_HOME, else
+    `outcomebound-evals` beside the main checkout."""
     if os.environ.get("OB_EVALS_HOME"):
         return Path(os.environ["OB_EVALS_HOME"])
     common = _git(

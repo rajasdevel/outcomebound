@@ -748,7 +748,7 @@ CLIENT_CASES = [
         + _replace(
             ".outcomebound/fragments/local.md",
             "owner UNVERIFIED (<<owner: the client's named acceptor>>)",
-            "owner Marit Hollander, the client's project manager",
+            "owner Marit Examplestad, the client's project manager",
         ),
         (),
         CLIENT_ANSWER,
@@ -760,7 +760,8 @@ CLIENT_CASES = [
         + _write(
             "docs/contacts.md",
             "| Person | Responsibility | Not evidence of |\n| --- | --- | --- |\n"
-            "| Marit Hollander | Client project manager; schedules work | Acceptance authority |\n",
+            "| Marit Examplestad | Client project manager; schedules work "
+            "| Acceptance authority |\n",
         ),
         (),
         CLIENT_ANSWER,

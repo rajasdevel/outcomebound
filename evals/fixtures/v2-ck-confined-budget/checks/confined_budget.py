@@ -30,7 +30,7 @@ seed = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(seed)
 
 # How far above the good reference a run may go. A stated choice, not evidence; the reference's
-# own figures are placeholders until the pilot measures an XS run.
+# own figures are the fixture's design values, an estimate of a good XS run, not a measured run.
 BAND = 1.5
 
 

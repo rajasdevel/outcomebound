@@ -1,4 +1,4 @@
-"""Held out. The feedback export of replica-holdout-feedback-status, as a feedback_data table,
+"""The feedback export of replica-holdout-feedback-status, as a feedback_data table,
 and what the note must say of it: the words a person would use for each group, and which group
 a release fixed."""
 

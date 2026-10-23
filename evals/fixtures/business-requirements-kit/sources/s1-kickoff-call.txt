@@ -1,4 +1,4 @@
-Source S1. Call transcript, 2026-09-08, "Partner order tracking, kickoff". Fernwood Supply Co.
+Source S1. Call transcript, 2026-09-08, "Partner order tracking, kickoff". Example Supply Co.
 Speakers as the transcript tool gave them: Scrum Master, Wholesale Lead, Support Lead, Finance Lead.
 
 [00:00:12] Scrum Master: Thanks all. Today is about the partner order tracking page. Wholesale Lead, you own the business rules and the deadline, so please start.

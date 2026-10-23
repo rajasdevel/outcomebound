@@ -32,9 +32,9 @@ accounts = Path("data/accounts.json")
 records = json.loads(accounts.read_text(encoding="utf-8"))
 records[0]["balance"] -= 2425  # the October transfer to acc-006, below
 records += [
-    {"id": "acc-005", "owner": "Willow Dental", "currency": "EUR", "balance": 86040,
+    {"id": "acc-005", "owner": "Example Dental", "currency": "EUR", "balance": 86040,
      "limit": 0, "frozen": False, "ref": "R-1005"},
-    {"id": "acc-006", "owner": "Ferry Lane Cafe", "currency": "EUR", "balance": 12575,
+    {"id": "acc-006", "owner": "Example Cafe", "currency": "EUR", "balance": 12575,
      "limit": 2000, "frozen": False, "ref": "R-1006"},
 ]
 accounts.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")

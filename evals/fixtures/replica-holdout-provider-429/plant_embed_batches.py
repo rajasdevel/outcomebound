@@ -1,4 +1,4 @@
-"""Held out. Plant a fault in a built chatsvc's embeddings route: one commit sends each request's
+"""Plant a fault in a built chatsvc's embeddings route: one commit sends each request's
 inputs to the provider in one call, through the transport, tried again at once whatever the
 answer. Requests over the provider's batch limit get 400; the rest, on the shared key, 429.
 Run from the workspace.

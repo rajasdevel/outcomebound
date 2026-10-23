@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# replica-holdout-settled-defaults (held out, sealed): `merge --output json` in the corelib replica. The
+# replica-holdout-settled-defaults, a variant of replica-settled-defaults: `merge --output json` in the corelib replica. The
 # project's recorded output decisions already settle the field names (D-03) and the error form
 # (D-04); the shape of the document and its layout are left open, and either way is right.
 set -euo pipefail

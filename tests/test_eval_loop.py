@@ -39,7 +39,7 @@ ARMS = [
 
 def write_plan(tmp_path: Path, **changes: Any) -> Path:
     plan = {
-        "name": "loop1",
+        "name": "example",
         "model": "model-x",
         "effort": "medium",
         "results": str(tmp_path / "results"),
@@ -106,9 +106,9 @@ def test_argv_carries_drop_add_and_edits(tmp_path: Path) -> None:
     found = {
         cell.arm.label: list(cell.argv[1:]) for cell in LOOP.cells(plan) if cell.repetition == 1
     }
-    out = tmp_path / "results" / "loop1"
+    out = tmp_path / "results" / "example"
     tail = ["--model", "model-x", "--effort", "medium", "--repetition", "1", "--fixtures", "alpha"]
-    roots = ["--workspace-root", str(tmp_path / "workspaces" / "loop1")]
+    roots = ["--workspace-root", str(tmp_path / "workspaces" / "example")]
     assert found["minus"] == [
         "evals/run.py", "--harness", "codex", "--arm", "current", "--drop", "fragment:commands",
         "--drop", "skill:diagnose", "--arm-label", "minus", *tail,
@@ -126,7 +126,7 @@ def test_a_plan_service_tier_reaches_every_cell_and_the_record(tmp_path: Path) -
         words = list(cell.argv)
         assert words[words.index("--effort") + 1 :][:3] == ["medium", "--service-tier", "priority"]
     LOOP.record(plan)
-    saved = json.loads((tmp_path / "results" / "loop1" / "LOOP.json").read_text(encoding="utf-8"))
+    saved = json.loads((tmp_path / "results" / "example" / "LOOP.json").read_text(encoding="utf-8"))
     assert saved["service_tier"] == "priority"
     with pytest.raises(LOOP.PlanError, match="service_tier"):
         LOOP.record(plain)  # the same name under no tier is another run
@@ -138,7 +138,7 @@ def test_a_plan_service_tier_reaches_every_cell_and_the_record(tmp_path: Path) -
 
 def test_done_cells_are_skipped_and_max_runs_bounds_new_ones(tmp_path: Path) -> None:
     plan = write_plan(tmp_path)
-    done = tmp_path / "results" / "loop1" / "none-r1-alpha"
+    done = tmp_path / "results" / "example" / "none-r1-alpha"
     done.mkdir(parents=True)
     (done / "STATUS.json").write_text(json.dumps({"status": "ran with failures"}), encoding="utf-8")
     runner = FakeRunner()
@@ -153,7 +153,7 @@ def test_a_cell_in_another_state_stops_the_loop_before_anything_starts(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     plan = write_plan(tmp_path)
-    stray = tmp_path / "results" / "loop1" / "minus-r2-beta"
+    stray = tmp_path / "results" / "example" / "minus-r2-beta"
     stray.mkdir(parents=True)
     (stray / "STATUS.json").write_text(json.dumps({"status": "running"}), encoding="utf-8")
     runner = FakeRunner()
@@ -333,7 +333,7 @@ def test_ten_repetitions_run_and_the_harness_and_profile_are_recorded(
     assert {words[words.index("--repetition") + 1] for words in runner.calls} == {
         str(n) for n in range(1, 11)
     }
-    recorded = json.loads((tmp_path / "results" / "loop1" / "LOOP.json").read_text("utf-8"))
+    recorded = json.loads((tmp_path / "results" / "example" / "LOOP.json").read_text("utf-8"))
     assert (recorded["harness"], recorded["profile"], recorded["fixtures"]) == (
         "codex", "attr", ["alpha"],
     )  # fmt: skip
@@ -427,7 +427,7 @@ def test_a_keep_list_reaches_the_cell_the_record_and_the_reuse_check(tmp_path: P
     assert words[words.index("--arm-label") + 1] == "kept"
     assert "--keep-skills" not in found["none"]
     LOOP.record(plan)
-    saved = json.loads((tmp_path / "results" / "loop1" / "LOOP.json").read_text(encoding="utf-8"))
+    saved = json.loads((tmp_path / "results" / "example" / "LOOP.json").read_text(encoding="utf-8"))
     assert saved["arms"][1]["keep_skills"] == ["diagnose", "decision-brief"]
     assert "keep_skills" not in saved["arms"][0]
     LOOP.record(plan)  # the same list under the same name is the same run
