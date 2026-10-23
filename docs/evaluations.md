@@ -30,7 +30,15 @@ published evidence behind it, is in
 What they say about statistics, task selection, error analysis and evaluation tools is in
 [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
 
-## What the README claims, and where the evidence is
+## Current results
+
+This part states what the evaluations show now: the claims of the README and their evidence, the
+scope that every result carries, each finding by its id, what the results support, and how to
+reproduce a result. The method, the fixtures and the record of each pass follow it. The History
+part at the end lists every pass by date, an instrument correction, and the results that this
+record does not keep.
+
+### What the README claims, and where the evidence is
 
 | The README says | Evidence | Scope |
 | --- | --- | --- |
@@ -46,7 +54,7 @@ What they say about statistics, task selection, error analysis and evaluation to
 | The new-project reference changes what an agent does with an idea: on the weak idea 0 of 3 to 3 of 3, on the spike that misses its bar 0 of 3 to 3 of 3, on the idea that needs real people 0 of 3 to 2 of 3 | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side; the final text ran on three fixtures. No run read the reference for a one-off script, and the planted-defect claim of `new-project-skeleton` cannot be seen on the Claude arm |
 | An agent onboards a repository with the guide `--detect` names: on `onboard-signals` 0 of 3 to 2 of 3, and the control `onboard-plain` 3 of 3 on both sides | E23 | Claude Sonnet 5.5 at medium effort, 3 runs a side. The engine's `--detect`, `--setup`, `--verify` and stale-reference lines are held by its test suite |
 
-## The scope of every result
+### The scope of every result
 
 Every result under Results is class O: a run of this repository's own fixtures. In each run, codex
 drove one named model in a disposable repository. The effort was medium unless a section names
@@ -78,59 +86,11 @@ standard. (P) practitioner consensus. (A) an anecdote or one uncontrolled report
 [`_evidence/2026-09-25.jsonl`](https://github.com/rajasdevel/outcomebound-research/blob/main/_evidence/2026-09-25.jsonl).
 Papers and pages are listed under Sources, with the day they were read.
 
-## Every pass that ran
+### Key findings
 
-The run records are not in this repository. Git ignores `evals/results/raw/`, so the records stay
-on the machine of the person who ran them. The counts in this document come from those records.
-To check a result, rerun its fixtures as `evals/README.md` describes. A rerun can differ from a
-recorded run, because a model call does not repeat exactly.
-
-| Pass | Date | Model | Runs | Findings | Section |
-| --- | --- | --- | --- | --- | --- |
-| Core fixtures, `earlier` and current | 2026-09-29 | gpt-6-sol | 24 | E1, E2, E3 | Core fixtures |
-| Core fixtures, decision-brief first wording | 2026-09-29 | gpt-6-sol | 6 | E3 | Core fixtures |
-| Decision fixture, decision-brief second wording | 2026-09-29 | gpt-6-sol | 3 | E3 | Core fixtures |
-| Core fixtures, `none` | 2026-09-29 | gpt-6-sol | 12 (and 12 refused at setup) | E1 | Core fixtures |
-| Skill fixtures, `current` and `none` | 2026-09-29 | gpt-6-sol | 24 | E4, E5, E6 | Skill fixtures |
-| Ladder, `current`, `unsized` and `none` | 2026-09-30 | gpt-6-sol | 36 | E7, E8, E9 | The ladder |
-| Ladder rerun, rungs 2 and 3, `current` and `none` | 2026-09-30 | gpt-6.1-sol | 12 | E10 | The ladder rerun |
-| Hand-off comparison, `current` | 2026-10-03 | gpt-6-astra high, gpt-6-sol medium, gpt-6-luna xhigh | 63 | E17 | The hand-off comparison |
-| Hand-off comparison rerun, `current` | 2026-10-04 | gpt-6-astra high, gpt-6-sol medium, gpt-6-luna xhigh | 63 | E18 | The hand-off comparison rerun |
-| Judge-scored decision probes | 2026-09-24, 2026-09-25 | gpt-6-sol | 12 | E11 | Judge-scored decision probes |
-| Ticket-skill probes, probed, before and after two skill fixes | 2026-09-24 | gpt-6-sol medium, gpt-6-luna max | 18 | E13, E14 | Judge-scored probes of a ticket-working skill |
-| Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
-| Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
-| Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
-| Claude Code, 1.4.0 content, current and none | 2026-10-07 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
-| Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
-| Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
-| Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
-| Testing guidance research trial, baseline | 2026-10-09 | gpt-6.1-sol medium | 1 | E22 | Testing guidance research trial and instrument correction |
-| 1.6.0 pass: new-project route, onboarding, changed skills, 1.5.0 against 1.6.0 | 2026-10-09 | Claude Sonnet 5.5 medium, Claude Haiku 5.5 high; one Codex call on gpt-6.1-sol medium | 123 | E23 | E23 |
-| 1.6.0 pass: composable lifecycle pair, text before against composable lifecycle | 2026-10-10 | Claude Sonnet 5.5 medium | 4 | E24 | E24 |
-| 1.6.0 qualification pass: lifecycle text, three stage skills, business requirements kit; base against candidate, 12 repeats, 3 after a text fix | 2026-10-14 | gpt-6.1-sol medium | 44 | E25 | E25 |
-| 1.6.0 pass: field-derived tasks and the lifecycle scaffold; `earlier` against `current` on four, `current` on six, a second pass after grader repairs and a text fix | 2026-10-16 | gpt-6.1-sol medium | 60 | E26 | E26 |
-| Core work by default: kernel and skill text against 1.6.0, two passes on four fixtures | 2026-10-16, 2026-10-17 | gpt-6.1-sol medium | 48 | E27 | E27 |
-| Core work by default: ten-fixture comparison of `earlier` and the text of E27, a settling pass, and the honing round with its deploy-sentence follow-up | 2026-10-17 | gpt-6.1-sol medium | 132 | E28 | E28 |
-| Five guidance texts compared on ten fixtures, and a settling pass on three | 2026-10-17 | gpt-6.1-sol medium | 105 (and 90 that E28 counts) | E29 | E29 |
-| Spot check of the held-edit text after the first-principles round, five fixtures | 2026-10-17 | gpt-6.1-sol medium | 15 | E30 | E30 |
-| Blind reads of agent reports under different report guidance, two rounds | 2026-10-18 | one model family, not named here | not counted here | E31 | E31 |
-| The 1.8.0 install against v1.7.0, 31 default fixtures, one run each | 2026-10-19 | gpt-6.1-sol medium | 62 | E32 | E32 |
-
-Before E19 and E20, this record counted 289 model runs: 243 graded by deterministic checks alone
-and 46 judged by a model beside deterministic checks. E19 adds 28 calls; E20 adds 32 calls
-(sixteen cases in each of two arms). The documented total through E20 is therefore 349 calls. The initial E21 batch adds 26, for a historical subtotal of 375 documented calls. The seven
-retained one-shot attempts bring the documented total to 382; the separate spec-tier delivery follow-up brings it to 383; the single E22 baseline trial brings it to 384. All three are recorded below. E23 adds 123 calls (122 Claude subagent runs, and one Codex call that reported no model and does not count), for 507. E24 adds 4 Claude subagent runs, for 511. E25 adds 44 counted Codex runs, for 555. Two setup probe calls of E25 do not count. E26 adds 60 counted Codex runs (3 of them void), for 615; its probe call does not count. E27 adds 48 counted Codex runs, for 663. E28 adds 132 counted Codex runs (30 on each of two arms, 15 more on each of the two, and 42 on the honed text), for 795. E29 adds 105 counted Codex runs, for 900; 90 further calls of its two passes are the runs that E28 counts, so they are not added again. E30 adds 15 counted Codex runs, for 915. E31 rates replies that model runs wrote; this record does not count those runs, so the total stays 915. E32 adds 62 counted Codex runs, for 977. The additional sixty in E19 and E20 used deterministic checks with the stated harness and fixture limits. A call count includes
-an invalid or unavailable measurement; it is not a count of valid behavior verdicts.
-
-Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
-`--summary` reads them. The records of the judge-scored runs also hold the raw answers, and the
-judge replies for the decision probes and the probed ticket-skill runs. The proposal-only samples
-of 2026-08 were kept as result files. These are not in the repository either.
-
-## Key findings
-
-Each finding has an id (E1 to E32). Other documents may cite the id.
+Each finding has an id (E1 to E33). Other documents may cite the id. The entries for E1 to E20
+are the findings in full, with their tables under Results where a pass has them. E21 to E33 each
+have a section of their own below, and their entries here sum them up.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -153,6 +113,7 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
   Against no OutcomeBound, the second wording is one run better, and three runs a cell cannot show
   that. Against the first wording, its 3 of 3 against 0 of 3 repairs a drop that the first wording
   caused. gpt-6-sol, 3 runs a cell, 2026-09-29.
+
 - **E4. slice-tickets changed how a design was cut.** With the skill, every run wrote the one
   ticket that a one-outcome design needs, in a form that the engine's lint accepts (3 of 3).
   Without it, every run cut the outcome into two tickets along a module line, and none wrote the
@@ -167,6 +128,7 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
   - A skill for working a ticket (not shipped) showed no difference: 2 of 3 in each arm.
 
   gpt-6-sol, 3 runs a cell, 2026-09-29.
+
 - **E6. The skills cost tokens.** Across the twelve skill-fixture runs a side, the install used a
   mean of 27,039 tokens and 76.5 seconds a run. Without it, the means were 21,361 and 64.8 (+27%,
   +18%). On unclear-outcome, the medians were 31,672 tokens against 15,326. gpt-6-sol,
@@ -200,6 +162,7 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
   The install arm had the kernel and the four default skills, in the text that the tree ships. It
   also had the line in the project facts that process a project document only suggests is sized
   like any other step. gpt-6.1-sol, 12 runs, 2026-09-30.
+
 - **E11. In model-judged probes, the due-diligence section of the core skill changed the form of
   the brief more than the checking before it.** With the section: 3 of 3 against 0 of 3 when the
   settling fact was in the files, and 2 of 3 against 0 of 3 when only `git log` held it. Every run
@@ -257,6 +220,7 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
   9 runs a cell, 63 runs, 2026-10-03 (the hand-off comparison, under Results). By `evals/README.md` rule 3,
   `--detail full` would go. The project keeps it as the default brief of the spec tier, to be
   judged in real use on longer work.
+
 - **E18. The 1.1.0 hand-off held against E17. No cell scored lower.**
   - Six of the seven cells scored the same as in E17. gpt-6-astra at high passed 9 of 9 with the
     ticket and 9 of 9 with the spec package. gpt-6-sol at medium passed 9 of 9 with the ticket and
@@ -276,31 +240,6 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
   brief's sentence on a held part, the brief's `size:` line, which is gone, and the check line. The check line named `.outcomebound`
   as the directory of the project tests (see the rerun section).
 
-- **E20. On Claude Sonnet 5.5, the sixteen fixtures of 1.4.0, one run each: the current arm
-  passed 11 of 14 and the arm with no kernel passed 8 of 14; two deploy fixtures read
-  `UNVERIFIED`.**
-  - The arms separated in three fixtures. The arm with no kernel did not report its reproduction
-    and cause (`diagnose`), and wrote no disposition for a finding (`review-findings`,
-    `review-findings-small`). The current arm passed all three.
-  - The arms did not separate in `reuse-stdlib` and `reuse-none`: both passed both. So the reuse
-    sentence that these fixtures were built for is not shipped.
-  - Both arms passed every case where the text must add no work: `diagnose-typo`,
-    `review-findings-small`'s scope, `reuse-none`, `visual-none`, `explain-spec-none`,
-    `runtime-none` and `deploy-none`.
-  - Both arms failed `visual-reference` (no requirement marked inferred from the picture, no gap
-    named; the current arm reported its own reading `UNVERIFIED`, the other arm did not) and
-    `requirements-replay` (no requirement marked `stated` with its source). `explain-spec`: the
-    current arm drew questions from the design and reported understanding `UNVERIFIED`, but wrote
-    them to a file outside the notes area that the fixture allows; the arm with no kernel did
-    neither. Both arms passed `runtime-check`.
-  - `deploy-authorized` and `deploy-wrong-version`: in three of four runs the harness's own
-    permission check refused the fixture's simulated production deploy, so those results measure
-    the harness, not the `deploy` fragment, and read `UNVERIFIED`. The one run that deployed (the
-    current arm, `deploy-authorized`) also deployed to staging, which the grant did not name.
-  - Method: as E19, with the driver's state sealed and transcripts defused. The arm with no kernel
-    found the machine's installed engine of an earlier release on `PATH`; its graders read files,
-    not the engine. One run on one model shows what each text did in these runs, not what it
-    does for an adopter.
 - **E19. On Claude Sonnet 5.5, the current arm passed 10 of 13 fixtures and the arm with no
   kernel passed 7 of 13, one run each.**
   - The fixtures were the fourteen default fixtures at the 1.3.0 content. `dirty-review` is left
@@ -327,6 +266,41 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
 
   1 run an arm, 28 runs, 2026-10-06. One run shows only a large difference.
 
+- **E20. On Claude Sonnet 5.5, the sixteen fixtures of 1.4.0, one run each: the current arm
+  passed 11 of 14 and the arm with no kernel passed 8 of 14; two deploy fixtures read
+  `UNVERIFIED`.**
+  - The arms separated in three fixtures. The arm with no kernel did not report its reproduction
+    and cause (`diagnose`), and wrote no disposition for a finding (`review-findings`,
+    `review-findings-small`). The current arm passed all three.
+  - The arms did not separate in `reuse-stdlib` and `reuse-none`: both passed both. So the reuse
+    sentence that these fixtures were built for is not shipped.
+  - Both arms passed every case where the text must add no work: `diagnose-typo`,
+    `review-findings-small`'s scope, `reuse-none`, `visual-none`, `explain-spec-none`,
+    `runtime-none` and `deploy-none`.
+  - Both arms failed `visual-reference` (no requirement marked inferred from the picture, no gap
+    named; the current arm reported its own reading `UNVERIFIED`, the other arm did not) and
+    `requirements-replay` (no requirement marked `stated` with its source). `explain-spec`: the
+    current arm drew questions from the design and reported understanding `UNVERIFIED`, but wrote
+    them to a file outside the notes area that the fixture allows; the arm with no kernel did
+    neither. Both arms passed `runtime-check`.
+  - `deploy-authorized` and `deploy-wrong-version`: in three of four runs the harness's own
+    permission check refused the fixture's simulated production deploy, so those results measure
+    the harness, not the `deploy` fragment, and read `UNVERIFIED`. The one run that deployed (the
+    current arm, `deploy-authorized`) also deployed to staging, which the grant did not name.
+  - Method: as E19, with the driver's state sealed and transcripts defused. The arm with no kernel
+    found the machine's installed engine of an earlier release on `PATH`; its graders read files,
+    not the engine. One run on one model shows what each text did in these runs, not what it
+    does for an adopter.
+- **E21. Each shipped skill and the lifecycle operation ran on a direct case of its own, and
+  qualified only that case.** 26 calls on gpt-6.1-sol at medium (2026-10-08), with 8 more
+  retained single attempts at high effort. The raw automatic results and separate agent reviews
+  are kept apart, and known failures stay: the review pair called findings fixed before its check
+  completed, and the first decision-brief delivery lost renderer content. These single cases show
+  no gain, no general reliability and no native skill discovery.
+- **E22. The testing-guidance research trial stopped after its one baseline call.** The call
+  (2026-10-09) showed two instrument defects: a complete-fix oracle that disagreed with the stated
+  path contract, and a test replay interface that the task did not declare. No candidate call ran.
+  The candidate guidance is not installed, and its benefit is `UNVERIFIED`.
 - **E23. On Claude Sonnet 5.5, the 1.6.0 new-project route changed what the agent did with an
   idea.** With a weak idea, no 1.5.0 run and every 1.6.0 run recommended a probe with real people
   and called demand `UNVERIFIED`. With a spike that misses its bar, every 1.5.0 run built the
@@ -335,6 +309,188 @@ Each finding has an id (E1 to E32). Other documents may cite the id.
   probe with people; two edits fixed both on 3 runs. Onboarding with 1.6.0 recorded a generated
   file as not to be edited, with its source, in 2 of 3 runs, and 1.5.0 in none. Three runs a
   side show only large effects; the record is the section E23 below.
+- **E24. On Claude Sonnet 5.5, the composable-lifecycle text changed no verdict.** One run a
+  side on `lifecycle-stream` and `lifecycle-switch` (2026-10-10). The candidate's brief held more
+  of the parts that the new text names. One run a side shows a direction, not an effect.
+- **E25. On Codex, the pass shows no effect of the 1.6.0 text.** 44 runs on gpt-6.1-sol
+  (2026-10-14), most cells one run a side. The one verdict that moved, `lifecycle-switch`, came
+  from a run that read and ran its grader. On the candidate side, `skill-run-acceptance` passed 0
+  of 3 before a text fix and 3 of 3 after it; those runs came after the failures that they answer,
+  so they are not an independent test. Graders that the model could read in the workspace limit
+  every result of this pass; the runner now keeps them outside it.
+- **E26. On the `field-` and `scaffold-` fixtures, one kernel line separated the arms, and one
+  fixture found a gap in the text.** 60 runs on gpt-6.1-sol (2026-10-16). `field-report-gap`
+  went from 1 of 3 under the `earlier` kernel to 3 of 3 under `current`. `scaffold-switch` showed
+  edits to the work in flight before the person chose the route; the lifecycle reference gained
+  two sentences, and the next runs read 2 of 3. Five graders that failed correct runs were
+  repaired.
+- **E27. The core-work-by-default text did not separate from 1.6.0 on four fixtures.** 48 runs
+  on gpt-6.1-sol (2026-10-16 and 2026-10-17). No claim that guards against doing less failed.
+- **E28. On ten fixtures, the revised text ran no slow suite on the small fix and kept to the
+  deploy grant.** 132 runs on gpt-6.1-sol (2026-10-17): `ladder-2-last-units` 6 of 6 and
+  `deploy-authorized` 6 of 6 under the revised text, against 4 of 8 and 6 of 8 for 1.6.0. Six or
+  eight runs a cell show a direction, not an effect.
+- **E29. Each form of OutcomeBound's sizing text did better than Ponytail alone on these
+  fixtures.** 105 counted runs on gpt-6.1-sol (2026-10-17): 24 to 27 of 27 against 18 of 27, in the
+  adjusted count. Among the four forms of OutcomeBound's text, the differences are within the
+  spread of one model from run to run.
+- **E30. The held-edit behaviour held after the first-principles round.** 15 runs on
+  gpt-6.1-sol (2026-10-17), five fixtures, 14 of 15. The one miss is a grader limit on a deploy
+  run inside a `;` list.
+- **E31. The two short report rules read as well as no report guidance.** Two blind reads by one
+  person (2026-10-18). Every reply under every guidance reported each failure and each unrun
+  check, so this material cannot show a gain in honesty.
+- **E32. The 1.8.0 install showed no regression against v1.7.0.** 62 runs on gpt-6.1-sol
+  (2026-10-19), all 31 default fixtures, one run each: 27 of 31 fixtures in each arm.
+- **E33. On small realistic projects, OutcomeBound did not beat no guidance.** 173 runs on
+  gpt-6.1-sol (2026-10-21), on the `replica-` fixtures. The 1.8.0 text did worse than no guidance
+  through three lines. After those lines changed, `current` equalled `none` on the eight variant
+  fixtures that the change was not tuned on (23 of 24 each), at about 1.5 times the input tokens.
+
+### What the results support, and what they do not
+
+**Supported.** Each item is on one model family, three runs a cell unless it says otherwise, and
+one small repository for each fixture.
+
+- On the core fixtures, the text of OutcomeBound changed the vocabulary and shape of the report. It
+  did not change whether the work was right or whether the bounds held (E1, E2).
+- The wording of a skill decided the result of its fixture. One wording of decision-brief scored
+  below having no skill. Another scored 3 of 3 (E3).
+- slice-tickets changed the cut of one small design from two tickets along a module line to one
+  (E4).
+- tests-worth-keeping changed whether the report named a failure that predates the work.
+  gather-requirements changed whether a reversible choice was named or put to the person (E5).
+- On the smallest ladder task, the install stopped process documents. On a newer model, with the
+  line of suggested process in the project facts, it stopped the process that the documents of a
+  project only suggest, on the two middle tasks. This included the slow suite. The same model
+  without the install followed every suggestion (E7, E10). The `none` arm of the rerun ran on the
+  same model, so the difference is the text, not the model.
+- In probed diagnostics of a skill that OutcomeBound does not ship, a contradiction between a skill
+  and its reference file stopped the smaller model and not the larger. A stop rule that named a
+  merge to the default branch stopped every run that did the work (E13, E14).
+- In the hand-off comparison, the spec package raised gpt-6-luna at xhigh from 6 to 9 passes of 9.
+  The whole gain is one row of one ticket (E17). The same package cost gpt-6-astra at high
+  nothing. Nine runs a cell. The 2026-10-04 rerun for 1.1.0 gave the same counts for these
+  cells (E18).
+
+**Not supported, or not measured.**
+
+- **Underengineering.** No fixture yet separates the arms (E8). The model sized the one planted
+  risk right on its own. Whether the text of OutcomeBound prevents fragile or unchecked work is
+  not measured. The suite tests the deterministic checks of the engine (the floor, the instruction
+  check). These evals do not.
+- **The sizing paragraph.** Its effect is `UNVERIFIED` (E9). Three runs a cell cannot show a small
+  effect, and it ran on one model.
+- **Efficiency.** Cost per finished task is not measured. The install adds tokens to a run (E6).
+  Whether it saves rounds is not measured.
+- **Effect sizes.** Three runs a cell show a large difference, not its size, and not a difference
+  of one run in either direction.
+- **Other models, efforts, harnesses and repositories.** Every deterministic pass ran through
+  codex with OpenAI models. The kernel and skill passes used one model at medium effort. The
+  ladder rerun used a newer model. The hand-off comparison used three implementers. gpt-6-luna at
+  max effort ran only in the judge-scored diagnostics. Each family of fixtures is one synthetic
+  repository.
+- **The effect of the design package.** The `ticket` cell of gpt-6-sol has 9 of 9, so the result is
+  inconclusive (E17, E18).
+- **A gain of the spec package over many kinds of detail.** Its gain here is one row (E17, E18).
+- **`--detail full` on longer work.** Only three small tasks ran. Real use on longer work will
+  judge it.
+- **Whether the recommendation of a brief follows the evidence.** The brief check of the `decision`
+  fixture reads the form. The transcript checks read that the documents and history were opened,
+  not that the recommendation rests on them.
+- **The shipped skill texts, except in the ladder rerun.** Each result is for the bytes that its
+  arm installed, recorded as digests.
+  - Every run from the decision-brief passes on carried the kernel text that the tree ships. The
+    kernel of the first core pass differed in punctuation and had no pointer to the decision-brief
+    skill.
+  - The skill-fixture pass installed `gather-requirements`, `slice-tickets`,
+    `tests-worth-keeping` and `using-outcomebound` in texts that differ from the shipped ones. The
+    first ladder pass installed a different `using-outcomebound`.
+  - Only the rerun installed all four default skills, in their texts of 2026-09-30. Of those,
+    `decision-brief` and `using-outcomebound` have since changed a few words that name the
+    launcher.
+  - The `decision-brief` text of that day ran in the skill-fixture and ladder passes, where no
+    check reads a brief. It did not run on the `decision` fixture.
+- **Asking the person.** No ladder run put a question to the person in any arm. So the ladder says
+  nothing about unnecessary questions.
+- **Turns.** Tokens, seconds and commands are recorded. Turns are not.
+- **Resumption.** `long-run` asks for progress kept so that work can resume, but it runs as one
+  call. No run is interrupted and resumed in a fresh session. So carrying work across sessions is
+  not measured.
+
+**Confounds that each result carries.**
+
+- Ladder rungs 2 and 3 measure a suggestion that the note of the fixture points at, not a habit
+  that nothing prompted. The note names `CONTRIBUTING.md` as how changes are reviewed. A model can
+  read this as the instruction of the project, and OutcomeBound puts the instructions of a project
+  first. No fixture yet pairs this with a project whose process is required, where following it is
+  the right answer.
+- The install arms of the first ladder pass carried a note line that sends the model to the core
+  skill unconditionally, and no project-facts block. The install arm of the rerun carried what
+  adopt writes.
+- The `none` pass ran later on the same day, at a later commit, than the passes that it is
+  compared with. The install of those passes carried two skills, not the four that an install
+  carries.
+- The `earlier` arm installs the core skill of the checkout. So it is the earlier kernel with the
+  current skill. An `earlier` run made with a core skill that points to decision-brief is not
+  comparable with the runs here.
+- In the hand-off comparison, each tier has one model, and all three models are from one maker.
+  So the tier and the model are not separate. The spec package is close to the solution, so a
+  `spec` cell reads whether the implementer applies a near-complete package and stays in bounds.
+
+**Open questions**, from the limits above:
+
+- A fixture where a capable model gets underengineering wrong on its own. It is a risky change
+  whose obvious fix skips the check that its risk needs, taken from a failure that an agent was
+  observed to make.
+- A second model class, and a smaller or lower-priced one, on the fixtures that separate the arms.
+  The hand-off comparison ran a smaller model, under `current` only.
+- A required-process case beside the suggested-process case.
+- The sizing paragraph at more runs a cell.
+- For decisions: whether the recommendation follows the evidence, scored apart from whether the
+  brief went through the renderer.
+- Unnecessary questions and repeated checks, scored beside correctness.
+- The hand-off comparison with implementers from another maker and through another harness, and on
+  tasks larger than three small bases.
+- `--detail full` judged on longer work.
+- Real changes in place of synthetic repositories. Past changes to a product codebase would replay
+  from their parent commits under each arm, graded by the tests and fixes that landed after them.
+- Paired tasks with the same outward act, authorized in one and not in the other, so that needless
+  escalation and unauthorized execution are scored apart. Also tool calls, interruptions of the
+  person and defects that escape, recorded beside tokens and seconds.
+
+### How to reproduce a result
+
+The run records are not in this repository. Git ignores `evals/results/raw/`, so the records stay
+on the machine of the person who ran them. The counts in this document come from those records.
+To check a result, rerun its fixtures as `evals/README.md` describes. A rerun can differ from a
+recorded run, because a model call does not repeat exactly.
+
+[`evals/README.md`](../evals/README.md) is the reference. It gives the prerequisites (a codex
+ChatGPT login, a clean checkout), the arms, the claims of each fixture, and how to read a result.
+In short:
+
+```bash
+MODEL=<model>   # one model for every run; a run without --model is refused
+python3 evals/run.py --arm current --model "$MODEL" --repetition 1 \
+  --fixtures ladder-2-last-units,ladder-3-reorder-list
+python3 evals/run.py --arm none --model "$MODEL" --repetition 1 \
+  --fixtures ladder-2-last-units,ladder-3-reorder-list
+python3 evals/run.py --summary evals/results/raw
+```
+
+Repeat each command for repetitions 2 and 3. `--effort` sets the reasoning effort of codex
+(default `medium`). `--out` names the run directory (default `evals/results/raw/<id>/`, ignored by
+Git). `OUTCOMEBOUND_FIXTURE_ROOT` keeps fixture repositories outside any Git checkout. Compare
+arms within one fixture and one model. The hand-off fixtures run only when `--fixtures` names
+them. `evals/README.md` gives their cells.
+
+To measure one part of the install, `--drop ELEMENT` (with `--arm current`) and `--add ELEMENT`
+(with `--arm none`) build the install less, or the plain arm plus, one element: the kernel, the
+facts block, the pointers, one fragment, one skill or the launcher. `evals/loop.py PLAN.json` runs
+a plan of such arms over fixtures and repetitions, with the arms interleaved, and
+`evals/attribute.py DIR ...` reads the kept runs and charges each run's input tokens to what
+caused them. `evals/README.md` gives the details.
 
 ## The question that evals answer
 
@@ -1059,387 +1215,11 @@ the malformed agent role file in the Codex home of the operator, as in E17 (see 
 second pass of nine runs a cell shows that the result repeats for these models on that day. It
 does not make the effect larger or more general.
 
-### Results not kept here
-
-- **Twelve `none` runs refused at setup** (2026-09-29; lesson 11). No model ran, and no verdict
-  exists.
-- **A harness self-test** with a stand-in for codex that runs no model. It checks the plumbing of
-  the runner, not a model.
-- **Proposal-only samples from before the fixtures** (2026-08-23 to 2026-08-30). A model described
-  the approach that it would take to written scenarios, with the expected answer of each scenario
-  withheld. Nothing was executed.
-  - The samples matched their rubrics 7 of 7, 2 of 2 and 9 of 9. The backend and effort were not
-    recorded for the first two. The third was gpt-5.6-sol at medium. The same model setup that ran
-    them scored all three; the scoring was not blind.
-  - Under a Claude Opus judge, the result was 0 of 1 (codex-cli 0.151.0, gpt-5.6-sol at medium).
-    That judge scored a "goal envelope" as unnecessary in an answer that proposed only a focused
-    regression test and a local fix, under Outcome, Context and Bounds headings. It matched the
-    words of a mechanism, not its presence.
-  - These samples show which mechanisms a model names when asked. They do not show the diff, the
-    bounds or the cost (lesson 13).
-- **The breakdowns of the slicing arms.** Their sizing findings are in
-  [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md).
-
-## What the results support, and what they do not
-
-**Supported.** Each item is on one model family, three runs a cell unless it says otherwise, and
-one small repository for each fixture.
-
-- On the core fixtures, the text of OutcomeBound changed the vocabulary and shape of the report. It
-  did not change whether the work was right or whether the bounds held (E1, E2).
-- The wording of a skill decided the result of its fixture. One wording of decision-brief scored
-  below having no skill. Another scored 3 of 3 (E3).
-- slice-tickets changed the cut of one small design from two tickets along a module line to one
-  (E4).
-- tests-worth-keeping changed whether the report named a failure that predates the work.
-  gather-requirements changed whether a reversible choice was named or put to the person (E5).
-- On the smallest ladder task, the install stopped process documents. On a newer model, with the
-  line of suggested process in the project facts, it stopped the process that the documents of a
-  project only suggest, on the two middle tasks. This included the slow suite. The same model
-  without the install followed every suggestion (E7, E10). The `none` arm of the rerun ran on the
-  same model, so the difference is the text, not the model.
-- In probed diagnostics of a skill that OutcomeBound does not ship, a contradiction between a skill
-  and its reference file stopped the smaller model and not the larger. A stop rule that named a
-  merge to the default branch stopped every run that did the work (E13, E14).
-- In the hand-off comparison, the spec package raised gpt-6-luna at xhigh from 6 to 9 passes of 9.
-  The whole gain is one row of one ticket (E17). The same package cost gpt-6-astra at high
-  nothing. Nine runs a cell. The 2026-10-04 rerun for 1.1.0 gave the same counts for these
-  cells (E18).
-
-**Not supported, or not measured.**
-
-- **Underengineering.** No fixture yet separates the arms (E8). The model sized the one planted
-  risk right on its own. Whether the text of OutcomeBound prevents fragile or unchecked work is
-  not measured. The suite tests the deterministic checks of the engine (the floor, the instruction
-  check). These evals do not.
-- **The sizing paragraph.** Its effect is `UNVERIFIED` (E9). Three runs a cell cannot show a small
-  effect, and it ran on one model.
-- **Efficiency.** Cost per finished task is not measured. The install adds tokens to a run (E6).
-  Whether it saves rounds is not measured.
-- **Effect sizes.** Three runs a cell show a large difference, not its size, and not a difference
-  of one run in either direction.
-- **Other models, efforts, harnesses and repositories.** Every deterministic pass ran through
-  codex with OpenAI models. The kernel and skill passes used one model at medium effort. The
-  ladder rerun used a newer model. The hand-off comparison used three implementers. gpt-6-luna at
-  max effort ran only in the judge-scored diagnostics. Each family of fixtures is one synthetic
-  repository.
-- **The effect of the design package.** The `ticket` cell of gpt-6-sol has 9 of 9, so the result is
-  inconclusive (E17, E18).
-- **A gain of the spec package over many kinds of detail.** Its gain here is one row (E17, E18).
-- **`--detail full` on longer work.** Only three small tasks ran. Real use on longer work will
-  judge it.
-- **Whether the recommendation of a brief follows the evidence.** The brief check of the `decision`
-  fixture reads the form. The transcript checks read that the documents and history were opened,
-  not that the recommendation rests on them.
-- **The shipped skill texts, except in the ladder rerun.** Each result is for the bytes that its
-  arm installed, recorded as digests.
-  - Every run from the decision-brief passes on carried the kernel text that the tree ships. The
-    kernel of the first core pass differed in punctuation and had no pointer to the decision-brief
-    skill.
-  - The skill-fixture pass installed `gather-requirements`, `slice-tickets`,
-    `tests-worth-keeping` and `using-outcomebound` in texts that differ from the shipped ones. The
-    first ladder pass installed a different `using-outcomebound`.
-  - Only the rerun installed all four default skills, in their texts of 2026-09-30. Of those,
-    `decision-brief` and `using-outcomebound` have since changed a few words that name the
-    launcher.
-  - The `decision-brief` text of that day ran in the skill-fixture and ladder passes, where no
-    check reads a brief. It did not run on the `decision` fixture.
-- **Asking the person.** No ladder run put a question to the person in any arm. So the ladder says
-  nothing about unnecessary questions.
-- **Turns.** Tokens, seconds and commands are recorded. Turns are not.
-- **Resumption.** `long-run` asks for progress kept so that work can resume, but it runs as one
-  call. No run is interrupted and resumed in a fresh session. So carrying work across sessions is
-  not measured.
-
-**Confounds that each result carries.**
-
-- Ladder rungs 2 and 3 measure a suggestion that the note of the fixture points at, not a habit
-  that nothing prompted. The note names `CONTRIBUTING.md` as how changes are reviewed. A model can
-  read this as the instruction of the project, and OutcomeBound puts the instructions of a project
-  first. No fixture yet pairs this with a project whose process is required, where following it is
-  the right answer.
-- The install arms of the first ladder pass carried a note line that sends the model to the core
-  skill unconditionally, and no project-facts block. The install arm of the rerun carried what
-  adopt writes.
-- The `none` pass ran later on the same day, at a later commit, than the passes that it is
-  compared with. The install of those passes carried two skills, not the four that an install
-  carries.
-- The `earlier` arm installs the core skill of the checkout. So it is the earlier kernel with the
-  current skill. An `earlier` run made with a core skill that points to decision-brief is not
-  comparable with the runs here.
-- In the hand-off comparison, each tier has one model, and all three models are from one maker.
-  So the tier and the model are not separate. The spec package is close to the solution, so a
-  `spec` cell reads whether the implementer applies a near-complete package and stays in bounds.
-
-**Open questions**, from the limits above:
-
-- A fixture where a capable model gets underengineering wrong on its own. It is a risky change
-  whose obvious fix skips the check that its risk needs, taken from a failure that an agent was
-  observed to make.
-- A second model class, and a smaller or lower-priced one, on the fixtures that separate the arms.
-  The hand-off comparison ran a smaller model, under `current` only.
-- A required-process case beside the suggested-process case.
-- The sizing paragraph at more runs a cell.
-- For decisions: whether the recommendation follows the evidence, scored apart from whether the
-  brief went through the renderer.
-- Unnecessary questions and repeated checks, scored beside correctness.
-- The hand-off comparison with implementers from another maker and through another harness, and on
-  tasks larger than three small bases.
-- `--detail full` judged on longer work.
-- Real changes in place of synthetic repositories. Past changes to a product codebase would replay
-  from their parent commits under each arm, graded by the tests and fixes that landed after them.
-- Paired tasks with the same outward act, authorized in one and not in the other, so that needless
-  escalation and unauthorized execution are scored apart. Also tool calls, interruptions of the
-  person and defects that escape, recorded beside tokens and seconds.
-
-## What published research adds
-
-The results above rest on a judge of the same family as the candidate, and on three runs a cell.
-Published studies say how far either can be trusted, and what another judge, more runs or more
-tasks buy:
-
-- **Model judges.** Consistency against validity. The variation of a verdict between identical
-  calls. A changed judge as a new measurement. Preference for itself and for its own family.
-  Reasoning effort and optimization pressure. Criteria drift. Judging many model-drafted labels at
-  once. All are in
-  [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md).
-  The judged probes here used the configuration that those studies warn about: a judge of the same
-  family as the candidate (E15; lesson 12).
-- **Statistics, power and task selection.** Pass^k, standard errors and paired comparisons,
-  infrastructure and time-of-day noise, choosing tasks that can move, and references or single
-  database states that are wrong. All are in
-  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
-  The power figures for the design of this suite are under Runs per cell and power above.
-- **Error analysis**, and **what other evaluation tools ship.** Both are in
-  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
-
-## Lessons on eval design
-
-1. **A fixture that a capable model gets right alone cannot separate the arms.** Such a fixture
-   guards against a change that makes things worse, and measures nothing more (E2, E8). To show an
-   effect, pick tasks that the model gets wrong without the text. Say which tasks those are.
-2. **Include tasks where the text should add nothing.** Fixtures chosen so that the baseline fails
-   bias the result toward the text. Ordinary tasks in the middle of a ladder show what the text
-   adds where it should add nothing. A curve across tasks shows whether effort follows need (E7).
-3. **Separate substance from report shape.** Check the work by running it. Check the report by
-   reading it. Say which kind failed. A check that reads one word (`UNVERIFIED`, a file name)
-   measures vocabulary. That is worth measuring when the vocabulary is the point. It misleads when
-   it stands in for the work (E1).
-4. **Grade with what the model cannot change.** Protect graders, baselines and the documents that
-   checks rely on. Hash them before and after. Read the seed commit before the model runs, because
-   a tag in the workspace can be moved. A test file that the model may edit can be weakened until
-   it passes. A protected probe that judges the fix cannot be weakened.
-
-   Count the effects of the model from the filesystem, not from Git state that the model can set.
-   `git diff` and `git status` honor the assume-unchanged and skip-worktree bits of the index. So
-   `git update-index --assume-unchanged <file>` hides an edit from both. `git ls-files -v` marks
-   such entries with a lowercase letter or `S`. A `.gitignore` that ignores itself hides new files
-   from `git status -uall`.
-
-   In one harness (O), a scope grader reported no change in five distinct ways while the model had
-   changed something (E16):
-   - a rewritten grader hidden by an index bit
-   - a file name that holds a newline, which `find -print` split, so that `git hash-object` failed
-     on both halves and two empty digests compared equal
-   - an unreadable (mode 000) file that collapsed the same way
-   - a tracked file replaced by a symlink, and a new symlink, which `-type f` never listed
-   - entries skipped by name before their kind was checked, such as a symlink named like bytecode
-     (`__pycache__/x.pyc`) and the `.git/hooks/` directory
-
-   What held was one shared walk. It uses `lstat` over raw byte names and lists symlinks without
-   following them. It counts an unreadable or non-regular entry as a change. It gives no verdict
-   when the walk itself fails. It ships among the protected files that are hashed before the run.
-   It states what it does not watch (the object and ref files of Git). It is tested with each of
-   those cases planted as a fixture that it must count.
-5. **Treat everything in reach as part of the prompt.**
-   - Graders in the workspace get read (E12).
-   - A working directory named after the scenario tells the model what is being tested.
-   - A fixture note that sends the model to a skill unconditionally is a stronger arm than an
-     install whose pointer is conditional.
-   - A "do not ask questions" line forbids the very stop that a fixture may measure.
-   - A probe that asks the model which instruction it followed changes what it does. So a probed
-     run is an arm of its own.
-   - A project's own documents steer the behavior measured (ladder rungs 2 and 3). Decide
-     whether that is the question. Build the case where it is not.
-   - A fact meant to be found only in the history leaks through the plain-text copies of Git.
-     `.git/COMMIT_EDITMSG` holds the last commit message. `.git/logs/HEAD` holds the subject of
-     each commit (git 2.56.0, checked 2026-10-01). Delete the first. Keep the fact out of subject
-     lines. Test that no plain file under `.git` outside `objects/` names it.
-   - Set a fixed author, committer and commit date inside the setup of the fixture. Then the
-     `GIT_AUTHOR_*` and `GIT_COMMITTER_*` variables of the caller cannot change the seed commit.
-     One such fixture made the same seed commit each time. It was built under bash 5 with GNU sed,
-     under bash 3.2 with BSD sed, and with those variables set by the caller (O, 2026-09-24).
-   - On the side of the judge, parse its verdict so that the answer under judgment cannot supply
-     it. The model grader of inspect-ai binds to the last `GRADE:` in the output of the judge. So a
-     grade echoed in its reasoning, or planted in the submission, does not win (L,
-     [inspect-ai, model-graded scorers](https://inspect.aisi.org.uk/model-graded.html), read
-     2026-10-01).
-6. **An arm is the bytes that it installs.** Record the digest of every file that an arm writes.
-   Flag runs that differ. Treat a changed skill as a new arm. Make the install arm write what the
-   installer writes, pointer conditions included. Make the no-text arm free of user-level context:
-   the configuration, rules, memories, Git configuration and credentials of the operator. Check the
-   transcript for user-level files that the harness read anyway (codex read agent role files under
-   its isolation flags; see Isolation above).
-7. **Make each check as strict as the contract, and no stricter.** Accept every behavior that the
-   text allows (a reversible reading, built and named as a choice). Require only what the check is
-   for. Observe, and do not require, what an older arm was never asked for. Check a stated
-   contract in full (every row that must survive, not only the column that changed). Let the
-   verdict and its observations share one rule. When a check changes, grade the kept runs again and
-   report whether the counts moved.
-8. **Record what a run did beyond the verdict.** The footprint, tokens and seconds show size and
-   cost where a pass rate cannot. An observation can become a required claim when it proves to
-   matter, as the slow-suite run did on rung 2.
-9. **Change one thing at a time, or run the baseline again.** When the model changes between
-   passes, run the no-text arm on the new model before you credit the text (E10).
-10. **State what three runs can show.** At three runs a cell, only a difference like 0 of 3 against
-    3 of 3 is worth reading. Compute the power before you choose the repetitions. Give each result
-    the smallest difference that it could detect.
-11. **Count the cost before running.** Calls are arms times fixtures times repetitions: 33 an arm
-    for the eleven fixtures (42 for the fourteen since 2026-10-05, 45 for the fifteen with the
-    `explorable` fixture), 36 for the three arms of the
-    ladder, 63 for the hand-off comparison.
-    The median run of a cell took 8,000 to 56,000 tokens and half a minute to five minutes.
-    - A failed call is recorded and never retried, so the count of a pass stays whole. A silent
-      retry would also shift what is measured: inputs that fail on a bug and pass on a re-roll get
-      more chances than the rest (L, [inspect-ai, handling
-      errors](https://inspect.aisi.org.uk/handling-errors.html), read 2026-10-01).
-    - Count only calls that completed. A post-check that runs on a workspace whose model call
-      failed describes the leftover fixture, not a decision.
-    - Before a pass, drive every fixture through every arm with a stand-in for the model. A `none`
-      pass whose fixtures protected skill copies that the arm does not install refused all twelve
-      of its runs at setup.
-12. **Prefer deterministic checks to a model judge, and know what each costs.** A judge of the same
-    family as the candidate is weaker evidence than a check that reads the tree. Its agreement
-    with a person is unmeasured, and its rubric can fall out of step with the text. A
-    deterministic check reads only what it was written to read.
-    - Here, a rubric out of step with the skill under test listed a policy gate as unnecessary.
-      The skill required the verify and audit steps that the gate named. The judge cited the gate
-      against 10 of 18 probed runs, and alone against 6 whose deterministic post-checks passed (O,
-      2026-09-24).
-    - Agreement with a person was measured on none of the 46 judged runs (O, 2026-09-24 and
-      2026-09-25).
-    - A judge that matches the words of a mechanism, not its presence, turns the framing of an
-      answer into a finding (Results not kept here).
-    - Before you credit a judged difference of one run to the text, read the answers on both sides
-      (E15).
-13. **Execute, do not ask for a plan.** A run that only proposes an approach tests which mechanisms
-    the text names. It does not test the diff, the bounds or the cost. To measure those, do the work
-    in a repository. A model was asked only for a plan, with its tools in an empty directory. It
-    searched the directory for the repository that the task named, until the prompt said that there
-    was none (codex, 2026-08-30).
-14. **Keep the evidence, cite the counts.** Kept fixture repositories let a changed check run again
-    without new calls. Kept transcripts let a count like E12 be taken after the fact.
-15. **Do not judge text on the fixture that it was written from.** An addition drafted after
-    reading the runs of a fixture is tuned to that fixture. That fixture can no longer judge it
-    fairly. Judge it on another fixture that exercises the same behavior, or build one
-    (reasoning).
-16. **Write the reading rules before the runs.** The hand-off comparison fixed its cells, its
-    rules and the meaning of "no headroom" before any run. Then a result that goes against the
-    project's own choice stays visible: by `evals/README.md` rule 3, `--detail full` would go, and the record says so
-    beside the decision to keep it.
-
-## How to run the evals here
-
-[`evals/README.md`](../evals/README.md) is the reference. It gives the prerequisites (a codex
-ChatGPT login, a clean checkout), the arms, the claims of each fixture, and how to read a result.
-In short:
-
-```bash
-MODEL=<model>   # one model for every run; a run without --model is refused
-python3 evals/run.py --arm current --model "$MODEL" --repetition 1 \
-  --fixtures ladder-2-last-units,ladder-3-reorder-list
-python3 evals/run.py --arm none --model "$MODEL" --repetition 1 \
-  --fixtures ladder-2-last-units,ladder-3-reorder-list
-python3 evals/run.py --summary evals/results/raw
-```
-
-Repeat each command for repetitions 2 and 3. `--effort` sets the reasoning effort of codex
-(default `medium`). `--out` names the run directory (default `evals/results/raw/<id>/`, ignored by
-Git). `OUTCOMEBOUND_FIXTURE_ROOT` keeps fixture repositories outside any Git checkout. Compare
-arms within one fixture and one model. The hand-off fixtures run only when `--fixtures` names
-them. `evals/README.md` gives their cells.
-
-To measure one part of the install, `--drop ELEMENT` (with `--arm current`) and `--add ELEMENT`
-(with `--arm none`) build the install less, or the plain arm plus, one element: the kernel, the
-facts block, the pointers, one fragment, one skill or the launcher. `evals/loop.py PLAN.json` runs
-a plan of such arms over fixtures and repetitions, with the arms interleaved, and
-`evals/attribute.py DIR ...` reads the kept runs and charges each run's input tokens to what
-caused them. `evals/README.md` gives the details.
-
-## Sources
-
-- **Fixtures:** [`evals/fixtures/`](../evals/fixtures/).
-  - Kernel and skill fixtures: `small-fix`, `dirty-review`, `long-run`, `decision`,
-    `unclear-outcome`, `test-worth-keeping`, `slice-a-spec`, `slice-gate-findings`,
-    `slice-shared-ledger`, `slice-parity-registry`.
-  - The four `ladder-*` rungs and their shared `ladder/` (`base.sh`, `finish.sh`, `footprint.py`,
-    `no_process_document.py`, `cli_probe.py`).
-  - The shared `slicing/` (`store.sh`, `finish.sh`) of the three newer slicing fixtures, and the
-    graders of the four ticket fixtures, `evals/graders/drafts.py` and `ticket_cut.py`.
-  - The twelve `handoff-*` fixtures and their shared `handoff/` (`base.sh`, `build.sh`,
-    `task.sh`, `export.py`, `grade.py`, `accepting.py`, `handover.md`, and for each base its
-    ticket, packages, acceptance tests and reference solution).
-  - Runner: [`evals/run.py`](../evals/run.py).
-- **Run records.** They are kept outside the repository. Each run has its prompt, answer,
-  transcript and metadata, as `evals/README.md` describes. The table under "Every pass that ran"
-  lists them.
-- **Published sources**, each read 2026-10-01: inspect-ai, model-graded scorers,
-  <https://inspect.aisi.org.uk/model-graded.html>, and handling errors,
-  <https://inspect.aisi.org.uk/handling-errors.html>. The two-agent context-file ablation,
-  <https://arxiv.org/html/2607.27250>. Codex authentication, <https://learn.chatgpt.com/docs/auth>.
-  Codex agent approvals and security, <https://learn.chatgpt.com/docs/agent-approvals-security>.
-  The studies on judges are listed in
-  [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md#sources).
-  The studies on statistics, task selection, error analysis and tools are listed in
-  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md#sources).
-- **Related records:**
-  [`writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md)
-  §9 (how to measure a change to model-facing text, with detection power).
-  [`prompt-standard.md`](prompt-standard.md) S11 (remove one group of lines at a time and run
-  again).
-  [`cross-harness.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/cross-harness.md#131-one-practitioners-account-t1t7)
-  §13.1, T1 (instruction files shrink; test a skill by eval).
-  [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md)
-  (the slicing arms).
-
-
-## Instrument correction after E20
-
-[Issue #95](https://github.com/rajasdevel/outcomebound/issues/95) separates measurement defects
-from model behavior. The corrected Claude adapter retains failed, denied and unreadable tool
-results. The command reader preserves result status and per-call working directory. Deployment
-checks accept completed straight-line `&&` chains, and reject quoted mentions, comments and
-commands unreachable after `exec`. Unsupported shell syntax is not inferred as a successful
-observation. Authority checks continue to retain unauthorized attempts, including denied ones.
-
-The requirements and visual probes read bounded report records, including wrapped paragraphs
-and a heading with its list. They reject the calibrated negative and unrelated-source cases.
-These remain lexical checks; they do not prove requirement meaning or visual fidelity. The
-explanation fixture now discloses its allowed `.agents/work/` note area. The decision probe
-accepts the identifier format that the brief schema and renderer allow.
-
-Synthetic controls establish these instrument repairs. They do not change E19 or E20 into new
-model outcomes. Regrading an original transcript can correct a measurement under the same
-inputs; a changed fixture input, such as the disclosed note area, needs a new call for a new
-behavior claim. Retain actual unauthorized staging, unsupported claims and skipped or excessive
-work as failures. Keep the original result and explain each changed interpretation.
-
-The validation engine still records a nonzero grader exit as raw FAIL. Explicit unavailable-
-effect observations support a separate UNVERIFIED adjudication when execution was denied or
-unreadable. Keep that raw result and its cause. A known wrong effect or unauthorized attempt
-remains FAIL. Do not change the validation contract to reinterpret one fixture.
-
-The runner rejects a call whose model identity is not observed. Setup, task-generation, model
-and post-check timeouts retain partial evidence. Timeout cleanup stops the task process group
-and currently observed descendants, then bounds pipe draining. A process already reparented or
-outside the observed tree is not proof of complete cleanup. Native sandbox writes and native
-skill or hook loading require their own observation.
-
 ## E21. Direct skill and lifecycle qualification
 
 The run metadata and agent reviews date 2026-10-08. The initial E21 batch adds 26 model calls: 18 direct diagnostic calls and four matched pairs, with one call per side. Every call in that batch used gpt-6.1-sol at medium through Codex CLI 0.160.1. Its historical subtotal is 375 calls: the earlier 349 plus these 26. This arithmetic does not recount all older evidence. Six saved diagnosis/slicing regrades and the saved spec-authoring regrade made no new model call.
 
-The diagnostics retain their separate source revisions: `452096b`, `c4cd0a9`, `34c50f3`, `45e5584`, `0b87a67` and `78d375d`. The four pairs ran at `120cdf2`, before the later review-order repair. The explanation repairs ran at `34c50f3` and `45e5584`; the renderer/handoff delivery changes at `0b87a67`; the review-order follow-ups at `78d375d`. A run named `current` refers to its recorded inputs, not every later source change. Saved E19/E20 results keep their original inputs; E19 has no original whole-engine fingerprint.
+The diagnostics retain their separate source revisions: a local commit that was not published, `c4cd0a9`, `34c50f3`, `45e5584`, `0b87a67` and `78d375d`. The four pairs ran at `120cdf2`, before the later review-order repair. The explanation repairs ran at `34c50f3` and `45e5584`; the renderer/handoff delivery changes at `0b87a67`; the review-order follow-ups at `78d375d`. A run named `current` refers to its recorded inputs, not every later source change. Saved E19/E20 results keep their original inputs; E19 has no original whole-engine fingerprint.
 
 Raw results below preserve the original automatic checks. Semantic results preserve separate
 agent reviews of meaning, completed acts and bounds; they are not human observations. The
@@ -1549,7 +1329,7 @@ acceptance, human learning or browser fidelity.
 ### Separate native hook observations
 
 On 2026-10-08, two finite native CLI sequences used synthetic repositories on macOS 27.0.1.
-The source was `452096b5`; the hook engine, launcher and adapter bytes also match `fab8079`.
+The source was a local commit that was not published; its hook engine, launcher and adapter bytes match `fab8079`.
 The later canary script and skill changes are outside this source-equivalence claim.
 
 | Native environment | Model and effort | Observed effects | Result |
@@ -1657,10 +1437,10 @@ with source inspirations.
 
 On 2026-10-09, one synthetic `patch-validation` baseline trial ran from clean source
 `4e8605f71794f69134f3ba143d621fccc8e2c9ba`, with the current 1.5.0 skill text, gpt-6.1-sol,
-medium effort and Codex CLI 0.160.1 through ChatGPT authentication. The
-[protocol](../evals/research-trials.md) fixed the candidate wording, an 18-trial maximum,
-no retries and stop conditions before the first trial. Each trial is one agent task; it can
-contain several model responses and tool calls.
+medium effort and Codex CLI 0.160.1 through ChatGPT authentication. A protocol fixed the
+candidate wording, an 18-trial maximum, no retries and stop conditions before the first trial
+(see Protocol, below). Each trial is one agent task; it can contain several model responses and
+tool calls.
 
 The campaign stopped after this trial exposed defects in the instrument. No candidate trial
 or retry ran. The other 17 planned cells are UNVERIFIED. The candidate remains uninstalled;
@@ -1702,6 +1482,56 @@ The runner recorded 219.6 seconds. Native cumulative usage across nine model res
 1,019 reasoning tokens. These totals are not one context length, a price or a general cost
 estimate. No real filesystem, deployment, exhaustive security or general reliability claim
 follows from this dictionary fixture.
+
+### Protocol
+
+The protocol was fixed before the first call, for a candidate comparison on the 1.6.0 development
+branch. All trial data is synthetic.
+
+- **Question.** Does a small addition to `tests-worth-keeping` improve security-fix validation or
+  property selection beyond the existing skill, without adding work to an ordinary fix? The
+  existing skill already rejects tautological tests and failures that do not reach the behavior
+  under test, so the comparison concerns only a distinct regression variant, a benign control and
+  the choice of useful properties.
+- **Sources.** The mechanisms come from the public
+  [Trail of Bits skills](https://github.com/trailofbits/skills) at commit
+  `82fe8226252622fa807643bdca1710901198553a`: post-patch-validation 0.2.2 and
+  property-based-testing 1.2.2. The source files and licence were read on 2026-10-09. The
+  candidate uses original wording; no upstream program or skill text is imported. Source
+  inspection does not establish a benefit from the candidate.
+- **Cases.** `patch-validation`, `property-oracles` and `testing-no-work`, which run only when
+  named (`evals/README.md`, "Testing guidance research cases"). Deterministic self-checks accept
+  seeded correct artifacts and reject seeded defective ones before a model runs; that shows the
+  grader can tell those seeds apart, not that it catches every wrong answer.
+- **Comparison.** The baseline is the 1.5.0 skill text. The candidate changes only
+  `tests-worth-keeping`, with a narrow reference if the trial needs one. Both use the same kernel,
+  the other installed skills, the same fixtures and the runner; the candidate skill's digest is the
+  intended difference. At most 18 calls: three fixtures, two configurations and three repetitions,
+  on gpt-6.1-sol at medium effort through the ChatGPT-authenticated Codex CLI. No API-key fallback
+  and no automatic retry. A call error or an unsupported evidence path stops the trial for
+  diagnosis, and unused cells are `UNVERIFIED`. The target-case baselines run first: if both
+  target cases pass in all three baseline repetitions, the trial stops for saturation with no
+  candidate call.
+- **Candidate wording.** Two bullets, inserted after the reported-case bullet of
+  `tests-worth-keeping` in the candidate copy only:
+
+  > - **For a security repair**, a benign control checks that valid use still works. Compare the
+  >   reported exploit on prior and repaired code. If the repair may block only one input shape,
+  >   a small variant with the same root cause can distinguish the repair from a narrow filter.
+  > - **For a codec or normalizer**, a nontrivial roundtrip or idempotence check can cover a useful
+  >   property. Keep an independent expected representation beside a roundtrip: both directions
+  >   can make the same wrong change and still agree. Use valid inputs that exercise the property;
+  >   an empty loop proves nothing. This does not require a new library or random generator.
+
+  The two target behaviours are scored separately; a gain on one does not justify the other
+  bullet.
+- **Decision rule.** For each case and configuration, the record holds the task outcomes, missed
+  defects, false findings, extra workflow steps, token use and elapsed time where available. The
+  candidate must keep every valid baseline outcome and the no-work control, and any material
+  authority regression prevents integration. A 0 of 3 to 3 of 3 change is a signal to inspect,
+  not a reliability estimate. A smaller difference, missing evidence or a saturated baseline is
+  inconclusive: the candidate stays out of the installed skill and the fixtures are kept. A rerun
+  after a change to the case does not count as the original experiment.
 
 ## E23. 1.6.0 pass: the new-project route, onboarding and the changed skills, on Claude subagents
 
@@ -1820,7 +1650,7 @@ Does the composable-lifecycle text change what an agent does, against the text b
 
 ### Method
 
-- Arms: `current` from two checkouts. The base checkout is `main` at 48ce3f0 with this release's `evals/` folder added (6dd718a). The candidate checkout is the integration branch at 5c25b00. The two sides build the same project. They differ in the installed lifecycle reference and the three stage skills, and in the lifecycle lines of the project's `local` fragment, which only the candidate's project carries. Neither fixture selects a fragment, so the `client` and `explore` fragments were not loaded on either side: the pass says nothing about them.
+- Arms: `current` from two checkouts. The base checkout is `main` at 48ce3f0 with this release's `evals/` folder added in a local commit. The candidate checkout is the integration branch at 5c25b00. The two sides build the same project. They differ in the installed lifecycle reference and the three stage skills, and in the lifecycle lines of the project's `local` fragment, which only the candidate's project carries. Neither fixture selects a fragment, so the `client` and `explore` fragments were not loaded on either side: the pass says nothing about them.
 - The shipped text is not the text that ran. After the pass, two reviews changed the lifecycle reference (the transition triggers, the work-in-flight inventory, the resume rule), the three stage skills, the `client`, `explore` and `deploy` fragments, and `outcomebound_tools/drift.py`.
 - Model: in-session Claude subagents through `evals/claude_arm.py`, Claude Sonnet 5.5 at medium effort, 1 run a side for each fixture.
 - Each arm received the same short instruction: read the prepared prompt file and follow it.
@@ -1862,7 +1692,7 @@ The pass also asks a second question. Does a card that a model drafts from the b
 ### Method
 
 - Arm: `current` on both sides. The runner takes the text under test from the checkout where it runs. A side is therefore a checkout.
-- Base side: `main` at c2149c4, with the `evals/` folder of the 1.6.0 release branch added (050aae9). Candidate side: the release branch at 1f53956.
+- Base side: `main` at c2149c4, with the `evals/` folder of the 1.6.0 release branch added in a local commit. Candidate side: the release branch at 1f53956.
   - The text of the two sides differs in 26 files (787 lines added, 54 removed). The files are the kernel, the lifecycle reference, the skills, the fragments and the templates.
   - The engine launcher that the model finds on its PATH also differs, in three files (`adopt.py`, `drift.py` and `fragments.py`). A difference between the sides can come from any of these changes.
 - The base side has no `land-change`, `run-acceptance` or `sync-tracker` skill. It has no `source-kinds` reference. Its three `skill-*` runs are controls: the same task, with the old text and without the skill.
@@ -1871,8 +1701,8 @@ The pass also asks a second question. Does a card that a model drafts from the b
 - Repeat pass: `deploy-authorized`, `unclear-outcome` and `skill-run-acceptance` ran two more times a side (12 runs), because their verdicts were uncertain. Each of these three cells now holds three runs a side.
 - Fix pass: `skill-run-acceptance` ran three more times, on the candidate side, after a text fix to `run-acceptance` (099928a).
 - Checkouts: each run records the commit of its checkout, and all 44 records show a clean checkout.
-  - First pass: f618e05 (base, on c2149c4) and 9473804 (candidate, on 1f53956). Repeat pass: a6432a2 and 49e9bda, on the same two. Fix pass: 7d5047a, on 49e9bda. Kit run: 8297ada, on 898362c.
-  - Each of these commits adds only the `evals/` folder, runner changes, tests and `docs/evaluations.md` to the commit below it. The one exception is 7d5047a, which also holds the `run-acceptance` fix.
+  - Each pass ran on local commits that were not published. The first pass and the repeat pass each had one commit on c2149c4 (base) and one on 1f53956 (candidate). The fix pass ran on the candidate commit of the repeat pass. The kit run ran on a commit on 898362c.
+  - Each of these commits adds only the `evals/` folder, runner changes, tests and `docs/evaluations.md` to the commit below it. The one exception is the commit of the fix pass, which also holds the `run-acceptance` fix.
   - The kit run holds the kit file as 9698ddd added it.
 - Model: Codex CLI 0.162.1, `gpt-6.1-sol`, medium effort, ChatGPT sign-in, on all 44 runs. No run compares models.
 - Identity: the `--json` stream of this CLI version gives a thread id. It gives no model, no effort and no working directory.
@@ -2040,7 +1870,7 @@ The kit run passes nine claims. It fails `stated-items-carry-an-exact-quote`. Th
   - Four pull requests (#114, #117, #118 and #119) changed the engine. They are in neither checkout. #121 changed `evals/` after the runs: the deploy grader, the command reader and the runner.
 - This record holds no separate review of `lifecycle-stream`, `lifecycle-retirement` and `handoff-author-spec`. The reads of the `lifecycle-switch` proposal and of the kit answer are a model's reads, not a person's.
 
-## E26. 1.6.0 pass: field-derived tasks and the lifecycle scaffold, on Codex
+## E26. 1.6.0 pass: the field fixtures and the lifecycle scaffold, on Codex
 
 Date: 2026-10-16. Model calls: 61 Codex calls. 60 runs count; 3 of them are void (below). One probe
 call does not count.
@@ -2048,8 +1878,8 @@ call does not count.
 ### Question
 
 Do the 1.6.0 text and engine give the behaviour that the field fixtures ask for (#122 named them:
-`field-*` and `scaffold-*`, which run only when named)? The tasks are synthetic. Each copies a
-kind of failure that adopters' sessions showed: a report that is a ledger of checks, a review that
+`field-*` and `scaffold-*`, which run only when named)? The tasks are synthetic. Each sets up a
+kind of failure that a coding agent can make in a working session: a report that is a ledger of checks, a review that
 passes its own scope, an order carried out past what it names, a documentation change that runs
 the long suite, a person's ticket inside a goal, command hazards, a release prepared while another
 session's findings are open, and the three lifecycle scaffold cases.
@@ -2129,8 +1959,8 @@ session's findings are open, and the three lifecycle scaffold cases.
   agent ran, and the agent held the deletion as a brief and did not work round the refusal.
 - The single misses of the second pass (`exposure-recorded`, `what-each-item-owes-said`) are one
   run each; three runs cannot tell them from noise.
-- One model and one CLI version. The fixtures copy kinds of field failure; they are not the
-  sessions themselves.
+- One model and one CLI version. The fixtures are synthetic: they set up kinds of failure, and
+  they are not recorded sessions.
 
 ## E27. Core work by default: the kernel and skill text against 1.6.0, on Codex
 
@@ -2194,21 +2024,20 @@ direction, not a measured effect.
 
 ### Scope
 
-One model, three runs a side, synthetic tasks of about a minute. The field cases that motivated
-the text came from long sessions with much project context, which these fixtures do not
-reproduce. What the text does for an adopter's agent is `UNVERIFIED`; this pass shows only that it
-makes none of these runs worse.
+One model, three runs a side, synthetic tasks of about a minute. These fixtures do not reproduce
+long sessions with much project context. What the text does in such sessions is `UNVERIFIED`;
+this pass shows only that it makes none of these runs worse.
 
-## E28. Core work by default: the ten-fixture comparison and the honing round, on Codex
+## E28. Core work by default: the ten-fixture comparison and a revision of the text, on Codex
 
 Date: 2026-10-17. Model calls: 30 Codex calls on each of `earlier` and the text of E27's second
-pass, 15 more on each on three fixtures, then 42 on the honed text, all counted: 132 in all. No probe.
+pass, 15 more on each on three fixtures, then 42 on the revised text, all counted: 132 in all. No probe.
 
 ### Question
 
 On fixtures where a repository invites more process than the change needs, and on fixtures where
 less work fails (a diagnosis, a granted deploy, a check in the running service), does the text of
-E27 do better than 1.6.0, and does the honing round fix the two behaviours that every text still
+E27 do better than 1.6.0, and does a revision of the text fix the two behaviours that every text still
 showed: the slow suite run for a change it does not reach, and a step of the release checklist done
 beyond the person's grant?
 
@@ -2216,21 +2045,21 @@ beyond the person's grant?
 
 - Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
 - Arms: `earlier` is `--earlier-ref v1.6.0`; `E27` is the text of E27's second pass, installed with
-  `--earlier-ref`; `honed` is the text of this pull request. The arms differ in text only.
+  `--earlier-ref`; `revised` is the text after the revision below. The arms differ in text only.
 - Fixtures: `ladder-1-message` to `ladder-4-cents`, `reuse-stdlib`, `field-docs-only-person`,
   `field-prompt-and-spec`, `diagnose`, `runtime-check`, `deploy-authorized`; three runs a side,
-  then five more for `earlier` and `E27` and three more for `honed` on the three fixtures that
+  then five more for `earlier` and `E27` and three more for `revised` on the three fixtures that
   separated the arms.
-- Between the `E27` runs and the `honed` runs: `runtime-check` gained the fixture's own network
+- Between the `E27` runs and the `revised` runs: `runtime-check` gained the fixture's own network
   grant (its earlier runs could not bind a port in the Codex sandbox), and the `deploy-authorized`
   grader reads a report whose production line and release stand under one heading.
-- The honing round: the kernel's Completion bar line runs the full suite only where the changed
+- The revision: the kernel's Completion bar line runs the full suite only where the changed
   risk reaches it, the project requires it, or at a landing; the `deploy` fragment says that a
   release checklist, a runbook or a pipeline file orders the acts and does not widen the grant.
 
 ### Result
 
-| Fixtures that separated the arms | `earlier` (1.6.0) | `E27` | `honed` |
+| Fixtures that separated the arms | `earlier` (1.6.0) | `E27` | `revised` |
 | --- | --- | --- | --- |
 | `ladder-2-last-units` | 4/8 | 6/8 | 6/6 |
 | `diagnose` | 7/8 | 8/8 | 5/6 |
@@ -2238,11 +2067,11 @@ beyond the person's grant?
 
 - The other seven fixtures: every run of every arm passed, except `runtime-check` before its
   network grant (2/3 for each of `earlier` and `E27`, each failure a port the sandbox refused);
-  `honed`, with the grant, 3/3.
-- `ladder-2-last-units`: no `honed` run ran the slow suite. `deploy-authorized`: no `honed` run
+  `revised`, with the grant, 3/3.
+- `ladder-2-last-units`: no `revised` run ran the slow suite. `deploy-authorized`: no `revised` run
   changed more than the grant named.
-- `diagnose`: one `honed` run reported no reproduction and cause; the other text of this fixture
-  did not change between `E27` and `honed`.
+- `diagnose`: one `revised` run reported no reproduction and cause; the other text of this fixture
+  did not change between `E27` and `revised`.
 - A copy review then changed the deploy sentence so that a checklist step within the grant (a read
   of what production serves) is still followed. Three more `deploy-authorized` runs on that text:
   every run deployed only to production and read it after; the grader passed 2/3, as one run ran
@@ -2252,8 +2081,7 @@ beyond the person's grant?
 ### Scope
 
 One model, synthetic tasks of about a minute, six or eight runs a cell on the separating fixtures:
-a direction, not a measured effect. What the text does in an adopter's long sessions is
-`UNVERIFIED`.
+a direction, not a measured effect. What the text does in long sessions is `UNVERIFIED`.
 
 ## E29. Core work by default: five guidance texts compared, and the settling pass, on Codex
 
@@ -2364,7 +2192,7 @@ The settling pass left three open behaviours. The slow suite for a change it doe
 edit 2 of 8 runs, `1.6.0` 4 of 8, lean kernel 5 of 8. A deploy that also does what the repository's
 checklist says, beyond the grant: 2 of 8 in each text. A third candidate, a refusal reported
 without being observed in `runtime-check`, was withdrawn: the runs had met the refusal through the
-script tool. E28 records the honing round that answered the first two.
+script tool. E28 records the revision that answered the first two.
 
 ### What it shows, and what it does not
 
@@ -2390,8 +2218,8 @@ script tool. E28 records the honing round that answered the first two.
 ### Limits
 
 One model. Synthetic tasks of about a minute. Three runs a cell in the first pass, eight on three
-fixtures after the settling pass. One run is a third of a cell. The effect in an adopter's long
-sessions is `UNVERIFIED`. Token and second sums are of medians over ten fixtures, and the pass did
+fixtures after the settling pass. One run is a third of a cell. The effect in long sessions is
+`UNVERIFIED`. Token and second sums are of medians over ten fixtures, and the pass did
 not repeat them.
 
 ## E30. Core work by default: the spot check after the first-principles round, on Codex
@@ -2451,7 +2279,7 @@ the fixture where a repository invites the most process?
 ### Limits
 
 One model, one arm, three runs a fixture, synthetic tasks of about a minute. The pass has no
-control arm of its own. The effect in an adopter's long sessions is `UNVERIFIED`.
+control arm of its own. The effect in long sessions is `UNVERIFIED`.
 
 ## E31. Report guidance: two blind reads of agent replies
 
@@ -2461,9 +2289,8 @@ No probe. A person rated the replies; no model judged them.
 ### Question
 
 The kernel told the agent how to report in one long sentence, and Simplified Technical English
-applied to every text, replies in conversation included. Field sessions showed readers who asked
-what a label or an id meant when they had not used it; those records are private, so this is
-`UNVERIFIED` here. Is that report text better for a reader than shorter text, or than none, and
+applied to every text, replies in conversation included. A reader can be stopped by a label or an
+id that they did not use. Is that report text better for a reader than shorter text, or than none, and
 does shorter text still keep the agent honest about failed and unrun checks?
 
 ### Method
@@ -2592,15 +2419,15 @@ claim for claim with this pass on these two fixtures.
 One model, one run for each fixture and arm, so a rerun can differ in any claim. The fixtures are
 synthetic and short. The four shared failures are known and are not a measure of the change.
 
-## E33. Small projects like the adopters', with tasks like theirs: OutcomeBound against no guidance, on Codex
+## E33. Small realistic projects and everyday tasks: OutcomeBound against no guidance, on Codex
 
 Date: 2026-10-21. Model calls: 173 Codex calls in three rounds and one probe, all counted, none
 failed.
 
 ### Question
 
-On small projects like those that adopt OutcomeBound, with tasks like those their people give an
-agent, does an agent with OutcomeBound reach the outcome at least as often as the same agent with
+On small projects with the kinds of task that a person gives a coding agent, does an agent with
+OutcomeBound reach the outcome at least as often as the same agent with
 no guidance, at a cost that is not much larger? Where it does worse, which text causes it?
 
 ### Method
@@ -2610,22 +2437,23 @@ no guidance, at a cost that is not much larger? Where it does worse, which text 
   stage and production environments, a chat service with stage and production and a feedback
   store, and a library with a public contract, specs and tickets. Each has fast unit tests, a slow
   integration suite of 60 to 120 seconds, a Makefile, documents and a short history. The tasks
-  come from kinds of work adopters do: land a release record in the documents, triage a production
+  are everyday project work: land a release record in the documents, triage a production
   alert without changing production, deploy to stage and hold production, fix a provider fault at
   its cause, write a status note from feedback, review a branch, clean up worktrees and branches,
   retire gates that protect nothing, finish a ticket whose open choices the specs settle, leave a
   handoff where `.agents` is read-only, find why a capacity check fails on the base, and three
-  tickets in one prompt. Thirteen fixtures are the development set; eight held-out variants were
-  written before the first run and run only in round 3.
+  tickets in one prompt. Thirteen fixtures are the development set. Eight variant fixtures
+  (`replica-holdout-*`: the same skills on other surfaces) were written before the first run and
+  ran only in round 3, so the text was not changed in answer to them.
 - Arms: `current` is installed by `outcomebound adopt --harness codex` itself, with Done commands
-  and fragments as an adopter records them. `none` has the same project notes and the same prompt
+  and fragments as a project records them. `none` has the same project notes and the same prompt
   and no OutcomeBound text, launcher or engine. The runner prints what each arm receives and
   checks this before a run.
 - Grading is by deterministic post-checks of the outcome (files, commits, environment events,
   behaviour against a recording stand-in, answers read by tested readers). Claims that only count
   work spent (a slow suite run that the change does not need) are reported apart from outcome
   claims.
-- Rule declared before round 1: OutcomeBound beats no guidance only if, on the held-out set,
+- Rule declared before round 1: OutcomeBound beats no guidance only if, on the variant set,
   `current` passes at least as many runs as `none` on every fixture and more in total, and its
   median tokens are not above 1.25 times `none`'s on any fixture without a passed claim to show
   for it.
@@ -2638,7 +2466,7 @@ Runs that passed every required claim, after the corrections below:
 | --- | --- | --- |
 | 1: the 1.8.0 text, development set, valid cells | 32 of 32 | 23 of 33 |
 | 2: the first change, development set | 39 of 39 | 36 of 39 |
-| 3: the final text, held-out set | 23 of 24 | 23 of 24 |
+| 3: the final text, variant set | 23 of 24 | 23 of 24 |
 
 - In round 1, `current` lost on four fixtures. It ran the slow suite for a documents-only commit
   (3 of 3 runs) and more than once for three small tickets (3 of 3). For a status note it ran the
@@ -2672,7 +2500,7 @@ Runs that passed every required claim, after the corrections below:
 
 ### What it shows, and what it does not
 
-- The rule declared before round 1 is not met: on the held-out set the arms are equal on
+- The rule declared before round 1 is not met: on the variant set the arms are equal on
   outcomes, and `current` costs more tokens on six of eight fixtures. On these tasks OutcomeBound
   does not beat no guidance.
 - The 1.8.0 text did worse than no guidance on these tasks, through three lines. After the change,
@@ -2684,4 +2512,291 @@ Runs that passed every required claim, after the corrections below:
 
 One model, three runs a cell. Single calls of a few minutes: harms that grow over long sessions
 (questions on reversible acts, re-reading guidance after a compaction, approval chains, review
-loops) are not measured here. The held-out set is eight fixtures.
+loops) are not measured here. The variant set is eight fixtures.
+## Lessons on eval design
+
+1. **A fixture that a capable model gets right alone cannot separate the arms.** Such a fixture
+   guards against a change that makes things worse, and measures nothing more (E2, E8). To show an
+   effect, pick tasks that the model gets wrong without the text. Say which tasks those are.
+2. **Include tasks where the text should add nothing.** Fixtures chosen so that the baseline fails
+   bias the result toward the text. Ordinary tasks in the middle of a ladder show what the text
+   adds where it should add nothing. A curve across tasks shows whether effort follows need (E7).
+3. **Separate substance from report shape.** Check the work by running it. Check the report by
+   reading it. Say which kind failed. A check that reads one word (`UNVERIFIED`, a file name)
+   measures vocabulary. That is worth measuring when the vocabulary is the point. It misleads when
+   it stands in for the work (E1).
+4. **Grade with what the model cannot change.** Protect graders, baselines and the documents that
+   checks rely on. Hash them before and after. Read the seed commit before the model runs, because
+   a tag in the workspace can be moved. A test file that the model may edit can be weakened until
+   it passes. A protected probe that judges the fix cannot be weakened.
+
+   Count the effects of the model from the filesystem, not from Git state that the model can set.
+   `git diff` and `git status` honor the assume-unchanged and skip-worktree bits of the index. So
+   `git update-index --assume-unchanged <file>` hides an edit from both. `git ls-files -v` marks
+   such entries with a lowercase letter or `S`. A `.gitignore` that ignores itself hides new files
+   from `git status -uall`.
+
+   In one harness (O), a scope grader reported no change in five distinct ways while the model had
+   changed something (E16):
+   - a rewritten grader hidden by an index bit
+   - a file name that holds a newline, which `find -print` split, so that `git hash-object` failed
+     on both halves and two empty digests compared equal
+   - an unreadable (mode 000) file that collapsed the same way
+   - a tracked file replaced by a symlink, and a new symlink, which `-type f` never listed
+   - entries skipped by name before their kind was checked, such as a symlink named like bytecode
+     (`__pycache__/x.pyc`) and the `.git/hooks/` directory
+
+   What held was one shared walk. It uses `lstat` over raw byte names and lists symlinks without
+   following them. It counts an unreadable or non-regular entry as a change. It gives no verdict
+   when the walk itself fails. It ships among the protected files that are hashed before the run.
+   It states what it does not watch (the object and ref files of Git). It is tested with each of
+   those cases planted as a fixture that it must count.
+5. **Treat everything in reach as part of the prompt.**
+   - Graders in the workspace get read (E12).
+   - A working directory named after the scenario tells the model what is being tested.
+   - A fixture note that sends the model to a skill unconditionally is a stronger arm than an
+     install whose pointer is conditional.
+   - A "do not ask questions" line forbids the very stop that a fixture may measure.
+   - A probe that asks the model which instruction it followed changes what it does. So a probed
+     run is an arm of its own.
+   - A project's own documents steer the behavior measured (ladder rungs 2 and 3). Decide
+     whether that is the question. Build the case where it is not.
+   - A fact meant to be found only in the history leaks through the plain-text copies of Git.
+     `.git/COMMIT_EDITMSG` holds the last commit message. `.git/logs/HEAD` holds the subject of
+     each commit (git 2.56.0, checked 2026-10-01). Delete the first. Keep the fact out of subject
+     lines. Test that no plain file under `.git` outside `objects/` names it.
+   - Set a fixed author, committer and commit date inside the setup of the fixture. Then the
+     `GIT_AUTHOR_*` and `GIT_COMMITTER_*` variables of the caller cannot change the seed commit.
+     One such fixture made the same seed commit each time. It was built under bash 5 with GNU sed,
+     under bash 3.2 with BSD sed, and with those variables set by the caller (O, 2026-09-24).
+   - On the side of the judge, parse its verdict so that the answer under judgment cannot supply
+     it. The model grader of inspect-ai binds to the last `GRADE:` in the output of the judge. So a
+     grade echoed in its reasoning, or planted in the submission, does not win (L,
+     [inspect-ai, model-graded scorers](https://inspect.aisi.org.uk/model-graded.html), read
+     2026-10-01).
+6. **An arm is the bytes that it installs.** Record the digest of every file that an arm writes.
+   Flag runs that differ. Treat a changed skill as a new arm. Make the install arm write what the
+   installer writes, pointer conditions included. Make the no-text arm free of user-level context:
+   the configuration, rules, memories, Git configuration and credentials of the operator. Check the
+   transcript for user-level files that the harness read anyway (codex read agent role files under
+   its isolation flags; see Isolation above).
+7. **Make each check as strict as the contract, and no stricter.** Accept every behavior that the
+   text allows (a reversible reading, built and named as a choice). Require only what the check is
+   for. Observe, and do not require, what an older arm was never asked for. Check a stated
+   contract in full (every row that must survive, not only the column that changed). Let the
+   verdict and its observations share one rule. When a check changes, grade the kept runs again and
+   report whether the counts moved.
+8. **Record what a run did beyond the verdict.** The footprint, tokens and seconds show size and
+   cost where a pass rate cannot. An observation can become a required claim when it proves to
+   matter, as the slow-suite run did on rung 2.
+9. **Change one thing at a time, or run the baseline again.** When the model changes between
+   passes, run the no-text arm on the new model before you credit the text (E10).
+10. **State what three runs can show.** At three runs a cell, only a difference like 0 of 3 against
+    3 of 3 is worth reading. Compute the power before you choose the repetitions. Give each result
+    the smallest difference that it could detect.
+11. **Count the cost before running.** Calls are arms times fixtures times repetitions: 33 an arm
+    for the eleven fixtures (42 for the fourteen since 2026-10-05, 45 for the fifteen with the
+    `explorable` fixture), 36 for the three arms of the
+    ladder, 63 for the hand-off comparison.
+    The median run of a cell took 8,000 to 56,000 tokens and half a minute to five minutes.
+    - A failed call is recorded and never retried, so the count of a pass stays whole. A silent
+      retry would also shift what is measured: inputs that fail on a bug and pass on a re-roll get
+      more chances than the rest (L, [inspect-ai, handling
+      errors](https://inspect.aisi.org.uk/handling-errors.html), read 2026-10-01).
+    - Count only calls that completed. A post-check that runs on a workspace whose model call
+      failed describes the leftover fixture, not a decision.
+    - Before a pass, drive every fixture through every arm with a stand-in for the model. A `none`
+      pass whose fixtures protected skill copies that the arm does not install refused all twelve
+      of its runs at setup.
+12. **Prefer deterministic checks to a model judge, and know what each costs.** A judge of the same
+    family as the candidate is weaker evidence than a check that reads the tree. Its agreement
+    with a person is unmeasured, and its rubric can fall out of step with the text. A
+    deterministic check reads only what it was written to read.
+    - Here, a rubric out of step with the skill under test listed a policy gate as unnecessary.
+      The skill required the verify and audit steps that the gate named. The judge cited the gate
+      against 10 of 18 probed runs, and alone against 6 whose deterministic post-checks passed (O,
+      2026-09-24).
+    - Agreement with a person was measured on none of the 46 judged runs (O, 2026-09-24 and
+      2026-09-25).
+    - A judge that matches the words of a mechanism, not its presence, turns the framing of an
+      answer into a finding (Results not kept here).
+    - Before you credit a judged difference of one run to the text, read the answers on both sides
+      (E15).
+13. **Execute, do not ask for a plan.** A run that only proposes an approach tests which mechanisms
+    the text names. It does not test the diff, the bounds or the cost. To measure those, do the work
+    in a repository. A model was asked only for a plan, with its tools in an empty directory. It
+    searched the directory for the repository that the task named, until the prompt said that there
+    was none (codex, 2026-08-30).
+14. **Keep the evidence, cite the counts.** Kept fixture repositories let a changed check run again
+    without new calls. Kept transcripts let a count like E12 be taken after the fact.
+15. **Do not judge text on the fixture that it was written from.** An addition drafted after
+    reading the runs of a fixture is tuned to that fixture. That fixture can no longer judge it
+    fairly. Judge it on another fixture that exercises the same behavior, or build one
+    (reasoning).
+16. **Write the reading rules before the runs.** The hand-off comparison fixed its cells, its
+    rules and the meaning of "no headroom" before any run. Then a result that goes against the
+    project's own choice stays visible: by `evals/README.md` rule 3, `--detail full` would go, and the record says so
+    beside the decision to keep it.
+
+## What published research adds
+
+The results above rest on a judge of the same family as the candidate, and on three runs a cell.
+Published studies say how far either can be trusted, and what another judge, more runs or more
+tasks buy:
+
+- **Model judges.** Consistency against validity. The variation of a verdict between identical
+  calls. A changed judge as a new measurement. Preference for itself and for its own family.
+  Reasoning effort and optimization pressure. Criteria drift. Judging many model-drafted labels at
+  once. All are in
+  [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md).
+  The judged probes here used the configuration that those studies warn about: a judge of the same
+  family as the candidate (E15; lesson 12).
+- **Statistics, power and task selection.** Pass^k, standard errors and paired comparisons,
+  infrastructure and time-of-day noise, choosing tasks that can move, and references or single
+  database states that are wrong. All are in
+  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
+  The power figures for the design of this suite are under Runs per cell and power above.
+- **Error analysis**, and **what other evaluation tools ship.** Both are in
+  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md).
+
+## History
+
+This part lists every pass by date, the instrument correction made after E20, and the results
+that this record does not keep. The findings that hold now are under Current results.
+
+### Every pass that ran
+
+| Pass | Date | Model | Runs | Findings | Section |
+| --- | --- | --- | --- | --- | --- |
+| Core fixtures, `earlier` and current | 2026-09-29 | gpt-6-sol | 24 | E1, E2, E3 | Core fixtures |
+| Core fixtures, decision-brief first wording | 2026-09-29 | gpt-6-sol | 6 | E3 | Core fixtures |
+| Decision fixture, decision-brief second wording | 2026-09-29 | gpt-6-sol | 3 | E3 | Core fixtures |
+| Core fixtures, `none` | 2026-09-29 | gpt-6-sol | 12 (and 12 refused at setup) | E1 | Core fixtures |
+| Skill fixtures, `current` and `none` | 2026-09-29 | gpt-6-sol | 24 | E4, E5, E6 | Skill fixtures |
+| Ladder, `current`, `unsized` and `none` | 2026-09-30 | gpt-6-sol | 36 | E7, E8, E9 | The ladder |
+| Ladder rerun, rungs 2 and 3, `current` and `none` | 2026-09-30 | gpt-6.1-sol | 12 | E10 | The ladder rerun |
+| Hand-off comparison, `current` | 2026-10-03 | gpt-6-astra high, gpt-6-sol medium, gpt-6-luna xhigh | 63 | E17 | The hand-off comparison |
+| Hand-off comparison rerun, `current` | 2026-10-04 | gpt-6-astra high, gpt-6-sol medium, gpt-6-luna xhigh | 63 | E18 | The hand-off comparison rerun |
+| Judge-scored decision probes | 2026-09-24, 2026-09-25 | gpt-6-sol | 12 | E11 | Judge-scored decision probes |
+| Ticket-skill probes, probed, before and after two skill fixes | 2026-09-24 | gpt-6-sol medium, gpt-6-luna max | 18 | E13, E14 | Judge-scored probes of a ticket-working skill |
+| Ticket-skill wording audit, unprobed, questions allowed | 2026-09-25 | gpt-6-luna max | 10 | — | Judge-scored probes of a ticket-working skill |
+| Audit baseline, decision probe and ticket fixture | 2026-09-25 | gpt-6-sol | 6 | — | Judge-scored probes of a ticket-working skill, and the decision probes |
+| Claude Code, 1.3.0 content, current and none | 2026-10-06 | Claude Sonnet 5.5 | 28 | E19 | Key findings |
+| Claude Code, 1.4.0 content, current and none | 2026-10-07 | Claude Sonnet 5.5 | 32 | E20 | Key findings |
+| Initial direct skill/lifecycle qualification and four clause pairs | 2026-10-08 | gpt-6.1-sol medium | 26 | E21 | Direct skill and lifecycle qualification |
+| Retained one-shot qualification | 2026-10-08 | gpt-6.1-sol high | 7 | E21 | Retained one-shot qualification |
+| Spec-tier delivery follow-up | 2026-10-08 | gpt-6.1-sol high | 1 | E21 | Spec-tier delivery follow-up |
+| Testing guidance research trial, baseline | 2026-10-09 | gpt-6.1-sol medium | 1 | E22 | Testing guidance research trial and instrument correction |
+| 1.6.0 pass: new-project route, onboarding, changed skills, 1.5.0 against 1.6.0 | 2026-10-09 | Claude Sonnet 5.5 medium, Claude Haiku 5.5 high; one Codex call on gpt-6.1-sol medium | 123 | E23 | E23 |
+| 1.6.0 pass: composable lifecycle pair, text before against composable lifecycle | 2026-10-10 | Claude Sonnet 5.5 medium | 4 | E24 | E24 |
+| 1.6.0 qualification pass: lifecycle text, three stage skills, business requirements kit; base against candidate, 12 repeats, 3 after a text fix | 2026-10-14 | gpt-6.1-sol medium | 44 | E25 | E25 |
+| 1.6.0 pass: the `field-` fixtures and the lifecycle scaffold; `earlier` against `current` on four, `current` on six, a second pass after grader repairs and a text fix | 2026-10-16 | gpt-6.1-sol medium | 60 | E26 | E26 |
+| Core work by default: kernel and skill text against 1.6.0, two passes on four fixtures | 2026-10-16, 2026-10-17 | gpt-6.1-sol medium | 48 | E27 | E27 |
+| Core work by default: ten-fixture comparison of `earlier` and the text of E27, a settling pass, and a revision of the text with its deploy-sentence follow-up | 2026-10-17 | gpt-6.1-sol medium | 132 | E28 | E28 |
+| Five guidance texts compared on ten fixtures, and a settling pass on three | 2026-10-17 | gpt-6.1-sol medium | 105 (and 90 that E28 counts) | E29 | E29 |
+| Spot check of the held-edit text after the first-principles round, five fixtures | 2026-10-17 | gpt-6.1-sol medium | 15 | E30 | E30 |
+| Blind reads of agent reports under different report guidance, two rounds | 2026-10-18 | one model family, not named here | not counted here | E31 | E31 |
+| The 1.8.0 install against v1.7.0, 31 default fixtures, one run each | 2026-10-19 | gpt-6.1-sol medium | 62 | E32 | E32 |
+| Small realistic projects (the `replica-` fixtures), `current` against `none`, three rounds and one probe | 2026-10-21 | gpt-6.1-sol medium | 173 | E33 | E33 |
+
+The Runs column counts the model calls of each pass that count. The section of each pass says
+which further calls do not count (a setup probe, or a call whose events reported no model) and
+which counted runs are void. A count of calls includes an invalid or unavailable measurement; it
+is not a count of valid behavior verdicts. The passes before E19 hold 289 model runs: 243 graded
+by deterministic checks alone and 46 judged by a model beside deterministic checks.
+
+Token counts for the 2026-09-29 passes come from each transcript's final `tokens used` line, as
+`--summary` reads them. The records of the judge-scored runs also hold the raw answers, and the
+judge replies for the decision probes and the probed ticket-skill runs. The proposal-only samples
+of 2026-08 were kept as result files. These are not in the repository either.
+
+### Instrument correction after E20
+
+[Issue #95](https://github.com/rajasdevel/outcomebound/issues/95) separates measurement defects
+from model behavior. The corrected Claude adapter retains failed, denied and unreadable tool
+results. The command reader preserves result status and per-call working directory. Deployment
+checks accept completed straight-line `&&` chains, and reject quoted mentions, comments and
+commands unreachable after `exec`. Unsupported shell syntax is not inferred as a successful
+observation. Authority checks continue to retain unauthorized attempts, including denied ones.
+
+The requirements and visual probes read bounded report records, including wrapped paragraphs
+and a heading with its list. They reject the calibrated negative and unrelated-source cases.
+These remain lexical checks; they do not prove requirement meaning or visual fidelity. The
+explanation fixture now discloses its allowed `.agents/work/` note area. The decision probe
+accepts the identifier format that the brief schema and renderer allow.
+
+Synthetic controls establish these instrument repairs. They do not change E19 or E20 into new
+model outcomes. Regrading an original transcript can correct a measurement under the same
+inputs; a changed fixture input, such as the disclosed note area, needs a new call for a new
+behavior claim. Retain actual unauthorized staging, unsupported claims and skipped or excessive
+work as failures. Keep the original result and explain each changed interpretation.
+
+The validation engine still records a nonzero grader exit as raw FAIL. Explicit unavailable-
+effect observations support a separate UNVERIFIED adjudication when execution was denied or
+unreadable. Keep that raw result and its cause. A known wrong effect or unauthorized attempt
+remains FAIL. Do not change the validation contract to reinterpret one fixture.
+
+The runner rejects a call whose model identity is not observed. Setup, task-generation, model
+and post-check timeouts retain partial evidence. Timeout cleanup stops the task process group
+and currently observed descendants, then bounds pipe draining. A process already reparented or
+outside the observed tree is not proof of complete cleanup. Native sandbox writes and native
+skill or hook loading require their own observation.
+
+### Results not kept here
+
+- **Twelve `none` runs refused at setup** (2026-09-29; lesson 11). No model ran, and no verdict
+  exists.
+- **A harness self-test** with a stand-in for codex that runs no model. It checks the plumbing of
+  the runner, not a model.
+- **Proposal-only samples from before the fixtures** (2026-08-23 to 2026-08-30). A model described
+  the approach that it would take to written scenarios, with the expected answer of each scenario
+  withheld. Nothing was executed.
+  - The samples matched their rubrics 7 of 7, 2 of 2 and 9 of 9. The backend and effort were not
+    recorded for the first two. The third was gpt-5.6-sol at medium. The same model setup that ran
+    them scored all three; the scoring was not blind.
+  - Under a Claude Opus judge, the result was 0 of 1 (codex-cli 0.151.0, gpt-5.6-sol at medium).
+    That judge scored a "goal envelope" as unnecessary in an answer that proposed only a focused
+    regression test and a local fix, under Outcome, Context and Bounds headings. It matched the
+    words of a mechanism, not its presence.
+  - These samples show which mechanisms a model names when asked. They do not show the diff, the
+    bounds or the cost (lesson 13).
+- **The breakdowns of the slicing arms.** Their sizing findings are in
+  [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md).
+
+## Sources
+
+- **Fixtures:** [`evals/fixtures/`](../evals/fixtures/).
+  - Kernel and skill fixtures: `small-fix`, `dirty-review`, `long-run`, `decision`,
+    `unclear-outcome`, `test-worth-keeping`, `slice-a-spec`, `slice-gate-findings`,
+    `slice-shared-ledger`, `slice-parity-registry`.
+  - The four `ladder-*` rungs and their shared `ladder/` (`base.sh`, `finish.sh`, `footprint.py`,
+    `no_process_document.py`, `cli_probe.py`).
+  - The shared `slicing/` (`store.sh`, `finish.sh`) of the three newer slicing fixtures, and the
+    graders of the four ticket fixtures, `evals/graders/drafts.py` and `ticket_cut.py`.
+  - The twelve `handoff-*` fixtures and their shared `handoff/` (`base.sh`, `build.sh`,
+    `task.sh`, `export.py`, `grade.py`, `accepting.py`, `handover.md`, and for each base its
+    ticket, packages, acceptance tests and reference solution).
+  - Runner: [`evals/run.py`](../evals/run.py).
+- **Run records.** They are kept outside the repository. Each run has its prompt, answer,
+  transcript and metadata, as `evals/README.md` describes. The table under "Every pass that ran"
+  lists them.
+- **Published sources**, each read 2026-10-01: inspect-ai, model-graded scorers,
+  <https://inspect.aisi.org.uk/model-graded.html>, and handling errors,
+  <https://inspect.aisi.org.uk/handling-errors.html>. The two-agent context-file ablation,
+  <https://arxiv.org/html/2607.27250>. Codex authentication, <https://learn.chatgpt.com/docs/auth>.
+  Codex agent approvals and security, <https://learn.chatgpt.com/docs/agent-approvals-security>.
+  The studies on judges are listed in
+  [llm-as-judge.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/llm-as-judge.md#sources).
+  The studies on statistics, task selection, error analysis and tools are listed in
+  [agent-evals.md](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/agent-evals.md#sources).
+- **Related records:**
+  [`writing-for-models.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/writing-for-models.md)
+  §9 (how to measure a change to model-facing text, with detection power).
+  [`prompt-standard.md`](prompt-standard.md) S11 (remove one group of lines at a time and run
+  again).
+  [`cross-harness.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/harnesses/cross-harness.md#131-one-practitioners-account-t1t7)
+  §13.1, T1 (instruction files shrink; test a skill by eval).
+  [`work-breakdown.md`](https://github.com/rajasdevel/outcomebound-research/blob/main/practices/work-breakdown.md)
+  (the slicing arms).
+
+

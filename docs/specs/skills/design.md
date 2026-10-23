@@ -155,8 +155,8 @@ The explain-spec fixture declares its own notes area; the skill gains no univers
 
 ## Research candidates (not installed)
 
-The [testing guidance trials](../../../evals/research-trials.md) define the comparison before
-results are read. Post-patch-validation and useful property selection are candidates for
+The [testing guidance trial protocol](../../evaluations.md#protocol) (E22) defines the comparison
+before results are read. Post-patch-validation and useful property selection are candidates for
 small additions to `tests-worth-keeping`, not new installed skills. Existing refusal-path
 and tautology guidance remains the baseline. A source inspection is not behavioral evidence.
 
