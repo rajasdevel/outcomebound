@@ -74,11 +74,15 @@ class Provider:
     def send(self, method: str, path: str, headers: dict[str, str], body: bytes) -> Answer:
         now = time.monotonic()
         key = str(headers.get("authorization", "")).removeprefix("Bearer ").strip()
+        # A call counts against the window until the window has passed as far as this clock can
+        # tell: a coarse clock (15.6 ms on Windows before Python 3.13) reads an interval up to
+        # one tick short, so a client that waits exactly as advised is not refused for it.
+        slack = max(1e-6, time.get_clock_info("monotonic").resolution)
         with self.lock:
             recent = sorted(
                 c["at"]
                 for c in self.calls
-                if c["key"] == key and now - c["at"] < self.window - 1e-6
+                if c["key"] == key and now - c["at"] < self.window - slack
             )
             call: dict[str, Any] = {"at": now, "key": key, "path": path}
             if len(recent) >= self.quota:
