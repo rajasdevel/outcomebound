@@ -101,7 +101,7 @@ from evals.evidence import (
     workspace_digest,
 )
 from evals.harnesses import SERVICE_TIER, Budget, Request
-from evals.harnesses.claude_code import ClaudeCodeHarness, cell_for, unreadable
+from evals.harnesses.claude_code import GIT_IDENTITY, ClaudeCodeHarness, cell_for, unreadable
 from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
 from evals.native_receipts import parse_records
@@ -276,6 +276,16 @@ FIXTURE_ROOT_ENV = "OUTCOMEBOUND_FIXTURE_ROOT"
 # A fixture is judged by Git comparisons, so an operator's global or system Git config
 # (hooksPath, excludesFile, an alias) must not reach the child that builds or checks it.
 HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+# The commits the runner makes itself, which fold an install or a removal into the seed, are
+# committed as the eval's own identity, the one each cell's session gets (`GIT_IDENTITY`), never
+# as the machine's: with the global config hidden, Git would else fall back to the user and host
+# names, which fails where they make no identity (a CI runner, a container's root) and elsewhere
+# records them in the fixture. An amend keeps the seed's author.
+FOLD_GIT = {
+    **HERMETIC_GIT,
+    "GIT_COMMITTER_NAME": GIT_IDENTITY[0],
+    "GIT_COMMITTER_EMAIL": GIT_IDENTITY[1],
+}
 # The `seed` tag lives in a workspace the model can write to, so the runner reads the seed
 # once, before the model runs, and hands that commit to the checks.
 SEED_SHA_ENV = "OUTCOMEBOUND_SEED_SHA"
@@ -1256,7 +1266,7 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
         blocks = [rendered.facts, *([rendered.pointers] if rendered.pointers else [])]
         agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
-    env = {**child_env(), **HERMETIC_GIT}
+    env = {**child_env(), **FOLD_GIT}
     # Only the notes this function wrote join the seed: a fixture's uncommitted edits, such as
     # the work in progress beside a read-only review, stay uncommitted, as setup left them.
     notes = [note for note in ("AGENTS.md", "README.md") if (workdir / note).is_file()]
@@ -1327,7 +1337,12 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
         ["git", "tag", "-f", "seed"],
     ):
         folded = subprocess.run(
-            command, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
+            command,
+            cwd=workdir,
+            capture_output=True,
+            text=True,
+            env={**env, **FOLD_GIT},
+            encoding="utf-8",
         )
         if folded.returncode != 0:
             return f"the install could not be folded into the seed: {folded.stderr.strip()}"
@@ -1417,7 +1432,7 @@ def fold_removal(workdir: Path, removed: list[str]) -> str:
 
     if not removed:
         return ""
-    env = {**child_env(), **HERMETIC_GIT}
+    env = {**child_env(), **FOLD_GIT}
     # Only the removed paths leave the index: a fixture's uncommitted edits stay as setup left
     # them, as under `as_installed`.
     for command in (

@@ -484,7 +484,9 @@ What stays `UNVERIFIED` until that probe runs:
     `outcomebound adopt <workspace> --harness codex --fragments <list> --done <command>...`,
     which writes the kernel, facts and pointers blocks into `AGENTS.md` (ahead of the note), the
     skills, the fragments, `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what
-    its own ignore files keep out, is folded into the seed commit. The kernel is then not in the
+    its own ignore files keep out, is folded into the seed commit (an amend that keeps the
+    seed's author; its committer is the eval's own `OutcomeBound eval <eval@example.invalid>`,
+    never the machine's, as for every fold the runner makes). The kernel is then not in the
     prompt: the prompt of both `current` and `none` is `Task:` and the task. The run checks that
     adopt wrote the skill and fragment files the arm's record names, byte for byte, and the meta
     records `arm_adopted`. `unsized` and `earlier` keep the install described above on these

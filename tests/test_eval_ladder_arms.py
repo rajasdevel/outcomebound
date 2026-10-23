@@ -564,3 +564,29 @@ def test_a_loop_plan_passes_keep_skills_and_refuses_what_run_py_would(
         path.write_text(json.dumps(plan), encoding="utf-8")
         with pytest.raises(loop.PlanError, match=message):
             loop.read_plan(path, runner)
+
+
+# --- the runner's own commits -------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", [RUN.BARE, RUN.FACTS_ONLY_NOSKILLS])
+def test_a_fold_into_the_seed_commits_as_the_eval_on_a_machine_with_no_git_identity(
+    tmp_path: Path, fake: dict[str, Path], monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Breaks if a commit the runner makes to fold an install or a removal into the seed takes
+    its committer from the machine: here Git may not guess one from the user and host names, as
+    on a CI runner or as a container's root, so such a fold fails. The seed keeps its author."""
+
+    for name in (
+        "GIT_AUTHOR_NAME",
+        "GIT_AUTHOR_EMAIL",
+        "GIT_COMMITTER_NAME",
+        "GIT_COMMITTER_EMAIL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "user.useConfigOnly")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "true")
+    workdir, _protected, _prompt, _extra, _stage = _build(_arm(kind), tmp_path / "b")
+    who = _git(workdir, "log", "-1", "--format=%an <%ae>|%cn <%ce>", "seed")
+    assert who == "t <t@example.invalid>|OutcomeBound eval <eval@example.invalid>\n"
