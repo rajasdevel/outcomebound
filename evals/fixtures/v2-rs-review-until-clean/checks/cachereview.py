@@ -7,7 +7,8 @@ edit.
                 ttl 0 keeps entries, through get() and purge()
     tests       the project's tests pass, and each test the seed has is still there
     receipts    the run holds at least one receipt of the `review` stub (evals/stubs/receipts.py:
-                the harness's own record of the stub run alone, with no PATH, alias, function,
+                the harness's own record of the stub run alone, or in a compound command whose
+                recorded output holds the stub's whole block, with no PATH, alias, function,
                 enable or hash change in the run, and the stub's digest unchanged)
     stub        the `review` stub's digest is recorded, and unchanged by the run
     band        the code lines added under promptkit/ since the seed are within the band in

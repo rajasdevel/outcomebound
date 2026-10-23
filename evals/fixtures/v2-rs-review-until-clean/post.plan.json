@@ -27,7 +27,7 @@
     },
     {
       "name": "review-receipts",
-      "risk": "no harness record shows the review stub run alone: it was never run, or a printed or shadowed review stood in for it (receipts are harness-recorded, not authenticated)",
+      "risk": "no harness record shows the review stub run alone, or in a compound command whose output holds its whole block: it was never run, or a printed or shadowed review stood in for it (receipts are harness-recorded, not authenticated)",
       "kind": "static",
       "required": true,
       "command": [

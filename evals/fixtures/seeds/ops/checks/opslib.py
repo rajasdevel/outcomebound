@@ -202,7 +202,9 @@ class Step(NamedTuple):
 
     `kind` is `run` or `edit`. For a run: `argv` from the program on, `text` the whole recorded
     command, `status` its recorded status, `cwd` the folder the step ran in (after any `cd`
-    before it in the same command). For an edit: `paths`, workspace-relative where inside it."""
+    before it in the same command), `output` the whole recorded command's output where the
+    transcript kept one (its `outputs` list, by position), else None. For an edit: `paths`,
+    workspace-relative where inside it."""
 
     kind: str
     argv: tuple[str, ...] = ()
@@ -211,6 +213,7 @@ class Step(NamedTuple):
     cwd: str = ""
     paths: tuple[str, ...] = ()
     record: int = -1
+    output: str | None = None
 
 
 FAILED = re.compile(r"exited -?[1-9]\d*|failed")
@@ -281,7 +284,12 @@ def timeline(transcript: str | None = None) -> list[Step] | None:
         document = json.loads(transcript.split(transcript_commands.POST_CHECKS, 1)[0])
     except ValueError:
         document = {}
-    edits = _edit_positions(document if isinstance(document, dict) else {})
+    if not isinstance(document, dict):
+        document = {}
+    edits = _edit_positions(document)
+    outputs = document.get("outputs")
+    if not isinstance(outputs, list) or len(outputs) != len(records):
+        outputs = [None] * len(records)
     steps: list[Step] = []
     for index, (command, status, directory) in enumerate(records):
         steps += [
@@ -296,7 +304,8 @@ def timeline(transcript: str | None = None) -> list[Step] | None:
                 target = argv[1] if len(argv) > 1 else os.path.expanduser("~")
                 cwd = os.path.realpath(target if os.path.isabs(target) else Path(cwd) / target)
                 continue
-            steps.append(Step("run", argv, command, status, cwd, record=index))
+            output = outputs[index] if isinstance(outputs[index], str) else None
+            steps.append(Step("run", argv, command, status, cwd, record=index, output=output))
     steps += [
         Step("edit", paths=tuple(relative(p, "") for p in paths if p))
         for started, paths in edits

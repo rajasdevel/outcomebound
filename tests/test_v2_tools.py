@@ -355,6 +355,10 @@ def test_reading_sheet_shows_the_stub_receipts_under_each_answer(
             [f"{placed} 2>&1", f"finding one in {stubs}\nverdict: changes\n"],
             ["review --again", "finding two\nverdict: changes\n"],
             ["review | head", "piped, not a receipt\n"],
+            [
+                "git show --stat HEAD; review 2>&1 | tail -40",
+                "in a chain\nreview: 2 files read\n1. [suggestion] three\nverdict: changes\n",
+            ],
         ],
     )
     out = tmp_path / "sheet"
@@ -364,7 +368,9 @@ def test_reading_sheet_shows_the_stub_receipts_under_each_answer(
     assert sheet.count("no receipt") == 1
     first, second = "$ review\nfinding one in <stubs>", "$ review --again\nfinding two"
     assert first in sheet and second in sheet and sheet.index(first) < sheet.index(second)
-    assert "piped" not in sheet and "listing" not in sheet
+    third = "$ review\nreview: 2 files read\n1. [suggestion] three\nverdict: changes\n```"
+    assert third in sheet and sheet.index(second) < sheet.index(third)
+    assert "piped" not in sheet and "listing" not in sheet and "in a chain" not in sheet
     for hidden in ("current", "none", str(tmp_path), "workspaces", "gamma.", "r1"):
         assert hidden not in sheet
 

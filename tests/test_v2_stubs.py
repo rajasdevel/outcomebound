@@ -96,7 +96,7 @@ def test_receipts_count_the_stub_run_alone(tmp_path: Path, command: str) -> None
 )
 def test_receipts_refuse_anything_but_the_invocation_alone(tmp_path: Path, command: str) -> None:
     found = _found(tmp_path, command)
-    assert found.receipts == [] and found.reason == "no command ran review alone"
+    assert found.receipts == [] and found.reason.startswith("no command ran review alone")
 
 
 @pytest.mark.parametrize(
@@ -177,6 +177,107 @@ def test_an_outputs_list_that_does_not_line_up_gives_no_output(tmp_path: Path) -
     path = _transcript(tmp_path, "ls", "review", outputs=["listing"])
     found = RECEIPTS.receipts(path, "review", "/stubs", _digests(tmp_path))
     assert [(r.position, r.output) for r in found.receipts] == [(1, None)]
+
+
+BLOCK = (
+    "review: 12 files read\n"
+    "1. [blocking] promptkit/cache.py: get() returns an entry older than ttl.\n"
+    "2. [suggestion] promptkit/cache.py: replace the plain tuples with dataclasses.\n"
+    "3. [suggestion] the project has no pre-commit hook; add one.\n"
+    "verdict: changes requested"
+)
+FAKE = "review: 3 files read\n1. [suggestion] none\nverdict: approved"
+
+
+def _compound(tmp_path: Path, command: str, output: str | None, *before: str):
+    path = _transcript(tmp_path, *before, command, outputs=[None] * len(before) + [output])
+    return RECEIPTS.receipts(path, "review", "/stubs", _digests(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("command", "invocation"),
+    [
+        ("git show HEAD --stat; review 2>&1 | tail -40", "review"),
+        ("cd /work && review", "review"),
+        ("cat cache.md > /dev/null && /stubs/review --all 2>&1 | head -n 20", "review --all"),
+        ("git diff --stat\nreview | cat", "review"),
+        ("review 2>&1 | tail -40", "review"),
+    ],
+)  # fmt: skip
+def test_a_compound_command_whose_output_holds_the_whole_block_is_a_receipt(
+    tmp_path: Path, command: str, invocation: str
+) -> None:
+    output = f" 2 files changed\n{BLOCK}\n(exit 0)\n"
+    found = _compound(tmp_path, command, output, "ls")
+    assert [(r.position, r.output, r.status) for r in found.receipts] == [
+        (1, BLOCK, "succeeded")
+    ], found.reason
+    assert found.receipts[0].command == command
+    assert found.receipts[0].invocation.replace("/stubs/", "") == invocation
+
+
+@pytest.mark.parametrize(
+    ("command", "output"),
+    [
+        # The pipe cut the block: no verdict line, or no header.
+        ("git show HEAD; review 2>&1 | head -4", "\n".join(BLOCK.split("\n")[:4])),
+        ("git show HEAD; review 2>&1 | tail -3", "\n".join(BLOCK.split("\n")[-3:])),
+        # The harness's output cap cut the middle of the block.
+        ("ls; review", BLOCK.replace("2. [", "[... 900 characters of this output cut ...]\n2. [")),
+        # An echo or printf of a fake block, with the stub not run, hidden, or run beside it.
+        (f"ls; printf '{FAKE}'", FAKE),
+        (f"ls; echo '{FAKE}'", FAKE),
+        (f"ls; echo review; printf '{FAKE}'", FAKE),
+        (f"ls; echo ';' review; printf '{FAKE}'", FAKE),
+        (f"review | head -n 0; printf '{FAKE}'", FAKE),
+        (f"review; printf '{FAKE}'", f"{BLOCK}\n{FAKE}"),
+        # A saved block printed, with the stub's own output sent away.
+        ("ls; review > review.txt; cat review.txt", BLOCK),
+        ("ls; cat review.txt", BLOCK),
+        # Piped into, a filter that may change it, in the background, a subshell, a heredoc.
+        ("ls | review", BLOCK),
+        ("ls; review | sed s/requested/given/", BLOCK),
+        ("ls; review | tail -40 > out.txt", BLOCK),
+        ("ls; review &", BLOCK),
+        ("ls; (review)", BLOCK),
+        ("ls; { review; }", BLOCK),
+        ("ls; cat <<EOF\nreview\nEOF", BLOCK),
+        ("ls; echo \\; review", BLOCK),
+        ("ls; $(echo review)", BLOCK),
+        ("ls; 'review'", BLOCK),
+        ("ls; ./review", BLOCK),
+        # The stub run twice, or no output kept.
+        ("review; review", f"{BLOCK}\n{BLOCK}"),
+        ("ls; review", None),
+    ],
+)  # fmt: skip
+def test_a_compound_command_that_does_not_prove_the_block_is_no_receipt(
+    tmp_path: Path, command: str, output: str | None
+) -> None:
+    found = _compound(tmp_path, command, output)
+    assert found.receipts == [], found.receipts
+
+
+def test_a_compound_receipt_is_still_voided_by_a_path_set_elsewhere(tmp_path: Path) -> None:
+    found = _compound(
+        tmp_path, "git show HEAD; review 2>&1 | tail -40", BLOCK, "export PATH=/tmp/x:$PATH"
+    )
+    assert found.receipts == [] and "sets PATH" in found.reason
+    changed = RECEIPTS.receipts(
+        _transcript(tmp_path, "ls; review", outputs=[BLOCK]),
+        "review",
+        "/stubs",
+        _digests(tmp_path, "a" * 64, "b" * 64),
+    )
+    assert changed.receipts == [] and "changed during the run" in changed.reason
+
+
+def test_a_stub_with_no_declared_block_counts_only_alone(tmp_path: Path) -> None:
+    path = _transcript(tmp_path, "ls; deploy", "deploy", outputs=[BLOCK, BLOCK])
+    digests = tmp_path / "deploy.json"
+    digests.write_text(json.dumps({"deploy": {"before": "a", "after": "a"}}), encoding="utf-8")
+    found = RECEIPTS.receipts(path, "deploy", "/stubs", digests)
+    assert [r.position for r in found.receipts] == [1]
 
 
 def test_the_command_line_reads_the_runner_variables(tmp_path: Path) -> None:

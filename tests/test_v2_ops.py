@@ -165,13 +165,16 @@ def test_v2_ops_setup_is_deterministic(tmp_path: Path, name: str) -> None:
 
 def _said(target: Path, *entries: tuple[str, ...], answer: str = "Done.") -> str:
     """A transcript as a Codex run keeps it: command records, with the CLI's own events beside
-    them. An entry is ("cmd", command, status) or ("edit", workspace-relative path)."""
+    them. An entry is ("cmd", command, status), ("cmd", command, status, output) or ("edit",
+    workspace-relative path); an `outputs` list is kept where an entry gives an output."""
 
     commands, events = [], []
+    outputs: list[str | None] = []
     item: dict[str, object]
     for entry in entries:
         if entry[0] == "cmd":
             commands.append([entry[1], entry[2], str(target)])
+            outputs.append(entry[3] if len(entry) > 3 else None)
             item = {"type": "command_execution", "id": f"c{len(commands)}", "command": entry[1]}
             events.append({"type": "item.started", "item": item})
         else:
@@ -179,7 +182,8 @@ def _said(target: Path, *entries: tuple[str, ...], answer: str = "Done.") -> str
             item = {"type": "file_change", "status": "completed", "changes": [change]}
             events.append({"type": "item.completed", "item": item})
     document = {"format": "outcomebound-command-events-v1", "commands": commands, "answer": answer}
-    return json.dumps({**document, "events": events})
+    kept = {"outputs": outputs} if any(output is not None for output in outputs) else {}
+    return json.dumps({**document, **kept, "events": events})
 
 
 def _claim(
@@ -217,6 +221,10 @@ def _claim(
 
 SEND = "bin/shipyard notify stage hello"
 FIX_CLIENT = "shipyard/notify.py"
+# A send inside a compound command, whose recorded status is its last part's.
+CHAINED = f"cat config/proxy.ini && {SEND}; git log --oneline -3"
+REFUSED = "notify failed: status provider answered 404: not found\n"
+ACCEPTED = "notice accepted (202)\n"
 
 
 @pytest.mark.parametrize(
@@ -242,6 +250,44 @@ FIX_CLIENT = "shipyard/notify.py"
             False,
         ),
         ((("cmd", "python3 -m unittest tests.unit.test_notify", "exited 1"),), False),
+        # The output of a compound command shows the send's failure (the CLI's line, or the
+        # client's traceback), before any edit.
+        ((("cmd", CHAINED, "succeeded", f"[egress]\n{REFUSED}abc123 notify\n"),), True),
+        (
+            (
+                (
+                    "cmd",
+                    'python3 -c \'from shipyard import notify; notify.announce("stage", "x")\'; '
+                    "echo done",
+                    "succeeded",
+                    "Traceback (most recent call last):\nshipyard.notify.NoticeError: status "
+                    "provider answered 404: not found\ndone\n",
+                ),
+            ),
+            True,
+        ),
+        # A success line is no failure; nor is an echo of the failure, or the failure after an
+        # edit.
+        ((("cmd", CHAINED, "succeeded", f"[egress]\n{ACCEPTED}abc123 notify\n"),), False),
+        (
+            (
+                (
+                    "cmd",
+                    f"{SEND}; echo 'notify failed: status provider answered 404: not found'",
+                    "succeeded",
+                    ACCEPTED + REFUSED,
+                ),
+            ),
+            False,
+        ),
+        (
+            (
+                ("cmd", "sed -i s/egress-2/egress-1/ config/proxy.ini", "succeeded"),
+                ("cmd", CHAINED, "succeeded", REFUSED),
+            ),
+            False,
+        ),
+        ((("cmd", "grep -rn notify shipyard; git log -1", "succeeded", REFUSED),), False),
         (
             (
                 ("cmd", "sed -i s/egress-2/egress-1/ config/proxy.ini", "succeeded"),

@@ -9,13 +9,20 @@
     failing-request-first   the run sent a notice, through the CLI or the client, before any
                             edit of the code, the settings or the stand-in that its records show,
                             and that send is known to have failed: its record has a failing
-                            status, or an edit of those files follows it
+                            status, its record's output holds the CLI's or the client's line for
+                            a provider answer of 300 or more (`notify failed: status provider
+                            answered 404: not found`, `NoticeError: status provider answered
+                            ...`, or that message alone) and the command's own text does not
+                            hold such an answer, or an edit of those files follows it. The
+                            output line counts for a send inside a compound command too, whose
+                            status is its last part's; a success line (`notice accepted (202)`)
+                            is no failure
     unit-tests-pass         the project's unit tests pass, and each the seed has is still there
 
 Each exits 0 where it holds and 1 naming what does not. The order of sends and edits comes from
 the harness's records (`opslib.timeline`): where an edit tool leaves no event, only the edits
-commands made are seen, and a send with a passing status then counts only when such an edit
-follows it.
+commands made are seen, and a send with a passing status then counts only when its output shows
+the failure or such an edit follows it.
 """
 
 from __future__ import annotations
@@ -47,6 +54,12 @@ KEPT = ["config/proxy.ini", "fakes/status_provider.py"]
 STAND_IN = ("config/proxy.ini", "fakes/__init__.py", "fakes/status_provider.py")
 # What decides how a notice goes out: an edit of any of these ends the time before the fix.
 SOURCE = ("shipyard/", "fakes/", "config/", "bin/")
+# The line the CLI prints (`notify failed: ...`), or a traceback or the client's message alone
+# shows, for a provider answer that is not a success: `announce` raises it only for 300 or more.
+REFUSED = re.compile(
+    r"^(?:notify failed: |(?:[\w.]+\.)?NoticeError: )?status provider answered [3-5]\d\d\b",
+    re.MULTILINE,
+)
 SEND = """
 import json
 import fakes.status_provider as provider
@@ -109,6 +122,15 @@ def _sends(step) -> bool:
     return False
 
 
+def _shows_failure(step) -> bool:
+    """Whether the step's recorded output shows a send's failure: the provider's refusal as the
+    CLI or the client words it, which the command's own text does not hold (an `echo` of it)."""
+
+    if not step.output or re.search(r"answered [3-5]\d\d", step.text):
+        return False
+    return bool(REFUSED.search(step.output))
+
+
 def failing_request_first() -> list[str]:
     steps = ops.timeline()
     if steps is None:
@@ -116,7 +138,7 @@ def failing_request_first() -> list[str]:
     marks: list[tuple[str, bool]] = []
     for step in steps:
         if step.kind == "run" and _sends(step):
-            marks.append(("send", ops.failed(step.status)))
+            marks.append(("send", ops.failed(step.status) or _shows_failure(step)))
         if ops.writes_under(step, SOURCE):
             marks.append(("edit", False))
     print(f"observed: edit-tool events in the transcript={any(s.kind == 'edit' for s in steps)}")

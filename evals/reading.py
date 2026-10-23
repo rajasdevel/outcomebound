@@ -216,7 +216,7 @@ def receipts_block(meta_path: Path, meta: dict[str, Any], stubs: list[str]) -> s
                 for receipt in found.receipts:
                     output = receipt.output if receipt.output is not None else "(no output kept)"
                     text = blind(output.replace(str(folder), "<stubs>"), meta)
-                    parts.append((receipt.position, f"$ {_bare(receipt.command, stub)}\n{text}"))
+                    parts.append((receipt.position, f"$ {_bare(receipt.invocation, stub)}\n{text}"))
     body = "\n\n".join(text for _, text in sorted(parts)) or NO_RECEIPT
     return f"**Receipts (stub outputs):**\n\n{fenced(body)}"
 
