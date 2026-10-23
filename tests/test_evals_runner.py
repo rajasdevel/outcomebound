@@ -514,7 +514,7 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
             assert f"- {adopt.CONDITIONS[skill]}: read .agents/skills/{skill}/SKILL.md" in note
         assert "read .outcomebound/fragments/tickets.md" in note
         assert seed_note == note
-    elif arm == RUN.FACTS_ONLY:
+    elif arm in (RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS):
         assert pointer not in note and "id=project-facts" in note, note
         assert "id=operating-contract" not in note and ": read " not in note, note
         assert seed_note == note
