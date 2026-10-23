@@ -12,7 +12,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" version"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "history-kept",
@@ -23,7 +27,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" history"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "site-matches-source",
@@ -34,7 +42,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" site"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "build-kept",
@@ -45,7 +57,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" build"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     }
   ]
 }

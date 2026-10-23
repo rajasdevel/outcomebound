@@ -51,6 +51,8 @@
     "sorted-product-weak-test",
     "source-marker-test",
     "skip",
-    "sort-by-total"
+    "sort-by-total",
+    "small-reports-unsorted",
+    "mutant-name-test"
   ]
 }

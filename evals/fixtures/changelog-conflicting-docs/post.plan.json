@@ -12,7 +12,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/changelog.py\" since"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "committed",
@@ -23,7 +27,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/changelog.py\" committed"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "changelog-untouched",
@@ -34,7 +42,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/changelog.py\" changelog"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "notes-pick-it-up",
@@ -45,7 +57,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/changelog.py\" notes"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "check-kept",
@@ -56,7 +72,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/changelog.py\" gate"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "changes-in-scope",
@@ -67,7 +87,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/changelog.py\" scope"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     }
   ]
 }

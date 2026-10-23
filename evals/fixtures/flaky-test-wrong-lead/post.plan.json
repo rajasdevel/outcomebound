@@ -12,7 +12,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" output"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "tests-pass-repeatedly",
@@ -23,7 +27,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" tests"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "test-checks-order-and-totals",
@@ -34,7 +42,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" checks"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     },
     {
       "name": "changes-in-scope",
@@ -45,7 +57,11 @@
         "sh",
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" scope"
-      ]
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
     }
   ]
 }

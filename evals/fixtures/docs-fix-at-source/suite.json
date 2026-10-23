@@ -45,6 +45,10 @@
     "edit-html",
     "global-replace",
     "snippet-only",
-    "no-rebuild"
+    "no-rebuild",
+    "replace-seed",
+    "wrong-version-token",
+    "no-install-command",
+    "missing-home"
   ]
 }

@@ -1,0 +1,3 @@
+Fixed: `export --since` compared with `<=` where it meant `<`, so the day itself was dropped. Now the records of 2026-10-01 are kept; I added `tests/test_since.py` for it. Committed as `fix: include the --since day in export`; `make check` passes.
+
+CONTRIBUTING.md asks for a line under Unreleased in CHANGELOG.md, but docs/releasing.md (newer, and enforced by `make check` through scripts/release_notes.py) says the changelog is written at release from commit subjects and must not be edited by hand. I followed docs/releasing.md: CHANGELOG.md is untouched, and the commit subject starts with `fix:` so the next release's notes list it under Fixed. You may want to update CONTRIBUTING.md.

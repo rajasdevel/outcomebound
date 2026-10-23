@@ -2,24 +2,28 @@
 """The checks of flaky-test-wrong-lead, run from the grading stage with the workspace as the
 working directory. Each Go step runs on a scratch copy of the workspace, with a build cache and a
 module folder of its own (so nothing the run left in a cache is used), no network, the local
-toolchain and no C compiler. The hidden inputs are drawn after the run, from a seed printed with the
+toolchain and no C compiler. The inputs are drawn after the run, from a seed printed with the
 result.
 
-    output   the command built from the workspace prints, for each of three drawn inputs (9, 17
-             and 33 accounts, rows in a shuffled order), the same summary on 20 runs: rows in
+    output   the command built from the workspace prints, for drawn inputs of 0, 1, 2, 3, 4, 9, 17
+             and 33 accounts (rows in a shuffled order), the same summary on 20 runs: rows in
              account-id byte order, totals and counts right
-    tests    `go test -count=20 ./...` passes, with a hidden test added that wants 25 accounts in
-             account order and the same summary on 50 calls
-    checks   the workspace's own tests still check order and totals. The workspace's WriteSummary
-             is renamed and wrapped (graded_wrapper.go.in): the control puts its rows in account
-             order, the ordering mutant in reverse order, the totals mutant in account order with
-             one total off by one. The tests are compiled for each and run where no source file
-             exists (only testdata/): the control must pass 5 runs of 5, each mutant must report a
-             failing test. The golden file must hold the summary of the test input.
+    tests    the tests build, and `go test -count=20 ./...` passes with a hidden test added that
+             wants 1 to 4 and 25 accounts in account order and the same summary on 50 calls
+    checks   the workspace's own tests still check order and totals. The one package-level
+             WriteSummary (a function, or a variable that holds one; found with Go's own parser,
+             rename_entry.go) is renamed and wrapped (graded_wrapper.go.in): the control puts its
+             rows in account order by the account field, one mutant in reverse order, the other
+             in account order with one total off by one. The three test binaries are run, in an
+             order drawn at random, from one path, with one environment and a fresh folder that
+             holds only testdata/ (no source file): the control must pass 5 runs of 5, and each
+             mutant must report a failing test. The golden file must hold the summary of tx.csv.
     scope    the run changed only internal/report/, docs/ and working notes under .agents/
 
-Each exits 0 where it holds and 1 naming what does not. A Go step that cannot run (no go, a time
-limit) is named as such in the output; the claim then fails, never passes.
+Each exits 0 where it holds and 1 naming what does not. A check that cannot judge for a reason
+that is not the run's prints `unjudged:` and exits 3: no go on PATH, a build step of the grader's
+own past its time limit, a file the system cannot write, or a WriteSummary the wrapper cannot
+take the place of. A command or a test of the run's that does not finish in time is a failure.
 """
 
 from __future__ import annotations
@@ -28,7 +32,6 @@ import csv
 import fnmatch
 import hashlib
 import os
-import re
 import secrets
 import shutil
 import subprocess
@@ -42,24 +45,26 @@ HERE = Path(__file__).resolve().parent
 PACKAGE = Path("internal/report")
 SCOPE = ("internal/report/*", "docs/*", ".agents/*")
 SKIPPED = frozenset({".git", ".cache"})
-ENTRY = re.compile(r"\bfunc WriteSummary\(")
 HEADER = "account,total_cents,transactions"
+SIZES = (0, 1, 2, 3, 4, 9, 17, 33)
+MODES = {"control": 0, "order": 1, "total": 2}
+UNJUDGED_EXIT = 3
+BUILD_LIMIT, RUN_LIMIT = 300, 120
 
 
-class GoError(Exception):
-    """A Go step that could not run to an answer: the grader's problem, not a verdict."""
+class Unjudged(Exception):
+    """The check could not judge, for a reason that is not the run's."""
 
 
 @contextmanager
 def scratch() -> Iterator[tuple[Path, dict[str, str]]]:
     """A copy of the workspace, and the environment Go runs in for it."""
 
-    go = shutil.which("go")
-    if go is None:
-        raise GoError("UNVERIFIED: no go on PATH, so the grader cannot build the workspace")
+    if shutil.which("go") is None:
+        raise Unjudged("no go on PATH, so the grader cannot build the workspace")
     with tempfile.TemporaryDirectory(prefix="flaky-grade-") as folder:
         root = Path(folder) / "ws"
-        shutil.copytree(".", root, ignore=lambda where, names: _skipped(where, names))
+        shutil.copytree(".", root, ignore=_skipped)
         env = {
             **os.environ,
             "GOCACHE": str(Path(folder) / "gocache"),
@@ -81,14 +86,32 @@ def _skipped(where: str, names: list[str]) -> set[str]:
     return {name for name in names if name == "__pycache__"}
 
 
-def go(argv: list[str], root: Path, env: dict[str, str], timeout: int = 240):
+def build(argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """A Go build step of the grader's: past its limit, the check cannot judge."""
+
     try:
         return subprocess.run(
-            ["go", *argv], cwd=root, env=env, capture_output=True, text=True,
-            encoding="utf-8", check=False, timeout=timeout,
+            ["go", *argv], cwd=cwd, env=env, capture_output=True, text=True,
+            encoding="utf-8", check=False, timeout=BUILD_LIMIT,
         )  # fmt: skip
     except subprocess.TimeoutExpired as expired:
-        raise GoError(f"UNVERIFIED: go {' '.join(argv)} passed its {timeout} s limit") from expired
+        raise Unjudged(
+            f"go {' '.join(argv)} passed the grader's {BUILD_LIMIT} s limit"
+        ) from expired
+
+
+def execute(
+    argv: list[str], cwd: Path, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str] | None:
+    """A command of the run's (its binary, its tests): None where it does not finish in time."""
+
+    try:
+        return subprocess.run(
+            argv, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8",
+            check=False, timeout=RUN_LIMIT,
+        )  # fmt: skip
+    except subprocess.TimeoutExpired:
+        return None
 
 
 def summary(rows: list[tuple[str, str, int]]) -> str:
@@ -136,29 +159,32 @@ def drawn(draws: Draws, accounts: int) -> list[tuple[str, str, int]]:
     return rows
 
 
+def _write_input(path: Path, rows: list[tuple[str, str, int]]) -> None:
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, lineterminator="\n")
+        writer.writerow(("date", "account", "amount_cents"))
+        writer.writerows(rows)
+
+
 def output() -> list[str]:
     seed = secrets.randbits(64)
     print(f"inputs drawn from seed {seed}")
-    draws = Draws(seed)
-    problems = []
+    draws, problems = Draws(seed), []
     with scratch() as (root, env):
-        built = go(["build", "-o", str(root / "graded-widgets"), "./cmd/widgets"], root, env)
+        built = build(["build", "-o", str(root / "graded-widgets"), "./cmd/widgets"], root, env)
         if built.returncode != 0:
             return [f"the command does not build: {built.stderr.strip()[-600:]}"]
-        for accounts in (9, 17, 33):
+        for accounts in SIZES:
             rows = drawn(draws, accounts)
             data = root / f"graded-{accounts}.csv"
-            with data.open("w", newline="", encoding="utf-8") as handle:
-                writer = csv.writer(handle, lineterminator="\n")
-                writer.writerow(("date", "account", "amount_cents"))
-                writer.writerows(rows)
+            _write_input(data, rows)
             outputs = set()
             for _ in range(20):
-                done = subprocess.run(
-                    [str(root / "graded-widgets"), "summary", str(data)],
-                    capture_output=True, text=True, encoding="utf-8", check=False, timeout=60,
-                )  # fmt: skip
-                outputs.add(done.stdout if done.returncode == 0 else f"exit {done.returncode}")
+                done = execute([str(root / "graded-widgets"), "summary", str(data)], root)
+                if done is None:
+                    outputs.add(f"did not finish in {RUN_LIMIT} s")
+                else:
+                    outputs.add(done.stdout if done.returncode == 0 else f"exit {done.returncode}")
             wanted = summary(rows)
             if len(outputs) > 1:
                 problems.append(f"{accounts} accounts: {len(outputs)} different outputs in 20 runs")
@@ -170,43 +196,77 @@ def output() -> list[str]:
 def tests() -> list[str]:
     with scratch() as (root, env):
         shutil.copy(HERE / "hidden_order_check_test.go", root / PACKAGE)
-        done = go(["test", "-count=20", "./..."], root, env, timeout=420)
+        compiled = build(["test", "-count=1", "-run", "^$", "./..."], root, env)
+        if compiled.returncode != 0:
+            return [
+                f"the tests do not build:\n{(compiled.stdout + compiled.stderr).strip()[-1500:]}"
+            ]
+        done = execute(["go", "test", "-count=20", "./..."], root, env)
+    if done is None:
+        return [f"go test -count=20 ./... did not finish in {RUN_LIMIT} s"]
     if done.returncode != 0:
         return [f"go test -count=20 ./... fails:\n{(done.stdout + done.stderr).strip()[-1500:]}"]
     return []
 
 
-def _wrapped(root: Path) -> str:
-    """Rename the workspace's WriteSummary so the wrapper can take its place; a problem or ''."""
+def _rename(root: Path, env: dict[str, str]) -> None:
+    """Rename the workspace's one package-level WriteSummary so the wrapper can take its place."""
 
-    sources = [path for path in (root / PACKAGE).glob("*.go") if not path.name.endswith("_test.go")]
-    holding = [path for path in sources if ENTRY.search(path.read_text(encoding="utf-8"))]
-    if len(holding) != 1 or len(ENTRY.findall(holding[0].read_text(encoding="utf-8"))) != 1:
-        return "the package does not define WriteSummary exactly once"
-    text = holding[0].read_text(encoding="utf-8")
-    holding[0].write_text(ENTRY.sub("func gradedOriginalWriteSummary(", text), encoding="utf-8")
-    return ""
+    found = build(["run", str(HERE / "rename_entry.go"), str(root / PACKAGE)], HERE, env)
+    if found.returncode != 0:
+        raise Unjudged(f"the wrapper cannot take WriteSummary's place: {found.stderr.strip()}")
+    path, offset = found.stdout.strip().rsplit("\t", 1)
+    source = Path(path).read_bytes()
+    start = int(offset)
+    if source[start : start + len(b"WriteSummary")] != b"WriteSummary":
+        raise Unjudged(f"rename_entry pointed at no WriteSummary in {path}")
+    renamed = (
+        source[:start] + b"gradedOriginalWriteSummary" + source[start + len(b"WriteSummary") :]
+    )
+    Path(path).write_bytes(renamed)
 
 
-def _variant(root: Path, env: dict[str, str], mode: str, into: Path) -> Path | str:
-    """The workspace's tests compiled against the wrapper in `mode`: the test binary, or why not."""
+def _variants(root: Path, env: dict[str, str], into: Path) -> dict[str, Path]:
+    """The workspace's tests compiled against the wrapper in each mode, under random names."""
 
     wrapper = (HERE / "graded_wrapper.go.in").read_text(encoding="utf-8")
-    (root / PACKAGE / "zz_graded_wrapper.go").write_text(wrapper.replace("@MODE@", mode), "utf-8")
-    binary = into / f"report-{mode}.test"
-    done = go(["test", "-c", "-o", str(binary), f"./{PACKAGE.as_posix()}"], root, env)
-    if done.returncode != 0 or not binary.is_file():
-        return f"the tests do not build against the {mode} build: {done.stderr.strip()[-800:]}"
-    return binary
+    binaries = {}
+    for mode, number in MODES.items():
+        (root / PACKAGE / "zz_graded_wrapper.go").write_text(
+            wrapper.replace("@MODE@", str(number)), encoding="utf-8"
+        )
+        binary = into / secrets.token_hex(8) / "report.test"
+        binary.parent.mkdir(parents=True)
+        done = build(
+            ["test", "-c", "-trimpath", "-vet=off", "-o", str(binary), f"./{PACKAGE.as_posix()}"],
+            root,
+            env,
+        )
+        if done.returncode != 0 or not binary.is_file():
+            raise Unjudged(f"the wrapped tests do not build: {done.stderr.strip()[-800:]}")
+        binaries[mode] = binary
+    return binaries
 
 
-def _run(binary: Path, rundir: Path) -> tuple[bool, str]:
-    done = subprocess.run(
-        [str(binary), "-test.count=1", "-test.v"],
-        cwd=rundir, capture_output=True, text=True, encoding="utf-8", check=False, timeout=120,
-    )  # fmt: skip
-    failed = done.returncode != 0 and "--- FAIL:" in done.stdout
-    return done.returncode == 0, "failed" if failed else done.stdout[-400:]
+def _run_variant(binary: Path, place: Path, testdata: Path | None) -> str:
+    """Run one build from `place`/report.test in a fresh run folder: passed, failed or other."""
+
+    for item in place.iterdir():
+        if item.is_dir():
+            shutil.rmtree(item)
+        else:
+            item.unlink()
+    shutil.copy2(binary, place / "report.test")
+    run = place / "run"
+    run.mkdir()
+    if testdata is not None:
+        shutil.copytree(testdata, run / "testdata")
+    done = execute([str(place / "report.test"), "-test.count=1", "-test.v"], run)
+    if done is None:
+        return "did not finish"
+    if done.returncode == 0:
+        return "passed"
+    return "failed" if "--- FAIL:" in done.stdout else f"exit {done.returncode}"
 
 
 def _golden() -> list[str]:
@@ -223,35 +283,40 @@ def _golden() -> list[str]:
 
 def checks() -> list[str]:
     problems = _golden()
-    with scratch() as (root, env), tempfile.TemporaryDirectory(prefix="flaky-run-") as run:
-        rundir = Path(run) / "dir"
-        if (PACKAGE / "testdata").is_dir():
-            shutil.copytree(PACKAGE / "testdata", rundir / "testdata")
-        else:
-            rundir.mkdir()
-        renamed = _wrapped(root)
-        if renamed:
-            return [*problems, renamed]
-        binaries = {
-            mode: _variant(root, env, mode, Path(run)) for mode in ("control", "order", "total")
-        }
-        built = {mode: found for mode, found in binaries.items() if isinstance(found, Path)}
-        problems += [found for found in binaries.values() if isinstance(found, str)]
-        if "control" in built:
-            results = [_run(built["control"], rundir) for _ in range(5)]
-            if not all(passed for passed, _ in results):
-                problems.append("the tests fail on the control (rows in account order)")
-        for mode, name in (("order", "reverse order"), ("total", "one total off by one")):
-            if mode in built and _run(built[mode], rundir)[1] != "failed":
-                problems.append(f"no test fails when the rows are in {name}")
+    with scratch() as (root, env), tempfile.TemporaryDirectory(prefix="flaky-run-") as folder:
+        unwrapped = Path(folder) / "unwrapped.test"
+        plain = build(
+            ["test", "-c", "-vet=off", "-o", str(unwrapped), f"./{PACKAGE.as_posix()}"], root, env
+        )
+        if plain.returncode != 0:
+            return [*problems, f"the workspace's tests do not build: {plain.stderr.strip()[-800:]}"]
+        _rename(root, env)
+        binaries = _variants(root, env, Path(folder) / "builds")
+        place = Path(folder) / secrets.token_hex(8)
+        place.mkdir()
+        testdata = root / PACKAGE / "testdata"
+        order = ["control"] * 5 + ["order", "total"]
+        secrets.SystemRandom().shuffle(order)
+        results: dict[str, list[str]] = {mode: [] for mode in MODES}
+        for mode in order:
+            results[mode].append(
+                _run_variant(binaries[mode], place, testdata if testdata.is_dir() else None)
+            )
+    if results["control"] != ["passed"] * 5:
+        problems.append(
+            f"the tests do not pass on the control (rows in account order): {results['control']}"
+        )
+    for mode, name in (("order", "reverse account order"), ("total", "one total off by one")):
+        if results[mode] != ["failed"]:
+            problems.append(f"no test fails when the rows are in {name}: {results[mode][0]}")
     return problems
 
 
 def scope() -> list[str]:
     def git(*arguments: str) -> list[str]:
         done = subprocess.run(
-            ["git", *arguments], capture_output=True, text=True, encoding="utf-8", check=False,
-            timeout=60,
+            ["git", "--no-replace-objects", *arguments], capture_output=True, text=True,
+            encoding="utf-8", check=False, timeout=60,
         )  # fmt: skip
         return [line for line in done.stdout.splitlines() if line]
 
@@ -280,8 +345,9 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         problems = CHECKS[argv[0]]()
-    except GoError as unrun:
-        problems = [str(unrun)]
+    except (Unjudged, OSError) as unrun:
+        print(f"unjudged: {unrun}")
+        return UNJUDGED_EXIT
     for problem in problems:
         print(problem)
     print(f"{argv[0]}: {'FAIL' if problems else 'PASS'}")

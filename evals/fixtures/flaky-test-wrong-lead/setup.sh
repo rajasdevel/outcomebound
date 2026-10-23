@@ -62,6 +62,6 @@ commit "2026-10-21T17:00:00Z" "ci: keep the last 20 runs' results" ci
 git tag seed
 
 cp "$here/checks/flaky.py" "$here/checks/hidden_order_check_test.go" \
-  "$here/checks/graded_wrapper.go.in" "$stage/checks/"
+  "$here/checks/graded_wrapper.go.in" "$here/checks/rename_entry.go" "$stage/checks/"
 chmod +x "$stage/checks/flaky.py"
 echo "fixture ready: $target"

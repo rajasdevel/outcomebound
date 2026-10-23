@@ -56,6 +56,8 @@
     "both",
     "loosen-check",
     "uncommitted",
-    "committed-gate-weakened"
+    "committed-gate-weakened",
+    "malformed-row",
+    "year-dropped"
   ]
 }
