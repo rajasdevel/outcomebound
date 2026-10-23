@@ -13,6 +13,7 @@
               {"label": "none-plus-kernel", "arm": "none", "add": ["kernel"]},
               {"label": "edited", "arm": "current", "edits": "/abs/edits.json"},
               {"label": "facts-only", "arm": "facts-only"},
+              {"label": "facts-only-noskills", "arm": "facts-only-noskills"},
               {"label": "bare", "arm": "bare"}]}
 
 A Claude Code plan names `"harness": "claude-code"`, and may give an arm a plugin from a pinned

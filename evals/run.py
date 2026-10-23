@@ -206,12 +206,17 @@ SKILL_ROOTS = (".outcomebound/skills/", ".claude/skills/", ".agents/skills/")
 # installs for the harness: the project-facts block, the local fragment inline where the fixture
 # selects it, and the skills where the harness lists skills itself; no kernel and no pointer.
 FACTS_ONLY = "facts-only"
+# The facts-only arm less its skills: the same adopt run, then each skill file that install wrote
+# is removed, so the two arms differ by the skills alone. The manifest adopt wrote stays as it is.
+FACTS_ONLY_NOSKILLS = "facts-only-noskills"
+# The arms that adopt's facts-only install builds.
+FACTS_ONLY_ARMS = (FACTS_ONLY, FACTS_ONLY_NOSKILLS)
 # The bare arm: no instruction file at all, the fixture's own note among them, and no
 # OutcomeBound file. Its fixture is built as the none arm's, then loses every file named below.
 BARE = "bare"
-ARMS = (EARLIER, "current", UNSIZED, NONE, FACTS_ONLY, BARE)
+ARMS = (EARLIER, "current", UNSIZED, NONE, FACTS_ONLY, FACTS_ONLY_NOSKILLS, BARE)
 # The arms whose fixture's setup runs as the none arm's: no core skill, no pointer to it.
-NOTE_ONLY = (NONE, FACTS_ONLY, BARE)
+NOTE_ONLY = (NONE, FACTS_ONLY, FACTS_ONLY_NOSKILLS, BARE)
 # What the bare arm removes after the fixture's setup: each file of these names at any depth
 # (codex reads the first two, Claude Code the others and AGENTS.md, from `.claude/` too), each
 # `.claude/rules` folder at any depth, and at the workspace's root each skill root and the
@@ -775,8 +780,8 @@ def load_arm(
         return Arm(name, text, files, None, agents=verbatim_guidance()[0])
     if name in (NONE, BARE) or (name == EARLIER and not EARLIER_REF):
         return Arm(name, text, {}, None)
-    if name == FACTS_ONLY:
-        return facts_only_arm(selected, done)
+    if name in FACTS_ONLY_ARMS:
+        return facts_only_arm(selected, done, name)
     from outcomebound_tools import adopt, facts, fragments
 
     root = earlier_source() if name == EARLIER else REPO
@@ -809,19 +814,16 @@ def load_arm(
     )
 
 
-def facts_only_arm(selected: tuple[str, ...], done: tuple[str, ...]) -> Arm:
-    """The facts-only arm, for an install that selects the fragments `selected` and records the
-    Done commands `done`: always installed by this checkout's adopt with `--facts-only` after
-    the build, on any fixture. Its files are what that install writes besides AGENTS.md and the
-    ignore and manifest files: each skill the install carries, at the harness's skill path, where
-    the harness lists skills itself, and nothing elsewhere; no fragment file. It keeps this
-    checkout's launcher, as the current arm does, so the two differ in the installed text alone."""
+def facts_only_skill_files() -> dict[str, bytes]:
+    """The skill files `outcomebound adopt --facts-only` writes for the harness: each skill the
+    install carries, at the harness's skill path, where the harness lists skills itself; else
+    none."""
 
     from outcomebound_tools import adopt
 
     try:
         (route,) = adopt.routes(REPO, [INSTALL_HARNESS])
-        files = {
+        return {
             f"{route.skills}/{skill}/{relative}": data
             for skill in (carried_skills(REPO) if route.native else ())
             for relative, data in adopt.skill_files(REPO, skill).items()
@@ -830,9 +832,19 @@ def facts_only_arm(selected: tuple[str, ...], done: tuple[str, ...]) -> Arm:
         raise SystemExit(
             f"run: the facts-only arm cannot read what adopt installs: {error}"
         ) from None
-    return Arm(
-        FACTS_ONLY, "", files, REPO / LAUNCHER, tuple(selected), done=tuple(done), adopted=True
-    )
+
+
+def facts_only_arm(selected: tuple[str, ...], done: tuple[str, ...], name: str = FACTS_ONLY) -> Arm:
+    """The facts-only arm, for an install that selects the fragments `selected` and records the
+    Done commands `done`: always installed by this checkout's adopt with `--facts-only` after
+    the build, on any fixture. Its files are what that install writes besides AGENTS.md and the
+    ignore and manifest files: the skill files (`facts_only_skill_files`), and nothing
+    elsewhere; no fragment file. The arm `FACTS_ONLY_NOSKILLS` has no files: the build removes
+    the skill files that the same install writes (`strip_skills`). Both keep this checkout's
+    launcher, as the current arm does, so they differ from it in the installed text alone."""
+
+    files = facts_only_skill_files() if name == FACTS_ONLY else {}
+    return Arm(name, "", files, REPO / LAUNCHER, tuple(selected), done=tuple(done), adopted=True)
 
 
 def fixture_arm(name: str, arm: Arm) -> Arm:
@@ -1250,7 +1262,7 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
 
     env = {**child_env(), **HERMETIC_GIT}
     argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", INSTALL_HARNESS]
-    argv += ["--facts-only"] if arm.name == FACTS_ONLY else []
+    argv += ["--facts-only"] if arm.name in FACTS_ONLY_ARMS else []
     argv += ["--fragments", ",".join(arm.selected)] if arm.selected else []
     for line in arm.done:
         argv += ["--done", line]
@@ -1373,8 +1385,15 @@ def strip_instructions(workdir: Path, extra: dict[str, Any]) -> tuple[tuple[str,
             shutil.rmtree(path)
         else:
             path.unlink()
+    return tuple(removed), fold_removal(workdir, removed)
+
+
+def fold_removal(workdir: Path, removed: list[str]) -> str:
+    """Fold the removal of `removed` from the built fixture into the seed commit and the `seed`
+    tag; why it could not, or an empty string."""
+
     if not removed:
-        return (), ""
+        return ""
     env = {**child_env(), **HERMETIC_GIT}
     # Only the removed paths leave the index: a fixture's uncommitted edits stay as setup left
     # them, as under `as_installed`.
@@ -1387,10 +1406,50 @@ def strip_instructions(workdir: Path, extra: dict[str, Any]) -> tuple[tuple[str,
             command, cwd=workdir, capture_output=True, text=True, env=env, encoding="utf-8"
         )
         if done.returncode != 0:
-            return tuple(
-                removed
-            ), f"the removal could not be folded into the seed: {done.stderr.strip()}"
-    return tuple(removed), ""
+            return f"the removal could not be folded into the seed: {done.stderr.strip()}"
+    return ""
+
+
+def strip_skills(workdir: Path, extra: dict[str, Any]) -> str:
+    """For the facts-only arm less its skills: remove each skill file that adopt's facts-only
+    install wrote (`facts_only_skill_files`), and each folder that leaves empty, and fold the
+    removal into the seed commit. A file the fixture's setup wrote under the skill path stays.
+    The manifest keeps its skill records, as the facts-only arm's does, so `adopt --check`
+    reads those skills as missing. `extra` records the files removed as `skills_removed`. Why
+    the removal could not be folded in, or an empty string."""
+
+    removed = sorted(path for path in facts_only_skill_files() if (workdir / path).is_file())
+    extra["skills_removed"] = removed
+    for item in removed:
+        (workdir / item).unlink()
+        for parent in (workdir / item).parents:
+            if parent == workdir or any(parent.iterdir()):
+                break
+            parent.rmdir()
+    return fold_removal(workdir, removed)
+
+
+def facts_only_unfit(workdir: Path, arm: Arm, extra: dict[str, Any]) -> str:
+    """For a facts-only arm's built fixture: the skill-less arm's skills removed
+    (`strip_skills`), then why the workspace is not adopt's facts-only install, less its skills
+    for that arm; or an empty string."""
+
+    unfit = strip_skills(workdir, extra) if arm.name == FACTS_ONLY_NOSKILLS else ""
+    if not unfit and facts_only_problems(workdir):
+        unfit = "the facts-only install differs: " + "; ".join(facts_only_problems(workdir))
+    if not unfit and arm.name == FACTS_ONLY_NOSKILLS and skill_problems(workdir):
+        unfit = "the skills are not all removed: " + "; ".join(skill_problems(workdir))
+    return unfit
+
+
+def skill_problems(workdir: Path) -> list[str]:
+    """Each skill file of adopt's facts-only install that the built workspace still holds."""
+
+    return [
+        f"skill file present: {path}"
+        for path in facts_only_skill_files()
+        if (workdir / path).exists()
+    ]
 
 
 def facts_only_problems(workdir: Path) -> list[str]:
@@ -1965,8 +2024,8 @@ def build_workspace(
     removed: tuple[str, ...] = ()
     if not unfit and arm.name == BARE:
         removed, unfit = strip_instructions(workdir, extra)
-    if not unfit and arm.name == FACTS_ONLY and facts_only_problems(workdir):
-        unfit = "the facts-only install differs: " + "; ".join(facts_only_problems(workdir))
+    if not unfit and arm.name in FACTS_ONLY_ARMS:
+        unfit = facts_only_unfit(workdir, arm, extra)
     if not unfit:
         refresh_baseline_hashes(workdir, stage, removed)
     if unfit:
@@ -2355,12 +2414,14 @@ def refuse_workspaces(root: Path, paths: list[Path]) -> str:
 
 
 # What the bare arm records of each fixture: the instruction files and OutcomeBound folders it
-# removed, and those a nested repository kept.
-BARE_RECORDS = ("instructions_removed", "instructions_kept")
+# removed, and those a nested repository kept; and what the facts-only arm less its skills
+# records: the skill files it removed.
+BARE_RECORDS = ("instructions_removed", "instructions_kept", "skills_removed")
 
 
 def bare_record(rows: list[dict[str, Any]]) -> dict[str, Any]:
-    """What STATUS.json keeps of the bare arm's removals, by fixture; nothing for another arm."""
+    """What STATUS.json keeps of the bare arm's and the skill-less facts-only arm's removals, by
+    fixture; nothing for another arm."""
 
     return {
         key: {row["fixture"]: row[key] for row in rows if key in row}
@@ -3283,6 +3344,8 @@ def _parser() -> argparse.ArgumentParser:
             f"paragraph; {NONE} is the task alone, with no kernel, skill or launcher; "
             f"{FACTS_ONLY} is the fixture's note and what `outcomebound adopt --facts-only` "
             "installs for the harness, with the launcher; "
+            f"{FACTS_ONLY_NOSKILLS} is {FACTS_ONLY} with the skill files that install wrote "
+            "removed; "
             f"{BARE} is {NONE} with no instruction file at all, the fixture's own note among "
             "them. The model is always named and passed to codex with -m, so codex's configured "
             "default never runs. Each arm's measurement is "
@@ -3307,7 +3370,8 @@ def _parser() -> argparse.ArgumentParser:
         help=f"{EARLIER}: an earlier wording of the kernel; current: what adopt "
         f"installs for {HARNESS}, and the launcher on PATH; {UNSIZED}: current without the "
         f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher; {FACTS_ONLY}: the "
-        f"facts-only install, and the launcher on PATH; {BARE}: {NONE} with no instruction file",
+        f"facts-only install, and the launcher on PATH; {FACTS_ONLY_NOSKILLS}: {FACTS_ONLY} "
+        f"without its skill files; {BARE}: {NONE} with no instruction file",
     )
     parser.add_argument(
         "--drop",
@@ -3528,7 +3592,7 @@ def element_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -
     the current arm or the none arm plus elements, under `--arm-label`. A refusal exits 2."""
 
     dropped, added = tuple(args.drop or ()), tuple(args.add or ())
-    if args.arm in (FACTS_ONLY, BARE) and (dropped or added or args.edits):
+    if args.arm in (*FACTS_ONLY_ARMS, BARE) and (dropped or added or args.edits):
         parser.error(
             f"--arm {args.arm} takes no --drop, --add or --edits: it is measured as it is; "
             f"build an element arm from --arm current or --arm {NONE}"
@@ -3996,9 +4060,12 @@ def isolation(
     if arm.shaped():
         problems = element_problems(workdir, arm)
         rows.append(("elements", not problems, "; ".join(problems) or _elements_text(arm)))
-    if arm.name == FACTS_ONLY:
+    if arm.name in FACTS_ONLY_ARMS:
         problems = facts_only_problems(workdir)
         rows.append(("facts-only-install", not problems, "; ".join(problems) or "as adopt wrote"))
+    if arm.name == FACTS_ONLY_NOSKILLS:
+        problems = skill_problems(workdir)
+        rows.append(("no-skill", not problems, "; ".join(problems) or "none of adopt's skills"))
     if arm.name == BARE:
         left, kept = instruction_paths(workdir)
         rows.append(

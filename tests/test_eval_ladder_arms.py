@@ -1,9 +1,10 @@
-"""The facts-only and bare arms, with no model call.
+"""The facts-only, facts-only-noskills and bare arms, with no model call.
 
 With `none` and `current` they form a ladder: `bare` has no instruction file at all, `none` the
 fixture's own note, `facts-only` that note and adopt's facts-only install, `current` the full
-install. Each is built on a fake fixture in a temporary folder, under each harness, as a run
-builds it; every codex is a fake that records being started, and Claude Code is never started.
+install; `facts-only-noskills` is `facts-only` less its skills. Each is built on a fake fixture
+in a temporary folder, under each harness, as a run builds it; every codex is a fake that records
+being started, and Claude Code is never started.
 """
 
 from __future__ import annotations
@@ -269,10 +270,55 @@ def test_the_facts_only_arm_is_adopts_facts_only_install(
     assert RUN.facts_only_problems(workdir) == [f"the {adopt.KERNEL} block present"]
 
 
+def test_the_noskills_arm_is_the_facts_only_install_less_its_skills(
+    tmp_path: Path, fake: dict[str, Path], harness: str
+) -> None:
+    """Breaks if the facts-only-noskills arm writes an AGENTS.md or a manifest other than the
+    facts-only arm's, leaves a skill file adopt wrote, removes the fixture's own skill, leaves
+    the removal outside the seed, or does not record what it removed."""
+
+    only = _arm(RUN.FACTS_ONLY)
+    arm = _arm(RUN.FACTS_ONLY_NOSKILLS)
+    assert arm.adopted and arm.kernel == "" and arm.launcher == only.launcher
+    assert arm.files == {} and (arm.selected, arm.done) == (only.selected, only.done)
+    with_skills, _protected, _prompt, _extra, _stage = _build(only, tmp_path / "f")
+    workdir, _protected, prompt, extra, _stage = _build(arm, tmp_path / "n")
+    for name in ("AGENTS.md", ".outcomebound/manifest.json", ".outcomebound/.gitignore"):
+        assert (workdir / name).read_bytes() == (with_skills / name).read_bytes(), name
+    assert extra["skills_removed"] == sorted(only.files)
+    assert not any((workdir / path).exists() for path in only.files)
+    skills = workdir / SKILL_PATH[harness]
+    left = sorted(p.relative_to(workdir).as_posix() for p in skills.rglob("*") if p.is_file())
+    own = [".claude/skills/own/SKILL.md"] if harness == RUN.CLAUDE else []
+    assert left == own
+
+    # Every other file is as the facts-only arm left it.
+    def tree(root: Path) -> dict[str, bytes]:
+        return {
+            p.relative_to(root).as_posix(): p.read_bytes()
+            for p in root.rglob("*")
+            if p.is_file() and ".git" not in p.relative_to(root).parts
+        }
+
+    assert tree(workdir) == {k: v for k, v in tree(with_skills).items() if k not in only.files}
+    assert prompt == "Task:\nRecord the release in the changelog.\n"
+    assert RUN.facts_only_problems(workdir) == [] and RUN.skill_problems(workdir) == []
+    _clean(workdir)
+    rows = {row[0]: row for row in RUN.isolation(arm, workdir, prompt, "", None)}
+    assert rows["facts-only-install"][1] == "PASS" and rows["no-skill"][1] == "PASS", rows
+    assert RUN.bare_record([{"fixture": "ladder-fake", **extra}]) == {
+        "skills_removed": {"ladder-fake": sorted(only.files)}
+    }
+    assert RUN.bare_record([{"fixture": "ladder-fake"}]) == {}
+    (workdir / sorted(only.files)[0]).parent.mkdir(parents=True, exist_ok=True)
+    (workdir / sorted(only.files)[0]).write_text("x", "utf-8")
+    assert RUN.skill_problems(workdir) == [f"skill file present: {sorted(only.files)[0]}"]
+
+
 # --- the dry run, the refusals and the loop -----------------------------------------------------
 
 
-@pytest.mark.parametrize("kind", [RUN.FACTS_ONLY, RUN.BARE])
+@pytest.mark.parametrize("kind", [RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS, RUN.BARE])
 @pytest.mark.parametrize("tool", [RUN.HARNESS, RUN.CLAUDE])
 def test_the_dump_builds_each_arm_on_each_harness_and_passes_its_rules(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], fake: dict[str, Path], kind: str, tool: str
@@ -285,13 +331,18 @@ def test_the_dump_builds_each_arm_on_each_harness_and_passes_its_rules(
     printed = capsys.readouterr().out
     assert code == 0, printed
     assert f"fixture ladder-fake, arm {kind};" in printed
-    rule = "facts-only-install" if kind == RUN.FACTS_ONLY else "no-instruction-file"
+    rules = {
+        RUN.FACTS_ONLY: ["facts-only-install"],
+        RUN.FACTS_ONLY_NOSKILLS: ["facts-only-install", "no-skill"],
+        RUN.BARE: ["no-instruction-file"],
+    }[kind]
     isolation = printed.split("--- isolation ---\n", 1)[1]
-    assert f"{rule} PASS" in isolation and " FAIL " not in isolation, printed
+    assert all(f"{rule} PASS" in isolation for rule in rules), printed
+    assert " FAIL " not in isolation, printed
     assert not fake["calls"].exists(), "the dump started codex"
 
 
-@pytest.mark.parametrize("kind", [RUN.FACTS_ONLY, RUN.BARE])
+@pytest.mark.parametrize("kind", [RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS, RUN.BARE])
 @pytest.mark.parametrize(
     "options",
     [["--drop", "kernel"], ["--add", "kernel"], ["--edits", "e.json", "--arm-label", "x"]],
@@ -314,7 +365,8 @@ def test_a_loop_plan_runs_the_ladder_arms_and_refuses_their_edits(
 
     loop = load("ladder_loop", "evals/loop.py")
     runner = loop.load_runner()
-    arms = [{"label": kind, "arm": kind} for kind in ("none", RUN.FACTS_ONLY, RUN.BARE, "current")]
+    kinds = ("none", RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS, RUN.BARE, "current")
+    arms = [{"label": kind, "arm": kind} for kind in kinds]
     plan = {
         "name": "ladder",
         "model": "m",
@@ -331,8 +383,8 @@ def test_a_loop_plan_runs_the_ladder_arms_and_refuses_their_edits(
     started: list[Any] = []
     assert loop.main([str(path), "--dry-run"], runner=started.append, module=runner) == 0
     printed = capsys.readouterr().out
-    assert started == [] and "cells 4, done 0, to run 4" in printed
-    for kind in (RUN.FACTS_ONLY, RUN.BARE):
+    assert started == [] and "cells 5, done 0, to run 5" in printed
+    for kind in (RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS, RUN.BARE):
         assert f"--arm {kind} --arm-label {kind}" in printed
     (tmp_path / "e.json").write_text("[]", encoding="utf-8")
     plan["arms"] = [{"label": "x", "arm": RUN.FACTS_ONLY, "edits": str(tmp_path / "e.json")}]

@@ -506,6 +506,12 @@ What stays `UNVERIFIED` until that probe runs:
   meta and `STATUS.json` record `arm_kind`, the skill files' digests, `arm_done` and
   `arm_adopted`, as for `current`. Against `none`, it measures what the project facts add;
   against `current`, what the contract and the pointers add over the facts.
+- `facts-only-noskills`: `facts-only` less its skills. The same adopt run, then the runner removes
+  each skill file that run wrote (a skill the fixture's own setup wrote stays) and folds the
+  removal into the seed commit; `AGENTS.md` and `.outcomebound/manifest.json` are byte-identical to
+  `facts-only`'s, so the manifest still records the skills and `adopt --check` reads them as missing.
+  The meta, `INDEX.json` and `STATUS.json` record `skills_removed`, and `--dump-arm` shows the rules
+  `facts-only-install` and `no-skill`. Against `facts-only`, it measures what the listed skills cost.
 - `bare`: the `none` arm with no instruction file at all. After the fixture's `setup.sh` (run as
   under `none`), the runner removes each `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` and
   `CLAUDE.local.md` at any depth (the fixture's own note among them, and `.claude/CLAUDE.md`),
@@ -523,9 +529,9 @@ What stays `UNVERIFIED` until that probe runs:
   every fixture, as a replica fixture's run does; a Claude Code run refuses one above its
   workspaces for every arm. `--dump-arm` shows the rule `no-instruction-file`. Against `none`, it
   measures what the project's own note is worth.
-  - `--drop`, `--add` and `--edits` are refused with `facts-only` and `bare` (exit 2): each arm is
-    measured as it is, and an element arm builds on `current` or `none`. A loop plan refuses
-    `edits` on them too.
+  - `--drop`, `--add` and `--edits` are refused with `facts-only`, `facts-only-noskills` and `bare`
+    (exit 2): each arm is measured as it is, and an element arm builds on `current` or `none`. A
+    loop plan refuses `edits` on them too.
   - With `none` and `current`, the two make four steps, each adding one layer: `bare`, `none`,
     `facts-only`, `current`.
 - `earlier`: an earlier wording of the kernel, kept in `evals/arms/earlier-kernel.md`. With
