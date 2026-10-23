@@ -280,6 +280,11 @@ FIXTURE_ROOT_ENV = "OUTCOMEBOUND_FIXTURE_ROOT"
 # A fixture is judged by Git comparisons, so an operator's global or system Git config
 # (hooksPath, excludesFile, an alias) must not reach the child that builds or checks it.
 HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+# Every grader process also runs with Git's replacement objects (`git replace`) and graft file
+# turned off: a run can add refs/replace/ or .git/info/grafts to its own repository, and a
+# grader that reads the seed commit (OUTCOMEBOUND_SEED_SHA) must read that commit, not the
+# object a replacement puts in its place.
+GRADER_GIT = {**HERMETIC_GIT, "GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull}
 # The commits the runner makes itself, which fold an install or a removal into the seed, are
 # committed as the eval's own identity, the one each cell's session gets (`GIT_IDENTITY`), never
 # as the machine's: with the global config hidden, Git would else fall back to the user and host
@@ -1968,7 +1973,7 @@ def post_check(
     (grading / "answer.md").write_text(answer, encoding="utf-8")
     env = {
         **child_env(),
-        **HERMETIC_GIT,
+        **GRADER_GIT,
         "PYTHONPATH": str(REPO),
         "PYTHONDONTWRITEBYTECODE": "1",
         GRADER_DIR_ENV: str(graders or workdir),

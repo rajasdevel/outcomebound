@@ -673,6 +673,14 @@ runs. So every fixture now works as the hand-off fixtures do, and the runner hol
   `<fixture>.graders/` and `OUTCOMEBOUND_EVAL_DIR` naming the `evals/` folder inside it, so the
   hand-off graders also run from the sealed copy. `--regrade` runs the same way from the source
   run's sealed copy, after it checks `graders_sha256`.
+- **Git's replacement objects are off for the graders.** A run can add `refs/replace/` or a
+  graft file to its own repository, so that the seed commit reads as a commit of its own. Every
+  grader process runs with `GIT_NO_REPLACE_OBJECTS=1` and `GIT_GRAFT_FILE` set to the null
+  device (`GRADER_GIT` in `run.py`; `selftest.py` and the tests' grading helper do the same),
+  so a grader that reads `OUTCOMEBOUND_SEED_SHA` reads that commit. A grader that starts Git
+  with an environment of its own passes `--no-replace-objects` itself.
+  `tests/test_eval_grader_git.py` replaces a seed commit and checks that a grader sees the
+  original.
 - **A test holds the rule.** `tests/test_eval_grader_isolation.py` builds every fixture once,
   under `current` (or under the one arm a fixture runs in), and one fixture under `none` as well,
   since where the graders go does not depend on the arm, with a stand-in harness whose `call`
