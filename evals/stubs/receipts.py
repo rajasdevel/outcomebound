@@ -76,7 +76,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import ntpath
 import os
+import posixpath
 import re
 import shlex
 import sys
@@ -251,15 +253,20 @@ def _invokes(command: str, stub_name: str, stubs_dir: str) -> bool:
 
 
 def _is_stub(word: str, stub_name: str, stubs_dir: str) -> bool:
-    """Whether `word`, as a command word, names the stub: its name, or its path under
-    `stubs_dir`."""
+    """Whether `word`, as a command word, names the stub: its name, or its absolute path under
+    `stubs_dir`. The word is shell text, so it is read as a POSIX path whatever the host (on a
+    Windows host a drive path such as `C:/...` is absolute too), and the folder the runner
+    recorded is compared in the form a shell names it, with forward slashes."""
 
     if word == stub_name:
         return True
-    if not os.path.isabs(word):
+    if not (posixpath.isabs(word) or (os.name == "nt" and ntpath.isabs(word))):
         return False
-    placed = os.path.normpath(os.path.join(stubs_dir, stub_name))
-    return os.path.normpath(word) in (placed, os.path.realpath(placed))
+    placed = os.path.join(stubs_dir, stub_name)
+    named = {
+        posixpath.normpath(path.replace(os.sep, "/")) for path in (placed, os.path.realpath(placed))
+    }
+    return posixpath.normpath(word) in named
 
 
 def _tokens(script: str) -> list[tuple[str, bool]] | None:

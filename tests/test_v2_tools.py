@@ -345,7 +345,8 @@ def test_reading_sheet_shows_the_stub_receipts_under_each_answer(
     results = tmp_path / "results"
     write_stub_run(results, "current", 1, [])
     stubs = results / "workspaces" / "none-r1-gamma.stubs"
-    placed = f"{stubs}/review"
+    # A command is shell text: the path in it has forward slashes on every host.
+    placed = f"{stubs.as_posix()}/review"
     write_stub_run(
         results,
         "none",
