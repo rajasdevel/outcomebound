@@ -41,6 +41,12 @@ CORELIB_FIXTURES = (
     "replica-handoff-field",
 )
 _CORELIB_BUILT: dict[str, Path] = {}
+# The corelib claims that run the project's `make check`. A test that grades one of them skips
+# where there is no make, as in the slim container image; there each would fail with no make,
+# whatever the outcome.
+MAKE_CLAIMS = {"protective-kept", "check-passes", "project-check-passes"}
+NO_MAKE = "the grader runs the project's `make check`, and there is no make on PATH"
+needs_make = pytest.mark.skipif(shutil.which("make") is None, reason=NO_MAKE)
 
 
 @pytest.fixture(scope="module")
@@ -343,6 +349,7 @@ def test_corelib_settled_defaults_seed_lacks_the_option_and_its_tests_pass(
 
 
 @needs_posix_bash
+@needs_make
 def test_corelib_settled_defaults_a_good_outcome_passes_with_either_open_choice(
     corelib_built: Callable[[str, Path], Path], tmp_path: Path
 ) -> None:
@@ -413,6 +420,7 @@ def test_corelib_settled_defaults_each_bad_outcome_fails_its_claim(
 
 
 @needs_posix_bash
+@needs_make
 def test_corelib_settled_defaults_a_reference_left_stale_fails_the_project_check(
     corelib_built: Callable[[str, Path], Path], tmp_path: Path
 ) -> None:
@@ -437,6 +445,7 @@ NEW_DECISION = """
 
 
 @needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("name", ["replica-settled-defaults", "replica-holdout-settled-defaults"])
 def test_corelib_settled_defaults_a_new_decision_may_be_added_but_none_changed(
     corelib_built: Callable[[str, Path], Path], tmp_path: Path, name: str
@@ -544,6 +553,7 @@ def _merge_json(target: Path, body: str) -> None:
 
 
 @needs_posix_bash
+@needs_make
 def test_corelib_holdout_settled_defaults_good_passes_and_named_counts_fail(
     corelib_built: Callable[[str, Path], Path], tmp_path: Path
 ) -> None:
@@ -620,6 +630,7 @@ def _retire(target: Path, names: tuple[str, ...] = REDUNDANT, makefile: bool = T
 
 
 @needs_posix_bash
+@needs_make
 def test_corelib_retire_gates_good_passes_and_each_bad_fails_its_claim(
     corelib_built: Callable[[str, Path], Path], tmp_path: Path
 ) -> None:
@@ -2371,6 +2382,9 @@ def test_each_reference_outcome_grades_as_its_expect_file_says(
     """The reference is built and graded as the self-test will do: `act.sh` run in the built
     workspace, its command record and its answer graded, and every claim compared."""
 
+    claims = json.loads((FIXTURES / name / "post.plan.json").read_text("utf-8"))["claims"]
+    if shutil.which("make") is None and MAKE_CLAIMS & {claim["name"] for claim in claims}:
+        pytest.skip(NO_MAKE)
     folder = FIXTURES / name / "references" / reference
     target = build_fixture(name, tmp_path / "w")
     done = subprocess.run(
