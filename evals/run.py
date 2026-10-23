@@ -698,6 +698,7 @@ class Arm(NamedTuple):
     added: tuple[str, ...] = ()
     edits: tuple[Edit, ...] = ()
     edits_sha256: str = ""
+    kept_skills: tuple[str, ...] = ()
 
     def shaped(self) -> bool:
         """Whether the arm is an element arm: the current install less some elements, the none
@@ -735,6 +736,7 @@ class Arm(NamedTuple):
             **({"arm_adopted": True} if self.adopted else {}),
             "elements": {"dropped": list(self.dropped), "added": list(self.added)},
             **({"edits": {"sha256": self.edits_sha256, "items": edits}} if self.edits else {}),
+            **({"skills_kept": list(self.kept_skills)} if self.kept_skills else {}),
         }
 
 
@@ -756,7 +758,11 @@ def carried_skills(root: Path) -> tuple[str, ...]:
 
 
 def load_arm(
-    name: str, selected: tuple[str, ...] = (), done: tuple[str, ...] = (), adopted: bool = False
+    name: str,
+    selected: tuple[str, ...] = (),
+    done: tuple[str, ...] = (),
+    adopted: bool = False,
+    kept: tuple[str, ...] = (),
 ) -> Arm:
     """The arm as it runs, for an install that selects the fragments `selected` and records the
     Done commands `done`; `adopted`, for `current` alone, installs it with the engine's own
@@ -764,7 +770,8 @@ def load_arm(
     `current` mirrors a codex install of this checkout: the whole folder of each skill that
     install carries, which is every install's ten, at the skill path the harness table gives
     codex, and this checkout's launcher. The earlier arm is its kernel alone and the kernel-off
-    arm has nothing, whatever is selected or recorded."""
+    arm has nothing, whatever is selected or recorded. `kept`, for `facts-only-noskills` alone,
+    names the skills whose files it keeps."""
 
     text = kernel(name)
     if verbatim_install(name):
@@ -781,7 +788,7 @@ def load_arm(
     if name in (NONE, BARE) or (name == EARLIER and not EARLIER_REF):
         return Arm(name, text, {}, None)
     if name in FACTS_ONLY_ARMS:
-        return facts_only_arm(selected, done, name)
+        return facts_only_arm(selected, done, name, kept)
     from outcomebound_tools import adopt, facts, fragments
 
     root = earlier_source() if name == EARLIER else REPO
@@ -814,10 +821,10 @@ def load_arm(
     )
 
 
-def facts_only_skill_files() -> dict[str, bytes]:
+def facts_only_skill_files(only: tuple[str, ...] | None = None) -> dict[str, bytes]:
     """The skill files `outcomebound adopt --facts-only` writes for the harness: each skill the
-    install carries, at the harness's skill path, where the harness lists skills itself; else
-    none."""
+    install carries (only those in `only`, where it is given), at the harness's skill path,
+    where the harness lists skills itself; else none."""
 
     from outcomebound_tools import adopt
 
@@ -826,6 +833,7 @@ def facts_only_skill_files() -> dict[str, bytes]:
         return {
             f"{route.skills}/{skill}/{relative}": data
             for skill in (carried_skills(REPO) if route.native else ())
+            if only is None or skill in only
             for relative, data in adopt.skill_files(REPO, skill).items()
         }
     except adopt.AdoptError as error:
@@ -834,17 +842,32 @@ def facts_only_skill_files() -> dict[str, bytes]:
         ) from None
 
 
-def facts_only_arm(selected: tuple[str, ...], done: tuple[str, ...], name: str = FACTS_ONLY) -> Arm:
+def facts_only_arm(
+    selected: tuple[str, ...],
+    done: tuple[str, ...],
+    name: str = FACTS_ONLY,
+    kept: tuple[str, ...] = (),
+) -> Arm:
     """The facts-only arm, for an install that selects the fragments `selected` and records the
     Done commands `done`: always installed by this checkout's adopt with `--facts-only` after
     the build, on any fixture. Its files are what that install writes besides AGENTS.md and the
     ignore and manifest files: the skill files (`facts_only_skill_files`), and nothing
-    elsewhere; no fragment file. The arm `FACTS_ONLY_NOSKILLS` has no files: the build removes
-    the skill files that the same install writes (`strip_skills`). Both keep this checkout's
-    launcher, as the current arm does, so they differ from it in the installed text alone."""
+    elsewhere; no fragment file. The arm `FACTS_ONLY_NOSKILLS` has the files of the skills in
+    `kept` (none by default): the build removes the other skill files that the same install
+    writes (`strip_skills`). Both keep this checkout's launcher, as the current arm does, so they
+    differ from it in the installed text alone."""
 
-    files = facts_only_skill_files() if name == FACTS_ONLY else {}
-    return Arm(name, "", files, REPO / LAUNCHER, tuple(selected), done=tuple(done), adopted=True)
+    files = facts_only_skill_files(None if name == FACTS_ONLY else tuple(kept))
+    return Arm(
+        name,
+        "",
+        files,
+        REPO / LAUNCHER,
+        tuple(selected),
+        done=tuple(done),
+        adopted=True,
+        kept_skills=tuple(kept) if name == FACTS_ONLY_NOSKILLS else (),
+    )
 
 
 def fixture_arm(name: str, arm: Arm) -> Arm:
@@ -1410,15 +1433,19 @@ def fold_removal(workdir: Path, removed: list[str]) -> str:
     return ""
 
 
-def strip_skills(workdir: Path, extra: dict[str, Any]) -> str:
+def strip_skills(workdir: Path, extra: dict[str, Any], kept: tuple[str, ...] = ()) -> str:
     """For the facts-only arm less its skills: remove each skill file that adopt's facts-only
-    install wrote (`facts_only_skill_files`), and each folder that leaves empty, and fold the
-    removal into the seed commit. A file the fixture's setup wrote under the skill path stays.
+    install wrote (`facts_only_skill_files`) except those of the skills in `kept`, and each
+    folder that leaves empty, and fold the removal into the seed commit. A file the fixture's
+    setup wrote under the skill path stays.
     The manifest keeps its skill records, as the facts-only arm's does, so `adopt --check`
     reads those skills as missing. `extra` records the files removed as `skills_removed`. Why
     the removal could not be folded in, or an empty string."""
 
-    removed = sorted(path for path in facts_only_skill_files() if (workdir / path).is_file())
+    keep = facts_only_skill_files(kept)
+    removed = sorted(
+        path for path in facts_only_skill_files() if path not in keep and (workdir / path).is_file()
+    )
     extra["skills_removed"] = removed
     for item in removed:
         (workdir / item).unlink()
@@ -1434,22 +1461,30 @@ def facts_only_unfit(workdir: Path, arm: Arm, extra: dict[str, Any]) -> str:
     (`strip_skills`), then why the workspace is not adopt's facts-only install, less its skills
     for that arm; or an empty string."""
 
-    unfit = strip_skills(workdir, extra) if arm.name == FACTS_ONLY_NOSKILLS else ""
+    unfit = strip_skills(workdir, extra, arm.kept_skills) if arm.name == FACTS_ONLY_NOSKILLS else ""
     if not unfit and facts_only_problems(workdir):
         unfit = "the facts-only install differs: " + "; ".join(facts_only_problems(workdir))
-    if not unfit and arm.name == FACTS_ONLY_NOSKILLS and skill_problems(workdir):
-        unfit = "the skills are not all removed: " + "; ".join(skill_problems(workdir))
+    if not unfit and arm.name == FACTS_ONLY_NOSKILLS and skill_problems(workdir, arm.kept_skills):
+        unfit = "the skills are not as kept: " + "; ".join(skill_problems(workdir, arm.kept_skills))
     return unfit
 
 
-def skill_problems(workdir: Path) -> list[str]:
-    """Each skill file of adopt's facts-only install that the built workspace still holds."""
+def skill_problems(workdir: Path, kept: tuple[str, ...] = ()) -> list[str]:
+    """Each skill file of adopt's facts-only install that the built workspace holds though its
+    skill is not in `kept`, and each file of a kept skill that it lacks or holds with other bytes
+    than the facts-only arm's."""
 
-    return [
-        f"skill file present: {path}"
-        for path in facts_only_skill_files()
-        if (workdir / path).exists()
-    ]
+    keep = facts_only_skill_files(kept)
+    problems = []
+    for path in facts_only_skill_files():
+        found = workdir / path
+        if path not in keep:
+            problems += [f"skill file present: {path}"] if found.exists() else []
+        elif not found.is_file():
+            problems.append(f"kept skill file missing: {path}")
+        elif found.read_bytes() != keep[path]:
+            problems.append(f"kept skill file differs: {path}")
+    return problems
 
 
 def facts_only_problems(workdir: Path) -> list[str]:
@@ -2749,7 +2784,9 @@ def rebuilt_arm(name: str, meta: dict[str, Any]) -> tuple[Arm | None, str]:
     if named.named():
         base = load_arm("current", chosen.fragments, chosen.done, True)
         return element_arm(base, kind, named), ""
-    return fixture_arm(name, load_arm(kind, chosen.fragments, chosen.done, chosen.adopted)), ""
+    kept = tuple(meta.get("skills_kept") or ()) if kind == FACTS_ONLY_NOSKILLS else ()
+    installed = load_arm(kind, chosen.fragments, chosen.done, chosen.adopted, kept)
+    return fixture_arm(name, installed), ""
 
 
 def install_differences(arm: Arm, meta: dict[str, Any]) -> list[str]:
@@ -3414,6 +3451,14 @@ def _parser() -> argparse.ArgumentParser:
         "launcher",
     )
     parser.add_argument(
+        "--keep-skills",
+        default=None,
+        metavar="NAME[,NAME...]",
+        help=f"with --arm {FACTS_ONLY_NOSKILLS} only: keep the files of these skills (names adopt "
+        "carries) and remove the other skills' files; needs --arm-label in a run, and the "
+        "record names them as skills_kept",
+    )
+    parser.add_argument(
         "--arm-label",
         default="",
         metavar="NAME",
@@ -3553,12 +3598,17 @@ def suite_refusal(name: str) -> str:
 
 
 def fixture_arms(
-    parser: argparse.ArgumentParser, arm: str, names: list[str], elements: Elements = NO_ELEMENTS
+    parser: argparse.ArgumentParser,
+    arm: str,
+    names: list[str],
+    elements: Elements = NO_ELEMENTS,
+    kept: tuple[str, ...] = (),
 ) -> dict[str, Arm]:
     """The arm each fixture runs under, with its install's fragments and Done commands, and the
     elements and edits `elements` names; a fixture whose install.json the runner refuses, or
     that cannot run the element arm (`element_refusal`, an edit whose text does not occur once
-    in an installed skill or fragment file), exits 2, before anything is built."""
+    in an installed skill or fragment file), exits 2, before anything is built. `kept` names the
+    skills the `facts-only-noskills` arm keeps."""
 
     arms = {}
     for name in names:
@@ -3567,7 +3617,7 @@ def fixture_arms(
         except InstallError as problem:
             parser.error(f"{name}/{INSTALL_FILE}: {problem}")
         if not elements.named():
-            installed = load_arm(arm, chosen.fragments, chosen.done, chosen.adopted)
+            installed = load_arm(arm, chosen.fragments, chosen.done, chosen.adopted, kept)
             arms[name] = fixture_arm(name, installed)
             continue
         refused = element_refusal(chosen, elements)
@@ -3613,6 +3663,35 @@ def element_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -
     return Elements(dropped, added, *edits_option(parser, args, added))
 
 
+def keep_skills_option(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, label_needed: bool = True
+) -> tuple[str, ...]:
+    """The skills `--keep-skills` names, checked: only with `--arm facts-only-noskills`, each a
+    skill that adopt carries and named once, and (for a run, not a dump) under `--arm-label`, so
+    that runs with different lists are told apart. A refusal exits 2."""
+
+    if args.keep_skills is None:
+        return ()
+    if args.arm != FACTS_ONLY_NOSKILLS:
+        parser.error(
+            f"--keep-skills keeps skills in the {FACTS_ONLY_NOSKILLS} arm: use --arm "
+            f"{FACTS_ONLY_NOSKILLS}"
+        )
+    named = tuple(args.keep_skills.split(","))
+    carried = carried_skills(REPO)
+    for skill in named:
+        if skill not in carried:
+            parser.error(
+                f"--keep-skills: no skill {skill!r} that adopt carries; there are "
+                f"{', '.join(carried)}"
+            )
+    if len(set(named)) != len(named):
+        parser.error("--keep-skills: name each skill once")
+    if label_needed and not args.arm_label:
+        parser.error("--keep-skills needs --arm-label: name the variant the kept skills make")
+    return named
+
+
 def edits_option(
     parser: argparse.ArgumentParser, args: argparse.Namespace, added: tuple[str, ...]
 ) -> tuple[tuple[Edit, ...], str]:
@@ -3631,12 +3710,12 @@ def edits_option(
         parser.error(f"--edits {args.edits}: {problem}")
 
 
-def run_arm(kind: str, elements: Elements) -> Arm:
+def run_arm(kind: str, elements: Elements, kept: tuple[str, ...] = ()) -> Arm:
     """The arm a run's STATUS.json records, with no fixture's fragments: the named arm, or the
     element arm built from the current install."""
 
     if not elements.named():
-        return load_arm(kind)
+        return load_arm(kind, kept=kept)
     return element_arm(load_arm("current", adopted=True), kind, elements)
 
 
@@ -4064,8 +4143,19 @@ def isolation(
         problems = facts_only_problems(workdir)
         rows.append(("facts-only-install", not problems, "; ".join(problems) or "as adopt wrote"))
     if arm.name == FACTS_ONLY_NOSKILLS:
-        problems = skill_problems(workdir)
-        rows.append(("no-skill", not problems, "; ".join(problems) or "none of adopt's skills"))
+        problems = skill_problems(workdir, arm.kept_skills)
+        rows.append(
+            (
+                "no-skill",
+                not problems,
+                "; ".join(problems)
+                or (
+                    f"only the kept skills, as facts-only has them: {', '.join(arm.kept_skills)}"
+                    if arm.kept_skills
+                    else "none of adopt's skills"
+                ),
+            )
+        )
     if arm.name == BARE:
         left, kept = instruction_paths(workdir)
         rows.append(
@@ -4119,8 +4209,9 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         parser.error(f"no fixture {name}; there are {', '.join(fixture_names())}")
     set_earlier_ref(parser, args)
     elements = element_options(parser, args)
+    kept = keep_skills_option(parser, args, label_needed=False)
     plugins = harness_options(parser, args)
-    arm = fixture_arms(parser, args.arm, [name], elements)[name]
+    arm = fixture_arms(parser, args.arm, [name], elements, kept)[name]
     label = args.arm_label or element_label(args.arm, elements)
     root = workspace_root(args.workspace_root)
     workspace = root / f"dump-{uuid.uuid4().hex[:12]}" / f"{name}-{label}" if root else None
@@ -4430,6 +4521,7 @@ def _main(argv: list[str] | None = None) -> int:
     set_earlier_ref(parser, args)
     plugins = harness_options(parser, args)
     elements = element_options(parser, args)
+    kept = keep_skills_option(parser, args)
     run_id = uuid.uuid4().hex
     out = Path(args.out) if args.out else RAW / run_id
     root = workspace_root(args.workspace_root)
@@ -4440,9 +4532,9 @@ def _main(argv: list[str] | None = None) -> int:
     # Each fixture's install, read before anything runs: an install.json the runner refuses, a
     # fragment the engine does not ship, an element the install does not hold or an edit that
     # does not apply stops the run here.
-    arms = fixture_arms(parser, args.arm, names, elements)
+    arms = fixture_arms(parser, args.arm, names, elements, kept)
     tried_edits(parser, arms)
-    arm = run_arm(args.arm, elements)
+    arm = run_arm(args.arm, elements, kept)
     if root:
         wanted = [workspace_path(root, out, name, args.repetition) for name in names]
         refused = refuse_workspaces(root, wanted)

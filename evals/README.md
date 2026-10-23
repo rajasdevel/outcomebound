@@ -512,6 +512,7 @@ What stays `UNVERIFIED` until that probe runs:
   `facts-only`'s, so the manifest still records the skills and `adopt --check` reads them as missing.
   The meta, `INDEX.json` and `STATUS.json` record `skills_removed`, and `--dump-arm` shows the rules
   `facts-only-install` and `no-skill`. Against `facts-only`, it measures what the listed skills cost.
+  `--keep-skills NAME[,NAME...]` (a loop arm's `keep_skills`) keeps those skills' files, byte-identical to `facts-only`'s, and removes the others; it is refused with any other arm or a name adopt does not carry, a run needs `--arm-label` to tell the lists apart, and the records add `skills_kept`.
 - `bare`: the `none` arm with no instruction file at all. After the fixture's `setup.sh` (run as
   under `none`), the runner removes each `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` and
   `CLAUDE.local.md` at any depth (the fixture's own note among them, and `.claude/CLAUDE.md`),

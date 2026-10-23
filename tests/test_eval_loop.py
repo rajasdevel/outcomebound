@@ -397,3 +397,71 @@ def test_dry_run_shows_the_spend_projection(
     assert LOOP.main([str(path), "--dry-run"], runner=FakeRunner(), module=RUNNER) == 0
     printed = capsys.readouterr().out
     assert "0 recorded so far, worst case of the cells to run 4800" in printed
+
+
+KEEPS = SimpleNamespace(
+    **{
+        **vars(RUNNER),
+        "ARMS": ("none", "current", "facts-only-noskills"),
+        "FACTS_ONLY_NOSKILLS": "facts-only-noskills",
+        "REPO": Path("."),
+        "carried_skills": lambda root: ("diagnose", "decision-brief", "review-findings"),
+    }
+)
+
+
+def keep_plan(tmp_path: Path, keep: list[str], **changes: Any) -> Path:
+    arms = [
+        {"label": "none", "arm": "none"},
+        {"label": "kept", "arm": "facts-only-noskills", "keep_skills": keep},
+    ]
+    return write_plan(tmp_path, arms=arms, fixtures=["alpha"], **changes)
+
+
+def test_a_keep_list_reaches_the_cell_the_record_and_the_reuse_check(tmp_path: Path) -> None:
+    plan = LOOP.read_plan(keep_plan(tmp_path, ["diagnose", "decision-brief"]), KEEPS)
+    found = {cell.arm.label: list(cell.argv) for cell in LOOP.cells(plan) if cell.repetition == 1}
+    words = found["kept"]
+    assert words[words.index("--keep-skills") + 1] == "diagnose,decision-brief"
+    assert words[words.index("--arm") + 1] == "facts-only-noskills"
+    assert words[words.index("--arm-label") + 1] == "kept"
+    assert "--keep-skills" not in found["none"]
+    LOOP.record(plan)
+    saved = json.loads((tmp_path / "results" / "loop1" / "LOOP.json").read_text(encoding="utf-8"))
+    assert saved["arms"][1]["keep_skills"] == ["diagnose", "decision-brief"]
+    assert "keep_skills" not in saved["arms"][0]
+    LOOP.record(plan)  # the same list under the same name is the same run
+    other = LOOP.read_plan(keep_plan(tmp_path, ["diagnose"]), KEEPS)
+    with pytest.raises(LOOP.PlanError, match="records keep_skills"):
+        LOOP.record(other)
+    # An arm the record lacks may be added under the name.
+    more = [
+        {"label": "none", "arm": "none"},
+        {
+            "label": "kept",
+            "arm": "facts-only-noskills",
+            "keep_skills": ["diagnose", "decision-brief"],
+        },
+    ]
+    more.append({"label": "second", "arm": "facts-only-noskills", "keep_skills": ["diagnose"]})
+    LOOP.record(LOOP.read_plan(write_plan(tmp_path, arms=more, fixtures=["alpha"]), KEEPS))
+
+
+@pytest.mark.parametrize(
+    ("keep", "arm", "message"),
+    [
+        (["nope"], "facts-only-noskills", "does not carry"),
+        (["diagnose", "diagnose"], "facts-only-noskills", "twice"),
+        (["diagnose"], "current", "applies to the facts-only-noskills arm only"),
+        ("diagnose", "facts-only-noskills", "list of non-empty strings"),
+    ],
+)
+def test_a_bad_keep_list_is_refused_before_any_cell(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], keep: Any, arm: str, message: str
+) -> None:
+    runner = FakeRunner()
+    arms = [{"label": "kept", "arm": arm, "keep_skills": keep}]
+    path = write_plan(tmp_path, arms=arms, fixtures=["alpha"])
+    assert LOOP.main([str(path)], runner=runner, module=KEEPS) == 2
+    assert runner.calls == []
+    assert message in capsys.readouterr().err

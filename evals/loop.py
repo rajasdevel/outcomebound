@@ -14,7 +14,15 @@
               {"label": "edited", "arm": "current", "edits": "/abs/edits.json"},
               {"label": "facts-only", "arm": "facts-only"},
               {"label": "facts-only-noskills", "arm": "facts-only-noskills"},
+              {"label": "keep-dd", "arm": "facts-only-noskills",
+               "keep_skills": ["diagnose", "decision-brief"]},
               {"label": "bare", "arm": "bare"}]}
+
+An arm of kind `facts-only-noskills` may give `keep_skills`, a list of distinct skill names that
+adopt carries: it keeps those skills' files and removes the others (each is passed to run.py as
+`--keep-skills`). Arms that keep different skills need different labels, which name their result
+folders. LOOP.json records the list when it is set, and a plan name that ran under another list
+for the same label is refused like one that ran under another model.
 
 A Claude Code plan names `"harness": "claude-code"`, and may give an arm a plugin from a pinned
 clone: `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/third-party/ponytail"}`.
@@ -108,7 +116,7 @@ PROFILES = {
     "claude-top": "claude-code",
     "small": "claude-code",
 }
-ARM_KEYS = frozenset(("label", "arm", "drop", "add", "edits", "plugin_dir"))
+ARM_KEYS = frozenset(("label", "arm", "drop", "add", "edits", "plugin_dir", "keep_skills"))
 DONE = ("ran", "ran with failures")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 REFUSED = 2
@@ -123,6 +131,7 @@ class Arm(NamedTuple):
     add: tuple[str, ...]
     edits: str
     plugin_dir: str = ""
+    keep_skills: tuple[str, ...] = ()
 
 
 class Plan(NamedTuple):
@@ -182,8 +191,34 @@ def _path(value: Any, where: str, base: Path) -> Path:
     return path if path.is_absolute() else (base / path).resolve()
 
 
-def _arm(entry: Any, arms: tuple[str, ...], kinds: tuple[str, str], base: Path) -> Arm:
-    current, none = kinds
+def _keep(
+    entry: dict[str, Any], label: str, kind: Any, noskills: str, skills: tuple[str, ...]
+) -> tuple[str, ...]:
+    """An arm's `keep_skills`: for the skill-less facts-only arm only, each a skill adopt carries
+    and named once."""
+
+    if "keep_skills" not in entry:
+        return ()
+    keep = _strings(entry["keep_skills"], f"arm {label}: keep_skills")
+    if kind != noskills:
+        raise PlanError(f"arm {label}: keep_skills applies to the {noskills} arm only")
+    unknown = [item for item in keep if item not in skills]
+    if unknown or len(set(keep)) != len(keep):
+        raise PlanError(
+            f"arm {label}: keep_skills names a skill adopt does not carry or names one twice: "
+            f"{', '.join(unknown) or 'a repeat'}; the skills are {', '.join(skills)}"
+        )
+    return keep
+
+
+def _arm(
+    entry: Any,
+    arms: tuple[str, ...],
+    kinds: tuple[str, str, str],
+    base: Path,
+    skills: tuple[str, ...],
+) -> Arm:
+    current, none, _noskills = kinds
     if not isinstance(entry, dict):
         raise PlanError("each arm is an object")
     unknown = sorted(set(entry) - ARM_KEYS)
@@ -207,7 +242,8 @@ def _arm(entry: Any, arms: tuple[str, ...], kinds: tuple[str, str], base: Path) 
         )
     plugin = entry.get("plugin_dir")
     folder = str(_path(plugin, f"arm {label}: plugin_dir", base)) if "plugin_dir" in entry else ""
-    return Arm(label, str(kind), drop, add, edits, folder)
+    keep = _keep(entry, label, kind, kinds[2], skills)
+    return Arm(label, str(kind), drop, add, edits, folder, keep)
 
 
 def read_plan(path: Path, runner: ModuleType) -> Plan:
@@ -402,11 +438,18 @@ def _fixtures(value: Any, known: set[str]) -> tuple[str, ...]:
     return fixtures
 
 
+def _keeps(entries: Any) -> bool:
+    """Whether any arm entry names `keep_skills`, which needs the runner's list of skills."""
+
+    return any(isinstance(entry, dict) and "keep_skills" in entry for entry in entries)
+
+
 def _arms(entries: Any, runner: ModuleType, base: Path) -> tuple[Arm, ...]:
     if not isinstance(entries, list) or not entries:
         raise PlanError("arms is a non-empty list")
-    kinds = ("current", runner.NONE)
-    arms = tuple(_arm(entry, tuple(runner.ARMS), kinds, base) for entry in entries)
+    kinds = ("current", runner.NONE, getattr(runner, "FACTS_ONLY_NOSKILLS", "facts-only-noskills"))
+    skills = tuple(runner.carried_skills(runner.REPO)) if _keeps(entries) else ()
+    arms = tuple(_arm(entry, tuple(runner.ARMS), kinds, base, skills) for entry in entries)
     labels = [arm.label for arm in arms]
     twice = sorted({label for label in labels if labels.count(label) > 1})
     if twice:
@@ -426,6 +469,8 @@ def argv(plan: Plan, arm: Arm, repetition: int, fixture: str, out: Path) -> tupl
         words += ["--edits", arm.edits]
     if arm.plugin_dir:
         words += ["--plugin-dir", arm.plugin_dir]
+    if arm.keep_skills:
+        words += ["--keep-skills", ",".join(arm.keep_skills)]
     words += [
         "--arm-label",
         arm.label,
@@ -554,6 +599,17 @@ def record(plan: Plan) -> None:
                     f"{path} records {key} {before.get(key)!r}, the plan {getattr(plan, key)!r}; "
                     "name the plan anew"
                 )
+        recorded = {
+            item.get("label"): tuple(item.get("keep_skills") or ())
+            for item in before.get("arms") or ()
+            if isinstance(item, dict)
+        }
+        for arm in plan.arms:
+            if arm.label in recorded and recorded[arm.label] != arm.keep_skills:
+                raise PlanError(
+                    f"{path} records keep_skills {list(recorded[arm.label])} for arm "
+                    f"{arm.label}, the plan {list(arm.keep_skills)}; name the plan anew"
+                )
     folder.mkdir(parents=True, exist_ok=True)
     document = {
         "name": plan.name,
@@ -564,7 +620,10 @@ def record(plan: Plan) -> None:
         "pack": plan.pack,
         "fixtures": list(plan.fixtures),
         "repetitions": list(plan.repetitions),
-        "arms": [arm._asdict() for arm in plan.arms],
+        "arms": [
+            {key: value for key, value in arm._asdict().items() if key != "keep_skills" or value}
+            for arm in plan.arms
+        ],
         "spend_limit": plan.spend_limit,
         **({"service_tier": plan.service_tier} if plan.service_tier else {}),
     }

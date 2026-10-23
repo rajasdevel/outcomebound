@@ -111,8 +111,8 @@ def harness(request: pytest.FixtureRequest) -> Iterator[str]:
     RUN.set_harness(RUN.HARNESS)
 
 
-def _arm(kind: str) -> Any:
-    return RUN.fixture_arms(RUN._parser(), kind, ["ladder-fake"])["ladder-fake"]
+def _arm(kind: str, kept: tuple[str, ...] = ()) -> Any:
+    return RUN.fixture_arms(RUN._parser(), kind, ["ladder-fake"], kept=kept)["ladder-fake"]
 
 
 def _build(arm: Any, root: Path) -> tuple[Path, dict[str, str], str, dict[str, Any], Path]:
@@ -281,6 +281,7 @@ def test_the_noskills_arm_is_the_facts_only_install_less_its_skills(
     arm = _arm(RUN.FACTS_ONLY_NOSKILLS)
     assert arm.adopted and arm.kernel == "" and arm.launcher == only.launcher
     assert arm.files == {} and (arm.selected, arm.done) == (only.selected, only.done)
+    assert arm.kept_skills == () and "skills_kept" not in arm.record()
     with_skills, _protected, _prompt, _extra, _stage = _build(only, tmp_path / "f")
     workdir, _protected, prompt, extra, _stage = _build(arm, tmp_path / "n")
     for name in ("AGENTS.md", ".outcomebound/manifest.json", ".outcomebound/.gitignore"):
@@ -313,6 +314,59 @@ def test_the_noskills_arm_is_the_facts_only_install_less_its_skills(
     (workdir / sorted(only.files)[0]).parent.mkdir(parents=True, exist_ok=True)
     (workdir / sorted(only.files)[0]).write_text("x", "utf-8")
     assert RUN.skill_problems(workdir) == [f"skill file present: {sorted(only.files)[0]}"]
+
+
+KEPT = ("diagnose", "decision-brief")
+
+
+def test_the_noskills_arm_keeps_the_skills_it_is_told_to(
+    tmp_path: Path, fake: dict[str, Path], harness: str
+) -> None:
+    """Breaks if `--keep-skills` removes a kept skill's file, leaves another skill's, changes a
+    kept file's bytes, leaves the kept files unprotected or the removal outside the seed, does not
+    record the kept list, or lets the dump rule pass a kept file that is missing, changed or
+    another skill's file that is present."""
+
+    only = _arm(RUN.FACTS_ONLY)
+    arm = _arm(RUN.FACTS_ONLY_NOSKILLS, KEPT)
+    keep = {p for p in only.files if p.split("/")[2] in KEPT}
+    assert keep and keep < set(only.files)
+    assert arm.kept_skills == KEPT and arm.files == {p: only.files[p] for p in keep}
+    assert arm.record()["skills_kept"] == list(KEPT)
+    with_skills, _protected, _prompt, _extra, _stage = _build(only, tmp_path / "f")
+    workdir, protected, prompt, extra, _stage = _build(arm, tmp_path / "n")
+    assert extra["skills_removed"] == sorted(set(only.files) - keep)
+    assert all((workdir / p).read_bytes() == only.files[p] for p in keep)
+    assert not any((workdir / p).exists() for p in set(only.files) - keep)
+    assert keep <= set(protected) and not (set(only.files) - keep) & set(protected)
+    for name in ("AGENTS.md", ".outcomebound/manifest.json"):
+        assert (workdir / name).read_bytes() == (with_skills / name).read_bytes(), name
+    _clean(workdir)
+    assert RUN.skill_problems(workdir, KEPT) == [] and RUN.facts_only_problems(workdir) == []
+    rows = {row[0]: row for row in RUN.isolation(arm, workdir, prompt, "", None)}
+    assert rows["facts-only-install"][1] == "PASS" and rows["no-skill"][1] == "PASS", rows
+    assert "diagnose" in rows["no-skill"][2]
+    first, other = sorted(keep)[0], sorted(set(only.files) - keep)[0]
+    (workdir / first).write_text("changed", "utf-8")
+    (workdir / other).parent.mkdir(parents=True, exist_ok=True)
+    (workdir / other).write_text("x", "utf-8")
+    assert RUN.skill_problems(workdir, KEPT) == [
+        f"kept skill file differs: {first}",
+        f"skill file present: {other}",
+    ]
+    (workdir / first).unlink()
+    assert f"kept skill file missing: {first}" in RUN.skill_problems(workdir, KEPT)
+    assert RUN.skill_problems(workdir) != RUN.skill_problems(workdir, KEPT)
+
+
+def test_the_kept_list_survives_a_rebuild_from_the_meta(fake: dict[str, Path]) -> None:
+    """Breaks if `--rescore` or `--regrade` rebuilds the arm of a run that kept skills without
+    its kept list, or gives the list to another arm."""
+
+    meta = {"arm": "x", "arm_kind": RUN.FACTS_ONLY_NOSKILLS, "skills_kept": list(KEPT)}
+    arm, why = RUN.rebuilt_arm("ladder-fake", meta)
+    assert why == "" and arm is not None and arm.kept_skills == KEPT
+    assert RUN.rebuilt_arm("ladder-fake", {**meta, "arm_kind": RUN.FACTS_ONLY})[0].kept_skills == ()
 
 
 # --- the dry run, the refusals and the loop -----------------------------------------------------
@@ -391,3 +445,122 @@ def test_a_loop_plan_runs_the_ladder_arms_and_refuses_their_edits(
     path.write_text(json.dumps(plan), encoding="utf-8")
     with pytest.raises(loop.PlanError, match="edits apply to the current arm"):
         loop.read_plan(path, runner)
+
+
+@pytest.mark.parametrize("tool", [RUN.HARNESS, RUN.CLAUDE])
+def test_the_dump_with_kept_skills_passes_its_rules(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], fake: dict[str, Path], tool: str
+) -> None:
+    arguments = ["--dump-arm", "ladder-fake", "--arm", RUN.FACTS_ONLY_NOSKILLS, "--model", "m"]
+    arguments += ["--harness", tool, "--keep-skills", ",".join(KEPT)]
+    try:
+        code = RUN._main([*arguments, "--workspace-root", str(tmp_path / "dumps")])
+    finally:
+        RUN.set_harness(RUN.HARNESS)
+    printed = capsys.readouterr().out
+    assert code == 0, printed
+    isolation = printed.split("--- isolation ---\n", 1)[1]
+    assert "no-skill PASS" in isolation and " FAIL " not in isolation, printed
+    assert f"{SKILL_PATH[tool]}/diagnose/SKILL.md" in printed
+    assert f"{SKILL_PATH[tool]}/tests-worth-keeping/SKILL.md" not in printed
+    assert not fake["calls"].exists(), "the dump started codex"
+
+
+@pytest.mark.parametrize(
+    ("options", "message"),
+    [
+        (["--arm", RUN.FACTS_ONLY_NOSKILLS, "--keep-skills", "diagnose,nope"], "no skill 'nope'"),
+        (["--arm", RUN.FACTS_ONLY_NOSKILLS, "--keep-skills", ""], "no skill ''"),
+        (["--arm", RUN.FACTS_ONLY_NOSKILLS, "--keep-skills", "diagnose,diagnose"], "once"),
+        (["--arm", RUN.FACTS_ONLY, "--keep-skills", "diagnose"], "keeps skills in the facts-only-"),
+        (["--arm", "current", "--keep-skills", "diagnose"], "keeps skills in the facts-only-"),
+        (["--arm", RUN.BARE, "--keep-skills", "diagnose"], "keeps skills in the facts-only-"),
+    ],
+)
+def test_a_bad_keep_skills_option_is_refused_before_anything_is_built(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], options: list[str], message: str
+) -> None:
+    arguments = ["--dump-arm", "small-fix", "--model", "m", *options]
+    arguments += ["--workspace-root", str(tmp_path / "dumps")]
+    with pytest.raises(SystemExit) as stopped:
+        RUN._main(arguments)
+    assert stopped.value.code == 2
+    assert message in capsys.readouterr().err
+    assert not (tmp_path / "dumps").exists()
+
+
+def test_a_run_that_keeps_skills_needs_a_label_to_tell_it_apart(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    arguments = ["--arm", RUN.FACTS_ONLY_NOSKILLS, "--keep-skills", "diagnose", "--model", "m"]
+    arguments += ["--fixtures", "small-fix", "--out", str(tmp_path / "out")]
+    with pytest.raises(SystemExit) as stopped:
+        RUN._main(arguments)
+    assert stopped.value.code == 2
+    assert "--keep-skills needs --arm-label" in capsys.readouterr().err
+    assert not (tmp_path / "out").exists()
+
+
+def test_a_loop_plan_passes_keep_skills_and_refuses_what_run_py_would(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Breaks if a plan's `keep_skills` does not reach run.py as `--keep-skills` with the arm's
+    own label, is accepted for another arm or an unknown or repeated skill, is lost from
+    LOOP.json, or a plan name can be reused under another list; and if two labelled arms of one
+    kind do not get separate result folders."""
+
+    loop = load("ladder_keep_loop", "evals/loop.py")
+    runner = loop.load_runner()
+    kind = RUN.FACTS_ONLY_NOSKILLS
+    arms = [
+        {"label": "all-out", "arm": kind},
+        {"label": "keep-dd", "arm": kind, "keep_skills": ["diagnose", "decision-brief"]},
+        {"label": "keep-rf", "arm": kind, "keep_skills": ["review-findings"]},
+    ]
+    plan = {
+        "name": "keeps",
+        "model": "m",
+        "results": str(tmp_path / "results"),
+        "workspaces": str(tmp_path / "workspaces"),
+        "repetitions": [1],
+        "fixtures": ["small-fix"],
+        "arms": arms,
+    }
+    path = tmp_path / "plan.json"
+    path.write_text(json.dumps(plan), encoding="utf-8")
+    read = loop.read_plan(path, runner)
+    words = {cell.arm.label: list(cell.argv) for cell in loop.cells(read)}
+    assert "--keep-skills" not in words["all-out"]
+    assert (
+        words["keep-dd"][words["keep-dd"].index("--keep-skills") + 1] == "diagnose,decision-brief"
+    )
+    assert words["keep-rf"][words["keep-rf"].index("--keep-skills") + 1] == "review-findings"
+    outs = {Path(w[w.index("--out") + 1]) for w in words.values()}
+    assert outs == {tmp_path / "results" / "keeps" / f"{n}-r1-small-fix" for n in words}
+    labels = {w[w.index("--arm-label") + 1] for w in words.values()}
+    assert labels == set(words) and all(w[w.index("--arm") + 1] == kind for w in words.values())
+    # run.py accepts each call's options.
+    parser = RUN._parser()
+    for call in words.values():
+        parsed = parser.parse_args(call[2:])
+        assert RUN.keep_skills_option(parser, parsed) == tuple(
+            parsed.keep_skills.split(",") if parsed.keep_skills else ()
+        )
+    loop.record(read)
+    saved = json.loads((tmp_path / "results" / "keeps" / "LOOP.json").read_text("utf-8"))
+    assert [a.get("keep_skills") for a in saved["arms"]] == [
+        None, ["diagnose", "decision-brief"], ["review-findings"]
+    ]  # fmt: skip
+    arms[1]["keep_skills"] = ["diagnose"]
+    path.write_text(json.dumps(plan), encoding="utf-8")
+    with pytest.raises(loop.PlanError, match="records keep_skills"):
+        loop.record(loop.read_plan(path, runner))
+    for entry, message in (
+        ({"label": "x", "arm": "current", "keep_skills": ["diagnose"]}, "applies to the facts"),
+        ({"label": "x", "arm": kind, "keep_skills": ["nope"]}, "does not carry"),
+        ({"label": "x", "arm": kind, "keep_skills": ["diagnose", "diagnose"]}, "twice"),
+    ):
+        plan["arms"] = [entry]
+        path.write_text(json.dumps(plan), encoding="utf-8")
+        with pytest.raises(loop.PlanError, match=message):
+            loop.read_plan(path, runner)
