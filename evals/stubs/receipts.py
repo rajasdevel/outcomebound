@@ -14,16 +14,25 @@ A command that runs the stub as one part of a compound command (a `;`, `&&`, `||
 list, or a pipeline) is also a receipt, for a stub whose output block is declared here (`BLOCKS`:
 today only `review`), where all of these hold:
 - the stub is the command word of exactly one simple command: its name or its path under
-  `OB_EVAL_STUBS`, unquoted, at the script's start or after `;`, `&&`, `||`, `&` or a newline.
+  `OB_EVAL_STUBS`, unquoted, at the script's start or after `;`, `&&`, `&` or a newline.
   A word inside quotes or after another word (`echo review`, `cat review.txt`) is no invocation;
+- the stub surely ran: it does not follow `||`; where it follows `&&`, the record's status is
+  `succeeded` and only `&&` and pipes follow it, so that the success of the whole shows each
+  link of its chain ran; and no simple command starts with a word that branches, loops or ends
+  the shell (`if`, `then`, `while`, `do`, `for`, `case`, `!`, `exit`, `exec`, `return`, `eval`,
+  `source`, `.`, `trap` and the like), or is a `set` that turns on errexit;
 - that simple command has no redirection but `2>&1`, does not take a pipe's input, and does not
   run in the background (`&`);
 - a pipe after it goes only into `head` or `tail` with a plain line count (`-40`, `-n 40`,
   `--lines=40`, or none for 10), or into `cat` with no argument, and that count holds the block's
   lines; nothing after the last of them is a redirection or `&`;
-- the script has no subshell or group (`(`, `)`, `{`, `}`), no heredoc or here-string (`<<`), no
-  command substitution (`$(`, a backtick) and no backslash outside quotes (other than a line
-  continuation);
+- the script has no subshell or group (`(`, `)`, `{`, `}`), no here-string (`<<<`), no heredoc
+  whose delimiter is unquoted (`<<E`, whose body can expand), no command substitution (`$(`, a
+  backtick) and no backslash outside quotes (other than a line continuation). A heredoc whose
+  delimiter is quoted (`<<'E'`, `<<"E"`, `<<-'E'`) is literal text: its body lines and its
+  terminator line are taken out before the command words are read, and every rule here applies
+  to what is left. Its `<<'E'` is a redirection of its own simple command, so it may stand before
+  the stub's, never on it. A script whose heredoc has no terminator line is not read;
 - the record's output holds exactly one whole block of the stub's output. For `review` that is a
   `review: N files read` line, then findings numbered from 1 with no gap
   (`N. [blocking] ...` or `N. [suggestion] ...`), then a `verdict: ...` line, each on a line of
@@ -114,6 +123,13 @@ _TOKEN = re.compile(
 _LIST = {";", "&&", "||", "&"}
 _PIPE = {"|", "|&"}
 _UNTAKEN = {"(", ")", ";;", "<<", "<<<", "<<-"}
+# A heredoc whose delimiter is quoted, once its body is taken out: a redirection like any other.
+_QUOTED_HEREDOC = "<<'"
+# A first word after which the next command may not run, or runs only on a condition.
+_FLOW = {"if", "then", "elif", "else", "fi", "while", "until", "do", "done", "for", "case", "esac",
+         "select", "coproc", "function", "!", "[[", "exit", "exec", "return", "logout", "eval",
+         "source", ".", "trap"}  # fmt: skip
+_ERREXIT = re.compile(r"-[a-zA-Z]*e[a-zA-Z]*|errexit")
 # The one redirection a part may keep: its error output merged into its output.
 _MERGED_IN_SCRIPT = re.compile(r"(?<!\S)2>&1(?=[\s;&|]|$)")
 _COUNT = re.compile(r"(?:-n ?|--lines=|-)(\d+)")
@@ -250,9 +266,11 @@ def _tokens(script: str) -> list[tuple[str, bool]] | None:
     """The script's words and operators as (text, is_operator), with quotes taken off the words
     and a quoted part marked by a NUL so that a quoted word never matches a command name; None
     for a form this reader does not take (a command substitution, a backslash outside quotes
-    that is not a line continuation, an unclosed quote)."""
+    that is not a line continuation, an unclosed quote, a heredoc with no terminator line). The
+    body of a heredoc whose delimiter is quoted is taken out unread."""
 
     tokens: list[tuple[str, bool]] = []
+    bodies: list[tuple[str, bool]] = []
     word: str | None = None
     position = 0
     while position < len(script):
@@ -266,14 +284,47 @@ def _tokens(script: str) -> list[tuple[str, bool]] | None:
         elif kind in ("plain", "single", "double"):
             word = (word or "") + (text if kind == "plain" else "\0" + text[1:-1])
         else:
-            if word is not None:
-                tokens.append((word, False))
+            _flush(tokens, word, bodies)
             word = None
             if kind in ("newline", "operator"):
                 tokens.append((";" if kind == "newline" else text, True))
-    if word is not None:
-        tokens.append((word, False))
-    return tokens
+            if kind == "newline" and bodies:
+                position = _past_bodies(script, position, bodies)
+                if position < 0:
+                    return None
+    _flush(tokens, word, bodies)
+    return None if bodies else tokens
+
+
+def _flush(
+    tokens: list[tuple[str, bool]], word: str | None, bodies: list[tuple[str, bool]]
+) -> None:
+    """Add a finished word. Where it is the quoted delimiter of a heredoc, mark the heredoc as
+    taken and keep the delimiter, so that its body is taken out at the line's end."""
+
+    if word is None:
+        return
+    if "\0" in word and tokens and tokens[-1] in (("<<", True), ("<<-", True)):
+        bodies.append((word.replace("\0", ""), tokens[-1][0] == "<<-"))
+        tokens[-1] = (_QUOTED_HEREDOC, True)
+    tokens.append((word, False))
+
+
+def _past_bodies(script: str, position: int, bodies: list[tuple[str, bool]]) -> int:
+    """Where the script goes on after the bodies of the heredocs that start on the line before
+    `position`, each up to its terminator line; -1 where one has none. Empties `bodies`."""
+
+    for delimiter, tabs in bodies:
+        while True:
+            if position >= len(script):
+                return -1
+            end = script.find("\n", position)
+            end = len(script) if end < 0 else end
+            line, position = script[position:end], end + 1
+            if (line.lstrip("\t") if tabs else line) == delimiter:
+                break
+    bodies.clear()
+    return min(position, len(script))
 
 
 def _passes_whole(argv: list[str], lines: int) -> bool:
@@ -292,8 +343,8 @@ def _passes_whole(argv: list[str], lines: int) -> bool:
 
 def _parts(tokens: list[tuple[str, bool]]) -> list[tuple[str, list[tuple[str, bool]], str]] | None:
     """The simple commands of a list or pipeline, each as (the operator before it, its words and
-    redirections, the operator after it); None for a subshell, a group, a heredoc, a `;;` or an
-    empty command (a leading `|`, a trailing `&&`)."""
+    redirections, the operator after it); None for a subshell, a group, a here-string, a heredoc
+    whose delimiter is unquoted, a `;;` or an empty command (a leading `|`, a trailing `&&`)."""
 
     parts: list[tuple[str, list[tuple[str, bool]], str]] = []
     words: list[tuple[str, bool]] = []
@@ -312,7 +363,31 @@ def _parts(tokens: list[tuple[str, bool]]) -> list[tuple[str, list[tuple[str, bo
     return parts
 
 
-def _compound(command: str, stub_name: str, stubs_dir: str) -> tuple[str, list[list[str]]] | None:
+def _flows(words: list[tuple[str, bool]]) -> bool:
+    """Whether a simple command branches, loops or may end the shell before a later command."""
+
+    first, *rest = [text for text, _ in words]
+    if first == "set":
+        return any(_ERREXIT.fullmatch(text) for text in rest)
+    return first in _FLOW
+
+
+def _surely_runs(parts: list, index: int, status: str) -> bool:
+    """Whether the stub's simple command at `index` ran, as the list's shape and status show."""
+
+    before = parts[index][0]
+    if before == "||" or any(_flows(words) for _, words, _ in parts):
+        return False
+    if before != "&&":
+        return True
+    return status == "succeeded" and all(
+        after in _PIPE or after == "&&" for _, _, after in parts[index:-1]
+    )
+
+
+def _compound(
+    command: str, stub_name: str, stubs_dir: str, status: str
+) -> tuple[str, list[list[str]]] | None:
     """Where `command` runs the stub as one simple command of a compound command, by the rules
     the module states: the stub's invocation, and the commands its pipe feeds; else None."""
 
@@ -331,6 +406,8 @@ def _compound(command: str, stub_name: str, stubs_dir: str) -> tuple[str, list[l
     before, words, after = parts[index]
     if before in _PIPE or after == "&" or any(is_operator for _, is_operator in words):
         return None
+    if not _surely_runs(parts, index, status):
+        return None
     fed: list[list[str]] = []
     while after in _PIPE:
         index += 1
@@ -342,7 +419,7 @@ def _compound(command: str, stub_name: str, stubs_dir: str) -> tuple[str, list[l
 
 
 def _compound_receipt(
-    command: str, output: str | None, stub_name: str, stubs_dir: str
+    command: str, output: str | None, stub_name: str, stubs_dir: str, status: str
 ) -> tuple[str, str] | None:
     """(invocation, block) where `command` is a compound command whose output proves the stub
     ran in it, by the rules the module states; else None."""
@@ -350,7 +427,7 @@ def _compound_receipt(
     pattern = BLOCKS.get(stub_name)
     if pattern is None or output is None:
         return None
-    parsed = _compound(command, stub_name, stubs_dir)
+    parsed = _compound(command, stub_name, stubs_dir, status)
     if parsed is None:
         return None
     invocation, fed = parsed
@@ -375,7 +452,7 @@ def _receipt(
     command, status, output = record
     if _invokes(command, stub_name, stubs_dir):
         return Receipt(index, command, output, status, command)
-    compound = _compound_receipt(command, output, stub_name, stubs_dir)
+    compound = _compound_receipt(command, output, stub_name, stubs_dir, status)
     if compound is None:
         return None
     return Receipt(index, command, compound[1], status, compound[0])
