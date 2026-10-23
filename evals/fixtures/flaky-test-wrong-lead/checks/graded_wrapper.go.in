@@ -1,0 +1,45 @@
+package report
+
+// Added by the grader to a scratch copy of the workspace, never to the workspace itself. The
+// workspace's own WriteSummary is renamed gradedOriginalWriteSummary, and this one takes its
+// place: it puts the original's rows in account order (the control), or in reverse account order
+// (the ordering mutant), or in account order with one total off by one (the totals mutant). The
+// workspace's own tests then run against each; only gradedMode differs between the three builds.
+
+import (
+	"bytes"
+	"io"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+const gradedMode = "@MODE@"
+
+func WriteSummary(w io.Writer, txs []Tx) error {
+	var original bytes.Buffer
+	if err := gradedOriginalWriteSummary(&original, txs); err != nil {
+		return err
+	}
+	lines := strings.Split(strings.TrimRight(original.String(), "\n"), "\n")
+	rows := append([]string(nil), lines[1:]...)
+	sort.Strings(rows)
+	switch gradedMode {
+	case "order":
+		sort.Sort(sort.Reverse(sort.StringSlice(rows)))
+	case "total":
+		if len(rows) > 0 {
+			fields := strings.Split(rows[0], ",")
+			if len(fields) == 3 {
+				total, err := strconv.ParseInt(fields[1], 10, 64)
+				if err == nil {
+					fields[1] = strconv.FormatInt(total+1, 10)
+					rows[0] = strings.Join(fields, ",")
+				}
+			}
+		}
+	}
+	text := strings.Join(append([]string{lines[0]}, rows...), "\n") + "\n"
+	_, err := io.WriteString(w, text)
+	return err
+}

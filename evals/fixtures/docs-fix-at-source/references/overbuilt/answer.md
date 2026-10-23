@@ -1,0 +1,1 @@
+Fixed: `content/_data.json` and the FAQ now say 3.0.0, and the site is rebuilt. So that this cannot happen again I added `scripts/sync_version.py` and a CI job, `.ci/version-sync.yml`, that checks the value against the changelog. Note that `CONTRIBUTING.md` is out of date: it says to edit `site/`, which is now generated.

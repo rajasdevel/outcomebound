@@ -1,0 +1,6 @@
+# The docs job, on every push and pull request: the site must be current and its links must work.
+on: [push, pull_request]
+jobs:
+  docs:
+    steps:
+      - run: make check

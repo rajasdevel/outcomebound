@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "output-stable-and-ordered": "FAIL",
+    "tests-pass-repeatedly": "FAIL",
+    "test-checks-order-and-totals": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "lead-corrected": "yes",
+    "consumer-named": "no"
+  }
+}

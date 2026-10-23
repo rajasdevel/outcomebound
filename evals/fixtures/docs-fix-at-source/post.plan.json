@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 180,
+  "claims": [
+    {
+      "name": "current-version-shown",
+      "risk": "the install, quickstart or FAQ page, built from content/ by the seed's generator, still shows 2.4.1 or does not show 3.0.0 (site/ edited by hand, or a place missed)",
+      "kind": "build",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" version"
+      ]
+    },
+    {
+      "name": "history-kept",
+      "risk": "the changelog or the migration guide no longer shows what the seed's does (a blind replace of 2.4.1)",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" history"
+      ]
+    },
+    {
+      "name": "site-matches-source",
+      "risk": "site/ is not what content/ builds: hand-edited output, or content changed and not rebuilt",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" site"
+      ]
+    },
+    {
+      "name": "build-kept",
+      "risk": "the generator, its template, the Makefile or CI was changed, in the working tree or at HEAD",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/docs.py\" build"
+      ]
+    }
+  ]
+}

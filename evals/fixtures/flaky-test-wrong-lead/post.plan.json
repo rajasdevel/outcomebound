@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 600,
+  "claims": [
+    {
+      "name": "output-stable-and-ordered",
+      "risk": "the command built from the workspace still writes the rows in a different order from run to run, or not in account order, or with wrong totals (more retries, a test that sorts, a skip)",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" output"
+      ]
+    },
+    {
+      "name": "tests-pass-repeatedly",
+      "risk": "the tests fail when repeated 20 times with a hidden test of the summary's order and stability",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" tests"
+      ]
+    },
+    {
+      "name": "test-checks-order-and-totals",
+      "risk": "the project's own tests no longer catch rows in the wrong order or a wrong total (a test that sorts, skips or reads the source), or the golden file was rewritten wrongly",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" checks"
+      ]
+    },
+    {
+      "name": "changes-in-scope",
+      "risk": "the run changed what the fix does not need: new packages, CI retry policy, other parts of the module",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/flaky.py\" scope"
+      ]
+    }
+  ]
+}

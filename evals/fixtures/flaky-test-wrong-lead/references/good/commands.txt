@@ -1,0 +1,4 @@
+git log --oneline -6
+git show HEAD~2 -- internal/report/summary.go
+go test -count=50 ./internal/report
+cat docs/format.md

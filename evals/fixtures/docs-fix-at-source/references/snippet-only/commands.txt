@@ -1,0 +1,2 @@
+cat content/_data.json
+python3 build.py

@@ -147,6 +147,10 @@ NAMED_ONLY = (
     "scaffold-",
     "replica-",
     "v2-",
+    # Real-world fixtures with suite-v2 references; named until their pilot runs are in.
+    "docs-fix-at-source",
+    "changelog-conflicting-docs",
+    "flaky-test-wrong-lead",
 )
 # A suite-v2 fixture's own `suite.json`. The runner reads its `tier`, its `budget`
 # (`input_cap`, the input tokens with the cached among them that the call's session may pass,

@@ -1,0 +1,2 @@
+cat CONTRIBUTING.md
+grep -n 2.4.1 site/install.html

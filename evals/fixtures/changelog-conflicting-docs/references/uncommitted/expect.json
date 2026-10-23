@@ -1,0 +1,13 @@
+{
+  "claims": {
+    "since-inclusive": "FAIL",
+    "committed": "FAIL",
+    "changelog-untouched": "PASS",
+    "notes-pick-it-up": "FAIL",
+    "check-kept": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "conflict-told": "no"
+  }
+}

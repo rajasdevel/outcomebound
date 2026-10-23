@@ -1,0 +1,2 @@
+grep -n install content/install.md
+python3 build.py

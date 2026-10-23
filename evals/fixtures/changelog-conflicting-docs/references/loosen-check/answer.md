@@ -1,0 +1,1 @@
+Fixed the --since filter and added the changelog line CONTRIBUTING.md asks for. `make check` then failed on the release-notes step, which looked out of date, so I removed that step from the Makefile. Committed.

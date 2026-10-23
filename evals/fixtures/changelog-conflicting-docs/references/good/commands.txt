@@ -1,0 +1,5 @@
+git log --oneline -8
+cat CONTRIBUTING.md docs/releasing.md
+bin/records export --since 2026-10-01
+make check
+git commit -m 'fix: include the --since day in export'
