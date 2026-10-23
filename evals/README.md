@@ -1250,6 +1250,10 @@ limit. Anything the workspace's content causes is a failure with its reason, and
 that cannot be read, a broken symlink, malformed text, an ambiguous or missing declaration, a build
 of the model's code that fails or does not finish, a product or a test that hangs. Without that
 rule a run could make its own failure unjudged and leave the denominator.
+The preflight resolves each tool once, to an absolute path, from the PATH entries that are
+absolute and lie outside the workspace and the stage (its real path outside both too), runs it by
+that path, and gives every process the check starts that PATH alone: a `git` or `go` the run puts
+in the workspace is never used, so it can neither pass a check nor make one unjudged.
 `tests/test_eval_unjudged.py` holds the rule, with a workspace whose broken symlink must fail.
 
 ### Tools

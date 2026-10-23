@@ -20,9 +20,11 @@ from the workspace or its Git objects. Git runs with replacement objects off.
               Makefile, scripts/release_notes.py), and working notes under .agents/
 
 Each exits 0 where it holds and 1 naming what does not. A check prints `unjudged:` and exits 3
-only where its preflight, which reads nothing of the workspace, fails: no git on PATH, a git
-inside the workspace, or an unreadable baseline.json in the stage. Anything the workspace causes
-(a file that cannot be read, a broken symlink, a command that does not finish) is a failure.
+only where its preflight, which reads nothing of the workspace, fails: no git in a PATH entry
+that is absolute and outside the workspace and the stage (a git the run put in the workspace is
+never used), or an unreadable baseline.json in the stage. Every later git call runs that git by
+its absolute path. Anything the workspace causes (a file that cannot be read, a broken symlink, a
+command that does not finish) is a failure.
 """
 
 from __future__ import annotations
@@ -33,7 +35,6 @@ import fnmatch
 import io
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -107,7 +108,7 @@ def baseline() -> dict[str, str]:
 
 def git(*arguments: str, cwd: str | Path = ".") -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["git", "--no-replace-objects", *arguments],
+        [TOOLS["git"], "--no-replace-objects", *arguments],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -278,16 +279,46 @@ CHECKS: dict[str, Callable[[], list[str]]] = {
 }
 
 
+TOOLS: dict[str, str] = {}
+
+
+def resolve(name: str) -> str:
+    """`name` as an absolute path, found only in PATH entries that are absolute and lie outside
+    the workspace and the stage, with its real path outside both as well, so a tool the run put in
+    the workspace is never used and cannot make a check unjudged. Unjudged where there is none."""
+
+    roots = (Path.cwd().resolve(), HERE.parent.resolve())
+
+    def inside(path: Path) -> bool:
+        return any(path.is_relative_to(root) for root in roots)
+
+    kept = [
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry
+        and os.path.isabs(entry)
+        and not inside(Path(entry))
+        and not inside(Path(entry).resolve())
+    ]
+    # Every process the check starts (the project's own tools among them) gets this PATH too.
+    os.environ["PATH"] = os.pathsep.join(kept)
+    for entry in kept:
+        candidate = Path(entry).resolve() / name
+        if (
+            candidate.is_file()
+            and os.access(candidate, os.X_OK)
+            and not inside(candidate.resolve())
+        ):
+            return str(candidate.resolve())
+    raise Unjudged(f"no {name} on PATH outside the workspace and the stage")
+
+
 def preflight() -> None:
     """What the checks need that the run cannot touch, verified apart from the workspace: git on
-    PATH and outside the workspace, and the stage's baseline. Only a failure here is the
-    grader's, and only it makes the check unjudged."""
+    PATH outside the workspace and the stage (`resolve`), and the stage's baseline. Only a
+    failure here is the grader's, and only it makes the check unjudged."""
 
-    found = shutil.which("git")
-    if found is None:
-        raise Unjudged("no git on PATH")
-    if Path(found).resolve().is_relative_to(Path.cwd().resolve()):
-        raise Unjudged(f"the git on PATH ({found}) is inside the workspace")
+    TOOLS["git"] = resolve("git")
     baseline()
 
 

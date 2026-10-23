@@ -16,9 +16,11 @@ from the workspace or its Git objects. Git is read only for HEAD, with replaceme
               HEAD, with no file added under templates/ or .ci/
 
 Each exits 0 where it holds and 1 naming what does not. A check prints `unjudged:` and exits 3
-only where its preflight, which reads nothing of the workspace, fails: no git on PATH, a git
-inside the workspace, or an unreadable baseline.json in the stage. Anything the workspace causes
-(a file that cannot be read, a broken symlink, a command that does not finish) is a failure.
+only where its preflight, which reads nothing of the workspace, fails: no git in a PATH entry
+that is absolute and outside the workspace and the stage (a git the run put in the workspace is
+never used), or an unreadable baseline.json in the stage. Every later git call runs that git by
+its absolute path. Anything the workspace causes (a file that cannot be read, a broken symlink, a
+command that does not finish) is a failure.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -66,15 +69,16 @@ def at_head(path: str) -> bytes | None:
     """The bytes of `path` in the workspace's HEAD commit, or None where it has no such file."""
 
     done = subprocess.run(
-        ["git", "--no-replace-objects", "show", f"HEAD:{path}"],
+        [TOOLS["git"], "--no-replace-objects", "show", f"HEAD:{path}"],
         capture_output=True, check=False, timeout=60,
     )  # fmt: skip
     return done.stdout if done.returncode == 0 else None
 
 
 def head_files(folder: str) -> set[str]:
+    argv = [TOOLS["git"], "--no-replace-objects", "ls-tree", "-r", "--name-only", "HEAD"]
     done = subprocess.run(
-        ["git", "--no-replace-objects", "ls-tree", "-r", "--name-only", "HEAD", "--", folder],
+        [*argv, "--", folder],
         capture_output=True, text=True, encoding="utf-8", check=False, timeout=60,
     )  # fmt: skip
     return {line for line in done.stdout.splitlines() if line}
@@ -205,16 +209,46 @@ def build() -> list[str]:
 CHECKS = {"version": version, "history": history, "site": site, "build": build}
 
 
+TOOLS: dict[str, str] = {}
+
+
+def resolve(name: str) -> str:
+    """`name` as an absolute path, found only in PATH entries that are absolute and lie outside
+    the workspace and the stage, with its real path outside both as well, so a tool the run put in
+    the workspace is never used and cannot make a check unjudged. Unjudged where there is none."""
+
+    roots = (Path.cwd().resolve(), HERE.parent.resolve())
+
+    def inside(path: Path) -> bool:
+        return any(path.is_relative_to(root) for root in roots)
+
+    kept = [
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry
+        and os.path.isabs(entry)
+        and not inside(Path(entry))
+        and not inside(Path(entry).resolve())
+    ]
+    # Every process the check starts (the project's own tools among them) gets this PATH too.
+    os.environ["PATH"] = os.pathsep.join(kept)
+    for entry in kept:
+        candidate = Path(entry).resolve() / name
+        if (
+            candidate.is_file()
+            and os.access(candidate, os.X_OK)
+            and not inside(candidate.resolve())
+        ):
+            return str(candidate.resolve())
+    raise Unjudged(f"no {name} on PATH outside the workspace and the stage")
+
+
 def preflight() -> None:
     """What the checks need that the run cannot touch, verified apart from the workspace: git on
-    PATH and outside the workspace, and the stage's baseline. Only a failure here is the
-    grader's, and only it makes the check unjudged."""
+    PATH outside the workspace and the stage (`resolve`), and the stage's baseline. Only a
+    failure here is the grader's, and only it makes the check unjudged."""
 
-    found = shutil.which("git")
-    if found is None:
-        raise Unjudged("no git on PATH")
-    if Path(found).resolve().is_relative_to(Path.cwd().resolve()):
-        raise Unjudged(f"the git on PATH ({found}) is inside the workspace")
+    TOOLS["git"] = resolve("git")
     baseline()
 
 

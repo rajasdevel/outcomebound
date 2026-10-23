@@ -21,8 +21,10 @@ result.
     scope    the run changed only internal/report/, docs/ and working notes under .agents/
 
 Each exits 0 where it holds and 1 naming what does not. A check prints `unjudged:` and exits 3
-only where its preflight, which reads nothing of the workspace, fails: no go on PATH, a go inside
-the workspace, a temporary folder the grader cannot write, or the stage's own Go tool
+only where its preflight, which reads nothing of the workspace, fails: no go (git for scope) in
+a PATH entry that is absolute and outside the workspace and the stage (a tool the run put in the
+workspace is never used; every later call runs the resolved tool by its absolute path), a
+temporary folder the grader cannot write, or the stage's own Go tool
 (rename_entry.go) not building within its limit. Anything the workspace causes is a failure with
 its reason: a file that cannot be copied or read, a package or test that does not build or does
 not finish, no WriteSummary or more than one among the files Go's build rules select.
@@ -58,21 +60,50 @@ class Unjudged(Exception):
     """The preflight failed: the check could not judge, for a reason that is not the run's."""
 
 
+TOOLS: dict[str, str] = {}
+
+
+def resolve(name: str) -> str:
+    """`name` as an absolute path, found only in PATH entries that are absolute and lie outside
+    the workspace and the stage, with its real path outside both as well, so a tool the run put in
+    the workspace is never used and cannot make a check unjudged. Unjudged where there is none."""
+
+    roots = (Path.cwd().resolve(), HERE.parent.resolve())
+
+    def inside(path: Path) -> bool:
+        return any(path.is_relative_to(root) for root in roots)
+
+    kept = [
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry
+        and os.path.isabs(entry)
+        and not inside(Path(entry))
+        and not inside(Path(entry).resolve())
+    ]
+    # Every process the check starts (the project's own tools among them) gets this PATH too.
+    os.environ["PATH"] = os.pathsep.join(kept)
+    for entry in kept:
+        candidate = Path(entry).resolve() / name
+        if (
+            candidate.is_file()
+            and os.access(candidate, os.X_OK)
+            and not inside(candidate.resolve())
+        ):
+            return str(candidate.resolve())
+    raise Unjudged(f"no {name} on PATH outside the workspace and the stage")
+
+
 class Broken(Exception):
     """Something the workspace holds keeps the check from going on: a failure, with its reason."""
 
 
 def preflight(folder: Path, env: dict[str, str]) -> Path:
-    """Verify, reading nothing of the workspace, that the grader can build Go: a go on PATH that
-    lies outside the workspace, and the stage's own rename tool built with it. The rename tool."""
+    """Verify, reading nothing of the workspace, that the grader can build Go: the stage's own
+    rename tool built with the go `resolve` found. The rename tool."""
 
-    found = shutil.which("go", path=env.get("PATH"))
-    if found is None:
-        raise Unjudged("no go on PATH, so the grader cannot build the workspace")
-    if Path(found).resolve().is_relative_to(Path.cwd().resolve()):
-        raise Unjudged(f"the go on PATH ({found}) is inside the workspace")
     tool = folder / "rename_entry"
-    argv = ["go", "build", "-o", str(tool), str(HERE / "rename_entry.go")]
+    argv = [TOOLS["go"], "build", "-o", str(tool), str(HERE / "rename_entry.go")]
     try:
         done = subprocess.run(
             argv, cwd=HERE, env=env, capture_output=True, text=True, encoding="utf-8",
@@ -105,7 +136,7 @@ def scratch() -> Iterator[tuple[Path, dict[str, str], Path]]:
             "GOMODCACHE": str(folder / "gopath" / "mod"),
             "GOPROXY": "off",
             "GOTOOLCHAIN": "local",
-            "GOFLAGS": "",
+            "GOFLAGS": "-buildvcs=false",
             "GOWORK": "off",
             "GOENV": "off",
             "CGO_ENABLED": "0",
@@ -130,7 +161,7 @@ def build(argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.Complet
 
     try:
         return subprocess.run(
-            ["go", *argv], cwd=cwd, env=env, capture_output=True, text=True,
+            [TOOLS["go"], *argv], cwd=cwd, env=env, capture_output=True, text=True,
             encoding="utf-8", check=False, timeout=BUILD_LIMIT,
         )  # fmt: skip
     except subprocess.TimeoutExpired as expired:
@@ -240,7 +271,7 @@ def tests() -> list[str]:
             return [
                 f"the tests do not build:\n{(compiled.stdout + compiled.stderr).strip()[-1500:]}"
             ]
-        done = execute(["go", "test", "-count=20", "./..."], root, env)
+        done = execute([TOOLS["go"], "test", "-count=20", "./..."], root, env)
     if done is None:
         return [f"go test -count=20 ./... did not finish in {RUN_LIMIT} s"]
     if done.returncode != 0:
@@ -341,8 +372,8 @@ def _golden() -> list[str]:
 
 
 def checks() -> list[str]:
-    problems = _golden()
     with scratch() as (root, env, tool), tempfile.TemporaryDirectory(prefix="flaky-run-") as folder:
+        problems = _golden()
         unwrapped = Path(folder) / "unwrapped.test"
         plain = build(
             ["test", "-c", "-vet=off", "-o", str(unwrapped), f"./{PACKAGE.as_posix()}"], root, env
@@ -374,7 +405,7 @@ def checks() -> list[str]:
 def scope() -> list[str]:
     def git(*arguments: str) -> list[str]:
         done = subprocess.run(
-            ["git", "--no-replace-objects", *arguments], capture_output=True, text=True,
+            [TOOLS["git"], "--no-replace-objects", *arguments], capture_output=True, text=True,
             encoding="utf-8", check=False, timeout=60,
         )  # fmt: skip
         return [line for line in done.stdout.splitlines() if line]
@@ -390,6 +421,8 @@ def scope() -> list[str]:
     ]
 
 
+# The tool each check needs, resolved before the check reads anything of the workspace.
+NEEDS = {"output": "go", "tests": "go", "checks": "go", "scope": "git"}
 CHECKS: dict[str, Callable[[], list[str]]] = {
     "output": output,
     "tests": tests,
@@ -403,6 +436,7 @@ def main(argv: list[str]) -> int:
         print(f"usage: flaky.py {{{','.join(CHECKS)}}}", file=sys.stderr)
         return 2
     try:
+        TOOLS[NEEDS[argv[0]]] = resolve(NEEDS[argv[0]])
         problems = CHECKS[argv[0]]()
     except Unjudged as unrun:
         print(f"unjudged: {unrun}")
