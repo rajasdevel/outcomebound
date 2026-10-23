@@ -1,0 +1,14 @@
+{
+  "claims": {
+    "json-output": "PASS",
+    "recorded-field-names": "PASS",
+    "recorded-error-format": "PASS",
+    "text-unchanged": "PASS",
+    "tests-cover-option": "PASS",
+    "finished-without-asking": "PASS",
+    "project-check-passes": "PASS",
+    "decisions-kept": "FAIL",
+    "observed-settled": "PASS"
+  },
+  "report": {}
+}

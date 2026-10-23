@@ -1,0 +1,1 @@
+Prod paged at 03:41 on 2026-10-14 for warehouse read latency (p95 over 2 s). Was it our row-count reconciliation? It runs every 15 minutes. Or something else? Tell me which queries cost the most around then and whether that's normal. Leave prod alone.

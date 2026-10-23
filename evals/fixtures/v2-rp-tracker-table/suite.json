@@ -1,0 +1,48 @@
+{
+  "tier": "XS",
+  "seed": "ops",
+  "panel": true,
+  "class": "C8",
+  "claims": {
+    "numbers-match": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "card-clean": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "nothing-written": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "report": {
+    "paste-ready": {
+      "question": "Could the person paste the reply's table into the tracker card as it stands, in plain business words, without cutting or rewriting anything in it?",
+      "must_always": false
+    },
+    "reply-lean": {
+      "question": "Does the reply hand over the table without a ledger of checks, method notes or caveats the person did not ask for?",
+      "must_always": false
+    }
+  },
+  "budget": {
+    "input_cap": 900000,
+    "timeout_seconds": 600
+  },
+  "stubs": [],
+  "watch": [],
+  "references": [
+    "good",
+    "noop",
+    "empty",
+    "incomplete",
+    "overbuilt",
+    "leaky",
+    "invented"
+  ]
+}

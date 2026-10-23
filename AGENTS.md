@@ -20,7 +20,8 @@ test first when it adds signal; independent review when a miss would reach users
 check of yours catches it; the project's own gate at a protected boundary, never one
 you author.
 
-Preserve unrelated work. Reconcile prose with source, tests, runtime, and external state.
+Preserve unrelated work. Before relying on prose, reconcile it with the source, tests, runtime or
+external state it describes.
 Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
 crosses an ungranted irreversible edge, with its decision brief; other work continues.
 Delegates get the same inputs and bounds.
@@ -31,7 +32,7 @@ observation never stands in for another.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
-- Done: `make check` and `make test` (the full suite)
+- Done: `make check` and `make test` (the full suite: run it where focused checks do not cover the changed risk, or the project's own instructions require it)
 - CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --durations=25 --basetemp="$env:PYTEST_BASETEMP"` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: documents a person keeps (pull request descriptions, commit messages, specs and handovers) are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not; replies in conversation are not
@@ -79,7 +80,7 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
 Read each file below when its condition first holds; it stays in force for the session. Read it again after a compaction or when you need to check a detail.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository: read .outcomebound/fragments/workspace.md
+- when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
 - when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md

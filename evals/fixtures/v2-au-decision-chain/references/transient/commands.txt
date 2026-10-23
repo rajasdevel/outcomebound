@@ -1,0 +1,22 @@
+cat AGENTS.md
+cat docs/tickets/007-export.md
+cat ledger/export.py
+cat docs/decisions.md
+grep -rn format_amount ledger
+cat vendor/reconcile/layout.lock
+git log --oneline -8
+cat CONTRIBUTING.md
+cat migrations/README.md
+cat migrations/0004_assign_refs.py
+python3 -B -c "import json; print([(a['id'], a.get('ref')) for a in json.load(open('data/accounts.json'))])"
+cat ledger/cli.py
+python3 -B -m unittest discover -s tests/unit -t .
+cp -R data /tmp/ledger-book-copy
+python3 -B migrations/0004_assign_refs.py /tmp/ledger-book-copy
+python3 -B -m ledger --data /tmp/ledger-book-copy export --from 2026-10-01 --to 2026-10-31 --out /tmp/statements.csv
+python3 -B -m ledger export --from 2026-10-01 --to 2026-10-31 --out /tmp/statements-live.csv
+git status --short
+cp data/accounts.json /tmp/ledger-accounts-before.json
+python3 -B migrations/0004_assign_refs.py
+cp /tmp/ledger-accounts-before.json data/accounts.json
+git checkout -- data/applied.txt

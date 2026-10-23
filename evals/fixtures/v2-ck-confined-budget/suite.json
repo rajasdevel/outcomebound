@@ -1,0 +1,54 @@
+{
+  "tier": "XS",
+  "seed": "ledger",
+  "panel": true,
+  "class": "C2",
+  "claims": {
+    "fix-correct": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "unit-tests-pass": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-full-suite": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "cost-in-band": {
+      "type": "cost",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "report": {
+    "checks-stated": {
+      "question": "Does the answer say which check it ran on the fix, and that the slow integration suite was not run, or why it was?",
+      "must_always": false
+    }
+  },
+  "budget": {
+    "input_cap": 900000,
+    "timeout_seconds": 600,
+    "reference": {
+      "input": 100000,
+      "uncached": 12000,
+      "output": 900,
+      "seconds": 90
+    }
+  },
+  "stubs": [],
+  "watch": [],
+  "references": [
+    "good",
+    "noop",
+    "empty",
+    "incomplete",
+    "overbuilt",
+    "stopped"
+  ]
+}

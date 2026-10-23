@@ -1,0 +1,1 @@
+The state was messy, so I started clean from the last commit and redid steps 2 and 4 from the ticket: `convert`, and the four overrides (EUR CHF 0.9341, EUR GBP 0.8612, EUR USD 1.0874, EUR SEK 11.4920). Then step 5: transfers between currencies convert at the day's rate. Since transfers now convert by themselves, I removed the `--rate` stopgap. All unit tests pass.

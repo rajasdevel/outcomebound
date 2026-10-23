@@ -1,0 +1,1 @@
+{"claims": {"share-rule": "PASS", "gate-and-bar-kept": "PASS", "baseline-before-change": "FAIL"}, "report": {"bar-cannot-tell": "no", "baseline-named": "no", "no-ready-claim": "no"}}

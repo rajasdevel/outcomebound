@@ -1,0 +1,52 @@
+"""Check the docs: every relative link resolves, and every setting and route is documented.
+
+    python3 scripts/docs_check.py
+"""
+
+import configparser
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+LINK = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
+
+
+def broken_links():
+    found = []
+    for page in sorted([ROOT / "README.md", *ROOT.glob("docs/**/*.md")]):
+        for target in LINK.findall(page.read_text(encoding="utf-8")):
+            if "://" in target or target.startswith("mailto:"):
+                continue
+            if not (page.parent / target).exists():
+                found.append(f"{page.relative_to(ROOT)}: broken link {target}")
+    return found
+
+
+def undocumented_settings():
+    parser = configparser.ConfigParser()
+    parser.read(ROOT / "config" / "chatsvc.ini", encoding="utf-8")
+    documented = (ROOT / "docs" / "configuration.md").read_text(encoding="utf-8")
+    found = []
+    for section in parser.sections():
+        kind = "route:*" if section.startswith("route:") else section
+        for key in parser[section]:
+            if f"`{key}`" not in documented:
+                found.append(f"config/chatsvc.ini [{kind}] {key} is not in docs/configuration.md")
+        if section.startswith("route:"):
+            path = parser[section].get("path", "")
+            if f"`{path}`" not in documented:
+                found.append(f"route {path} is not in docs/configuration.md")
+    return sorted(set(found))
+
+
+def main():
+    problems = broken_links() + undocumented_settings()
+    for problem in problems:
+        print(problem)
+    print(f"docs-check: {len(problems)} problem(s)")
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

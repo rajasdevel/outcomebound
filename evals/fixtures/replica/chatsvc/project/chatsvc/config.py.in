@@ -1,0 +1,117 @@
+"""Settings, read once at start from config/chatsvc.ini.
+
+Each `[route:<name>]` section is one inbound path in front of one provider key. A route names its
+default model and a few aliases callers may use instead of a model id; see
+docs/specs/provider-routing.md.
+"""
+
+import configparser
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
+class ConfigError(Exception):
+    """A settings file this service cannot run with."""
+
+
+@dataclass(frozen=True)
+class Route:
+    name: str
+    path: str
+    key: str
+    default_model: str
+    aliases: dict = field(default_factory=dict)
+    max_attempts: int = 3
+    timeout: float = 20.0
+
+    def resolve(self, requested):
+        """The provider model id for what a caller asked for: the default for nothing, the
+        model an alias names, else the name as given (a model id)."""
+        if not requested:
+            return self.default_model
+        return self.aliases.get(requested, requested)
+
+
+@dataclass(frozen=True)
+class Embed:
+    path: str
+    key: str
+    model: str
+    max_batch: int
+
+
+@dataclass(frozen=True)
+class Settings:
+    root: Path
+    listen: str
+    provider_base: str
+    limits_path: Path
+    feedback_path: Path
+    routes: dict
+    embed: Embed
+
+    def route_for(self, path):
+        return self.routes.get(path)
+
+
+def _aliases(text):
+    found = {}
+    for item in filter(None, (part.strip() for part in text.split(","))):
+        alias, sep, model = item.partition("=")
+        if not sep or not alias.strip() or not model.strip():
+            raise ConfigError(f"alias {item!r} is not name=model")
+        found[alias.strip()] = model.strip()
+    return found
+
+
+def _route(name, section):
+    try:
+        return Route(
+            name=name,
+            path=section["path"],
+            key=section["key"],
+            default_model=section["default_model"],
+            aliases=_aliases(section.get("aliases", "")),
+            max_attempts=section.getint("max_attempts", 3),
+            timeout=section.getfloat("timeout", 20.0),
+        )
+    except KeyError as missing:
+        raise ConfigError(f"route {name}: missing {missing}") from None
+    except ValueError as bad:
+        raise ConfigError(f"route {name}: {bad}") from None
+
+
+def load(config_dir, root=None):
+    """The settings in `config_dir`/chatsvc.ini; paths in it are relative to `root`."""
+    config_dir = Path(config_dir)
+    root = Path(root) if root is not None else config_dir.resolve().parent
+    parser = configparser.ConfigParser()
+    if not parser.read(config_dir / "chatsvc.ini", encoding="utf-8"):
+        raise ConfigError(f"no settings file in {config_dir}")
+    routes = {}
+    for section in parser.sections():
+        if section.startswith("route:"):
+            route = _route(section.split(":", 1)[1], parser[section])
+            if route.path in routes:
+                raise ConfigError(f"two routes serve {route.path}")
+            routes[route.path] = route
+    if not routes:
+        raise ConfigError("no [route:*] section")
+    try:
+        embed = Embed(
+            path=parser["embed"]["path"],
+            key=parser["embed"]["key"],
+            model=parser["embed"]["model"],
+            max_batch=parser["embed"].getint("max_batch"),
+        )
+        return Settings(
+            root=root,
+            listen=parser["service"].get("listen", "127.0.0.1:8080"),
+            provider_base=parser["provider"]["base"],
+            limits_path=root / parser["service"]["limits"],
+            feedback_path=root / parser["service"]["feedback"],
+            routes=routes,
+            embed=embed,
+        )
+    except KeyError as missing:
+        raise ConfigError(f"missing setting {missing}") from None

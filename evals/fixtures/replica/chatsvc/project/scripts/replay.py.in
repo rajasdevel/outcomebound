@@ -1,0 +1,52 @@
+"""Replay recorded traffic through the service against the offline provider, in real time.
+
+    python3 scripts/replay.py traffic/<file>.jsonl [--speed 2.0]
+
+Each line of a traffic file is one request: {"t": seconds from the start, "path", "key", "body"}.
+Prints what the callers got, by path and status, and what the provider was asked and answered.
+"""
+
+import argparse
+import json
+import sys
+import time
+from collections import Counter
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from chatsvc.app import build_service
+from fakeprovider import FakeProvider
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="replay.py")
+    parser.add_argument("traffic")
+    parser.add_argument("--speed", type=float, default=1.0, help="2.0 replays twice as fast")
+    args = parser.parse_args(argv)
+    requests = [json.loads(line) for line in Path(args.traffic).read_text("utf-8").splitlines()]
+    provider = FakeProvider()
+    upstream = []
+    service = build_service("config", provider, log=upstream.append)
+    answered = Counter()
+    start = time.monotonic()
+    for request in requests:
+        delay = start + request["t"] / args.speed - time.monotonic()
+        if delay > 0:
+            time.sleep(delay)
+        status, _, _ = service.handle(
+            "POST", request["path"], {"x-api-key": request["key"]}, json.dumps(request["body"]).encode()
+        )
+        answered[(request["path"], status)] += 1
+    print(f"{len(requests)} requests in {time.monotonic() - start:.1f}s")
+    print("callers got:")
+    for (path, status), count in sorted(answered.items()):
+        print(f"  {path:<12} {status}  x{count}")
+    print("provider was asked:")
+    for (path, status), count in sorted(Counter((r.path, r.status) for r in provider.records).items()):
+        print(f"  {path:<40} {status}  x{count}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

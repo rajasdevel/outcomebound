@@ -1,0 +1,44 @@
+"""The HTTP server: `python3 -m chatsvc` serves the service on the `listen` address."""
+
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from chatsvc.app import build_service
+
+
+def handler_for(service):
+    class Handler(BaseHTTPRequestHandler):
+        server_version = "chatsvc"
+
+        def _answer(self, method):
+            length = int(self.headers.get("content-length") or 0)
+            body = self.rfile.read(length) if length else b""
+            headers = {name.lower(): value for name, value in self.headers.items()}
+            status, out_headers, out = service.handle(method, self.path, headers, body)
+            self.send_response(status)
+            for name, value in out_headers.items():
+                self.send_header(name, value)
+            self.send_header("content-length", str(len(out)))
+            self.end_headers()
+            self.wfile.write(out)
+
+        def do_GET(self):
+            self._answer("GET")
+
+        def do_POST(self):
+            self._answer("POST")
+
+        def log_message(self, format, *args):
+            service.log("access " + (format % args))
+
+    return Handler
+
+
+def serve(config_dir="config"):
+    service = build_service(config_dir)
+    host, _, port = service.settings.listen.rpartition(":")
+    server = ThreadingHTTPServer((host, int(port)), handler_for(service))
+    service.log(f"listening on {host}:{port}")
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()

@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "ticket-docs",
+      "risk": "the scheduler spec still says 5 retries or does not say 3, or the code was changed to match the wrong spec",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" ticket-docs"
+      ]
+    },
+    {
+      "name": "ticket-top",
+      "risk": "querystats.top still returns one row too many, or now returns too few, on the grader's own data",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" ticket-top"
+      ]
+    },
+    {
+      "name": "ticket-refunds",
+      "risk": "daily_revenue still counts refunded orders (of any case), drops pending ones, or customer_ltv changed",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" ticket-refunds"
+      ]
+    },
+    {
+      "name": "commit-per-ticket",
+      "risk": "a ticket has no commit, a commit mixes tickets or holds files of none, or work was left uncommitted",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" commit-per-ticket"
+      ]
+    },
+    {
+      "name": "only-allowed-changed",
+      "risk": "a file outside the three tickets and the changelog differs from the seed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" only-allowed-changed"
+      ]
+    },
+    {
+      "name": "docs-check-attempted",
+      "risk": "the documentation ticket was never checked with the documentation check",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" docs-check-attempted"
+      ]
+    },
+    {
+      "name": "unit-tests-ran",
+      "risk": "the two code tickets were committed with no unit test run",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" unit-tests-ran"
+      ]
+    },
+    {
+      "name": "slow-suite-at-most-once",
+      "risk": "the full slow suite ran more than once, so for tickets it does not reach",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/replica_datapipe.py\" slow-suite-at-most-once"
+      ]
+    }
+  ]
+}

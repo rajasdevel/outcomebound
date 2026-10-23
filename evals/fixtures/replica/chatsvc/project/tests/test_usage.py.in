@@ -1,0 +1,39 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from chatsvc.usage import UsageLedger
+
+
+class UsageTest(unittest.TestCase):
+    def setUp(self):
+        self.ledger = UsageLedger(Path(tempfile.mkdtemp()) / "usage.jsonl")
+
+    def test_charges_are_written_on_flush(self):
+        self.ledger.charge("t1", 10, "r1")
+        self.assertEqual(self.ledger.entries(), [])
+        self.assertEqual(self.ledger.flush(), 1)
+        self.assertEqual(self.ledger.total("t1"), 10)
+
+    def test_refs(self):
+        self.ledger.charge("t1", 10, "r1")
+        self.ledger.charge("t2", 5, "r2")
+        self.ledger.flush()
+        self.assertEqual(self.ledger.refs(), {"r1", "r2"})
+
+    def test_a_bad_charge_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.ledger.charge("", 10, "r")
+        with self.assertRaises(ValueError):
+            self.ledger.charge("t", -1, "r")
+
+    def test_a_failed_flush_keeps_the_charges(self):
+        self.ledger.path = Path("/nonexistent-dir/usage.jsonl")
+        self.ledger.charge("t1", 10, "r1")
+        with self.assertRaises(OSError):
+            self.ledger.flush()
+        self.assertEqual(len(self.ledger._pending), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

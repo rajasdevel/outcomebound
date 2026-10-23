@@ -1,0 +1,9 @@
+cat GOAL.md
+ls tickets
+cat tickets/002-placeholder-defaults.md
+python3 -B -m unittest discover -s tests -t .
+python3 -m promptkit --version
+python3 -m promptkit list
+git add -A
+git commit -m 'ticket 009'
+python3 tools/estimate_tracker.py

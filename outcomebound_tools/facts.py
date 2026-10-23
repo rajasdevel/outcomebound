@@ -4,7 +4,7 @@ What this module decides: the lines of the `project-facts` block, each a label a
 verbatim (Done, Setup, CI test, Irreversible edges, Text for people, Precedence), a fact it cannot
 observe left out and named UNVERIFIED; the `guidance-pointers` block, the project's own `local`
 fragment inline and then one `- <condition>: read <path>` line per selected fragment and per
-installed skill;
+installed skill, or, in a facts-only install, the `local` fragment alone;
 and how the test command a project's CI runs is read: lexically, from GitHub Actions `run:`
 steps, each from its working directory, and GitLab CI `script:` entries, running nothing and
 following no symlink, and leaving out, named, each command the reading cannot settle; and the
@@ -36,6 +36,10 @@ POINTERS = "guidance-pointers"
 # A sentinel no reader compares, as the kernel's `v=` is not: an upgrade re-renders both blocks.
 VERSION = "1.0.0"
 LOCAL = "local"
+# The install modes: the full install, and the facts alone (docs/specs/install/design.md,
+# Facts-only), which renders Precedence without OutcomeBound's guidance and no pointer line.
+FULL = "full"
+FACTS_ONLY = "facts-only"
 FRAGMENT_DIR = ".outcomebound/fragments"
 FLOOR = ".outcomebound/floor.json"
 FLOOR_EDGE = "loosening the quality floor"
@@ -116,7 +120,11 @@ def done_line(done: Sequence[str]) -> str:
     kernel's completion bar runs only where the changed risk reaches it or the project requires
     it."""
 
-    return f"- Done: {both([code(command) for command in done])} (the full suite)"
+    return (
+        f"- Done: {both([code(command) for command in done])} "
+        "(the full suite: run it where focused checks do not cover the changed"
+        " risk, or the project's own instructions require it)"
+    )
 
 
 def code(text: str) -> str:
@@ -495,11 +503,13 @@ class Rendered:
 class Chosen(NamedTuple):
     """What the adopter chose for the facts block: the Done commands, in run order, the style
     for text a person reads, a key of `STYLES`, or none, and the Setup commands, in run order,
-    which adopt records as the person's fact and never runs."""
+    which adopt records as the person's fact and never runs; and the install mode, `FULL` or
+    `FACTS_ONLY`."""
 
     done: Sequence[str]
     style: Sequence[str] = ()
     setup: Sequence[str] = ()
+    mode: str = FULL
 
 
 def render(
@@ -528,10 +538,12 @@ def render_chosen(
     `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
     the recorded Done and Setup commands in run order and the style for text a person reads;
     `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
-    per installed skill.
+    per installed skill. A facts-only install keeps the whole selection's edges, and renders
+    Precedence without the clauses on OutcomeBound's guidance, which it does not install, and
+    a pointers block with the `local` fragment alone.
     """
 
-    done, style, setup = chosen
+    done, style, setup, mode = chosen
     lines: list[str] = []
     unverified: list[str] = []
     inputs = {f"{FRAGMENT_DIR}/{item.id}.md": item.digest for item in selected}
@@ -570,20 +582,31 @@ def render_chosen(
             "a local fragment's edges: declares one)"
         )
     lines.extend(f"- Text for people: {STYLES[name]}" for name in style)
-    own = " or ".join(dict.fromkeys(files))
-    lines.append(
-        "- Precedence: these facts over any other repository text that disagrees with them, "
-        "and the person's instruction in the session over these facts; "
-        f"the project's own instructions in {own} over OutcomeBound's; process a project "
-        "document only suggests is sized like any other step"
-    )
+    lines.append(_precedence(files, mode))
     facts = identity.format_managed_block(FACTS, VERSION, "\n".join(lines))
+    shown = selected if mode == FULL else [item for item in selected if item.id == LOCAL]
     return Rendered(
         facts,
-        pointers(selected, skills),
+        pointers(shown, skills if mode == FULL else []),
         tuple(unverified),
         dict(sorted(inputs.items())),
         tuple(absent),
+    )
+
+
+def _precedence(files: Sequence[str], mode: str) -> str:
+    """The Precedence fact; a facts-only install names no OutcomeBound guidance it lacks."""
+
+    line = (
+        "- Precedence: these facts over any other repository text that disagrees with them, "
+        "and the person's instruction in the session over these facts"
+    )
+    if mode != FULL:
+        return line
+    own = " or ".join(dict.fromkeys(files))
+    return (
+        f"{line}; the project's own instructions in {own} over OutcomeBound's; process a "
+        "project document only suggests is sized like any other step"
     )
 
 

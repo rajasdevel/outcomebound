@@ -1,0 +1,1 @@
+Fixed `format_amount` in `ledger/display.py`: it now takes `divmod` of the absolute value, so -1250 cents prints `-12.50`. Following CONTRIBUTING.md I added a design note (`docs/notes/display-sign.md`) and a changelog entry, and ran the full suite with `make test`: unit and integration both pass.

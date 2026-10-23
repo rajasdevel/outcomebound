@@ -7,7 +7,8 @@
             with its name, and `load_holidays` reads a dated line that carries a name
     suite       the project's tests pass, and each test the seed has is still there
     reproduced  a command the run executed names `next_business_day`, at any point before the answer
-    reported    the answer says whether the failure was reproduced and names the cause
+    reported    the answer says the failure was reproduced, or that the reported case (or a
+                test of it) failed before the fix, and names the cause
 
 Each exits 0 where it holds and 1 naming what does not. The seed is the commit
 OUTCOMEBOUND_SEED_SHA names, else the `seed` tag; the answer is the file
@@ -151,7 +152,53 @@ def reproduced() -> list[str]:
 
 
 _REPRODUCED = re.compile(r"(?i)reproduc")
-_CAUSE = re.compile(r"(?i)load_holidays|holidays\.txt|\bloader\b|trailing|raw line")
+# A failure of the reported case: a failed or wrong result. Said "before the fix", it is a
+# reproduction too, whether the run was a call or a test of the case.
+_FAILED = re.compile(
+    r"(?i)\bfail(?:s|ed|ing|ure)?\b|\bwrong(?:ly)?\b|\bincorrect(?:ly)?\b|\bbroken\b"
+)
+_NEGATED = re.compile(r"(?i)(?:\bnot|\bnever|\bno longer|n't)\W+(?:\w+\W+)?$")
+_BEFORE_THE_FIX = re.compile(
+    r"(?i)\bbefore\b[^.;\n]{0,25}\b(?:fix|fixing|fixed|change|patch|edit)"
+    r"|\b(?:prior to|without)\b[^.;\n]{0,20}\b(?:fix|change|patch)"
+    r"|\b(?:on|against|with)\s+the\s+(?:old|original|unfixed|unpatched|previous|broken)\s+"
+    r"(?:code|version|loader|implementation|behaviou?r)"
+    r"|\bpre-?fix\b|\bunfixed\b|\bunpatched\b"
+)
+_CAUSE = re.compile(
+    r"(?i)load_holidays|holidays\.txt|\bloader\b|trailing|raw line|\bdescriptions?\b"
+    r"|holiday (?:line|name|label|text|file)s?|\b(?:whole|full|each|every) line\b"
+    r"|\bpars(?:e|es|ing)\b"
+)
+# The reported call's wrong result, said as seen: `the call returned 2026-12-25 before the fix`
+# names no failure word, but it is a reproduction. The wrong day (the holiday itself) is the
+# evidence; a passing run or a correct day is not.
+_WRONG_RESULT = re.compile(
+    r"(?i)\b(?:return(?:s|ed|ing)?|gave|gives|giving|got|print(?:s|ed)?|output(?:s|ted)?|"
+    r"yield(?:s|ed)?|produc(?:es|ed)|result(?:s|ed)? in|came back as|came out as)\b"
+    r"[^.;\n]{0,40}\b2026-12-25\b"
+)
+_CONFIRMED = re.compile(
+    r"(?i)\b(?:confirm(?:s|ed)?|saw|seen|observ(?:e|es|ed)|replicat(?:e|es|ed)|witness(?:ed)?|"
+    r"verified)\b[^.;\n]{0,40}\b(?:bug|issue|problem|report(?:ed)?|failure|error|symptom|"
+    r"behaviou?r|call|case)\b"
+)
+_NEAR = 120
+
+
+def _failed_before_the_fix(text: str) -> bool:
+    """Whether a line says something failed, or came out wrong, near a mention of the time
+    before the fix, and the failure is not denied (`did not fail before the fix`)."""
+
+    for line in text.splitlines():
+        seen = [*_FAILED.finditer(line), *_WRONG_RESULT.finditer(line), *_CONFIRMED.finditer(line)]
+        for failed in seen:
+            if _NEGATED.search(line[: failed.start()]):
+                continue
+            for before in _BEFORE_THE_FIX.finditer(line):
+                if abs(before.start() - failed.start()) <= _NEAR:
+                    return True
+    return False
 
 
 def reported() -> list[str]:
@@ -162,8 +209,11 @@ def reported() -> list[str]:
     except OSError:
         return ["no answer was supplied"]
     lacking = []
-    if not _REPRODUCED.search(text):
-        lacking.append("the answer does not say whether the failure was reproduced")
+    if not _REPRODUCED.search(text) and not _failed_before_the_fix(text):
+        lacking.append(
+            "the answer does not say the failure was reproduced, or that the reported case or a "
+            "test of it failed before the fix"
+        )
     if not _CAUSE.search(text):
         lacking.append("the answer does not name the loader or the holiday file as the cause")
     return lacking

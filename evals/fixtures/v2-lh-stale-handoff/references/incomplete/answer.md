@@ -1,0 +1,1 @@
+Continued from the handoff: steps 1 to 4 were done, so I did step 5. `transfer` now takes `rates` and converts between currencies, and the command line loads the rates from its data folder. The `--rate` option stays until you decide whether it goes.

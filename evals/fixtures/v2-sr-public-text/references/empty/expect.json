@@ -1,0 +1,13 @@
+{
+  "claims": {
+    "retry-fixed": "FAIL",
+    "project-tests-pass": "PASS",
+    "fix-committed": "FAIL",
+    "public-texts-written": "FAIL",
+    "no-private-text-public": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "unverified-fact-marked": "no"
+  }
+}

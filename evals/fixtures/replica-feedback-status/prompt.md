@@ -1,0 +1,1 @@
+Pull the feedback since release 1.6 and write me a status note I can paste into the tracker: the issues people reported, grouped, with how many each, and which of them are fixed. Put it in `status-note.md`.

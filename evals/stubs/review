@@ -1,0 +1,4 @@
+#!/bin/sh
+# The `review` stub's launcher: review.py, beside this file, under an isolated Python that writes
+# no bytecode. The runner places both files, read-only, in the folder OB_EVAL_STUBS names.
+exec python3 -I -B "$(dirname "$0")/review.py" "$@"

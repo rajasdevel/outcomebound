@@ -1,0 +1,1 @@
+There's a retry bug in `promptkit/fetch.py`; my notes are in `notes/retry-bug.md`. Fix it and commit the fix. Then write the PR description (`pr/description.md`), the changelog line, and a follow-up issue under `issues/` for the reviewer's point. I'll file the PR and the issue myself.

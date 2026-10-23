@@ -1,0 +1,7 @@
+{
+  "claims": {
+    "greeting-fixed": "FAIL",
+    "only-greeting-changed": "PASS"
+  },
+  "report": {}
+}

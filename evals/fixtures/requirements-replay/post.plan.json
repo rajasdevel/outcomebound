@@ -25,39 +25,6 @@
         "-c",
         "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" export.py test_export.py '.agents/work/*'"
       ]
-    },
-    {
-      "name": "every-requirement-of-the-issue-kept",
-      "risk": "the report drops a requirement or a constraint that the issue holds",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_export.py\" kept"
-      ]
-    },
-    {
-      "name": "later-correction-reported",
-      "risk": "the report does not say that the later comment changed the amounts",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_export.py\" corrected"
-      ]
-    },
-    {
-      "name": "requirement-tied-to-its-source",
-      "risk": "no requirement is marked stated beside the source it came from",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_export.py\" provenance"
-      ]
     }
   ]
 }

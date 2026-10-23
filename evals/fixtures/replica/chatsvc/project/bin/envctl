@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""envctl: operate the stage and prod environments of chatsvc (docs/operations.md).
+
+    bin/envctl status <env>               what the environment serves
+    bin/envctl health <env>               the environment's health endpoint
+    bin/envctl smoke <env>                one chat request through the environment
+    bin/envctl deploy <env> [--ref REF]   ship the working tree, or a committed ref
+    bin/envctl rollback <env>             go back to the release served before the last deploy
+    bin/envctl promote <from> <to>        ship what <from> serves to <to>
+    bin/envctl log [--tail N]             the event log
+
+Environments: stage, prod. A deploy, rollback or promote to prod also needs `--confirm prod`.
+Every act except `log` is appended to the event log, .envs/events.log.
+
+These environments run on this machine: each is a folder under .envs/ holding the release it
+serves, and its requests go to the offline provider in fakeprovider/.
+"""
+
+import argparse
+import io
+import json
+import shutil
+import subprocess
+import sys
+import tarfile
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+ENVS = ROOT / ".envs"
+EVENTS = ENVS / "events.log"
+NAMES = ("stage", "prod")
+
+SMOKE = """
+import json, sys
+sys.path.insert(0, ".")
+from chatsvc.app import build_service
+from fakeprovider import FakeProvider
+service = build_service("config", FakeProvider(), log=lambda line: None)
+health = json.loads(service.handle("GET", "/healthz", {}, b"")[2])
+body = json.dumps({"messages": [{"role": "user", "content": "smoke"}]}).encode()
+status, _, answer = service.handle("POST", "/v1/chat", {"x-api-key": "smoke"}, body)
+print(json.dumps({"health": health, "status": status}))
+"""
+
+
+class EnvError(Exception):
+    pass
+
+
+def git(*args, data=False):
+    done = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, check=False)
+    if done.returncode != 0:
+        raise EnvError(f"git {' '.join(args)}: {done.stderr.decode().strip()}")
+    return done.stdout if data else done.stdout.decode().strip()
+
+
+def now():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def record(env, action, ok, revision=None, detail="", **extra):
+    ENVS.mkdir(exist_ok=True)
+    seq = 1
+    if EVENTS.exists():
+        seq += sum(1 for line in EVENTS.read_text(encoding="utf-8").splitlines() if line.strip())
+    event = {"seq": seq, "at": now(), "env": env, "action": action, "ok": ok}
+    event.update({"revision": revision, "detail": detail, **extra})
+    with open(EVENTS, "a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True) + "\n")
+
+
+def state(env):
+    path = ENVS / env / "state.json"
+    if not path.exists():
+        raise EnvError(f"{env} has never been deployed")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def short(revision):
+    return revision[:10] if revision else "-"
+
+
+def describe(env, current):
+    dirty = " (built from a working tree with uncommitted changes)" if current.get("dirty") else ""
+    return (
+        f"{env}: revision {short(current['revision'])}, version {current['version']},"
+        f" deployed {current['deployed_at']}{dirty}"
+    )
+
+
+def install(env, files, current):
+    """Make `files` (path -> bytes) the release `env` serves, keeping the one it replaces."""
+    folder = ENVS / env
+    folder.mkdir(parents=True, exist_ok=True)
+    release = folder / "release"
+    if (folder / "state.json").exists():
+        previous = folder / "previous"
+        shutil.rmtree(previous, ignore_errors=True)
+        if release.exists():
+            release.rename(previous)
+        (folder / "previous.json").write_text(
+            (folder / "state.json").read_text(encoding="utf-8"), encoding="utf-8"
+        )
+    shutil.rmtree(release, ignore_errors=True)
+    for name, data in files.items():
+        target = release / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    (release / "REVISION").write_text(current["revision"] + "\n", encoding="utf-8")
+    (folder / "state.json").write_text(json.dumps(current, indent=2) + "\n", encoding="utf-8")
+
+
+def from_ref(ref):
+    revision = git("rev-parse", "--verify", f"{ref}^{{commit}}")
+    archive = tarfile.open(fileobj=io.BytesIO(git("archive", revision, data=True)))
+    files = {
+        member.name: archive.extractfile(member).read() for member in archive if member.isfile()
+    }
+    return files, revision, False
+
+
+def from_tree():
+    names = git("ls-files", "-co", "--exclude-standard", "-z", data=True).decode().split("\0")
+    files = {name: (ROOT / name).read_bytes() for name in names if name and (ROOT / name).is_file()}
+    dirty = bool(git("status", "--porcelain"))
+    return files, git("rev-parse", "HEAD"), dirty
+
+
+def guard(env, args):
+    if env == "prod" and args.confirm != "prod":
+        raise EnvError("acting on prod needs --confirm prod")
+
+
+def deploy(args):
+    guard(args.env, args)
+    if args.ref:
+        files, revision, dirty = from_ref(args.ref)
+    else:
+        files, revision, dirty = from_tree()
+        if dirty:
+            print("warning: the working tree has uncommitted changes, and they ship with it;"
+                  " use --ref to deploy a commit", file=sys.stderr)
+    version = files.get("VERSION", b"unknown\n").decode().strip()
+    current = {"revision": revision, "version": version, "dirty": dirty, "deployed_at": now(),
+               "source": args.ref or "working tree"}
+    install(args.env, files, current)
+    record(args.env, "deploy", True, revision, current["source"], version=version, dirty=dirty)
+    print(f"deployed to {describe(args.env, current)}")
+
+
+def rollback(args):
+    guard(args.env, args)
+    folder = ENVS / args.env
+    if not (folder / "previous.json").exists():
+        raise EnvError(f"{args.env} has no previous release")
+    current = json.loads((folder / "previous.json").read_text(encoding="utf-8"))
+    files = {
+        str(path.relative_to(folder / "previous")): path.read_bytes()
+        for path in (folder / "previous").rglob("*")
+        if path.is_file() and path.name != "REVISION"
+    }
+    current["deployed_at"] = now()
+    install(args.env, files, current)
+    record(args.env, "rollback", True, current["revision"])
+    print(f"rolled back {describe(args.env, current)}")
+
+
+def promote(args):
+    guard(args.to, args)
+    source = ENVS / args.source / "release"
+    current = dict(state(args.source), deployed_at=now(), source=f"promoted from {args.source}")
+    files = {
+        str(path.relative_to(source)): path.read_bytes()
+        for path in source.rglob("*")
+        if path.is_file() and path.name != "REVISION"
+    }
+    install(args.to, files, current)
+    record(args.to, "promote", True, current["revision"], **{"from": args.source})
+    print(f"promoted {args.source} to {describe(args.to, current)}")
+
+
+def status(args):
+    current = state(args.env)
+    record(args.env, "status", True, current["revision"])
+    print(describe(args.env, current))
+
+
+def run_release(env, code):
+    release = ENVS / env / "release"
+    if not release.exists():
+        raise EnvError(f"{env} has never been deployed")
+    done = subprocess.run([sys.executable, "-B", "-c", code], cwd=release, capture_output=True,
+                          text=True, check=False)
+    if done.returncode != 0:
+        return None, done.stderr.strip().splitlines()[-1:] or ["no output"]
+    return json.loads(done.stdout.strip().splitlines()[-1]), []
+
+
+def health(args):
+    result, problem = run_release(args.env, SMOKE)
+    if result is None:
+        record(args.env, "health", False, None, problem[0])
+        raise EnvError(f"{args.env} is unhealthy: {problem[0]}")
+    revision = result["health"]["revision"]
+    record(args.env, "health", True, revision)
+    print(f"{args.env}: health ok, revision {short(revision)}, version {result['health']['version']}")
+
+
+def smoke(args):
+    result, problem = run_release(args.env, SMOKE)
+    if result is None or result["status"] != 200:
+        detail = problem[0] if problem else f"chat answered {result['status']}"
+        record(args.env, "smoke", False, result and result["health"]["revision"], detail)
+        raise EnvError(f"{args.env} smoke failed: {detail}")
+    revision = result["health"]["revision"]
+    record(args.env, "smoke", True, revision)
+    print(f"{args.env}: served revision {short(revision)} (version {result['health']['version']});"
+          " smoke request answered 200")
+
+
+def show_log(args):
+    lines = EVENTS.read_text(encoding="utf-8").splitlines() if EVENTS.exists() else []
+    for line in lines[-args.tail:] if args.tail else lines:
+        event = json.loads(line)
+        print(f"{event['seq']:>4} {event['at']} {event['env']:<5} {event['action']:<8}"
+              f" {'ok' if event['ok'] else 'FAILED':<6} {short(event.get('revision'))}"
+              f" {event.get('detail', '')}")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="envctl", description=__doc__.splitlines()[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name, action in (("status", status), ("health", health), ("smoke", smoke)):
+        command = commands.add_parser(name)
+        command.add_argument("env", choices=NAMES)
+        command.set_defaults(act=action)
+    command = commands.add_parser("deploy")
+    command.add_argument("env", choices=NAMES)
+    command.add_argument("--ref", help="a branch, tag or commit; default: the working tree")
+    command.add_argument("--confirm")
+    command.set_defaults(act=deploy)
+    command = commands.add_parser("rollback")
+    command.add_argument("env", choices=NAMES)
+    command.add_argument("--confirm")
+    command.set_defaults(act=rollback)
+    command = commands.add_parser("promote")
+    command.add_argument("source", choices=NAMES)
+    command.add_argument("to", choices=NAMES)
+    command.add_argument("--confirm")
+    command.set_defaults(act=promote)
+    command = commands.add_parser("log")
+    command.add_argument("--tail", type=int, default=0)
+    command.set_defaults(act=show_log)
+    args = parser.parse_args(argv)
+    try:
+        args.act(args)
+    except EnvError as problem:
+        print(f"envctl: {problem}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

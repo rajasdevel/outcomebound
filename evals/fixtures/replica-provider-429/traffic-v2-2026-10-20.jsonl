@@ -1,0 +1,36 @@
+{"t": 0.2, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 0"}]}}
+{"t": 0.4, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 1"}], "model": "fast"}}
+{"t": 0.45, "path": "/v2/chat", "key": "tenant-1", "body": {"messages": [{"role": "user", "content": "question 2"}], "model": "fast"}}
+{"t": 0.6, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 3"}], "model": "chat-fast-2"}}
+{"t": 0.65, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 4"}], "model": "fast"}}
+{"t": 0.7, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 5"}], "model": "chat-fast-2"}}
+{"t": 0.95, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 6"}], "model": "fast"}}
+{"t": 1.0, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 7"}], "model": "fast"}}
+{"t": 1.05, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 8"}]}}
+{"t": 1.25, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 9"}]}}
+{"t": 1.45, "path": "/v2/chat", "key": "tenant-3", "body": {"messages": [{"role": "user", "content": "question 10"}], "model": "fast"}}
+{"t": 1.55, "path": "/v2/chat", "key": "tenant-5", "body": {"messages": [{"role": "user", "content": "question 11"}], "model": "fast"}}
+{"t": 1.8, "path": "/v2/chat", "key": "tenant-5", "body": {"messages": [{"role": "user", "content": "question 12"}], "model": "fast"}}
+{"t": 1.9, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 13"}], "model": "fast-long"}}
+{"t": 2.1, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 14"}]}}
+{"t": 2.25, "path": "/v2/chat", "key": "tenant-5", "body": {"messages": [{"role": "user", "content": "question 15"}], "model": "chat-fast-2"}}
+{"t": 2.35, "path": "/v2/chat", "key": "tenant-1", "body": {"messages": [{"role": "user", "content": "question 16"}], "model": "fast"}}
+{"t": 2.5, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 17"}], "model": "fast"}}
+{"t": 2.55, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 18"}], "model": "fast-long"}}
+{"t": 2.6, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 19"}], "model": "chat-fast-2"}}
+{"t": 2.85, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 20"}], "model": "chat-fast-2"}}
+{"t": 3.1, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 21"}], "model": "fast"}}
+{"t": 3.3, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 22"}], "model": "fast-long"}}
+{"t": 3.4, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 23"}]}}
+{"t": 3.55, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 24"}], "model": "fast-long"}}
+{"t": 3.75, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 25"}], "model": "fast-long"}}
+{"t": 3.85, "path": "/v2/chat", "key": "tenant-1", "body": {"messages": [{"role": "user", "content": "question 26"}], "model": "fast"}}
+{"t": 4.1, "path": "/v2/chat", "key": "tenant-1", "body": {"messages": [{"role": "user", "content": "question 27"}], "model": "fast"}}
+{"t": 4.35, "path": "/v2/chat", "key": "tenant-2", "body": {"messages": [{"role": "user", "content": "question 28"}], "model": "chat-fast-2"}}
+{"t": 4.5, "path": "/v2/chat", "key": "tenant-1", "body": {"messages": [{"role": "user", "content": "question 29"}], "model": "fast"}}
+{"t": 4.55, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 30"}], "model": "fast"}}
+{"t": 4.8, "path": "/v2/chat", "key": "tenant-5", "body": {"messages": [{"role": "user", "content": "question 31"}], "model": "fast-long"}}
+{"t": 4.9, "path": "/v2/chat", "key": "tenant-1", "body": {"messages": [{"role": "user", "content": "question 32"}]}}
+{"t": 5.05, "path": "/v2/chat", "key": "tenant-3", "body": {"messages": [{"role": "user", "content": "question 33"}]}}
+{"t": 5.25, "path": "/v2/chat", "key": "tenant-5", "body": {"messages": [{"role": "user", "content": "question 34"}], "model": "fast-long"}}
+{"t": 5.35, "path": "/v2/chat", "key": "tenant-4", "body": {"messages": [{"role": "user", "content": "question 35"}], "model": "fast-long"}}

@@ -1,0 +1,105 @@
+"""The model provider's API, as this service calls it (docs/provider.md).
+
+    POST /v1/models/<model>:generate   {"messages": [...], "max_tokens": n}
+    POST /v1/models/<model>:embed      {"inputs": [...]}
+
+Every call carries `authorization: Bearer <key>`. Keys are shared pools: every route on one key
+shares its quota. A transport is anything with `send(method, path, headers, body)` returning a
+Response; `HttpTransport` is the real one, and tests use `fakeprovider.FakeProvider`.
+"""
+
+import http.client
+import json
+import time
+from dataclasses import dataclass, field
+from urllib.parse import quote, urlsplit
+
+from chatsvc.retry import RetryPolicy, call_with_retry
+
+
+@dataclass
+class Response:
+    status: int
+    headers: dict = field(default_factory=dict)
+    body: bytes = b""
+
+    def json(self):
+        try:
+            return json.loads(self.body or b"{}")
+        except ValueError:
+            return {}
+
+
+class ProviderError(Exception):
+    """A provider call that ended without an answer."""
+
+    def __init__(self, status, detail, attempts, retry_after=None):
+        super().__init__(f"provider answered {status} after {attempts} attempt(s): {detail}")
+        self.status = status
+        self.detail = detail
+        self.attempts = attempts
+        self.retry_after = retry_after
+
+
+class HttpTransport:
+    """Calls the provider over HTTP(S) at `base`."""
+
+    def __init__(self, base, timeout=20.0):
+        parts = urlsplit(base)
+        self.https = parts.scheme == "https"
+        self.host = parts.netloc
+        self.prefix = parts.path.rstrip("/")
+        self.timeout = timeout
+
+    def send(self, method, path, headers, body):
+        kind = http.client.HTTPSConnection if self.https else http.client.HTTPConnection
+        connection = kind(self.host, timeout=self.timeout)
+        try:
+            connection.request(method, self.prefix + path, body=body, headers=headers)
+            answer = connection.getresponse()
+            return Response(
+                answer.status, {k.lower(): v for k, v in answer.getheaders()}, answer.read()
+            )
+        finally:
+            connection.close()
+
+
+def model_path(model, action="generate"):
+    return f"/v1/models/{quote(model, safe='-._')}:{action}"
+
+
+class ProviderClient:
+    """Calls on one provider key, with the retry policy of the route that owns it."""
+
+    def __init__(self, transport, key, policy=None, sleep=time.sleep, log=None):
+        self.transport = transport
+        self.key = key
+        self.policy = policy or RetryPolicy()
+        self.sleep = sleep
+        self.log = log or (lambda line: None)
+
+    def _post(self, path, payload):
+        body = json.dumps(payload).encode("utf-8")
+        headers = {"authorization": f"Bearer {self.key}", "content-type": "application/json"}
+        attempts = []
+
+        def send():
+            response = self.transport.send("POST", path, headers, body)
+            attempts.append(response.status)
+            self.log(f"upstream path={path} attempt={len(attempts)} status={response.status}")
+            return response
+
+        response, count = call_with_retry(send, self.policy, self.sleep)
+        if response.status != 200:
+            detail = response.json().get("error", response.body[:200].decode("utf-8", "replace"))
+            hint = response.headers.get("retry-after-ms")
+            raise ProviderError(
+                response.status, detail, count, float(hint) / 1000 if hint else None
+            )
+        return response.json()
+
+    def generate(self, model, messages, max_tokens=512):
+        return self._post(model_path(model), {"messages": messages, "max_tokens": max_tokens})
+
+    def embed(self, model, inputs):
+        return self._post(model_path(model, "embed"), {"inputs": list(inputs)})["vectors"]

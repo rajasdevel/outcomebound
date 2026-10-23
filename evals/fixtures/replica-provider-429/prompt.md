@@ -1,0 +1,1 @@
+Since we added the new `/v2/chat` route, its requests fail with 429, and some with 404. A sample of yesterday's traffic on it is in `traffic/v2-2026-10-20.jsonl`. Find the root cause and fix it, and verify the fix.

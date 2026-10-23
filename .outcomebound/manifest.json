@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "e9627da59573958eb3769cee5219fb9b09c7f422b87017c9e9b3dba11d7d6dab"
+      "sha256": "4b987fc906e3586f81b7f47703bdbe7b025a53209f43ba4cdc0202e3ff409855"
     },
     {
       "kind": "block",
@@ -28,23 +28,23 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "59fae29c81d8c0da0811a2ca9f016737811fe1323e89f08b5a02dc24ca157123",
+        ".outcomebound/fragments/commands.md": "2d0bff6e89bde6d29d27aa724652ee32efd00a1f238ba4953a7a7f43f1516df9",
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "79e8188cc76a3e7197b4ef21798ba5b2e5a233cc7ee19cd99e36975abccc1483"
+        ".outcomebound/fragments/workspace.md": "b29de05eba3c638c4f8fb5f9fe0482e92404290ff0d3b43f21a53118d83d7d52"
       },
       "style": [
         "ste"
       ],
-      "sha256": "3cf27ec40b92f7e2bc9987d06b447e1bed6293f79dfc16c4d754b18b1d47a1ac"
+      "sha256": "02eb642df7089de532e33e26c52efc2c10ec1b3de3f739c727c22083bfd54359"
     },
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "ee8cf2ff2798d07c3241c27388b37757a68e64c3bb90999b5bec46ca55bee922",
-      "sha256": "08b5e03a89a13162bf5dbbee3486890ee19c4b13fcc2bdda46a074372372925f"
+      "frame": "107b91a3d48f173ab9e2c9c0890b577b16063f8205dc5c49579a47f94b3316e2",
+      "sha256": "96c3ee46a8211aa9e856e8cc5c01fadcd8e5338b7cbe39912722597eff1f2df0"
     },
     {
       "kind": "fragment",
@@ -56,7 +56,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "79e8188cc76a3e7197b4ef21798ba5b2e5a233cc7ee19cd99e36975abccc1483"
+      "sha256": "b29de05eba3c638c4f8fb5f9fe0482e92404290ff0d3b43f21a53118d83d7d52"
     },
     {
       "kind": "fragment",
@@ -68,7 +68,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "59fae29c81d8c0da0811a2ca9f016737811fe1323e89f08b5a02dc24ca157123"
+      "sha256": "2d0bff6e89bde6d29d27aa724652ee32efd00a1f238ba4953a7a7f43f1516df9"
     },
     {
       "kind": "ignore",

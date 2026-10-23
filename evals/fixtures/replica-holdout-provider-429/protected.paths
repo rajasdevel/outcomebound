@@ -1,0 +1,7 @@
+# The project note, the environments' operator and repository exclusion state, copied into the
+# candidate-writable fixture. The offline provider is not here: a change to it is a claim of its
+# own (`provider-stand-in-unchanged`), so the run still reports what the fix did.
+AGENTS.md
+bin/envctl
+.git/config
+.git/info/exclude

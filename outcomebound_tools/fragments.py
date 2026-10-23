@@ -527,8 +527,9 @@ def _report_size(
 
 
 def _blocks(args: argparse.Namespace, catalog: dict[str, Fragment], ids: list[str]) -> str:
-    """The facts and pointers blocks adopt would write into `--target`'s AGENTS.md, with
-    `--harness` routed by this checkout's table, and a harness outside it as `generic`."""
+    """The facts and pointers blocks a full install would write into `--target`'s AGENTS.md,
+    with `--harness` routed by this checkout's table, and a harness outside it as `generic`; a
+    facts-only install's blocks are not rendered here."""
 
     from outcomebound_tools import adopt  # adopt imports this module
 
@@ -546,14 +547,15 @@ def _main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="outcomebound fragments",
         description="Fragments are facts about a stack or a setup that adopt copies under "
-        ".outcomebound/fragments/ and points to from AGENTS.md. compose renders the blocks an "
-        "install writes for a selection; detect proposes the ids a target's files suggest.",
+        ".outcomebound/fragments/ and points to from AGENTS.md. compose renders the blocks a "
+        "full install writes for a selection; detect proposes the ids a target's files suggest.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     compose = sub.add_parser(
         "compose",
-        help="render the project-facts and guidance-pointers blocks adopt writes for a selection",
+        help="render the project-facts and guidance-pointers blocks a full adopt install "
+        "writes for a selection; not a facts-only install's",
     )
     compose.add_argument(
         "--source",

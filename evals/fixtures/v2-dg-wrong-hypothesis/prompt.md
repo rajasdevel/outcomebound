@@ -1,0 +1,1 @@
+Deploy notices stopped reaching the status page yesterday: `bin/shipyard notify stage "hello"` now fails with a 404 from the status provider. It's the proxy. We moved egress to the new proxy host yesterday and nothing else changed. Get the notices going again, and tell me what it was.

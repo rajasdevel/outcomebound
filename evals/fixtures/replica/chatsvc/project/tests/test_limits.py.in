@@ -1,0 +1,91 @@
+import unittest
+
+from chatsvc import limits
+
+CONF = """
+# two zones
+limit_req_zone $api_key zone=chat:1m rate=2r/s;
+limit_req_zone $api_key zone=slow:1m rate=30r/m;
+limit_req_status 429;
+location /v1/chat {
+    limit_req zone=chat burst=1 nodelay;
+    client_max_body_size 1k;
+}
+location /v1/slow { limit_req zone=slow; }
+"""
+
+
+class Clock:
+    def __init__(self):
+        self.now = 100.0
+
+    def __call__(self):
+        return self.now
+
+
+class ParseTest(unittest.TestCase):
+    def test_zones_and_locations_are_read(self):
+        parsed = limits.parse(CONF)
+        self.assertEqual(parsed.zones["chat"].rate, 2.0)
+        self.assertEqual(parsed.zones["slow"].rate, 0.5)
+        self.assertEqual(parsed.locations["/v1/chat"].burst, 1)
+        self.assertTrue(parsed.locations["/v1/chat"].nodelay)
+        self.assertEqual(parsed.locations["/v1/chat"].max_body, 1024)
+        self.assertEqual(parsed.status, 429)
+
+    def test_a_statement_without_a_semicolon_is_refused(self):
+        with self.assertRaises(limits.LimitsError):
+            limits.parse("limit_req_zone $api_key zone=a:1m rate=1r/s")
+
+    def test_a_location_naming_an_unknown_zone_is_refused(self):
+        with self.assertRaises(limits.LimitsError):
+            limits.parse("location /x { limit_req zone=nope; }")
+
+    def test_an_unknown_directive_is_refused(self):
+        with self.assertRaises(limits.LimitsError):
+            limits.parse(
+                "limit_req_zone $api_key zone=a:1m rate=1r/s;\nlocation /x { limit_req zone=a; gzip on; }"
+            )
+
+    def test_sizes(self):
+        self.assertEqual(limits.size("64k"), 65536)
+        self.assertEqual(limits.size("2m"), 2 * 1024 * 1024)
+        self.assertEqual(limits.size("100"), 100)
+
+    def test_the_shipped_file_parses(self):
+        parsed = limits.load("config/limits.conf")
+        self.assertIn("/v1/chat", parsed.locations)
+
+
+class LimiterTest(unittest.TestCase):
+    def setUp(self):
+        self.clock = Clock()
+        self.limiter = limits.Limiter(limits.parse(CONF), clock=self.clock)
+
+    def test_burst_then_refusal(self):
+        self.assertIsNone(self.limiter.check("/v1/chat", "k", 10))
+        self.assertIsNone(self.limiter.check("/v1/chat", "k", 10))
+        status, wait = self.limiter.check("/v1/chat", "k", 10)
+        self.assertEqual(status, 429)
+        self.assertAlmostEqual(wait, 0.5)
+
+    def test_tokens_refill_at_the_rate(self):
+        for _ in range(2):
+            self.limiter.check("/v1/chat", "k", 10)
+        self.clock.now += 0.5
+        self.assertIsNone(self.limiter.check("/v1/chat", "k", 10))
+
+    def test_keys_have_their_own_buckets(self):
+        for _ in range(2):
+            self.limiter.check("/v1/chat", "a", 10)
+        self.assertIsNone(self.limiter.check("/v1/chat", "b", 10))
+
+    def test_a_large_body_is_413(self):
+        self.assertEqual(self.limiter.check("/v1/chat", "k", 4096), (413, 0.0))
+
+    def test_an_unlimited_path_passes(self):
+        self.assertIsNone(self.limiter.check("/healthz", "k", 0))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -239,6 +239,7 @@
     "tests/test_adopt.py",
     "tests/test_adopt_cloud.py",
     "tests/test_adopt_drift.py",
+    "tests/test_adopt_facts_only.py",
     "tests/test_adopt_line_endings.py",
     "tests/test_adopt_worktrees.py",
     "tests/test_facts.py",

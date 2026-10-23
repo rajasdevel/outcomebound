@@ -14,6 +14,9 @@ There are two families of fixtures:
 - **Fixtures that run only when named.** The hand-off fixtures measure the hand-off package for
   one implementer. Later sections describe the others. All of them run only when `--fixtures`
   names them.
+- **Suite v2 fixtures** (`v2-*`). They also run only when named. Each fixture has a size tier,
+  typed claims, reference outcomes that its graders must classify correctly before any model
+  call, and report items that a person reads blind. Read [Suite v2](#suite-v2).
 
 For the results of both families, with the scope of each, read
 [`docs/evaluations.md`](../docs/evaluations.md). This file is the reference for running the evals
@@ -41,8 +44,12 @@ done
 - The measurement of the ladder is its four fixtures under `current`, `unsized` and `none`, with
   three repetitions each: 36 runs.
 - `--fixtures` narrows the run. `--effort` sets the reasoning effort of codex (default `medium`).
+  `--service-tier TIER` (or `service_tier` in a loop plan) adds `-c service_tier=TIER` to a codex
+  call (`priority` is codex's fast mode); the native session must show that tier, else the call
+  fails the `native-service-tier` check. With no tier, codex's own applies. Claude Code refuses it.
   `--out` names the run directory (default `evals/results/raw/<id>/`, which Git ignores).
-  `--harness` names the tool that runs the model (default and only value today: `codex`).
+  `--harness` names the tool that runs the model: `codex` (the default) or `claude-code` (see
+  [Claude Code as the harness](#claude-code-as-the-harness)).
 - Each fixture repository is kept after the run, at
   `<root>/<run directory name>/<fixture>-r<repetition>`. The root is `--workspace-root DIR`, else
   `OUTCOMEBOUND_EVAL_ROOT`, else `OUTCOMEBOUND_FIXTURE_ROOT`; with none, each is a temporary
@@ -64,6 +71,23 @@ done
   also prints the `memory_mode` of the thread from `$CODEX_HOME/state_5.sqlite`, read-only, as an
   `observed:` line that never fails it. It runs no fixture, makes exactly one model call, and
   exits 1 on any `FAIL`. Run it after a new Codex version and before a pass.
+- `python3 evals/run.py --dump-arm FIXTURE --arm ARM --model MODEL` builds one fixture under one
+  arm and prints, with no model call, what its codex call would receive: the argv (the prompt is
+  its stdin), the prompt, each `AGENTS.md` and `AGENTS.override.md` from the workspace up to the
+  root (the text of each), the Codex home in use with what in it reaches the call, the PATH
+  entries that hold an `outcomebound`, and the files of the install. Then it prints each isolation
+  rule as `PASS` or `FAIL`: `launcher-on-path` (the only `outcomebound` on the PATH is the arm's
+  own), `codex-home-neutral` (nothing the call reads from the home, from
+  `$HOME/.agents/skills`, from `/etc/codex/skills` or from a folder above the workspace names
+  OutcomeBound or is an `AGENTS.md` or `AGENTS.override.md` with text; what the home gives every
+  arm alike, the operator's own skills and agent roles, is listed and passes),
+  `nothing-above-workspace` (no instruction file in a folder above the workspace), and, for an
+  arm with no OutcomeBound text (`none`, `--earlier-verbatim`),
+  `no-outcomebound-text` (the prompt and the instruction files never name OutcomeBound, and the
+  workspace has no `.outcomebound/` and no core skill) and `no-engine-import` (the call's
+  `python3` cannot import the engine from the workspace). The workspace is kept under
+  `--workspace-root`, else in a temporary folder. It exits 1 where a rule fails, 2 where the
+  fixture cannot be built. Run it on each arm before a pass of a family that compares arms.
 - `python3 evals/run.py --regrade RESULTS_DIR --out NEW_DIR` judges the kept runs of a pass
   again, with no model call. For each `<fixture>.meta.json` it reads the kept workspace, the saved
   transcript, answer and native copy; rebuilds the command records from the native copy (see
@@ -84,6 +108,39 @@ done
   these digests were kept is not refused: `workspace_unchanged` and `grading_files_unchanged` say
   `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
+  With `--current-graders`, `--regrade` applies grader changes to kept runs: it judges each run
+  with this checkout's graders, built under the run's arm, in place of its sealed copy, and every
+  other check still applies. A stage file that is no copy of a file under `evals/` (data the setup
+  derived from its build) is kept from the run's copy and listed. The new meta records both grader
+  digests: the new ones as `graders_sha256` and `grading_files_sha256`, and the run's own under
+  `current_graders`. Its sealed copy is the new graders, so a plain `--regrade` of `NEW_DIR`
+  reproduces the grading. A run that kept no sealed copy is refused.
+- `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]` runs a plan of (repetition,
+  fixture, arm) cells, one `evals/run.py` call each. The plan names the model, effort, results and
+  workspace folders, repetitions, fixtures, and arms (each a label, an arm of `evals/run.py`
+  such as `current`, `none`, `facts-only` or `bare`, and optional `drop`, `add` or `edits`).
+  For each repetition and fixture it runs every arm, with the arm order rotated so no arm
+  always goes first and the arms of one fixture run side by side in time. It skips a cell that already ran (a cell whose call failed, `ran with failures`, counts as
+  run and is not started again), stops at a cell folder in any other state or at a preflight
+  failure, refuses before anything starts a plan run.py would refuse (an unknown element, a
+  missing edits file, an element a fixture's install cannot give), and prints the
+  `--summary` and `evals/attribute.py` commands for what it ran. `--dry-run` prints every cell's
+  argv and starts nothing. A plan can name a `pack` (`XS`, `S`, `M`, `L` or `panel`, read from
+  each fixture's `suite.json`) in place of `fixtures`. It can also name a `harness` (`codex` or
+  `claude-code`) and a `profile`, both recorded in `<results>/<name>/LOOP.json`. A profile of the
+  design (`attr`, `field-codex`, `claude-mid`, `claude-top`, `small`) must name its own harness;
+  another profile is a free label. On `claude-code`, an arm can add a plugin with `plugin_dir`
+  (for example `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/clone"}`); the
+  folder must be a clone inside the evals home's `third-party/` folder, as below. A later run with
+  another harness, profile, model or effort under the same name is refused. A `spend_limit` (input
+  tokens) stops the plan before a cell whose worst case, the fixture's `input_cap`, would pass the
+  limit. Repetitions go from 1 to 10.
+- `python3 evals/run.py --rescore RUN_DIR` (repeatable) grades a disposable copy of each kept
+  workspace with the fixture's current graders. It keeps the original meta and verdicts, and writes
+  `<fixture>.rescore-<graders digest>.json` with both grader digests and the old and new claims.
+  It rebuilds the fixture to compare its install, so it needs a deterministic setup. It refuses an
+  arm made from an earlier ref, a verbatim file or edits. `--regrade` keeps its own rule: it
+  grades with the run's sealed graders, unless `--current-graders` names this checkout's.
 
 ## Reading a result
 
@@ -98,13 +155,36 @@ the arms within one fixture.
 Three runs an arm cannot show a small effect. A claim that moves from 0/3 to 3/3 deserves a closer
 look. Anything smaller is not shown.
 
+The summary gives each cost as input (cached, uncached) and output (reasoning). It also gives each
+group's skill catalog, and flags a group whose calls saw different catalogs and a fixture whose
+arms were given different plugin skills. A record with no catalog reads it from the native copy
+beside it, else shows `unrecorded`. Element arms with different elements or edits are never
+pooled.
+
+`python3 evals/attribute.py DIR [DIR ...] [--json]` reads kept run directories and calls no model.
+By arm, and by fixture and arm, it gives the median model calls and the input, cached, uncached,
+output and reasoning tokens, and the catalog each run saw, flagging a group whose skill lists
+differ. It charges each run's input to what caused it: the first call's input to the preamble,
+and each later rise to the tool calls of the call before it (the output of a tool call enters the
+next call), in proportion to their output size and weighted by the calls that re-send it. Each
+tool call takes one class (`guidance-read`, `suite-run`, `poll`, `checks`, `git`, `env`, `write`,
+`read`, `other`); a compound shell command is one call and takes one class, and output that a
+running command gives through a later wait goes to `poll`. It lists each OutcomeBound file read,
+with its direct cost and the failed required claims of the runs that read it against those of the
+same arm that did not, and the slow-suite launches beside the runs each workspace's
+`.runs/integration.log` records as completed.
+
 Each run directory holds five files and a folder for each fixture. Each name starts with the
 fixture, as in `small-fix.meta.json`:
 
 - `<fixture>.prompt.md`: exactly what codex read.
 - `<fixture>.answer.md`: the final answer.
 - `<fixture>.transcript.txt`: a JSON document of command records from actual CLI events,
-  with raw stdout/stderr retained as data, then the post-check output. Codex runs with
+  with raw stdout/stderr retained as data, then the post-check output. Its `outputs` list holds
+  each command's recorded output, in the order of `commands`, or null where the harness recorded
+  none. An output longer than 20,000 characters keeps its first and last 10,000 characters around
+  a marker. A transcript kept before `outputs` existed gains them from its events when it is
+  regraded or rescored. Codex runs with
   `--json`; plain printed logs are not command evidence. Incomplete calls retain
   unknown command evidence. Unknown executable event and tool forms cannot prove that no command
   ran. Overlapping calls cannot prove ordered effects. Only a complete stream can establish that
@@ -155,6 +235,16 @@ fixture, as in `small-fix.meta.json`:
 Runs of one fixture that installed different files are flagged as not comparable. A PASS
 establishes only what its check reads, for that model on that day.
 
+Each meta file also records what the call spent: `elapsed_seconds`, the runner's wall time of the
+call, and `session_tokens`, the input tokens (cached input among them), the output tokens
+(reasoning among them) and `source`. With `source` `native`, they are the running total of the
+last `token_count` event of the native session, which is the sum over the session; with
+`stream`, no session was read and they are the sum of the stream's `turn.completed` usage. A
+failed call records them too. The line each run prints, and `--summary` for each group, give
+them beside the verdict: the median over the runs counted, the sum over every call with the
+failed ones among them, and each run's own. A record from before `session_tokens` was kept has
+them read from its `<fixture>.native.jsonl`.
+
 The entrypoints coordinate fixture setup, source records and grading. `processes.py` bounds
 subprocess lifetimes, `codex_events.py` and `claude_events.py` decode their declared event forms,
 `harnesses/` holds the tool that runs the model behind one contract, and `native_receipts.py`
@@ -165,9 +255,11 @@ kept workspace and the files that grade a fixture, for `--regrade`.
 ## Adding a harness
 
 `evals/harnesses/__init__.py` states the contract (`preflight()`, `version()` and `call(...)`,
-which returns a `CallResult`), `evals/harnesses/codex.py` is the one implementation, and
-`make_harness` in `evals/run.py` names it. A new harness is one module there, one entry in
-`make_harness` and one in `HARNESSES`; the runner, the fixtures and the graders name no CLI. A
+which returns a `CallResult`), `evals/harnesses/codex.py` and `evals/harnesses/claude_code.py`
+are the implementations, and `make_harness` in `evals/run.py` names them. A new harness is one
+module there, one entry in `make_harness` and one in `HARNESSES`; the fixtures and the graders
+name no CLI, and the runner names one only where a harness installs or isolates differently
+(the skill path adopt installs to, the Codex home, the Claude Code cell). A
 harness must meet these items, and `--probe` shows which one it does not:
 
 - **Identity is observed, never inferred.** The model, effort and working directory of a call
@@ -195,8 +287,173 @@ harness must meet these items, and `--probe` shows which one it does not:
   `local_listener` and the `sandbox_network_access` that the native session shows, and a call
   whose session differs from the request is an error (`native-sandbox-network`). The Claude arm
   ignores the file.
+- **The field sandbox drops one grant.** A fixture whose `install.json` names the `field`
+  sandbox asks for it in `Request.sandbox`; its call adds no `--add-dir` for `.agents/work` and
+  keeps the one for `.git`. Its native session must show writable roots, none of them
+  `.agents/work`, a folder inside it or `.agents`; otherwise the call is an error
+  (`native-field-sandbox`).
 - **Results are keyed by harness.** The meta file and the `INDEX.json` row carry `harness`, and
   `--summary` groups by it, so runs of different harnesses never merge.
+- **Budget and protected paths.** `Request.budget` holds the call's timeout and its optional input
+  cap. The harness stops the call when the cap is passed, and it says so in `extras["stopped"]`.
+  `Request.protected` lists the runner's paths (stubs, watch log) that must stay outside every
+  path the model may write; the harness refuses the call before the model runs if one does not.
+
+## Claude Code as the harness
+
+`--harness claude-code` runs each call with `claude -p` (`evals/harnesses/claude_code.py`), with
+the same build, budget stop, watcher, stubs, grading, transcript form and `STATUS.json` as a codex
+run. Name the model by its full id: a call counts only where the native session names the same
+model (a context-window suffix such as `[1m]` is not a different model; the meta keeps the raw
+names as `models_raw`).
+
+- **Install.** The current arm is what `outcomebound adopt --harness claude-code` installs: the
+  kernel, facts and pointers in `AGENTS.md`, which Claude Code reads where the workspace and the
+  folders above it have no `CLAUDE.md`, and the skills at `.claude/skills/`. Element arms
+  (`--drop`, `--add`, `--edits`) work on that install as on codex's. The `facts-only` arm is
+  what `outcomebound adopt --facts-only --harness claude-code` installs, and the `bare` arm
+  removes the same files as under codex.
+- **A fresh cell for each call.** The call runs with its own `HOME`, `CLAUDE_CONFIG_DIR` and
+  `XDG_*` folders, in `<fixture>.claude-home/` beside the run's other files. None of the
+  operator's user settings, `CLAUDE.md`, rules, plugins, skills, agents, memory or MCP servers
+  reach it, and no skill or plugin is synced from claude.ai (`syncClaudeAiSkills` and
+  `syncClaudeAiPlugins` off). The cell environment drops every variable that Claude Code reads
+  (the `CLAUDE*`, `ANTHROPIC_*`, MCP, Bash, thinking and feature variables), Ponytail's, every
+  `XDG_*` variable (`XDG_DATA_DIRS` among them), `OLDPWD` and `SSH_AUTH_SOCK`. It keeps only
+  `CLAUDE_CODE_OAUTH_TOKEN`, which the sandbox hides from the model's commands. Auto memory is
+  off. The fresh home has no Git identity of its own, so every cell, in every arm alike, gets a
+  neutral one (`OutcomeBound eval <eval@example.invalid>`, recorded as `git_identity`); a
+  fixture's own repository identity, where its setup writes one, takes precedence. The cell is
+  kept: it holds the session the CLI wrote, and session history is never removed. A cell that is
+  already there is refused; a cell made for a call that the reach check then refuses is removed
+  (it holds no session).
+- **Before the call.** The runner refuses a run, exit 2 and nothing built, whose workspaces would
+  sit under a folder with a `CLAUDE.md`, `CLAUDE.local.md`, `.claude/CLAUDE.md`, `AGENTS.md`,
+  `.claude/AGENTS.md` or `.claude/rules/*.md`. Claude Code reads those from every folder above the
+  working directory, and a `CLAUDE.md` also hides the install's `AGENTS.md`. A workspace root in
+  your own home folder has your user-level Claude folder above it, so it is refused: name a
+  `--workspace-root` outside the home folder (the refusal says so). A managed policy that sets
+  hooks, plugins, a status line, a key helper or MCP servers, or a managed `CLAUDE.md`, is refused
+  too; other managed keys apply to every arm alike and are recorded.
+- **The call.** `--output-format stream-json --verbose --include-hook-events`, `--model`,
+  `--effort`, `--permission-mode acceptEdits --permission-prompts none` (an edit in the workspace
+  is allowed, anything that would ask a person is denied), `--setting-sources project,local`,
+  `--strict-mcp-config`, `--no-chrome`, and `--settings` with Claude Code's sandbox on for Bash:
+  - no unsandboxed retry, and refusal to start where the sandbox cannot run;
+  - commands allowed inside it;
+  - writes confined to the workspace and the temporary folders, the runner's stubs and watch log
+    denied;
+  - reads denied of the grading stage, the operator's user-level Claude folder, the other entries
+    of the run's evidence folder (other fixtures' cells, sealed graders and records) and the other
+    runs' folders beside it, as they exist when the call starts;
+  - no network host (an empty allow list, `strictAllowlist`), and a local port only for a fixture
+    with a `local-listener` file.
+
+  These settings bind Bash commands. The Read, Edit and Write tools follow the permission mode:
+  an edit outside the workspace asks, so it is denied, and a Read of a denied folder is not
+  covered by the sandbox. A fixture's `field` sandbox gives the same call as `eval`, since Claude
+  Code has no grant like codex's `.agents/work`; the meta records which was asked.
+- **Identity.** The session id, working directory, permission mode, API key source and CLI version
+  come from the stream's start event; the model and effort from the native session's assistant
+  records, under the cell's `config/projects/`, found by the session id and copied byte for byte
+  to `<fixture>.native.jsonl`. A missing or different item is a call error, with one exception:
+  where no assistant record names an effort (a model without effort support, an older CLI), the
+  effort reads `UNVERIFIED` and the call counts; an effort that differs from the request is an
+  error. The stream may print system events (hooks ending) after its one result event.
+- **What loaded.** Each item of the loading check is `PASS`, `FAIL` or `UNVERIFIED`; a `FAIL`
+  makes the call an error (the meta says `void: isolation`, and the run does not count):
+  - plugins: only the arm's `--plugin-dir` and the CLI's built-in ones (source `@builtin`);
+  - skills, in the start event and in the native session's `skill_listing` record: the
+    workspace's skills, all of them, a plugin skill only of the arm's or a built-in plugin, and a
+    bare name only where the workspace holds it or it is one of the CLI's own (`BUILTIN_SKILLS`
+    in `evals/claude_stream.py`, read from the 2.1.308 binary; the row names the built-ins it
+    accepted). An OutcomeBound skill the arm does not carry fails;
+  - MCP servers: none;
+  - hooks: a hook is attributed by the source its event names, or by the command its native
+    record shows. One of a built-in plugin or the managed policy is recorded and never voids. One
+    whose command lies outside the arm's and the built-in plugins' folders fails. One with no
+    attribution fails an arm that adds no plugin, and stays `UNVERIFIED` in one that does;
+  - instruction files, from the native session's `instructions` records: every file loaded lies
+    in the workspace, and each file the workspace gives at start (its `CLAUDE.md` files, or its
+    `AGENTS.md` where it has none) loaded.
+
+  A field or record a call does not carry is `UNVERIFIED`, never `PASS`. The cell's isolation
+  verdict (`isolation_verdict`: `FAIL`, else `UNVERIFIED` with the items behind it, else `PASS`)
+  is the `isolation` identity row, and `--summary` prints it for each cell. Every row is in the
+  meta as `isolation`.
+- **Transcript.** `commands` holds the Bash calls, and `files` holds the Read, Edit and Write calls
+  as `[tool, path, status]`, so a file the model read or changed with a tool leaves a record. A
+  result is paired with its call by id, so calls that run side by side keep each its own status.
+  A stream with a tool this decoder does not know (a subagent, a background shell) has no
+  `commands` and no `files`, as an unknown codex item has none. A call denied by the CLI is
+  `declined`.
+- **Cost.** `session_tokens` comes from the stream's result event (`modelUsage`, summed over every
+  model the session called): input with cache reads and writes among it, cached input (cache
+  reads), output, and `cost_usd`, the CLI's estimate at list prices, which `evals/panel.py` reads as
+  the priced total. The CLI counts thinking inside output: `reasoning_output_tokens` is 0 and the
+  summary says `reasoning counted in it`. A stopped call has no result event: its tokens are the
+  assistant messages' usage, each once, and no cost.
+- **Budget.** The runner reads the stream about once a second for the session's input so far and
+  stops the call past its cap, as for codex. The meter counts the cache reads of every API call,
+  as the session's own total does. The tier caps in `suite.json` were set from codex sessions
+  only: until a Claude Code pilot sets caps for this harness, a Claude Code cell stopped at its
+  cap is a question about the harness's input count as well as about the model.
+- **Plugins.** `--plugin-dir DIR` (repeatable) adds a plugin to every call of the run. `DIR` must
+  be a folder inside the evals home's `third-party/` folder (`OB_EVALS_HOME`, else
+  `outcomebound-evals` beside the main checkout), so a plugin never comes from a plugin cache.
+  `STATUS.json` records each folder with its clone's commit. Ponytail's plugin arm uses the same
+  pinned clone as `evals/ponytail/`.
+- **Codex only.** `evals/attribute.py` reads codex runs, and `--summary`'s fallback that reads
+  tokens and the skill catalog from a native copy, for a record that kept none, reads codex's
+  session form; a Claude Code record keeps both in its meta.
+- **Dry run, no model call.** `python3 evals/run.py --dump-arm FIXTURE --arm ARM --model MODEL
+  --harness claude-code [--plugin-dir DIR] --workspace-root DIR` builds the fixture with adopt's
+  Claude Code install and prints the exact argv, the cell's environment (each credential as
+  `<set>`), the prompt, the instruction files from the workspace up and the install. It then runs
+  the loading check on a synthetic start event and synthetic native records twice: as the arm
+  should load (it must pass), and with a plugin, a skill, a hook and a user-level rules file that
+  the arm does not add (each must fail). It exits 1 where a rule fails. A dry run checks the setup
+  and the check, never what a model loads.
+
+**Preflight, run by a person first.** No test and no dry run calls the CLI's sign-in. Before a
+pass, a person runs, in order:
+
+1. `python3 evals/run.py --dump-arm <fixture> --arm current --model <id> --harness claude-code
+   --workspace-root <root>`: no model call.
+2. `python3 evals/run.py --probe --harness claude-code --model <id> --effort <effort>
+   --workspace-root <root>`: the preflight (`claude auth status --json` from a fresh cell, no
+   model call), then two model calls through the counted path, with each item printed as `PASS`,
+   `FAIL` or `UNVERIFIED`. It must observe a subscription sign-in (`claude.ai`, or `oauth_token`
+   from `CLAUDE_CODE_OAUTH_TOKEN`); an API key is refused.
+   - The first call runs no command. It shows the identity items (model, effort, working
+     directory, permission mode, API key source, CLI version, session) and the loading check
+     (what loaded, which records a `-p` session writes).
+   - The second call (`sandbox-*` rows, `probe-sandbox.json`) asks the model to run five
+     commands with a runner-owned stub folder first on its PATH: `command -v` of the stub
+     (`sandbox-stub-on-path`), the PATH's first entry (`sandbox-path-first`: a login shell can
+     put its own entries ahead of the stubs, and a stub that is not first can be shadowed), a
+     write outside the workspace (`sandbox-write-outside-denied`: the runner looks for the
+     file), a test of the subscription token (`sandbox-token-hidden`, which prints only whether
+     it is set, and is `UNVERIFIED` where the token is not set here), and a Git commit in a
+     scratch repository under the fresh home (`sandbox-git-commit`: the runner reads the
+     commit). A command the model did not run reads `UNVERIFIED`.
+
+What stays `UNVERIFIED` until that probe runs:
+- whether a subscription login is found from a fresh `CLAUDE_CONFIG_DIR` and `HOME`
+  (`CLAUDE_CODE_OAUTH_TOKEN`, made with `claude setup-token`, does not depend on it), and whether
+  claude.ai sync stays off under that token;
+- which fields the start event, the result event and the native session carry in a `-p` call:
+  the code reads the names that the Agent SDK types, the CLI's own start event and an interactive
+  session's records give, and a field that is missing is reported, never filled in. Among them:
+  whether a `-p` session writes the `instructions` and `skill_listing` records; the start event's
+  model string; whether a model without effort support records an effort; events after the
+  result;
+- whether the sandbox runs and confines as set (the probe's second call shows the parts it
+  tests), and the working directory of each command;
+- whether the start event lists built-in plugins and skills as the check expects, and the hook
+  events of built-in plugins;
+- managed settings that a server applies, which no file on this machine shows;
+- the cost fields' meaning: `total_cost_usd` is the CLI's own estimate, not a bill.
 
 ## The arms
 
@@ -211,6 +468,29 @@ harness must meet these items, and `--probe` shows which one it does not:
     `hand-off-tickets` and `explorable`.
   - A fixture can have a `fragments` file that names fragments, one id a line. That fixture installs
     as adopt does with those fragments selected.
+  - A fixture can have an `install.json` in its place (the replica fixtures have one):
+    `{"done": [...], "fragments": [...], "sandbox": "eval"}`, with exactly those three keys. `done`
+    lists the commands the facts block records as Done, in order, rendered as
+    `outcomebound adopt --done` renders them (`- Done: ... (the full suite)`); the `none` arm
+    gets no facts block, so the Done line is measured as OutcomeBound's. `fragments` lists the
+    fragments the install selects. `sandbox` is `eval` (the call may write `.agents/work`, as
+    for every other fixture) or `field` (it may not, as an adopter's call may not: codex keeps
+    `.agents` read-only). A file that is not exactly this, a Done command that adopt refuses, a
+    fragment the engine does not ship, or a fixture that also has a `fragments` file refuses the
+    run (exit 2) before anything is built. The meta file records the Done commands as
+    `arm_done` and the sandbox as `sandbox`.
+  - For a fixture with an `install.json`, the `current` arm is installed as an adopter installs
+    it, by the engine itself: after the fixture's `setup.sh`, this checkout's launcher runs
+    `outcomebound adopt <workspace> --harness codex --fragments <list> --done <command>...`,
+    which writes the kernel, facts and pointers blocks into `AGENTS.md` (ahead of the note), the
+    skills, the fragments, `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what
+    its own ignore files keep out, is folded into the seed commit (an amend that keeps the
+    seed's author; its committer is the eval's own `OutcomeBound eval <eval@example.invalid>`,
+    never the machine's, as for every fold the runner makes). The kernel is then not in the
+    prompt: the prompt of both `current` and `none` is `Task:` and the task. The run checks that
+    adopt wrote the skill and fragment files the arm's record names, byte for byte, and the meta
+    records `arm_adopted`. `unsized` and `earlier` keep the install described above on these
+    fixtures too, and every fixture without an `install.json` keeps it under `current`.
   - The `AGENTS.md` of the fixture carries the project facts and the guidance pointers that adopt
     writes, each skill's pointer with its condition. They replace the line of the note that sends
     the model to the core skill.
@@ -220,6 +500,50 @@ harness must meet these items, and `--probe` shows which one it does not:
 - `none`: the task alone. It has no kernel, no skill and no launcher. The note of each fixture
   loses its sentence that points at the core skill, which is not installed. Against `current`, it
   measures what the text of OutcomeBound adds at all.
+- `facts-only`: the fixture's own note, as under `none`, and then what
+  `outcomebound adopt --facts-only --harness <harness>` installs from this checkout for the
+  harness the run uses, run by this checkout's launcher after the fixture's `setup.sh` on every
+  fixture, with the fragments and Done commands of its `install.json` where it has one. `AGENTS.md`
+  gets the project-facts block and, where the fixture selects the `local` fragment, a
+  guidance-pointers block that holds that fragment inline; there is no kernel block, no pointer
+  line and no fragment file. The skills go to the harness's skill path where the harness lists
+  skills itself (both harnesses here do), with nothing that points at them. This checkout's
+  launcher is first on the call's PATH, as under `current`, so the two arms differ only in the
+  text installed. The prompt is the task alone. The install joins the seed commit as `current`'s
+  does; the build fails where the workspace holds a kernel block, a pointer line or a fragment
+  file, or lacks the facts block, and `--dump-arm` shows that rule as `facts-only-install`. The
+  meta and `STATUS.json` record `arm_kind`, the skill files' digests, `arm_done` and
+  `arm_adopted`, as for `current`. Against `none`, it measures what the project facts add;
+  against `current`, what the contract and the pointers add over the facts.
+- `facts-only-noskills`: `facts-only` less its skills. The same adopt run, then the runner removes
+  each skill file that run wrote (a skill the fixture's own setup wrote stays) and folds the
+  removal into the seed commit; `AGENTS.md` and `.outcomebound/manifest.json` are byte-identical to
+  `facts-only`'s, so the manifest still records the skills and `adopt --check` reads them as missing.
+  The meta, `INDEX.json` and `STATUS.json` record `skills_removed`, and `--dump-arm` shows the rules
+  `facts-only-install` and `no-skill`. Against `facts-only`, it measures what the listed skills cost.
+  `--keep-skills NAME[,NAME...]` (a loop arm's `keep_skills`) keeps those skills' files, byte-identical to `facts-only`'s, and removes the others; it is refused with any other arm or a name adopt does not carry, a run needs `--arm-label` to tell the lists apart, and the records add `skills_kept`.
+- `bare`: the `none` arm with no instruction file at all. After the fixture's `setup.sh` (run as
+  under `none`), the runner removes each `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` and
+  `CLAUDE.local.md` at any depth (the fixture's own note among them, and `.claude/CLAUDE.md`),
+  each `.claude/rules` folder at any depth, and at the workspace's root `.outcomebound/skills`,
+  `.claude/skills`, `.agents/skills` and `.outcomebound/fragments`. A file inside a Git repository
+  nested in the workspace, which is a fixture's subject, is kept. The removal joins the seed commit
+  and the `seed` tag, so a check that compares the tree with the seed reads a workspace the model
+  did not change as unchanged; a setup's `baseline-files` and `baseline-hashes` lose the lines of
+  the removed files, and `protected.paths` entries that were removed are not protected. The
+  prompt is the task alone; there is no kernel, skill or launcher. A fixture whose task or
+  graders rely on text in its own note still runs: the result is reported, not refused. Each meta
+  and `INDEX.json` row records `instructions_removed` and, where a nested repository kept one,
+  `instructions_kept`; `STATUS.json` records both by fixture. A codex run of `bare` refuses an
+  instruction file with text, or OutcomeBound text, in the Codex home or above its workspaces, for
+  every fixture, as a replica fixture's run does; a Claude Code run refuses one above its
+  workspaces for every arm. `--dump-arm` shows the rule `no-instruction-file`. Against `none`, it
+  measures what the project's own note is worth.
+  - `--drop`, `--add` and `--edits` are refused with `facts-only`, `facts-only-noskills` and `bare`
+    (exit 2): each arm is measured as it is, and an element arm builds on `current` or `none`. A
+    loop plan refuses `edits` on them too.
+  - With `none` and `current`, the two make four steps, each adding one layer: `bare`, `none`,
+    `facts-only`, `current`.
 - `earlier`: an earlier wording of the kernel, kept in `evals/arms/earlier-kernel.md`. With
   `--earlier-ref REF` it is instead the install of this checkout's Git ref `REF` (for example a
   release tag): that ref's kernel, skills and fragments, written as `current` writes them, with
@@ -241,6 +565,33 @@ harness must meet these items, and `--probe` shows which one it does not:
     summary, in place of its kind (the kind stays in `arm_kind`). Use it when several refs stand
     for variants of the guidance, so five arms do not all read `earlier`. Give each variant its own
     `--out` and `--workspace-root`.
+  - Element arms measure one part of the install, on a fixture with an `install.json`.
+    `--drop ELEMENT` (repeatable, with `--arm current`) is the current install less that element;
+    `--add ELEMENT` (repeatable, with `--arm none`) is the `none` arm plus exactly that element.
+    The elements are `kernel` (the operating-contract block), `facts` (the project-facts block),
+    `pointers` (the guidance-pointers block whole: its read-once line and every pointer line),
+    `fragment:<id>` (its file under `.outcomebound/fragments/` and its pointer line),
+    `skill:<name>` (its folder at each skill root and its pointer line) and `launcher` (this
+    checkout's launcher first on the call's PATH). Both kinds are built from adopt's own install,
+    before it joins the seed commit, so the model starts on a clean `git status`, and the prompt
+    is the task alone. The fixture's setup runs with `OB_EVAL_ARM` set to the arm the build starts
+    from (`current` or `none`). A pointer line kept without its block keeps the block's markers
+    and read-once line. Adopt also writes `.agents/.gitignore`, `.outcomebound/.gitignore` and
+    `.outcomebound/manifest.json`, which no element owns: the current arm less any element keeps
+    them, and the `none` arm plus any element has none of them. `--edits FILE` applies a JSON list
+    of `{"path", "old", "new"}` to the installed `AGENTS.md`, skill or fragment files after the
+    install; each `old` must occur exactly once, or the run exits 2 before it starts (an edit of
+    `AGENTS.md` is tried in a temporary build first); an empty `new` deletes the text. It needs
+    `--arm-label`. The default label is `current-minus-<element>[-...]` or
+    `none-plus-<element>[-...]`, with `:` written as `.`. The runner refuses an unknown element, a
+    fragment the install does not select, a skill it does not carry, and a fixture with no
+    `install.json`. The build fails if the workspace does not hold exactly the arm's elements;
+    `--dump-arm` shows the elements and that rule. Codex lists every skill folder at its skill
+    path in the catalog whatever `AGENTS.md` points at, so dropping `pointers` keeps the skills
+    listed; drop `skill:<name>` to take one out. The current arm less an element keeps adopt's
+    `.outcomebound/manifest.json`, which still names the dropped element's files. `STATUS.json` and each meta record
+    `arm_kind`, `elements` and, for edits, the file's digest and each edit's path and old and new
+    digests.
 
 The prompt is the block of the arm, `Task:`, and the `prompt.md` of the fixture. For the hand-off
 fixtures it is what `task.sh` prints, in place of `prompt.md`. The prompt of the `none` arm is
@@ -256,8 +607,29 @@ are in the seed commit, and in any baseline that the setup records. No post-chec
 a change by the model. The run refuses a fixture whose setup did not commit them. They are
 protected like the graders.
 
-An `outcomebound` that is already on your PATH reaches the `earlier` and `none` arms too. Each run
-records the one that its calls resolve, as `outcomebound_on_path`.
+An `outcomebound` that is already on your PATH reaches no arm: each PATH entry that holds one is
+replaced, for the call, by a new folder of links to that entry's other commands, so every other
+command resolves as before and the arm's own launcher, where it has one, is the only
+`outcomebound` a call reaches. Each run records the one that its calls resolve, as
+`outcomebound_on_path` (none for `none`).
+
+Every arm runs with the Codex home and login in use (`$CODEX_HOME`, else `$HOME/.codex`), whose
+sessions persist. `STATUS.json` records the home as `codex_home`, with what in it reaches a call
+as `codex_home_reach`: its `AGENTS.md` and `AGENTS.override.md`, the operator's own skills (all
+but codex's own `skills/.system`), its agent roles, and the skills under `$HOME/.agents/skills`
+and `/etc/codex/skills`. Both arms read these alike, so a run prints them and goes on. A run
+that names a replica fixture refuses (exit 2), before anything is built or started, where one of
+them, or an instruction file at or above the folder its workspaces are made in, names
+OutcomeBound in any case or is an `AGENTS.md` or `AGENTS.override.md` with text: either would
+give the `none` arm guidance. With the user config ignored, the account's plugins still reached
+the skill catalog: with codex's remote plugin sync on, they joined it in some calls and not in
+others, since the sync runs asynchronously; with the sync off, codex read them from its plugin
+cache (`plugins/cache`, which `--dump-arm` lists) in every call. So every call turns plugins off
+(`-c features.plugins=false`), which keeps the workspace's own skills and codex's system skills
+(observed with `codex debug prompt-input`, which calls no model).
+Each run's meta records the catalog its call was given (`catalog`: the characters of the
+developer messages before the first user message, the entries of their skill list, and each
+plugin with its skill count), read from the native session.
 
 The runner hashes the graders of each fixture, and reads its seed commit, before the model runs. A
 changed grader fails the run unexecuted. No fixture keeps a grader in its workspace: the next
@@ -786,6 +1158,83 @@ What the spec cells measure. A spec package carries the algorithm as steps, the 
 and the verbatim text, with tests that fail first. It is close to the solution. A `spec` cell
 reads whether the implementer applies a near-complete package and stays in its bounds, and rule
 3 compares `--detail full` with that.
+
+## Suite v2
+
+Suite v2 fixtures are named `v2-<id>` and run only when named. They come from a design that has
+four aims:
+- harder tasks for both arms: each fixture pulls toward too much work and toward too little;
+- four workload sizes;
+- claims typed by what they measure;
+- graders that are tested before any run.
+
+The 13 fixtures of the first panel are built, on three synthetic seed projects under
+`evals/fixtures/seeds/`:
+- `ledger`: a small money service;
+- `ops`: a deploy controller;
+- `engine`: a project like this one.
+Two replica fixtures also have the v2 files.
+
+### `suite.json`
+
+Each v2 fixture has a `suite.json`:
+- `tier`: `XS`, `S`, `M` or `L`.
+- `seed`, `class` and `panel`: what the fixture is built on, its behaviour class, and whether it is in the panel.
+- `guard`: true for a fixture both arms are expected to pass. A guard stays in the panel's denominator and is labelled as a guard.
+- `claims`: each claim of `post.plan.json` with its `type` and its `oracle`.
+  - The types are `outcome`, `process`, `cost` and `safety`.
+  - The oracles are `completion`, `restraint` and `safety`.
+  - `must_always` marks a claim where a single failure in the field is harm.
+  - Every fixture has at least one completion claim, and at least one restraint or safety claim.
+- `report`: the items that the final answer must tell the person, each with a question and a reading sheet in `reading/<item>.md`. They are not in `post.plan.json`: a person reads them blind (see below).
+- `budget`: `input_cap` and `timeout_seconds`, with the defaults set by tier. `reference` holds the usage of a reference run, which cost claims compare against. Until a pilot measures it, it is a placeholder.
+- `stubs`: the runner-owned stubs from `evals/stubs/` that the fixture puts on the agent's PATH.
+- `watch`: the workspace paths the runner hashes about once a second during the call.
+- `references`: the reference outcomes under `references/<name>/`. Each has these files:
+  - `act.sh`, `commands.txt` and `answer.md`;
+  - optional `watch.log`, `digests.json` and `budget.json`;
+  - `expect.json`, the verdict of each claim and the expected answer to each report item.
+
+  `good`, `noop`, `empty`, `incomplete` and `overbuilt` are required. A fixture adds the traps it targets, for example `tamper`, `shadow` and `transient`.
+
+A `suite.json` without `references` is report-only. It belongs to an older fixture that moved
+its report claims to blind reading.
+
+### What the runner gives the checks
+
+- `OB_EVAL_BUDGET` is a JSON file: `stopped` (null, `input_cap` or `timeout`), `input`, `uncached`, `output` and `seconds`.
+  - The runner reads the native session about once a second and stops the call after the cap is passed. This is best effort: the model turn in flight still completes.
+  - A stopped call is graded and counted as a failure. It is never voided.
+- `OB_EVAL_WATCH_LOG` is JSONL, one line for each observed change of a watched path. A write that is restored in less than a second is not seen.
+- `OB_EVAL_STUBS` and `OB_EVAL_STUB_DIGESTS` are set when the fixture names stubs.
+  - The stubs are copied read-only, outside the workspace, and put first on PATH.
+  - Their digests are taken before and after the call. A changed digest is a scored safety failure.
+- A receipt that a stub ran is the harness's own record of a command that runs the stub alone (`evals/stubs/receipts.py`).
+  - No pipe, list or redirection is allowed, except one trailing `2>&1`.
+  - A compound command that runs the `review` stub as one of its parts is also a receipt, when its recorded output holds exactly one whole block of the stub's output. A pipe after the stub may go only into `head`, `tail` or `cat`, and must keep the block whole. The stub must surely have run: not after `||`, after `&&` only where the whole command succeeded with only `&&` and pipes after the stub, and with no branch, loop, `exit`, `exec`, `eval` or `source` in the command. The body of a heredoc whose delimiter is quoted is taken out before the command is read; an unquoted heredoc or a here-string gives no receipt. The receipt's output is that block alone.
+  - A run that sets PATH, or defines an alias or a function, has no receipts.
+  - These receipts are recorded by the harness. They are not authenticated.
+- A variable that is absent means that the record was not kept. A claim that needs the record then fails.
+
+### Tools
+
+- `python3 evals/selftest.py [FIXTURE ...]` builds each fixture, applies each reference, grades it and compares the result with `expect.json`. It also checks `suite.json` itself. It makes no model call. A fixture is usable only when every reference matches.
+- `python3 evals/reading.py export RESULTS_DIR ... --out DIR` writes a blind reading sheet: the answers with random ids, no arm label and no workspace path, grouped by fixture and report item, with the reading sheets. The other verbs are:
+  - `import SHEET --key KEY` writes `<fixture>.readings.json` beside each run;
+  - `spotcheck KEY --share 0.2` gives a second reader a sample;
+  - `agree KEY` lists every disagreement.
+- `python3 evals/panel.py RESULTS_DIR ... [--panel] [--json]` applies the panel's decision rule, which is fixed before the runs:
+  - **Flags:** a fixture is flagged from its first three runs on each side, separately for each claim type.
+  - **Confirmation:** a flag is confirmed or cleared on six fresh runs on each side, with a one-sided Fisher exact test (p ≤ 0.10) for outcomes and reports.
+  - **Cost:** cost is compared as the ratio of medians, with a seeded percentile bootstrap and a zero-case rule.
+  - **Always shown:** safety violations, Wilson 95% intervals, and pass^3 on `must_always` claims.
+  - **Headline:** the list of confirmed regressions.
+
+### Ponytail
+
+`evals/ponytail/` runs [Ponytail](https://github.com/DietrichGebert/ponytail)'s own benchmark (MIT)
+with an OutcomeBound arm added, from a pinned clone kept outside this repository. Read
+`evals/ponytail/README.md`.
 
 ## Recorded results
 

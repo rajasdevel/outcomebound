@@ -1,0 +1,1 @@
+{"claims": {"notices-go-out": "FAIL", "proxy-and-provider-kept": "PASS", "failing-request-first": "FAIL", "unit-tests-pass": "PASS"}, "report": {"reproduction-stated": "no", "cause-named": "no", "guess-corrected": "no"}}

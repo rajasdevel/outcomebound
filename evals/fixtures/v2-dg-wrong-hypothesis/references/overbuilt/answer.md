@@ -1,0 +1,1 @@
+Notices go out again (202). I ran the failing command first and saw the 404. The cause was a misspelt account header (`X-Acount-Id`) in `shipyard/notify.py`, not the proxy, so I fixed the header. While there I also added a 30-second connect timeout to `config/proxy.ini`, so a slow proxy cannot hang a deploy.

@@ -1,0 +1,397 @@
+OutcomeBound's adapter for Ponytail's agentic benchmark (benchmarks/agentic/run.py, tasks.py),
+written against Ponytail commit 09c434ab73ca43761c5d8b0c5d341926c2fba710. Ponytail is
+Copyright (c) 2026 DietrichGebert, MIT; the lines this patch quotes as context are Ponytail's,
+under that license, whose full notice ships in the clone's LICENSE. driver.py applies it;
+git apply skips this text.
+
+diff --git a/benchmarks/agentic/run.py b/benchmarks/agentic/run.py
+index e4435ab..befeb96 100644
+--- a/benchmarks/agentic/run.py
++++ b/benchmarks/agentic/run.py
+@@ -22,7 +22,7 @@ over-engineering score is a later pass.
+ ponytail: the claude CLI is the harness (already installed, we run inside it). No SDK
+ dependency. The CLI's JSON output already carries cost/tokens/duration/permission_denials.
+ """
+-import argparse, concurrent.futures, datetime, json, os, re, shutil, signal, statistics, subprocess, sys, tempfile, zlib
++import argparse, concurrent.futures, datetime, hashlib, importlib.util, json, os, re, shutil, signal, statistics, subprocess, sys, tempfile, zlib
+ from collections import defaultdict
+ from pathlib import Path
+ 
+@@ -41,6 +41,7 @@ ARMS = {
+     "brief":          lambda: "Be brief.",   # the two words that matched caveman in an independent test
+     "ponytail2":      lambda: None,          # plugin arm: PONYTAIL2_PLUGIN_DIR points at the candidate
+     "concise":        lambda: None,          # Claude Code's built-in Concise output style, no plugin
++    "ob":             lambda: None,          # OutcomeBound: installed into the cell by its adopt (--ob-launcher)
+ }
+ SETTINGS_ARMS = {"concise": '{"outputStyle": "Concise"}'}   # arms that differ only by a settings value
+ # Shorthands; any other value is passed to `claude --model` as is, so new models need no code change.
+@@ -66,6 +67,123 @@ def _plugin_dir(name):
+         sys.exit(f"{name} plugin dir not found under {base}; install the plugin or set {name.upper()}_PLUGIN_DIR")
+     return str(versions[-1])                    # latest version dir; not pinned to one machine's hash
+ 
++# --- OutcomeBound adapter (ob-arm.patch; OutcomeBound's evals/ponytail/driver.py applies it) ---
++PINNED_PLUGINS = {}  # arm -> plugin dir given with --pinned-plugin ARM=PATH; the user's plugin cache is refused
++OB_LAUNCHER = None   # OutcomeBound's launcher (--ob-launcher); the ob arm's cell is installed with its adopt
++OB_CHECKS = None     # OutcomeBound's checks module (--ob-checks): completion oracles and the loading check
++DRY_RUN = False      # --dry-run: build every cell and record its command and environment; start no claude
++CELL_ENV_KEEP = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "USER", "LOGNAME", "SHELL")
++CELL_AUTH_KEEP = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN")  # recorded as <set>
++
++def _pinned_plugin_dir(name):
++    """The plugin dir pinned for this arm, never the env override or the user's cache."""
++    p = PINNED_PLUGINS.get(name)
++    if not p:
++        sys.exit(f"{name}: no pinned plugin dir (--pinned-plugin {name}=PATH); the user's plugin cache is refused")
++    if not (Path(p) / ".claude-plugin" / "plugin.json").is_file():
++        sys.exit(f"{name}: {p} holds no .claude-plugin/plugin.json")
++    return str(Path(p).resolve())
++
++def _cell_env(cell: Path):
++    """Fresh state per cell: a new HOME, XDG folders, Claude config dir and TMPDIR under the cell.
++    Only CELL_ENV_KEEP and CELL_AUTH_KEEP are inherited, so every PONYTAIL_* variable and the
++    user's other settings are left out. Instruction files are not disabled for any arm."""
++    home = cell / "home"
++    env = {k: os.environ[k] for k in CELL_ENV_KEEP + CELL_AUTH_KEEP if k in os.environ}
++    env.update(HOME=str(home), XDG_CONFIG_HOME=str(home / ".config"), XDG_DATA_HOME=str(home / ".local" / "share"),
++               XDG_CACHE_HOME=str(home / ".cache"), XDG_STATE_HOME=str(home / ".local" / "state"),
++               CLAUDE_CONFIG_DIR=str(cell / "claude-config"), TMPDIR=str(cell / "tmp"),
++               CLAUDE_CODE_DISABLE_AUTO_MEMORY="1")
++    for k in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "CLAUDE_CONFIG_DIR", "TMPDIR"):
++        Path(env[k]).mkdir(parents=True, exist_ok=True)
++    return env
++
++def _evidence(workdir: Path):
++    """Raw CLI output and grading baselines live beside the workspace (cell/evidence), not in it."""
++    workdir = Path(workdir)
++    return workdir.parent / "evidence" if workdir.name == "ws" and (workdir.parent / "evidence").is_dir() else None
++
++def _manifest(workdir: Path):
++    ev = _evidence(workdir)
++    return (ev if ev else Path(workdir)) / "_fixture_files.json"
++
++def _base_git(workdir: Path):
++    ev = _evidence(workdir)
++    return ev / "base" / ".git" if ev and (ev / "base" / ".git").is_dir() else None
++
++def _files(workdir: Path):
++    return sorted(str(p.relative_to(workdir)).replace("\\", "/") for p in workdir.rglob("*")
++                  if p.is_file() and ".git" not in p.relative_to(workdir).parts)
++
++def _ob_install(workdir: Path):
++    """Install OutcomeBound into the cell as an adopter does; returns the files it wrote."""
++    if not OB_LAUNCHER:
++        sys.exit("ob arm: no --ob-launcher; refusing to run the ob arm without OutcomeBound's install")
++    before = {f: (workdir / f).read_bytes() for f in _files(workdir)}
++    env = {**_cell_env(workdir.parent), "OUTCOMEBOUND_HOME": str(Path(OB_LAUNCHER).resolve().parents[1]),
++           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
++    done = subprocess.run([OB_LAUNCHER, "adopt", ".", "--harness", "claude-code"], cwd=str(workdir), env=env,
++                          capture_output=True, text=True, timeout=300)
++    (workdir.parent / "evidence" / "adopt.txt").write_text(done.stdout + done.stderr, encoding="utf-8")
++    if done.returncode != 0:
++        sys.exit(f"ob arm: adopt exited {done.returncode}: {(done.stdout + done.stderr)[-400:]}")
++    return [f for f in _files(workdir) if before.get(f) != (workdir / f).read_bytes()]
++
++def _build_cell(task_id, arm, workdir: Path):
++    """Every arm's cell is built the same way, in this order: git init, seed, the ob arm's install,
++    the manifest, the snapshot. The manifest and a clone of the snapshot go to cell/evidence."""
++    task = TASKS[task_id]
++    ev = workdir.parent / "evidence"
++    ev.mkdir(parents=True, exist_ok=True)
++    _git(workdir, "init", "-q")
++    seeded = []
++    if task.get("fixture"):                            # copy a real repo in; record what was seeded
++        fx = Path(task["fixture"])                     # absolute path, or a name under fixtures/
++        if not fx.is_absolute(): fx = Path(__file__).resolve().parent / "fixtures" / task["fixture"]
++        shutil.copytree(fx, workdir, dirs_exist_ok=True,
++                        ignore=shutil.ignore_patterns("node_modules", ".git", "build", "dist",
++                                                       "dist-ssr", ".vite", "*.log", "__pycache__",
++                                                       "storage", ".venv", "venv", ".pytest_cache",
++                                                       "*.mp4", "*.mp3", "*.wav", "*.mov",
++                                                       "*service-account*.json",
++                                                       "nul", "con", "prn", "aux",
++                                                       "DatePicker*.tsx", "DatePicker*.jsx"))
++        seeded = _files(workdir)
++    for fn, content in task.get("seed", {}).items():
++        _write(workdir / fn, content)
++    installed = _ob_install(workdir) if arm == "ob" else []
++    manifest = sorted(set(seeded) | set(installed))   # a seed task's own files stay counted, as upstream
++    (ev / "_fixture_files.json").write_text(json.dumps(manifest), encoding="utf-8")
++    (ev / "installed.json").write_text(json.dumps(installed), encoding="utf-8")
++    _git_snapshot(workdir)
++    _git(workdir.parent, "clone", "-q", "--no-checkout", str(workdir), str(ev / "base"))
++    return _baseline_digest(workdir)
++
++def _baseline_digest(workdir: Path):
++    m = _manifest(workdir)
++    head = _git(workdir, "rev-parse", "HEAD", git_dir=_base_git(workdir)).stdout.strip()
++    return {"manifest": hashlib.sha256(m.read_bytes()).hexdigest() if m.exists() else None, "base": head}
++
++def _claude_events(workdir: Path):
++    """The CLI's stream-JSON events (cell/evidence/_claude.jsonl); upstream's _claude.json as one event."""
++    ev = _evidence(workdir)
++    stream = ev / "_claude.jsonl" if ev else None
++    if stream and stream.exists():
++        out = []
++        for line in stream.read_text(encoding="utf-8", errors="replace").splitlines():
++            try: out.append(json.loads(line))
++            except ValueError: pass
++        return out
++    cj = (ev if ev else Path(workdir)) / "_claude.json"
++    try: return [json.loads(cj.read_text(encoding="utf-8"))] if cj.exists() else []
++    except ValueError: return []
++
++def _load_ob_checks(path):
++    spec = importlib.util.spec_from_file_location("ob_checks", path)
++    mod = importlib.util.module_from_spec(spec)
++    spec.loader.exec_module(mod)
++    return mod
++
+ CELL_TIMEOUT = 300  # seconds per cell; a hung agent is force-killed (process tree) so the pool can't freeze
+ 
+ # Added to every arm's system prompt, identically. We measure code PRODUCTION, not execution: agents
+@@ -138,13 +256,13 @@ def code_stats(workdir: Path, selfcheck_as_test: bool = False):
+     reclassified from source to test, so following ponytail's 'leave a runnable check' rule is not
+     counted as code bloat against it."""
+     fixture = set()                                   # files that were seeded, not delivered
+-    fm = workdir / "_fixture_files.json"
++    fm = _manifest(workdir)
+     if fm.exists():
+         try: fixture = set(json.loads(fm.read_text(encoding="utf-8")))
+         except Exception: pass
+     def _rel(p): return str(p.relative_to(workdir)).replace("\\", "/")
+     files = [p for p in workdir.rglob("*") if p.is_file() and p.suffix in CODE_EXT
+-             and "__pycache__" not in p.parts and "node_modules" not in p.parts
++             and "__pycache__" not in p.parts and "node_modules" not in p.parts and ".git" not in p.parts
+              and not p.name.startswith((".", "_")) and _rel(p) not in fixture]
+     src = [p for p in files if not _is_test(p, workdir)]
+     tst = [p for p in files if _is_test(p, workdir)]
+@@ -163,9 +281,11 @@ def code_stats(workdir: Path, selfcheck_as_test: bool = False):
+             "src_loc": sum(_count(p, False) for p in src),    # code only
+             "test_files": len(tst), "test_loc": test_loc, "gz_code": gz_code}
+ 
+-def _git(workdir, *args):
+-    return subprocess.run([shutil.which("git") or "git", *args], cwd=str(workdir),
+-                          capture_output=True, text=True)
++def _git(workdir, *args, git_dir=None):
++    pre = ["--git-dir", str(git_dir), "--work-tree", str(workdir)] if git_dir else []   # scoring: cell/evidence/base
++    return subprocess.run([shutil.which("git") or "git", *pre, *args], cwd=str(workdir),
++                          capture_output=True, text=True,
++                          env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
+ 
+ def _git_snapshot(workdir):
+     """Commit the seeded repo so we can diff exactly what the agent changes."""
+@@ -179,8 +299,9 @@ def git_diff_stats(workdir):
+     """Added lines (incl comments) of code files the agent created OR modified, vs the seeded
+     base. This is the delivered-code metric and matches the '+N' a PR/diff shows. Tests counted
+     separately; lockfiles/generated files skipped."""
+-    _git(workdir, "add", "-A")
+-    out = _git(workdir, "diff", "--cached", "--numstat", "HEAD").stdout
++    gd = _base_git(workdir)                                    # the evidence clone, never the agent's .git
++    _git(workdir, "add", "-A", git_dir=gd)
++    out = _git(workdir, "diff", "--cached", "--numstat", "HEAD", git_dir=gd).stdout
+     loc = files = test_loc = test_files = 0
+     src_paths = []
+     for line in out.splitlines():
+@@ -193,7 +314,7 @@ def git_diff_stats(workdir):
+         n = int(added)
+         if _is_test(Path(workdir) / path, Path(workdir)): test_loc += n; test_files += 1
+         else: loc += n; files += 1; src_paths.append(path)
+-    added = _git(workdir, "diff", "--cached", "-U0", "HEAD", "--", *src_paths).stdout if src_paths else ""
++    added = _git(workdir, "diff", "--cached", "-U0", "HEAD", "--", *src_paths, git_dir=gd).stdout if src_paths else ""
+     gz_code = gz("\n".join(l[1:] for l in added.splitlines() if l.startswith("+") and not l.startswith("+++")))
+     return {"files": files, "src_files": files, "total_loc": loc, "src_loc": loc,
+             "test_files": test_files, "test_loc": test_loc, "gz_code": gz_code}
+@@ -287,10 +408,11 @@ def chat_code_loc(text):
+ 
+ def score_workspace(task_id, arm, model, workdir: Path):
+     meta, result_text = {}, ""
+-    cj = workdir / "_claude.json"
+-    if cj.exists():
++    events = _claude_events(workdir)
++    results = [e for e in events if isinstance(e, dict) and e.get("type", "result") == "result"]
++    if results:
+         try:
+-            j = json.loads(cj.read_text(encoding="utf-8"))
++            j = results[-1]
+             u = j.get("usage") or {}
+             meta = {"cost": j.get("total_cost_usd"), "duration_ms": j.get("duration_ms"),
+                     "turns": j.get("num_turns"), "denials": len(j.get("permission_denials") or []),
+@@ -314,11 +436,17 @@ def score_workspace(task_id, arm, model, workdir: Path):
+         sc = {"correct": 1 if stats.get("total_loc", 0) > 0 else 0, "safe": 1, "reason": "git-diff"}
+     else:
+         sc = TASKS[task_id]["score"](workdir)
++    if OB_CHECKS:   # OutcomeBound's completion oracle where upstream checks size only; upstream's verdict is kept
++        v = OB_CHECKS.oracle(task_id, workdir, result_text, lambda *a: _git(workdir, *a, git_dir=_base_git(workdir)).stdout)
++        if v is not None:
++            sc = {**sc, "correct_upstream": sc["correct"], "oracle": v["reason"],
++                  "correct": sc["correct"] if v["correct"] is None else v["correct"]}
++        meta["loading"] = OB_CHECKS.loading_check(arm, events)
+     return {"task": task_id, "arm": arm, "model": model, **sc, **stats, **meta}
+ 
+ def _base_cmd(claude, prompt, model):
+     return [claude, "-p", prompt, "--model", MODELS.get(model, model),
+-            "--permission-mode", "bypassPermissions", "--output-format", "json",
++            "--permission-mode", "bypassPermissions", "--output-format", "stream-json", "--verbose",
+             "--setting-sources", "project,local", "--strict-mcp-config",
+             "--disallowedTools", "Bash"]
+ 
+@@ -328,56 +456,45 @@ def warm_cache(model):
+     which is ordering noise, not an arm effect. Cells running back to back keep the cache warm."""
+     with tempfile.TemporaryDirectory() as d:
+         subprocess.run(_base_cmd(shutil.which("claude"), "Reply with: ok", model) + ["--append-system-prompt", NO_RUN],
+-                       cwd=d, capture_output=True, timeout=CELL_TIMEOUT,
+-                       env={**os.environ, "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"})
++                       cwd=d, capture_output=True, timeout=CELL_TIMEOUT, env=_cell_env(Path(d)))
+ 
+ def run_cell(task_id, arm, model, workdir: Path):
+     task = TASKS[task_id]
+-    if task.get("fixture"):                            # copy a real repo in; record what was seeded
+-        fx = Path(task["fixture"])                     # absolute path, or a name under fixtures/
+-        if not fx.is_absolute(): fx = Path(__file__).resolve().parent / "fixtures" / task["fixture"]
+-        shutil.copytree(fx, workdir, dirs_exist_ok=True,
+-                        ignore=shutil.ignore_patterns("node_modules", ".git", "build", "dist",
+-                                                       "dist-ssr", ".vite", "*.log", "__pycache__",
+-                                                       "storage", ".venv", "venv", ".pytest_cache",
+-                                                       "*.mp4", "*.mp3", "*.wav", "*.mov",
+-                                                       "*service-account*.json",
+-                                                       "nul", "con", "prn", "aux",
+-                                                       "DatePicker*.tsx", "DatePicker*.jsx"))
+-        manifest = sorted(str(p.relative_to(workdir)).replace("\\", "/")
+-                          for p in workdir.rglob("*") if p.is_file())
+-        (workdir / "_fixture_files.json").write_text(json.dumps(manifest), encoding="utf-8")
+-    for fn, content in task.get("seed", {}).items():
+-        _write(workdir / fn, content)
+-    if task.get("fixture") or task.get("diff"): _git_snapshot(workdir)  # baseline commit -> diff the agent's changes
+-    claude = shutil.which("claude")
++    baseline = _build_cell(task_id, arm, workdir)      # git init, seed, ob install, manifest, snapshot
++    claude = shutil.which("claude") or ("claude" if DRY_RUN else None)
+     if not claude: sys.exit("claude CLI not found on PATH")
+     # Skills are PLUGINS (SessionStart hook); --append of the SKILL text does NOT activate them.
+     # Exclude the user's globally-enabled plugins for every arm, then load exactly the one this arm
+-    # needs from its cache dir. baseline loads none; yagni-oneliner is a raw prompt so it uses --append.
++    # needs from its pinned dir. baseline loads none; yagni-oneliner is a raw prompt so it uses --append.
+     # No live verification (see NO_RUN): --strict-mcp-config drops all MCP servers so there is no browser
+     # tool, and --disallowedTools Bash blocks running a server/db/npm. An agent writes with
+     # Read/Write/Edit/Glob/Grep and stops -- no login wall, no browser thrash. We measure code, not execution.
+     cmd = _base_cmd(claude, task["prompt"], model)
+     append = NO_RUN                                     # all arms get NO_RUN, identically
+     if arm in PLUGIN_ARMS:
+-        cmd += ["--plugin-dir", _plugin_dir(arm)]       # real activation of exactly one plugin
++        cmd += ["--plugin-dir", _pinned_plugin_dir(arm)]  # real activation of exactly one pinned plugin
+     elif arm in SETTINGS_ARMS:
+         cmd += ["--settings", SETTINGS_ARMS[arm]]
+     else:
+         extra = ARMS[arm]()                             # baseline -> None; yagni-oneliner -> the prompt
+         if extra: append = extra + "\n\n" + NO_RUN
+     cmd += ["--append-system-prompt", append]
+-    out_path, err_path = workdir / "_claude.json", workdir / "_claude.stderr.txt"
++    ev = workdir.parent / "evidence"                    # outside the workspace the agent edits
++    out_path, err_path = ev / "_claude.jsonl", ev / "_claude.stderr.txt"
++    # Fresh HOME, XDG and Claude config per cell; no PONYTAIL_* or other inherited setting.
++    env = _cell_env(workdir.parent)
++    if DRY_RUN:
++        shown = {k: ("<set>" if k in CELL_AUTH_KEEP else v) for k, v in env.items()}
++        (ev / "dry_run.json").write_text(json.dumps({"cmd": cmd, "cwd": str(workdir), "env": shown,
++                                                     "stdout": str(out_path), "stderr": str(err_path),
++                                                     "baseline": baseline}, indent=2), encoding="utf-8")
++        return {"task": task_id, "arm": arm, "model": model, "dry_run": True}
+     # stdout -> file, never a PIPE: on Windows a hung agent's child processes can hold a stdout PIPE
+     # open forever, so subprocess.run(timeout=) never fires and the worker freezes. Writing to a file
+     # lets proc.wait(timeout) return reliably; on timeout _tree_kill ends ONLY this cell's process
+     # tree -- never a blanket kill, which would also take down this Claude Code session.
+     try:
+         with open(out_path, "wb") as so, open(err_path, "wb") as se:
+-            # Cells live under this repo, so without these every arm (baseline too) also loads the
+-            # repo's AGENTS.md, which is the ponytail ruleset, plus the user's auto-memory.
+-            env = {**os.environ, "CLAUDE_CODE_DISABLE_CLAUDE_MDS": "1", "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
+             proc = subprocess.Popen(cmd, cwd=str(workdir), stdout=so, stderr=se, env=env,
+                                     start_new_session=(os.name != "nt"))
+             try:
+@@ -389,7 +506,7 @@ def run_cell(task_id, arm, model, workdir: Path):
+                 se.write(f"\n[KILLED after {CELL_TIMEOUT}s timeout]".encode())
+     except Exception as e:
+         out_path.write_text(json.dumps({"error": str(e)[:300]}), encoding="utf-8")
+-    return score_workspace(task_id, arm, model, workdir)
++    return {**score_workspace(task_id, arm, model, workdir), "evidence_ok": _baseline_digest(workdir) == baseline}
+ 
+ def aggregate(results):
+     groups = defaultdict(list)
+@@ -449,6 +566,7 @@ def rescore(run_dir):
+         parts = ws.name.split("__")
+         if len(parts) != 4 or parts[0] not in TASKS: continue
+         tid, arm, model, _r = parts
++        if (ws / "ws").is_dir(): ws = ws / "ws"      # OutcomeBound adapter's cell layout: cell/ws, cell/evidence
+         results.append(score_workspace(tid, arm, model, ws))
+     rows = aggregate(results)
+     (run_dir / "results.json").write_text(json.dumps({"rescored": True, "results": results}, indent=2), encoding="utf-8")
+@@ -471,7 +589,15 @@ def main():
+     ap.add_argument("--models", default="haiku", help="comma list: haiku,sonnet,opus")
+     ap.add_argument("--runs", type=int, default=1)
+     ap.add_argument("--workers", type=int, default=4, help="cells to run concurrently (default 4; cells are fully isolated)")
++    ap.add_argument("--pinned-plugin", action="append", default=[], metavar="ARM=PATH", help="plugin dir for a plugin arm")
++    ap.add_argument("--ob-launcher", help="OutcomeBound's launcher; the ob arm installs with its adopt")
++    ap.add_argument("--ob-checks", help="OutcomeBound's checks module: completion oracles, loading check")
++    ap.add_argument("--dry-run", action="store_true", help="build every cell, record command and env, start no claude")
+     args = ap.parse_args()
++    global OB_LAUNCHER, OB_CHECKS, DRY_RUN
++    PINNED_PLUGINS.update(a.split("=", 1) for a in args.pinned_plugin)
++    OB_LAUNCHER, DRY_RUN = args.ob_launcher, args.dry_run
++    if args.ob_checks: OB_CHECKS = _load_ob_checks(args.ob_checks)
+ 
+     if args.selftest:
+         sys.exit(1 if selftest() else 0)
+@@ -485,6 +611,9 @@ def main():
+     if not task_ids: sys.exit("give --task <id> (comma list ok), --all, or --rescore <dir>")
+     arms = [a.strip() for a in args.arms.split(",")]
+     models = [m.strip() for m in (args.model or args.models).split(",")]
++    for arm in arms:                                    # refuse before any cell, not inside one
++        if arm in PLUGIN_ARMS: _pinned_plugin_dir(arm)
++        if arm == "ob" and not OB_LAUNCHER: sys.exit("ob arm: no --ob-launcher")
+     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+     out_dir = RUNS_DIR / stamp
+     out_dir.mkdir(parents=True, exist_ok=True)
+@@ -502,14 +631,16 @@ def main():
+     def _one(spec):
+         tid, arm, model, r = spec
+         name = f"{tid}__{arm}__{model}__{r}"
+-        ws = scratch / name
++        cell = scratch / name                           # cell/ws is the workspace; cell/evidence, home, config beside it
++        ws = cell / "ws"
+         ws.mkdir(parents=True, exist_ok=True)
+         try:
+             return run_cell(tid, arm, model, ws)
+         finally:
+-            shutil.move(str(ws), str(out_dir / name))
++            shutil.move(str(cell), str(out_dir / name))
+ 
+-    for m in models: warm_cache(m)
++    if not DRY_RUN:
++        for m in models: warm_cache(m)
+     print(f"running {total} cells, {args.workers} at a time", flush=True)
+     # Cells are fully isolated (own copy + own claude context), so they parallelize safely.
+     # To STOP a parallel run, kill the whole tree: taskkill /PID <pid> /T /F. Killing just the
+@@ -531,9 +662,10 @@ def main():
+                   f"correct={res.get('correct')}", flush=True)
+             (out_dir / "results.json").write_text(json.dumps(
+                 {"date": stamp, "models": {m: MODELS.get(m, m) for m in models},
+-                 "claude": _claude_version(), "results": results}, indent=2), encoding="utf-8")
++                 "claude": "dry-run" if DRY_RUN else _claude_version(), "results": results}, indent=2), encoding="utf-8")
+ 
+     shutil.rmtree(scratch, ignore_errors=True)
++    if DRY_RUN: return print(f"\ndry run: {len(results)} cells built under {out_dir}; no claude started")
+     rows = aggregate(results)
+     (out_dir / "summary.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+     print_table(rows)
+diff --git a/benchmarks/agentic/tasks.py b/benchmarks/agentic/tasks.py
+index 0bd3c7e..c51c458 100644
+--- a/benchmarks/agentic/tasks.py
++++ b/benchmarks/agentic/tasks.py
+@@ -431,6 +431,8 @@ def score_fixture(workdir):
+     already excludes the seeded files via _fixture_files.json, so only the delivered code counts."""
+     fixture = set()
+     fm = workdir / "_fixture_files.json"
++    if workdir.name == "ws" and (workdir.parent / "evidence").is_dir():   # OutcomeBound adapter: kept outside
++        fm = workdir.parent / "evidence" / "_fixture_files.json"
+     if fm.exists():
+         try: fixture = set(json.loads(fm.read_text(encoding="utf-8")))
+         except Exception: pass

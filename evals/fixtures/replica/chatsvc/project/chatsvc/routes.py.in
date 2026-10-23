@@ -1,0 +1,83 @@
+"""The request handlers: chat on each configured route, and embeddings."""
+
+import json
+
+from chatsvc.provider import ProviderError
+from chatsvc.retry import RetryPolicy
+
+
+class BadRequest(Exception):
+    """A request body this service refuses before calling the provider."""
+
+
+def reply(status, payload, headers=None):
+    body = json.dumps(payload, sort_keys=True).encode("utf-8")
+    return status, {"content-type": "application/json", **(headers or {})}, body
+
+
+def provider_failure(error):
+    """What a caller sees when the provider did not answer: 503 with a retry hint while the
+    provider is busy, 502 for any other answer it gave."""
+    if error.status == 429:
+        wait = error.retry_after if error.retry_after is not None else 1.0
+        return reply(
+            503,
+            {"error": "provider_busy", "attempts": error.attempts},
+            {"retry-after": str(max(1, round(wait)))},
+        )
+    return reply(
+        502,
+        {"error": "provider_rejected", "status": error.status, "detail": str(error.detail)},
+    )
+
+
+def messages_of(request):
+    messages = request.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise BadRequest("messages must be a non-empty list")
+    for message in messages:
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+            raise BadRequest("each message needs a string content")
+        if message.get("role") not in ("system", "user", "assistant"):
+            raise BadRequest("each message needs a role: system, user or assistant")
+    return messages
+
+
+def max_tokens_of(request):
+    value = request.get("max_tokens", 512)
+    if not isinstance(value, int) or not 1 <= value <= 4096:
+        raise BadRequest("max_tokens must be an integer from 1 to 4096")
+    return value
+
+
+def chat(service, route, request):
+    """One chat completion on `route`: the requested model or alias resolved by the route, the
+    call made by the route's client with the route's retry policy."""
+    messages = messages_of(request)
+    max_tokens = max_tokens_of(request)
+    model = route.resolve(request.get("model"))
+    client = service.client(route.key, RetryPolicy(max_attempts=route.max_attempts))
+    try:
+        answer = client.generate(model, messages, max_tokens)
+    except ProviderError as error:
+        return provider_failure(error)
+    return reply(
+        200,
+        {"model": model, "output": answer.get("output", ""), "usage": answer.get("usage", {})},
+    )
+
+
+def embed(service, request):
+    """Embeddings for a list of inputs, sent to the provider in batches it accepts."""
+    inputs = request.get("inputs")
+    if not isinstance(inputs, list) or not inputs or not all(isinstance(i, str) for i in inputs):
+        raise BadRequest("inputs must be a non-empty list of strings")
+    settings = service.settings.embed
+    client = service.client(settings.key, RetryPolicy(max_attempts=3))
+    vectors = []
+    try:
+        for start in range(0, len(inputs), settings.max_batch):
+            vectors.extend(client.embed(settings.model, inputs[start : start + settings.max_batch]))
+    except ProviderError as error:
+        return provider_failure(error)
+    return reply(200, {"model": settings.model, "vectors": vectors})

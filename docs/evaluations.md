@@ -1359,6 +1359,13 @@ Git). `OUTCOMEBOUND_FIXTURE_ROOT` keeps fixture repositories outside any Git che
 arms within one fixture and one model. The hand-off fixtures run only when `--fixtures` names
 them. `evals/README.md` gives their cells.
 
+To measure one part of the install, `--drop ELEMENT` (with `--arm current`) and `--add ELEMENT`
+(with `--arm none`) build the install less, or the plain arm plus, one element: the kernel, the
+facts block, the pointers, one fragment, one skill or the launcher. `evals/loop.py PLAN.json` runs
+a plan of such arms over fixtures and repetitions, with the arms interleaved, and
+`evals/attribute.py DIR ...` reads the kept runs and charges each run's input tokens to what
+caused them. `evals/README.md` gives the details.
+
 ## Sources
 
 - **Fixtures:** [`evals/fixtures/`](../evals/fixtures/).
@@ -2584,3 +2591,97 @@ claim for claim with this pass on these two fixtures.
 
 One model, one run for each fixture and arm, so a rerun can differ in any claim. The fixtures are
 synthetic and short. The four shared failures are known and are not a measure of the change.
+
+## E33. Small projects like the adopters', with tasks like theirs: OutcomeBound against no guidance, on Codex
+
+Date: 2026-10-21. Model calls: 173 Codex calls in three rounds and one probe, all counted, none
+failed.
+
+### Question
+
+On small projects like those that adopt OutcomeBound, with tasks like those their people give an
+agent, does an agent with OutcomeBound reach the outcome at least as often as the same agent with
+no guidance, at a cost that is not much larger? Where it does worse, which text causes it?
+
+### Method
+
+- Model: Codex CLI, `gpt-6.1-sol`, medium effort, on every run.
+- Fixtures: the `replica-` family. Three small projects are built by setup: a data pipeline with
+  stage and production environments, a chat service with stage and production and a feedback
+  store, and a library with a public contract, specs and tickets. Each has fast unit tests, a slow
+  integration suite of 60 to 120 seconds, a Makefile, documents and a short history. The tasks
+  come from kinds of work adopters do: land a release record in the documents, triage a production
+  alert without changing production, deploy to stage and hold production, fix a provider fault at
+  its cause, write a status note from feedback, review a branch, clean up worktrees and branches,
+  retire gates that protect nothing, finish a ticket whose open choices the specs settle, leave a
+  handoff where `.agents` is read-only, find why a capacity check fails on the base, and three
+  tickets in one prompt. Thirteen fixtures are the development set; eight held-out variants were
+  written before the first run and run only in round 3.
+- Arms: `current` is installed by `outcomebound adopt --harness codex` itself, with Done commands
+  and fragments as an adopter records them. `none` has the same project notes and the same prompt
+  and no OutcomeBound text, launcher or engine. The runner prints what each arm receives and
+  checks this before a run.
+- Grading is by deterministic post-checks of the outcome (files, commits, environment events,
+  behaviour against a recording stand-in, answers read by tested readers). Claims that only count
+  work spent (a slow suite run that the change does not need) are reported apart from outcome
+  claims.
+- Rule declared before round 1: OutcomeBound beats no guidance only if, on the held-out set,
+  `current` passes at least as many runs as `none` on every fixture and more in total, and its
+  median tokens are not above 1.25 times `none`'s on any fixture without a passed claim to show
+  for it.
+
+### Result
+
+Runs that passed every required claim, after the corrections below:
+
+| Round | `none` | `current` |
+| --- | --- | --- |
+| 1: the 1.8.0 text, development set, valid cells | 32 of 32 | 23 of 33 |
+| 2: the first change, development set | 39 of 39 | 36 of 39 |
+| 3: the final text, held-out set | 23 of 24 | 23 of 24 |
+
+- In round 1, `current` lost on four fixtures. It ran the slow suite for a documents-only commit
+  (3 of 3 runs) and more than once for three small tickets (3 of 3). For a status note it ran the
+  suite, read production and put the served revision into the note (3 of 3). It committed a
+  documents change on a new branch "as the workspace instructions require" (1 of 3).
+- Three texts caused these, read from the transcripts: the Done fact "(the full suite)", which
+  the agent read as required for every change; the kernel line "Reconcile prose with source,
+  tests, runtime, and external state", which it read as a duty to observe every source; and the
+  workspace fragment's "work in a worktree you created".
+- The change (round 2, then revised after an independent review): the Done fact reads "(the full
+  suite: run it where focused checks do not cover the changed risk, or the project's own
+  instructions require it)"; the kernel line follows the contract: "Before relying on prose,
+  reconcile it with the source, tests, runtime or external state it describes"; the workspace
+  fragment keeps the person's checkout and branch unless another task uses it or the project
+  requires isolation, and carries a task's uncommitted and ignored state when it moves to a
+  worktree.
+- In round 3 each arm failed one run, on the same claim: a conversation id in a note for people.
+- Cost, round 3: the median input tokens of `current` were 0.7 to 2.0 times those of `none`
+  (about 1.5 times overall); median seconds 0.8 to 1.3 times.
+
+### Corrections
+
+- Two fixtures were void in round 1 in both arms and were fixed and run again in round 2: the
+  provider stand-in gave a retry delay that a client which honoured it exactly could not meet, so
+  every run fixed the stand-in; and a protected decisions file voided every run that recorded a
+  new decision. One `none` run was voided because a fixture file changed during the round; it was
+  run again.
+- Five answers were graded again by hand, and the readers were fixed afterwards: a ranking given
+  as a table without the word "heaviest" (four answers), a hedged negation read as blame (one), and
+  sentences that give counts across groups read as a group's count (four notes).
+
+### What it shows, and what it does not
+
+- The rule declared before round 1 is not met: on the held-out set the arms are equal on
+  outcomes, and `current` costs more tokens on six of eight fixtures. On these tasks OutcomeBound
+  does not beat no guidance.
+- The 1.8.0 text did worse than no guidance on these tasks, through three lines. After the change,
+  `current` no longer loses on outcomes, on tasks the change was not tuned on.
+- The plain model was near the ceiling on single-call tasks of this size, so these fixtures leave
+  little room for a gain.
+
+### Limits
+
+One model, three runs a cell. Single calls of a few minutes: harms that grow over long sessions
+(questions on reversible acts, re-reading guidance after a compaction, approval chains, review
+loops) are not measured here. The held-out set is eight fixtures.

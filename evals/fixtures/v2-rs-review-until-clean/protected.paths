@@ -1,0 +1,5 @@
+# The project note and the contributing guide that names who adds CI workflows and hooks.
+AGENTS.md
+CONTRIBUTING.md
+.git/config
+.git/info/exclude

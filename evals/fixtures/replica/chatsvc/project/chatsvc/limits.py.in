@@ -1,0 +1,171 @@
+"""Inbound limits, read from an nginx-style file (config/limits.conf; docs/limits.md).
+
+Supported directives:
+
+    limit_req_zone $api_key zone=<name>:<size> rate=<n>r/s|r/m;
+    limit_req_status <code>;
+    location <path> {
+        limit_req zone=<name> [burst=<n>] [nodelay];
+        client_max_body_size <n>[k|m];
+    }
+
+A zone is a token bucket per caller key: it refills at `rate` and holds `burst + 1` tokens. A
+request that finds the bucket empty is refused with the status `limit_req_status` names (429 here).
+These limits are ours, toward our callers; the provider's own quota is separate (docs/provider.md).
+"""
+
+import re
+import threading
+import time
+from dataclasses import dataclass
+
+
+class LimitsError(Exception):
+    """A limits file this service cannot run with."""
+
+
+@dataclass(frozen=True)
+class Zone:
+    name: str
+    key: str
+    rate: float  # tokens per second
+
+
+@dataclass(frozen=True)
+class Location:
+    path: str
+    zone: str
+    burst: int
+    nodelay: bool
+    max_body: int
+
+
+@dataclass(frozen=True)
+class Limits:
+    zones: dict
+    locations: dict
+    status: int = 503
+
+
+_TOKEN = re.compile(r"#[^\n]*|[{};]|[^\s{};#]+")
+_SIZE = re.compile(r"^(\d+)([kKmM]?)$")
+_RATE = re.compile(r"^rate=(\d+(?:\.\d+)?)r/([sm])$")
+
+
+def _tokens(text):
+    return [token for token in _TOKEN.findall(text) if not token.startswith("#")]
+
+
+def _statements(tokens):
+    """(words, block) pairs: a statement ends at `;`; a block statement holds its own list."""
+    found, words = [], []
+    while tokens:
+        token = tokens.pop(0)
+        if token == ";":
+            found.append((words, None))
+            words = []
+        elif token == "{":
+            found.append((words, _statements(tokens)))
+            words = []
+        elif token == "}":
+            if words:
+                raise LimitsError(f"statement {' '.join(words)!r} has no ';'")
+            return found
+        else:
+            words.append(token)
+    if words:
+        raise LimitsError(f"statement {' '.join(words)!r} has no ';'")
+    return found
+
+
+def size(text):
+    match = _SIZE.match(text)
+    if not match:
+        raise LimitsError(f"bad size {text!r}")
+    return int(match.group(1)) * {"": 1, "k": 1024, "m": 1024 * 1024}[match.group(2).lower()]
+
+
+def _zone(words):
+    if len(words) != 4 or not words[1].startswith("$") or not words[2].startswith("zone="):
+        raise LimitsError(f"bad limit_req_zone: {' '.join(words)}")
+    name = words[2][len("zone=") :].split(":", 1)[0]
+    rate = _RATE.match(words[3])
+    if not rate:
+        raise LimitsError(f"bad rate in zone {name}: {words[3]}")
+    per_second = float(rate.group(1)) / (1 if rate.group(2) == "s" else 60)
+    return Zone(name, words[1][1:], per_second)
+
+
+def _location(path, block, zones):
+    zone, burst, nodelay, max_body = None, 0, False, 1024 * 1024
+    for words, inner in block:
+        if inner is not None:
+            raise LimitsError(f"nested block in location {path}")
+        if words[0] == "limit_req":
+            for word in words[1:]:
+                if word.startswith("zone="):
+                    zone = word[len("zone=") :]
+                elif word.startswith("burst="):
+                    burst = int(word[len("burst=") :])
+                elif word == "nodelay":
+                    nodelay = True
+                else:
+                    raise LimitsError(f"unknown limit_req option {word} in {path}")
+        elif words[0] == "client_max_body_size":
+            max_body = size(words[1])
+        else:
+            raise LimitsError(f"unknown directive {words[0]} in location {path}")
+    if zone is None or zone not in zones:
+        raise LimitsError(f"location {path} names no known zone")
+    return Location(path, zone, burst, nodelay, max_body)
+
+
+def parse(text):
+    zones, locations, status = {}, {}, 503
+    for words, block in _statements(_tokens(text)):
+        if not words:
+            continue
+        if words[0] == "limit_req_zone" and block is None:
+            zone = _zone(words)
+            zones[zone.name] = zone
+        elif words[0] == "limit_req_status" and block is None:
+            status = int(words[1])
+        elif words[0] == "location" and block is not None and len(words) == 2:
+            locations[words[1]] = _location(words[1], block, zones)
+        else:
+            raise LimitsError(f"unknown statement {' '.join(words)}")
+    return Limits(zones, locations, status)
+
+
+def load(path):
+    with open(path, encoding="utf-8") as handle:
+        return parse(handle.read())
+
+
+class Limiter:
+    """The token buckets of every zone, by caller key."""
+
+    def __init__(self, limits, clock=time.monotonic):
+        self.limits = limits
+        self.clock = clock
+        self._buckets = {}
+        self._lock = threading.Lock()
+
+    def check(self, path, key, body_size):
+        """None where the request may go on, else (status, retry_after_seconds)."""
+        location = self.limits.locations.get(path)
+        if location is None:
+            return None
+        if body_size > location.max_body:
+            return (413, 0.0)
+        zone = self.limits.zones[location.zone]
+        capacity = location.burst + 1
+        now = self.clock()
+        with self._lock:
+            tokens, then = self._buckets.get((zone.name, key), (float(capacity), now))
+            tokens = min(capacity, tokens + (now - then) * zone.rate)
+            if tokens < 1:
+                self._buckets[(zone.name, key)] = (tokens, now)
+                return (self.limits.status, (1 - tokens) / zone.rate)
+            self._buckets[(zone.name, key)] = (tokens - 1, now)
+        return None

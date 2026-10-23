@@ -1,0 +1,118 @@
+"""An offline stand-in for the model provider, for tests, the replay script and the environments.
+
+It answers like the provider (docs/provider.md): the same paths, the same errors, the same quota
+per key. It also records every request it is sent (when, which key, which path, what it answered)
+so a test can ask how many calls a request cost and how they were spaced.
+
+The quota: each key may make `quota` requests in any `window` seconds. A request over the quota is
+answered 429 with `retry-after-ms`, and a refused request still counts against the window, as on
+the real provider. The advice is honest: it counts the refused request itself and is rounded up to
+the millisecond, so a client that waits exactly `retry-after-ms` and calls again, with no other
+call on the key in between, is answered.
+"""
+
+import json
+import math
+import threading
+import time
+from dataclasses import dataclass
+
+from chatsvc.provider import Response
+
+MODELS = ("chat-large-3", "chat-small-3", "chat-fast-2", "chat-fast-2-long", "embed-small-1")
+MAX_BATCH = 16
+# A call leaves the window once `window` seconds have passed, to within a microsecond, so a wait
+# that lands exactly on the advised moment is not undone by floating-point rounding.
+SLACK = 1e-6
+
+
+@dataclass(frozen=True)
+class Record:
+    at: float
+    key: str
+    path: str
+    status: int
+
+
+class FakeProvider:
+    def __init__(self, models=MODELS, quota=4, window=1.0, clock=time.monotonic):
+        self.models = set(models)
+        self.quota = quota
+        self.window = window
+        self.clock = clock
+        self.records = []
+        self._lock = threading.Lock()
+
+    def _over_quota(self, key, now):
+        """The wait in seconds before `key` is under its quota again, counting the call made
+        `now`, which is refused and counts against the window too; or None. A call made at
+        `at` leaves the window once `window` seconds have passed."""
+        recent = sorted(
+            r.at for r in self.records if r.key == key and now - r.at < self.window - SLACK
+        )
+        if len(recent) < self.quota:
+            return None
+        calls = [*recent, now]
+        # Under the quota again once all but quota - 1 of these calls have left the window.
+        return calls[len(calls) - self.quota] + self.window - now
+
+    def send(self, method, path, headers, body):
+        now = self.clock()
+        key = headers.get("authorization", "").removeprefix("Bearer ").strip()
+        with self._lock:
+            response = self._answer(method, path, key, body, now)
+            self.records.append(Record(now, key, path, response.status))
+        return response
+
+    def _answer(self, method, path, key, body, now):
+        if not key:
+            return _error(401, "missing_key")
+        wait = self._over_quota(key, now)
+        if wait is not None:
+            return _error(429, "rate_limited", {"retry-after-ms": str(max(1, math.ceil(wait * 1000)))})
+        if method != "POST" or not path.startswith("/v1/models/") or ":" not in path:
+            return _error(404, "not_found")
+        model, _, action = path[len("/v1/models/") :].partition(":")
+        if model not in self.models:
+            return _error(404, "model_not_found")
+        try:
+            payload = json.loads(body or b"{}")
+        except ValueError:
+            return _error(400, "bad_json")
+        if action == "generate":
+            text = " ".join(m.get("content", "") for m in payload.get("messages", []))
+            output = f"[{model}] {text[:80]}"
+            usage = {"input_tokens": len(text.split()), "output_tokens": len(output.split())}
+            return _ok({"output": output, "usage": usage})
+        if action == "embed":
+            inputs = payload.get("inputs", [])
+            if len(inputs) > MAX_BATCH:
+                return _error(400, f"too_many_inputs: at most {MAX_BATCH}")
+            return _ok({"vectors": [[float(len(i)), float(sum(map(ord, i)) % 97)] for i in inputs]})
+        return _error(404, "not_found")
+
+    # What a test asks of the record.
+
+    def count(self, status=None, path=None):
+        return sum(
+            1
+            for r in self.records
+            if (status is None or r.status == status) and (path is None or r.path == path)
+        )
+
+    def paths(self):
+        return [r.path for r in self.records]
+
+    def gaps(self, key):
+        """The seconds between consecutive requests on `key`."""
+        times = [r.at for r in self.records if r.key == key]
+        return [b - a for a, b in zip(times, times[1:])]
+
+
+def _ok(payload):
+    return Response(200, {"content-type": "application/json"}, json.dumps(payload).encode())
+
+
+def _error(status, error, headers=None):
+    body = json.dumps({"error": error}).encode()
+    return Response(status, {"content-type": "application/json", **(headers or {})}, body)

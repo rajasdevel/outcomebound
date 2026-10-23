@@ -212,6 +212,12 @@ Run that command, read the diff, and commit the files. The install writes no hoo
 command of yours. Start a new agent session, and add `outcomebound adopt . --check` to CI to catch
 stale or edited managed files.
 
+To install only the facts of your project, add `--facts-only`. `AGENTS.md` then gets the project
+facts and your `local` fragment, and no operating contract and no pointers. The skills go only to
+a harness that lists skills itself. Later runs keep this mode, and `--full` returns to the full
+install. An engine before this mode installs in full when it runs, so first move every pin of the
+engine (CI, each machine) to a release that has the mode.
+
 You can also give the whole onboarding to your agent: ask it to follow the guide that `--detect`
 names. It proposes only the project facts an agent would otherwise get wrong, each with the file
 that shows it, and asks you once for what the repository cannot show.

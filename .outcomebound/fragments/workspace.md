@@ -2,9 +2,9 @@
 id: workspace
 family: setup
 applies: repositories where several agents work in one machine's checkout
-condition: when creating a worktree or working file, resuming or handing off work, keeping a fact for later sessions, or working in another repository
+condition: when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 13
+version: 15
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -37,7 +37,10 @@ keeps, and names the next skill for an unfinished item; `outcomebound workspace 
 worktree with its commits merged, pushed only or local only (a squash merge reads local or pushed).
 Both only read, and can be slow in a large repository; `where --offline` skips `gh`.
 **Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
-worktrees are preserved state: work in a worktree you created, keep it while its task or an agent
+worktrees are preserved state. Work in the checkout and branch the person put you in unless another
+task uses it or the project requires isolation; for parallel work or work across sessions, create
+or resume a worktree for this task, carry its uncommitted and ignored task state with you, keep it
+while its task or an agent
 that may resume it needs it, and remove it only when the task is finished, its commits are reachable
 from a kept branch, and nothing uncommitted or ignored in it is still needed. A worktree's commits
 land as the project's instructions or the goal envelope say work lands, the rule the tickets
@@ -47,9 +50,8 @@ checks its completion bar and the project's landing gate name, and report their 
 there, so that its own instructions and sandbox apply; where the person asks this session to change
 it, ask once for it as a writable root, and until then hold only the items that write there; apply
 its completion bar yourself, and report the checks you ran.
-The machine is shared: before a heavy command (a full suite, a build, an image pull) check the
-free disk, and run heavy commands at once only as many as the machine's free memory, CPU and disk
-hold: a worktree is not a lane. Clean up only what this task made (its worktree, logs and caches);
+The machine is shared, and a worktree is not a lane: the commands fragment's limit on heavy
+commands holds across every worktree. Clean up only what this task made (its worktree, logs and caches);
 a process, folder or file of an owner you cannot name stays as it is, and the handoff names it.
 The one exception to that sentence: where the task needs disk it lacks, you may remove what a tool
 rebuilds or fetches again on its next use (a build cache, a package cache, a dangling image of this

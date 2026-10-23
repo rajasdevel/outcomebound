@@ -14,24 +14,61 @@ runner, the fixtures or the graders names a CLI.
                           (`local_listener`, false: the tool's default sandbox); `cwd` is the
                           workspace, `write_roots` the extra paths the model may write, `path`
                           the call's PATH, `keep` a new file the harness copies the tool's own
-                          session record to.
+                          session record to. `request.budget` bounds the call's time and the
+                          input its session may pass; a call the harness stops at either says
+                          which in `extras["stopped"]`.
 
 `evals/README.md`, "Adding a harness", states what a harness must meet.
 """
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
 from typing import Any, NamedTuple
+
+# A serving tier is one lower-case word; it goes into the tool's argv as a config value.
+SERVICE_TIER = re.compile(r"[a-z][a-z0-9_-]*")
+
+# How a call ended early, as `extras["stopped"]` names it: its session passed the input cap, or
+# the call ran past its time. None: the call ended by itself.
+STOPS = ("input_cap", "timeout")
+
+
+class Budget(NamedTuple):
+    """What one call may spend before the harness stops it: `seconds` of wall time, and
+    `input_cap`, the input tokens (cached input among them) its session may pass, None for no
+    cap. The cap is best effort: the harness reads the tool's own session record about once a
+    second, so the model turn in flight when the cap is passed completes before the stop."""
+
+    seconds: float
+    input_cap: int | None = None
 
 
 class Request(NamedTuple):
     """What a run asks for; a call counts only where the tool's own record shows it. `model` and
     `effort` are the identity. `local_listener` lets the model's commands bind a local port,
-    which the default sandbox of the tool refuses; the tool's record must show the same."""
+    which the default sandbox of the tool refuses; the tool's record must show the same.
+    `sandbox` is `eval`, where the model may also write `.agents/work` for task notes, or
+    `field`, the tool's own default for that folder, as an adopter's session has it; the tool's
+    record must show a `field` call without that grant. `budget` bounds the call (None: the
+    harness's own timeout and no cap). `protected` names runner-owned paths outside the
+    workspace that the model's commands read and never write (the stubs folder, the watch log):
+    the harness refuses the call, before the model runs, where one lies inside a path the model
+    may write. `unreadable` names runner-owned paths the model's commands should not read (the
+    grading stage); a harness that can deny reads denies them, and one that cannot ignores
+    them. `service_tier` is the serving tier the call asks for (Codex's `priority` is its fast
+    mode); empty asks for none, and the tool's own default applies. The tool's record must show
+    the tier that was asked for; a harness with no such tier refuses the request."""
 
     model: str
     effort: str
     local_listener: bool = False
+    sandbox: str = "eval"
+    budget: Budget | None = None
+    protected: tuple[Path, ...] = ()
+    unreadable: tuple[Path, ...] = ()
+    service_tier: str = ""
 
 
 class CallResult(NamedTuple):

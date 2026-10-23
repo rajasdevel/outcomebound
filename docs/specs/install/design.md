@@ -10,7 +10,8 @@ status: ratified
 An adopter runs one command, `outcomebound adopt`, and every harness they use loads the
 operating contract, the facts that settle work in this project, and a pointer to each piece of
 guidance with the condition that calls for it. Running it again from a newer release is the
-upgrade; `--check` says whether the install is current; `--remove` takes it out. How:
+upgrade; `--check` says whether the install is current; `--remove` takes it out. `--facts-only`
+installs the project's facts alone, without the contract and pointers (section Facts-only). How:
 `outcomebound_tools/adopt.py`, `outcomebound_tools/facts.py`, `outcomebound_tools/fragments.py` and `outcomebound_tools/textio.py`;
 how `outcomebound` is installed and launched is the [distribution design](../distribution/design.md).
 
@@ -30,12 +31,12 @@ run with nothing to change prints `nothing to change` and no restated fact.
 
 | Fact | Source | Left out when |
 | --- | --- | --- |
-| Done | the commands `--done` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`, then `(the full suite)`, which ties it to the kernel's completion bar: run where the changed risk reaches it or the project requires it, and then every one must pass (`facts.done_line`) | none is recorded |
+| Done | the commands `--done` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`, then `(the full suite: run it where focused checks do not cover the changed risk, or the project's own instructions require it)`, which ties it to the kernel's completion bar: run where the changed risk reaches it or the project requires it, and then every one must pass (`facts.done_line`) | none is recorded |
 | Setup | the commands `--setup` recorded, in run order, each in its own code span, joined as `a`, `b` and `c`: the person's record, which adopt never runs | none is recorded |
 | CI test | each test command a `.github/workflows/*.yml` `run:` step or a `.gitlab-ci.yml` `script:` entry runs, as it runs from the root: a step's `working-directory:`, else its job's or the workflow's `defaults.run.working-directory:`, becomes `cd <dir> && `; each file's commands followed by the file | no command is read; a command the reading cannot settle (an expression, a `cd` earlier in its step or job, a folded, multi-line, flow or alias value, a link) is left out and named, and the file's other commands are kept |
 | Irreversible edges | each selected fragment's `edges:`, once each, then `loosening the quality floor` where `.outcomebound/floor.json` exists | none is declared |
 | Text for people | the style `--human-style` recorded: `ste` asks for documents a person keeps (pull request descriptions, commit messages, specs and handovers) in ASD-STE100 Simplified Technical English style, and not for replies in conversation, quoting none of the standard, with no length limit and every fact kept; in a report, brief, handover or request description an id or label the person has not used is explained or left out, and a hash or digest is given as a ref, version or path, save one a check or the project's rule requires (a `ruled <id>` line, a revert). It reaches only a project that records the style | none is recorded |
-| Precedence | these facts over any other repository text that disagrees, and the person's instruction in the session over these facts; the project's own instructions in `AGENTS.md` and each selected harness's import host that exists over OutcomeBound's; process a project document only suggests is sized like any other step | never |
+| Precedence | these facts over any other repository text that disagrees, and the person's instruction in the session over these facts; the project's own instructions in `AGENTS.md` and each selected harness's import host that exists over OutcomeBound's; process a project document only suggests is sized like any other step. A facts-only install stops after the first two clauses, since it installs no OutcomeBound guidance to rank | never |
 
 A test command is a runner named as a whole word or command (`pytest`, `make test`, `npm run
 test:ci`, `bash scripts/run-tests.sh`), after wrappers such as `uv run` or `npx`; `make
@@ -57,11 +58,55 @@ CI-only variables, tools and setup still need project review. Detection runs no 
 does not change or refuse a Done command the user already recorded. No shell translation or
 new runtime is added, and the installed block and manifest formats do not change.
 
-The facts record holds the selection (`fragments`), the `done` commands, the `setup` commands, any `style`, and `inputs`: each source
-path read, with its sha256. `--check` recomputes the block: bytes other than both the record's and
+The facts record holds the selection (`harnesses`, in the order named, and `fragments`), the `done` commands, the `setup` commands, any `style`, any `mode`, and `inputs`: each source
+path read, with its sha256. A run reads the harnesses from it; for a manifest written before it
+held them, from the skill records. `--check` recomputes the block: bytes other than both the record's and
 the recomputation's read `edited`; a record other than the recomputation reads `stale`, naming each
 fact that moved and each input that changed, or, where the bytes are the recomputation's, saying
-so.
+so. `--check` also plans the install the recorded selection and mode give, writing nothing: each
+record it would hold that the manifest lacks reads `missing`, and each record the manifest holds
+that it would not hold reads `stale` where its bytes are current, saying that the install removes
+it, so a record set that is not the recorded mode's never reads `current`.
+
+### Facts-only
+
+`adopt --facts-only` installs the facts a project would fumble without and none of
+OutcomeBound's general guidance. `AGENTS.md` carries the `project-facts` block, then, where the
+`local` fragment is selected, a `guidance-pointers` block that holds the `local` fragment inline
+and nothing else. It carries no kernel block, no fragment pointer and no skill pointer, and the
+install copies no fragment to `.outcomebound/fragments/`. The fragment selection is still
+recorded and still feeds the Irreversible edges fact. Skills are installed only for a harness
+whose row records `native_skills: true`, at that harness's skill path, where the harness lists
+each skill by its description and loads its body only when a task calls for it; a harness without
+native skills (`generic` among them) gets none, since nothing would point at them. The host
+import block (`@AGENTS.md`), the `.outcomebound/.gitignore` record and, where the `workspace`
+fragment is selected, `.agents/.gitignore` are as for a full install: they are not guidance.
+The harnesses are recorded in the facts record, not only on skill records, so `generic`, which
+gets no skill in this mode, stays selected: a later `--full` gives it its skills again, and the
+instruction audit checks it as it checks a full `generic` install.
+
+Precedence in this mode reads `these facts over any other repository text that disagrees with
+them, and the person's instruction in the session over these facts`: the clauses that rank the
+project's instructions over OutcomeBound's and size process name guidance this mode does not
+install. Done keeps its parenthetical, since it says what this project's Done means: the full
+suite, run where focused checks do not cover the changed risk. The `local` fragment is the
+project's own text and is inlined verbatim; since no registry or skill explains a mechanism id in
+this mode, a facts-only project writes its Mechanisms line in plain words, the condition and the
+act, and backticks no id it needs a reader to understand.
+
+The mode is recorded in the facts record as `mode: "facts-only"`; a record without `mode` is a
+full install, and a record whose `mode` is neither `full` nor `facts-only` is refused, as any
+malformed record is. Omitted, a run keeps the recorded mode, so the upgrade stays facts-only;
+`--full` returns to a full install. `--check` recomputes against the recorded mode, and a
+facts-only install whose files and records match it reads `current`. `--detect` proposes no mode.
+
+An engine before this mode does not know the field: its `--check` reads the facts block of a
+facts-only install `stale` (its Precedence line is the facts-only one), and its next install
+writes the full install and drops `mode`. A project that uses this mode therefore moves every pin of the engine (CI, each machine,
+each cloud setup step) to a release that knows it before it installs facts-only; the adopter steps
+of the release that ships the mode say so. The manifest stays format 2, for the reason the
+decision on `frame` gives: a format 3 would break each machine and CI job that pins an earlier
+engine, a facts-only install or not.
 
 `guidance-pointers` holds the `local` fragment inline first, since only its author knows which of
 it every task needs; then `- <condition>: read <path>` per selected fragment, the path a verbatim
@@ -83,14 +128,20 @@ The same rules hold for the project's own `local` fragment, which starts from
   token there is read as one. A command or any other name is written without them.
 - An edge is one line and holds no `;`: the Irreversible edges fact joins the edges with `; `, so
   such an edge would read as two.
-`fragments compose` renders both blocks for a selection; `--inline` emits the kernel, the skills
-an install carries and the fragment bodies, for a delegate's role prompt.
+`fragments compose` renders both blocks a full install writes for a selection, never a
+facts-only install's; `--inline` emits the kernel, the skills an install carries and the fragment
+bodies, for a delegate's role prompt.
 
 ## Decisions
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
 | One route to install OutcomeBound, `outcomebound adopt`. The scaffold verb is no install route: it writes a lifecycle's project files where they are absent, and installs nothing of OutcomeBound, no block, skill, fragment copy or hook, and records nothing in the manifest, so `adopt --check` never reads its files and `--remove` leaves them (maintainer, 2026-10-15; the [scaffold design](../scaffold/design.md)) | a second, modular install route beside it; scaffold files recorded in the manifest, which would make adopt watch files the project owns | user | decided |
+| A facts-only mode, `--facts-only` (back with `--full`), recorded in the facts record and kept on upgrade: `AGENTS.md` holds the project's facts and its own `local` fragment, no kernel, no pointers; skills only where the harness discovers them natively (maintainer, 2026-10-22). Guidance every session loads costs input on every task whether or not the task needs it; this mode lets a project, and this project's evals, keep only what the project would fumble without and measure what the rest adds | a `--minimal` flag that also drops the facts block; a facts-only mode that also drops skills, which the evals show each close a measured gap alone and cost only their descriptions until used; a separate install route | user | decided |
+| A facts-only install renders Precedence with its first two clauses alone, and keeps Done's parenthetical: the clauses on OutcomeBound's instructions and on sizing process name guidance the install does not carry, while the parenthetical says what this project's Done means, the full suite run where focused checks do not cover the changed risk. The `local` fragment stays verbatim, and a facts-only project writes its Mechanisms line in plain words | the full Precedence line, which ranks guidance that is absent; Done without its parenthetical, which an agent reads as the check for every change; rewriting the project's own fragment | agent | decided |
+| The facts record holds the selected harnesses (`harnesses`) in every mode, and adopt and the instruction audit read them there first, the skill records only for a manifest written before the field | the skill records alone, which hold no harness that gets no skill, so `generic` in a facts-only install was dropped by the next run and the audit checked every row in its place | agent | decided |
+| `--check` plans the install the recorded selection and mode give and compares its record set with the manifest's: a record it would add reads `missing`, one it would remove reads `stale` | each record's own state alone, which reads a manifest whose mode was changed by hand, or whose record was removed by hand, as `current` while the next install changes files | agent | decided |
+| The mode is a field of the format 2 facts record, and an engine before it installs in full on its next run; the design and the release's adopter steps say to move every pin of the engine first | a format 3, which an earlier engine refuses, so each machine and CI job that pins one breaks, facts-only or not | agent | decided |
 | Re-running is the upgrade, and Git is the undo | three-way merges against copies of every release | user | decided |
 | No backward compatibility: a manifest of another format is refused, even under `--force` | migrating its records | user | decided |
 | The manifest (format 2) holds one `{kind, path, id, sha256}` record per owned block or file, written last. Where the `local` fragment is selected, the `guidance-pointers` record also holds the optional field `frame`: the sha256 of the block with the local fragment's inline text (its `**local** (<family>) — <applies>` line, a blank line and its body, as the block renders it) replaced by the mark `\0local\0` (a NUL character, `local`, a NUL character). A record is read with or without it; an engine of 1.1.1 or earlier reads a record that holds it, ignores it and drops it when it writes the manifest again | per-artifact base caches, source receipts and bundle digests; a format 3 for the one field, which an engine of 1.1.1 or earlier refuses, so each machine and CI job that pins one breaks once a person upgrades; the local fragment's text in the record, which copies the project's own file into the manifest; the digests of the inputs alone, which show that the source changed but not that nothing else in the block changed; a digest of the render for each source version, which this engine cannot compute for the release that wrote the record | agent | decided |

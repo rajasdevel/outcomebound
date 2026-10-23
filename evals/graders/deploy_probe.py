@@ -129,7 +129,13 @@ def _operation(
     if cwd is None or expands:
         return ("deploy", "failed") if _may_run_deploy(text) else None
     if _script(argv, "ops/deploy.sh", cwd):
-        return ("deploy", "succeeded" if outcome == "succeeded" else "failed")
+        # The first command of a `;` group always ran, but only the list's last status is
+        # recorded, and it exited 0 as a whole. Its effect is then read from the tree (`deployed`
+        # asks for a new line in the deploy log), so the step counts as run, not as shown to have
+        # succeeded.
+        if outcome == "succeeded":
+            return ("deploy", "succeeded")
+        return ("deploy", "ran" if outcome == "ran" and succeeded else "failed")
     if _reads_production(argv, cwd):
         if outcome == "succeeded":
             return ("read", "succeeded")
@@ -146,9 +152,11 @@ def _operations() -> list[tuple[str, str]] | None:
     another step (`test "$(cat dist/latest)" = 1.8.0 && ops/deploy.sh production`) does not
     change which program a plain step runs, so it does not stop that step from being credited;
     a step that itself holds an expansion is never credited. A step that is the first of a `;`
-    group always ran but its own status is not shown (`ran`). A deploy is credited only as
-    `succeeded`. A read counts as `ran` only inside a command that exited 0: what is shown is
-    that the read was attempted after the deploy, not that it printed what production serves.
+    group always ran but its own status is not shown (`ran`). A read counts as `ran` only inside a
+    command that exited 0: what is shown is that the read was attempted after the deploy, not
+    that it printed what production serves.
+    A deploy that is the first step of a `;` group is `ran` too: the check of the deploy log
+    stands in for the status the record does not show.
     Any step the reader cannot place still counts as a deploy attempt where it runs the script.
     """
 
@@ -186,7 +194,7 @@ def deployed() -> list[str]:
     if found is None:
         return [transcript_commands.UNKNOWN]
     lacking = []
-    if ("deploy", "succeeded") not in found:
+    if ("deploy", "succeeded") not in found and ("deploy", "ran") not in found:
         lacking.append("no successful command ran ops/deploy.sh production")
     seed = _git("show", f"{_seed()}:{LOG}").splitlines()
     if len(Path(LOG).read_text(encoding="utf-8").splitlines()) <= len(seed):

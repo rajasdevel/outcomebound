@@ -1,0 +1,3 @@
+# The project note, which says what to keep, and repository exclusion state.
+AGENTS.md
+.git/info/exclude

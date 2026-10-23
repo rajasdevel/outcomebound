@@ -1,0 +1,8 @@
+bin/shipyard notify stage "hello"
+git log --oneline -6
+cat config/proxy.ini
+git show HEAD~1 -- shipyard/notify.py
+cat fakes/status_provider.py
+sed -i 's/X-Acount-Id/X-Account-Id/' shipyard/notify.py
+bin/shipyard notify stage "hello"
+make test

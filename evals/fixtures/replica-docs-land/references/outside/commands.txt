@@ -1,0 +1,2 @@
+make docs-check
+git commit -am 'docs: 2.4.0'

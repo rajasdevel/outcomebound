@@ -1,0 +1,4 @@
+{
+  "production_added_max": 25,
+  "reason": "The reference fix of the three defects adds 7 code lines to promptkit/. The band allows more than three times that, for another valid shape of the fix (a helper, a clearer branch), and fails the code that the reviewer's suggestions ask for (metrics, logging, an interface, typed validation), which runs to tens of lines."
+}

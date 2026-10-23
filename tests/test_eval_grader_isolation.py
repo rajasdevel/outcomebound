@@ -392,12 +392,14 @@ def _kept(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     act: Callable[[Path, Path], None] | None = None,
+    extra: str = "",
 ) -> tuple[Path, dict[str, Any], Path]:
-    """A run of the control fixture kept in `out`: the mirror it ran from, its meta and `out`."""
+    """A run of the control fixture kept in `out`: the mirror it ran from, its meta and `out`;
+    `extra` is added to the mirror's setup."""
 
     base = tmp_path / "mirror"
     base.mkdir()
-    evals = _mirror(base, monkeypatch)
+    evals = _mirror(base, monkeypatch, extra)
     stages = _watch(monkeypatch)
     harness = Stand(stages, act or (lambda cwd, _stage: _write_fix(cwd)))
     out = tmp_path / "out"
@@ -448,6 +450,69 @@ def test_regrade_runs_the_sealed_copy_not_the_checkout(
     assert (new / f"{CONTROL}.graders" / "checks" / "probe_datehelp.py").read_bytes() != (
         probe.read_bytes()
     )
+
+
+def _meta(folder: Path) -> dict[str, Any]:
+    return json.loads((folder / f"{CONTROL}.meta.json").read_text(encoding="utf-8"))
+
+
+# A file the setup derives from its build: each build writes another value.
+BUILT = (
+    'mkdir -p "$stage/checks"\n'
+    'python3 -c "import uuid; print(uuid.uuid4())" > "$stage/checks/built-id.txt"\n'
+)
+
+
+def test_current_graders_judge_a_kept_run_with_the_checkout_and_record_both_digests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A grader changed in the checkout after the run: a plain regrade still uses the sealed
+    copy; `--current-graders` uses the checkout's, keeps the run's digests apart from the new
+    ones and the run's build data, and a plain regrade of its output gives the same verdict."""
+
+    from evals.evidence import grading_digest, tree_digest
+
+    evals, meta, out = _kept(tmp_path, monkeypatch, extra=BUILT)
+    assert meta["verdict"] == "PASS", meta
+    built = (out / f"{CONTROL}.graders" / "checks" / "built-id.txt").read_text(encoding="utf-8")
+    probe = evals / "fixtures" / CONTROL / "checks" / "probe_datehelp.py"
+    probe.write_text("raise SystemExit(1)\n", encoding="utf-8")
+
+    plain = tmp_path / "plain"
+    assert _regrade(out, plain) == 0
+    assert _meta(plain)["verdict"] == "PASS"
+    assert RUN.CURRENT_GRADERS not in _meta(plain)
+
+    current = tmp_path / "current"
+    argv = ["--regrade", str(out), "--out", str(current), "--current-graders"]
+    assert RUN._main(argv) == 0
+    again = _meta(current)
+    assert again["verdict"] == "FAIL", again
+    sealed = current / f"{CONTROL}.graders"
+    assert (sealed / "checks" / "probe_datehelp.py").read_bytes() == probe.read_bytes()
+    assert again["graders_sha256"] == tree_digest(sealed) != meta["graders_sha256"]
+    assert again["grading_files_sha256"] == grading_digest(evals, CONTROL)
+    assert again["grading_files_sha256"] != meta["grading_files_sha256"]
+    record = again[RUN.CURRENT_GRADERS]
+    assert record["run_graders_sha256"] == meta["graders_sha256"]
+    assert record["run_grading_files_sha256"] == meta["grading_files_sha256"]
+    assert record["stage_kept_from_run"] == ["checks/built-id.txt"]
+    assert (sealed / "checks" / "built-id.txt").read_text(encoding="utf-8") == built
+
+    later = tmp_path / "later"
+    assert _regrade(current, later) == 0
+    reproduced = _meta(later)
+    assert (reproduced["verdict"], reproduced["claims"]) == (again["verdict"], again["claims"])
+    assert reproduced["graders_sha256"] == again["graders_sha256"]
+    assert reproduced["grading_files_unchanged"] == "PASS"
+    assert reproduced[RUN.CURRENT_GRADERS] == record
+
+
+def test_current_graders_is_refused_without_regrade(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as stopped:
+        RUN._main(["--summary", "somewhere", "--current-graders"])
+    assert stopped.value.code == 2
+    assert "--current-graders is valid only with --regrade" in capsys.readouterr().err
 
 
 def test_a_relative_regrade_path_gives_the_grader_commands_an_absolute_grader_dir(

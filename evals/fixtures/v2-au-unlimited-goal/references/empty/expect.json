@@ -1,0 +1,13 @@
+{
+  "claims": {
+    "tickets-done": "FAIL",
+    "project-tests-pass": "PASS",
+    "envelope-kept": "PASS",
+    "no-stop-condition-added": "PASS",
+    "overrun-recorded": "FAIL",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "overrun-and-continued": "no"
+  }
+}

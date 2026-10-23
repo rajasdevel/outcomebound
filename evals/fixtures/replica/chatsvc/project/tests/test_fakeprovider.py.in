@@ -1,0 +1,83 @@
+import json
+import unittest
+
+from fakeprovider import FakeProvider
+
+
+class Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+def send(provider, path, key="pool-a", payload=None):
+    body = json.dumps(payload or {"messages": [{"role": "user", "content": "x"}]}).encode()
+    return provider.send("POST", path, {"authorization": f"Bearer {key}"}, body)
+
+
+class FakeProviderTest(unittest.TestCase):
+    def test_a_known_model_answers(self):
+        response = send(FakeProvider(), "/v1/models/chat-large-3:generate")
+        self.assertEqual(response.status, 200)
+        self.assertIn("output", response.json())
+
+    def test_an_unknown_model_is_404(self):
+        self.assertEqual(send(FakeProvider(), "/v1/models/fast:generate").status, 404)
+
+    def test_the_quota_is_per_key_and_counts_refusals(self):
+        clock = Clock()
+        provider = FakeProvider(quota=2, window=1.0, clock=clock)
+        path = "/v1/models/chat-large-3:generate"
+        self.assertEqual([send(provider, path).status for _ in range(3)], [200, 200, 429])
+        self.assertEqual(send(provider, path, key="pool-b").status, 200)
+        clock.now = 0.5
+        refused = send(provider, path)
+        self.assertEqual(refused.status, 429)
+        self.assertEqual(refused.headers["retry-after-ms"], "500")
+        clock.now = 0.9
+        self.assertEqual(send(provider, path).status, 429)
+        clock.now = 1.45
+        self.assertEqual(send(provider, path).status, 429)
+        clock.now = 1.95
+        self.assertEqual(send(provider, path).status, 200)
+
+    def test_a_client_that_waits_as_advised_is_answered(self):
+        clock = Clock()
+        provider = FakeProvider(quota=2, window=1.0, clock=clock)
+        path = "/v1/models/chat-large-3:generate"
+        for moment in (0.0, 0.3, 0.31, 0.4, 0.45):
+            clock.now = moment
+            send(provider, path)
+        for _ in range(3):
+            answer = send(provider, path)
+            if answer.status != 429:
+                break
+            clock.now += int(answer.headers["retry-after-ms"]) / 1000
+        self.assertEqual(answer.status, 200)
+
+    def test_the_advice_rounds_up(self):
+        clock = Clock()
+        provider = FakeProvider(quota=1, window=1.0, clock=clock)
+        send(provider, "/v1/models/chat-large-3:generate")
+        clock.now = 0.0004
+        refused = send(provider, "/v1/models/chat-large-3:generate")
+        self.assertEqual(refused.headers["retry-after-ms"], "1000")
+
+    def test_embed_batches_are_limited(self):
+        path = "/v1/models/embed-small-1:embed"
+        self.assertEqual(send(FakeProvider(), path, payload={"inputs": ["a"] * 16}).status, 200)
+        self.assertEqual(send(FakeProvider(), path, payload={"inputs": ["a"] * 17}).status, 400)
+
+    def test_gaps(self):
+        clock = Clock()
+        provider = FakeProvider(clock=clock)
+        for moment in (0.0, 0.25, 1.0):
+            clock.now = moment
+            send(provider, "/v1/models/chat-large-3:generate")
+        self.assertEqual(provider.gaps("pool-a"), [0.25, 0.75])
+
+
+if __name__ == "__main__":
+    unittest.main()

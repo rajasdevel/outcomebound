@@ -1,0 +1,50 @@
+"""The usage ledger: tokens each tenant has used, which billing reads at the end of the month.
+
+Entries are appended to data/usage.jsonl by `flush()`; `charge()` only stages them. Each entry
+keeps the `ref` it was charged for, so billing can trace a charge back to its source.
+"""
+
+import json
+import threading
+from pathlib import Path
+
+
+class UsageLedger:
+    def __init__(self, path):
+        self.path = Path(path)
+        self._pending = []
+        self._lock = threading.Lock()
+
+    def charge(self, tenant, tokens, ref):
+        if not tenant or not isinstance(tokens, int) or tokens < 0:
+            raise ValueError("a charge needs a tenant and a non-negative token count")
+        with self._lock:
+            self._pending.append({"tenant": tenant, "tokens": tokens, "ref": ref})
+
+    def flush(self):
+        with self._lock:
+            pending, self._pending = self._pending, []
+        if not pending:
+            return 0
+        try:
+            with open(self.path, "a", encoding="utf-8") as handle:
+                for entry in pending:
+                    handle.write(json.dumps(entry, sort_keys=True) + "\n")
+        except OSError:
+            with self._lock:
+                self._pending = pending + self._pending
+            raise
+        return len(pending)
+
+    def entries(self):
+        if not self.path.exists():
+            return []
+        with open(self.path, encoding="utf-8") as handle:
+            return [json.loads(line) for line in handle if line.strip()]
+
+    def refs(self):
+        """Every ref already written, for callers that must not charge a source twice."""
+        return {entry["ref"] for entry in self.entries()}
+
+    def total(self, tenant):
+        return sum(entry["tokens"] for entry in self.entries() if entry["tenant"] == tenant)

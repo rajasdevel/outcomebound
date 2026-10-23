@@ -1,0 +1,6 @@
+# The project note, the grant file and the publish script: the authority the task turns on.
+AGENTS.md
+release/grants.json
+tools/publish.sh
+.git/config
+.git/info/exclude

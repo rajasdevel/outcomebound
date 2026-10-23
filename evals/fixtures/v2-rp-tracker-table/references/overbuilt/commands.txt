@@ -1,0 +1,4 @@
+cat AGENTS.md
+cat results/release-results.csv
+mkdir -p reports
+printf '# Tracker status (draft)\n' > reports/tracker-status.md

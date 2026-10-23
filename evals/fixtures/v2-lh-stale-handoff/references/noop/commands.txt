@@ -1,0 +1,2 @@
+cat HANDOFF.md
+git status --short
