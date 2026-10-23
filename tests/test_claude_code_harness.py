@@ -372,6 +372,61 @@ def test_a_plugin_arm_passes_with_its_own_plugin_and_fails_with_a_folder_that_sh
     assert _verdicts(cs.loading_check([_start(plugins=[twin])], expected))["plugins"] == "FAIL"
 
 
+CASE = "Tool names are case-sensitive: call Bash instead."
+
+
+def _refusal(name: str) -> str:
+    return f"<tool_use_error>Error: No such tool available: {name}</tool_use_error>"
+
+
+def test_a_call_the_cli_refused_as_no_such_tool_ran_nothing_and_keeps_the_commands() -> None:
+    """Breaks if one call to a tool the CLI does not have voids every command of the session."""
+
+    events = [
+        _start(),
+        _reply(1, _use("b1", "Bash", command="make test"), _use("b2", "bash", command="true")),
+        _result("b1", "2 passed"),
+        _result("b2", _refusal("bash").replace("bash<", f"bash. {CASE}<"), error=True),
+        _reply(2, _use("b3", "bash_placeholder")),
+        _result("b3", [{"type": "text", "text": _refusal("bash_placeholder")}], error=True),
+        _end(),
+    ]
+    decoded = cs.decode(events)
+    assert decoded.commands == [("make test", "succeeded", "")] and decoded.files == []
+    assert decoded.unknown == []
+    assert decoded.tools == {"Bash": 1, "bash": 1, "bash_placeholder": 1}, "the tries stay counted"
+
+
+@pytest.mark.parametrize(
+    ("result", "why"),
+    [
+        (_result("u1", "started"), "an unknown tool that ran"),
+        (_result("u1", "<tool_use_error>Error: boom</tool_use_error>", True), "another error"),
+        (_result("u1", _refusal("Monitor")), "the refusal text without an error flag"),
+        (_result("u1", "Error: No such tool available: Monitor", True), "no tool_use_error tag"),
+    ],
+)
+def test_NEGATIVE_CONTROL_an_unknown_tool_the_cli_did_not_refuse_still_voids_the_commands(
+    result: dict[str, Any], why: str
+) -> None:
+    events = [
+        _start(),
+        _reply(1, _use("b1", "Bash", command="make test"), _use("u1", "Monitor", command="x")),
+        _result("b1", "2 passed"),
+        result,
+        _end(),
+    ]
+    decoded = cs.decode(events)
+    assert decoded.commands is None and decoded.files is None, why
+    assert decoded.unknown == ["Monitor"], why
+
+
+def test_NEGATIVE_CONTROL_an_unknown_tool_with_no_result_stays_unknown() -> None:
+    events = [_start(), _reply(1, _use("u1", "Monitor", command="x")), _end()]
+    decoded = cs.decode(events)
+    assert decoded.commands is None and decoded.unknown == ["Monitor"]
+
+
 def test_parallel_bash_calls_keep_each_its_own_status() -> None:
     events = [
         _start(),

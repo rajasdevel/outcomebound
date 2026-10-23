@@ -17,7 +17,9 @@ Bash calls only, and `files` the Read, Edit and Write calls, each `[tool, path, 
 file the model read or changed with a tool leaves a record and a grader that counts commands
 never counts one. A stream with any tool this module does not know (a subagent, a background
 shell) has no `commands` and no `files`: what such a tool ran is not in the stream, so "no
-command ran" cannot be shown.
+command ran" cannot be shown. The one exception is a call the CLI refused because it has no such
+tool (an error result whose `<tool_use_error>` says `No such tool available`, as read in claude
+2.1.308): it ran nothing, so it is counted in `tools` but not as unknown.
 
 The model and effort a call ran with are read from its native session, the
 `<config>/projects/<folder>/<session id>.jsonl` file the CLI writes under `CLAUDE_CONFIG_DIR`:
@@ -67,6 +69,8 @@ PASSIVE_TOOLS = frozenset(
 # What a file tool names as its file.
 PATH_KEYS = ("file_path", "notebook_path", "path")
 HOOK_EVENTS = ("hook_started", "hook_progress", "hook_response")
+# The error the CLI returns for a call to a tool it does not have (read in claude 2.1.308).
+NO_SUCH_TOOL = re.compile(r"<tool_use_error>[^<]*No such tool available")
 # The message the CLI writes for an error it made itself, not the model.
 SYNTHETIC = "<synthetic>"
 # A built-in plugin's id ends with this; such a plugin ships with the CLI.
@@ -149,7 +153,7 @@ class Decoded(NamedTuple):
 
 class _Call(NamedTuple):
     name: str
-    kind: str  # "command", "file" or "passive"
+    kind: str  # "command", "file", "passive" or "unknown"
     slot: int | None
     background: bool
 
@@ -167,6 +171,13 @@ def _status(result: dict[str, Any], key: str, denied: set[str]) -> str:
     if result.get("is_error", False) is False and _text(result.get("content")) is not None:
         return "succeeded"
     return "unverified"
+
+
+def _refused(result: dict[str, Any]) -> bool:
+    """Whether the CLI refused the call because it has no tool of that name: it ran nothing."""
+
+    text = _text(result.get("content"))
+    return result.get("is_error") is True and text is not None and bool(NO_SUCH_TOOL.search(text))
 
 
 class _Decoder:
@@ -208,9 +219,8 @@ class _Decoder:
         else:
             if name == "Skill" and isinstance(args.get("skill"), str):
                 self.skills.append(args["skill"])
-            if name not in PASSIVE_TOOLS:
-                self.unknown.add(name)
-            self.pending[key] = _Call(name, "passive", None, False)
+            kind = "passive" if name in PASSIVE_TOOLS else "unknown"
+            self.pending[key] = _Call(name, kind, None, False)
 
     def command(self, key: str, name: str, args: dict[str, Any]) -> None:
         command = args.get("command")
@@ -231,6 +241,8 @@ class _Decoder:
             self.broken = True
             return
         call = self.pending.pop(key)
+        if call.kind == "unknown" and not _refused(part):
+            self.unknown.add(call.name)
         if call.slot is None:
             return
         if call.kind == "file":
@@ -249,8 +261,8 @@ def decode(events: list[dict[str, Any]], directories: dict[str, str] | None = No
     """The stream's tool calls, in the order they started. `directories` gives the working
     directory of a call by its tool-use id (from the native session); a call with none keeps an
     empty one. A call with no result, a result with no call, a reused id, a malformed part, an
-    unknown tool, or a stream with no start or no final result event leaves no commands and no
-    files."""
+    unknown tool (save one the CLI refused as no such tool), or a stream with no start or no
+    final result event leaves no commands and no files."""
 
     result = result_event(events)
     denied = {
@@ -274,6 +286,7 @@ def decode(events: list[dict[str, Any]], directories: dict[str, str] | None = No
                 state.result(part)
     answer = result.get("result") if result else None
     answer = answer if isinstance(answer, str) else ""
+    state.unknown.update(c.name for c in state.pending.values() if c.kind == "unknown")
     tools, unknown, skills = state.tools, sorted(state.unknown), state.skills
     whole = not (state.broken or state.pending or unknown or result is None)
     if not whole or start_event(events) is None:
