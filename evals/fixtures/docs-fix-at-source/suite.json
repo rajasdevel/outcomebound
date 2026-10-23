@@ -49,6 +49,7 @@
     "replace-seed",
     "wrong-version-token",
     "no-install-command",
-    "missing-home"
+    "missing-home",
+    "dangling-faq"
   ]
 }

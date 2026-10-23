@@ -1,8 +1,9 @@
 // Command rename_entry is the grader's: it finds the one package-level declaration of
-// WriteSummary in the non-test Go files of a folder (a function, or a variable that holds one)
-// and prints its file and the byte offset of its name, so the grader can rename it and wrap it.
-// It exits 2 where there is no such declaration or more than one, and 1 where a file does not
-// parse.
+// WriteSummary in the Go files it is given (those `go list` selects for the package, so a file
+// that the build rules leave out is never read) and prints its file and the byte offset of its
+// name, so the grader can rename it and wrap it. The declaration is a function, or a variable
+// that holds one. It exits 2 where there is no such declaration or more than one, and 1 where a
+// file does not parse.
 package main
 
 import (
@@ -11,30 +12,21 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 )
 
 const entry = "WriteSummary"
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: rename_entry FOLDER")
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: rename_entry FILE...")
 		os.Exit(2)
 	}
-	files, err := filepath.Glob(filepath.Join(os.Args[1], "*.go"))
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
+	files := append([]string(nil), os.Args[1:]...)
 	sort.Strings(files)
 	fset := token.NewFileSet()
 	var found []string
 	for _, path := range files {
-		if strings.HasSuffix(path, "_test.go") {
-			continue
-		}
 		file, err := parser.ParseFile(fset, path, nil, parser.SkipObjectResolution)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)

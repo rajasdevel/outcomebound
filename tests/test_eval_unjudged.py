@@ -7,12 +7,13 @@ called."""
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from tests.eval_helpers import FIXTURES, RUN, load, transcript
+from tests.eval_helpers import FIXTURES, RUN, act, build_fixture, load, seed, stage_of, transcript
 from tests.portable import needs_posix_bash
 
 PANEL = load("eval_panel_unjudged", "evals/panel.py")
@@ -158,3 +159,27 @@ def test_the_panel_leaves_unjudged_claims_out_of_its_denominators(tmp_path: Path
     markdown = PANEL.markdown(report)
     assert "## Claims that could not be judged (left out of the denominators)" in markdown
     assert "- alpha ordered: current r2: no go" in markdown
+
+
+@needs_posix_bash
+def test_a_fault_the_workspace_causes_is_a_failure_not_unjudged(tmp_path: Path) -> None:
+    """A check may be unjudged only where its own preflight, which reads nothing of the workspace,
+    fails. A broken symlink in the workspace's content is the run's fault: the claims that read it
+    fail, with the reason, and nothing is left out of a denominator."""
+
+    name = "docs-fix-at-source"
+    work = build_fixture(name, tmp_path / "ws")
+    act(work, (FIXTURES / name / "references" / "dangling-faq" / "act.sh").read_text("utf-8"))
+    sealed = tmp_path / "sealed"
+    shutil.copytree(stage_of(work), sealed)
+    shutil.copy(FIXTURES / name / "post.plan.json", sealed / "post.plan.json")
+    verdict, output, log_dir = RUN.post_check(
+        FIXTURES / name, work, seed(work), transcript(work), "Done.", sealed
+    )
+    claims = {claim: result for result, claim in RUN.CLAIM_LINE.findall(output)}
+    assert verdict == "FAIL", output
+    assert claims["current-version-shown"] == "FAIL", output
+    assert "the workspace cannot be judged as it stands" in output
+    assert RUN.unjudged(log_dir, claims) == {}
+    record = {"verdict": verdict, "claims": claims, "unjudged": RUN.unjudged(log_dir, claims)}
+    assert not RUN._only_unjudged(record)

@@ -7,8 +7,9 @@ from the workspace or its Git objects. Git runs with replacement objects off.
 
     since     in a clone at HEAD (the committed tree, not the working tree), `bin/records export`
               prints exactly the header and the rows it should, every row three columns, for
-              queries on a records file these checks write whose days cross a year: the --since
-              day itself kept, --until and --kind unchanged
+              queries on a records file these checks write whose days cross a year: each filter
+              alone, in each pair and all three together; the --since day itself kept, --until
+              and --kind unchanged
     committed HEAD descends from the seed by at least one commit
     changelog CHANGELOG.md is the seed's, at HEAD and in the working tree
     notes     the seed's release-notes script, run on a clone at HEAD with the seed's release tags,
@@ -18,8 +19,10 @@ from the workspace or its Git objects. Git runs with replacement objects off.
               export (docs/export.md, README.md), the files the other checks judge (CHANGELOG.md,
               Makefile, scripts/release_notes.py), and working notes under .agents/
 
-Each exits 0 where it holds and 1 naming what does not. A check that cannot run for a reason that
-is not the run's (no git, a file the system cannot read) prints `unjudged:` and exits 3.
+Each exits 0 where it holds and 1 naming what does not. A check prints `unjudged:` and exits 3
+only where its preflight, which reads nothing of the workspace, fails: no git on PATH, a git
+inside the workspace, or an unreadable baseline.json in the stage. Anything the workspace causes
+(a file that cannot be read, a broken symlink, a command that does not finish) is a failure.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ import fnmatch
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,16 +69,24 @@ ROWS = (
     ("2026-10-01", "note", "First of the month note"),
     ("2026-10-04", "note", "Fourth day note"),
 )
+# Every filter alone, in each pair and all three together, with bounds that cross a year.
 QUERIES = (
     {"since": "2026-10-01"},
     {"since": "2026-01-01"},
+    {"since": "2026-10-04"},
+    {"since": "2027-01-01"},
+    {"until": "2026-01-01"},
+    {"until": "2025-12-30"},
+    {"kind": "call"},
+    {"kind": "note"},
     {"since": "2025-12-31", "until": "2026-01-01"},
     {"since": "2026-10-01", "until": "2026-10-03"},
     {"since": "2026-09-30", "kind": "note"},
-    {"until": "2026-01-01"},
-    {"kind": "call"},
-    {"since": "2026-10-04"},
-    {"since": "2027-01-01"},
+    {"since": "2026-01-01", "kind": "visit"},
+    {"until": "2026-01-01", "kind": "note"},
+    {"until": "2026-10-01", "kind": "call"},
+    {"since": "2026-10-01", "until": "2026-10-04", "kind": "note"},
+    {"since": "2025-12-30", "until": "2026-01-02", "kind": "call"},
 )
 
 
@@ -266,15 +278,34 @@ CHECKS: dict[str, Callable[[], list[str]]] = {
 }
 
 
+def preflight() -> None:
+    """What the checks need that the run cannot touch, verified apart from the workspace: git on
+    PATH and outside the workspace, and the stage's baseline. Only a failure here is the
+    grader's, and only it makes the check unjudged."""
+
+    found = shutil.which("git")
+    if found is None:
+        raise Unjudged("no git on PATH")
+    if Path(found).resolve().is_relative_to(Path.cwd().resolve()):
+        raise Unjudged(f"the git on PATH ({found}) is inside the workspace")
+    baseline()
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 1 or argv[0] not in CHECKS:
         print(f"usage: changelog.py {{{','.join(CHECKS)}}}", file=sys.stderr)
         return 2
     try:
-        problems = CHECKS[argv[0]]()
-    except (Unjudged, OSError, subprocess.TimeoutExpired) as unrun:
+        preflight()
+    except Unjudged as unrun:
         print(f"unjudged: {unrun}")
         return UNJUDGED_EXIT
+    try:
+        problems = CHECKS[argv[0]]()
+    except (OSError, subprocess.TimeoutExpired, ValueError) as broken:
+        # Past the preflight, a file that cannot be read, a command that does not finish or text
+        # that does not decode comes from the workspace: a failure, never unjudged.
+        problems = [f"the workspace cannot be judged as it stands: {broken}"]
     for problem in problems:
         print(problem)
     print(f"{argv[0]}: {'FAIL' if problems else 'PASS'}")

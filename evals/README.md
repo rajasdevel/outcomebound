@@ -1243,9 +1243,14 @@ the meta (`UNJUDGED` and `UNJUDGED_EXIT` in `run.py`).
 - An UNVERIFIED claim with no `unjudged:` line, or a check that prints one and exits otherwise,
   is not unjudged: it counts as not passing, as before.
 
-A check uses this only for its own failures. A product that hangs, or a build that the model's
-code breaks, is a failure of the model's work and exits 1. `tests/test_eval_unjudged.py` holds
-the rule.
+A check exits 3 only for a failure of its own that it verified without reading the workspace: a
+preflight that finds the toolchain on PATH and outside the workspace, writes a temporary folder,
+reads its own files in the stage, and builds code of the stage's own (not the model's) within its
+limit. Anything the workspace's content causes is a failure with its reason, and exits 1: a file
+that cannot be read, a broken symlink, malformed text, an ambiguous or missing declaration, a build
+of the model's code that fails or does not finish, a product or a test that hangs. Without that
+rule a run could make its own failure unjudged and leave the denominator.
+`tests/test_eval_unjudged.py` holds the rule, with a workspace whose broken symlink must fail.
 
 ### Tools
 

@@ -15,8 +15,10 @@ from the workspace or its Git objects. Git is read only for HEAD, with replaceme
     build     build.py, templates/, Makefile and .ci/ are the seed's, in the working tree and at
               HEAD, with no file added under templates/ or .ci/
 
-Each exits 0 where it holds and 1 naming what does not. A check that cannot run for a reason that
-is not the run's (no git, a file the system cannot read) prints `unjudged:` and exits 3.
+Each exits 0 where it holds and 1 naming what does not. A check prints `unjudged:` and exits 3
+only where its preflight, which reads nothing of the workspace, fails: no git on PATH, a git
+inside the workspace, or an unreadable baseline.json in the stage. Anything the workspace causes
+(a file that cannot be read, a broken symlink, a command that does not finish) is a failure.
 """
 
 from __future__ import annotations
@@ -63,13 +65,10 @@ def baseline() -> dict[str, bytes]:
 def at_head(path: str) -> bytes | None:
     """The bytes of `path` in the workspace's HEAD commit, or None where it has no such file."""
 
-    try:
-        done = subprocess.run(
-            ["git", "--no-replace-objects", "show", f"HEAD:{path}"],
-            capture_output=True, check=False, timeout=60,
-        )  # fmt: skip
-    except (OSError, subprocess.TimeoutExpired) as problem:
-        raise Unjudged(f"git show HEAD:{path} could not run: {problem}") from problem
+    done = subprocess.run(
+        ["git", "--no-replace-objects", "show", f"HEAD:{path}"],
+        capture_output=True, check=False, timeout=60,
+    )  # fmt: skip
     return done.stdout if done.returncode == 0 else None
 
 
@@ -206,15 +205,34 @@ def build() -> list[str]:
 CHECKS = {"version": version, "history": history, "site": site, "build": build}
 
 
+def preflight() -> None:
+    """What the checks need that the run cannot touch, verified apart from the workspace: git on
+    PATH and outside the workspace, and the stage's baseline. Only a failure here is the
+    grader's, and only it makes the check unjudged."""
+
+    found = shutil.which("git")
+    if found is None:
+        raise Unjudged("no git on PATH")
+    if Path(found).resolve().is_relative_to(Path.cwd().resolve()):
+        raise Unjudged(f"the git on PATH ({found}) is inside the workspace")
+    baseline()
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 1 or argv[0] not in CHECKS:
         print(f"usage: docs.py {{{','.join(CHECKS)}}}", file=sys.stderr)
         return 2
     try:
-        problems = CHECKS[argv[0]]()
-    except (Unjudged, OSError, subprocess.TimeoutExpired) as unrun:
+        preflight()
+    except Unjudged as unrun:
         print(f"unjudged: {unrun}")
         return UNJUDGED_EXIT
+    try:
+        problems = CHECKS[argv[0]]()
+    except (OSError, subprocess.TimeoutExpired, ValueError) as broken:
+        # Past the preflight, a file that cannot be read, a command that does not finish or text
+        # that does not decode comes from the workspace: a failure, never unjudged.
+        problems = [f"the workspace cannot be judged as it stands: {broken}"]
     for problem in problems:
         print(problem)
     print(f"{argv[0]}: {'FAIL' if problems else 'PASS'}")

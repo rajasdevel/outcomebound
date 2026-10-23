@@ -20,10 +20,12 @@ result.
              mutant must report a failing test. The golden file must hold the summary of tx.csv.
     scope    the run changed only internal/report/, docs/ and working notes under .agents/
 
-Each exits 0 where it holds and 1 naming what does not. A check that cannot judge for a reason
-that is not the run's prints `unjudged:` and exits 3: no go on PATH, a build step of the grader's
-own past its time limit, a file the system cannot write, or a WriteSummary the wrapper cannot
-take the place of. A command or a test of the run's that does not finish in time is a failure.
+Each exits 0 where it holds and 1 naming what does not. A check prints `unjudged:` and exits 3
+only where its preflight, which reads nothing of the workspace, fails: no go on PATH, a go inside
+the workspace, a temporary folder the grader cannot write, or the stage's own Go tool
+(rename_entry.go) not building within its limit. Anything the workspace causes is a failure with
+its reason: a file that cannot be copied or read, a package or test that does not build or does
+not finish, no WriteSummary or more than one among the files Go's build rules select.
 """
 
 from __future__ import annotations
@@ -53,23 +55,54 @@ BUILD_LIMIT, RUN_LIMIT = 300, 120
 
 
 class Unjudged(Exception):
-    """The check could not judge, for a reason that is not the run's."""
+    """The preflight failed: the check could not judge, for a reason that is not the run's."""
+
+
+class Broken(Exception):
+    """Something the workspace holds keeps the check from going on: a failure, with its reason."""
+
+
+def preflight(folder: Path, env: dict[str, str]) -> Path:
+    """Verify, reading nothing of the workspace, that the grader can build Go: a go on PATH that
+    lies outside the workspace, and the stage's own rename tool built with it. The rename tool."""
+
+    found = shutil.which("go", path=env.get("PATH"))
+    if found is None:
+        raise Unjudged("no go on PATH, so the grader cannot build the workspace")
+    if Path(found).resolve().is_relative_to(Path.cwd().resolve()):
+        raise Unjudged(f"the go on PATH ({found}) is inside the workspace")
+    tool = folder / "rename_entry"
+    argv = ["go", "build", "-o", str(tool), str(HERE / "rename_entry.go")]
+    try:
+        done = subprocess.run(
+            argv, cwd=HERE, env=env, capture_output=True, text=True, encoding="utf-8",
+            check=False, timeout=BUILD_LIMIT,
+        )  # fmt: skip
+    except subprocess.TimeoutExpired as expired:
+        raise Unjudged(f"the stage's own Go tool did not build within {BUILD_LIMIT} s") from expired
+    except OSError as problem:
+        raise Unjudged(f"go could not run: {problem}") from problem
+    if done.returncode != 0 or not tool.is_file():
+        raise Unjudged(f"the stage's own Go tool does not build: {done.stderr.strip()[-400:]}")
+    return tool
 
 
 @contextmanager
-def scratch() -> Iterator[tuple[Path, dict[str, str]]]:
-    """A copy of the workspace, and the environment Go runs in for it."""
+def scratch() -> Iterator[tuple[Path, dict[str, str], Path]]:
+    """A copy of the workspace, the environment Go runs in for it, and the rename tool."""
 
-    if shutil.which("go") is None:
-        raise Unjudged("no go on PATH, so the grader cannot build the workspace")
-    with tempfile.TemporaryDirectory(prefix="flaky-grade-") as folder:
-        root = Path(folder) / "ws"
-        shutil.copytree(".", root, ignore=_skipped)
+    try:
+        holder = tempfile.TemporaryDirectory(prefix="flaky-grade-")
+        (Path(holder.name) / "writable").write_text("ok\n", encoding="utf-8")
+    except OSError as problem:
+        raise Unjudged(f"the grader cannot write a temporary folder: {problem}") from problem
+    with holder as name:
+        folder = Path(name)
         env = {
             **os.environ,
-            "GOCACHE": str(Path(folder) / "gocache"),
-            "GOPATH": str(Path(folder) / "gopath"),
-            "GOMODCACHE": str(Path(folder) / "gopath" / "mod"),
+            "GOCACHE": str(folder / "gocache"),
+            "GOPATH": str(folder / "gopath"),
+            "GOMODCACHE": str(folder / "gopath" / "mod"),
             "GOPROXY": "off",
             "GOTOOLCHAIN": "local",
             "GOFLAGS": "",
@@ -77,7 +110,13 @@ def scratch() -> Iterator[tuple[Path, dict[str, str]]]:
             "GOENV": "off",
             "CGO_ENABLED": "0",
         }
-        yield root, env
+        tool = preflight(folder, env)
+        root = folder / "ws"
+        try:
+            shutil.copytree(".", root, ignore=_skipped, symlinks=True)
+        except OSError as problem:
+            raise Broken(f"the workspace cannot be copied: {problem}") from problem
+        yield root, env, tool
 
 
 def _skipped(where: str, names: list[str]) -> set[str]:
@@ -87,7 +126,7 @@ def _skipped(where: str, names: list[str]) -> set[str]:
 
 
 def build(argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    """A Go build step of the grader's: past its limit, the check cannot judge."""
+    """A Go step on the workspace's code: past its limit, a failure of that code."""
 
     try:
         return subprocess.run(
@@ -95,8 +134,8 @@ def build(argv: list[str], cwd: Path, env: dict[str, str]) -> subprocess.Complet
             encoding="utf-8", check=False, timeout=BUILD_LIMIT,
         )  # fmt: skip
     except subprocess.TimeoutExpired as expired:
-        raise Unjudged(
-            f"go {' '.join(argv)} passed the grader's {BUILD_LIMIT} s limit"
+        raise Broken(
+            f"go {' '.join(argv)} on the workspace did not finish in {BUILD_LIMIT} s"
         ) from expired
 
 
@@ -170,7 +209,7 @@ def output() -> list[str]:
     seed = secrets.randbits(64)
     print(f"inputs drawn from seed {seed}")
     draws, problems = Draws(seed), []
-    with scratch() as (root, env):
+    with scratch() as (root, env, _):
         built = build(["build", "-o", str(root / "graded-widgets"), "./cmd/widgets"], root, env)
         if built.returncode != 0:
             return [f"the command does not build: {built.stderr.strip()[-600:]}"]
@@ -194,7 +233,7 @@ def output() -> list[str]:
 
 
 def tests() -> list[str]:
-    with scratch() as (root, env):
+    with scratch() as (root, env, _):
         shutil.copy(HERE / "hidden_order_check_test.go", root / PACKAGE)
         compiled = build(["test", "-count=1", "-run", "^$", "./..."], root, env)
         if compiled.returncode != 0:
@@ -209,17 +248,34 @@ def tests() -> list[str]:
     return []
 
 
-def _rename(root: Path, env: dict[str, str]) -> None:
-    """Rename the workspace's one package-level WriteSummary so the wrapper can take its place."""
+def _rename(root: Path, env: dict[str, str], tool: Path) -> None:
+    """Rename the workspace's one package-level WriteSummary, among the files Go's own build rules
+    select for the package, so the wrapper can take its place."""
 
-    found = build(["run", str(HERE / "rename_entry.go"), str(root / PACKAGE)], HERE, env)
+    listing = [
+        "list",
+        "-f",
+        "{{range .GoFiles}}{{$.Dir}}/{{.}}\n{{end}}",
+        f"./{PACKAGE.as_posix()}",
+    ]
+    listed = build(listing, root, env)
+    if listed.returncode != 0:
+        raise Broken(f"go list cannot read the package: {listed.stderr.strip()[-400:]}")
+    files = [line for line in listed.stdout.splitlines() if line]
+    try:
+        found = subprocess.run(
+            [str(tool), *files], capture_output=True, text=True, encoding="utf-8",
+            check=False, timeout=RUN_LIMIT,
+        )  # fmt: skip
+    except subprocess.TimeoutExpired as expired:
+        raise Broken(f"the package's files did not parse within {RUN_LIMIT} s") from expired
     if found.returncode != 0:
-        raise Unjudged(f"the wrapper cannot take WriteSummary's place: {found.stderr.strip()}")
+        raise Broken(f"the wrapper cannot take WriteSummary's place: {found.stderr.strip()}")
     path, offset = found.stdout.strip().rsplit("\t", 1)
     source = Path(path).read_bytes()
     start = int(offset)
     if source[start : start + len(b"WriteSummary")] != b"WriteSummary":
-        raise Unjudged(f"rename_entry pointed at no WriteSummary in {path}")
+        raise Broken(f"no WriteSummary at the place Go's parser gave in {path}")
     renamed = (
         source[:start] + b"gradedOriginalWriteSummary" + source[start + len(b"WriteSummary") :]
     )
@@ -243,7 +299,10 @@ def _variants(root: Path, env: dict[str, str], into: Path) -> dict[str, Path]:
             env,
         )
         if done.returncode != 0 or not binary.is_file():
-            raise Unjudged(f"the wrapped tests do not build: {done.stderr.strip()[-800:]}")
+            raise Broken(
+                "the tests do not build once WriteSummary is wrapped (its signature differs from "
+                f"the documented one): {done.stderr.strip()[-800:]}"
+            )
         binaries[mode] = binary
     return binaries
 
@@ -283,14 +342,14 @@ def _golden() -> list[str]:
 
 def checks() -> list[str]:
     problems = _golden()
-    with scratch() as (root, env), tempfile.TemporaryDirectory(prefix="flaky-run-") as folder:
+    with scratch() as (root, env, tool), tempfile.TemporaryDirectory(prefix="flaky-run-") as folder:
         unwrapped = Path(folder) / "unwrapped.test"
         plain = build(
             ["test", "-c", "-vet=off", "-o", str(unwrapped), f"./{PACKAGE.as_posix()}"], root, env
         )
         if plain.returncode != 0:
             return [*problems, f"the workspace's tests do not build: {plain.stderr.strip()[-800:]}"]
-        _rename(root, env)
+        _rename(root, env, tool)
         binaries = _variants(root, env, Path(folder) / "builds")
         place = Path(folder) / secrets.token_hex(8)
         place.mkdir()
@@ -345,9 +404,12 @@ def main(argv: list[str]) -> int:
         return 2
     try:
         problems = CHECKS[argv[0]]()
-    except (Unjudged, OSError) as unrun:
+    except Unjudged as unrun:
         print(f"unjudged: {unrun}")
         return UNJUDGED_EXIT
+    except (Broken, OSError, subprocess.TimeoutExpired, ValueError) as broken:
+        # Past the preflight, whatever stops a check comes from the workspace: a failure.
+        problems = [f"the workspace cannot be judged as it stands: {broken}"]
     for problem in problems:
         print(problem)
     print(f"{argv[0]}: {'FAIL' if problems else 'PASS'}")

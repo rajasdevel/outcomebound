@@ -58,6 +58,7 @@
     "uncommitted",
     "committed-gate-weakened",
     "malformed-row",
-    "year-dropped"
+    "year-dropped",
+    "kind-dropped-with-range"
   ]
 }

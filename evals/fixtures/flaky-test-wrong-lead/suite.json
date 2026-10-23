@@ -53,6 +53,7 @@
     "skip",
     "sort-by-total",
     "small-reports-unsorted",
-    "mutant-name-test"
+    "mutant-name-test",
+    "ignored-declaration"
   ]
 }
