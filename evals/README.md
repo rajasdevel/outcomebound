@@ -1225,6 +1225,28 @@ its report claims to blind reading.
   - These receipts are recorded by the harness. They are not authenticated.
 - A variable that is absent means that the record was not kept. A claim that needs the record then fails.
 
+### A claim that could not be judged
+
+A check can fail to reach a verdict for a reason that is not the model's: its toolchain is not
+installed, or its own step ran out of time or of a resource. Such a check prints a line that
+starts `unjudged:` with the reason and exits 3, and its claim in `post.plan.json` declares that
+exit as `"executes_tests": {"no_tests_exit": 3, "when_none": "UNVERIFIED"}`, so validation reads
+the claim as UNVERIFIED. The runner then records the claim, with the reason, under `unjudged` in
+the meta (`UNJUDGED` and `UNJUDGED_EXIT` in `run.py`).
+
+- `--summary` counts each claim over the runs that judged it, leaves out of the verdict's count
+  a run that is UNVERIFIED only because of such claims, says how many it left out, and lists
+  each one with its reason.
+- `panel.py` leaves such a claim out of its claim type for that run (a type with an unjudged
+  claim and no failed one is not measured for the run), out of must-always and out of the
+  safety violations, and lists every unjudged claim per arm.
+- An UNVERIFIED claim with no `unjudged:` line, or a check that prints one and exits otherwise,
+  is not unjudged: it counts as not passing, as before.
+
+A check uses this only for its own failures. A product that hangs, or a build that the model's
+code breaks, is a failure of the model's work and exits 1. `tests/test_eval_unjudged.py` holds
+the rule.
+
 ### Tools
 
 - `python3 evals/selftest.py [FIXTURE ...]` builds each fixture, applies each reference, grades it and compares the result with `expect.json`. It also checks `suite.json` itself. It makes no model call. A fixture is usable only when every reference matches.

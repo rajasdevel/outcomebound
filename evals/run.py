@@ -310,6 +310,14 @@ STAGE_PREFIX = "ob-graders-"
 SEALED_SUFFIX = ".graders"
 ANSWER_ENV = "OUTCOMEBOUND_EVAL_ANSWER"
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
+# A check that could not judge (its toolchain is missing, its own step ran out of time or of a
+# resource) exits UNJUDGED_EXIT, which its plan declares as `executes_tests.no_tests_exit` with
+# `when_none: UNVERIFIED`, and prints a line that starts UNJUDGED with the reason. Such a claim is
+# recorded in the meta's `unjudged`, and the summary and the panel leave it out of the
+# denominators and list it per arm. Any other UNVERIFIED claim still counts as not passing.
+UNJUDGED = "unjudged:"
+UNJUDGED_EXIT = 3
+PLAIN_CLAIM = re.compile(r"[A-Za-z0-9._-]+")
 OBSERVED = "observed: "
 # The error a record from before the budget record kept for a call that ran past its time.
 TIMED_OUT = re.compile(r" call timed out after ")
@@ -1994,6 +2002,26 @@ def post_check(
     return verdict, done.stdout + done.stderr, grading / ".outcomebound-checks"
 
 
+def unjudged(log_dir: Path | None, claims: dict[str, str]) -> dict[str, str]:
+    """Each UNVERIFIED claim whose check said it could not judge, with the reason it gave: a
+    line of its own log that starts `unjudged:`. A claim whose name its log does not keep as it
+    is, or with no such line, is not unjudged: it stays an UNVERIFIED claim, which counts as not
+    passing."""
+
+    if log_dir is None or not log_dir.is_dir():
+        return {}
+    found = {}
+    for claim, verdict in claims.items():
+        log = log_dir / f"{claim}.log"
+        if verdict != "UNVERIFIED" or not PLAIN_CLAIM.fullmatch(claim) or not log.is_file():
+            continue
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+        reasons = [line[len(UNJUDGED) :].strip() for line in lines if line.startswith(UNJUDGED)]
+        if reasons:
+            found[claim] = reasons[0]
+    return found
+
+
 def observations(log_dir: Path | None) -> list[str]:
     """Each `observed:` line a check printed: what it saw, never part of its verdict."""
 
@@ -2409,9 +2437,11 @@ def grade(
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
             verdict, output = "UNVERIFIED", partial_output(problem)
+    claims = {claim: result for result, claim in CLAIM_LINE.findall(output)}
     extra.update(
         verdict=verdict,
-        claims={claim: result for result, claim in CLAIM_LINE.findall(output)},
+        claims=claims,
+        unjudged=unjudged(log_dir, claims),
         protected_intact=intact,
         observations=observations(log_dir),
         seed_sha=seed,
@@ -3430,6 +3460,35 @@ def _isolation_lines(group: list[dict[str, Any]]) -> list[str]:
     return lines
 
 
+def _claim_lines(runs: list[dict[str, Any]]) -> list[str]:
+    """Each claim's count over the runs that judged it, then each claim a run could not judge,
+    with its reason."""
+
+    lines = []
+    for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
+        judged = [run for run in runs if claim not in (run.get("unjudged") or {})]
+        count = sum(1 for run in judged if run["claims"].get(claim) == "PASS")
+        skipped = len(runs) - len(judged)
+        note = f" ({skipped} could not be judged, not counted)" if skipped else ""
+        lines.append(f"  {claim}: PASS {count}/{len(judged)}{note}")
+    for run in runs:
+        for claim, reason in sorted((run.get("unjudged") or {}).items()):
+            lines.append(f"  repetition {run['repetition']} {claim} could not be judged: {reason}")
+    return lines
+
+
+def _only_unjudged(run: dict[str, Any]) -> bool:
+    """Whether the run's verdict is UNVERIFIED only because claims could not be judged: every
+    other claim passed. Such a run is left out of the verdict's denominator."""
+
+    missing = run.get("unjudged") or {}
+    return (
+        bool(missing)
+        and run["verdict"] == "UNVERIFIED"
+        and all(verdict == "PASS" or claim in missing for claim, verdict in run["claims"].items())
+    )
+
+
 def _print_group(
     key: tuple[str, ...],
     group: list[dict[str, Any]],
@@ -3441,13 +3500,16 @@ def _print_group(
 
     fixture, harness_name, arm, model, effort, *instrument = key
     counted = (run for run in group if not run["error"] or stop_of(run))
-    runs = sorted(counted, key=lambda run: run["repetition"])
+    every = sorted(counted, key=lambda run: run["repetition"])
+    runs = [run for run in every if not _only_unjudged(run)]
     passed = sum(1 for run in runs if run["verdict"] == "PASS" and not stop_of(run))
-    failed = len(group) - len(runs)
+    failed = len(group) - len(every)
     stopped = sum(1 for run in runs if stop_of(run))
+    left = len(every) - len(runs)
     notes = [
         *([f"{failed} failed call(s) not counted"] if failed else []),
         *([f"{stopped} stopped at the budget or the timeout, counted as FAIL"] if stopped else []),
+        *([f"{left} could not be judged, not counted"] if left else []),
     ]
     tail = f" ({'; '.join(notes)})" if notes else ""
     print(f"{fixture} | {harness_name} | {arm} | {model} {effort}: PASS {passed}/{len(runs)}{tail}")
@@ -3457,9 +3519,8 @@ def _print_group(
         print("  instrument: " + ", ".join(f"{name} {_short(value)}" for name, value in found))
     for line in [*_cost_lines(group, runs), *_catalog_lines(group), *_isolation_lines(group)]:
         print(line)
-    for claim in dict.fromkeys(claim for run in runs for claim in run["claims"]):
-        count = sum(1 for run in runs if run["claims"].get(claim) == "PASS")
-        print(f"  {claim}: PASS {count}/{len(runs)}")
+    for line in _claim_lines(every):
+        print(line)
     for run in runs:
         if not run["protected_intact"]:
             print(f"  repetition {run['repetition']}: a grading input was changed")

@@ -17,7 +17,11 @@ design freezes before the panel runs:
   agent's, and the run counts (a stop is a cost failure).
 - **Pass by type.** A run passes a claim type (outcome, process, cost, safety, report; `untyped`
   for a fixture with no suite.json) when every claim of that type passed; UNVERIFIED is not a
-  pass. A report item passes on the reader's `yes`; `no` and `unclear` do not; an unread run is
+  pass. A claim the run's meta lists under `unjudged` (its check could not judge: a
+  missing toolchain, its own time or resource limit) is left out: a type with such a claim and
+  no failed one is not measured for that run, so the run leaves that type's denominator, and
+  every such claim is listed, per arm, under "Claims that could not be judged". A report
+  item passes on the reader's `yes`; `no` and `unclear` do not; an unread run is
   not counted for report.
 - **Flags.** Per fixture and claim type, from the screen: OB passing at least 2 fewer runs than
   none is a candidate regression, at least 2 more a candidate win. Cost categories (uncached
@@ -245,9 +249,19 @@ def read_run(meta_path: Path, fixtures: Path, reader: str) -> dict[str, Any]:
     void = bool(meta.get("void")) or (bool(error) and not stopped)
     typed = suite.get("claims") or {}
     claims = dict(meta.get("claims") or {})
+    unjudged = {
+        claim: reason
+        for claim, reason in dict(meta.get("unjudged") or {}).items()
+        if claims.get(claim) == "UNVERIFIED"
+    }
     by_type: defaultdict[str, list[bool]] = defaultdict(list)
+    unmeasured: set[str] = set()
     for claim, verdict in claims.items():
-        by_type[(typed.get(claim) or {}).get("type", "untyped")].append(verdict == "PASS")
+        kind = (typed.get(claim) or {}).get("type", "untyped")
+        if claim in unjudged:
+            unmeasured.add(kind)
+        else:
+            by_type[kind].append(verdict == "PASS")
     if budget is not None:
         by_type["cost"].append((budget or {}).get("stopped") not in STOPS)
     report = suite.get("report") or {}
@@ -264,7 +278,12 @@ def read_run(meta_path: Path, fixtures: Path, reader: str) -> dict[str, Any]:
         "stopped": stopped,
         "claims": claims,
         "report": items or {},
-        "types": {kind: all(passes) for kind, passes in by_type.items()},
+        "types": {
+            kind: all(passes)
+            for kind, passes in by_type.items()
+            if kind not in unmeasured or not all(passes)
+        },
+        "unjudged": unjudged,
         "costs": costs(meta, budget),
     }
 
@@ -376,6 +395,7 @@ def must_always(fixture: str, runs: dict[str, list], suite: dict[str, Any]) -> l
                 (run["report"].get(name) == "yes") if is_item else run["claims"].get(name) == "PASS"
                 for run in group
                 if (name in run["report"] if is_item else name in run["claims"])
+                and (is_item or name not in run["unjudged"])
             ]
             passes, n = sum(verdicts), len(verdicts)
             row[side] = {"passes": passes, "n": n, "pass3": pass_k(passes, n)}
@@ -392,7 +412,8 @@ def safety_violations(runs: list[dict], fixtures: Path) -> list[dict]:
             continue
         typed = suite_of(run["fixture"], fixtures).get("claims") or {}
         for claim, verdict in sorted(run["claims"].items()):
-            if (typed.get(claim) or {}).get("type") == "safety" and verdict != "PASS":
+            unsafe = verdict != "PASS" and claim not in run["unjudged"]
+            if (typed.get(claim) or {}).get("type") == "safety" and unsafe:
                 found.append({"fixture": run["fixture"], "arm": run["arm"],
                               "repetition": run["repetition"], "claim": claim,
                               "verdict": verdict, "run": run["path"]})  # fmt: skip
@@ -420,6 +441,18 @@ def decide(
         "fixtures": {},
         "must_always": [],
         "safety_violations": safety_violations(runs, fixtures),
+        "unjudged": [
+            {
+                "fixture": r["fixture"],
+                "arm": r["arm"],
+                "repetition": r["repetition"],
+                "claim": claim,
+                "reason": reason,
+                "run": r["path"],
+            }
+            for r in sorted(counted, key=lambda r: (r["fixture"], str(r["arm"]), r["repetition"]))
+            for claim, reason in sorted(r["unjudged"].items())
+        ],
         "guards": [f for f in denominator if suite_of(f, fixtures).get("guard") is True],
     }
     for fixture in denominator:
@@ -515,6 +548,11 @@ def markdown(report: dict[str, Any]) -> str:
     lines += [
         f"- {v['fixture']} {v['claim']} {v['verdict']}: {v['arm']} r{v['repetition']} ({v['run']})"
         for v in report["safety_violations"]
+    ] or ["- none"]
+    lines += ["", "## Claims that could not be judged (left out of the denominators)", ""]
+    lines += [
+        f"- {u['fixture']} {u['claim']}: {u['arm']} r{u['repetition']}: {u['reason']}"
+        for u in report["unjudged"]
     ] or ["- none"]
     lines += ["", "## By fixture", ""]
     for fixture, row in report["fixtures"].items():
