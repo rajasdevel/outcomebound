@@ -108,6 +108,13 @@ done
   these digests were kept is not refused: `workspace_unchanged` and `grading_files_unchanged` say
   `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
+  With `--current-graders`, `--regrade` applies grader changes to kept runs: it judges each run
+  with this checkout's graders, built under the run's arm, in place of its sealed copy, and every
+  other check still applies. A stage file that is no copy of a file under `evals/` (data the setup
+  derived from its build) is kept from the run's copy and listed. The new meta records both grader
+  digests: the new ones as `graders_sha256` and `grading_files_sha256`, and the run's own under
+  `current_graders`. Its sealed copy is the new graders, so a plain `--regrade` of `NEW_DIR`
+  reproduces the grading. A run that kept no sealed copy is refused.
 - `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]` runs a plan of (repetition,
   fixture, arm) cells, one `evals/run.py` call each. The plan names the model, effort, results and
   workspace folders, repetitions, fixtures, and arms (each a label, an arm of `evals/run.py`
@@ -133,7 +140,7 @@ done
   `<fixture>.rescore-<graders digest>.json` with both grader digests and the old and new claims.
   It rebuilds the fixture to compare its install, so it needs a deterministic setup. It refuses an
   arm made from an earlier ref, a verbatim file or edits. `--regrade` keeps its own rule: it
-  grades only with the run's sealed graders.
+  grades with the run's sealed graders, unless `--current-graders` names this checkout's.
 
 ## Reading a result
 

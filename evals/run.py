@@ -2533,6 +2533,9 @@ def run_one(
 
 
 REGRADED = "regraded_from"
+# The record of a regrade with this checkout's graders (`--current-graders`): the digests of the
+# graders the run itself ran with, and the stage files kept from its own copy.
+CURRENT_GRADERS = "current_graders"
 UNVERIFIED = "UNVERIFIED"
 POST_CHECKS = "\n--- post-checks ---\n"
 
@@ -2609,10 +2612,14 @@ def kept_transcript(plan: dict[str, Any], meta: dict[str, Any]) -> tuple[str, st
     return transcript, answer, filled
 
 
-def _regrade_graders(path: Path, name: str, meta: dict[str, Any], plan: dict[str, Any]) -> str:
+def _regrade_graders(
+    path: Path, name: str, meta: dict[str, Any], plan: dict[str, Any], current: bool = False
+) -> str:
     """Find the graders that judge the run again, in `plan`, and why they cannot: the run's own
     sealed copy where it kept one, which must be as its digest says; otherwise this checkout's
-    files, which must be as the run recorded them, where it recorded them."""
+    files, which must be as the run recorded them, where it recorded them. With `current`, the
+    run's copy is checked as before and this checkout's graders are sealed in its place
+    (`_current_graders`); a run that kept no copy is refused."""
 
     sealed = meta.get("graders_sha256")
     if sealed:
@@ -2628,7 +2635,9 @@ def _regrade_graders(path: Path, name: str, meta: dict[str, Any], plan: dict[str
             return f"{copy.name} holds grading files that differ from grading_files_sha256"
         plan["graders"] = copy
         plan["grading_files"] = "PASS" if recorded else UNVERIFIED
-        return ""
+        return _current_graders(name, meta, plan) if current else ""
+    if current:
+        return "--current-graders needs a run that kept a sealed copy of its graders"
     recorded = meta.get("grading_files_sha256")
     if recorded and recorded != grading_digest(evals_dir(), str(name)):
         return "this checkout's fixture files under evals/ differ from the ones the run used"
@@ -2636,7 +2645,67 @@ def _regrade_graders(path: Path, name: str, meta: dict[str, Any], plan: dict[str
     return ""
 
 
-def _regrade_plan(source: Path, path: Path, meta: dict[str, Any]) -> tuple[dict[str, Any], str]:
+def _evals_sources() -> set[str]:
+    """The SHA-256 of each file under this checkout's `evals/`, kept results left out: a stage
+    file with one of them is a copy of a grader, not data a setup derived from its build."""
+
+    found = set()
+    for child in evals_dir().iterdir():
+        if child.is_dir() and child.name != "results":
+            found |= set(tree_hashes(child).values())
+        elif child.is_file():
+            found.add(hashlib.sha256(child.read_bytes()).hexdigest())
+    return found
+
+
+def _current_graders(name: str, meta: dict[str, Any], plan: dict[str, Any]) -> str:
+    """Seal this checkout's graders for the run into a new temporary folder, set in `plan` in
+    place of the run's copy, and say why they cannot be, else an empty string.
+
+    The fixture is built from this checkout under the run's arm (`current_graders`), which gives
+    the checks, the plan and the grading files as they are now. A stage file that build wrote
+    that is no copy of a file under `evals/` is data the setup derived from its build (recorded
+    refs, baseline digests): it is taken from the run's own copy, which describes the kept
+    workspace, and named in `stage_kept_from_run`."""
+
+    arm, why = rebuilt_arm(name, meta)
+    if arm is None:
+        return why
+    plan["temporary"] = Path(tempfile.mkdtemp(prefix="ob-current-graders-"))
+    built = plan["temporary"] / f"{name}{SEALED_SUFFIX}"
+    digest, seed = current_graders(name, arm, built)
+    if digest is None:
+        return f"this checkout's graders could not be built: {seed}"
+    sources, kept = _evals_sources(), []
+    for relative, value in sorted(tree_hashes(built).items()):
+        if relative == "post.plan.json" or relative.startswith("evals/") or value in sources:
+            continue
+        own = plan["graders"] / relative
+        if own.is_file() or own.is_symlink():
+            (built / relative).unlink()
+            shutil.copy2(own, built / relative, follow_symlinks=False)
+            kept.append(relative)
+    # A run graded so before keeps the digests of the graders it ran with.
+    earlier = _object(meta.get(CURRENT_GRADERS))
+    plan["current"] = {
+        "graders_sha256": tree_digest(built),
+        "grading_files_sha256": grading_digest(evals_dir(), str(name)),
+        CURRENT_GRADERS: {
+            "run_graders_sha256": earlier.get("run_graders_sha256", meta.get("graders_sha256")),
+            "run_grading_files_sha256": earlier.get(
+                "run_grading_files_sha256", meta.get("grading_files_sha256")
+            ),
+            "stage_kept_from_run": kept,
+            "seed_matches_run": seed == meta.get("seed_sha") if meta.get("seed_sha") else None,
+        },
+    }
+    plan["graders"] = built
+    return ""
+
+
+def _regrade_plan(
+    source: Path, path: Path, meta: dict[str, Any], current: bool = False
+) -> tuple[dict[str, Any], str]:
     """What one kept run needs to be judged again, and why it cannot be: the saved files, the
     sealed copy of its graders, the workspace and the digests, each compared where the source run
     recorded one.
@@ -2657,7 +2726,7 @@ def _regrade_plan(source: Path, path: Path, meta: dict[str, Any]) -> tuple[dict[
     if not workdir.is_dir():
         return plan, f"the kept workspace {workdir} is missing"
     plan["workdir"] = workdir
-    refused = _regrade_graders(path, name, meta, plan)
+    refused = _regrade_graders(path, name, meta, plan, current)
     if refused:
         return plan, refused
     before = workspace_digest(workdir, {**child_env(), **HERMETIC_GIT})
@@ -2684,24 +2753,38 @@ def _regrade_protected(workdir: Path, meta: dict[str, Any]) -> tuple[bool, str, 
     return intact, report, UNVERIFIED
 
 
-def regrade(source: Path, out: Path) -> int:
+def regrade(source: Path, out: Path, current: bool = False) -> int:
     """Judge the runs kept under `source` again, with no model call, into the new `out`.
 
     Each run's workspace, saved transcript, answer, seed and native session copy are read; the
     command records are rebuilt from the native session (`fill_directories`); the protected
     check and the post-checks run as in a normal run, from a new grading folder. The observed
     identity and the call's own record stay as the source run kept them. Exit 2, with nothing
-    written, where any run cannot be judged again: a digest differs or a file is missing.
+    written, where any run cannot be judged again: a digest differs or a file is missing. With
+    `current`, this checkout's graders judge each run in place of its sealed copy
+    (`_current_graders`).
     """
 
     paths = sorted(source.glob("*.meta.json"))
     if not paths:
         print(f"no run records under {source}")
         return 1
-    plans, refusals = [], []
+    plans: list[dict[str, Any]] = []
+    try:
+        return _regrade_all(source, out, paths, plans, current)
+    finally:
+        for plan in plans:
+            if plan.get("temporary"):
+                shutil.rmtree(plan["temporary"], ignore_errors=True)
+
+
+def _regrade_all(
+    source: Path, out: Path, paths: list[Path], plans: list[dict[str, Any]], current: bool
+) -> int:
+    refusals = []
     for path in paths:
         meta = json.loads(path.read_text(encoding="utf-8"))
-        plan, why = _regrade_plan(source, path, meta)
+        plan, why = _regrade_plan(source, path, meta, current)
         plans.append(plan)
         if why:
             refusals.append(f"regrade: refused {plan['name'] or path.name}: {why}")
@@ -2738,6 +2821,7 @@ def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any
         "grading_files_unchanged": plan["grading_files"],
         "workspace_unchanged": plan["workspace_unchanged"],
         "workspace_sha256": workspace_digest(workdir, {**child_env(), **HERMETIC_GIT}),
+        **plan.get("current", {}),
     }
     (out / f"{name}.prompt.md").write_text(plan["prompt"].read_text(encoding="utf-8"), "utf-8")
     (out / f"{name}.answer.md").write_text(answer, encoding="utf-8")
@@ -3262,9 +3346,11 @@ def _regrade_line(run: dict[str, Any], other: dict[str, Any]) -> str:
         if run["claims"].get(claim) != other["claims"].get(claim)
     )
     differing = f"; claims that differ: {', '.join(claims)}" if claims else ""
+    graders = ", with this checkout's graders" if other.get(CURRENT_GRADERS) else ""
     return (
-        f"  repetition {run['repetition']} regrade (an alternate measurement of this attempt, "
-        f"not counted): {other['verdict']}; the original {run['verdict']} is kept{differing}"
+        f"  repetition {run['repetition']} regrade{graders} (an alternate measurement of this "
+        f"attempt, not counted): {other['verdict']}; the original {run['verdict']} is kept"
+        f"{differing}"
     )
 
 
@@ -3537,6 +3623,14 @@ def _parser() -> argparse.ArgumentParser:
         "post-checks on its kept workspace, from the run's own sealed graders, into the new "
         "--out; refuses where the sealed graders or the workspace differ from what the run "
         "recorded",
+    )
+    parser.add_argument(
+        "--current-graders",
+        action="store_true",
+        help="with --regrade: judge with this checkout's graders in place of each run's sealed "
+        "copy, so a grader change reaches kept runs; every other check still applies, the new "
+        f"meta keeps the run's own grader digests under {CURRENT_GRADERS}, and its sealed copy "
+        "is the graders it was judged with",
     )
     parser.add_argument(
         "--rescore",
@@ -4478,7 +4572,8 @@ def _no_call(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     if args.rescore:
         return rescore([Path(item).resolve() for item in args.rescore])
     if args.regrade:
-        return regrade(Path(args.regrade).resolve(), Path(args.out or RAW / uuid.uuid4().hex))
+        out = Path(args.out or RAW / uuid.uuid4().hex)
+        return regrade(Path(args.regrade).resolve(), out, args.current_graders)
     return dump_arm(parser, args)
 
 
@@ -4506,9 +4601,18 @@ def refuse_unclean(
         print(f"codex home {home} gives every call alike: {', '.join(home_leaks(home))}")
 
 
-def _main(argv: list[str] | None = None) -> int:
+def _arguments(argv: list[str] | None) -> tuple[argparse.ArgumentParser, argparse.Namespace]:
+    """The parser and the arguments, with the options that are valid only together checked."""
+
     parser = _parser()
     args = parser.parse_args(argv)
+    if args.current_graders and not args.regrade:
+        parser.error("--current-graders is valid only with --regrade")
+    return parser, args
+
+
+def _main(argv: list[str] | None = None) -> int:
+    parser, args = _arguments(argv)
     if args.summary:
         return summarize([Path(item) for item in args.summary])
     # Absolute before any use: the grader commands run in the fixture repository, where a

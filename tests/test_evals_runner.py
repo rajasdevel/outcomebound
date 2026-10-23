@@ -1319,6 +1319,21 @@ def test_a_regrade_is_an_alternate_measurement_of_its_attempt_and_not_another_at
     assert reverse[0] == "synthetic | codex | current | named medium: PASS 0/1", reverse
 
 
+def test_a_regrade_with_this_checkouts_graders_says_so_on_its_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    regrade = {
+        **SUMMARY_RUN,
+        "graders_sha256": "s2",
+        "regraded_from": "/kept/run",
+        "current_graders": {"run_graders_sha256": SUMMARY_RUN["graders_sha256"]},
+    }
+    printed = _summary(tmp_path, capsys, SUMMARY_RUN, regrade)
+    assert any("regrade, with this checkout's graders (" in line for line in printed), printed
+    plain = _summary(tmp_path / "plain", capsys, SUMMARY_RUN, {**regrade, "current_graders": None})
+    assert not any("this checkout's graders" in line for line in plain), plain
+
+
 def test_a_regrade_whose_graders_differ_still_belongs_to_its_original_attempt(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
