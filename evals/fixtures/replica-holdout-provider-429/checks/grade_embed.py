@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Held out. The claims of replica-holdout-provider-429, graded by how the embeddings route
+"""The claims of replica-holdout-provider-429, graded by how the embeddings route
 behaves against a provider that records every call.
 
     grade_embed.py batches     a request over the provider's batch limit is answered 200, with

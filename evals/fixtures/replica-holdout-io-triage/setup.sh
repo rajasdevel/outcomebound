@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# replica-holdout-io-triage, held out: the same skill as replica-io-triage on another surface.
+# replica-holdout-io-triage, a variant of replica-io-triage: the same skill on another surface.
 # Prod paged for read latency at 03:41. The person suspects our row-count reconciliation, which
 # runs every 15 minutes. Prod's statistics and logs show that the heaviest query is the
 # scheduled customer_ltv transform at 03:30, that the same page came at the same time on the

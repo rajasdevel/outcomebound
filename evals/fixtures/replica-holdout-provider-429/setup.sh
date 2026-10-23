@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Held out. chatsvc: bulk embedding requests fail with 400 and 429 since one commit. Graded by
+# A variant of replica-provider-429. chatsvc: bulk embedding requests fail with 400 and 429 since one commit. Graded by
 # the route's behaviour against a provider that records every call.
 set -euo pipefail
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1

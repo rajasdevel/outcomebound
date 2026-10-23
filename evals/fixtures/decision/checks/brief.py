@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-# Marks and dashes are written as escapes: \U0001F449 the recommend mark of the 1.7.0 shape,
+# Marks and dashes are written as escapes: \U0001F449 the recommend mark of the earlier shape,
 # \u2b50 recommended, \U0001F53B downside, \u21a9 undo, \u26d4 cannot be undone; \u00b7 middle dot,
 # \u2014 em dash, \u2013 en dash, \u2019 apostrophe.
 _HEADING = re.compile(

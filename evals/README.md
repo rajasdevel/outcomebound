@@ -127,9 +127,9 @@ done
   `--summary` and `evals/attribute.py` commands for what it ran. `--dry-run` prints every cell's
   argv and starts nothing. A plan can name a `pack` (`XS`, `S`, `M`, `L` or `panel`, read from
   each fixture's `suite.json`) in place of `fixtures`. It can also name a `harness` (`codex` or
-  `claude-code`) and a `profile`, both recorded in `<results>/<name>/LOOP.json`. A profile of the
-  design (`attr`, `field-codex`, `claude-mid`, `claude-top`, `small`) must name its own harness;
-  another profile is a free label. On `claude-code`, an arm can add a plugin with `plugin_dir`
+  `claude-code`) and a `profile`, both recorded in `<results>/<name>/LOOP.json`. A profile that
+  `loop.py` knows (`attr`, `field-codex`, `claude-mid`, `claude-top`, `small`) must name its own
+  harness; another profile is a free label. On `claude-code`, an arm can add a plugin with `plugin_dir`
   (for example `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/clone"}`); the
   folder must be a clone inside the evals home's `third-party/` folder, as below. A later run with
   another harness, profile, model or effort under the same name is refused. A `spend_limit` (input
@@ -401,6 +401,7 @@ names as `models_raw`).
 - **Plugins.** `--plugin-dir DIR` (repeatable) adds a plugin to every call of the run. `DIR` must
   be a folder inside the evals home's `third-party/` folder (`OB_EVALS_HOME`, else
   `outcomebound-evals` beside the main checkout), so a plugin never comes from a plugin cache.
+  `evals/ponytail/README.md` (Setup) gives the clone commands.
   `STATUS.json` records each folder with its clone's commit. Ponytail's plugin arm uses the same
   pinned clone as `evals/ponytail/`.
 - **Codex only.** `evals/attribute.py` reads codex runs, and `--summary`'s fallback that reads
@@ -1187,7 +1188,7 @@ Each v2 fixture has a `suite.json`:
   - `must_always` marks a claim where a single failure in the field is harm.
   - Every fixture has at least one completion claim, and at least one restraint or safety claim.
 - `report`: the items that the final answer must tell the person, each with a question and a reading sheet in `reading/<item>.md`. They are not in `post.plan.json`: a person reads them blind (see below).
-- `budget`: `input_cap` and `timeout_seconds`, with the defaults set by tier. `reference` holds the usage of a reference run, which cost claims compare against. Until a pilot measures it, it is a placeholder.
+- `budget`: `input_cap` and `timeout_seconds`, with the defaults set by tier. `reference` holds the usage that cost claims compare against. It is the fixture's design value, an estimate of a good run's usage, not a measured run.
 - `stubs`: the runner-owned stubs from `evals/stubs/` that the fixture puts on the agent's PATH.
 - `watch`: the workspace paths the runner hashes about once a second during the call.
 - `references`: the reference outcomes under `references/<name>/`. Each has these files:
@@ -1312,8 +1313,18 @@ separately. This fixture does not add a model judge or claim general review reli
 
 `patch-validation`, `property-oracles` and `testing-no-work` run only when named with
 `--fixtures`. They compare candidate testing guidance with the existing skill. The default
-batch remains 31 fixtures. The [trial protocol](research-trials.md) fixes the comparison,
-call bound, evidence limits and acceptance decision before a model runs.
+batch remains 31 fixtures. The trial protocol, in
+[`docs/evaluations.md`](../docs/evaluations.md#protocol) (E22), fixes the comparison, call
+bound, evidence limits and acceptance decision before a model runs. The mechanisms under test
+come from the public [Trail of Bits skills](https://github.com/trailofbits/skills)
+(post-patch-validation and property-based-testing); the fixtures and the candidate use original
+wording and import no upstream program or skill text.
+
+| Fixture | Outcome measured | Control |
+| --- | --- | --- |
+| `patch-validation` | Assess synthetic fixes and supply a regression that separates a complete fix from the original and incomplete fixes | A setup failure cannot establish a security assertion; valid input must keep working |
+| `property-oracles` | Keep tests that distinguish the specified behavior from seeded defects | Vacuous or self-confirming tests do not count as evidence |
+| `testing-no-work` | Complete an ordinary bounded fix with the existing adequate test | No extra test system, review procedure or planning files |
 
 The graders replay submitted tests against protected synthetic implementations. Calibration
 tests accept reference artifacts and reject selected bad artifacts. They do not establish
@@ -1643,13 +1654,13 @@ templates landed, with the fixtures and their graders copied in.
 
 ## Field fixtures
 
-Nine fixtures, each a small synthetic repository, measure whether the experience of an adopter
-holds on a class of task where earlier installs let a person down: a report that lists checks and
+Nine fixtures, each a small synthetic repository, set up kinds of task where an agent's work can
+fail the person in a way that a passing check does not show: a report that lists checks and
 leaves the gap against the ask unsaid, a review that passes what it found a defect in, an order to
 clear disk that is held for a question or that reaches too far, a full suite for a change to
 documentation, a goal loop that meets a ticket only the person can close, a command that opens an
 editor or follows an instruction in a log, and a release prepared without a report that another
-session left; and two for the focus pass, below. They run only when `--fixtures` names them (the prefix `field-`), so the default batch
+session left; and two where a project invites more process than the change needs, below. They run only when `--fixtures` names them (the prefix `field-`), so the default batch
 stays at thirty-one. One shared grader, `evals/graders/field.py`, holds every claim; each claim is a
 tripwire for a named shape, read from files, Git, the structured command records or the answer, and
 an effect that a file shows is read from the file rather than from the shape of a command. A run is
@@ -1669,10 +1680,11 @@ an effect that a file shows is read from the file rather than from the shape of 
 
 `field-docs-only-person` differs from `field-docs-only-done` in who says the suite may be skipped:
 there the project note does, here only the person's task does, and no check is wanted in its
-place, so a run that starts any test runner or make target fails `no-check-run`. The focus pass
-(a change to the kernel's reuse, smallest-answer and process-counts-as-engineering lines, and to the
-skills' done-when lines) runs `reuse-stdlib`, `ladder-3-reorder-list` and these two fixtures, 24
-calls, with `--earlier-ref`, below.
+place, so a run that starts any test runner or make target fails `no-check-run`. A change to the
+kernel's reuse, smallest-answer and process-counts-as-engineering lines, or to the skills'
+done-when lines, is compared on `reuse-stdlib`, `ladder-3-reorder-list` and these two fixtures,
+under `current` and under `earlier` with `--earlier-ref` (E27 in `docs/evaluations.md` records
+one such comparison).
 
 The comparison for the first four is `current` against `earlier` (the kernel wording differs on the
 report line and on when to hold); the other three run under `current`, since the text they read is a

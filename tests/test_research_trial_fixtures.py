@@ -1,4 +1,4 @@
-"""Calibration of three bounded research trials; these tests make no model calls."""
+"""Calibration of the three testing-guidance fixtures; these tests make no model calls."""
 
 from __future__ import annotations
 

@@ -3,7 +3,7 @@
 
 `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]`. The plan is a JSON object:
 
-    {"name": "loop1", "model": "MODEL", "effort": "medium", "service_tier": "priority",
+    {"name": "example", "model": "MODEL", "effort": "medium", "service_tier": "priority",
      "harness": "codex", "profile": "attr",
      "results": "/abs/results", "workspaces": "/abs/workspaces",
      "repetitions": [1, 2, 3], "fixtures": ["FIXTURE", ...],

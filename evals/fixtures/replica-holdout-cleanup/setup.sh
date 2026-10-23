@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# replica-holdout-cleanup (held out, sealed): the corelib replica after another kind of week.
+# replica-holdout-cleanup, a variant of replica-cleanup: the corelib replica after another kind of week.
 # Done with: two worktrees of branches that landed, a worktree whose folder was deleted by hand
 # (Git still lists it), those branches and one more that landed, and build/ and dist/. Kept: a
 # locked worktree running a benchmark (its branch landed), try-arrow, a branch with commits not

@@ -16,7 +16,7 @@ The three findings:
 - two suggestions, style or over-engineering, chosen from the tree's digest: the same tree gives
   the same two, and any change to a file the tree holds may give two others.
 
-Phase A's one profile is the prompt cache of `v2-rs-review-until-clean` (`promptkit/cache.py`
+The one profile so far is the prompt cache of `v2-rs-review-until-clean` (`promptkit/cache.py`
 against `docs/specs/cache.md`). Standard library only.
 """
 
