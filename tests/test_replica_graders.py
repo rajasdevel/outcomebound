@@ -279,7 +279,7 @@ def test_corelib_resumable_reads_a_handoff(text: str, why: str) -> None:
     assert CORELIB.resumable(text, "014", "report-since") == why
 
 
-# replica-settled-defaults and its held-out variant.
+# replica-settled-defaults and its variant.
 
 OPTION = '    reporting.add_argument("--by", default="project", choices=aggregate.GROUPINGS)\n'
 REPORT = """def run_report(args) -> int:
@@ -675,7 +675,7 @@ def test_corelib_retire_gates_good_passes_and_each_bad_fails_its_claim(
     assert _claim(edited, "package-and-tests-intact")[0] == 1
 
 
-# replica-cleanup and its held-out variant.
+# replica-cleanup and its variant.
 
 CLEANUP = """git worktree remove .worktrees/fix-week-parse
 git worktree remove .worktrees/docs-errors
@@ -1088,7 +1088,7 @@ def test_datapipe_heavy_named_reads_paraphrase_negation_and_contradiction(
         ),
         ("sessionize_events was the heaviest.", False),
         ("The health check is the main load on the warehouse.", False),
-        # Hedged negations clear the check (held-out round): "little support for X causing".
+        # Hedged negations clear the check: "little support for X causing".
         (
             "The evidence points to the nightly sessionize_events query, with little support "
             "for the health check causing the alert.",
@@ -2191,7 +2191,7 @@ def test_chatsvc_pr_review_good_passes_and_each_bad_fails_its_claim(
 def test_chatsvc_holdouts_grade_a_good_outcome_and_catch_a_bad_one(
     chatsvc_built: Callable[[str, Path], Path], tmp_path: Path
 ) -> None:
-    """The held-out variants: one good outcome and one bad outcome each, kept short."""
+    """The chatsvc variant fixtures: one good outcome and one bad outcome each, kept short."""
 
     name = "replica-holdout-stage-deploy"
     good = chatsvc_built(name, tmp_path / "deploy")
