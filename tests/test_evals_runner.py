@@ -59,6 +59,8 @@ METERED = (
 # where the argv carries `sandbox_workspace_write.network_access=true`; $OB_FAKE_NETWORK (`true`
 # or `false`) sets it to the opposite of what the argv asked for, for a test of the check. Its
 # writable roots are the argv's `--add-dir` folders, as codex-cli 0.163.0 records them.
+# Where the argv carries `service_tier=T`, or $OB_FAKE_TIER sets one (`none`: no event), the
+# record gets a `thread_settings_applied` event with that tier, as codex-cli 0.163.0 writes it.
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
@@ -133,6 +135,11 @@ if mode != "none" and os.environ.get("CODEX_HOME"):
     records=[{"type":"session_meta","payload":meta}]
     if mode!="no-turn-context":
         records.append({"type":"turn_context","payload":context})
+    tier=next((a.split("=",1)[1] for a in argv if a.startswith("service_tier=")),"")
+    tier=os.environ.get("OB_FAKE_TIER") or tier
+    if tier and tier!="none":
+        records.append({"type":"event_msg","payload":{"type":"thread_settings_applied",
+                        "thread_settings":{"model":model,"service_tier":tier}}})
     shown=ran[:-1] if native=="count" else ran
     if native=="text":
         shown=[([*shown[0][0][:2],shown[0][0][2]+" --changed"],shown[0][1]),*shown[1:]]
@@ -844,6 +851,97 @@ def test_NEGATIVE_CONTROL_a_run_whose_codex_reports_another_model_does_not_count
     assert done.returncode == 1, done.stdout + done.stderr
     error = "the native session reports model gpt-6-astra, not gpt-6-sol"
     assert _meta(out)["error"] == error
+
+
+TIER = (*SMALL_FIX, "--service-tier", "priority")
+TIER_CHECK = "the native session reports service tier"
+
+
+def test_the_default_codex_argv_has_no_service_tier(tmp_path: Path) -> None:
+    """With no tier asked for, the argv is what it was, and the status keeps no tier."""
+
+    harness = RUN.make_harness()
+    argv = harness.command("gpt-6-sol", "medium", tmp_path, tmp_path / "last.md")
+    plain = harness.argv(Request("gpt-6-sol", "medium"), tmp_path, tmp_path / "last.md")
+    assert plain == argv, "the default request adds nothing to the command"
+    assert not [word for word in plain if "service_tier" in word]
+    asked = harness.argv(
+        Request("gpt-6-sol", "medium", service_tier="priority"), tmp_path, tmp_path / "last.md"
+    )
+    at = asked.index("service_tier=priority")
+    assert asked[at - 1 : at + 1] == ["-c", "service_tier=priority"]
+    assert asked[at - 2] == "model_reasoning_effort=medium"
+    assert [*asked[: at - 1], *asked[at + 1 :]] == argv, "a tier adds only its own -c pair"
+    with pytest.raises(ValueError, match="one lower-case word"):
+        harness.argv(Request("m", "medium", service_tier="a b"), tmp_path, tmp_path / "last.md")
+    done, out = _invoke(tmp_path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "service_tier" not in (tmp_path / "argv.txt").read_text(encoding="utf-8")
+    meta = _meta(out)
+    assert "service_tier" not in meta and "native_service_tier" not in meta
+    assert "service_tier" not in json.loads((out / "STATUS.json").read_text(encoding="utf-8"))
+    assert {row[0] for row in meta["identity_checks"]} >= {"native-effort"}
+    assert "native-service-tier" not in {row[0] for row in meta["identity_checks"]}
+
+
+def test_a_run_that_asks_for_a_tier_passes_when_the_native_session_shows_it(
+    tmp_path: Path,
+) -> None:
+    done, out = _invoke(tmp_path, TIER)
+    assert done.returncode == 0, done.stdout + done.stderr
+    argv = (tmp_path / "argv.txt").read_text(encoding="utf-8").splitlines()
+    assert argv[argv.index("service_tier=priority") - 1] == "-c"
+    meta = _meta(out)
+    rows = {row[0]: row[1] for row in meta["identity_checks"]}
+    assert rows["native-service-tier"] == "PASS" and rows["native-effort"] == "PASS"
+    assert (meta["service_tier"], meta["native_service_tier"]) == ("priority", "priority")
+    assert meta["error"] == "" and meta["verdict"] == "PASS"
+    assert (
+        json.loads((out / "STATUS.json").read_text(encoding="utf-8"))["service_tier"] == "priority"
+    )
+
+
+def test_the_tier_is_read_only_from_thread_settings_events_and_must_agree() -> None:
+    from evals.harnesses.codex import _service_tier
+
+    def event(tier: object) -> dict:
+        settings = {"model": "m", "service_tier": tier}
+        payload = {"type": "thread_settings_applied", "thread_settings": settings}
+        return {"type": "event_msg", "payload": payload}
+
+    other = {"type": "turn_context", "payload": {"service_tier": "flex"}}
+    assert _service_tier([other, event("priority"), event("priority")]) == ("priority", "")
+    assert _service_tier([other])[0] is None
+    assert _service_tier([event("priority"), event("default")])[1].startswith("the native session")
+    assert "conflicting" in _service_tier([event("priority"), event("default")])[1]
+    assert _service_tier([event(None)]) == (None, "the native session gives no service_tier")
+
+
+@pytest.mark.parametrize("shown", ["none", "default"])
+def test_NEGATIVE_CONTROL_a_run_whose_native_session_shows_no_or_another_tier_does_not_count(
+    tmp_path: Path, shown: str
+) -> None:
+    done, out = _invoke(tmp_path, TIER, env={"OB_FAKE_TIER": shown})
+    assert done.returncode == 1, done.stdout + done.stderr
+    meta = _meta(out)
+    rows = {row[0]: row[1] for row in meta["identity_checks"]}
+    assert rows["native-service-tier"] == "FAIL"
+    if shown == "none":
+        assert "no thread_settings_applied event" in meta["error"], meta["error"]
+    else:
+        assert f"{TIER_CHECK} default, not priority" in meta["error"], meta["error"]
+
+
+def test_NEGATIVE_CONTROL_a_tier_is_refused_for_claude_code_and_for_a_malformed_word(
+    tmp_path: Path,
+) -> None:
+    done, out = _invoke(tmp_path, (*TIER, "--harness", "claude-code"))
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "has no serving tier" in done.stderr
+    assert not out.exists() and not (tmp_path / "calls.txt").exists()
+    done, out = _invoke(tmp_path, (*SMALL_FIX, "--service-tier", "Fast Mode"))
+    assert done.returncode == 2 and "one lower-case word" in done.stderr
+    assert not out.exists() and not (tmp_path / "calls.txt").exists()
 
 
 def _folder(parent: Path, name: str) -> Path:

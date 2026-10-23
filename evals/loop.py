@@ -3,7 +3,7 @@
 
 `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]`. The plan is a JSON object:
 
-    {"name": "loop1", "model": "MODEL", "effort": "medium",
+    {"name": "loop1", "model": "MODEL", "effort": "medium", "service_tier": "priority",
      "harness": "codex", "profile": "attr",
      "results": "/abs/results", "workspaces": "/abs/workspaces",
      "repetitions": [1, 2, 3], "fixtures": ["FIXTURE", ...],
@@ -27,6 +27,11 @@ Repetitions are distinct values from 1 to 10 that run.py accepts. `harness` (def
 or `claude-code`) and `profile` (default empty) are recorded in `<results>/<name>/LOOP.json`;
 only a harness run.py can run is accepted. A profile in PROFILES (`attr`, `field-codex`,
 `claude-mid`, `claude-top`, `small`) must name its own harness; any other profile is a free label.
+
+`service_tier`, optional and for `codex` only, is passed to each cell as `--service-tier`
+(`priority` is codex's fast mode); each cell's native session must show it. It is recorded in
+LOOP.json when set, and a plan name that ran under another tier is refused like one that ran
+under another model.
 
 `spend_limit`, optional, is the pass's limit on input tokens (cached input among them). Before
 each new cell the loop adds the input every cell of the plan has recorded so far (its
@@ -73,6 +78,7 @@ PLAN_KEYS = frozenset(
         "name",
         "model",
         "effort",
+        "service_tier",
         "harness",
         "profile",
         "results",
@@ -84,6 +90,8 @@ PLAN_KEYS = frozenset(
         "arms",
     )
 )
+# The shape run.py accepts for `--service-tier` (evals.harnesses.SERVICE_TIER).
+SERVICE_TIER = re.compile(r"[a-z][a-z0-9_-]*")
 REQUIRED_KEYS = frozenset(("name", "model", "results", "workspaces", "repetitions", "arms"))
 PACKS = ("XS", "S", "M", "L", "panel")
 MAX_REPETITION = 10
@@ -130,6 +138,7 @@ class Plan(NamedTuple):
     pack: str = ""
     spend_limit: int | None = None
     caps: tuple[tuple[str, int], ...] = ()
+    service_tier: str = ""
 
     def cap(self, fixture: str) -> int:
         return dict(self.caps)[fixture]
@@ -228,6 +237,7 @@ def read_plan(path: Path, runner: ModuleType) -> Plan:
     if not isinstance(profile, str):
         raise PlanError("profile is a string")
     _harness(harness, runner)
+    service_tier = _service_tier(document.get("service_tier", ""), harness)
     if profile in PROFILES and PROFILES[profile] != harness:
         raise PlanError(f"profile {profile} runs on {PROFILES[profile]}, not {harness}")
     known = set(runner.fixture_names())
@@ -248,6 +258,7 @@ def read_plan(path: Path, runner: ModuleType) -> Plan:
         pack,
         limit,
         _caps(fixtures) if limit is not None else (),
+        service_tier,
     )
     _elements_fit(plan, runner)
     _plugins_fit(plan, runner)
@@ -297,6 +308,14 @@ def _pack(pack: Any, known: set[str]) -> tuple[str, ...]:
     if not chosen:
         raise PlanError(f"no fixture's suite.json puts it in pack {pack}")
     return chosen
+
+
+def _service_tier(value: Any, harness: str) -> str:
+    if not isinstance(value, str) or (value and not SERVICE_TIER.fullmatch(value)):
+        raise PlanError("service_tier is one lower-case word, such as priority")
+    if value and harness != "codex":
+        raise PlanError(f"service_tier is for codex; {harness} has no serving tier")
+    return value
 
 
 def _harness(harness: Any, runner: ModuleType) -> None:
@@ -413,6 +432,7 @@ def argv(plan: Plan, arm: Arm, repetition: int, fixture: str, out: Path) -> tupl
         plan.model,
         "--effort",
         plan.effort,
+        *(("--service-tier", plan.service_tier) if plan.service_tier else ()),
         "--repetition",
         str(repetition),
         "--fixtures",
@@ -527,8 +547,8 @@ def record(plan: Plan) -> None:
             before = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             before = {}
-        for key in ("harness", "profile", "model", "effort"):
-            if before.get(key) != getattr(plan, key):
+        for key in ("harness", "profile", "model", "effort", "service_tier"):
+            if before.get(key, "" if key == "service_tier" else None) != getattr(plan, key):
                 raise PlanError(
                     f"{path} records {key} {before.get(key)!r}, the plan {getattr(plan, key)!r}; "
                     "name the plan anew"
@@ -545,6 +565,7 @@ def record(plan: Plan) -> None:
         "repetitions": list(plan.repetitions),
         "arms": [arm._asdict() for arm in plan.arms],
         "spend_limit": plan.spend_limit,
+        **({"service_tier": plan.service_tier} if plan.service_tier else {}),
     }
     path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
 

@@ -100,7 +100,7 @@ from evals.evidence import (
     tree_hashes,
     workspace_digest,
 )
-from evals.harnesses import Budget, Request
+from evals.harnesses import SERVICE_TIER, Budget, Request
 from evals.harnesses.claude_code import ClaudeCodeHarness, cell_for, unreadable
 from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
@@ -2405,7 +2405,7 @@ def run_one(
 
     answer, report, returncode, extra = run_fixture(
         name,
-        Request(status["model"], status["effort"]),
+        Request(status["model"], status["effort"], service_tier=status.get("service_tier", "")),
         arm,
         path,
         harness,
@@ -3382,6 +3382,14 @@ def _parser() -> argparse.ArgumentParser:
         "--effort", default="medium", help="the harness's reasoning effort (default: medium)"
     )
     parser.add_argument(
+        "--service-tier",
+        default="",
+        metavar="TIER",
+        help="the serving tier a codex call asks for, as `-c service_tier=TIER`; `priority` is "
+        "codex's fast mode. The native session must show it. Default: none, codex's own tier; "
+        "claude-code has no tier and refuses one",
+    )
+    parser.add_argument(
         "--fixtures",
         default=",".join(default_fixtures()),
         help="comma-separated fixtures to run (default: %(default)s)",
@@ -3718,7 +3726,7 @@ def sandbox_probe(
     try:
         result = tool.call(
             prompt,
-            Request(args.model, args.effort, protected=(stubs,)),
+            Request(args.model, args.effort, protected=(stubs,), service_tier=args.service_tier),
             work,
             (),
             path,
@@ -3757,7 +3765,7 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None, tool: Harness)
     (work / ".agents" / "work").mkdir(parents=True, exist_ok=True)
     result = tool.call(
         PROBE_PROMPT,
-        Request(args.model, args.effort),
+        Request(args.model, args.effort, service_tier=args.service_tier),
         work,
         (),
         child_env().get("PATH", os.defpath),
@@ -3801,6 +3809,7 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None, tool: Harness)
             "harness": tool.name,
             "model": args.model,
             "effort": args.effort,
+            **({"service_tier": args.service_tier} if args.service_tier else {}),
             "workspace": str(work),
             "observed": result.observed,
             "checks": rows,
@@ -4064,7 +4073,13 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
         return 2
     install = fixture_install(name)
     path = call_path(arm, str(root) if root else None)
-    request = Request(args.model, args.effort, needs_local_listener(name), install.sandbox)
+    request = Request(
+        args.model,
+        args.effort,
+        needs_local_listener(name),
+        install.sandbox,
+        service_tier=args.service_tier,
+    )
     if isinstance(tool, ClaudeCodeHarness):
         lines, rows = claude_dump(tool, arm, workdir, prompt, DumpCall(name, request, path))
         print("\n".join([f"fixture {name}, arm {label}; workspace {workdir} (kept)", *lines]))
@@ -4215,11 +4230,16 @@ def no_login(out: Path, status: dict[str, Any], login: dict[str, Any]) -> int:
 
 
 def harness_options(parser: argparse.ArgumentParser, args: argparse.Namespace) -> tuple[Path, ...]:
-    """Install for `--harness` (`set_harness`), and give the plugin folders `--plugin-dir`
+    """Install for `--harness` (`set_harness`), refuse a `--service-tier` that is malformed or
+    that claude-code cannot meet, and give the plugin folders `--plugin-dir`
     names, each checked (`plugin_dir_refusal`) and resolved; a plugin for a harness other than
     Claude Code, or a folder outside the evals home's third-party clones, exits 2."""
 
     set_harness(args.harness)
+    if args.service_tier and not SERVICE_TIER.fullmatch(args.service_tier):
+        parser.error(f"--service-tier {args.service_tier!r} is one lower-case word")
+    if args.service_tier and args.harness == CLAUDE:
+        parser.error(f"--service-tier: {CLAUDE} has no serving tier to request")
     named = tuple(args.plugin_dir or ())
     if named and args.harness != CLAUDE:
         parser.error(f"--plugin-dir adds a plugin to a {CLAUDE} call: use --harness {CLAUDE}")
@@ -4377,6 +4397,7 @@ def _main(argv: list[str] | None = None) -> int:
         "earlier_commit": earlier_commit(),
         "model": args.model,
         "effort": args.effort,
+        **({"service_tier": args.service_tier} if args.service_tier else {}),
         "repetition": args.repetition,
         "workspace_root": str(root) if root else None,
         **arm.record(),

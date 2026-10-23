@@ -118,6 +118,24 @@ def test_argv_carries_drop_add_and_edits(tmp_path: Path) -> None:
     assert found["edited"][5:7] == ["--edits", str(tmp_path / "edits.json")]
 
 
+def test_a_plan_service_tier_reaches_every_cell_and_the_record(tmp_path: Path) -> None:
+    plain = LOOP.read_plan(write_plan(tmp_path, fixtures=["alpha"]), RUNNER)
+    assert "--service-tier" not in [word for cell in LOOP.cells(plain) for word in cell.argv]
+    plan = LOOP.read_plan(write_plan(tmp_path, fixtures=["alpha"], service_tier="priority"), RUNNER)
+    for cell in LOOP.cells(plan):
+        words = list(cell.argv)
+        assert words[words.index("--effort") + 1 :][:3] == ["medium", "--service-tier", "priority"]
+    LOOP.record(plan)
+    saved = json.loads((tmp_path / "results" / "loop1" / "LOOP.json").read_text(encoding="utf-8"))
+    assert saved["service_tier"] == "priority"
+    with pytest.raises(LOOP.PlanError, match="service_tier"):
+        LOOP.record(plain)  # the same name under no tier is another run
+    with pytest.raises(LOOP.PlanError, match="service_tier"):
+        LOOP.read_plan(write_plan(tmp_path, service_tier="Fast"), RUNNER)
+    with pytest.raises(LOOP.PlanError, match="for codex"):
+        LOOP.read_plan(write_plan(tmp_path, service_tier="priority", harness="claude-code"), RUNNER)
+
+
 def test_done_cells_are_skipped_and_max_runs_bounds_new_ones(tmp_path: Path) -> None:
     plan = write_plan(tmp_path)
     done = tmp_path / "results" / "loop1" / "none-r1-alpha"

@@ -44,6 +44,9 @@ done
 - The measurement of the ladder is its four fixtures under `current`, `unsized` and `none`, with
   three repetitions each: 36 runs.
 - `--fixtures` narrows the run. `--effort` sets the reasoning effort of codex (default `medium`).
+  `--service-tier TIER` (or `service_tier` in a loop plan) adds `-c service_tier=TIER` to a codex
+  call (`priority` is codex's fast mode); the native session must show that tier, else the call
+  fails the `native-service-tier` check. With no tier, codex's own applies. Claude Code refuses it.
   `--out` names the run directory (default `evals/results/raw/<id>/`, which Git ignores).
   `--harness` names the tool that runs the model: `codex` (the default) or `claude-code` (see
   [Claude Code as the harness](#claude-code-as-the-harness)).

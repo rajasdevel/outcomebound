@@ -640,6 +640,14 @@ def _harness(
     return cc.ClaudeCodeHarness(lambda: base, RUN._run, 60, plugins)
 
 
+def test_a_serving_tier_is_refused_never_ignored(tmp_path: Path) -> None:
+    harness = _harness(tmp_path / "record.json")
+    request = Request("claude-model", "high", service_tier="priority")
+    with pytest.raises(ValueError, match="no serving tier"):
+        harness.argv(request, tmp_path)
+    assert "--service-tier" not in harness.argv(Request("claude-model", "high"), tmp_path)
+
+
 def _workspace(tmp_path: Path) -> Path:
     workspace = tmp_path / "ws"
     (workspace / ".claude" / "skills" / "diagnose").mkdir(parents=True)
@@ -941,7 +949,7 @@ def test_the_probe_shows_what_the_sandbox_gives_a_model_s_commands(
     auth = json.dumps({"loggedIn": True, "authMethod": "oauth_token"})
     env = {"FAKE_AUTH": auth, **({"FAKE_LEAKY": "1"} if leaky else {})}
     harness = _harness(tmp_path / "record.json", env)
-    args = argparse.Namespace(model=MODEL, effort="high", repetition=1)
+    args = argparse.Namespace(model=MODEL, effort="high", service_tier="", repetition=1)
     out = trusted / "probe"
     code = RUN.probe(args, out, None, harness)
     printed = capsys.readouterr().out

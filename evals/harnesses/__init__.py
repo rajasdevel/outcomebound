@@ -23,8 +23,12 @@ runner, the fixtures or the graders names a CLI.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, NamedTuple
+
+# A serving tier is one lower-case word; it goes into the tool's argv as a config value.
+SERVICE_TIER = re.compile(r"[a-z][a-z0-9_-]*")
 
 # How a call ended early, as `extras["stopped"]` names it: its session passed the input cap, or
 # the call ran past its time. None: the call ended by itself.
@@ -53,7 +57,9 @@ class Request(NamedTuple):
     the harness refuses the call, before the model runs, where one lies inside a path the model
     may write. `unreadable` names runner-owned paths the model's commands should not read (the
     grading stage); a harness that can deny reads denies them, and one that cannot ignores
-    them."""
+    them. `service_tier` is the serving tier the call asks for (Codex's `priority` is its fast
+    mode); empty asks for none, and the tool's own default applies. The tool's record must show
+    the tier that was asked for; a harness with no such tier refuses the request."""
 
     model: str
     effort: str
@@ -62,6 +68,7 @@ class Request(NamedTuple):
     budget: Budget | None = None
     protected: tuple[Path, ...] = ()
     unreadable: tuple[Path, ...] = ()
+    service_tier: str = ""
 
 
 class CallResult(NamedTuple):

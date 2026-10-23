@@ -319,10 +319,13 @@ class ClaudeCodeHarness:
         denied: tuple[Path, ...] = (),
     ) -> list[str]:
         """The `claude -p` argv for `request` in `cwd`; the prompt is its stdin. ValueError for
-        a call with no model or a sandbox this harness does not know."""
+        a call with no model, a sandbox this harness does not know, or a serving tier (Claude
+        Code has no equivalent of Codex's, so one is refused, never ignored)."""
 
         if not request.model:
             raise ValueError("name the model: Claude Code's configured default never runs")
+        if request.service_tier:
+            raise ValueError("Claude Code has no serving tier: a request for one is refused")
         if request.sandbox not in SANDBOXES:
             raise ValueError(f"no sandbox {request.sandbox!r}; there is {', '.join(SANDBOXES)}")
         argv = [

@@ -31,7 +31,7 @@ from evals.codex_events import (
     unknown_types,
     warnings,
 )
-from evals.harnesses import Budget, CallResult, Request
+from evals.harnesses import SERVICE_TIER, Budget, CallResult, Request
 from evals.native_commands import fill_directories
 from evals.native_receipts import (
     NativeCapture,
@@ -175,16 +175,23 @@ class CodexHarness:
     def argv(
         self, request: Request, cwd: Path, last_message: Path, write_roots: tuple[Path, ...] = ()
     ) -> list[str]:
-        """The `codex exec` argv for `request`: `command`, and in a `field` sandbox without the
-        grant of `.agents/work`, which an adopter's call does not have: codex keeps `.agents`
-        read-only, and where the model keeps a record is measured. ValueError for a sandbox
-        this harness does not know."""
+        """The `codex exec` argv for `request`: `command`, with `-c service_tier=<tier>` where a
+        tier is asked for, and in a `field` sandbox without the grant of `.agents/work`, which an
+        adopter's call does not have: codex keeps `.agents` read-only, and where the model keeps a
+        record is measured. ValueError for a sandbox or tier this harness does not know."""
 
         if request.sandbox not in SANDBOXES:
             raise ValueError(f"no sandbox {request.sandbox!r}; there is {', '.join(SANDBOXES)}")
         argv = self.command(
             request.model, request.effort, cwd, last_message, write_roots, request.local_listener
         )
+        if request.service_tier:
+            if not SERVICE_TIER.fullmatch(request.service_tier):
+                raise ValueError(f"service tier {request.service_tier!r} is one lower-case word")
+            # `-c service_tier=<tier>`, next to the effort: the operator's own config is
+            # ignored, so codex's fast mode (`priority`) is asked for here.
+            at = argv.index(f"model_reasoning_effort={request.effort}") + 1
+            argv[at:at] = ["-c", f"service_tier={request.service_tier}"]
         if request.sandbox == FIELD:
             grant = argv.index(str(Path(cwd) / NOTES))
             del argv[grant - 1 : grant + 1]
@@ -437,6 +444,31 @@ def _agreed(records: list[dict[str, Any]], field: str) -> tuple[str | None, str]
 Records = list[dict[str, Any]]
 
 
+def _service_tier(records: Records) -> tuple[str | None, str]:
+    """The one serving tier every `thread_settings_applied` event of the session gives, and the
+    problem otherwise (no event, or no tier in one, or two tiers)."""
+
+    values: list[Any] = []
+    for record in records:
+        payload = record.get("payload")
+        if record.get("type") != "event_msg" or not isinstance(payload, dict):
+            continue
+        if payload.get("type") != "thread_settings_applied":
+            continue
+        settings = payload.get("thread_settings")
+        values.append(settings.get("service_tier") if isinstance(settings, dict) else None)
+    if not values:
+        return None, "the native session has no thread_settings_applied event"
+    if any(not isinstance(value, str) or not value for value in values):
+        return None, "the native session gives no service_tier"
+    if len(set(values)) != 1:
+        return (
+            None,
+            f"the native session gives conflicting service_tier values: {sorted(set(values))}",
+        )
+    return values[0], ""
+
+
 def _session(
     sessions: Path, key: str, stopped: bool, extras: dict[str, Any]
 ) -> tuple[Path, bytes, Records]:
@@ -581,6 +613,16 @@ def identify(
         f"{seen_effort} == requested",
         effort_problem or f"the native session reports effort {seen_effort}, not {effort}",
     )
+    if request.service_tier:
+        seen_tier, tier_problem = _service_tier(records)
+        extras["native_service_tier"] = seen_tier
+        check(
+            "native-service-tier",
+            seen_tier == request.service_tier,
+            f"{seen_tier} == requested",
+            tier_problem
+            or f"the native session reports service tier {seen_tier}, not {request.service_tier}",
+        )
     wanted = Path(cwd).resolve()
     same = (
         seen_cwd is not None and Path(seen_cwd).is_absolute() and Path(seen_cwd).resolve() == wanted
