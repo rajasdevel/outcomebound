@@ -231,7 +231,7 @@ def leave_rule_recorded() -> list[str]:
 # --- scaffold-client --------------------------------------------------------------------------
 
 CONTRACT_NAMES = (
-    r"Marit Hollander|Hollander|Ines Calloway|Calloway|Joss Brennan|Brennan"
+    r"Marit Examplestad|Examplestad|Ines Samplemore|Samplemore|Joss Exampleworth|Exampleworth"
     r"|project manager|IT liaison|finance contact"
 )
 NOBODY = (

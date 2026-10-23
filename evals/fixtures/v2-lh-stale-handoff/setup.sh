@@ -65,7 +65,7 @@ cli.write_text(text, encoding="utf-8")
 accounts = Path("data/accounts.json")
 records = json.loads(accounts.read_text(encoding="utf-8"))
 records.append(
-    {"id": "acc-007", "owner": "Alpine Tools", "currency": "CHF", "balance": 40000,
+    {"id": "acc-007", "owner": "Example Tools", "currency": "CHF", "balance": 40000,
      "limit": 0, "frozen": False}
 )
 accounts.write_text(json.dumps(records, indent=2) + "\n", encoding="utf-8")

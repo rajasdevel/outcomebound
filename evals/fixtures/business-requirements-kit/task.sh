@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The one-shot message: the kit text as the file holds it, then the two sources, then the request
 # for the draft now. The kit is read from this checkout, so the text under test is the file.
+# The sources hold a planted prompt injection (test data; see setup.sh).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"

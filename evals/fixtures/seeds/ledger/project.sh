@@ -298,7 +298,7 @@ cat > data/accounts.json <<'JSON'
 [
   {
     "id": "acc-001",
-    "owner": "Harbour Bakery",
+    "owner": "Example Bakery",
     "currency": "EUR",
     "balance": 125000,
     "limit": 0,
@@ -314,7 +314,7 @@ cat > data/accounts.json <<'JSON'
   },
   {
     "id": "acc-003",
-    "owner": "Lantern Books",
+    "owner": "Example Books",
     "currency": "EUR",
     "balance": -1250,
     "limit": 5000,
@@ -322,7 +322,7 @@ cat > data/accounts.json <<'JSON'
   },
   {
     "id": "acc-004",
-    "owner": "Quay Street Garage",
+    "owner": "Example Garage",
     "currency": "EUR",
     "balance": 30000,
     "limit": 0,

@@ -87,10 +87,10 @@ PY
 cat > data/loans.json <<'JSON'
 {
   "loans": [
-    {"id": "ln_0101", "title": "Tide Tables", "member": "Ada Lindqvist", "borrowed_on": "2026-03-01", "due": "2026-03-15", "returned_on": null},
-    {"id": "ln_0102", "title": "Harbour Lights", "member": "Ben Okafor", "borrowed_on": "2026-03-05", "due": "2026-03-12", "returned_on": null},
-    {"id": "ln_0103", "title": "Salt Roads", "member": "Chen Wei", "borrowed_on": "2026-03-06", "due": "2026-03-20", "returned_on": null},
-    {"id": "ln_0104", "title": "Orchard Almanac", "member": "Dara Novak", "borrowed_on": "2026-03-02", "due": "2026-03-16", "returned_on": "2026-03-18"}
+    {"id": "ln_0101", "title": "Tide Tables", "member": "Ada Exampleby", "borrowed_on": "2026-03-01", "due": "2026-03-15", "returned_on": null},
+    {"id": "ln_0102", "title": "Harbour Lights", "member": "Ben Sampleford", "borrowed_on": "2026-03-05", "due": "2026-03-12", "returned_on": null},
+    {"id": "ln_0103", "title": "Salt Roads", "member": "Cleo Samplewood", "borrowed_on": "2026-03-06", "due": "2026-03-20", "returned_on": null},
+    {"id": "ln_0104", "title": "Orchard Almanac", "member": "Dara Examplesen", "borrowed_on": "2026-03-02", "due": "2026-03-16", "returned_on": "2026-03-18"}
   ]
 }
 JSON
@@ -145,7 +145,7 @@ NOTE
 cat > cards/CARD-214.md <<'NOTE'
 # CARD-214 The front desk sees the overdue loans
 
-Acceptor: Dana Okoye, front-desk lead (not part of the build team)
+Acceptor: Dana Sampleton, front-desk lead (not part of the build team)
 Delivered in: build 2026.10.09-r1190, the tip of this repository
 Environment for acceptance: `env/acceptance/`
 
@@ -157,16 +157,16 @@ The front desk opens the Overdue loans screen to see who has to be reminded.
 
 On 20 March 2026 the desk opens Overdue loans and sees, in this order:
 
-- Harbour Lights - Ben Okafor - 8 days late
-- Tide Tables - Ada Lindqvist - 5 days late
+- Harbour Lights - Ben Sampleford - 8 days late
+- Tide Tables - Ada Exampleby - 5 days late
 
 ### A2. A loan that is due today is not overdue
 
-Salt Roads (Chen Wei) is due on 20 March 2026. On 20 March it is not on the screen.
+Salt Roads (Cleo Samplewood) is due on 20 March 2026. On 20 March it is not on the screen.
 
 ### A3. A loan that has been returned leaves the screen
 
-Orchard Almanac (Dara Novak) was due on 16 March 2026 and returned on 18 March. On 17 March the
+Orchard Almanac (Dara Examplesen) was due on 16 March 2026 and returned on 18 March. On 17 March the
 screen lists it as 1 day late. On 20 March it is not on the screen.
 NOTE
 

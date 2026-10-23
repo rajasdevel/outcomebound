@@ -9,5 +9,5 @@ git commit -qm "fetch: raise the last error when every attempt fails"
 . "$here/../texts.sh"
 cat >> pr/description.md <<'MD'
 
-Reported by Corvane Logistics; a first fix drafted by model-x9 was discarded.
+Reported by Example Freight; a first fix drafted by model-x9 was discarded.
 MD
