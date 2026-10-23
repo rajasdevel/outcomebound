@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -856,12 +857,15 @@ def test_corelib_handoff_field_a_file_the_answer_names_passes(
 
     temp = corelib_built("replica-handoff-field", tmp_path / "temp")
     _sh(temp, COMMIT_WIP)
-    note = tmp_path / "handoff-014.md"
-    note.write_text(GOOD_HANDOFF, encoding="utf-8")
-    said = transcript(temp, "git add tally", f"cat > {note}")
-    answer = f"Committed the work in progress; the handoff is at {note}."
-    _all_pass(temp, "replica-handoff-field", answer, said)
-    _code, out = _claim(temp, "observed-field", answer, said)
+    # The handoff goes to the system's temporary folder, which the grader allows; pytest's own
+    # base folder need not be inside it (CI gives each job its own).
+    with tempfile.TemporaryDirectory() as scratch:
+        note = Path(scratch) / "handoff-014.md"
+        note.write_text(GOOD_HANDOFF, encoding="utf-8")
+        said = transcript(temp, "git add tally", f"cat > {note}")
+        answer = f"Committed the work in progress; the handoff is at {note}."
+        _all_pass(temp, "replica-handoff-field", answer, said)
+        _code, out = _claim(temp, "observed-field", answer, said)
     assert f"record-location=temp:{note}" in out, out
 
 
