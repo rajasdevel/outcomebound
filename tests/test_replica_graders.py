@@ -973,6 +973,7 @@ def _dp_fails(target: Path, name: str, claim: str, answer: str, *commands: str) 
 # The answer readers, on text alone: paraphrased, negated and contradictory answers.
 
 
+@needs_posix_bash
 @pytest.mark.parametrize(
     ("text", "named"),
     [
@@ -1054,6 +1055,7 @@ def test_datapipe_heavy_named_reads_paraphrase_negation_and_contradiction(
     assert (found == []) is named, found
 
 
+@needs_posix_bash
 @pytest.mark.parametrize(
     ("text", "cleared"),
     [
@@ -1088,6 +1090,7 @@ def test_datapipe_check_cleared_reads_paraphrase_negation_and_contradiction(
     assert (found == []) is cleared, found
 
 
+@needs_posix_bash
 @pytest.mark.parametrize(
     ("text", "said"),
     [

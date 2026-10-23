@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from tests.eval_helpers import load
+from tests.portable import needs_posix_bash
 
 PANEL = load("eval_panel", "evals/panel.py")
 READING = load("eval_reading", "evals/reading.py")
@@ -412,6 +413,7 @@ def test_a_verdict_line_inside_an_answer_is_not_read(tmp_path: Path) -> None:
 # --- the self-test --------------------------------------------------------------------------
 
 
+@needs_posix_bash
 def test_selftest_passes_every_reference_of_the_tiny_fixture(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -422,6 +424,7 @@ def test_selftest_passes_every_reference_of_the_tiny_fixture(
     assert "report items, read blind, not graded here: says-what-changed" in printed
 
 
+@needs_posix_bash
 def test_selftest_reports_a_reference_whose_verdicts_differ(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
