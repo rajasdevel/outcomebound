@@ -87,10 +87,10 @@ PY
 cat > data/loans.json <<'JSON'
 {
   "loans": [
-    {"id": "ln_0101", "title": "Tide Tables", "member": "Ada Exampleby", "borrowed_on": "2026-03-01", "due": "2026-03-15", "returned_on": null},
-    {"id": "ln_0102", "title": "Harbour Lights", "member": "Ben Sampleford", "borrowed_on": "2026-03-05", "due": "2026-03-12", "returned_on": null},
-    {"id": "ln_0103", "title": "Salt Roads", "member": "Cleo Samplewood", "borrowed_on": "2026-03-06", "due": "2026-03-20", "returned_on": null},
-    {"id": "ln_0104", "title": "Orchard Almanac", "member": "Dara Examplesen", "borrowed_on": "2026-03-02", "due": "2026-03-16", "returned_on": "2026-03-18"}
+    {"id": "ln_0101", "title": "Sample Tide Tables", "member": "Ada Exampleby", "borrowed_on": "2026-03-01", "due": "2026-03-15", "returned_on": null},
+    {"id": "ln_0102", "title": "The Exampleton Lights", "member": "Ben Sampleford", "borrowed_on": "2026-03-05", "due": "2026-03-12", "returned_on": null},
+    {"id": "ln_0103", "title": "Exampleford Roads", "member": "Cleo Samplewood", "borrowed_on": "2026-03-06", "due": "2026-03-20", "returned_on": null},
+    {"id": "ln_0104", "title": "Sample Almanac", "member": "Dara Examplesen", "borrowed_on": "2026-03-02", "due": "2026-03-16", "returned_on": "2026-03-18"}
   ]
 }
 JSON
@@ -109,17 +109,17 @@ LOANS = json.loads((Path(__file__).resolve().parents[1] / "data" / "loans.json")
 class OverdueTest(unittest.TestCase):
     def test_the_longest_overdue_comes_first(self):
         late = desk.overdue_loans(LOANS, datetime.date(2026, 3, 20))
-        self.assertEqual([loan["title"] for loan in late], ["Harbour Lights", "Tide Tables"])
+        self.assertEqual([loan["title"] for loan in late], ["The Exampleton Lights", "Sample Tide Tables"])
 
     def test_a_loan_due_today_is_not_overdue(self):
         late = desk.overdue_loans(LOANS, datetime.date(2026, 3, 20))
-        self.assertNotIn("Salt Roads", [loan["title"] for loan in late])
+        self.assertNotIn("Exampleford Roads", [loan["title"] for loan in late])
 
     def test_a_returned_loan_leaves_the_screen(self):
         before = desk.overdue_loans(LOANS, datetime.date(2026, 3, 17))
         after = desk.overdue_loans(LOANS, datetime.date(2026, 3, 20))
-        self.assertIn("Orchard Almanac", [loan["title"] for loan in before])
-        self.assertNotIn("Orchard Almanac", [loan["title"] for loan in after])
+        self.assertIn("Sample Almanac", [loan["title"] for loan in before])
+        self.assertNotIn("Sample Almanac", [loan["title"] for loan in after])
 
 
 if __name__ == "__main__":
@@ -157,16 +157,16 @@ The front desk opens the Overdue loans screen to see who has to be reminded.
 
 On 20 March 2026 the desk opens Overdue loans and sees, in this order:
 
-- Harbour Lights - Ben Sampleford - 8 days late
-- Tide Tables - Ada Exampleby - 5 days late
+- The Exampleton Lights - Ben Sampleford - 8 days late
+- Sample Tide Tables - Ada Exampleby - 5 days late
 
 ### A2. A loan that is due today is not overdue
 
-Salt Roads (Cleo Samplewood) is due on 20 March 2026. On 20 March it is not on the screen.
+Exampleford Roads (Cleo Samplewood) is due on 20 March 2026. On 20 March it is not on the screen.
 
 ### A3. A loan that has been returned leaves the screen
 
-Orchard Almanac (Dara Examplesen) was due on 16 March 2026 and returned on 18 March. On 17 March the
+Sample Almanac (Dara Examplesen) was due on 16 March 2026 and returned on 18 March. On 17 March the
 screen lists it as 1 day late. On 20 March it is not on the screen.
 NOTE
 

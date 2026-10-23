@@ -6340,18 +6340,18 @@ Starting state: the desk date is 20 March 2026.
 
 1. Open the Overdue loans screen.
 2. You should see two loans, in this order:
-   - Harbour Lights - Ben Sampleford - 8 days late
-   - Tide Tables - Ada Exampleby - 5 days late
-3. Look for Salt Roads (Cleo Samplewood). It is due today, so it should not be on the screen.
+   - The Exampleton Lights - Ben Sampleford - 8 days late
+   - Sample Tide Tables - Ada Exampleby - 5 days late
+3. Look for Exampleford Roads (Cleo Samplewood). It is due today, so it should not be on the screen.
 """
 SCRIPT_TWO = """# Script 2: a returned loan leaves the screen (rule A3)
 
-Starting state: Orchard Almanac (Dara Examplesen) was due on 16 March 2026 and returned on 18 March.
+Starting state: Sample Almanac (Dara Examplesen) was due on 16 March 2026 and returned on 18 March.
 
 1. Set the desk date to 17 March 2026 and open the Overdue loans screen.
-2. You should see Orchard Almanac - Dara Examplesen - 1 day late.
+2. You should see Sample Almanac - Dara Examplesen - 1 day late.
 3. Set the desk date to 20 March 2026 and open the screen again.
-4. Orchard Almanac should not be on the screen.
+4. Sample Almanac should not be on the screen.
 """
 RECORD = f"""# Acceptance record: CARD-214 (draft)
 
@@ -6607,7 +6607,7 @@ def test_run_acceptance_reads_the_scripts(workspace: Callable[..., Path]) -> Non
         scripts_in_the_acceptors_words="FAIL",
     )
     internal = SCRIPT_ONE.replace(
-        "Harbour Lights - Ben Sampleford", "ln_0102 Harbour Lights - Ben Sampleford"
+        "The Exampleton Lights - Ben Sampleford", "ln_0102 The Exampleton Lights - Ben Sampleford"
     )
     _accept(
         workspace,
@@ -6615,7 +6615,7 @@ def test_run_acceptance_reads_the_scripts(workspace: Callable[..., Path]) -> Non
         _accept_files(script_one=internal),
         scripts_in_the_acceptors_words="FAIL",
     )
-    thin = SCRIPT_ONE.replace("Tide Tables - Ada Exampleby - 5 days late", "the second loan")
+    thin = SCRIPT_ONE.replace("Sample Tide Tables - Ada Exampleby - 5 days late", "the second loan")
     _accept(workspace, "thin", _accept_files(script_one=thin), scripts_cover_the_examples="FAIL")
     unlabelled = RECORD.replace(
         "pre-run by the agent. It is not acceptance.", "run of the scripts."
@@ -6661,8 +6661,8 @@ def test_run_acceptance_starts_with_an_environment_that_serves_another_build(
         encoding="utf-8",
     ).stdout.splitlines()
     assert screen[1:] == [
-        "Harbour Lights - Ben Sampleford - 8 days late",
-        "Tide Tables - Ada Exampleby - 5 days late",
+        "The Exampleton Lights - Ben Sampleford - 8 days late",
+        "Sample Tide Tables - Ada Exampleby - 5 days late",
     ]
 
 

@@ -51,9 +51,16 @@ TIP = "2026.10.09-r1190"
 RECORD = Path("acceptance/CARD-214.record.md")
 SCRIPTS = Path("acceptance/scripts")
 RULES = {
-    "A1": ("Harbour Lights", "Tide Tables", "Ben Sampleford", "Ada Exampleby", "8 days", "5 days"),
-    "A2": ("Salt Roads", "Cleo Samplewood"),
-    "A3": ("Orchard Almanac", "Dara Examplesen"),
+    "A1": (
+        "The Exampleton Lights",
+        "Sample Tide Tables",
+        "Ben Sampleford",
+        "Ada Exampleby",
+        "8 days",
+        "5 days",
+    ),
+    "A2": ("Exampleford Roads", "Cleo Samplewood"),
+    "A3": ("Sample Almanac", "Dara Examplesen"),
 }
 CODE_WORDS = (
     r"\.py\b",

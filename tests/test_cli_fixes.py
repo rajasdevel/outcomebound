@@ -1,4 +1,4 @@
-"""CLI conveniences found in adopter sessions: `--version`, a hint for a guessed verb, `floor
+"""CLI conveniences: `--version`, a hint for a guessed verb, `floor
 --json`, `adopt --dry-run` diffs, `tickets check --summary`, and the instruction check's exit.
 
 Every project here is a synthetic throwaway under `tmp_path`.
