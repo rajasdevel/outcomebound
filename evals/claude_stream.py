@@ -621,6 +621,7 @@ BUILTIN_SKILLS = frozenset(
         "cowork-plugin",
         "dataviz",
         "debug",
+        "deep-research",
         "design",
         "design-sync",
         "doctor",
