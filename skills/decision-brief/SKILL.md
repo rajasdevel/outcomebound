@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision is the user's to make. That is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them. Also when a harness refuses an act the person granted.
+description: Use when a decision is the user's to make, or an assumption sets the direction of later work. The user's decision is an act the agent's authority does not grant, such as an irreversible edge, an external write, spending or widening scope, or a decision a handoff leaves to them; the assumption, the agent's own or inherited from another agent or session, is said to the user before work builds on it. Also when a harness refuses an act the person granted.
 ---
 
 # Decision brief
@@ -14,7 +14,15 @@ it: the brief itself is in the text.
 
 ## Decide what is yours
 
-Decide every reversible choice inside your granted authority yourself. An act the outcome does not
+Decide every reversible choice inside your granted authority yourself. Before the writes or the
+delegation that build on an assumption that sets the direction of later work, such as the approach
+or which part owns a capability, say it to the person in one line, not first in a report, unless
+you can see it was said to them already; this includes one inherited from another agent or
+session. The line asks nothing and changes no bound. A choice the person's own words settled stays
+as they settled it however easy it is to undo, and a line that announces a change to it does not
+grant the change. Check a record that attributes a choice to the person against their cited words;
+where those cannot be read, keep its constraints and state the attribution as unverified. A choice
+made within granted authority stays labelled as an agent's choice. An act the outcome does not
 need is left out, not asked about. Ask the user only what is
 theirs — an act your authority does not grant, such as an irreversible edge, an external write,
 spending, or widening scope — batched into one message, and continue the work that does not wait

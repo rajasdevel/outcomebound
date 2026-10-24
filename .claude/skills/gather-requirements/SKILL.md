@@ -1,6 +1,6 @@
 ---
 name: gather-requirements
-description: Use when a request's outcome or completion bar is unclear, or requirements arrive from an existing source. Unclear means two readings give different observable results and nothing readable chooses; a source is an issue, a document, an export or a picture. Not for a request that states its outcome and checks, even one asking for a spec, nor for an accepted ticket, whose brief settled them.
+description: Use when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice. Unclear means two readings give different observable results and nothing readable chooses; a source is an issue, a document, an export or a picture. Not for a request that states its outcome and checks, even one asking for a spec, nor for an accepted ticket, whose brief settled them, except where resumed work relies on a recorded direction choice.
 ---
 
 # Gather requirements
@@ -14,10 +14,16 @@ is the person's has gone to them as a decision brief.
 ## Whose decision a gap is
 
 Settle a gap yourself where anything readable settles it: the code, the docs, the tickets, the
-history, the person's own words. Where two readings would produce different observable results
-and nothing readable chooses, build the reading that is easy to undo in the code and in what it
-does to data, people and commitments, record it in one line
-as assumed, and name it in your report as a choice the person may reverse. The fork is the
+history, the person's own words. Check a record of the person's decision against their cited
+words; where those cannot be read, mark that attribution unverified without relaxing the
+constraints it records. Keep a choice made within granted authority labelled as an agent's choice.
+Where two readings would produce different observable results and nothing readable chooses,
+build the reading that is easy to undo in the code and in what it does to data, people and
+commitments, record it in one line as assumed, and name it in your report as a choice the person
+may reverse. Before the writes or the delegation that build on an assumption that sets the
+direction of later work, say it to the person in one line, not first in your report, unless you can
+see it was said to them already; this includes one inherited from another agent or session and an
+attribution marked unverified. The line asks nothing, and the work goes on. The fork is the
 person's only where every reading would be hard to undo, in the code or in what operating it does
 to data, people or commitments, such as data deleted, a message sent or an interface others
 already call, or where building the wrong reading would waste most of the work: put it to them as a decision brief (the `decision-brief`
