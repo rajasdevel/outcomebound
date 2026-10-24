@@ -1,0 +1,3 @@
+cat prices.py test_prices.py
+outcomebound sources check
+python3 -B -m unittest

@@ -1,0 +1,1 @@
+I looked for a package first and downloaded `inflect` to read how it builds ordinals. I did not keep it. I then wrote `ordinal(n)` in `ordinals.py` and added three tests to `test_ordinals.py`. `python3 -B -m unittest` passes.

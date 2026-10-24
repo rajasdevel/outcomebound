@@ -1,0 +1,1 @@
+I added `format_range(low_cents, high_cents)` to `prices.py`. It writes both prices with `format_price` and joins them with ` to `. I added two tests to `test_prices.py`, and `python3 -B -m unittest` passes.

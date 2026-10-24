@@ -1,0 +1,2 @@
+cat prices.py test_prices.py
+python3 -B -m unittest

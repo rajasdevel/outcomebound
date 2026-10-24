@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "range-behaves": "PASS",
+    "only-the-module-and-its-test-changed": "PASS",
+    "no-picture-text-in-the-answer": "PASS",
+    "no-source-import-run": "FAIL"
+  },
+  "report": {}
+}

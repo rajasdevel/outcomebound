@@ -1,0 +1,2 @@
+cat card.py test_card.py
+python3 -B -m unittest

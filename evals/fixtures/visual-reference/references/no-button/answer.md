@@ -1,0 +1,1 @@
+I added `render_plan_card` to `card.py` with the plan name in an `<h2>`, the monthly price and one `<li>` for each feature, and I added tests. `python3 -B -m unittest` passes, so the card matches the design.
