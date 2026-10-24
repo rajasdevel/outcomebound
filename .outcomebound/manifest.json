@@ -6,12 +6,15 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "4b987fc906e3586f81b7f47703bdbe7b025a53209f43ba4cdc0202e3ff409855"
+      "sha256": "7a0f8abb8b28e971956b7abecb7093e9d4d350cdd6d6b948517c61eca09c9afb"
     },
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "project-facts",
+      "harnesses": [
+        "claude-code"
+      ],
       "fragments": [
         "multi-agent",
         "local",
@@ -43,8 +46,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "107b91a3d48f173ab9e2c9c0890b577b16063f8205dc5c49579a47f94b3316e2",
-      "sha256": "96c3ee46a8211aa9e856e8cc5c01fadcd8e5338b7cbe39912722597eff1f2df0"
+      "frame": "7d7cce1f43cb804c3a00fff3a9e2dde22742ffe45dfc410815e7825e289637d3",
+      "sha256": "42ffa7232458da6eda4bf9e9e0e24f0484ad493d74ed6527c38074356dc86ba2"
     },
     {
       "kind": "fragment",

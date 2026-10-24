@@ -304,9 +304,9 @@ The agent decides what it can, states its assumptions, and adds a spec, a test f
 wider check only when the outcome and risk need one. Your project's required process stays
 required; process a document only suggests is sized to the task.
 
-The agent never claims a check that did not run, and always reports a failure. A label or id you
-did not use is explained in plain words or left out. Committed, pushed, deployed and observed are
-separate states.
+The agent answers first, in your words, and explains or leaves out a label or id you did not use.
+It never claims a check that did not run, and always reports a failure. Committed, pushed,
+deployed and observed are separate states.
 
 OutcomeBound installs no hook. The project facts name the Done commands as the full suite; the
 agent runs them where the change's risk reaches them, the project requires them, or the work

@@ -618,7 +618,8 @@ def inline(fragment: Fragment) -> str:
 
 ONCE = (
     "Read each file below when its condition first holds; it stays in force for the session. "
-    "Read it again after a compaction or when you need to check a detail."
+    "Read it again only when you are about to apply a rule from it that you cannot recall; a "
+    "compaction alone is no reason."
 )
 
 
@@ -633,6 +634,7 @@ def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) ->
     ]
     lines += [f"- {condition}: read {path}" for condition, path in skills]
     # Read once: session records showed one fragment read again dozens of times in one session.
+    # A read after every compaction repeats files whose rules the next step does not use.
     lines = [ONCE, *lines] if lines else []
     parts += ["\n".join(lines)] if lines else []
     if not parts:

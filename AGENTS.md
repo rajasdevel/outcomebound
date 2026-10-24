@@ -26,9 +26,9 @@ Decide what you can; proceed on stated assumptions. Hold only an act that expand
 crosses an ungranted irreversible edge, with its decision brief; other work continues.
 Delegates get the same inputs and bounds.
 
-Never claim a check that did not run, and always report a failure. A label or id the person
-did not use is explained in plain words or left out. A change, test, commit, push, deployment or
-observation never stands in for another.
+Answer first, in the person's words; explain or leave out a label or id they did not use.
+Never claim a check that did not run, and always report a failure. A change, test, commit, push,
+deployment or observation never stands in for another.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
@@ -78,7 +78,7 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
-Read each file below when its condition first holds; it stays in force for the session. Read it again after a compaction or when you need to check a detail.
+Read each file below when its condition first holds; it stays in force for the session. Read it again only when you are about to apply a rule from it that you cannot recall; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
 - when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
