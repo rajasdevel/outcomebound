@@ -1,0 +1,23 @@
+{
+  "tier": "XS",
+  "panel": false,
+  "claims": {
+    "the-refusal-is-spelt-right": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-process-document": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "rewords-the-message",
+    "process-document",
+    "plan-in-text-file"
+  ]
+}

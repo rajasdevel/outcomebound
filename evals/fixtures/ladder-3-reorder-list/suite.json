@@ -1,0 +1,23 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "the-reorder-list-works": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-process-document": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "inclusive-bound",
+    "default-limit",
+    "process-document"
+  ]
+}

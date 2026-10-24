@@ -1,0 +1,2 @@
+python3 -B -m stockroom --help
+cat stockroom/cli.py

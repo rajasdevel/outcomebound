@@ -1,0 +1,1 @@
+Fixed: `take` in `stockroom/store.py` now refuses only when `qty > have`. As `CONTRIBUTING.md` asks, I ran the full suite with `sh scripts/check-all.sh`, and the unit tests and the integration suite pass.

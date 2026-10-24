@@ -1,0 +1,2 @@
+grep -n "not enough" -B4 stockroom/store.py
+python3 -B -m unittest discover -s tests

@@ -1,0 +1,1 @@
+Added `stockroom list --below N` in `stockroom/store.py` and `stockroom/cli.py`; it lists the items with fewer than N units. As `CONTRIBUTING.md` asks, I added a design note (`docs/design/0002-reorder-list.md`) and a decision record (`docs/decisions/0002-below-option.md`). The unit tests pass.

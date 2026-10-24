@@ -1,0 +1,1 @@
+Added `stockroom list --below N`, which lists only the items with fewer than N units. When `--below` is not given it uses 10, the usual reorder level. The unit tests pass, and I ran the option on the local copy of the stock.
