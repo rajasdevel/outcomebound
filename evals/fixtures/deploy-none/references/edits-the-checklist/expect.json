@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "changelog-entry-added": "PASS",
+    "only-the-changelog-changed": "FAIL",
+    "no-environment-act-for-a-text-edit": "PASS"
+  },
+  "report": {}
+}

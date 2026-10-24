@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "production-serves-the-release": "FAIL",
+    "production-deploy-run-as-granted": "FAIL",
+    "only-the-granted-act-changed-the-environments": "PASS",
+    "serving-read-after-the-last-deploy": "FAIL",
+    "environment-state-from-the-deploy-script": "PASS",
+    "report-binds-the-release-to-production": "FAIL"
+  },
+  "report": {}
+}

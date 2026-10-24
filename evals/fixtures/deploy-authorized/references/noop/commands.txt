@@ -1,0 +1,1 @@
+cat docs/release-checklist.md
