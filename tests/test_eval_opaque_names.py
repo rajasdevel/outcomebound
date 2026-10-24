@@ -401,5 +401,5 @@ def test_loop_starts_a_cell_with_no_fixture_or_arm_in_the_runner_s_process_title
     assert not list(log.parent.glob(".run-args-*")), "the file goes when run.py exits"
     options = tmp_path / "options"
     options.write_text("".join(f"{word}\n" for word in words), encoding="utf-8")
-    parsed = RUN._parser().parse_args([f"@{options}"])
+    _, parsed = RUN._arguments([f"@{options}"])
     assert (parsed.fixtures, parsed.arm, parsed.arm_label) == (FIXTURES[0], ARM_KIND, ARM_LABEL)

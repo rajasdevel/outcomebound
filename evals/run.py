@@ -3615,9 +3615,6 @@ def _print_group(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="evals/run.py",
-        # `@FILE` reads the arguments from FILE, one a line: loop.py starts each cell so, and no
-        # fixture or arm name is in the runner's own process title, which a call's `ps` can show.
-        fromfile_prefix_chars="@",
         description=(
             "Hand a harness (default codex) each fixture's task behind one arm's kernel, in a "
             "disposable repository, and judge what the model left with the fixture's "
@@ -4773,7 +4770,19 @@ def _arguments(argv: list[str] | None) -> tuple[argparse.ArgumentParser, argpars
     """The parser and the arguments, with the options that are valid only together checked."""
 
     parser = _parser()
-    args = parser.parse_args(argv)
+    # `@FILE` reads the arguments from FILE, one a line: loop.py starts each cell so, and no
+    # fixture or arm name is in the runner's own process title, which a call's `ps` can show.
+    # Read here as UTF-8, since argparse's own reader on Python 3.10 names no encoding.
+    words: list[str] = []
+    for word in sys.argv[1:] if argv is None else argv:
+        if not word.startswith("@"):
+            words.append(word)
+            continue
+        try:
+            words += Path(word[1:]).read_text(encoding="utf-8").splitlines()
+        except OSError as problem:
+            parser.error(f"cannot read the arguments in {word[1:]}: {problem}")
+    args = parser.parse_args(words)
     if args.current_graders and not args.regrade:
         parser.error("--current-graders is valid only with --regrade")
     return parser, args
