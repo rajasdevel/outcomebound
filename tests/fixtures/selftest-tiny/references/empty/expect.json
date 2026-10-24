@@ -1,6 +1,9 @@
 {
   "claims": {
-    "greeting-fixed": "FAIL"
+    "greeting-fixed": "FAIL",
+    "only-greeting-changed": "PASS",
+    "stubs-unchanged": "PASS",
+    "within-budget": "PASS"
   },
   "report": {
     "says-what-changed": "no"

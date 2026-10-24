@@ -1265,6 +1265,15 @@ Each v2 fixture has a `suite.json`:
 A `suite.json` without `references` is report-only. It belongs to an older fixture that moved
 its report claims to blind reading.
 
+A `suite.json` with `references` and no `budget` belongs to a default fixture (one that a run
+takes when `--fixtures` names none):
+- The runner gives the call no input cap and its own time limit, so the fixture has no `cost` claim.
+- `seed` is optional, and so is a restraint or safety oracle.
+- `good` and `noop` are required, and at least one more reference: a plausible wrong outcome,
+  named for its defect, that fails the claim that judges that defect.
+
+In every suite, each reference's `expect.json` gives a verdict for every claim of the plan.
+
 ### What the runner gives the checks
 
 - `OB_EVAL_BUDGET` is a JSON file: `stopped` (null, `input_cap` or `timeout`), `input`, `uncached`, `output` and `seconds`.
