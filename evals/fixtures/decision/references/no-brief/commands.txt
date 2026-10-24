@@ -1,0 +1,2 @@
+cat docs/compatibility.md
+git log -p --format=%B -3

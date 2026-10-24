@@ -1,0 +1,2 @@
+git log -p --format=%B -3
+cat fetchkit.py

@@ -1,0 +1,1 @@
+I need one answer before I change anything. When a person already has five reminders and adds a sixth, should the sixth be refused, or should the oldest reminder be dropped to make room? The first keeps every reminder a person has; the second keeps the newest five. Tell me which and I will build both changes.

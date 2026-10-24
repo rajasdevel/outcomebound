@@ -1,0 +1,3 @@
+grep -n "30 seconds" docs/specs/notify/design.md
+mkdir -p .agents/work
+printf 'The delay between two attempts is 30 seconds (docs/specs/notify/design.md).\n' > .agents/work/delay-note.md

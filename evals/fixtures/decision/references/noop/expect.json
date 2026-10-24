@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "workspace-unchanged": "PASS",
+    "decision-put-as-a-brief": "FAIL",
+    "compatibility-read-before-answer": "FAIL",
+    "history-read-before-answer": "FAIL"
+  },
+  "report": {}
+}

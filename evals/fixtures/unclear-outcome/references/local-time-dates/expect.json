@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "independent-part-done": "FAIL",
+    "no-reading-loses-data": "PASS",
+    "reversible-reading-built-and-named": "PASS",
+    "settled-gap-not-asked": "PASS"
+  },
+  "report": {}
+}

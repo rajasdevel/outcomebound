@@ -1,0 +1,1 @@
+grep -n "30 seconds" docs/specs/notify/design.md

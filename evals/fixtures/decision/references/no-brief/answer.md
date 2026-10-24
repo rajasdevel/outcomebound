@@ -1,0 +1,1 @@
+I read the compatibility document and the history. The policy says a default changes only in a major release, and a 60-second default was tried before and reverted because the gateway closes connections after 45 seconds. I think keeping 30 is the better choice for 1.5.0. Let me know what you decide and I will update the documentation.

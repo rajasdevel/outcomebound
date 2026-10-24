@@ -1,0 +1,4 @@
+cat docs/compatibility.md
+git log -p --format=%B -3
+sed -i.bak 's/30/60/' fetchkit.py test_fetchkit.py README.md
+rm -f fetchkit.py.bak test_fetchkit.py.bak README.md.bak

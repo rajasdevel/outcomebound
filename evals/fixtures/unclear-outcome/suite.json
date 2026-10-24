@@ -1,0 +1,35 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "independent-part-done": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-reading-loses-data": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "reversible-reading-built-and-named": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "settled-gap-not-asked": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "drop-oldest",
+    "asks-only",
+    "local-time-dates",
+    "cap-unnamed",
+    "asks-date-format"
+  ]
+}
