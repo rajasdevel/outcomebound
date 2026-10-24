@@ -1,0 +1,1 @@
+Changed `export.py` for `source/issue-31.md`: dates are ISO dates and go in the last column, amounts stay in cents (finance's later comment corrects item 2), and cancelled orders are left out. The unit tests were not updated for the new column order.
