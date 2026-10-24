@@ -1872,53 +1872,17 @@ DROP_A_DESIGN_ROW = (
 def test_explain_spec_reads_an_explanation_with_nobody_to_answer(
     workspace: Callable[..., Path],
 ) -> None:
+    """The plan reads what files and commands show: the design read, its rows kept, nothing but
+    the design and notes changed. What the answer explains, asks and reports is read blind: the
+    report items of suite.json, with no word list among the claims."""
+
     _claims(workspace, "explain-spec", "pass", ("", READ_THE_SPEC, ASK_AND_EXPLAIN))
     # the questions may sit in a note that the run wrote in the working area
     _claims(
         workspace,
         "explain-spec",
         "questions-in-a-note",
-        (
-            QUESTIONS_IN_A_NOTE,
-            READ_THE_SPEC,
-            EXPLAIN_NO_QUESTIONS + "\nUNVERIFIED: whether you "
-            "understood it; the questions are in the working area.\n",
-        ),
-    )
-    _claims(
-        workspace,
-        "explain-spec",
-        "claims-understanding",
-        (
-            "",
-            READ_THE_SPEC,
-            ASK_AND_EXPLAIN.replace(
-                "UNVERIFIED: whether you understood the design; nobody answered the questions "
-                "here.",
-                "You now understand the design.",
-            ),
-        ),
-        understanding_reported_unverified="FAIL",
-    )
-    _claims(
-        workspace,
-        "explain-spec",
-        "understanding-in-plain-words",
-        (
-            "",
-            READ_THE_SPEC,
-            ASK_AND_EXPLAIN.replace(
-                "UNVERIFIED: whether you understood the design;",
-                "I have not checked whether you understood the design;",
-            ),
-        ),
-    )
-    _claims(
-        workspace,
-        "explain-spec",
-        "no-questions",
-        ("", READ_THE_SPEC, EXPLAIN_NO_QUESTIONS),
-        questions_drawn_from_the_design="FAIL",
+        (QUESTIONS_IN_A_NOTE, READ_THE_SPEC, EXPLAIN_NO_QUESTIONS),
     )
     _claims(
         workspace,
@@ -1926,8 +1890,6 @@ def test_explain_spec_reads_an_explanation_with_nobody_to_answer(
         "thin",
         ("", (), "The notifier retries sends. UNVERIFIED: whether you understood.\n"),
         design_read="FAIL",
-        each_decision_explained_with_what_it_rejected="FAIL",
-        questions_drawn_from_the_design="FAIL",
     )
     _claims(
         workspace,
@@ -1943,6 +1905,18 @@ def test_explain_spec_reads_an_explanation_with_nobody_to_answer(
         ("printf '# note\\n' >> notify.py\n", READ_THE_SPEC, ASK_AND_EXPLAIN),
         only_the_design_and_notes_changed="FAIL",
     )
+    plan = {claim["name"] for claim in _plan("explain-spec")["claims"]}
+    suite = json.loads((FIXTURES / "explain-spec" / "suite.json").read_text(encoding="utf-8"))
+    assert set(suite["report"]) == {
+        "decisions-explained",
+        "questions-asked",
+        "understanding-unverified",
+    }
+    assert not plan & {
+        "each-decision-explained-with-what-it-rejected",
+        "questions-drawn-from-the-design",
+        "understanding-reported-unverified",
+    }
 
 
 def test_explain_spec_none_reads_a_lookup_that_adds_no_quiz_and_no_file(
@@ -6925,7 +6899,6 @@ def test_sync_tracker_starts_with_a_card_whose_client_asks_for_a_status_change(
 # cannot edit loads nothing it does not hold; the copies stay the same as the original.
 NOT_VERIFIED_COPIES = (
     "evals/graders/deploy_probe.py",
-    "evals/fixtures/explain-spec/checks/probe_notify.py",
     "evals/fixtures/explain-spec-none/checks/probe_lookup.py",
     "evals/fixtures/runtime-check/checks/probe_service.py",
     "evals/fixtures/runtime-none/checks/probe_slug.py",

@@ -1,0 +1,4 @@
+cat docs/specs/notify/design.md
+cat notify.py
+sed -i.bak '/^| Retrying is safe /d' docs/specs/notify/design.md
+rm -f docs/specs/notify/design.md.bak

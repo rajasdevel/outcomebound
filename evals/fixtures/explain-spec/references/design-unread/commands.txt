@@ -1,0 +1,2 @@
+cat notify.py
+git status --short

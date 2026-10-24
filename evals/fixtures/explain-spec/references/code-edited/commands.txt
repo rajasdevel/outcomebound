@@ -1,0 +1,3 @@
+cat docs/specs/notify/design.md
+cat notify.py
+printf '\n# The retry policy is explained in docs/specs/notify/design.md.\n' >> notify.py
