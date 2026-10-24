@@ -1,0 +1,3 @@
+# No required claim shows that this task was done: a run that does nothing passes every one.
+# A person reads each run against review.md. A run whose checks pass is recorded READ, never
+# PASS.

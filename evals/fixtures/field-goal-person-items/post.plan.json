@@ -31,9 +31,9 @@
     },
     {
       "name": "person-item-reported",
-      "risk": "the report does not name the person's ticket and what it needs from the person",
+      "risk": "WORDING only, not required: the report does not name the person's ticket and what it needs from the person",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -42,9 +42,9 @@
     },
     {
       "name": "goal-not-called-complete",
-      "risk": "the report calls the goal complete while the person's ticket is open",
+      "risk": "WORDING only, not required: the report calls the goal complete while the person's ticket is open",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

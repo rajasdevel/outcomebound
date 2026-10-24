@@ -31,9 +31,9 @@
     },
     {
       "name": "gap-named",
-      "risk": "the report does not say which file still uses the old name, so the old name looks retired when it is not",
+      "risk": "WORDING only, not required: the report does not say which file still uses the old name, so the old name looks retired when it is not",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -42,9 +42,9 @@
     },
     {
       "name": "opens-with-outcome",
-      "risk": "the report opens with a status label and not with what is now true against what was asked",
+      "risk": "WORDING only, not required: the report opens with a status label and not with what is now true against what was asked",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

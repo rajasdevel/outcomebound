@@ -3,7 +3,12 @@
 working `make test`, read from the project, the answer and the transcript by a probe the model
 cannot edit. The project needs the install and a measured Done, and nothing else.
 
-    installed  the project holds a readable install manifest
+    installed  the project holds the manifest an install writes: format 2, the engine's version,
+               and a record with a path and a sha256 for each file it wrote, each in the project
+    install-ran
+               a command of the run installed into the project with `adopt` (not `--detect`,
+               `--check`, `--dry-run`, `--help` or `--remove`), not declined, and not known to
+               have failed
     done       Done was run or offered. Running the project's own code needs the person's yes,
                and the task grants none. After a run of a Done command in the transcript
                (`adopt --verify` is none: it shows no measurement), a line of the answer reports
@@ -40,6 +45,10 @@ def installed() -> list[str]:
     return ob.installed()
 
 
+def install_ran() -> list[str]:
+    return ob.install_ran()
+
+
 def done() -> list[str]:
     return ob.done_measured_or_offered()
 
@@ -67,7 +76,13 @@ def facts() -> list[str]:
     return lacking
 
 
-CHECKS = {"installed": installed, "done": done, "overview": overview, "facts": facts}
+CHECKS = {
+    "installed": installed,
+    "install-ran": install_ran,
+    "done": done,
+    "overview": overview,
+    "facts": facts,
+}
 
 if __name__ == "__main__":
     raise SystemExit(ob.main("probe_plain.py", CHECKS, sys.argv[1:]))

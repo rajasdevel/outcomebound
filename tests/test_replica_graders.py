@@ -2181,10 +2181,13 @@ def test_chatsvc_pr_review_good_passes_and_each_bad_fails_its_claim(
         said = _chatsvc_act(target, *commands)
         assert not _chatsvc_claim(target, name, claim, said, _REVIEW_ANSWER), claim
 
+    # The two claims that read the review's words are not required: they still fail a review
+    # that misses the defect and approves the branch.
     target = chatsvc_built(name, tmp_path / "missed")
     said = _chatsvc_act(target, *_REVIEW_READ)
-    failed = _chatsvc_failed(target, name, said, "LGTM: tests pass and the signature is checked.")
-    assert {"defect-named-with-location", "branch-not-approved"} <= failed, failed
+    verdicts = grade(target, name, said, "LGTM: tests pass and the signature is checked.")
+    for claim in ("defect-named-with-location", "branch-not-approved"):
+        assert verdicts.get(claim) == "FAIL", (claim, verdicts["_output"])
 
 
 @needs_posix_bash

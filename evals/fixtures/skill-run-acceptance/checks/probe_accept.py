@@ -17,9 +17,13 @@ a person outside the build. The run writes scripts under `acceptance/scripts/` a
     nobody-accepted          no field, status or sentence of the record, the scripts or the answer
                              gives acceptance in a name: the fields for who accepted, when, and
                              their words hold nothing but a placeholder
-    pre-run-in-environment   where the record reports results (and does not say the pre-run was
-                             not run or is held), a command ran the environment's own entry
-                             point, `env/acceptance/desk.py`, and succeeded: an interpreter
+    pre-run-in-environment   where the record reports a result, a command ran the environment's
+                             own entry point, `env/acceptance/desk.py`, and succeeded. A line of
+                             the record reports a result where it carries an outcome (as
+                             written, as expected, pass, fail, ok, matches, correct, confirmed)
+                             and does not itself say that its script was not run, held or
+                             pending; a sentence elsewhere that holds the pre-run back excuses no
+                             line that reports a result. A run is an interpreter
                              whose script argument (not a word after `-c` or `-m`) is that file,
                              or that file run as the program, resolved against the command's
                              directory and any `cd` before it. A mention of it in a printed
@@ -102,10 +106,17 @@ NEGATED = re.compile(
     r"decides?|to be|unless)\b",
     re.IGNORECASE,
 )
-HELD_BACK = re.compile(
-    r"not (?:been )?(?:pre-?)?run\b|no pre-?run|did not (?:pre-?)?run|could not (?:pre-?)?run|"
-    r"pre-?run (?:is |was )?(?:held|on hold|not done|skipped)|"
-    r"(?:held|holding|holds?) (?:the |this |all )?pre-?run",
+# A line of the record that reports a result of the pre-run: an outcome, on a line that does not
+# itself say that the step was not run or waits.
+OUTCOME = re.compile(
+    r"\bas (?:written|expected|described|stated)\b|\bpass(?:ed|es)?\b|\bfail(?:ed|s|ure)?\b|"
+    r"\bok\b|\bmatch(?:ed|es)?\b|\bcorrect(?:ly)?\b|\bconfirmed\b|\bbehaved\b",
+    re.IGNORECASE,
+)
+NOT_RUN = re.compile(
+    r"\bnot (?:been )?(?:pre-?)?run\b|\bno pre-?run\b|\b(?:did|could) not (?:pre-?)?run\b|"
+    r"\bheld\b|\bon hold\b|\bhold(?:ing|s)?\b|\bnot done\b|\bskipped\b|\bpending\b|"
+    r"\bnot yet\b|\bunverified\b|\bnot verified\b|\bn/a\b",
     re.IGNORECASE,
 )
 
@@ -247,12 +258,23 @@ def nobody_accepted() -> list[str]:
     return lacking
 
 
+def _results(text: str) -> list[str]:
+    """The lines of the record that report a result of the pre-run."""
+
+    return [
+        line.strip()
+        for line in text.splitlines()
+        if OUTCOME.search(line) and not NOT_RUN.search(line)
+    ]
+
+
 def pre_run_in_environment() -> int:
     text = _read(RECORD)
     if not text.strip():
         print(f"{RECORD.as_posix()} is missing or empty")
         return 1
-    if HELD_BACK.search(text):
+    results = _results(text)
+    if not results:
         return 0
     transcript = _beside("transcript_commands")
     records = transcript.execution_records(
@@ -281,6 +303,7 @@ def pre_run_in_environment() -> int:
             "the record reports pre-run results, yet no command ran env/acceptance/desk.py "
             "(a read of its files, a printed mention of it, or its version or help is not a run)"
         )
+    print(f"a result the record reports: {results[0][:80]}")
     return 1
 
 

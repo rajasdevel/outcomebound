@@ -125,6 +125,12 @@ SANDBOXES = ("eval", "field")
 # A fixture's own empty file (a comment may explain it) that marks it as needing a local listener:
 # the run lets the model's commands bind a port, for this fixture only.
 LISTENER_FILE = "local-listener"
+# A fixture's own empty file (a comment may explain it) that marks it as human-reviewed: no
+# required claim shows that its task was done, so a person reads the run against the fixture's
+# `review.md`. A run whose checks all pass is recorded `READ`, never PASS, and the summary leaves
+# it out of the pass count.
+HUMAN_READ_FILE = "human-read"
+READ = "READ"
 # A fixture's own script printing its task for the built workspace, in place of a fixed
 # prompt.md: what it prints can name the seed commit, which exists only once the build is done.
 TASK_SCRIPT = "task.sh"
@@ -484,6 +490,35 @@ def stub_source() -> Path:
     """The folder the stubs are placed from: `stubs/` beside the fixtures' folder."""
 
     return evals_dir() / "stubs"
+
+
+def human_read(name: str, graders: Path | None = None) -> bool:
+    """Whether the fixture has a `human-read` file: a person judges whether its task was done.
+    Where the run has a sealed copy of its grading files (`graders`), only that copy is read, so
+    a regrade judges with the marker the run was graded with; a seal without the fixture's
+    folder predates the markers and holds none. This checkout is read only where no graders are
+    given."""
+
+    if graders is not None:
+        return (graders / "evals" / "fixtures" / name / HUMAN_READ_FILE).is_file()
+    return (FIXTURES / name / HUMAN_READ_FILE).is_file()
+
+
+def required_claims(name: str, graders: Path | None = None) -> list[str] | None:
+    """The names of the claims that the plan the post-checks ran (the sealed copy's, else the
+    fixture's) marks required, as the validation reads it (a claim is required unless it says
+    `"required": false`); None where the plan cannot be read."""
+
+    path = (graders or FIXTURES / name) / "post.plan.json"
+    try:
+        plan = json.loads(path.read_text(encoding="utf-8"))
+        return [
+            str(claim["name"])
+            for claim in plan["claims"]
+            if isinstance(claim, dict) and claim.get("required", True) is not False
+        ]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
 
 
 def needs_local_listener(name: str) -> bool:
@@ -2475,7 +2510,18 @@ def grade(
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
             verdict, output = "UNVERIFIED", partial_output(problem)
+    if verdict == "PASS" and human_read(name, graders):
+        verdict = READ
+        output = re.sub(r"(?m)^VERDICT: PASS$", f"VERDICT: {READ}", output)
+        output += (
+            f"\n{READ}: every required check passed; a person reads this run against the "
+            "fixture's review.md, or its task where it has none\n"
+        )
     claims = {claim: result for result, claim in CLAIM_LINE.findall(output)}
+    required = required_claims(name, graders)
+    if required is not None:
+        # The plan's requiredness as it stood when the run was graded, for the panel.
+        extra["required"] = required
     extra.update(
         verdict=verdict,
         claims=claims,
@@ -3579,15 +3625,17 @@ def _print_group(
     fixture, harness_name, arm, model, effort, *instrument = key
     counted = (run for run in group if not run["error"] or stop_of(run))
     every = sorted(counted, key=lambda run: run["repetition"])
-    runs = [run for run in every if not _only_unjudged(run)]
+    to_read = [run for run in every if run["verdict"] == READ]
+    runs = [run for run in every if not _only_unjudged(run) and run["verdict"] != READ]
     passed = sum(1 for run in runs if run["verdict"] == "PASS" and not stop_of(run))
     failed = len(group) - len(every)
     stopped = sum(1 for run in runs if stop_of(run))
-    left = len(every) - len(runs)
+    left = len(every) - len(runs) - len(to_read)
     notes = [
         *([f"{failed} failed call(s) not counted"] if failed else []),
         *([f"{stopped} stopped at the budget or the timeout, counted as FAIL"] if stopped else []),
         *([f"{left} could not be judged, not counted"] if left else []),
+        *([f"{len(to_read)} for a person to read, not counted"] if to_read else []),
     ]
     tail = f" ({'; '.join(notes)})" if notes else ""
     print(f"{fixture} | {harness_name} | {arm} | {model} {effort}: PASS {passed}/{len(runs)}{tail}")

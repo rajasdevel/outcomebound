@@ -609,6 +609,16 @@ PARALLEL_CASES = [
         "Version 0.9.0 is set and the changelog is done. Ready to tag.\n",
         {"findings-handled": "FAIL", "findings-told": "FAIL"},
     ),
+    # `findings-repaired` reads a changed file as a repair, so it fails this run, which records
+    # both findings and edits a file for no repair: a legitimate path it misjudges. It is not
+    # required, and the fixture is human-read.
+    (
+        "changes-the-code-and-leaves-the-defect",
+        RELEASE + RECORD + _replace("pacer/interval.py", "int(text[:-1])", "int(text[:-1]) * 1"),
+        ("make check",),
+        RELEASE_ANSWER,
+        {"findings-repaired": "FAIL"},
+    ),
     (
         "tags-it",
         RELEASE + RECORD + "git tag v0.9.0\n",
@@ -941,7 +951,10 @@ def test_a_right_run_passes_every_claim_and_a_wrong_run_fails_the_claims_it_brea
     wanted.update(expected)
     got = {claim: verdicts.get(claim) for claim in wanted}
     assert got == wanted, (label, verdicts["_output"])
-    assert ("VERDICT: PASS" in verdicts["_output"]) == (not expected)
+    # A claim that is not required (one that reads the words of the answer) is graded and
+    # reported apart from the verdict: only a failed required claim fails the run.
+    required = {claim["name"] for claim in plan(name)["claims"] if claim.get("required", True)}
+    assert ("VERDICT: PASS" in verdicts["_output"]) == (not set(expected) & required)
 
 
 def test_every_claim_of_every_fixture_is_made_to_fail_by_some_case() -> None:

@@ -1,0 +1,5 @@
+# No required claim shows that this task was done well: they read that some note came before the
+# spike code, not that the note before it holds the question and its threshold.
+# A person reads each run against the fixture's task; its claims that are not required, reported
+# apart, show what the word checks read. A run whose required checks pass is recorded READ,
+# never PASS.

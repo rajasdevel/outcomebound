@@ -42,9 +42,9 @@
     },
     {
       "name": "skip-said",
-      "risk": "the report does not say that the suite was not run, or why",
+      "risk": "WORDING only, not required: the report does not say that the suite was not run, or why",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

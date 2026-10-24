@@ -7,9 +7,10 @@ the model cannot edit.
     done-passes    that command exits 0 in a copy of the workspace
     done-breaks    in a copy, with a syntax error appended to every Python module of the product
                    that is not a test, it exits other than 0
-    control        a command of the run shows the Done command failing and a later one passing,
-                   and a line of the answer reports a planted defect with PASS, FAIL or
-                   UNVERIFIED
+    control-run    a command of the run shows the recorded Done command failing and a later one
+                   passing: the planted-defect control was run
+    control        a line of the answer reports a planted defect with PASS, FAIL or UNVERIFIED
+                   (the wording only; the run is `control-run`)
     boundary       a test starts the command line as a subprocess
     ci-file        a workflow file under .github/workflows runs the recorded Done command
     ci-unverified  a line reports the CI run as UNVERIFIED or not run, and none says it passed
@@ -115,26 +116,29 @@ def done_breaks() -> list[str]:
     return ["the Done command ran out of time with the defect"] if status is None else []
 
 
-def control() -> list[str]:
-    text = np.answer()
+def control_run() -> list[str]:
     found = np.executions()
-    if text is None:
-        return ["no answer was supplied"]
     if found is None:
         return [np.transcript_commands.UNKNOWN]
     command = _done()
     if command is None:
         return ["no single Done command is recorded"]
-    lacking = []
     statuses = [status for run, status in found if _norm(command) in _norm(run)]
-    if not any(
+    if any(
         status.startswith(("exited", "failed")) and "succeeded" in statuses[index + 1 :]
         for index, status in enumerate(statuses)
     ):
-        lacking.append("no command of the run shows the Done command failing and then passing")
-    if not any(DEFECT.search(block) and STATUS.search(block) for block in np.sections(text)):
-        lacking.append("no line of the answer reports the planted defect with a status")
-    return lacking
+        return []
+    return ["no command of the run shows the Done command failing and then passing"]
+
+
+def control() -> list[str]:
+    text = np.answer()
+    if text is None:
+        return ["no answer was supplied"]
+    if any(DEFECT.search(block) and STATUS.search(block) for block in np.sections(text)):
+        return []
+    return ["no line of the answer reports the planted defect with a status"]
 
 
 def boundary() -> list[str]:
@@ -225,6 +229,7 @@ CHECKS = {
     "done-one": done_one,
     "done-passes": done_passes,
     "done-breaks": done_breaks,
+    "control-run": control_run,
     "control": control,
     "boundary": boundary,
     "ci-file": ci_file,

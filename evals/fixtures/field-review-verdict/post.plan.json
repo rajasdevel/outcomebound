@@ -16,9 +16,9 @@
     },
     {
       "name": "defect-found",
-      "risk": "the review misses that the cache never removes an expired entry, or cites a line the file does not have",
+      "risk": "WORDING only, not required: the review misses that the cache never removes an expired entry, or cites a line the file does not have",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -30,9 +30,9 @@
     },
     {
       "name": "no-pass-beside-defect",
-      "risk": "a PASS stands beside the defect, on the reviewer's own scope, or as the verdict of a change that has a defect",
+      "risk": "WORDING only, not required: a PASS stands beside the defect, on the reviewer's own scope, or as the verdict of a change that has a defect",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -41,9 +41,9 @@
     },
     {
       "name": "verdict-given",
-      "risk": "the review ends with no verdict a person can act on",
+      "risk": "WORDING only, not required: the review ends with no verdict a person can act on",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

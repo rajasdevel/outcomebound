@@ -16,9 +16,9 @@
     },
     {
       "name": "strongest-case-against-given",
-      "risk": "neither the answer nor a note gives the strongest case against building the idea",
+      "risk": "WORDING only, not required: neither the answer nor a note gives the strongest case against building the idea",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -27,9 +27,9 @@
     },
     {
       "name": "stop-or-probe-recommended",
-      "risk": "the answer recommends building an idea that an existing tool covers, or recommends nothing",
+      "risk": "WORDING only, not required: the answer recommends building an idea that an existing tool covers, or recommends nothing",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -38,9 +38,9 @@
     },
     {
       "name": "desirability-reported-unverified",
-      "risk": "the answer does not report whether people want the product as UNVERIFIED",
+      "risk": "WORDING only, not required: the answer does not report whether people want the product as UNVERIFIED",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -49,9 +49,9 @@
     },
     {
       "name": "no-simulated-user-counted-as-demand",
-      "risk": "the answer or a note counts what made-up users said or did as evidence that people want the product",
+      "risk": "WORDING only, not required: the answer or a note counts what made-up users said or did as evidence that people want the product",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

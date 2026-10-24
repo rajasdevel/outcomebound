@@ -42,9 +42,9 @@
     },
     {
       "name": "suite-unrun-said",
-      "risk": "the report does not say that the suite was not run",
+      "risk": "WORDING only, not required: the report does not say that the suite was not run",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

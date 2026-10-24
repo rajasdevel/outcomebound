@@ -16,9 +16,9 @@
     },
     {
       "name": "exposure-recorded",
-      "risk": "the local fragment, where one was written, does not record the invited testers, no real data and learning as the life, in its slots",
+      "risk": "WORDING only, not required: the local fragment, where one was written, does not record the invited testers, no real data and learning as the life, in its slots",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -27,9 +27,9 @@
     },
     {
       "name": "signal-observable",
-      "risk": "the measure of a good prototype is a feeling and not something a tester does",
+      "risk": "WORDING only, not required: the measure of a good prototype is a feeling and not something a tester does",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -38,9 +38,9 @@
     },
     {
       "name": "leave-rule-recorded",
-      "risk": "nothing says that the first outside user or real data ends the prototype",
+      "risk": "WORDING only, not required: nothing says that the first outside user or real data ends the prototype",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

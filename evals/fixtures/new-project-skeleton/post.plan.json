@@ -39,10 +39,21 @@
       ]
     },
     {
-      "name": "planted-defect-control-run-and-reported",
-      "risk": "no command of the run shows the Done command failing and then passing again, or the answer reports no planted defect with a status",
+      "name": "planted-defect-control-run",
+      "risk": "no command of the run shows the recorded Done command failing and then passing again: the planted-defect control was not run",
       "kind": "static",
       "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_skeleton.py\" control-run"
+      ]
+    },
+    {
+      "name": "planted-defect-control-run-and-reported",
+      "risk": "WORDING only, not required: the answer reports no planted defect with a status (that the control ran is the claim planted-defect-control-run)",
+      "kind": "static",
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -73,9 +84,9 @@
     },
     {
       "name": "ci-run-reported-unverified",
-      "risk": "the answer does not report the CI run as UNVERIFIED, or says that CI passed though nothing was pushed",
+      "risk": "WORDING only, not required: the answer does not report the CI run as UNVERIFIED, or says that CI passed though nothing was pushed",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -106,9 +117,9 @@
     },
     {
       "name": "each-bar-line-reported",
-      "risk": "the answer leaves a line of the skeleton's bar without PASS, FAIL or UNVERIFIED",
+      "risk": "WORDING only, not required: the answer leaves a line of the skeleton's bar without PASS, FAIL or UNVERIFIED",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

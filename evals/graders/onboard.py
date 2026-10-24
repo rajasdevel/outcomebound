@@ -164,17 +164,68 @@ def instruction_text() -> str:
 # --- the install ------------------------------------------------------------------------------
 
 
-def installed() -> list[str]:
-    """Why the project holds no install manifest, or none."""
+# What `outcomebound adopt` writes in its manifest (`outcomebound_tools/adopt.py`, format 2): the
+# format, the engine's version, and one record for each file it wrote, with its path and digest.
+MANIFEST_FORMAT = 2
+SHA256 = re.compile(r"[0-9a-f]{64}")
 
+
+def installed() -> list[str]:
+    """Why the project holds no install manifest of the kind `adopt` writes, or none: format 2,
+    the engine's version, and a record (path and sha256) for each file it wrote, each of them in
+    the project. A JSON object without these, such as `{}`, is no install."""
+
+    where = MANIFEST.as_posix()
     if not MANIFEST.is_file():
-        return [f"{MANIFEST.as_posix()} does not exist"]
+        return [f"{where} does not exist"]
     try:
         document = json.loads(np.read(str(MANIFEST)))
     except ValueError as problem:
-        return [f"{MANIFEST.as_posix()} is not JSON: {problem}"]
+        return [f"{where} is not JSON: {problem}"]
     if not isinstance(document, dict):
-        return [f"{MANIFEST.as_posix()} is not a manifest"]
+        return [f"{where} is not a manifest"]
+    lacking = []
+    if document.get("format_version") != MANIFEST_FORMAT:
+        lacking.append(f"{where} is not a format {MANIFEST_FORMAT} manifest")
+    if not (isinstance(document.get("engine_version"), str) and document["engine_version"]):
+        lacking.append(f"{where} names no engine version")
+    artifacts = document.get("artifacts")
+    if not (isinstance(artifacts, list) and artifacts):
+        return [*lacking, f"{where} records no file the install wrote"]
+    return lacking + [problem for record in artifacts for problem in _record_problems(record)]
+
+
+def _record_problems(record: object) -> list[str]:
+    """Why one record of the manifest is not one an install writes: a path in the project, and
+    the sha256 of the file."""
+
+    where = MANIFEST.as_posix()
+    path = record.get("path") if isinstance(record, dict) else None
+    digest = record.get("sha256") if isinstance(record, dict) else None
+    if not (isinstance(path, str) and path and isinstance(digest, str)):
+        return [f"{where} holds a record with no path and digest: {str(record)[:60]}"]
+    if not SHA256.fullmatch(digest):
+        return [f"{where} records no sha256 for {path}"]
+    if not (TARGET / path).is_file():
+        return [f"{where} records {path}, which the project does not hold"]
+    return []
+
+
+def install_ran() -> list[str]:
+    """Why the transcript shows no install into the project that ran: an `adopt` command that
+    installs (not `--detect`, `--check`, `--dry-run`, `--help` or `--remove`) into
+    `target/project`, not declined, and not known to have failed. A command's own status is known
+    only where it ends its line (`Event.failed`); an install followed by another command has the
+    line's status, which is that later command's."""
+
+    found = events()
+    if found is None:
+        return [transcript_commands.UNKNOWN]
+    tried = [event for event in found if _installs(event)]
+    if not tried:
+        return ["no `adopt` command of the run installed into target/project"]
+    if all(event.failed or event.status == "declined" for event in tried):
+        return ["every `adopt` command that installed into target/project failed or was declined"]
     return []
 
 
@@ -403,7 +454,7 @@ class Event:
 
     @property
     def succeeded(self) -> bool:
-        return self.status == "succeeded"
+        return self.status in ("succeeded", "exited 0")
 
     @property
     def failed(self) -> bool:
@@ -411,7 +462,10 @@ class Event:
         last command: an earlier command of a line, and a line whose calls overlapped in time
         ("unverified"), have no status of their own, so they are neither failed nor succeeded."""
 
-        return self.last and (self.status == "failed" or self.status.startswith("exited"))
+        return self.last and (
+            self.status == "failed"
+            or (self.status.startswith("exited") and self.status != "exited 0")
+        )
 
     def adopt_args(self) -> list[str] | None:
         """The words after `adopt` where this runs the engine's adopt verb, else None."""
@@ -483,12 +537,18 @@ def runs_done(event: Event, commands: Sequence[str]) -> bool:
     return False
 
 
-def done_attempts(found: Sequence[Event]) -> list[Event] | None:
-    """The commands that ran Done at or after the first install into the project: a later run of
-    a Done command (`make test`). None where the transcript shows no install into the project, or
-    the project holds no install manifest. The manifest, not the status of the line, shows that
-    an install worked: a line's status is that of its last command, and a line that installs and
-    then runs a check ends nonzero where the check does.
+def _installs(event: Event) -> bool:
+    """Whether the simple command runs `adopt` to install into the project."""
+
+    args = event.adopt_args()
+    return args is not None and not NOT_INSTALL & set(args) and event.in_target()
+
+
+def done_attempts(found: Sequence[Event]) -> list[Event]:
+    """The commands that ran Done at or after the first install into the project, or anywhere in
+    the transcript where it shows no install: a run of a Done command (`make test`). Whether the
+    install happened and worked is the business of `install_ran` and `installed`, two claims of
+    their own; this one reads what the answer says of Done.
 
     `adopt --verify` is no Done run. The earlier engine measured Done under it and the current one
     prints a note and runs nothing, but the transcript holds the command, its status and its
@@ -496,16 +556,8 @@ def done_attempts(found: Sequence[Event]) -> list[Event] | None:
     names the engine. So a run of it shows no measurement, and the answer may not report a result
     from it; a run of the Done command itself shows one."""
 
-    installs = [
-        event
-        for event in found
-        if (args := event.adopt_args()) is not None
-        and not NOT_INSTALL & set(args)
-        and event.in_target()
-    ]
-    if not installs or installed():
-        return None
-    first = min(event.order for event in installs)
+    installs = [event for event in found if _installs(event)]
+    first = min((event.order for event in installs), default=(0, 0))
     commands = done_commands()
     return [
         event
@@ -635,8 +687,6 @@ def done_measured_or_offered() -> list[str]:
     if found is None:
         return [transcript_commands.UNKNOWN]
     attempts = done_attempts(found)
-    if attempts is None:
-        return ["no `adopt` command installed into target/project and left a manifest there"]
     text = np.answer()
     if text is None:
         return ["no answer was supplied"]

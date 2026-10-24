@@ -11,10 +11,13 @@ exactly 2 kg already pays the base rate only.
                   file still states what it reviewed
     rulings       SUBSTANCE: no finding is ruled wrongly in the review file: R1 and R2, where
                   ruled, are fixed, and R3, where ruled, is rejected. A ruling is read from the
-                  finding's section of the file (any of Disposition, Status, Ruling, Resolution,
-                  Outcome or Verdict, any separator, any case; accepted, resolved or addressed
-                  mean fixed; declined, invalid or "not a defect" mean rejected). A finding the
-                  file does not rule is not failed here: what the answer rules is read blind
+                  finding's section of the file, and only from an explicit disposition value:
+                  a label line (Disposition, Status, Ruling, Resolution, Outcome, Verdict or
+                  Decision, any separator, any case) whose value starts with a keyword (fixed,
+                  accepted, resolved or addressed: fixed; rejected, declined, invalid or
+                  wontfix: rejected; deferred or postponed: deferred). A value that starts with
+                  any other word is no ruling, and a finding the file does not rule is not
+                  failed here: what the answer rules is read blind
                   (`reading/rulings-reported.md`)
 
 The engine's disposition line is `Disposition: fixed — <where>`,
@@ -147,42 +150,23 @@ def dispositions() -> list[str]:
     return lacking
 
 
-# A finding's ruling in the words people use for it. A negated fix reads as a rejection.
-_NOT_DONE = re.compile(
-    r"(?i)\b(?:not|never|no)\s+(?:be\s+|been\s+)?(?:fix|chang|follow|appl|implement|built|adopt|"
-    r"accept|act)\w*|n't\s+(?:fix|chang|follow|appl|implement|build|adopt|accept|act)\w*"
-)
-_KINDS = (
-    (
-        "rejected",
-        re.compile(
-            r"(?i)\b(?:reject\w*|declin\w*|disagree\w*|invalid|incorrect|wrong|mistaken|"
-            r"not (?:a )?(?:defect|bug|issue|problem)|won'?t fix|no change|"
-            r"false (?:positive|alarm)|"
-            r"already (?:correct|right|handled|answered))\b"
-        ),
-    ),
-    ("deferred", re.compile(r"(?i)\b(?:defer\w*|postpone\w*|later|follow-?up|backlog)\b")),
-    (
-        "fixed",
-        re.compile(
-            r"(?i)\b(?:fix(?:ed|es)?|resolved?|address(?:ed)?|accept(?:ed)?|done|appl(?:y|ied)|"
-            r"implement(?:ed)?|corrected|changed)\b"
-        ),
-    ),
-)
+# A ruling is an explicit disposition value: the first word of a label line's value, one of these
+# keywords. Any other value (a sentence such as "The proposed fix is incorrect; I reject it.") is
+# no ruling here; what it means is left to the blind reading of the answer.
+_KEYWORDS = {
+    **dict.fromkeys(("fixed", "accepted", "resolved", "addressed"), "fixed"),
+    **dict.fromkeys(("rejected", "declined", "invalid", "wontfix"), "rejected"),
+    **dict.fromkeys(("deferred", "postponed"), "deferred"),
+}
+_FIRST_WORD = re.compile(r"^\W*([A-Za-z]+)")
 
 
-def _kind_of(text: str) -> str | None:
-    """The ruling a span of text states: the earliest ruling word, a negated fix being a
-    rejection, so `fixed, no change to the steps` is fixed and `not fixed` is rejected."""
+def _kind_of(value: str) -> str | None:
+    """The ruling a label line's value states: its first word where that is a disposition
+    keyword, else None."""
 
-    best = None
-    for kind, rule in (*_KINDS, ("rejected", _NOT_DONE)):
-        match = rule.search(text)
-        if match and (best is None or match.start() < best[0]):
-            best = (match.start(), kind)
-    return best[1] if best else None
+    first = _FIRST_WORD.match(value)
+    return _KEYWORDS.get(first.group(1).lower()) if first else None
 
 
 _SECTION = re.compile(r"^#{2,4}\s*\**\s*([A-Za-z]+-?\d+)\b")

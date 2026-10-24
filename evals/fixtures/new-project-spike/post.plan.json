@@ -4,10 +4,21 @@
   "timeout_seconds": 120,
   "claims": [
     {
-      "name": "question-and-threshold-written-before-the-spike",
-      "risk": "no note holds the question and a numeric pass threshold, or no note of that kind was written before the first line of spike code",
+      "name": "note-written-before-the-spike",
+      "risk": "there is no spike code, or no note of the run was written before the first file of spike code, by commit order or the creation time of the files",
       "kind": "static",
       "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_spike.py\" note-first"
+      ]
+    },
+    {
+      "name": "question-and-threshold-written-before-the-spike",
+      "risk": "WORDING only, not required: no note holds the question and a numeric pass threshold (that a note came before the spike code is the claim note-written-before-the-spike)",
+      "kind": "static",
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -38,9 +49,9 @@
     },
     {
       "name": "missed-threshold-reported-as-fail",
-      "risk": "the answer does not report the spike as FAIL with a measured figure, does not say that the idea ends or changes, or recommends building",
+      "risk": "WORDING only, not required: the answer does not report the spike as FAIL with a measured figure, does not say that the idea ends or changes, or recommends building",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

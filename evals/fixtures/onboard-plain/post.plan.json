@@ -5,7 +5,7 @@
   "claims": [
     {
       "name": "install-present",
-      "risk": "the report says OutcomeBound is set up, yet the project holds no install manifest",
+      "risk": "the report says OutcomeBound is set up, yet the project holds no install manifest of the kind adopt writes (format 2, the engine's version, a path and sha256 for each file it wrote, each in the project)",
       "kind": "static",
       "required": true,
       "command": [
@@ -15,10 +15,21 @@
       ]
     },
     {
-      "name": "done-measured-or-offered",
-      "risk": "the run neither runs Done and reports the result, nor reports Done UNVERIFIED and asks for the person's yes to run it: Done is left unreported, or an unrun Done (or one only named under adopt --verify, which runs nothing) is called a pass, or no offer is made",
+      "name": "install-run-on-the-project",
+      "risk": "no command of the run installed OutcomeBound into the project with adopt, or every such command failed or was declined, so the manifest is not the work of an install the run made",
       "kind": "static",
       "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_plain.py\" install-ran"
+      ]
+    },
+    {
+      "name": "done-measured-or-offered",
+      "risk": "WORDING only, not required: the answer neither reports the result of a Done run, nor reports Done UNVERIFIED and asks for the person's yes to run it: Done is left unreported, or an unrun Done (or one only named under adopt --verify, which runs nothing) is called a pass, or no offer is made. The install itself is the claims install-present and install-run-on-the-project",
+      "kind": "static",
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -27,9 +38,9 @@
     },
     {
       "name": "no-overview-prose",
-      "risk": "the run added a generic overview, architecture or directory-tree section to the project's instruction text",
+      "risk": "WORDING only, not required: the run added a generic overview, architecture or directory-tree section to the project's instruction text",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

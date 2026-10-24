@@ -75,9 +75,9 @@
     },
     {
       "name": "route-named-in-answer",
-      "risk": "the report does not say which of the project's routes the fix took",
+      "risk": "WORDING only, not required: the report does not say which of the project's routes the fix took",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

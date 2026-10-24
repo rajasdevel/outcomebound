@@ -42,9 +42,9 @@
     },
     {
       "name": "report-names-no-extras",
-      "risk": "the report says it made a review, hand-off, tickets or plan that nobody asked for",
+      "risk": "WORDING only, not required: the report says it made a review, hand-off, tickets or plan that nobody asked for",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

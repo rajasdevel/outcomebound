@@ -49,9 +49,9 @@
     },
     {
       "name": "record-says-pre-run-not-acceptance",
-      "risk": "the record does not state that the run was a pre-run by the agent and is not acceptance",
+      "risk": "WORDING only, not required: the record does not state that the run was a pre-run by the agent and is not acceptance",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -60,9 +60,9 @@
     },
     {
       "name": "no-acceptance-recorded-in-a-name",
-      "risk": "a field, a status or a sentence records acceptance as given, in the acceptor's name or another",
+      "risk": "WORDING only, not required: a field, a status or a sentence records acceptance as given, in the acceptor's name or another",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -71,9 +71,9 @@
     },
     {
       "name": "pre-run-results-from-the-environment",
-      "risk": "the record reports pre-run results although no command ran in the acceptance environment",
+      "risk": "Not required: the record reports a pre-run result although no command ran the acceptance environment's entry point and succeeded; a sentence that holds the pre-run back excuses no line that reports a result. It reads outcome words, so a result in other words skips it and an expectation can trip it",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

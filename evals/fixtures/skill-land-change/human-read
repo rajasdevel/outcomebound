@@ -1,0 +1,5 @@
+# No required claim shows that this task was done well: a run that fixes the clear defect and leaves
+# the returning finding alone, with no reply and no question, passes every one.
+# A person reads each run against the fixture's task; its claims that are not required, reported
+# apart, show what the word checks read. A run whose required checks pass is recorded READ,
+# never PASS.
