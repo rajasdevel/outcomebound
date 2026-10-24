@@ -985,7 +985,7 @@ def test_check_without_a_manifest_names_the_command_that_proposes_an_install(
 
     assert code == 1
     assert out.splitlines() == [
-        f"missing  {adopt.MANIFEST}",
+        f"missing  {adopt.MANIFEST}: HEAD's commit does not hold it either",
         f"next: outcomebound adopt {paths.shell_path(target)} --detect prints the command "
         "that installs OutcomeBound here",
     ]
@@ -1875,7 +1875,8 @@ def test_check_names_the_fact_that_moved_and_an_install_brings_it_current(
     code, out, _ = run(capsys, str(target), "--check")
 
     assert code == 1
-    (line,) = [line for line in out.splitlines() if f"({adopt.FACTS})" in line]
+    records = [line for line in out.splitlines() if not line.startswith(("warn ", "note "))]
+    (line,) = [line for line in records if f"({adopt.FACTS})" in line]
     assert line.startswith("stale ")
     assert "CI test moved" in line and ".github/workflows/ci.yml changed" in line
     assert "Done" not in line

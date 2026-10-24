@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from outcomebound_tools import home, review_check, schemacheck, validation, where
+from outcomebound_tools import adopt, home, review_check, schemacheck, validation, where
 from outcomebound_tools.__main__ import VERBS
 from tests import tickets_export as export
 from tests.fake_tools import shell_tool
@@ -182,7 +182,39 @@ def test_a_worktree_with_no_or_an_older_install_is_counted_as_adopt_check_names_
     other = tmp_path / "other"
     git(project, "worktree", "add", "-q", "-b", "other", str(other))
     older = one(read(project), "worktree", source="adopt_worktrees")
-    assert "1 worktree(s) have no readable install or one older" in older["text"]
+    assert "1 worktree(s) have no readable install, one older" in older["text"]
+
+
+def install(root: Path, capsys) -> None:
+    assert adopt.main([str(root), "--harness", "claude-code"]) == 0
+    capsys.readouterr()
+    commit(root, "install")
+
+
+def test_this_checkouts_block_missing_on_disk_is_named_with_the_manifest_kept(project, capsys):
+    install(project, capsys)
+    assert [i for i in read(project) if i["source"] == "adopt_worktrees"] == []
+    agents = project / "AGENTS.md"
+    agents.write_text(adopt.cut(agents.read_text(encoding="utf-8"), adopt.KERNEL), encoding="utf-8")
+
+    line = one(read(project), "git", source="adopt_worktrees")
+
+    assert line["verdict"] == "NOTE" and line["text"].startswith("this checkout: installed ")
+    assert "missing on disk, its commit holds them: AGENTS.md (operating-contract)" in line["text"]
+
+
+def test_a_checkout_without_an_install_is_named_only_beside_one_that_has_it(
+    project, tmp_path, capsys
+):
+    early = tmp_path / "early"
+    git(project, "worktree", "add", "-q", "-b", "early", str(early))
+    assert [i for i in lines(read(early), "git") if i["source"] == "adopt_worktrees"] == []
+    install(project, capsys)
+
+    line = one(read(early), "git", source="adopt_worktrees")
+
+    assert line["text"].startswith("this checkout: no OutcomeBound install; its commit holds no ")
+    assert f"while worktree {project} has an install" in line["text"]
 
 
 def test_a_worktree_whose_folder_is_gone_is_unverified(project, tmp_path):
@@ -761,6 +793,32 @@ def test_git_is_told_not_to_fetch_lazily(project, monkeypatch):
     monkeypatch.setattr(subprocess, "run", spy)
     read(project)
     assert seen and set(seen) == {"1"}
+
+
+def test_the_install_survey_of_each_worktree_is_told_not_to_fetch_lazily(
+    project, tmp_path, monkeypatch, capsys
+):
+    install(project, capsys)
+    git(project, "worktree", "add", "-q", "-b", "other", str(tmp_path / "other"))
+    seen: list[tuple[str, str | None, str | None]] = []
+    real = subprocess.run
+
+    def spy(argv, *a, **k):
+        if Path(str(argv[0])).stem == "git":
+            env = k["env"]
+            seen.append(
+                (
+                    " ".join(map(str, argv[1:])),
+                    env.get("GIT_NO_LAZY_FETCH"),
+                    env.get("GIT_OPTIONAL_LOCKS"),
+                )
+            )
+        return real(argv, *a, **k)
+
+    monkeypatch.setattr(subprocess, "run", spy)
+    read(project)
+    assert any("cat-file --batch" in argv for argv, _, _ in seen)
+    assert {(fetch, locks) for _, fetch, locks in seen} == {("1", "0")}
 
 
 def test_the_schemas_promises_hold_for_every_line(project, capsys):

@@ -167,13 +167,41 @@ def _branch_line(top: Path) -> Item:
     return _item("git", "git", NOTE, ", ".join(parts), subject=branch)
 
 
+def _own_install(top: Path, engine: str, listed: str | None) -> Item | None:
+    """The line on this checkout's install where it is older than the engine, missing on disk
+    or not committed. A checkout with no install whose commit holds none is named only where
+    another worktree has one, so a project that never adopted OutcomeBound gets no line."""
+
+    text = adopt_worktrees.describe(top, engine, adopt.worktree_survey)
+    if text is None:
+        return None
+    if text.endswith(f"its commit holds no {adopt.MANIFEST}"):
+        here = top.resolve()
+        others = [
+            tree.path
+            for tree in adopt_worktrees.parse(listed or "")
+            if tree.path.is_dir()
+            and tree.path.resolve() != here
+            and adopt_worktrees.installed(tree.path) is not None
+        ]
+        if not others:
+            return None
+        text += f", while worktree {SEE(str(others[0]))} has an install"
+    text = f"this checkout: {text}; `outcomebound adopt . --check` names each"
+    return _item("git", "adopt_worktrees", NOTE, text)
+
+
 def _git_items(top: Path, inside: bool) -> list[Item]:
     if not inside:
         text = "the folder is not in a Git work tree, or git is absent"
         return [_item("git", "git", UNVERIFIED, text)]
     items = [_branch_line(top)]
+    engine = adopt.engine_version(home.ROOT)
     source = "git worktree list"
     listed = _git(top, "worktree", "list", "--porcelain")
+    own = _own_install(top, engine, listed)
+    if own is not None:
+        items.append(own)
     if listed is None:
         return [*items, _item("worktree", source, UNVERIFIED, "Git did not list the worktrees")]
     here, quiet = top.resolve(), []
@@ -199,11 +227,11 @@ def _git_items(top: Path, inside: bool) -> list[Item]:
             f"pushed: {', '.join(quiet)}"
         )
         items.append(_item("worktree", source, NOTE, text))
-    older = adopt_worktrees.lines(top, listed, adopt.engine_version(home.ROOT))
+    older = adopt_worktrees.lines(top, listed, engine, adopt.worktree_survey)
     if older:
         text = (
-            f"{len(older)} worktree(s) have no readable install or one older than the engine; "
-            "`outcomebound adopt . --check` names each"
+            f"{len(older)} worktree(s) have no readable install, one older than the engine, or "
+            "one missing on disk or not committed; `outcomebound adopt . --check` names each"
         )
         items.append(_item("worktree", "adopt_worktrees", NOTE, text))
     return items

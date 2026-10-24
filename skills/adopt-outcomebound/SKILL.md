@@ -9,11 +9,10 @@ Use `outcomebound` on PATH: installed from a release, or `scripts/outcomebound` 
 checkout. Read the target's existing agent instructions and its dirty state first; they are
 preserved.
 
-You are done when the install is current (an install that exits 0 wrote and checked every record;
-`outcomebound adopt <target> --check` is for a later day or another clone), each Done command
-was run once or the report says why not, each line you proposed for the project's `local` guidance
-cites the file that shows it, each fact the install reports `UNVERIFIED` is named, and what only the
-person can answer has gone to them as one decision brief. Write no overview of the repository: an
+You are done when the install is current (an install that exits 0 wrote and checked every record),
+each Done command was run once or the report says why not, each line you proposed for the project's
+`local` guidance cites the file that shows it, each fact the install reports `UNVERIFIED` is named,
+and what only the person can answer has gone to them as one decision brief. Write no overview of the repository: an
 agent reads the code, and a summary of it adds text without adding a fact.
 
 ## Install or upgrade
@@ -48,9 +47,11 @@ agent reads the code, and a summary of it adds text without adding a fact.
    none. Report whether each passed, failed or was not run. A Done that needs a secret or a service
    reads as its command reads; say which.
 5. For a shared installation, check that the files it needs will survive the target's normal
-   commit and checkout workflow. Use the manifest and the ignored-path warnings to inspect the
-   intended shared paths; an unchanged repeat install can still have this problem. Review complete
-   settings files before staging: the tool owns entries, not every byte in those files. Stage only
+   commit and checkout workflow. Use the manifest, the ignored-path warnings and the
+   `not committed` and `missing on disk` lines of `outcomebound adopt <target> --check`, which reads
+   each worktree, to inspect the intended shared paths; an unchanged repeat install can still have
+   this problem. Review complete settings files before staging: the tool owns entries, not every
+   byte in those files. Stage only
    shareable adoption content under the target's rules; leave unrelated and machine-local changes
    unstaged. If mixed content cannot be separated safely within the grant, leave it unstaged and
    report that specific limit while other authorized work continues. Never force-add a directory to

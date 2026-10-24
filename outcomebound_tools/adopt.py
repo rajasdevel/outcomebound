@@ -1770,7 +1770,12 @@ def remove(target: Path, source: Path, force: bool) -> tuple[Planned, list[str],
 def _observed(target: Path, record: Record) -> bytes | None:
     """The bytes `record` names as they are on disk; for a hook record, its group."""
 
-    data = _read(target, record["path"])
+    return _observed_in(record, _read(target, record["path"]))
+
+
+def _observed_in(record: Record, data: bytes | None) -> bytes | None:
+    """The bytes `record` names within `data`, its file's bytes or None where there is no file."""
+
     if record["kind"] == HOOK:
         if data is None or finish_check.MARKER not in data:
             return None
@@ -1987,9 +1992,11 @@ def _record_line(
     record: Record,
     own: Sequence[Record],
     keys: Sequence[tuple[str, str, str]] | None,
+    commit: Commit | None = None,
 ) -> str:
     """Print the `--check` line of one record and return its state; `keys` are the records the
-    recorded selection and mode install, None where they cannot be planned."""
+    recorded selection and mode install, None where they cannot be planned, and `commit` the
+    owned paths in HEAD's commit, which a `missing` line reads."""
 
     found = state(target, source, record, own)
     name = None if record["kind"] in FILE_KINDS else record["id"]
@@ -2007,23 +2014,291 @@ def _record_line(
         detail = unrecorded_detail(target, source, record, own)
     elif found == "stale" and record["id"] == FACTS and record["kind"] == "block":
         detail = moved(target, source, record, own)
+    elif found == "missing":
+        detail = _missing_detail(record, commit)
     print(f"{found:<8} {label(record['path'], name)}" + (f": {detail}" if detail else ""))
     return found
+
+
+# --- Whether the install is on disk and in HEAD's commit --------------------------
+#
+# An install that is only in a working tree can be lost to a stash or a branch switch, and a
+# worktree made from a commit that lacks it has none. `--check` reports what is on disk and what
+# HEAD's commit holds; it commits, restores and upgrades nothing, and a path it cannot read is
+# `UNVERIFIED`, never a failure (docs/specs/install/design.md, "Install survival").
+
+HELD, ABSENT, UNKNOWN = "held", "absent", "unknown"
+
+
+@dataclass(frozen=True)
+class Commit:
+    """Owned paths as HEAD's commit holds them: `files` by path, `unreadable` the paths the
+    commit lists whose bytes this clone cannot read (a partial clone that would fetch them)."""
+
+    files: dict[str, bytes]
+    unreadable: frozenset[str]
+
+
+def _head_files(root: Path, relatives: Sequence[str]) -> Commit | None:
+    """The owned paths `relatives` in HEAD's commit, read with optional locks off and no lazy
+    fetch; a repository with no commit holds none. None where Git cannot say."""
+
+    unique = sorted(set(relatives))
+    head = _git_run(root, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+    if head is None or head.returncode not in (0, 1):
+        return None
+    if head.returncode == 1:
+        return Commit({}, frozenset())
+    # Paths read from `root`, git's cwd, so a subfolder install reads its own; literal, so no
+    # path is read as pathspec magic.
+    listed = _git(root, "--literal-pathspecs", "ls-tree", "-r", "-z", "HEAD", "--", *unique)
+    if listed is None:
+        return None
+    oids: dict[str, str] = {}
+    for entry in listed.decode("utf-8", "surrogateescape").split("\0"):
+        meta, _, path = entry.partition("\t")
+        fields = meta.split()
+        if len(fields) == 3 and fields[1] == "blob" and path in unique:
+            oids[path] = fields[2]
+    order = list(oids)
+    batch = _git(root, "cat-file", "--batch", stdin="".join(f"{oids[p]}\n" for p in order).encode())
+    if batch is None and order:
+        return None
+    files: dict[str, bytes] = {}
+    unreadable: set[str] = set()
+    rest = batch or b""
+    for path in order:
+        header, _, rest = rest.partition(b"\n")
+        answer = header.split()
+        if len(answer) != 3 or not answer[2].isdigit():
+            unreadable.add(path)  # `<oid> missing`: listed, not readable without a fetch
+            continue
+        size = int(answer[2])
+        files[path], rest = rest[:size], rest[size + 1 :]
+    return Commit(files, frozenset(unreadable))
+
+
+def _head_state(record: Record, commit: Commit | None) -> str:
+    """Whether HEAD's commit holds what `record` names: `held`, `absent` or `unknown`."""
+
+    path = record["path"]
+    if commit is None or path in commit.unreadable:
+        return UNKNOWN
+    return ABSENT if _held(record, commit) is None else HELD
+
+
+def _held(record: Record, commit: Commit) -> bytes | None:
+    """The bytes `record` names in HEAD's commit, CRLF as LF; None where it holds none or they
+    do not parse."""
+
+    try:
+        found = _observed_in(record, commit.files.get(record["path"]))
+    except AdoptError:
+        return None
+    return None if found is None else textio.fold(found)
+
+
+def _record_name(record: Record) -> str:
+    return label(record["path"], None if record["kind"] in FILE_KINDS else record["id"])
+
+
+def _listed(parts: Sequence[str]) -> str:
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+@dataclass(frozen=True)
+class Survival:
+    """One root's install against its disk and its HEAD commit. `missing` holds each record not
+    on disk with what HEAD's commit says of it; `named` (blocks and the manifest) and `others` (a
+    count of files) are on disk but not as HEAD's commit holds them; `unread` are the paths that
+    could not be read, on disk or in the commit; `commit` is None where Git could not say."""
+
+    commit: Commit | None
+    missing: list[tuple[str, str]]
+    named: list[str]
+    others: int
+    unread: list[str]
+    total: int
+    facts_only: bool
+
+    def loose(self) -> str:
+        """The records HEAD's commit does not hold as they are on disk, in words; empty where
+        there are none."""
+
+        count = len(self.named) + self.others
+        if not count:
+            return ""
+        parts = [*self.named, *([f"{self.others} other file(s)"] if self.others else [])]
+        return f"{_listed(parts)} ({count} of the install's {self.total} blocks and files)"
+
+
+def survival(root: Path, manifest: Manifest) -> Survival:
+    """Read each of the manifest's records (a retired hook record left out) on disk and in HEAD's
+    commit, and the manifest itself; nothing is written, and a read that fails is `unread`."""
+
+    own = [record for record in manifest.own if record["kind"] != HOOK]
+    commit = _head_files(root, [MANIFEST, *(record["path"] for record in own)])
+    missing: list[tuple[str, str]] = []
+    named: list[str] = []
+    unread: list[str] = []
+    others = 0
+    for record in own:
+        try:
+            disk = _observed(root, record)
+        except (AdoptError, OSError):
+            unread.append(record["path"])
+            continue
+        if disk is None:
+            missing.append((_record_name(record), _head_state(record, commit)))
+            continue
+        state = _head_state(record, commit)
+        if state == UNKNOWN:
+            if commit is not None:
+                unread.append(record["path"])
+        elif commit is not None and _held(record, commit) != textio.fold(disk):
+            if record["kind"] in FILE_KINDS:
+                others += 1
+            else:
+                named.append(_record_name(record))
+    held = _manifest_state(commit, manifest.raw)
+    if held == UNKNOWN:
+        unread.append(MANIFEST)
+    elif held == ABSENT:
+        named.append(MANIFEST)
+    facts_only = recorded_mode(own) == FACTS_ONLY
+    unique = list(dict.fromkeys(unread))
+    return Survival(commit, missing, named, others, unique, len(own) + 1, facts_only)
+
+
+def _manifest_state(commit: Commit | None, raw: bytes | None) -> str | None:
+    """`held` where HEAD's commit holds the manifest as on disk, `absent` where it does not,
+    `unknown` where its bytes cannot be read; None where Git or the disk gave nothing to compare."""
+
+    if commit is None or raw is None:
+        return None
+    if MANIFEST in commit.unreadable:
+        return UNKNOWN
+    committed = commit.files.get(MANIFEST)
+    same = committed is not None and textio.fold(committed) == textio.fold(raw)
+    return HELD if same else ABSENT
+
+
+def _missing_detail(record: Record, commit: Commit | None) -> str:
+    """What `--check` says of a block or file the manifest records and the disk lacks."""
+
+    what = "file" if record["kind"] in FILE_KINDS else "block"
+    state = _head_state(record, commit)
+    if state == UNKNOWN:
+        return f"expected {what} missing on disk; whether HEAD's commit holds it is UNVERIFIED"
+    if state == HELD:
+        return f"expected {what} missing on disk; HEAD's commit holds it"
+    return (
+        f"expected {what} missing on disk; HEAD's commit does not hold it either "
+        "(a stash or another branch may)"
+    )
+
+
+NOT_COMMITTED = (
+    "a new worktree from HEAD does not hold these bytes, and whether a stash or a branch switch "
+    "takes them away depends on the paths and the options"
+)
+
+
+def _survival_lines(found: Survival) -> list[str]:
+    """The target's `note` and `warn` lines on its mode and on what HEAD's commit holds."""
+
+    lines: list[str] = []
+    if found.facts_only:
+        lines.append(
+            f"{'note':<8} facts-only install, the recorded mode: {AGENTS} holds the project facts "
+            "and, by intent, no operating contract"
+        )
+    if found.commit is None:
+        lines.append(f"{'note':<8} whether HEAD's commit holds the install is UNVERIFIED")
+    elif found.loose():
+        lines.append(
+            f"{'warn':<8} not committed: {found.loose()} are absent from HEAD's commit or differ "
+            f"from it; {NOT_COMMITTED}"
+        )
+    if found.unread:
+        lines.append(
+            f"{'note':<8} install state UNVERIFIED: cannot read "
+            f"{_listed([textio.visible(path) for path in found.unread])}"
+        )
+    return lines
+
+
+def worktree_survey(root: Path) -> tuple[list[str], bool]:
+    """What `--check` and `where` say of one worktree's install beside its version, and whether
+    it is facts-only: each expected block or file missing on disk with what its commit holds,
+    what its commit does not hold as on disk, what cannot be read, or, with no manifest on disk,
+    whether its commit holds one. A read that fails is `UNVERIFIED`; nothing is raised."""
+
+    try:
+        return _survey(root)
+    except (AdoptError, OSError, ValueError) as error:
+        return [f"install state UNVERIFIED: {_printable(str(error))}"], False
+
+
+def _survey(root: Path) -> tuple[list[str], bool]:
+    try:
+        manifest = load_manifest(root)
+    except AdoptError as error:
+        reason = _printable(str(error))
+        return [f"install state UNVERIFIED: cannot read {MANIFEST}: {reason}"], False
+    if manifest.raw is None:
+        commit = _head_files(root, [MANIFEST])
+        if commit is None or MANIFEST in commit.unreadable:
+            return [f"whether its commit holds {MANIFEST} is UNVERIFIED"], False
+        if MANIFEST in commit.files:
+            return [f"{MANIFEST} missing on disk; its commit holds it"], False
+        return [f"its commit holds no {MANIFEST}"], False
+    found = survival(root, manifest)
+    parts: list[str] = []
+    for state, words in (
+        (HELD, "missing on disk, its commit holds them"),
+        (ABSENT, "missing on disk, its commit does not hold them either"),
+        (UNKNOWN, "missing on disk, whether its commit holds them is UNVERIFIED"),
+    ):
+        names = [name for name, held in found.missing if held == state]
+        if names:
+            parts.append(f"{words}: {_listed(names)}")
+    if found.commit is None:
+        parts.append("whether its commit holds the install is UNVERIFIED")
+    elif found.loose():
+        parts.append(f"not committed: {found.loose()} are absent from its commit or differ from it")
+    if found.unread:
+        unread = _listed([textio.visible(path) for path in found.unread])
+        parts.append(f"install state UNVERIFIED: cannot read {unread}")
+    return parts, found.facts_only
 
 
 def check(target: Path, source: Path) -> int:
     """Print each record's state, then each record the recorded selection and mode install that
     the manifest does not hold as `missing`: a record set that is not the mode's is not
-    current. A record they no longer install reads `stale` where its bytes are current."""
+    current. A record they no longer install reads `stale` where its bytes are current. Lines on
+    what is missing on disk, what HEAD's commit does not hold and a facts-only mode follow, for
+    the target and each other worktree; they change no exit (`survival`)."""
 
     manifest = load_manifest(target)
     if manifest.raw is None:
-        print(f"missing  {MANIFEST}")
+        commit = _head_files(target, [MANIFEST])
+        if commit is None or MANIFEST in commit.unreadable:
+            detail = "whether HEAD's commit holds it is UNVERIFIED"
+        elif MANIFEST in commit.files:
+            detail = "missing on disk; HEAD's commit holds it"
+        else:
+            detail = "HEAD's commit does not hold it either"
+        print(f"missing  {MANIFEST}: {detail}")
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return 1
     keys = wanted(target, source, manifest.own)
-    found = [_record_line(target, source, record, manifest.own, keys) for record in manifest.own]
+    kept = survival(target, manifest)
+    found = [
+        _record_line(target, source, record, manifest.own, keys, kept.commit)
+        for record in manifest.own
+    ]
     recorded = {(record["kind"], record["path"], record["id"]) for record in manifest.own}
     for kind, path, name in [key for key in keys or [] if key not in recorded]:
         found.append("missing")
@@ -2034,7 +2309,7 @@ def check(target: Path, source: Path) -> int:
         source, recorded_harnesses(manifest.own), recorded_setup(manifest.own)
     ):
         print(f"{verb:<8} {text}")
-    for line in _worktree_warnings(target, source):
+    for line in [*_survival_lines(kept), *_worktree_warnings(target, source)]:
         print(line)
     step = next_step(target, found)
     if step is not None:
@@ -2044,12 +2319,14 @@ def check(target: Path, source: Path) -> int:
 
 def _worktree_warnings(target: Path, source: Path) -> list[str]:
     """The `warn` lines for each other worktree of the project whose install is older than this
-    engine; none where Git cannot list them. Informational: no exit changes."""
+    engine, missing, not on disk as recorded or not as its commit holds it; none where Git cannot
+    list them. Informational: no exit changes."""
 
     listed = _git(target, "worktree", "list", "--porcelain")
     if listed is None:
         return []
-    found = adopt_worktrees.lines(target, listed.decode("utf-8", "replace"), engine_version(source))
+    text = listed.decode("utf-8", "replace")
+    found = adopt_worktrees.lines(target, text, engine_version(source), worktree_survey)
     return adopt_worktrees.render(found)
 
 
@@ -2077,17 +2354,20 @@ def _drift_lines(
     return drift.lines(target, selected, detected, files, local)
 
 
-def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
-    """What one read-only git command printed in `target`; None where it failed or Git cannot run.
-    Git comes from PATH's absolute entries only (`programs.require`), so the target cannot supply
-    its own, on Windows too."""
+def _git_run(
+    target: Path, *arguments: str, stdin: bytes | None = None
+) -> subprocess.CompletedProcess[bytes] | None:
+    """One read-only git command in `target`; None where Git cannot run. Git comes from PATH's
+    absolute entries only (`programs.require`), so the target cannot supply its own, on Windows
+    too; optional locks are off and a partial clone fetches nothing, so a read writes nothing."""
 
     inherited = dict(os.environ)
     inherited["PATH"] = os.pathsep.join(
         part for part in inherited.get("PATH", "").split(os.pathsep) if os.path.isabs(part)
     )
+    inherited.update({"GIT_OPTIONAL_LOCKS": "0", "GIT_NO_LAZY_FETCH": "1"})
     try:
-        completed = subprocess.run(
+        return subprocess.run(
             [programs.require("git", inherited), *GIT_READ_CONFIGURATION, *arguments],
             cwd=target,
             env=git_environment(inherited),
@@ -2097,7 +2377,14 @@ def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | N
         )
     except OSError:
         return None
-    return completed.stdout if completed.returncode == 0 else None
+
+
+def _git(target: Path, *arguments: str, stdin: bytes | None = None) -> bytes | None:
+    """What one read-only git command (`_git_run`) printed in `target`; None where it failed or
+    Git cannot run."""
+
+    completed = _git_run(target, *arguments, stdin=stdin)
+    return completed.stdout if completed is not None and completed.returncode == 0 else None
 
 
 def _git_line(target: Path, *arguments: str) -> str | None:

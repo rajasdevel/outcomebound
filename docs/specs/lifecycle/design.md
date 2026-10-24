@@ -218,7 +218,7 @@ so the report agrees with the verb that owns the file:
 | Kind | Read from | Reader |
 | --- | --- | --- |
 | `git` | the current branch, its upstream, ahead and behind counts, the uncommitted paths | `git`, read-only: optional locks off, no lazy fetch from a partial clone, and the plumbing that does not refresh the index (as `size` does) |
-| `worktree` | each other worktree: its branch, whether its commits are merged, pushed or only local, and its uncommitted paths; a count of worktrees with no readable install or one older than the engine | `git worktree list`, `workspace.default_branch`, `workspace.classify` and `workspace.changes` (the readers of `workspace audit`), `adopt_worktrees` |
+| `worktree` | each other worktree: its branch, whether its commits are merged, pushed or only local, and its uncommitted paths; a count of worktrees with no readable install, one older than the engine, or one missing on disk or not committed; a line on this checkout's own install where it is missing on disk or not committed (the [install design](../install/design.md), Install survival) | `git worktree list`, `workspace.default_branch`, `workspace.classify` and `workspace.changes` (the readers of `workspace audit`), `adopt_worktrees` |
 | `pr` | the open pull requests of the repository | `gh pr list`, only when `gh` is found on `PATH`'s absolute entries and answers; `--offline` skips it |
 | `ticket` | the open tickets of the declared store, from its export (`--tickets`, else `issues.json` at the work tree's root, else at the main checkout's): hold, blockers, `waits-on` | `tickets_store.read_store` |
 | `validation` | each claim of a validation plan (`--plan`, repeatable, else the `claims` plan the ticket declaration names; `--cwd` as `validation status` takes it): the last kept result and whether a declared path changed since | `validation.claim_states`, which `validation status` prints and `where` reads |
@@ -273,8 +273,9 @@ to, and counts the rest on one `NOTE` line, so that a false `OPEN` never buries 
   branch and not by the default branch), when it holds uncommitted paths, or when its folder is
   gone; the others are named on one line. This is the classification of `workspace audit`. After a
   squash merge a landed branch reads `pushed` or `local`, since Git cannot tell it from an unlanded
-  one. A count of worktrees with no readable install or one older than the engine follows, from the
-  logic of `adopt --check`;
+  one. A count of worktrees with no readable install, one older than the engine, or one missing on
+  disk or not committed follows, from the logic of `adopt --check`, and a `git` line names this
+  checkout's own install where it is missing on disk or not committed;
 - every open pull request of the repository is listed, the one whose branch is the current branch
   first and marked; `gh` is asked for up to 1000, and a list that long reads `UNVERIFIED`. `gh` runs
   with prompts and its update check off;
