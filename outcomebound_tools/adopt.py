@@ -96,10 +96,12 @@ SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
     "using-outcomebound": "when unsure how much design, testing, review or process a task needs",
-    "decision-brief": "when a decision is the user's to make",
+    "decision-brief": (
+        "when a decision is the user's to make, or an assumption sets the direction of later work"
+    ),
     "gather-requirements": (
-        "when a request's outcome or completion bar is unclear, "
-        "or requirements arrive from an existing source"
+        "when a request's outcome or completion bar is unclear, requirements arrive from an "
+        "existing source, or resumed work relies on a recorded direction choice"
     ),
     "tests-worth-keeping": (
         "when writing, changing or judging a test, or when the project's tests already fail before "

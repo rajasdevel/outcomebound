@@ -84,8 +84,8 @@ Read each file below when its condition first holds; it stays in force for the s
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
 - when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
-- when a decision is the user's to make: read .claude/skills/decision-brief/SKILL.md
-- when a request's outcome or completion bar is unclear, or requirements arrive from an existing source: read .claude/skills/gather-requirements/SKILL.md
+- when a decision is the user's to make, or an assumption sets the direction of later work: read .claude/skills/decision-brief/SKILL.md
+- when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice: read .claude/skills/gather-requirements/SKILL.md
 - when writing, changing or judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
 - when a failure's cause is unknown, or a fix did not hold: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
