@@ -51,7 +51,20 @@ PARSERS = {"parse_qs", "parse_qsl", "unquote", "unquote_plus", "unquote_to_bytes
 # read in base 16, or one of the modules that decodes for the caller.
 BY_HAND_NAMES = {"fromhex", "chr", "binascii", "unhexlify", "a2b_hex", "unescape"}
 BY_HAND_MODULES = {"binascii", "html"}
-INSTALLERS = ("pip", "pip3", "uv", "npm", "apt", "apt-get", "brew", "poetry", "curl", "wget")
+INSTALLERS = (
+    "pip",
+    "pip3",
+    "pipx",
+    "uv",
+    "conda",
+    "npm",
+    "apt",
+    "apt-get",
+    "brew",
+    "poetry",
+    "curl",
+    "wget",
+)
 
 
 def behaviour() -> list[str]:

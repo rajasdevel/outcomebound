@@ -5,5 +5,7 @@
     "each-finding-has-a-disposition": "FAIL",
     "dispositions-match-the-code": "PASS"
   },
-  "report": {}
+  "report": {
+    "rulings-reported": "yes"
+  }
 }

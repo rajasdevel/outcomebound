@@ -3,8 +3,9 @@
 
     drafts.py lint              `tickets check --draft`, given every draft, reads PASS
     drafts.py count MIN MAX     there are at least MIN drafts and at most MAX
-    drafts.py bounds            each draft names bounds, and each entry names a path the seed
-                                commit holds
+    drafts.py bounds [PATH...]  each draft names bounds, each entry names a path the seed
+                                commit holds, and the bounds of the drafts together cover each
+                                PATH (the engine's rule), so a cut grants where the design lands
 
 A draft is a file added or changed since the seed, outside `.git`, that carries a ticket
 block and whose seed version did not: the ticket template and any document that held a block at
@@ -137,14 +138,16 @@ def _exists(entry: str, held: set[str]) -> bool:
     )
 
 
-def bounds() -> list[str]:
+def bounds(needed: list[str]) -> list[str]:
     found = drafts()
     if not found:
         return ["no draft was written"]
+    from outcomebound_tools.tickets_bounds import covers
     from outcomebound_tools.tickets_model import parse_block
 
     held = _seed_paths()
     lacking = []
+    granted: list[str] = []
     for path in found:
         fields, _messages = parse_block(path.read_text(encoding="utf-8", errors="replace"))
         print(f"observed: {path.as_posix()} bounds {list(fields.bounds)}")
@@ -155,6 +158,12 @@ def bounds() -> list[str]:
             for entry in fields.bounds
             if not _exists(entry, held)
         ]
+        granted += fields.bounds
+    lacking += [
+        f"no draft's bounds cover {path}, where the design lands"
+        for path in needed
+        if not any(covers(entry, path) for entry in granted)
+    ]
     return lacking
 
 
@@ -164,10 +173,10 @@ def _main(argv: list[str]) -> int:
             lacking = lint()
         elif len(argv) == 3 and argv[0] == "count":
             lacking = count(int(argv[1]), int(argv[2]))
-        elif argv == ["bounds"]:
-            lacking = bounds()
+        elif argv[:1] == ["bounds"]:
+            lacking = bounds(argv[1:])
         else:
-            print("usage: drafts.py {lint | count MIN MAX | bounds}")
+            print("usage: drafts.py {lint | count MIN MAX | bounds [PATH...]}")
             return 2
     except ImportError as problem:
         lacking = [f"the engine is not importable from PYTHONPATH: {problem}"]

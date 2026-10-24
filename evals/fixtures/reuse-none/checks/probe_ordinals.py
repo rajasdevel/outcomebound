@@ -54,7 +54,20 @@ CASES = {
     121: "121st",
     1002: "1002nd",
 }
-INSTALLERS = ("pip", "pip3", "uv", "npm", "apt", "apt-get", "brew", "poetry", "curl", "wget")
+INSTALLERS = (
+    "pip",
+    "pip3",
+    "pipx",
+    "uv",
+    "conda",
+    "npm",
+    "apt",
+    "apt-get",
+    "brew",
+    "poetry",
+    "curl",
+    "wget",
+)
 
 
 def behaviour() -> list[str]:
