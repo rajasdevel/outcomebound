@@ -1,0 +1,1 @@
+I installed `furl` to compare its query handling, then wrote `query_params(url)` in `links.py` with `urllib.parse.parse_qs` and did not use `furl`. I added four tests to `test_links.py`, and `python3 -B -m unittest` passes.

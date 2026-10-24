@@ -1,0 +1,33 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "query-params-behave": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "standard-library-reused": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "only-the-module-and-its-test-changed": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "no-dependency-installed": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "by-hand",
+    "own-unquote",
+    "dependency-installed"
+  ]
+}

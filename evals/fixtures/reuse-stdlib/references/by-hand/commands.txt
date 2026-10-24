@@ -1,0 +1,2 @@
+cat links.py test_links.py
+python3 -B -m unittest

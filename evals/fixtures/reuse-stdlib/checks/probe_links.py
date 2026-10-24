@@ -3,8 +3,10 @@
 
     behaviour  `query_params` returns the dict the task describes on cases that a hand
                         parse of the query usually gets wrong
-    reuses     `links.py` uses `urllib.parse` for the parsing and decodes no escape by
-                        hand
+    reuses     `links.py` calls a parser that it takes from `urllib.parse` (a function of the
+                        same name defined in the module does not count) and decodes no escape by
+                        hand; the code is read as a syntax tree, so a comment or a docstring that
+                        names the by-hand idea does not count
     plain      no command the run executed installed anything or fetched a package
 
 Each exits 0 where it holds and 1 naming what does not. The transcript is the file
@@ -16,7 +18,6 @@ from __future__ import annotations
 import ast
 import importlib.util
 import os
-import re
 import sys
 from pathlib import Path
 
@@ -46,7 +47,10 @@ CASES = {
     "https://x.test/p?e=%E2%82%AC5": {"e": ["€5"]},
 }
 PARSERS = {"parse_qs", "parse_qsl", "unquote", "unquote_plus", "unquote_to_bytes"}
-BY_HAND = re.compile(r"fromhex|\bchr\(|int\([^)]*,\s*16\s*\)|\bbinascii\b|\bhtml\.unescape")
+# The names of a by-hand decode of escapes: a call or an attribute with one of them, or an int
+# read in base 16, or one of the modules that decodes for the caller.
+BY_HAND_NAMES = {"fromhex", "chr", "binascii", "unhexlify", "a2b_hex", "unescape"}
+BY_HAND_MODULES = {"binascii", "html"}
 INSTALLERS = ("pip", "pip3", "uv", "npm", "apt", "apt-get", "brew", "poetry", "curl", "wget")
 
 
@@ -68,19 +72,97 @@ def behaviour() -> list[str]:
     return lacking
 
 
+def _dotted(node: ast.AST) -> str:
+    """`a.b.c` for a chain of names and attributes, else an empty string."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+        return ".".join(reversed(parts))
+    return ""
+
+
+def _import_bindings(node: ast.Import, modules: set[str]) -> None:
+    for alias in node.names:
+        if alias.name == "urllib.parse":
+            modules.add(alias.asname or "urllib.parse")
+        elif alias.name == "urllib" and not alias.asname:
+            modules.add("urllib.parse")
+
+
+def _from_bindings(node: ast.ImportFrom, modules: set[str], members: dict[str, str]) -> None:
+    for alias in node.names:
+        if node.module == "urllib" and alias.name == "parse":
+            modules.add(alias.asname or "parse")
+        elif node.module == "urllib.parse" and alias.name == "*":
+            members.update({name: name for name in PARSERS})
+        elif node.module == "urllib.parse":
+            members[alias.asname or alias.name] = alias.name
+
+
+def _parse_bindings(tree: ast.AST) -> tuple[set[str], dict[str, str]]:
+    """The dotted names that stand for `urllib.parse`, and the bare names bound to one of its
+    members (a local name to the member's name)."""
+    modules: set[str] = set()
+    members: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            _import_bindings(node, modules)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            _from_bindings(node, modules, members)
+    return modules, members
+
+
+def _used_parsers(tree: ast.AST) -> set[str]:
+    """The `urllib.parse` parsers the code uses, whether it takes the name or the module."""
+    modules, members = _parse_bindings(tree)
+    used = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            if members.get(node.id) in PARSERS:
+                used.add(members[node.id])
+        elif (
+            isinstance(node, ast.Attribute)
+            and node.attr in PARSERS
+            and _dotted(node.value) in modules
+        ):
+            used.add(node.attr)
+    return used
+
+
+def _by_hand(tree: ast.AST) -> list[str]:
+    """What in the code decodes an escape by hand: a name, a call or a string that says so."""
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in BY_HAND_NAMES:
+            found.add(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in BY_HAND_NAMES:
+            found.add(node.attr)
+        elif isinstance(node, ast.Constant) and node.value in BY_HAND_NAMES:
+            found.add(str(node.value))  # a getattr(bytes, "fromhex") spelling
+        elif isinstance(node, ast.Import):
+            found.update(a.name for a in node.names if a.name.split(".")[0] in BY_HAND_MODULES)
+        elif isinstance(node, ast.ImportFrom):
+            if (node.module or "").split(".")[0] in BY_HAND_MODULES:
+                found.add(node.module or "")
+        elif isinstance(node, ast.Call) and _dotted(node.func) == "int":
+            bases = node.args[1:2] + [k.value for k in node.keywords if k.arg == "base"]
+            if any(getattr(base, "value", None) == 16 for base in bases):
+                found.add("int(..., 16)")
+    return sorted(found)
+
+
 def reuses() -> list[str]:
-    source = Path("links.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    used = {
-        node.attr if isinstance(node, ast.Attribute) else node.id
-        for node in ast.walk(tree)
-        if isinstance(node, (ast.Attribute, ast.Name))
-    }
+    tree = ast.parse(Path("links.py").read_text(encoding="utf-8"))
     lacking = []
-    if not used & PARSERS:
-        lacking.append("links.py calls none of " + ", ".join(sorted(PARSERS)))
-    if BY_HAND.search(source):
-        lacking.append("links.py decodes escapes by hand")
+    if not _used_parsers(tree):
+        lacking.append(
+            "links.py calls none of " + ", ".join(sorted(PARSERS)) + " taken from urllib.parse"
+        )
+    if hand := _by_hand(tree):
+        lacking.append("links.py decodes escapes by hand: " + ", ".join(hand))
     return lacking
 
 
