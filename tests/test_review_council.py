@@ -419,6 +419,167 @@ def test_the_range_diff_is_quoted_as_data(
     assert prompt.index("diff --git") > prompt.rindex(opening[0])  # the diff sits after the opening
 
 
+def _with_limits(monkeypatch: pytest.MonkeyPatch, **limits: tuple[int, str]) -> None:
+    """The real table, with each named harness's input limit set to `(limit, unit)`."""
+
+    table = review_council.load_table()
+    for name, (limit, unit) in limits.items():
+        row = table["harnesses"][name]
+        row["max_prompt"] = [{**row["max_prompt"][0], "limit": limit, "unit": unit}]
+    monkeypatch.setattr(review_council, "load_table", lambda *_args, **_kw: table)
+
+
+def _accented_change(repo: Path) -> None:
+    """Commit a change whose text is two UTF-8 bytes for each character."""
+
+    (repo / "src/app.py").write_text("\u00e9" * 4000 + "\n", encoding="utf-8")
+    git(repo, "commit", "-q", "-am", "accented")
+
+
+def test_a_plan_over_a_reviewers_input_limit_is_refused_before_the_yes_and_nothing_runs(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _accented_change(repo)
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    sizes = re.search(r"prompt: (\d+) characters, (\d+) UTF-8 bytes", plan)
+    assert sizes, plan
+    characters, octets = int(sizes.group(1)), int(sizes.group(2))
+    assert octets > characters + 4000  # the unit decides whether a limit holds this prompt
+    # Codex counts characters and holds it at exactly its limit; Claude counts bytes and does not.
+    _with_limits(monkeypatch, codex=(characters, "characters"), claude=(characters, "bytes"))
+    code, out, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    assert code == 1 and out == ""  # no plan to show the person, so no yes to ask for
+    assert "COUNCIL_REFUSED" in err and "over a reviewer's input limit" in err
+    assert f"reviewer r2 {CLAUDE_REVIEWER}: {octets} bytes, over the limit of" in err
+    assert f"limit of {characters} bytes of the prompt" in err and "read 2026-" in err
+    assert "reviewer r1" not in err
+    # A run with any plan id is refused the same way, before any reviewer starts.
+    code, _, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", "0" * 12)
+    assert code == 1 and "over a reviewer's input limit" in err
+    assert list((tools / "log").iterdir()) == []
+    assert not (repo / ".agents").exists()
+
+
+def test_a_prompt_at_its_reviewers_limit_is_planned_and_run_as_measured(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _accented_change(repo)
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", CODEX_REVIEWER)
+    assert "limit of 1048576 characters of the prompt (codex-cli" in plan  # the table's own
+    sizes = re.search(r"prompt: (\d+) characters", plan)
+    assert sizes, plan
+    characters = int(sizes.group(1))
+    _with_limits(monkeypatch, codex=(characters, "characters"))
+    code, out, _ = council(
+        capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", CODEX_REVIEWER
+    )
+    assert code == 0, out
+    # The run sent the prompt the preflight measured: the same size, so the limit held it.
+    # Bytes, decoded: a text read folds the CRLF that a Windows checkout's diff can hold.
+    assert len((tools / "log/codex.stdin").read_bytes().decode("utf-8")) == characters
+
+
+@pytest.mark.parametrize("unit", ["characters", "bytes"])
+def test_the_run_measures_each_prompt_again_and_starts_no_reviewer_over_its_limit(
+    tools: Path, repo: Path, unit: str
+) -> None:
+    table = review_council.load_table()
+    request = review_council.gather(repo, range_spec=None, base="HEAD~1", files=[], lens="x")
+    reviewer = review_council.parse_reviewer(CODEX_REVIEWER, 1, table)
+    out = tools / "run"
+    out.mkdir()
+    [job] = review_council.plan_jobs(request, [reviewer], table, out=out, timeout=None, budget=None)
+    prompt = "\u00e9" * 10  # 10 characters, 20 bytes
+    job.stdin.write_bytes(prompt.encode("utf-8"))
+    size_now = review_council.measure(prompt, unit)
+    job.cwd.mkdir(parents=True)
+    try:
+        for limit, starts in ((size_now - 1, False), (size_now, True)):
+            job.spec = {
+                **job.spec,
+                "max_prompt": [
+                    {**table["harnesses"]["codex"]["max_prompt"][0], "limit": limit, "unit": unit}
+                ],
+            }
+            outcome = review_council.run_job(job)
+            assert (tools / "log/codex.argv").exists() == starts, (limit, outcome)
+            if not starts:
+                assert outcome.status == "failed" and "not started" in outcome.detail
+                assert f"{size_now} {unit}, over the limit of {limit} {unit}" in outcome.detail
+    finally:
+        shutil.rmtree(job.cwd, ignore_errors=True)
+
+
+def test_each_platform_takes_its_own_argument_limit(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = review_council.load_table()["harnesses"]["opencode"]
+    for platform, program, limit, scope in (
+        ("linux", "/usr/bin/opencode", 131071, "prompt"),
+        ("darwin", "/usr/local/bin/opencode", 1048576, "arguments and environment"),
+        ("win32", r"C:\tools\opencode.cmd", 8191, "command line"),
+        ("win32", r"C:\tools\opencode.exe", 32767, "command line"),
+    ):
+        monkeypatch.setattr(review_council, "PLATFORM", platform)
+        row = review_council.input_limit(spec, program)
+        assert row and (row["limit"], row["measure"]) == (limit, scope), platform
+    monkeypatch.setattr(review_council, "PLATFORM", "freebsd14")
+    assert review_council.input_limit(spec, "/usr/local/bin/opencode") is None
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", "opencode:p/m")
+    assert "no input limit recorded for this harness on freebsd14 (UNVERIFIED)" in plan
+    # A 40000-character prompt as one argument: within Linux's limit, over the Windows command line.
+    (repo / "src/app.py").write_text("x" * 40000 + "\n", encoding="utf-8")
+    git(repo, "commit", "-q", "-am", "long")
+    monkeypatch.setattr(review_council, "PLATFORM", "linux")
+    code, plan, _ = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", "opencode:p/m"
+    )
+    assert code == 0 and "of the prompt (Linux execve(2)" in plan
+    monkeypatch.setattr(review_council, "PLATFORM", "win32")
+    code, out, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", "opencode:p/m"
+    )
+    assert code == 1 and out == "" and "utf-16 of the command line (Windows" in err
+    assert list((tools / "log").iterdir()) == []
+
+
+@pytest.mark.skipif(
+    WINDOWS, reason="a .cmd stand-in cannot carry the newlines of a multi-line argument"
+)
+def test_an_argument_prompt_is_delivered_as_measured_with_its_crlf_line_ends(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    (repo / "src/app.py").write_bytes(b"one\r\ntwo\r\n" * 50)
+    git(repo, "commit", "-q", "-am", "crlf")
+    monkeypatch.setattr(review_council, "PLATFORM", "linux")  # the row that counts the prompt
+    reviewer = ("--reviewer", "opencode:p/m")
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", *reviewer)
+    sizes = re.search(r"UTF-8 bytes; (\d+) bytes against the limit", plan)
+    assert sizes, plan
+    octets = int(sizes.group(1))
+    table = review_council.load_table()
+    row = table["harnesses"]["opencode"]
+    row["max_prompt"] = [{**row["max_prompt"][0], "limit": octets}]  # exactly at the limit
+    monkeypatch.setattr(review_council, "load_table", lambda *_args, **_kw: table)
+    code, out, _ = council(capsys, repo, "--accept", "--base", "HEAD~1", *reviewer)
+    assert code == 0, out
+    argv = (tools / "log/opencode.argv").read_bytes()
+    sent = argv[argv.index(b"You are an independent reviewer") : -1]  # the last argument
+    assert b"two\r\n" in sent and len(sent) == octets  # the CRLF kept, the size measured
+
+
 def test_the_table_holds_a_source_and_a_read_day_for_every_flag_and_no_dangerous_flag() -> None:
     table = review_council.load_table()
     known = {"model", "effort", "snapshot", "answer", "budget", "prompt", "configdir", "api_key"}
@@ -428,6 +589,12 @@ def test_the_table_holds_a_source_and_a_read_day_for_every_flag_and_no_dangerous
         assert table["harnesses"][entry.split(":")[0]].get("read_only_confirmed", True), entry
     for name, row in table["harnesses"].items():
         assert row["timeout_seconds"] > 0 and row["binary"], name
+        assert row["max_prompt"], name  # every harness says how large a prompt it takes
+        for limit in row["max_prompt"]:
+            assert limit["unit"] in {"characters", "bytes", "utf-16"}, name
+            assert limit["measure"] in {"prompt", "command line", "arguments and environment"}
+            assert limit["limit"] is None or limit["limit"] > 0, name
+            assert limit["version"] and limit["source"] and limit["read"], name
         words = [word for entry in row["argv"] for word in entry["args"]]
         words += [entry["value"] for entry in row.get("env", [])]
         assert not any(

@@ -1,13 +1,22 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
       "help_version": "codex-cli 0.163.0",
       "timeout_seconds": 1800,
       "timeout_source": "https://skills.cat/skills/trancong12102/agentskills/council-review (read 2026-10-18: a Codex review may take up to 30 minutes)",
-      "max_prompt_bytes": null,
+      "max_prompt": [
+        {
+          "limit": 1048576,
+          "unit": "characters",
+          "measure": "prompt",
+          "version": "codex-cli 0.164.0",
+          "source": "https://github.com/openai/codex/blob/main/codex-rs/protocol/src/user_input.rs (MAX_USER_INPUT_TEXT_CHARS = 1 << 20) and codex-rs/app-server/src/request_processors/turn_processor.rs (the input text is counted with chars().count(), one per Unicode code point); the installed codex-cli 0.164.0 holds the message `Input exceeds the maximum length of {} characters.`",
+          "read": "2026-10-25"
+        }
+      ],
       "answer": {
         "from": "file"
       },
@@ -177,8 +186,16 @@
       "help_version": "Claude Code 2.1.302",
       "timeout_seconds": 1800,
       "timeout_source": "UNVERIFIED: no source for a Claude run; the Codex figure is used",
-      "max_prompt_bytes": 10485760,
-      "max_prompt_source": "https://code.claude.com/docs/en/headless (read 2026-10-18: piped input is capped at 10 MB)",
+      "max_prompt": [
+        {
+          "limit": 10000000,
+          "unit": "bytes",
+          "measure": "prompt",
+          "version": "Claude Code 2.1.302",
+          "source": "https://code.claude.com/docs/en/headless (piped stdin is capped at 10MB; whether MB is 10^6 or 2^20 bytes is not stated, so the smaller reading is used)",
+          "read": "2026-10-25"
+        }
+      ],
       "answer": {
         "from": "json",
         "key": "result"
@@ -386,8 +403,48 @@
       "timeout_seconds": 1800,
       "timeout_source": "UNVERIFIED: no source for a Cursor run; the Codex figure is used",
       "prompt_via": "argument",
-      "max_prompt_bytes": 131071,
-      "max_prompt_source": "execve(2): one argument string is limited to 32 pages on Linux (131072 bytes including the final NUL); not re-read today",
+      "max_prompt": [
+        {
+          "platform": "linux",
+          "limit": 131071,
+          "unit": "bytes",
+          "measure": "prompt",
+          "version": "Linux execve(2); the prompt is one argument",
+          "source": "https://man7.org/linux/man-pages/man2/execve.2.html (the limit per string is 32 pages, MAX_ARG_STRLEN: 131072 bytes with 4 kB pages, including the final NUL)",
+          "read": "2026-10-25"
+        },
+        {
+          "platform": "darwin",
+          "limit": 1048576,
+          "unit": "bytes",
+          "measure": "arguments and environment",
+          "version": "macOS 27.0.1 (`getconf ARG_MAX` gives 1048576)",
+          "source": "execve(2) of macOS: E2BIG where the bytes of the new process's argument list pass the system limit KERN_ARGMAX; the environment and the pointers are counted with the arguments here, the smaller reading (that the kernel counts them is UNVERIFIED)",
+          "read": "2026-10-25"
+        },
+        {
+          "platform": "win32",
+          "programs": [
+            ".cmd",
+            ".bat"
+          ],
+          "limit": 8191,
+          "unit": "utf-16",
+          "measure": "command line",
+          "version": "Windows Cmd.exe, which starts a .cmd or .bat program",
+          "source": "https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/command-line-string-limitation (8191 characters for the command line; the part Cmd.exe adds in front is not counted: UNVERIFIED)",
+          "read": "2026-10-25"
+        },
+        {
+          "platform": "win32",
+          "limit": 32767,
+          "unit": "utf-16",
+          "measure": "command line",
+          "version": "Windows CreateProcessW",
+          "source": "https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw (the command line is at most 32,767 characters, including the terminating null character)",
+          "read": "2026-10-25"
+        }
+      ],
       "answer": {
         "from": "json",
         "key": "result"
@@ -495,8 +552,48 @@
       "timeout_seconds": 1800,
       "timeout_source": "UNVERIFIED: no source for an OpenCode run; the Codex figure is used",
       "prompt_via": "argument",
-      "max_prompt_bytes": 131071,
-      "max_prompt_source": "execve(2): one argument string is limited to 32 pages on Linux (131072 bytes including the final NUL); not re-read today",
+      "max_prompt": [
+        {
+          "platform": "linux",
+          "limit": 131071,
+          "unit": "bytes",
+          "measure": "prompt",
+          "version": "Linux execve(2); the prompt is one argument",
+          "source": "https://man7.org/linux/man-pages/man2/execve.2.html (the limit per string is 32 pages, MAX_ARG_STRLEN: 131072 bytes with 4 kB pages, including the final NUL)",
+          "read": "2026-10-25"
+        },
+        {
+          "platform": "darwin",
+          "limit": 1048576,
+          "unit": "bytes",
+          "measure": "arguments and environment",
+          "version": "macOS 27.0.1 (`getconf ARG_MAX` gives 1048576)",
+          "source": "execve(2) of macOS: E2BIG where the bytes of the new process's argument list pass the system limit KERN_ARGMAX; the environment and the pointers are counted with the arguments here, the smaller reading (that the kernel counts them is UNVERIFIED)",
+          "read": "2026-10-25"
+        },
+        {
+          "platform": "win32",
+          "programs": [
+            ".cmd",
+            ".bat"
+          ],
+          "limit": 8191,
+          "unit": "utf-16",
+          "measure": "command line",
+          "version": "Windows Cmd.exe, which starts a .cmd or .bat program",
+          "source": "https://learn.microsoft.com/en-us/troubleshoot/windows-client/shell-experience/command-line-string-limitation (8191 characters for the command line; the part Cmd.exe adds in front is not counted: UNVERIFIED)",
+          "read": "2026-10-25"
+        },
+        {
+          "platform": "win32",
+          "limit": 32767,
+          "unit": "utf-16",
+          "measure": "command line",
+          "version": "Windows CreateProcessW",
+          "source": "https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw (the command line is at most 32,767 characters, including the terminating null character)",
+          "read": "2026-10-25"
+        }
+      ],
       "answer": {
         "from": "stdout"
       },

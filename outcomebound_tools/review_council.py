@@ -6,7 +6,8 @@ What this module decides: the request (a diff of a ref range or against a base, 
 quoted as data with a lens); the reviewers (`harness:model[:effort]`, with defaults from
 `adapters/council.json`); the exact argv of each, built from that table; and, after a run, one
 review file for each reviewer that answered, in the `review check` format, with every `path:line`
-citation looked up at the reviewed revision. `--plan` prints all of that and runs nothing.
+citation looked up at the reviewed revision. `--plan` prints all of that and runs nothing; it
+and `--accept` refuse a request whose assembled prompt is over a reviewer's input limit.
 `--accept` runs the reviewers in parallel, each against a snapshot of the reviewed revision, and
 spends the person's credits with every reviewer it starts.
 
@@ -28,6 +29,7 @@ import re
 import secrets
 import shlex
 import shutil
+import struct
 import subprocess
 import sys
 import tarfile
@@ -354,6 +356,92 @@ def build_prompt(request: Request, reviewer: Reviewer) -> str:
     )
 
 
+# --- the input limit ----------------------------------------------------------------------------
+
+# The platform whose limits apply; a test sets another to check that platform's row.
+PLATFORM = sys.platform
+POINTER = struct.calcsize("P")
+
+
+def input_limit(spec: dict[str, Any], program: str) -> dict[str, Any] | None:
+    """The first `max_prompt` row of a harness that applies to this platform and to `program`,
+    the path that would start, where that row names a limit: `limit`, `unit`, `measure`,
+    `version`, `source` and `read`. A row with `platform` applies only there, and one with
+    `programs` only to a program with one of those extensions."""
+
+    for row in spec.get("max_prompt") or []:
+        if row.get("platform") and not PLATFORM.startswith(row["platform"]):
+            continue
+        if row.get("programs") and not program.lower().endswith(tuple(row["programs"])):
+            continue
+        return row if row.get("limit") else None
+    return None
+
+
+def measure(text: str, unit: str) -> int:
+    """A size in a limit's unit: code points for `characters`, UTF-16 code units for `utf-16`,
+    UTF-8 for `bytes`."""
+
+    if unit == "characters":
+        return len(text)
+    if unit == "utf-16":
+        return len(text.encode("utf-16-le")) // 2
+    return len(text.encode("utf-8"))
+
+
+def delivered(job: Job, program: str, prompt: str) -> list[str]:
+    """The argv that starts the reviewer, with the prompt as its last argument where the harness
+    takes it so."""
+
+    rest = list(job.argv[1:])
+    if job.spec.get("prompt_via") == "argument":
+        rest[-1] = prompt
+    return [program, *rest]
+
+
+def measured(limit: dict[str, Any], job: Job, program: str, prompt: str) -> int:
+    """What a limit counts: the prompt; or the command line Windows receives, with its final NUL;
+    or every argument and environment string, each with its NUL and its pointer."""
+
+    unit, scope = limit["unit"], limit.get("measure", "prompt")
+    if scope == "command line":
+        return measure(subprocess.list2cmdline(delivered(job, program, prompt)), unit) + 1
+    if scope == "arguments and environment":
+        strings = [
+            *delivered(job, program, prompt),
+            *(f"{name}={value}" for name, value in {**os.environ, **job.env}.items()),
+        ]
+        return sum(measure(text, unit) + 1 + POINTER for text in strings) + 2 * POINTER
+    return measure(prompt, unit)
+
+
+def _limit_text(limit: dict[str, Any]) -> str:
+    return (
+        f"the limit of {limit['limit']} {limit['unit']} of the {limit.get('measure', 'prompt')} "
+        f"({limit['version']}; {limit['source']}, read {limit['read']})"
+    )
+
+
+def over_limit(request: Request, jobs: Sequence[Job]) -> list[str]:
+    """Each reviewer whose assembled prompt is over the input limit that applies to it, with the
+    size, the limit, its unit and where the limit was read. The prompt is the one a run delivers;
+    only its random boundary token differs, and that has a fixed length."""
+
+    over = []
+    for job in jobs:
+        program = programs.find(job.spec["binary"]) or job.spec["binary"]
+        limit = input_limit(job.spec, program)
+        if limit is None:
+            continue
+        size_now = measured(limit, job, program, build_prompt(request, job.reviewer))
+        if size_now > limit["limit"]:
+            over.append(
+                f"reviewer {job.reviewer.tag} {job.reviewer.label}: {size_now} {limit['unit']}, "
+                f"over {_limit_text(limit)}"
+            )
+    return over
+
+
 # --- the plan -----------------------------------------------------------------------------------
 
 
@@ -531,9 +619,19 @@ def render_plan(
                     else ""
                 )
             )
-        cap = spec.get("max_prompt_bytes")
-        if cap:
-            lines.append(f"  prompt limit: {cap} bytes ({spec.get('max_prompt_source', '')})")
+        prompt = build_prompt(request, reviewer)
+        program = found or spec["binary"]
+        limit = input_limit(spec, program)
+        lines.append(
+            f"  prompt: {measure(prompt, 'characters')} characters, "
+            f"{measure(prompt, 'bytes')} UTF-8 bytes; "
+            + (
+                f"{measured(limit, job, program, prompt)} {limit['unit']} against "
+                + _limit_text(limit)
+                if limit
+                else f"no input limit recorded for this harness on {PLATFORM} (UNVERIFIED)"
+            )
+        )
     lines += [
         "",
         "No run has shown that a safeguard stops a write. Whether the model named exists on the "
@@ -645,7 +743,7 @@ def _execute(job: Job, argv: list[str]) -> tuple[str, str] | None:
     by_argument = job.spec.get("prompt_via") == "argument"
     try:
         if by_argument:
-            argv[-1] = job.stdin.read_text(encoding="utf-8")
+            argv[-1] = job.stdin.read_bytes().decode("utf-8")  # the text measured, unchanged
         for entry in job.spec.get("env", []):
             if "{configdir}" in entry["value"]:
                 Path(job.values["configdir"]).mkdir(parents=True, exist_ok=True)
@@ -684,10 +782,15 @@ def run_job(job: Job) -> Outcome:
     found = programs.find(job.spec["binary"])
     if found is None:
         return done("failed", f"{job.spec['binary']} is not on PATH")
-    size_now = job.stdin.stat().st_size
-    cap = job.spec.get("max_prompt_bytes")
-    if cap and size_now > cap:
-        return done("failed", f"the prompt is {size_now} bytes; the documented limit is {cap}")
+    limit = input_limit(job.spec, found)
+    if limit:
+        # The prompt as the reviewer receives it, on standard input or as an argument.
+        size_now = measured(limit, job, found, job.stdin.read_bytes().decode("utf-8"))
+        if size_now > limit["limit"]:
+            return done(
+                "failed",
+                f"not started: {size_now} {limit['unit']}, over {_limit_text(limit)}",
+            )
     failure = _execute(job, [found, *job.argv[1:]])
     if failure is not None:
         return done(*failure)
@@ -854,7 +957,10 @@ def run_council(request: Request, jobs: Sequence[Job], out: Path) -> list[Outcom
     try:
         _snapshot(request.root, request.commit, snapshot)
         for job in jobs:
-            job.stdin.write_text(build_prompt(request, job.reviewer), encoding="utf-8")
+            # newline="\n": the file holds the very text the input limit was measured on.
+            job.stdin.write_text(
+                build_prompt(request, job.reviewer), encoding="utf-8", newline="\n"
+            )
         revision = Revision(request)
         with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
             outcomes = list(pool.map(run_job, jobs))
@@ -1089,6 +1195,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout=chosen["timeout"],
             budget=chosen["budget"],
         )
+        over = over_limit(request, jobs)
+        if over:
+            raise CouncilError(
+                "the prompt is over a reviewer's input limit, so there is no plan to approve and "
+                "no reviewer started: "
+                + "; ".join(over)
+                + ". Review less (a shorter range or fewer files), or name a reviewer whose "
+                "limit holds the prompt; either is a new plan"
+            )
         if options.plan:
             sys.stdout.write(render_plan(request, jobs, out, chosen["budget"], chosen))
             return 0
