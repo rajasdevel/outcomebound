@@ -4,7 +4,7 @@ family: setup
 applies: repositories where several agents work in one machine's checkout
 condition: when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 15
+version: 16
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -72,12 +72,18 @@ person one block to paste as the run's first message, the goal envelope itself, 
 are the person's own words; what is for the person, such as how to start the run, stays outside
 that block. A handoff names no copy of itself in another repository: a copy kept elsewhere is a
 snapshot that the run does not update. A memory is one fact per file with its
-source and the day it was checked. When instruction files changed in this task, or at a handoff
-you write or read, run `outcomebound instructions check .`; a worker that only reads or edits code
-does not run it. Its result says which notes another session wrote can be relied on: a FAIL on a note in `.agents/handoffs/` or
-`.agents/shared-memory/` means rely on none of the flagged notes, rebuild what they held from its
-sources, and name them in your handoff; anything else it reports (a FAIL or review hit in another
-file, a harness row past its re-check date, any other `UNVERIFIED`) goes into your handoff and
+source and the day it was checked. At a handoff you write or read, and after instruction files
+change, run `outcomebound instructions check .`, or reuse a run's result for this target while all
+it read still holds, whoever could have changed it: the instruction files and harness configuration,
+the paths, Make targets and scripts they name, the notes in `.agents/handoffs/` and
+`.agents/shared-memory/`, the person's rulings, the engine, and no harness row's re-check date
+passed since; where you cannot tell, run it. A worker that only reads or edits code does not run it.
+A reused result keeps its verdict: an `UNVERIFIED` goes into your handoff as `UNVERIFIED` again, not
+as settled because a handoff named it before. The check's result says which notes another session
+wrote can be relied on: a FAIL on a note in `.agents/handoffs/` or `.agents/shared-memory/` means
+rely on none of the flagged notes, rebuild what they held from its sources, and name them in your
+handoff; anything else it reports (a FAIL or review hit in another file, a harness row past its
+re-check date, any other `UNVERIFIED`) goes into your handoff and
 never blocks the notes. `outcomebound sources links <handoff>` only reads, and
 reports a link, anchor, path:line or ref that the handoff names and the tree lacks; its FAIL goes
 into your handoff like the other reports. Re-check each fact you act on against its source; delete

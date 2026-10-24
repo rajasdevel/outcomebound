@@ -34,9 +34,13 @@ keeps reviews, else in your reply to the reviewer or your report; do not make a 
 it.
 
 A reviewer you dispatch reads again only where a fix changes a claim its finding rests on or a
-result a user can observe, and then reads the changed claims and the context needed to check them. A finding that changes neither takes
-its disposition in this round and starts no other. For a review file (the form is below),
-`outcomebound review since <file>` shows what changed in Git since the revision its `Reviewed:` line
+result a user can observe, and then reads the changed claims and the context needed to check them.
+A finding that changes neither takes its disposition in this round and starts no other. Where a
+round finds another case of a defect an earlier round fixed, check whether the two share a cause:
+where they do, fix that cause within the task's bounds; where they do not, each finding takes its
+own disposition. Where the choice left is the person's, tell them how many rounds ran and what the
+last ones found, and hold only the work that waits on their answer. For a review file (the form
+is below), `outcomebound review since <file>` shows what changed in Git since the revision its `Reviewed:` line
 names, and which findings cite a changed path. A cited path that changed does not make a finding
 stale, nor an unchanged one hold. It writes nothing.
 
