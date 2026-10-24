@@ -1,0 +1,6 @@
+cat docs/specs/markdown-format.md
+cat CONTRIBUTING.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+cat audit/module_registry.py
+git log --stat -3
+ls

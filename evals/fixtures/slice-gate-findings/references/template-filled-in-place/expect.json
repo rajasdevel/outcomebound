@@ -1,0 +1,7 @@
+{
+  "claims": {
+    "drafts-pass-the-ticket-lint": "FAIL",
+    "gate-ticket-can-turn-green": "FAIL"
+  },
+  "report": {}
+}

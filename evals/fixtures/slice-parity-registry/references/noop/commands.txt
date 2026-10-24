@@ -1,0 +1,2 @@
+cat docs/specs/markdown-format.md
+ls formats

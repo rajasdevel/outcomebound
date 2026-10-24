@@ -1,0 +1,4 @@
+cat docs/specs/markdown-format.md
+cat CONTRIBUTING.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+ls formats tests

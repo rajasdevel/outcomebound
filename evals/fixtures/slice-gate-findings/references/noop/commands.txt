@@ -1,0 +1,2 @@
+cat docs/specs/doc-gate.md
+ls docs

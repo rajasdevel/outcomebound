@@ -1,0 +1,24 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "drafts-pass-the-ticket-lint": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "module-ticket-grants-the-registry": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "registry-left-out",
+    "registry-in-a-later-ticket",
+    "lint-refused",
+    "template-filled-in-place"
+  ]
+}

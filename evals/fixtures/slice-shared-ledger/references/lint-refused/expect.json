@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "drafts-pass-the-ticket-lint": "FAIL",
+    "draft-count-within-the-sizing-rule": "PASS",
+    "outcomes-not-merged-by-the-shared-file": "PASS",
+    "shared-file-granted-or-ordered": "PASS"
+  },
+  "report": {}
+}

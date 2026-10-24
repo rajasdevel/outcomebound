@@ -7,9 +7,11 @@
                                 commit holds
 
 A draft is a file added or changed since the seed, outside `.git`, that carries a ticket
-block. The engine is the OutcomeBound checkout on PYTHONPATH, never a program found on PATH.
-The seed is the commit OUTCOMEBOUND_SEED_SHA names, else the `seed` tag. Each exits 0 where
-it holds and 1 naming what does not; lines starting `observed:` never change the exit status.
+block and whose seed version did not: the ticket template and any document that held a block at
+the seed are not drafts, however a run fills them in. The engine is the OutcomeBound checkout
+on PYTHONPATH, never a program found on PATH. The seed is the commit OUTCOMEBOUND_SEED_SHA
+names, else the `seed` tag. Each exits 0 where it holds and 1 naming what does not; lines
+starting `observed:` never change the exit status.
 """
 
 from __future__ import annotations
@@ -42,10 +44,21 @@ def _seed() -> str:
     return seed or _git("rev-parse", "--verify", "refs/tags/seed^{commit}").decode().strip()
 
 
-def drafts() -> list[Path]:
-    """Every file added or changed since the seed that carries a ticket block, sorted."""
+def _held_a_block(path: Path, seed: str) -> bool:
+    """Whether the seed commit's version of `path` already carried a ticket block."""
 
-    listed = _git("ls-files", "--others", "-z") + _git("diff", "--name-only", "-z", _seed())
+    done = subprocess.run(
+        ["git", "show", f"{seed}:{path.as_posix()}"], capture_output=True, timeout=60
+    )
+    return done.returncode == 0 and BLOCK.encode() in done.stdout
+
+
+def drafts() -> list[Path]:
+    """Every file added or changed since the seed that carries a ticket block it did not
+    carry at the seed, sorted."""
+
+    seed = _seed()
+    listed = _git("ls-files", "--others", "-z") + _git("diff", "--name-only", "-z", seed)
     found = set()
     for raw in listed.split(b"\0"):
         path = Path(os.fsdecode(raw)) if raw else None
@@ -55,7 +68,7 @@ def drafts() -> list[Path]:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        if BLOCK in text:
+        if BLOCK in text and not _held_a_block(path, seed):
             found.add(path)
     return sorted(found)
 

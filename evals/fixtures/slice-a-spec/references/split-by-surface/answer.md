@@ -1,0 +1,1 @@
+I drafted three tickets in `docs/tickets/`: `csv-writer` (report.py), `format-option` (expenses.py) and `csv-tests-and-readme` (test_report.py and README.md). Each follows the design and names the `report-tests` claim. I published nothing.

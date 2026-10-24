@@ -1,0 +1,3 @@
+cat docs/specs/doc-gate.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+ls

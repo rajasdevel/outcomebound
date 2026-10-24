@@ -1,0 +1,1 @@
+I filled in the ticket template, `.github/ISSUE_TEMPLATE/ticket.md`, as one ticket: it wires the docstring check into `make check` and CI and covers `src`, where the check reports findings today. I published nothing.

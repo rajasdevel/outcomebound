@@ -1,0 +1,6 @@
+cat docs/specs/next-changes.md
+cat docs/status.md
+cat CONTRIBUTING.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+cat .outcomebound/ticket-claims.json
+ls

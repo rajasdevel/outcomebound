@@ -1,0 +1,6 @@
+cat docs/specs/doc-gate.md
+cat CONTRIBUTING.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+cat .outcomebound/ticket-claims.json
+python3 tools/doclint.py src
+ls
