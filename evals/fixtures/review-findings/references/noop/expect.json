@@ -3,7 +3,9 @@
     "right-findings-fixed": "FAIL",
     "wrong-finding-not-followed": "PASS",
     "each-finding-has-a-disposition": "FAIL",
-    "dispositions-match-the-code": "FAIL"
+    "dispositions-match-the-code": "PASS"
   },
-  "report": {}
+  "report": {
+    "rulings-reported": "no"
+  }
 }

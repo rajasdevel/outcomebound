@@ -360,7 +360,7 @@ def _same_path(word: str, path: str) -> bool:
 
 def executes(command: str, program: str) -> bool:
     """Whether `command` runs `program`: as the program itself, or a script a shell or
-    an interpreter it names runs."""
+    an interpreter it names runs, a module that `python -m` names included."""
 
     for words in _simple_commands(command):
         argv = _program(words)
@@ -372,6 +372,10 @@ def executes(command: str, program: str) -> bool:
         if interpreter in _SHELLS or re.match(r"^python3?(\.\d+)?$", interpreter):
             script = next((word for word in argv[1:] if not word.startswith("-")), "")
             if script and _same_path(script, program):
+                return True
+            # `python -m a.b.c` runs the module file `a/b/c.py`.
+            module = script and "-m" in argv[1 : argv.index(script)]
+            if module and _same_path(script.replace(".", "/") + ".py", program):
                 return True
     return False
 

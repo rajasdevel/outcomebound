@@ -30,5 +30,11 @@
     "right-finding-rejected",
     "third-left-open",
     "file-not-updated"
-  ]
+  ],
+  "report": {
+    "rulings-reported": {
+      "question": "Does the answer give each of the three findings a ruling: R1 and R2 fixed, and R3 rejected because the code already handles a parcel of exactly 2 kg?",
+      "must_always": false
+    }
+  }
 }

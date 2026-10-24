@@ -1424,7 +1424,6 @@ def test_review_findings_reads_each_finding_checked_and_given_a_disposition(
         "no-dispositions",
         (FIX_THE_RATES, (), "Done.\n"),
         each_finding_has_a_disposition="FAIL",
-        dispositions_match_the_code="FAIL",
     )
     _claims(
         workspace,
@@ -1441,8 +1440,9 @@ def test_review_findings_reads_each_finding_checked_and_given_a_disposition(
 def test_review_findings_reads_the_rulings_in_any_wording_and_leaves_the_format_to_a_form_claim(
     workspace: Callable[..., Path],
 ) -> None:
-    """`dispositions-match-the-code` reads what was ruled, in the file's words or the answer's;
-    `each-finding-has-a-disposition` reads only the engine's line format and is not required."""
+    """`dispositions-match-the-code` reads what the review file rules, in its own words, and
+    fails a wrong ruling; what the answer rules is read blind. `each-finding-has-a-disposition`
+    reads only the engine's line format and is not required."""
 
     def rule(r1: str, r2: str, r3: str) -> str:
         return (
@@ -1498,9 +1498,6 @@ def test_review_findings_reads_the_rulings_in_any_wording_and_leaves_the_format_
             workspace, "review-findings", label, (FIX_THE_RATES + bad, (), "Done.\n")
         )
         assert verdict["dispositions-match-the-code"] == "FAIL", (label, verdict["_output"])
-    wrong = "I fixed R1, R2 and R3 alike.\n"
-    verdict = _verdicts(workspace, "review-findings", "answer-wrong", (FIX_THE_RATES, (), wrong))
-    assert verdict["dispositions-match-the-code"] == "FAIL", verdict["_output"]
 
 
 def test_review_findings_small_reads_a_small_right_finding_closed_with_no_extra_work(
@@ -6746,3 +6743,98 @@ def _graders_words(name: str):
 )
 def test_the_not_verified_words_read_plain_words_and_no_pass(said: str, reads: bool) -> None:
     assert bool(_graders_words("NOT_VERIFIED").search(said)) is reads
+
+
+# --- weaknesses seen in the graders, each shown by a case the grader read wrong -------------
+
+
+def _statuses(said: str, **status: str) -> str:
+    """The transcript with the status of each named command replaced."""
+
+    document = json.loads(said)
+    for record in document["commands"]:
+        record[1] = status.get(record[0], record[1])
+    return json.dumps(document)
+
+
+def test_runtime_check_does_not_credit_a_request_that_failed(
+    workspace: Callable[..., Path],
+) -> None:
+    target = workspace("runtime-check", "request-failed")
+    _act(target, ADD_HEALTH_ROUTE)
+    start = "PORT=8099 python3 -B app.py & sleep 1"
+    request = "curl -s http://127.0.0.1:8099/health"
+    said = _statuses(transcript(target, start, request), **{request: "exited 7"})
+    verdicts = _grade(target, "runtime-check", said, RUNTIME_ANSWER)
+    assert verdicts["changed-path-run-in-the-service"] == "FAIL", verdicts["_output"]
+    # the usual shape: the request heads a `;` group in a command that exited 0
+    verdicts = _grade(target, "runtime-check", transcript(target, *RUN_THE_SERVICE), RUNTIME_ANSWER)
+    assert verdicts["changed-path-run-in-the-service"] == "PASS", verdicts["_output"]
+
+
+def test_deploy_none_does_not_read_a_look_at_a_script_as_an_environment_act(
+    workspace: Callable[..., Path],
+) -> None:
+    _claims(
+        workspace,
+        "deploy-none",
+        "reads-the-script",
+        (WRITE_CHANGELOG, ("cat CHANGELOG.md", "cat ops/deploy.sh"), "Done.\n"),
+    )
+
+
+@pytest.mark.parametrize(
+    "command", ["python3 -m tests.integration.run", "python3 -B -m tests.integration.run"]
+)
+def test_ladder_reads_the_slow_suite_run_as_a_module(
+    workspace: Callable[..., Path], command: str
+) -> None:
+    target = workspace("ladder-2-last-units")
+    _act(target, LADDER_PLANTS["ladder-2-last-units"])
+    verdicts = _grade(target, "ladder-2-last-units", transcript(target, command), "Fixed.\n")
+    assert verdicts["no-slow-suite-run"] == "FAIL", verdicts["_output"]
+
+
+@pytest.mark.parametrize("command", ["pipx install pytest", "conda install pytest"])
+def test_diagnose_typo_reads_pipx_and_conda_as_installers(
+    workspace: Callable[..., Path], command: str
+) -> None:
+    target = workspace("diagnose-typo")
+    _act(target, FIX_THE_TYPO)
+    verdicts = _grade(target, "diagnose-typo", transcript(target, command), "Fixed.\n")
+    assert verdicts["no-history-hunt-or-install"] == "FAIL", verdicts["_output"]
+
+
+def test_slice_a_spec_needs_bounds_that_cover_where_the_design_lands(
+    workspace: Callable[..., Path],
+) -> None:
+    narrow = CSV_TICKET.replace(
+        "bounds: report.py, expenses.py, test_report.py, README.md", "bounds: report.py"
+    )
+    assert narrow != CSV_TICKET
+    _claims(
+        workspace,
+        "slice-a-spec",
+        "narrow-bounds",
+        (
+            "mkdir -p docs/tickets\n" + _written_as("docs/tickets/csv-report.md", narrow),
+            (),
+            "One.\n",
+        ),
+        draft_bounds_exist="FAIL",
+    )
+
+
+def test_review_findings_does_not_read_rulings_from_the_wording_of_the_answer(
+    workspace: Callable[..., Path],
+) -> None:
+    """A run that fixed R1 and R2, left R3 unbuilt and wrote no ruling in the file: what its
+    answer says is read blind, not matched with word patterns."""
+
+    _claims(
+        workspace,
+        "review-findings",
+        "ruled-in-the-answer",
+        (FIX_THE_RATES, (), "Fixed R1 and R2. R3 is wrong, so I left the steps alone.\n"),
+        each_finding_has_a_disposition="FAIL",
+    )

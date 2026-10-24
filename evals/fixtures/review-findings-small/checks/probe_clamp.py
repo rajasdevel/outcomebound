@@ -42,7 +42,20 @@ transcript_commands = _beside("transcript_commands")
 
 HEADING = re.compile(r"^### ([A-Za-z0-9-]+) · (.+)$")
 DISPOSITION = re.compile(r"^Disposition: fixed (?:—|--) (\S.*)$")
-INSTALLERS = ("pip", "pip3", "uv", "npm", "apt", "apt-get", "brew", "poetry", "curl", "wget")
+INSTALLERS = (
+    "pip",
+    "pip3",
+    "pipx",
+    "uv",
+    "conda",
+    "npm",
+    "apt",
+    "apt-get",
+    "brew",
+    "poetry",
+    "curl",
+    "wget",
+)
 
 
 def _seed_clamp():

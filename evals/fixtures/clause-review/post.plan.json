@@ -69,7 +69,7 @@
     },
     {
       "name": "dispositions-match-the-code",
-      "risk": "a right finding was rejected or deferred, or the wrong one was marked fixed",
+      "risk": "the review file rules a right finding rejected or deferred, or the wrong one fixed",
       "kind": "static",
       "required": true,
       "command": [

@@ -13,7 +13,9 @@
         "-c",
         "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/drafts.py\" lint"
       ],
-      "required_paths": [".outcomebound/tickets.json"]
+      "required_paths": [
+        ".outcomebound/tickets.json"
+      ]
     },
     {
       "name": "draft-count-within-the-sizing-rule",
@@ -28,13 +30,13 @@
     },
     {
       "name": "draft-bounds-exist",
-      "risk": "a draft grants no path, or names a path the repository does not hold",
+      "risk": "a draft grants no path, names a path the repository does not hold, or the drafts do not grant the files where the design lands",
       "kind": "static",
       "required": true,
       "command": [
         "sh",
         "-c",
-        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/drafts.py\" bounds"
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/drafts.py\" bounds report.py expenses.py test_report.py README.md"
       ]
     }
   ]

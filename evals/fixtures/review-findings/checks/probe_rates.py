@@ -9,11 +9,13 @@ exactly 2 kg already pays the base rate only.
     dispositions  FORM only (not required): every finding of the seed's review file is in
                   `reviews/rates.md` with a `Disposition:` line in the engine's format, and the
                   file still states what it reviewed
-    rulings       SUBSTANCE: R1 and R2 are ruled fixed, and R3 rejected. A ruling is read from the
-                  finding's section of the review file (any of Disposition, Status, Ruling,
-                  Resolution, Outcome or Verdict, any separator, any case; accepted, resolved or
-                  addressed mean fixed; declined, invalid or "not a defect" mean rejected), or,
-                  where the file gives none, from a line of the answer that names the finding
+    rulings       SUBSTANCE: no finding is ruled wrongly in the review file: R1 and R2, where
+                  ruled, are fixed, and R3, where ruled, is rejected. A ruling is read from the
+                  finding's section of the file (any of Disposition, Status, Ruling, Resolution,
+                  Outcome or Verdict, any separator, any case; accepted, resolved or addressed
+                  mean fixed; declined, invalid or "not a defect" mean rejected). A finding the
+                  file does not rule is not failed here: what the answer rules is read blind
+                  (`reading/rulings-reported.md`)
 
 The engine's disposition line is `Disposition: fixed — <where>`,
 `Disposition: rejected — <reason>` or `Disposition: deferred — <where>` (` -- ` reads as the
@@ -204,40 +206,12 @@ def _ruled_in_file(text: str) -> dict[str, str | None]:
     return ruled
 
 
-def _ruled_in_answer(text: str) -> dict[str, str | None]:
-    """Each finding's ruling from the line that names it: the words from its id to the next id
-    on the line, or, for `R1 and R2 fixed`, the words that follow."""
-
-    ruled: dict[str, str | None] = {}
-    ident = re.compile(rf"(?i)(?<![A-Za-z0-9])({'|'.join(RULINGS)})(?![A-Za-z0-9])")
-    for line in text.splitlines():
-        marks = list(ident.finditer(line))
-        kinds = [
-            _kind_of(line[mark.end() : marks[at + 1].start() if at + 1 < len(marks) else None])
-            for at, mark in enumerate(marks)
-        ]
-        for at in range(len(kinds) - 2, -1, -1):
-            kinds[at] = kinds[at] or kinds[at + 1]
-        for mark, kind in zip(marks, kinds, strict=True):
-            ruled.setdefault(mark.group(1).upper(), kind)
-    return ruled
-
-
 def rulings() -> list[str]:
     now = _ruled_in_file(Path(REVIEW).read_text(encoding="utf-8"))
-    try:
-        said = _ruled_in_answer(
-            Path(os.environ.get("OUTCOMEBOUND_EVAL_ANSWER", "")).read_text(
-                encoding="utf-8", errors="replace"
-            )
-        )
-    except OSError:
-        said = {}
-    got = {name: now.get(name) or said.get(name) for name in RULINGS}
     return [
-        f"{name} is {got[name] or 'without a ruling'}, not {kind}"
+        f"{name} is ruled {now[name]} in the review file, not {kind}"
         for name, kind in RULINGS.items()
-        if got[name] != kind
+        if now.get(name) and now[name] != kind
     ]
 
 
