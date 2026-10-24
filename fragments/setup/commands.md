@@ -4,7 +4,7 @@ family: setup
 applies: any repository where an agent runs commands
 condition: when running a command whose output you read
 detect: ["."]
-version: 10
+version: 11
 ---
 **Context** — a harness may give a command a terminal, and all it prints is context spent. A pager
 waits for a key: `git --no-pager`, a tool's `--no-pager`, else `PAGER=cat`. An editor waits:
@@ -42,6 +42,11 @@ changed) or it endangers the machine; report that it did not finish, with the re
 The person's own instruction to stop or skip a check outranks that line: stop it, and report that the
 check did not run to its end. A command that was stopped can leave a lock or a half-done change: look before
 the next run.
+To undo your own work, remove only your changes: what a file held when you began, and what
+another actor changed in it since, stays. Before you edit a file that already holds changes,
+staged or not, record them (`git diff HEAD -- <file>`). Before a restore, a checkout or a reverse
+patch, compare what it would remove, from the index as well as the file, with that record and
+with the file as it is now; run it only when all it removes is yours, else edit your changes out.
 Where a bound forbids an act that a run can perform (a grant, a write to shared data, a call to a
 live service), a test suite is such a run: read the setup it runs first, then list what it
 will execute (the runner's collect-only or dry-run form, where reading the setup shows that form
@@ -51,4 +56,4 @@ result, not its help text.
 **Completion bar** — a command that was stopped or timed out is reported as not finished, never
 as passed; a check's verdict comes from its own exit code and its error text.
 **Distinguish** — quiet ≠ hidden; the exit code of a pipe ≠ the exit code of its command; stopped ≠
-failed; slow ≠ hung.
+failed; slow ≠ hung; your change ≠ the file's diff.
