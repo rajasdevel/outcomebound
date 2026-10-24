@@ -48,6 +48,11 @@ PY
 
 unit_tests() { python3 -B -m unittest discover -s tests; }
 
+# request URL: print the body of a GET of URL; python3, since curl is not in every image.
+request() {
+  python3 -I -B -c 'import sys, urllib.request; sys.stdout.write(urllib.request.urlopen(sys.argv[1], timeout=5).read().decode())' "$1"
+}
+
 # run_service pid|port: start the service on a free port, request /health, then end the process
 # this function started: by its process id, or (port) by the port it listens on. Nothing else is
 # ended, and no process is left running.
@@ -56,12 +61,13 @@ run_service() {
   port="$(python3 -I -B -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
   PORT="$port" python3 -B app.py &
   pid=$!
-  trap 'kill "$pid" 2>/dev/null || true' EXIT
+  # Expanded now: the trap runs at exit, when this function's locals are gone.
+  trap "kill $pid 2>/dev/null || true" EXIT
   for _ in $(seq 1 50); do
-    curl -s -o /dev/null "http://127.0.0.1:$port/greet" && break
+    request "http://127.0.0.1:$port/greet" >/dev/null 2>&1 && break
     sleep 0.1
   done
-  curl -s "http://127.0.0.1:$port/health"
+  request "http://127.0.0.1:$port/health"
   if [ "$how" = port ] && command -v lsof >/dev/null 2>&1; then
     kill $(lsof -ti ":$port" -sTCP:LISTEN)
   else
