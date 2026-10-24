@@ -59,7 +59,10 @@ class Request(NamedTuple):
     grading stage); a harness that can deny reads denies them, and one that cannot ignores
     them. `service_tier` is the serving tier the call asks for (Codex's `priority` is its fast
     mode); empty asks for none, and the tool's own default applies. The tool's record must show
-    the tier that was asked for; a harness with no such tier refuses the request."""
+    the tier that was asked for; a harness with no such tier refuses the request. `cell` is a new
+    folder, outside every path the model may write, where a harness that gives each call a home
+    of its own (Claude Code) makes it; None: beside `keep`. The runner names it with the
+    workspace's opaque id, so no path the call sees names the fixture or the arm."""
 
     model: str
     effort: str
@@ -69,6 +72,7 @@ class Request(NamedTuple):
     protected: tuple[Path, ...] = ()
     unreadable: tuple[Path, ...] = ()
     service_tier: str = ""
+    cell: Path | None = None
 
 
 class CallResult(NamedTuple):

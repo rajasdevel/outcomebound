@@ -839,7 +839,8 @@ def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Pat
     assert argv[argv.index("-m") + 1] == "gpt-6-sol" == meta["model_observed"]
     assert meta["verdict"] == "PASS" and meta["error"] == "", meta
     assert set(meta["claims"].values()) == {"PASS"} and len(meta["claims"]) == 5, meta
-    assert Path(meta["fixture_repo"]) == tmp_path / "fixtures" / out.name / "small-fix-r1"
+    assert Path(meta["fixture_repo"]) == tmp_path / "fixtures" / meta["workspace_id"]
+    assert RUN.OPAQUE.fullmatch(meta["workspace_id"]), meta["workspace_id"]
     assert (meta["arm_files"], meta["arm_launcher"]) == ({}, None)
     assert not (Path(meta["fixture_repo"]) / ".agents/skills/decision-brief").exists()
 

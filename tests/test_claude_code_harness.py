@@ -1181,7 +1181,10 @@ def test_a_suite_run_on_claude_code_is_stopped_at_its_cap_with_its_watch_log_and
     assert meta["budget"]["stopped"] == "input_cap" and meta["watch_changes"] == 2
     assert meta["harness"] == row["harness"] == "claude-code" and row["thread_id"] == SESSION
     assert (trusted / f"{NAME}.native.jsonl").is_file()
-    assert (trusted / f"{NAME}.claude-home" / "config" / "projects").is_dir()
+    # No workspace root is named: the cell sits in the run directory, under the opaque id.
+    assert RUN.OPAQUE.fullmatch(meta["workspace_id"]), meta["workspace_id"]
+    assert meta["claude_home"] == str(trusted / f"{meta['workspace_id']}.claude-home")
+    assert (trusted / f"{meta['workspace_id']}.claude-home" / "config" / "projects").is_dir()
     assert meta["isolation_verdict"] == "UNVERIFIED"
     capsys.readouterr()
     RUN.summarize([trusted])
@@ -1215,6 +1218,6 @@ def test_the_dry_run_builds_a_claude_code_cell_and_checks_the_loading_check_with
     assert (
         "CLAUDE_CONFIG_DIR=" in printed and ".claude/skills/using-outcomebound/SKILL.md" in printed
     )
-    built = next((tmp_path / "root").glob("dump-*/*"))
+    (built,) = [p for p in (tmp_path / "root").iterdir() if RUN.OPAQUE.fullmatch(p.name)]
     assert (built / ".claude" / "skills" / "diagnose" / "SKILL.md").is_file()
     assert not list(built.parent.glob("*.claude-home")), "a dry run makes no cell"

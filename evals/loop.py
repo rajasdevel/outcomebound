@@ -70,10 +70,12 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import shlex
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
@@ -528,13 +530,27 @@ def log_path(cell: Cell) -> Path:
 
 
 def run_cell(words: tuple[str, ...], log: Path, cwd: Path) -> int:
-    """Start one run.py call, its stdout and stderr appended to `log`, and give its exit."""
+    """Start one run.py call, its stdout and stderr appended to `log`, and give its exit.
+
+    The options after the script go in a file of their own beside the log, named at random,
+    and run.py reads them from it (`@FILE`): the process title a call's `ps` can show then names
+    no fixture and no arm. The file is removed when run.py exits."""
 
     log.parent.mkdir(parents=True, exist_ok=True)
-    with open(log, "a", encoding="utf-8") as stream:
-        return subprocess.run(
-            list(words), cwd=cwd, stdout=stream, stderr=subprocess.STDOUT, check=False
-        ).returncode
+    handle, name = tempfile.mkstemp(prefix=".run-args-", dir=log.parent)
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as listing:
+            listing.write("".join(f"{word}\n" for word in words[2:]))
+        with open(log, "a", encoding="utf-8") as stream:
+            return subprocess.run(
+                [*words[:2], f"@{name}"],
+                cwd=cwd,
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                check=False,
+            ).returncode
+    finally:
+        Path(name).unlink(missing_ok=True)
 
 
 Runner = Callable[[tuple[str, ...], Path, Path], int]

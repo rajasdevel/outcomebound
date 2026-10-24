@@ -125,13 +125,14 @@ def _refuse_changed_engine(sealed: dict) -> None:
 
 def prepare(fixture: str, arm_name: str, seal_out: Path | None = None) -> None:
     import os
-    import tempfile
 
     arm = run.fixture_arm(fixture, run.load_arm(arm_name, run.selected_fragments(fixture)))
     fixture_dir = run.FIXTURES / fixture
     work = STATE / "work"
     work.mkdir(parents=True, exist_ok=True)
-    workdir = Path(tempfile.mkdtemp(prefix=f"{fixture}-{arm_name}-", dir=work))
+    # An opaque name: the subagent is told this path, and it names no fixture or arm.
+    workdir = work / run.opaque_id(work)
+    workdir.mkdir(mode=0o700)
     try:
         stage = run.new_stage((workdir, STATE))
     except ValueError as problem:

@@ -18,7 +18,9 @@ CITATION = re.compile(
     r"(?P<path>(?:[\w.@~+-]*/)*[\w.@~+-]*\w\.[A-Za-z0-9]+)"
     r"(?::(?P<line>\d+)(?:-(?P<end>\d+))?|#L(?P<lline>\d+)(?:-L?(?P<lend>\d+))?)"
 )
-WORKSPACE = re.compile(r"^.*/ob-fixture-[^/]+/")
+# A workspace folder: `ws-<16 hex>` (the runner's opaque name) or, in runs kept from before it,
+# `ob-fixture-<random>`.
+WORKSPACE = re.compile(r"^.*/(?:ws-[0-9a-f]{16}|ob-fixture-[^/]+)/")
 
 
 def _relative(path: str, root: Path) -> Path:

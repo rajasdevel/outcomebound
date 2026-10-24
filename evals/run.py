@@ -57,6 +57,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -104,7 +105,7 @@ from evals.harnesses import SERVICE_TIER, Budget, Request
 from evals.harnesses.claude_code import GIT_IDENTITY, ClaudeCodeHarness, cell_for, unreadable
 from evals.harnesses.codex import CodexHarness, catalog
 from evals.native_commands import fill_directories
-from evals.native_receipts import parse_records
+from evals.native_receipts import parse_records, temporary_write_roots
 from evals.processes import bounded_command, partial_output
 from evals.watch import Watcher
 
@@ -2035,14 +2036,48 @@ def observations(log_dir: Path | None) -> list[str]:
     ]
 
 
+# A workspace's name: `ws-` and 16 random hexadecimal digits, new for each run. The call's own
+# files beside it (stubs, watch log, Claude Code cell) take the same id. Which fixture, arm and
+# repetition an id stands for is kept only in the run's record (its meta and INDEX.json), outside
+# the workspace, so no path the call sees names them.
+OPAQUE = re.compile(r"ws-[0-9a-f]{16}")
+OPAQUE_ENTRY = re.compile(r"ws-[0-9a-f]{16}(?:\..+)?")
+
+
+def opaque_id(*folders: Path) -> str:
+    """A new workspace id: random, and the name of no entry, nor the start of one, in any of
+    `folders`."""
+
+    while True:
+        ident = f"ws-{secrets.token_hex(8)}"
+        if not any(folder.is_dir() and any(folder.glob(f"{ident}*")) for folder in folders):
+            return ident
+
+
 def new_workspace(workspace: Path | None) -> Path:
     """The empty directory a fixture is built in: `workspace`, which must not exist yet, or a
-    new temporary one."""
+    new one with an opaque name in the system's temporary folder."""
 
     if workspace is None:
-        return Path(tempfile.mkdtemp(prefix="ob-fixture-"))
+        temporary = Path(tempfile.gettempdir())
+        workspace = temporary / opaque_id(temporary)
+        workspace.mkdir(mode=0o700)
+        return workspace
     workspace.mkdir(parents=True, exist_ok=False)
     return workspace
+
+
+def other_workspaces(workdir: Path) -> tuple[Path, ...]:
+    """The other runs' workspaces and their files beside `workdir`, by their opaque names, for a
+    call that can deny reads; none where `workdir` has no opaque name."""
+
+    if not OPAQUE.fullmatch(workdir.name) or not workdir.parent.is_dir():
+        return ()
+    return tuple(
+        entry
+        for entry in sorted(workdir.parent.iterdir())
+        if OPAQUE_ENTRY.fullmatch(entry.name) and not entry.name.startswith(workdir.name)
+    )
 
 
 def new_stage(avoid: tuple[Path, ...] = ()) -> Path:
@@ -2064,7 +2099,8 @@ class Place(NamedTuple):
     the workspace), the new folder that holds the sealed copy of its graders (None for one beside
     the workspace) and the workspace root, which the stage must stay outside; for a suite
     fixture, the new folder its stubs are placed in and the new file its watch log is written
-    to (None for each: beside the workspace)."""
+    to (None for each: beside the workspace); and the new folder a harness that gives each call
+    a home of its own makes it in (None: the harness's own choice, beside the session copy)."""
 
     workspace: Path | None = None
     keep: Path | None = None
@@ -2072,6 +2108,7 @@ class Place(NamedTuple):
     root: Path | None = None
     stubs: Path | None = None
     watch: Path | None = None
+    cell: Path | None = None
 
 
 def build_workspace(
@@ -2344,7 +2381,8 @@ def _call_and_judge(
                     sandbox=sandbox,
                     budget=kit.budget,
                     protected=kit.protected(),
-                    unreadable=(stage,),
+                    unreadable=(stage, *other_workspaces(workdir)),
+                    cell=place.cell,
                 ),
                 workdir,
                 fixture_write_roots(name, workdir),
@@ -2487,8 +2525,51 @@ def workspace_root(option: str) -> Path | None:
     return Path(named).resolve() if named else None
 
 
-def workspace_path(root: Path, out: Path, name: str, repetition: int) -> Path:
-    return root / out.name / f"{name}-r{repetition}"
+def beside_workspaces(root: Path | None) -> bool:
+    """Whether a call's own files (stubs, watch log, Claude Code cell) go beside its workspace,
+    in the named root: only where the root lies outside every temporary folder the sandbox lets
+    the model write. Elsewhere they go in the run directory, whose path the call then sees."""
+
+    if root is None:
+        return False
+    try:
+        writable = temporary_write_roots()
+    except ValueError:
+        return False
+    return not any(root.resolve().is_relative_to(folder) for folder in writable)
+
+
+def note_paths(root: Path | None) -> None:
+    """Say on stderr, where the call's own files cannot go beside the workspace, that the run
+    directory's path reaches the call."""
+
+    if not beside_workspaces(root):
+        sys.stderr.write(
+            "run: no workspace root outside the temporary folders is named, so each call's "
+            "stubs, watch log and Claude Code cell sit in the run directory, whose path the call "
+            "sees; name --workspace-root to keep every path the call sees opaque\n"
+        )
+
+
+def call_place(root: Path | None, out: Path, name: str) -> tuple[str, Place]:
+    """A new opaque id and where one run of fixture `name` keeps what it makes: its workspace
+    `<root>/<id>` (or `<temporary folder>/<id>`), its stubs, watch log and Claude Code cell
+    `<id>.stubs`, `<id>.watch.jsonl` and `<id>.claude-home` beside the workspace where the root
+    allows (`beside_workspaces`), else in the run directory; its session copy and sealed graders
+    under the fixture's name in the run directory, which the call does not see."""
+
+    base = root if root is not None else Path(tempfile.gettempdir())
+    side = root if root is not None and beside_workspaces(root) else out
+    ident = opaque_id(base, side)
+    return ident, Place(
+        workspace=base / ident,
+        keep=out / f"{name}.native.jsonl",
+        graders=out / f"{name}{SEALED_SUFFIX}",
+        root=root,
+        stubs=side / f"{ident}.stubs",
+        watch=side / f"{ident}.watch.jsonl",
+        cell=side / f"{ident}.claude-home",
+    )
 
 
 def refuse_workspaces(root: Path, paths: list[Path]) -> str:
@@ -2533,6 +2614,7 @@ def index_row(status: dict[str, Any], name: str, meta: dict[str, Any]) -> dict[s
         "thread_id": meta.get("thread_id"),
         "native_session": meta.get("native_session"),
         "workspace": meta.get("fixture_repo"),
+        "workspace_id": meta.get("workspace_id"),
         **{key: meta[key] for key in BARE_RECORDS if key in meta},
     }
 
@@ -2546,12 +2628,14 @@ def run_one(
     harness: Harness,
 ) -> tuple[bool, dict[str, Any]]:
     """One fixture under the run's arm, recorded in `out`; whether its call failed, and its
-    INDEX row. The workspace is kept under the status's root, if it names one, and the
-    harness's session record is copied to `<fixture>.native.jsonl`; a suite fixture's stubs are
-    placed in `<fixture>.stubs/` and its watch log is `<fixture>.watch.jsonl`."""
+    INDEX row. The workspace has a new opaque name (`call_place`) and is kept under the status's
+    root, if it names one; the meta records that name as `workspace_id`. The harness's session
+    record is copied to `<fixture>.native.jsonl`; a suite fixture's stubs are placed in
+    `<id>.stubs/` and its watch log is `<id>.watch.jsonl`, beside the workspace where the root
+    allows, else in `out`."""
 
     root = status.get("workspace_root")
-    workspace = workspace_path(Path(root), out, name, status["repetition"]) if root else None
+    ident, place = call_place(Path(root) if root else None, out, name)
 
     answer, report, returncode, extra = run_fixture(
         name,
@@ -2559,15 +2643,9 @@ def run_one(
         arm,
         path,
         harness,
-        Place(
-            workspace,
-            out / f"{name}.native.jsonl",
-            out / f"{name}{SEALED_SUFFIX}",
-            Path(root) if root else None,
-            out / f"{name}.stubs",
-            out / f"{name}.watch.jsonl",
-        ),
+        place,
     )
+    extra["workspace_id"] = ident
     (out / f"{name}.prompt.md").write_text(extra.pop("prompt", ""), encoding="utf-8")
     error = call_error(returncode, answer, extra, status["model"])
     extra.pop("error", None)
@@ -3537,6 +3615,9 @@ def _print_group(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="evals/run.py",
+        # `@FILE` reads the arguments from FILE, one a line: loop.py starts each cell so, and no
+        # fixture or arm name is in the runner's own process title, which a call's `ps` can show.
+        fromfile_prefix_chars="@",
         description=(
             "Hand a harness (default codex) each fixture's task behind one arm's kernel, in a "
             "disposable repository, and judge what the model left with the fixture's "
@@ -3690,9 +3771,11 @@ def _parser() -> argparse.ArgumentParser:
         "--workspace-root",
         metavar="DIR",
         default="",
-        help="keep each workspace at DIR/<run directory name>/<fixture>-r<repetition>, outside "
-        f"any Git checkout (default: ${EVAL_ROOT_ENV}, else ${FIXTURE_ROOT_ENV}, else a "
-        "temporary directory each)",
+        help="keep each workspace at DIR/ws-<16 hex digits>, a new random name that names no "
+        "fixture, arm or repetition (the run's meta and INDEX.json map it), outside any Git "
+        f"checkout (default: ${EVAL_ROOT_ENV}, else ${FIXTURE_ROOT_ENV}, else a temporary "
+        "directory each); the call's stubs, watch log and Claude Code cell sit beside it where "
+        "DIR is outside the temporary folders",
     )
     parser.add_argument(
         "--probe",
@@ -4031,7 +4114,7 @@ def sandbox_probe(
     with a runner-owned stub folder first on its PATH, that runs the commands of
     `SANDBOX_PROMPT`; its rows (`sandbox_rows`) and the call's own checks."""
 
-    workspace = workspace_path(root, out, "probe-sandbox", args.repetition) if root else None
+    workspace = root / opaque_id(root) if root else None
     work = new_workspace(workspace)
     stubs = out / "probe.stubs"
     stubs.mkdir()
@@ -4078,7 +4161,7 @@ def probe(args: argparse.Namespace, out: Path, root: Path | None, tool: Harness)
             f"probe: UNVERIFIED - preflight did not observe a subscription login for {tool.name}.\n"
         )
         return PREFLIGHT_EXIT
-    workspace = workspace_path(root, out, "probe", args.repetition) if root else None
+    workspace = root / opaque_id(root) if root else None
     message = refuse_workspaces(root, [workspace]) if root and workspace else ""
     if message:
         raise SystemExit(f"probe: {message}")
@@ -4393,7 +4476,7 @@ def dump_arm(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
     arm = fixture_arms(parser, args.arm, [name], elements, kept)[name]
     label = args.arm_label or element_label(args.arm, elements)
     root = workspace_root(args.workspace_root)
-    workspace = root / f"dump-{uuid.uuid4().hex[:12]}" / f"{name}-{label}" if root else None
+    workspace = root / opaque_id(root) if root else None
     refused = refuse_workspaces(root, [workspace]) if root and workspace else ""
     if refused:
         raise SystemExit(f"run: {refused}")
@@ -4717,7 +4800,7 @@ def _main(argv: list[str] | None = None) -> int:
     tool = make_harness(args.harness, plugins)
     if args.probe:
         return probe(args, out, root, tool)
-    reach = harness_reach(parser, tool, names, root / out.name if root else None, args.arm == BARE)
+    reach = harness_reach(parser, tool, names, root, args.arm == BARE)
     # Each fixture's install, read before anything runs: an install.json the runner refuses, a
     # fragment the engine does not ship, an element the install does not hold or an edit that
     # does not apply stops the run here.
@@ -4725,11 +4808,11 @@ def _main(argv: list[str] | None = None) -> int:
     tried_edits(parser, arms)
     arm = run_arm(args.arm, elements, kept)
     if root:
-        wanted = [workspace_path(root, out, name, args.repetition) for name in names]
-        refused = refuse_workspaces(root, wanted)
+        refused = refuse_workspaces(root, [])
         if refused:
             raise SystemExit(f"run: {refused}")
         root.mkdir(parents=True, exist_ok=True)
+    note_paths(root)
     try:
         out.mkdir(parents=True, exist_ok=False)
     except FileExistsError:
@@ -4748,6 +4831,7 @@ def _main(argv: list[str] | None = None) -> int:
         **({"service_tier": args.service_tier} if args.service_tier else {}),
         "repetition": args.repetition,
         "workspace_root": str(root) if root else None,
+        "opaque_paths": beside_workspaces(root),
         **arm.record(),
         **source(),
         "cli_version": tool.version(),
