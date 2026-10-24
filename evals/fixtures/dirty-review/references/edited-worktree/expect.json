@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "worktree-unchanged": "FAIL",
+    "source-read-before-report": "PASS",
+    "cited-lines-exist": "PASS"
+  },
+  "report": {
+    "contradiction-named": "yes"
+  }
+}

@@ -26,17 +26,6 @@
       ]
     },
     {
-      "name": "contradiction-named",
-      "risk": "the report passed over the document that says the opposite of the code",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "answer=\"${OUTCOMEBOUND_EVAL_ANSWER:-}\"; if [ ! -f \"$answer\" ]; then echo 'no answer file was supplied' >&2; exit 1; fi; for part in 'parser[.]md' 'parser[.]py' 'quot' 'contradict|disagree|conflict|inconsisten|mismatch|out of date|stale|does not match|doesn.t match|incorrect|wrong'; do if ! grep -Eqi \"$part\" \"$answer\"; then echo \"the answer does not say: $part\" >&2; exit 1; fi; done"
-      ]
-    },
-    {
       "name": "cited-lines-exist",
       "risk": "the report cites a file or a line this tree does not hold",
       "kind": "static",

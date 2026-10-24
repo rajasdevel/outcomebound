@@ -1,0 +1,4 @@
+cat parser.py
+cat docs/parser.md
+git status --short
+python3 -c "from pathlib import Path; p = Path('parser.py'); p.write_text(p.read_text().replace('line.split(\";\")', 'next(csv.reader([line], delimiter=\";\"))'))"
