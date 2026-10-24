@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "mean-fixed": "PASS",
+    "only-the-helper-and-its-test-changed": "FAIL",
+    "no-history-hunt-or-install": "PASS",
+    "passing-run-reported": "PASS"
+  },
+  "report": {}
+}

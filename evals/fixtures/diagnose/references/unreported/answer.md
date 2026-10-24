@@ -1,0 +1,1 @@
+Fixed `load_holidays` in `bizdays.py`: it now keeps only the date at the start of each line of `holidays.txt`, where it kept the whole line with the holiday name. `python3 -B -m unittest discover -s tests` passes.

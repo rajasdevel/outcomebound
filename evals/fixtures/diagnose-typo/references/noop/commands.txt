@@ -1,0 +1,2 @@
+python3 -B -m unittest 2>&1 | tail -15
+cat tally.py

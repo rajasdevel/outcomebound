@@ -1,0 +1,7 @@
+cat AGENTS.md
+cat bizdays.py
+cat holidays.txt
+python3 -B -c "import datetime; from bizdays import next_business_day; print(next_business_day(datetime.date(2026, 12, 24)))"
+python3 -B -c "from bizdays import load_holidays; print(sorted(load_holidays()))"
+python3 -B -m unittest discover -s tests
+python3 -B -c "import datetime; from bizdays import next_business_day; print(next_business_day(datetime.date(2026, 12, 24)), next_business_day(datetime.date(2026, 11, 25)), next_business_day(datetime.date(2026, 7, 2)))"
