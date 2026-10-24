@@ -12,6 +12,9 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "project-facts",
+      "harnesses": [
+        "claude-code"
+      ],
       "fragments": [
         "multi-agent",
         "local",
@@ -43,8 +46,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "107b91a3d48f173ab9e2c9c0890b577b16063f8205dc5c49579a47f94b3316e2",
-      "sha256": "96c3ee46a8211aa9e856e8cc5c01fadcd8e5338b7cbe39912722597eff1f2df0"
+      "frame": "f3fa267aa2ad3e6ea7c95a939e4ed04f3e7551592144e0e5eea1c546990b9817",
+      "sha256": "58e92529881437deb427c4d4020ae79625cf6134271d26960f7535afedeec7a4"
     },
     {
       "kind": "fragment",
