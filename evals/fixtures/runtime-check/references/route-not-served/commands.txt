@@ -1,0 +1,4 @@
+cat app.py
+python3 - <<'PY' (add the health route to app.py)
+python3 - <<'PY' (add a unit test for it)
+python3 -B -m unittest discover -s tests

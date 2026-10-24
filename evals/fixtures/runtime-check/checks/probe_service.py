@@ -4,7 +4,9 @@ probe the model cannot edit.
 
     served        the service the workspace holds, started here on a free local port by this
                   probe, answers `GET /health` with 200 and JSON that has `status` `ok` and the
-                  `version` of `VERSION`, and still answers `/greet`
+                  `version` of `VERSION`, and still answers `/greet`; the same service, run from
+                  a copy of the workspace whose `VERSION` holds another release, answers with
+                  that release, so the version is read from `VERSION` and not written into the code
     requested     a command the run executed requested `/health` over HTTP, and a command names
                   `app.py` or the `app` module, so the changed path ran in the service and not
                   only in a unit test
@@ -24,9 +26,11 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -55,49 +59,88 @@ def _get(port: int, path: str) -> tuple[int, str]:
         return problem.code, problem.read().decode("utf-8", "replace")
 
 
-def served() -> list[str]:
+def _running(folder: Path):
+    """Start `app.py` of `folder` on a free local port: the process and the port."""
+
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     server = subprocess.Popen(
         [sys.executable, "-B", "app.py"],
+        cwd=folder,
         env={**os.environ, "PORT": str(port)},
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    for _ in range(50):
+        if _open(port):
+            return server, port
+        time.sleep(0.1)
+    _end(server)
+    return None, port
+
+
+def _open(port: int) -> bool:
+    """Whether something listens on the local port."""
+
     try:
-        for _ in range(50):
-            try:
-                socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
-                break
-            except OSError:
-                time.sleep(0.1)
-        else:
-            return ["the service did not start"]
-        status, body = _get(port, "/health")
-        lacking = []
+        socket.create_connection(("127.0.0.1", port), timeout=0.2).close()
+    except OSError:
+        return False
+    return True
+
+
+def _end(server: subprocess.Popen) -> None:
+    server.terminate()
+    try:
+        server.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        server.kill()
+
+
+def _health(port: int, want: str) -> list[str]:
+    status, body = _get(port, "/health")
+    try:
+        data = json.loads(body)
+    except ValueError:
+        data = None
+    if status != 200:
+        return [f"GET /health answers {status}, not 200"]
+    if not isinstance(data, dict) or data.get("status") != "ok" or data.get("version") != want:
+        return [f"GET /health answers {body.strip()[:80]!r}, not status ok and version {want}"]
+    return []
+
+
+def served() -> list[str]:
+    server, port = _running(Path.cwd())
+    if server is None:
+        return ["the service did not start"]
+    try:
         want = Path("VERSION").read_text(encoding="utf-8").strip()
-        try:
-            data = json.loads(body)
-        except ValueError:
-            data = None
-        if status != 200:
-            lacking.append(f"GET /health answers {status}, not 200")
-        elif (
-            not isinstance(data, dict) or data.get("status") != "ok" or data.get("version") != want
-        ):
-            lacking.append(
-                f"GET /health answers {body.strip()[:80]!r}, not status ok and version {want}"
-            )
+        lacking = _health(port, want)
         if _get(port, "/greet?name=Ada") != (200, "Hello, Ada\n"):
             lacking.append("GET /greet no longer answers as it did")
-        return lacking
     finally:
-        server.terminate()
+        _end(server)
+    if lacking:
+        return lacking
+    # The same service over a copy whose release differs: a version written into the code, and
+    # not read from VERSION, answers the old one.
+    with tempfile.TemporaryDirectory() as scratch:
+        copy = Path(scratch) / "service"
+        shutil.copytree(Path.cwd(), copy, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+        other = "0.0.1-probe"
+        (copy / "VERSION").write_text(other + "\n", encoding="utf-8")
+        server, port = _running(copy)
+        if server is None:
+            return ["the service did not start from a copy with another VERSION"]
         try:
-            server.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            server.kill()
+            return [
+                f"{reason} after VERSION held {other}: the version is not read from VERSION"
+                for reason in _health(port, other)
+            ]
+        finally:
+            _end(server)
 
 
 def _commands() -> list[str] | None:
