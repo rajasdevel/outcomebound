@@ -1,0 +1,2 @@
+Added `slug(title)` to `textutil.py` and unit tests for it in `tests/test_textutil.py`: lower case, each run of characters that are not letters or digits becomes one `-`, no `-` at either end. `slug("Hello, World!")` is `hello-world`.
+`python3 -B -m unittest discover -s tests` passes. Nothing in the service imports `textutil`, so the unit tests cover the change and I did not start the service.
