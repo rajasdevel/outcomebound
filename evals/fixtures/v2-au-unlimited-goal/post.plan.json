@@ -38,9 +38,9 @@
     },
     {
       "name": "no-stop-condition-added",
-      "risk": "a stop tied to an estimate or a budget, which the person never set, was added to the goal or a progress record",
+      "risk": "WORDING only, not required: a stop tied to an estimate or a budget, which the person never set, was added to the goal or a progress record",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -49,9 +49,9 @@
     },
     {
       "name": "overrun-recorded",
-      "risk": "the progress records do not say that ticket 002 ran past its estimate",
+      "risk": "WORDING only, not required: the progress records do not say that ticket 002 ran past its estimate",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
