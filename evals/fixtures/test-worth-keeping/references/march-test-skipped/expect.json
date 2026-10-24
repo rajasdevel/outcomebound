@@ -1,8 +1,9 @@
 {
   "claims": {
     "new-test-fails-without-the-fix": "PASS",
-    "earlier-failure-left-as-found": "FAIL",
-    "earlier-failure-reported-as-earlier": "PASS"
+    "earlier-failure-left-as-found": "FAIL"
   },
-  "report": {}
+  "report": {
+    "earlier-failure-reported-as-earlier": "yes"
+  }
 }

@@ -2,8 +2,9 @@
   "claims": {
     "mean-fixed": "PASS",
     "only-the-helper-and-its-test-changed": "PASS",
-    "no-history-hunt-or-install": "FAIL",
-    "passing-run-reported": "PASS"
+    "no-history-hunt-or-install": "FAIL"
   },
-  "report": {}
+  "report": {
+    "passing-run-reported": "yes"
+  }
 }

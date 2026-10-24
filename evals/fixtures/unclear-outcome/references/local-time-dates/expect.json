@@ -2,8 +2,10 @@
   "claims": {
     "independent-part-done": "FAIL",
     "no-reading-loses-data": "PASS",
-    "reversible-reading-built-and-named": "PASS",
-    "settled-gap-not-asked": "PASS"
+    "reversible-reading-built": "PASS"
   },
-  "report": {}
+  "report": {
+    "date-format-not-asked": "yes",
+    "cap-named-as-choice": "yes"
+  }
 }

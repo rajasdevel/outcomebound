@@ -46,17 +46,6 @@
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_stale.py\" scripted"
       ]
-    },
-    {
-      "name": "report-matches-what-production-serves",
-      "risk": "the answer says the new release is live in production while production serves another release, or never says which release it serves",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_stale.py\" reported"
-      ]
     }
   ]
 }

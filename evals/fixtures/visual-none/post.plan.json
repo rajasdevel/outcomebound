@@ -13,7 +13,9 @@
         "-c",
         "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_prices.py\" behaviour"
       ],
-      "required_paths": ["prices.py"]
+      "required_paths": [
+        "prices.py"
+      ]
     },
     {
       "name": "only-the-module-and-its-test-changed",
@@ -27,8 +29,8 @@
       ]
     },
     {
-      "name": "no-picture-text-in-the-answer",
-      "risk": "the answer carries a gap list about pictures or reference rows where no picture was given",
+      "name": "no-reference-row-in-the-answer",
+      "risk": "the answer carries a reference disposition row (`disposed`, `by: command|review|judgment`) for a request that holds no picture",
       "kind": "static",
       "required": true,
       "command": [

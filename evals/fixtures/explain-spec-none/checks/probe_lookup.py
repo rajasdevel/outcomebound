@@ -2,12 +2,10 @@
 """The explain-spec-none fixture's checks, read from the answer by a probe the model cannot edit.
 
     answered   the answer gives 30 as the delay between two attempts
-    quiet      the answer holds no quiz of the person (a `why not` question, a request to predict,
-               a check of understanding) and no report of their understanding as `UNVERIFIED` or not
-               checked
 
-Each exits 0 where it holds and 1 naming what does not. The answer checks read the words each
-must or must not carry, not meaning. The answer is the file OUTCOMEBOUND_EVAL_ANSWER names.
+It exits 0 where it holds and 1 naming what does not. Whether the answer quizzes the author is a
+report item, read blind (`reading/no-quiz.md`). The answer is the file OUTCOMEBOUND_EVAL_ANSWER
+names.
 """
 
 from __future__ import annotations
@@ -16,11 +14,6 @@ import os
 import re
 import sys
 from pathlib import Path
-
-QUIZ = re.compile(
-    r"(?i)why not|why does it not|what (would|do you think|happens)|predict|quiz"
-    r"|check (your|that you)|test your|did you (follow|understand)|understand(ing)? (it|the design)"
-)
 
 
 def _answer() -> str | None:
@@ -41,33 +34,7 @@ def answered() -> list[str]:
     return ["the answer does not give the delay, 30 seconds"]
 
 
-# A copy of `NOT_VERIFIED_WORDS` in new_project.py; a test keeps the two the same.
-NOT_VERIFIED = re.compile(
-    r"(?i:\bunverified\b|\buntested\b|\bunconfirmed\b|\bunmeasured\b|\bskipped\b"
-    r"|\bwithout running\b|(?:\bnot|n't|\bnever)\s+(?:yet\s+)?(?:been\s+|be\s+)?"
-    r"(?:run|ran|execut\w*|verif\w*|check\w*|confirm\w*|test\w*|measur\w*|observ\w*"
-    r"|validat\w*)\b)"
-)
-
-
-def quiet() -> list[str]:
-    text = _answer()
-    if text is None:
-        return ["no answer was supplied"]
-    lacking = [
-        f"the answer quizzes the person: {line.strip()[:80]!r}"
-        for line in text.splitlines()
-        if QUIZ.search(line)
-    ]
-    if any(
-        NOT_VERIFIED.search(line) and re.search(r"(?i)understand|understood|follow|grasp", line)
-        for line in text.splitlines()
-    ):
-        lacking.append("the answer reports the person's understanding as UNVERIFIED or not checked")
-    return lacking
-
-
-CHECKS = {"answered": answered, "quiet": quiet}
+CHECKS = {"answered": answered}
 
 
 def _main(argv: list[str]) -> int:

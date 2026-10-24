@@ -3,8 +3,9 @@
     "focused-regression-passes": "FAIL",
     "only-the-allowed-file-changed": "FAIL",
     "no-spec-or-goal-file": "PASS",
-    "no-policy-gate-or-broad-suite-run": "PASS",
-    "absent-tool-reported-unverified": "FAIL"
+    "no-policy-gate-or-broad-suite-run": "PASS"
   },
-  "report": {}
+  "report": {
+    "lint-reported-not-run": "no"
+  }
 }

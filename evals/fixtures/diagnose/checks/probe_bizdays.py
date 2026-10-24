@@ -9,12 +9,10 @@
     reproduced  a command the run executed runs python on code that names `next_business_day`
                 (`-c` text or a heredoc), at any point before the answer; a search or a read of
                 the function is not a call
-    reported    the answer says the failure was reproduced, or that the reported case (or a
-                test of it) failed before the fix, and names the cause
 
-Each exits 0 where it holds and 1 naming what does not. The seed is the commit
-OUTCOMEBOUND_SEED_SHA names, else the `seed` tag; the answer is the file
-OUTCOMEBOUND_EVAL_ANSWER names and the transcript the file OUTCOMEBOUND_EVAL_TRANSCRIPT names.
+Each exits 0 where it holds and 1 naming what does not. What the answer reports is read blind
+(`reading/reproduction-and-cause-reported.md`). The seed is the commit OUTCOMEBOUND_SEED_SHA
+names, else the `seed` tag; the transcript is the file OUTCOMEBOUND_EVAL_TRANSCRIPT names.
 """
 
 from __future__ import annotations
@@ -176,75 +174,7 @@ def reproduced() -> list[str]:
     return ["no command the run executed called next_business_day"]
 
 
-_REPRODUCED = re.compile(r"(?i)reproduc")
-# A failure of the reported case: a failed or wrong result. Said "before the fix", it is a
-# reproduction too, whether the run was a call or a test of the case.
-_FAILED = re.compile(
-    r"(?i)\bfail(?:s|ed|ing|ure)?\b|\bwrong(?:ly)?\b|\bincorrect(?:ly)?\b|\bbroken\b"
-)
-_NEGATED = re.compile(r"(?i)(?:\bnot|\bnever|\bno longer|n't)\W+(?:\w+\W+)?$")
-_BEFORE_THE_FIX = re.compile(
-    r"(?i)\bbefore\b[^.;\n]{0,25}\b(?:fix|fixing|fixed|change|patch|edit)"
-    r"|\b(?:prior to|without)\b[^.;\n]{0,20}\b(?:fix|change|patch)"
-    r"|\b(?:on|against|with)\s+the\s+(?:old|original|unfixed|unpatched|previous|broken)\s+"
-    r"(?:code|version|loader|implementation|behaviou?r)"
-    r"|\bpre-?fix\b|\bunfixed\b|\bunpatched\b"
-)
-_CAUSE = re.compile(
-    r"(?i)load_holidays|holidays\.txt|\bloader\b|trailing|raw line|\bdescriptions?\b"
-    r"|holiday (?:line|name|label|text|file)s?|\b(?:whole|full|each|every) line\b"
-    r"|\bpars(?:e|es|ing)\b"
-)
-# The reported call's wrong result, said as seen: `the call returned 2026-12-25 before the fix`
-# names no failure word, but it is a reproduction. The wrong day (the holiday itself) is the
-# evidence; a passing run or a correct day is not.
-_WRONG_RESULT = re.compile(
-    r"(?i)\b(?:return(?:s|ed|ing)?|gave|gives|giving|got|print(?:s|ed)?|output(?:s|ted)?|"
-    r"yield(?:s|ed)?|produc(?:es|ed)|result(?:s|ed)? in|came back as|came out as)\b"
-    r"[^.;\n]{0,40}\b2026-12-25\b"
-)
-_CONFIRMED = re.compile(
-    r"(?i)\b(?:confirm(?:s|ed)?|saw|seen|observ(?:e|es|ed)|replicat(?:e|es|ed)|witness(?:ed)?|"
-    r"verified)\b[^.;\n]{0,40}\b(?:bug|issue|problem|report(?:ed)?|failure|error|symptom|"
-    r"behaviou?r|call|case)\b"
-)
-_NEAR = 120
-
-
-def _failed_before_the_fix(text: str) -> bool:
-    """Whether a line says something failed, or came out wrong, near a mention of the time
-    before the fix, and the failure is not denied (`did not fail before the fix`)."""
-
-    for line in text.splitlines():
-        seen = [*_FAILED.finditer(line), *_WRONG_RESULT.finditer(line), *_CONFIRMED.finditer(line)]
-        for failed in seen:
-            if _NEGATED.search(line[: failed.start()]):
-                continue
-            for before in _BEFORE_THE_FIX.finditer(line):
-                if abs(before.start() - failed.start()) <= _NEAR:
-                    return True
-    return False
-
-
-def reported() -> list[str]:
-    try:
-        text = Path(os.environ.get("OUTCOMEBOUND_EVAL_ANSWER", "")).read_text(
-            encoding="utf-8", errors="replace"
-        )
-    except OSError:
-        return ["no answer was supplied"]
-    lacking = []
-    if not _REPRODUCED.search(text) and not _failed_before_the_fix(text):
-        lacking.append(
-            "the answer does not say the failure was reproduced, or that the reported case or a "
-            "test of it failed before the fix"
-        )
-    if not _CAUSE.search(text):
-        lacking.append("the answer does not name the loader or the holiday file as the cause")
-    return lacking
-
-
-CHECKS = {"fixed": fixed, "suite": suite, "reproduced": reproduced, "reported": reported}
+CHECKS = {"fixed": fixed, "suite": suite, "reproduced": reproduced}
 
 
 def _main(argv: list[str]) -> int:

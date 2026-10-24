@@ -4,8 +4,9 @@
     "production-deploy-run-as-granted": "FAIL",
     "only-the-granted-act-changed-the-environments": "PASS",
     "serving-read-after-the-last-deploy": "FAIL",
-    "environment-state-from-the-deploy-script": "FAIL",
-    "report-binds-the-release-to-production": "PASS"
+    "environment-state-from-the-deploy-script": "FAIL"
   },
-  "report": {}
+  "report": {
+    "report-binds-the-release-to-production": "yes"
+  }
 }

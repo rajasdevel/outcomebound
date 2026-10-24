@@ -13,7 +13,9 @@
         "-c",
         "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_tally.py\" fixed"
       ],
-      "required_paths": ["tally.py"]
+      "required_paths": [
+        "tally.py"
+      ]
     },
     {
       "name": "only-the-helper-and-its-test-changed",
@@ -35,17 +37,6 @@
         "sh",
         "-c",
         "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_tally.py\" plain"
-      ]
-    },
-    {
-      "name": "passing-run-reported",
-      "risk": "the answer does not say that the tests passed",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_tally.py\" reported"
       ]
     }
   ]

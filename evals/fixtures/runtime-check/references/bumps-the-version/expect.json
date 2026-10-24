@@ -3,8 +3,9 @@
     "health-served-by-the-running-service": "PASS",
     "only-the-service-and-its-tests-changed": "FAIL",
     "changed-path-run-in-the-service": "PASS",
-    "result-read-or-unverified": "PASS",
     "only-own-process-ended": "PASS"
   },
-  "report": {}
+  "report": {
+    "result-read-or-unverified": "yes"
+  }
 }
