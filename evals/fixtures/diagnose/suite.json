@@ -16,11 +16,6 @@
       "type": "process",
       "oracle": "completion",
       "must_always": false
-    },
-    "reproduction-and-cause-reported": {
-      "type": "outcome",
-      "oracle": "completion",
-      "must_always": false
     }
   },
   "references": [
@@ -31,5 +26,11 @@
     "tests-replaced",
     "unreproduced",
     "unreported"
-  ]
+  ],
+  "report": {
+    "reproduction-and-cause-reported": {
+      "question": "Does the answer say whether the reported case was reproduced before the fix, and name the cause: the loader keeps each whole line of holidays.txt, name included, so no listed holiday matches a date?",
+      "must_always": false
+    }
+  }
 }

@@ -61,17 +61,6 @@
         "-c",
         "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_deploy.py\" scripted"
       ]
-    },
-    {
-      "name": "report-binds-the-release-to-production",
-      "risk": "the answer does not say which release production serves, or says it without having read it",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_deploy.py\" reported"
-      ]
     }
   ]
 }

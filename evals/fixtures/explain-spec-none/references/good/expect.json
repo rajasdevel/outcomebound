@@ -1,8 +1,9 @@
 {
   "claims": {
     "value-answered": "PASS",
-    "no-quiz-added": "PASS",
     "tree-unchanged": "PASS"
   },
-  "report": {}
+  "report": {
+    "no-quiz": "yes"
+  }
 }

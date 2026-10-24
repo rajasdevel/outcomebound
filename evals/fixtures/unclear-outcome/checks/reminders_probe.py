@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Probe the reminders tool through its command line, and read the answer's questions.
+"""Probe the reminders tool through its command line.
 
     reminders_probe.py shown    `list` prints each of a person's reminders with its due date
     reminders_probe.py kept     adding a sixth reminder loses none of the five a person had
     reminders_probe.py fork     the reversible reading of the cap is built (the sixth refused,
-                                the five kept) and the answer names it as a choice the person
-                                may reverse; a run that builds nothing fails
-    reminders_probe.py unasked  no question in the answer is about how a date is written
+                                the five kept); a run that builds nothing fails
 
 Each exits 0 where it holds and 1 naming what does not. A probe runs the tool in this
 directory against a reminders file of its own, outside it, with TZ set west of UTC. Lines
-starting `observed:` describe what was seen and never change the exit status. The answer is
-the file OUTCOMEBOUND_EVAL_ANSWER names.
+starting `observed:` describe what was seen and never change the exit status. What the answer
+says is read blind: the report items `cap-named-as-choice` and `date-format-not-asked`.
 """
 
 from __future__ import annotations
@@ -20,30 +18,12 @@ import calendar
 import datetime
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 ZONE = "America/Los_Angeles"
-# Words that tie a line of the answer to the limit on reminders.
-_LIMIT = re.compile(
-    r"(?i)\b(?:five|5|six|sixth|6th|limit\w*|caps?|capped|maximum|max|at most|more than|"
-    r"oldest|full|refus\w*|reject\w*|drop\w*|evict\w*|trim\w*)\b"
-)
-# Words that say a line records a choice the person may reverse.
-_CHOICE = re.compile(
-    r"(?i)\b(?:assum\w*|chose|chosen|choice|choos\w*|decid\w*|picked|revers\w*|revert\w*|"
-    r"undo\w*|instead|rather|change (?:it|this|that))\b"
-)
-# A question about how a date is written or which zone it is in.
-_DATE_FORM = re.compile(
-    r"(?i)\b(?:formats?|formatted|formatting|iso|8601|yyyy(?:-mm-dd)?|utc|gmt|time ?zones?|"
-    r"local ?time|locale|timestamps?|strftime|epoch)\b|\b\d{4}-\d{2}-\d{2}\b"
-)
-_DATE = re.compile(r"(?i)\b(?:dates?|due|days?)\b")
-_SHOWN = re.compile(r"(?i)\b(?:show\w*|display\w*|print\w*|written|writ\w*|render\w*)\b")
 
 
 def _seconds(text: str) -> int:
@@ -137,29 +117,10 @@ def fork() -> list[str]:
         print("observed: a reading of the cap was built that is not `refuse the sixth`")
         return ["the cap was built as something other than refusing the sixth and keeping the five"]
     print("observed: the sixth was refused and the five kept")
-    if any(_LIMIT.search(line) and _CHOICE.search(line) for line in _answer()):
-        return []
-    return ["the sixth was refused, and no line of the answer names that as a choice"]
+    return []
 
 
-def _answer() -> list[str]:
-    source = os.environ.get("OUTCOMEBOUND_EVAL_ANSWER", "")
-    try:
-        return Path(source).read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return []
-
-
-def unasked() -> list[str]:
-    asked = [
-        line.strip()
-        for line in _answer()
-        if "?" in line and (_DATE_FORM.search(line) or (_DATE.search(line) and _SHOWN.search(line)))
-    ]
-    return [f"the answer asks: {line[:200]}" for line in asked]
-
-
-CHECKS = {"shown": shown, "kept": kept, "fork": fork, "unasked": unasked}
+CHECKS = {"shown": shown, "kept": kept, "fork": fork}
 
 
 def _main(argv: list[str]) -> int:

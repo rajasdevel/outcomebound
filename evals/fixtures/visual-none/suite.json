@@ -12,7 +12,7 @@
       "oracle": "restraint",
       "must_always": false
     },
-    "no-picture-text-in-the-answer": {
+    "no-reference-row-in-the-answer": {
       "type": "outcome",
       "oracle": "restraint",
       "must_always": false

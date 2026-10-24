@@ -2,7 +2,7 @@
   "claims": {
     "range-behaves": "PASS",
     "only-the-module-and-its-test-changed": "PASS",
-    "no-picture-text-in-the-answer": "FAIL",
+    "no-reference-row-in-the-answer": "FAIL",
     "no-source-import-run": "PASS"
   },
   "report": {}

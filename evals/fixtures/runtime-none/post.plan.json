@@ -13,7 +13,9 @@
         "-c",
         "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_slug.py\" behaviour"
       ],
-      "required_paths": ["textutil.py"]
+      "required_paths": [
+        "textutil.py"
+      ]
     },
     {
       "name": "only-the-helper-and-its-test-changed",
@@ -28,7 +30,7 @@
     },
     {
       "name": "no-service-started-for-a-pure-helper",
-      "risk": "the service was started or a URL requested for a helper that the service never calls, or the answer reports the running service UNVERIFIED",
+      "risk": "the service was started or a URL requested for a helper that the service never calls",
       "kind": "static",
       "required": true,
       "command": [

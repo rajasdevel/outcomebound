@@ -26,5 +26,11 @@
     "starts-the-service",
     "hedges-the-service",
     "wires-it-into-the-service"
-  ]
+  ],
+  "report": {
+    "no-service-hedge": {
+      "question": "Does the answer leave out any report that the running service is unverified or not checked?",
+      "must_always": false
+    }
+  }
 }

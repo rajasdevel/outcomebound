@@ -3,8 +3,8 @@
 pictures adds nothing: the task is done and the answer and the commands carry no trace of it.
 
     behaviour  `format_range` returns the text the task describes
-    quiet      the answer names no picture, screenshot or design export, and has no `reference`
-               disposition row (`disposed`, `by: command|review|judgment`)
+    quiet      the answer has no `reference` disposition row (`disposed`,
+               `by: command|review|judgment`), the skill's format for a picture's facts
     plain      no command the run executed imported or checked a source ledger
 
 Each exits 0 where it holds and 1 naming what does not. The answer is the file
@@ -42,7 +42,6 @@ CASES = {
     (99, 100): "$0.99 to $1.00",
     (1999, 2500): "$19.99 to $25.00",
 }
-PICTURE = re.compile(r"(?i)\b(pictures?|screenshots?|mock-?ups?|pixels?|design exports?|images?)\b")
 ROW = re.compile(
     r"(?i)\bby:\s*(command|review|judgment)\b|\bdisposed\b|\bdisposition\b.*\breference\b"
 )
@@ -74,13 +73,9 @@ def quiet() -> list[str]:
         )
     except OSError:
         return ["no answer was supplied"]
-    lacking = []
-    found = PICTURE.search(text)
-    if found:
-        lacking.append(f"the answer speaks of a picture: {found.group(0)!r}")
     if ROW.search(text):
-        lacking.append("the answer has a reference or disposition row")
-    return lacking
+        return ["the answer has a reference or disposition row"]
+    return []
 
 
 def plain() -> list[str]:

@@ -7,11 +7,6 @@
       "oracle": "completion",
       "must_always": false
     },
-    "no-quiz-added": {
-      "type": "outcome",
-      "oracle": "restraint",
-      "must_always": false
-    },
     "tree-unchanged": {
       "type": "outcome",
       "oracle": "restraint",
@@ -25,5 +20,11 @@
     "understanding-reported",
     "note-left",
     "wrong-value"
-  ]
+  ],
+  "report": {
+    "no-quiz": {
+      "question": "Does the answer give the value without quizzing the author about their own design, and without reporting their understanding as unchecked?",
+      "must_always": false
+    }
+  }
 }

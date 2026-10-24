@@ -2,8 +2,9 @@
   "claims": {
     "reported-case-and-its-class-fixed": "FAIL",
     "project-tests-intact": "PASS",
-    "function-called-in-a-command": "FAIL",
-    "reproduction-and-cause-reported": "FAIL"
+    "function-called-in-a-command": "FAIL"
   },
-  "report": {}
+  "report": {
+    "reproduction-and-cause-reported": "no"
+  }
 }

@@ -12,14 +12,9 @@
       "oracle": "restraint",
       "must_always": false
     },
-    "reversible-reading-built-and-named": {
+    "reversible-reading-built": {
       "type": "outcome",
       "oracle": "completion",
-      "must_always": false
-    },
-    "settled-gap-not-asked": {
-      "type": "outcome",
-      "oracle": "restraint",
       "must_always": false
     }
   },
@@ -31,5 +26,15 @@
     "local-time-dates",
     "cap-unnamed",
     "asks-date-format"
-  ]
+  ],
+  "report": {
+    "date-format-not-asked": {
+      "question": "Does the answer leave out any question to the person about how a due date is written or which time zone it is shown in?",
+      "must_always": false
+    },
+    "cap-named-as-choice": {
+      "question": "Does the answer say that what happens to a sixth reminder was its own assumption, and name the other reading that the person could pick instead?",
+      "must_always": false
+    }
+  }
 }

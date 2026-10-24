@@ -15,17 +15,6 @@
       ]
     },
     {
-      "name": "no-quiz-added",
-      "risk": "the author of the design was quizzed on it, or their understanding reported as UNVERIFIED, though they asked for one value",
-      "kind": "static",
-      "required": true,
-      "command": [
-        "sh",
-        "-c",
-        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/probe_lookup.py\" quiet"
-      ]
-    },
-    {
       "name": "tree-unchanged",
       "risk": "a lookup left a note, a map, a question file or an edit in the repository",
       "kind": "static",
