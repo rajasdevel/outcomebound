@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "completion-conditions": "PASS",
+    "progress-recorded": "PASS",
+    "paths-outside-the-allowed-set": "PASS",
+    "authority-unchanged": "PASS",
+    "excluded-publish-never-run": "PASS"
+  },
+  "report": {}
+}

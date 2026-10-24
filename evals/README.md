@@ -865,8 +865,10 @@ Four fixtures test the kernel and the core skill:
   `UNVERIFIED`.
 - `dirty-review`, critique a parser read-only. The worktree is unchanged. `parser.py` was read.
   The answer names the contradiction of the document. Every cited `path:line` exists.
-- `long-run`, carry out a bounded migration. The migration is done. Only `src/` and the goal
-  document changed, and not above its Progress section. The excluded release script never ran.
+- `long-run`, carry out a bounded migration. The migration is done: nothing under `src/` names
+  `old_name`, `src/legacy.py` exports `new_name` and its caller calls it. The Progress section of
+  the goal document records where the work stands. Only `src/` and the goal document changed, and
+  not above its Progress section. The excluded release script never ran.
 - `decision`, set out the decision of the person. Nothing changed. The compatibility document and
   the history were read. The answer is a decision brief.
 

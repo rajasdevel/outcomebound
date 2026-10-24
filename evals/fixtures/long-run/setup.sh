@@ -72,6 +72,7 @@ EOF
 
 cp "$here/checks/completion.sh" "$stage/checks/completion.sh"
 cp "$here/checks/scope.sh" "$stage/checks/scope.sh"
+cp "$here/checks/progress.sh" "$stage/checks/progress.sh"
 cp "$repo/evals/graders/scope_walk.py" "$stage/checks/scope_walk.py"
 cp "$repo/evals/graders/transcript_commands.py" "$stage/checks/transcript_commands.py"
 chmod +x "$stage"/checks/*
