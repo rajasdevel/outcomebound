@@ -78,7 +78,7 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
-Read each file below when its condition first holds; it stays in force for the session. Read it again only when you are about to apply a rule from it that you cannot recall; a compaction alone is no reason.
+Read each file below when its condition first holds; it stays in force for the session. Read it again when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
 - when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
