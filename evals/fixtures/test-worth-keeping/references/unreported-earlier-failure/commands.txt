@@ -1,0 +1,6 @@
+git log --oneline -5
+git show HEAD
+cat money.py
+cat test_money.py
+cp money.py money.py.fixed && git show HEAD~1:money.py > money.py && python3 -B -m unittest test_money 2>&1 | tail -8; mv money.py.fixed money.py
+python3 -B -m unittest test_money

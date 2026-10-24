@@ -1,0 +1,5 @@
+cat reviews/rates.md
+cat rates.py
+cat test_rates.py
+python3 -B -c "from rates import shipping_cost; print(shipping_cost(2, 'local'), shipping_cost(2.5, 'local'), shipping_cost(5, 'national'))"
+python3 -B -m unittest

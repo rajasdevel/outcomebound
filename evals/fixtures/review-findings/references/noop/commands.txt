@@ -1,0 +1,3 @@
+cat reviews/rates.md
+cat rates.py
+cat test_rates.py

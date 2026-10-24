@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "right-findings-fixed": "FAIL",
+    "wrong-finding-not-followed": "PASS",
+    "each-finding-has-a-disposition": "PASS",
+    "dispositions-match-the-code": "FAIL"
+  },
+  "report": {}
+}

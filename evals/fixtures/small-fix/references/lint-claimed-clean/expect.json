@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "focused-regression-passes": "PASS",
+    "only-the-allowed-file-changed": "PASS",
+    "no-spec-or-goal-file": "PASS",
+    "no-policy-gate-or-broad-suite-run": "PASS",
+    "absent-tool-reported-unverified": "FAIL"
+  },
+  "report": {}
+}

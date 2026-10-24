@@ -1,0 +1,4 @@
+cat reviews/rates.md
+cat rates.py
+cat test_rates.py
+python3 -B -m unittest

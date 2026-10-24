@@ -1,0 +1,6 @@
+git log --oneline -5
+git show HEAD
+cat money.py
+cat test_money.py
+python3 -B -m unittest 2>&1 | tail -20
+python3 -B -m unittest test_money
