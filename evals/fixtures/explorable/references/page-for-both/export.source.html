@@ -1,0 +1,29 @@
+<script type="application/json" data-explorable>
+{"kind": "decision", "id": "export", "title": "Old export endpoint", "brief": "briefs.json"}
+</script>
+
+<section>
+  <h2>Who still calls the old endpoint</h2>
+  <p>In the last 30 days the old endpoint had 9 calls from 1 caller, and the new one had 1860 calls from 41 callers.</p>
+  <label>Callers that must move before removal
+    <input type="number" data-input="callers" data-unit="callers" data-source="checked" min="0" max="50" step="1" value="1"
+      data-note="From logs/endpoints.csv."></label>
+  <label>Days a caller needs to move
+    <input type="number" data-input="days" data-unit="days" data-source="assumed" min="1" max="90" step="1" value=""
+      data-note="Not known. Leave empty if you do not know."></label>
+  <table>
+    <caption>Work before the old endpoint can go</caption>
+    <thead><tr><th>Measure</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td>Days of caller work</td><td><output data-output="work"></output></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<script>
+  explorable.onChange((v) => {
+    explorable.show("work", v.days === null ? null : v.callers * v.days, { unit: "days", waits: ["days"] });
+  });
+  explorable.expect("one caller needs 10 days", { callers: 1, days: 10 }, { work: 10 });
+  explorable.expect("no estimate yet", { callers: 1, days: null }, { work: null });
+</script>

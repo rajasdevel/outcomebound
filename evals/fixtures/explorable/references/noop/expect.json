@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "only-working-files-added": "PASS",
+    "page-built-and-checked": "FAIL",
+    "page-declares-an-expectation": "FAIL",
+    "page-is-not-the-starter": "FAIL",
+    "one-page-only": "FAIL",
+    "brief-for-each-decision": "FAIL",
+    "page-named-in-the-answer": "FAIL"
+  },
+  "report": {}
+}

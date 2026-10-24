@@ -1,0 +1,8 @@
+cat logs/uploads.csv
+cat docs/storage.md
+cat logs/endpoints.csv
+mkdir -p .agents/work
+outcomebound explorable new .agents/work/disk.source.html --kind decision
+outcomebound explorable build .agents/work/disk.source.html
+sed -i.bak 's/THRESHOLD_STEPS/STEPS/' .agents/work/disk.html
+rm -f .agents/work/disk.html.bak

@@ -715,7 +715,24 @@ ENGINE = f"PYTHONPATH={shlex.quote(str(ROOT))} {PYTHON} -m outcomebound_tools"
 NEW_PAGE = f"""mkdir -p .agents/work
 {ENGINE} explorable new .agents/work/disk.source.html --kind decision
 """
-OWN_CONTENT = "printf '<p>Disk use by month.</p>\\n' >> .agents/work/disk.source.html\n"
+
+
+def own_page(path: str, ident: str, title: str, text: str) -> str:
+    """A command that writes a page of its own over the starter at `path`: its declaration, a
+    paragraph and one expectation, and none of the starter's example."""
+
+    declaration = json.dumps(
+        {"kind": "decision", "id": ident, "title": title, "brief": "briefs.json"}
+    )
+    return (
+        "printf '%s\\n' '<script type=\"application/json\" data-explorable>' "
+        f"'{declaration}' '</script>' '<p>{text}</p>' "
+        f"'<script>explorable.expect(\"none\", {{}}, {{}});</script>' > {path}\n"
+    )
+
+
+# A page of its own: a starter with only a paragraph added still shows the starter's example.
+OWN_CONTENT = own_page(".agents/work/disk.source.html", "disk", "Disk", "Disk use by month.")
 BUILD_PAGE = f"{ENGINE} explorable build .agents/work/disk.source.html\n"
 DISK_PAGE = NEW_PAGE + OWN_CONTENT + BUILD_PAGE
 NO_EXPECTATION = (
@@ -731,13 +748,13 @@ EDIT_THE_BUILT_PAGE = (
 )
 EXPORT_PAGE = (
     f"{ENGINE} explorable new .agents/work/export.source.html --kind decision\n"
-    "printf '<p>Calls by month.</p>\\n' >> .agents/work/export.source.html\n"
-    f"{ENGINE} explorable build .agents/work/export.source.html\n"
+    + own_page(".agents/work/export.source.html", "export", "Export", "Calls by month.")
+    + f"{ENGINE} explorable build .agents/work/export.source.html\n"
 )
 OUTSIDE_THE_WORKING_AREA = (
     f"{ENGINE} explorable new disk.source.html --kind decision\n"
-    "printf '<p>Disk use by month.</p>\\n' >> disk.source.html\n"
-    f"{ENGINE} explorable build disk.source.html\n"
+    + own_page("disk.source.html", "disk", "Disk", "Disk use by month.")
+    + f"{ENGINE} explorable build disk.source.html\n"
 )
 DISK_BRIEF = """### D1 · Grow the uploads disk, or move uploads older than 90 days to the archive?
 - 👉 Recommend: B — the disk then holds about three months of uploads

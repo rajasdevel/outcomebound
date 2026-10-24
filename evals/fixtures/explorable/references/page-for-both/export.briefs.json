@@ -1,0 +1,27 @@
+{
+  "briefs": [
+    {
+      "id": "D2",
+      "heading": "Should the next release remove the old `/v1/export` endpoint?",
+      "why_now": "the next release is being prepared; until you answer, the endpoint stays",
+      "context": ["In the last 30 days `/v1/export` had 9 calls from 1 caller."],
+      "terms": [],
+      "recommend": "one caller is left, and a removed endpoint can come back",
+      "recommend_way": "remove it",
+      "confidence": "inferred",
+      "options": [
+        {"way": "remove it",
+         "leads_to": "the caller must use `/v2/export`",
+         "choose_if": "fewer endpoints to keep working matters more than the one caller",
+         "downside": "the caller breaks if it has not moved"},
+        {"way": "keep it one more release",
+         "leads_to": "the endpoint stays to be kept working",
+         "choose_if": "the caller needs time to move",
+         "downside": "one more release carries an endpoint nobody else uses"}
+      ],
+      "checked": {"verdicts": ["PASS"], "text": "`logs/endpoints.csv` was read"},
+      "not_checked": "whether the caller has a plan to move",
+      "undo": {"can_be_undone": true, "text": "restore the endpoint in a later release"}
+    }
+  ]
+}

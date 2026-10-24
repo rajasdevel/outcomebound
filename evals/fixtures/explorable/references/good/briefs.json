@@ -1,0 +1,31 @@
+{
+  "briefs": [
+    {
+      "id": "D1",
+      "heading": "Should the uploads disk be grown, or should uploads older than 90 days move to archive storage?",
+      "why_now": "the disk has 90 GB free and takes about 38 GB each month; until you answer, nothing is changed and the disk fills in about two to three months",
+      "context": [
+        "The uploads disk holds 500 GB and 410 GB of it is used (`docs/storage.md`).",
+        "Growing it takes the shop offline for about 30 minutes, and a disk that has grown never shrinks. The archive has no size limit but an upload opens in about 2 seconds from it, and in about 50 ms from the disk."
+      ],
+      "terms": [["archive", "storage with no size limit, slower to open, that a nightly job would fill with uploads older than 90 days"]],
+      "recommend": "the archive lasts several times longer for any growth the log supports, and a move can be undone",
+      "recommend_way": "archive old uploads",
+      "confidence": "inferred",
+      "options": [
+        {"way": "grow the disk to 2 TB",
+         "leads_to": "every upload stays on the disk, which lasts about 25 to 30 months at the growth in the log",
+         "choose_if": "a fast open of every upload matters more than a nightly job to write and run",
+         "downside": "the shop is offline for about 30 minutes, and the disk never shrinks again"},
+        {"way": "archive old uploads",
+         "leads_to": "the disk holds the last three months, which lasts many years at the growth in the log",
+         "choose_if": "lasting longest and keeping the choice open matter more than a fast open of an old upload",
+         "downside": "an old upload opens in about 2 seconds, and nobody has measured how often that happens"}
+      ],
+      "checked": {"verdicts": ["PASS"],
+                  "text": "`docs/storage.md` and `logs/uploads.csv` were read"},
+      "not_checked": "how often an upload older than 90 days is opened, which nobody has measured",
+      "undo": {"can_be_undone": false, "text": "growing the disk cannot be undone; moving uploads to the archive is undone by moving them back"}
+    }
+  ]
+}
