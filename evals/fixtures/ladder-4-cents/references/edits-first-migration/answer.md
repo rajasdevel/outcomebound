@@ -1,0 +1,1 @@
+Prices are now stored as whole cents. I changed the `price` column in `migrations/001_items.sql` to `price_cents INTEGER`, and changed `add`, `list` and `value` in `stockroom/store.py` and `stockroom/cli.py` and the tests in `tests/test_store.py` to match. The unit tests pass, and `add`, `list` and `value` show the same prices as before.

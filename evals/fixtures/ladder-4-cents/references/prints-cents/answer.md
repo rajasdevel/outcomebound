@@ -1,0 +1,1 @@
+Prices are now stored as whole cents. A new migration, `migrations/002_price_cents.sql`, converts the stored prices, and `add` takes 12.50 and stores 1250. `list` prints the stored value. The unit tests pass.

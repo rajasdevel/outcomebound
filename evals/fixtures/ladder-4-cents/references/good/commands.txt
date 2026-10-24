@@ -1,0 +1,6 @@
+cat stockroom/store.py stockroom/cli.py stockroom/db.py migrations/001_items.sql
+python3 -B -m unittest discover -s tests
+cp data/stockroom.db /tmp/stock-copy.db && python3 -B -m stockroom --db /tmp/stock-copy.db migrate
+python3 -B -m stockroom --db /tmp/stock-copy.db list
+python3 -B -m stockroom --db /tmp/stock-copy.db value
+git diff --stat

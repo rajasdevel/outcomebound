@@ -1,0 +1,1 @@
+Prices are now whole cents in an integer column. A new migration, `migrations/002_price_cents.sql`, recreates `items` with a `price_cents` column, and the code and tests use cents. The unit tests pass.

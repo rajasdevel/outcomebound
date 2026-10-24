@@ -1,0 +1,3 @@
+cat stockroom/store.py stockroom/cli.py migrations/001_items.sql
+python3 -B -m unittest discover -s tests
+git diff --stat

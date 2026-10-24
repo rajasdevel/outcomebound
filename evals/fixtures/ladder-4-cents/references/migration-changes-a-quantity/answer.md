@@ -1,0 +1,1 @@
+Prices are now whole cents. A new migration, `migrations/002_price_cents.sql`, rebuilds `items` with an integer `price_cents` column and converts the stored prices. I ran the unit tests and `migrate` on a copy of the shop's stock; `list` printed the same prices.
