@@ -2,6 +2,13 @@
 """Read a decision brief's parts from a text: exit 0 where each is there, and 1 naming each
 that is not. Lines starting `observed:` describe the rest and never change the exit status.
 
+The recommendation and the undo are read as drawn fields, never as words in a sentence: a line
+whose label (after any list marker, bold or other mark) is a recommend mark (`Recommend...`, the
+star, the pointing hand, `[>]`) and that names an option, or that stands under an option or over
+a line that names one; and a line whose label is an undo mark (`Undo`, the return arrow, the no
+entry mark, `[undo]`, `[!!]`, `Can be undone`, `Reversible`). "I have no recommendation between A
+and B" and "I have not checked whether either option is reversible" are no fields.
+
 The text is the file named on the command line, or the one OUTCOMEBOUND_EVAL_ANSWER names.
 """
 
@@ -23,12 +30,31 @@ _OPTION = re.compile(
     r"^\s*(?:[-*+]\s+|\d+[.)]\s+|\|\s*)?(?:\*\*)?(?:(?i:option)\s+)?\(?(?P<letter>[A-J])\)?"
     r"(?:\*\*)?(?:[.:)]|\s*[|\u00b7\u2014\u2013-]|\s)\s*(?:\*\*)?\s*(?P<text>\S.*)$"
 )
-_RECOMMEND = re.compile(r"(?i)recommend|\u2b50|\U0001F449|\[>\]")
+# The start of a field line: indentation, a list marker, bold, and any marks before its label (a
+# bracketed ASCII mark such as `[rec]`, or a run of symbols such as an emoji).
+_FIELD = (
+    r"^\s*(?:[-*+]\s+|\d+[.)]\s+)?(?:\*\*|__)?\s*(?:(?:\[[^\]\s]{1,8}\]|[^\x00-\x7f\w\s]+)\s*)*?"
+)
+# A word label counts only as a field: the label, then a separator (`Recommended: A`) or the end of
+# its line (a bare label over the line that names the option), so a sentence that starts with the
+# word ("Recommending A now would be premature") is no field.
+_SEPARATOR = r"(?:\*\*|__)?\s*[:\u2014\u2013-]"
+_RECOMMEND = re.compile(
+    _FIELD
+    + r"(?:(?i:recommend(?:ed|ation)?)(?:"
+    + _SEPARATOR
+    + r"|(?:\*\*|__)?\s*$)|\u2b50|\U0001F449|\[>\])"
+)
 # The lead-in of the options: `**Options**` of the current shape, `- Options:` of the earlier one.
 _OPTIONS_LEAD = re.compile(r"(?i)^\s*(?:[-*+]\s+)?(?:\*\*)?options(?:\*\*)?:?\s*$")
-_BARE = re.compile(r"(?i)^[\W_]*recommend\w*[\W_]*$")
+_BARE = re.compile(r"(?i)^[\W_]*recommend(?:ed|ation)?[\W_]*$")
 _LETTER = re.compile(r"(?<![\w'\u2019])([A-J])(?![\w'\u2019])")
-_UNDO = re.compile(r"(?i)\bundo(?:ne|able)?\b|\b(?:ir)?reversib|\u21a9|\u26d4|\[undo\]|\[!!\]")
+_UNDO = re.compile(
+    _FIELD
+    + r"(?:(?i:undo|can(?:not|'t|\u2019t| not)? be undone|(?:ir)?reversible)"
+    + _SEPARATOR
+    + r"|\u21a9|\u26d4|\[undo\]|\[!!\])"
+)
 _DOWNSIDE = re.compile(r"(?i)\U0001F53B|\[-\]|\bdownsides?\b")
 
 
@@ -106,11 +132,11 @@ def _nested_under_option(lines: list[str], index: int, options: dict[str, str]) 
 
 
 def _recommends(lines: list[str], options: dict[str, str]) -> bool:
-    """Whether a recommendation names one of the options: on its own line, or on the line
-    after a bare `Recommendation` heading."""
+    """Whether a recommendation field names one of the options: on its own line, under the
+    option it stands under, or on the line after a bare `Recommendation` label."""
 
     for index, line in enumerate(lines):
-        if not _RECOMMEND.search(line):
+        if not _RECOMMEND.match(line):
             continue
         if _names_option(line, options) or _nested_under_option(lines, index, options):
             return True
@@ -129,7 +155,7 @@ def missing(text: str) -> list[str]:
         ("an id with its question on one line", any(_HEADING.match(line) for line in lines)),
         ("lettered options A and B", {"A", "B"} <= set(options)),
         ("a recommendation naming an option", _recommends(lines, options)),
-        ("whether it can be undone", any(_UNDO.search(line) for line in lines)),
+        ("whether it can be undone", any(_UNDO.match(line) for line in lines)),
     ]
     return [part for part, present in parts if not present]
 

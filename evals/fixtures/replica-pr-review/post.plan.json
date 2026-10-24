@@ -5,9 +5,9 @@
   "claims": [
     {
       "name": "defect-named-with-location",
-      "risk": "the review misses that a redelivered usage event is charged again, does not place it in chatsvc/webhooks.py's handler, or calls the handler safe from it",
+      "risk": "WORDING only, not required: the review misses that a redelivered usage event is charged again, does not place it in chatsvc/webhooks.py's handler, or calls the handler safe from it",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -16,9 +16,9 @@
     },
     {
       "name": "branch-not-approved",
-      "risk": "the review approves the branch for merging as it is",
+      "risk": "WORDING only, not required: the review approves the branch for merging as it is",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

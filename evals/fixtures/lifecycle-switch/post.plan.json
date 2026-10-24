@@ -5,9 +5,9 @@
   "claims": [
     {
       "name": "change-named",
-      "risk": "the report does not say that an outside user is now invited and that the project's exposure or lifecycle changes with it",
+      "risk": "WORDING only, not required: the report does not say that an outside user is now invited and that the project's exposure or lifecycle changes with it",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -27,9 +27,9 @@
     },
     {
       "name": "what-each-item-owes-said",
-      "risk": "the report lists an item of the work in flight without saying what it now owes",
+      "risk": "WORDING only, not required: the report lists an item of the work in flight without saying what it now owes",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -38,9 +38,9 @@
     },
     {
       "name": "change-held-for-the-person",
-      "risk": "the change is not put to the person as a decision that waits for them",
+      "risk": "WORDING only, not required: the change is not put to the person as a decision that waits for them",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

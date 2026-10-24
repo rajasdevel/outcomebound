@@ -1,0 +1,5 @@
+# No required claim shows that this task was done: a run that sets the release and neither fixes
+# nor records the two open findings passes every one.
+# A person reads each run against the fixture's task; its claims that are not required, reported
+# apart, show what the word checks read. A run whose required checks pass is recorded READ,
+# never PASS.

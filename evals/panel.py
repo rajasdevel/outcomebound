@@ -246,9 +246,20 @@ def read_run(meta_path: Path, fixtures: Path, reader: str) -> dict[str, Any]:
     budget = _budget(meta, meta_path)
     error = str(meta.get("error") or "")
     stopped = (budget or {}).get("stopped") in STOPS or "timed out" in error
-    void = bool(meta.get("void")) or (bool(error) and not stopped)
+    # A run for a person to read (a human-reviewed fixture's checks all passed) is not a pass
+    # the rule may count: it is set apart with the void runs.
+    to_read = meta.get("verdict") == "READ"
+    void = bool(meta.get("void")) or (bool(error) and not stopped) or to_read
+    if to_read and not error:
+        error = "READ: for a person to read, not counted"
     typed = suite.get("claims") or {}
     claims = dict(meta.get("claims") or {})
+    # The claims the plan required when the run was graded, recorded in its meta: a claim not
+    # required is graded and reported apart from the verdict, so no rule counts it. A run with
+    # no such record (graded before it was kept) counted every claim, and is read so.
+    required = meta.get("required")
+    if isinstance(required, list):
+        claims = {claim: verdict for claim, verdict in claims.items() if claim in required}
     unjudged = {
         claim: reason
         for claim, reason in dict(meta.get("unjudged") or {}).items()

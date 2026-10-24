@@ -42,9 +42,9 @@ CASES = {
     (99, 100): "$0.99 to $1.00",
     (1999, 2500): "$19.99 to $25.00",
 }
-ROW = re.compile(
-    r"(?i)\bby:\s*(command|review|judgment)\b|\bdisposed\b|\bdisposition\b.*\breference\b"
-)
+# The row's own field: `by:` naming how the fact was settled. A word such as "disposed" or
+# "disposition" in a sentence is not a row.
+ROW = re.compile(r"(?i)\bby:\s*(command|review|judgment)\b")
 SOURCES = re.compile(r"\bsources\s+(import|check)\b")
 
 

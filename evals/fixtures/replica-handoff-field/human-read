@@ -1,0 +1,3 @@
+# No required claim shows that this task was done: a run that writes only a stub, or commits
+# the seeded work with no handoff, passes every one. A person reads each run against the
+# fixture's task. A run whose required checks pass is recorded READ, never PASS.

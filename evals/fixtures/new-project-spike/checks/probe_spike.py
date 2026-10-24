@@ -2,8 +2,10 @@
 """The checks of a run whose idea rests on one capability that a sample can settle, read from the
 workspace, the transcript and the answer by a probe the model cannot edit.
 
-    question-first  a note holds a question and a pass threshold with a number, and was written
-                    before every file of spike code; spike code exists
+    note-first      spike code exists, and a note the run wrote (a changed `.md`, `.txt`, `.rst`
+                    or `.adoc` file with lines of its own) was written before every file of it
+    question-first  a note holds a question and a pass threshold with a number (the wording only;
+                    the order of the writes is `note-first`)
     throwaway       spike code is in the working area, and every file of it says it is throwaway
     ran             a command of the run named a file of spike code
     fail            a line of the answer reports the spike as FAIL or failed, the answer carries a
@@ -61,21 +63,26 @@ def _asks_and_sets_a_bar(text: str) -> bool:
     )
 
 
-def question_first() -> list[str]:
-    paths = np.changed_files()
+def note_first() -> list[str]:
     spikes = _spike_code()
     if not spikes:
         return ["no spike code in the working area"]
     candidates = [
-        path for path in paths if np.is_note(path) and _asks_and_sets_a_bar(np.added_text(path))
+        path for path in np.changed_files() if np.is_note(path) and np.added_text(path).strip()
     ]
     if not candidates:
-        return ["no note holds a question and a pass threshold with a number"]
-    problems = [
-        np.order_problems([path], spikes, "the question and threshold in", "the spike")
-        for path in candidates
-    ]
+        return ["no note was written"]
+    problems = [np.order_problems([path], spikes, "the note", "the spike") for path in candidates]
     return next((found for found in problems if not found), problems[0])
+
+
+def question_first() -> list[str]:
+    if any(
+        np.is_note(path) and _asks_and_sets_a_bar(np.added_text(path))
+        for path in np.changed_files()
+    ):
+        return []
+    return ["no note holds a question and a pass threshold with a number"]
 
 
 def throwaway() -> list[str]:
@@ -139,6 +146,7 @@ def kept_out() -> list[str]:
 
 
 CHECKS = {
+    "note-first": note_first,
     "question-first": question_first,
     "throwaway": throwaway,
     "ran": ran,

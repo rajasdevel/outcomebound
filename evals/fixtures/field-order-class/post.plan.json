@@ -38,9 +38,9 @@
     },
     {
       "name": "kept-said",
-      "risk": "the report does not say that the items without a copy, and the other team's volume, were kept",
+      "risk": "WORDING only, not required: the report does not say that the items without a copy, and the other team's volume, were kept",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

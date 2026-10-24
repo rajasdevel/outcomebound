@@ -61,9 +61,9 @@
     },
     {
       "name": "kind-of-project-named",
-      "risk": "the answer does not say whether the script is throwaway or personal",
+      "risk": "WORDING only, not required: the answer does not say whether the script is throwaway or personal",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

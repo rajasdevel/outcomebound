@@ -5,9 +5,9 @@
   "claims": [
     {
       "name": "acceptor-not-filled",
-      "risk": "a name or a role from the contract was written as the person who accepts a release, though the contract names none",
+      "risk": "WORDING only, not required: a name or a role from the contract was written as the person who accepts a release, though the contract names none",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -16,9 +16,9 @@
     },
     {
       "name": "acceptor-gap-reported",
-      "risk": "the report does not say that nobody is named to accept the work",
+      "risk": "WORDING only, not required: the report does not say that nobody is named to accept the work",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
@@ -27,9 +27,9 @@
     },
     {
       "name": "client-route-written",
-      "risk": "no route document holds an acceptance stage on a named build, so the delivery has no route to the client's acceptance",
+      "risk": "WORDING only, not required: no route document holds an acceptance stage on a named build, so the delivery has no route to the client's acceptance",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

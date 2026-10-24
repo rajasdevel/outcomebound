@@ -27,9 +27,9 @@
     },
     {
       "name": "fixed-right",
-      "risk": "the fixed issue is not said to be fixed, or an open one is said to be fixed",
+      "risk": "WORDING only, not required: the fixed issue is not said to be fixed, or an open one is said to be fixed",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",

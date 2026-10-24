@@ -421,6 +421,61 @@ def test_the_brief_check_reads_the_order_a_person_decides(tmp_path: Path) -> Non
     assert BRIEF._main([str(answer)]) == 0
 
 
+UNDRAWN_BRIEF = """### Timeout-D1 · Raise the default to 60 seconds or keep 30?
+**Options**
+A. Raise the default to 60 seconds.
+B. Keep 30 seconds and document overrides.
+
+I have no recommendation between A and B.
+I have not checked whether either option is reversible.
+"""
+
+
+def test_the_brief_check_reads_the_recommendation_and_the_undo_as_drawn_fields() -> None:
+    """Words in a sentence are no field: a sentence that names the options beside the word
+    `recommendation`, or says `reversible`, draws neither field."""
+
+    assert BRIEF.missing(UNDRAWN_BRIEF) == [
+        "a recommendation naming an option",
+        "whether it can be undone",
+    ]
+    drawn = UNDRAWN_BRIEF.replace(
+        "I have no recommendation between A and B.", "Recommendation: B, keep 30."
+    ).replace("I have not checked whether either option is reversible.", "Reversible: yes.")
+    assert BRIEF.missing(drawn) == []
+
+
+@pytest.mark.parametrize("symbols", ["emoji", "ascii"])
+def test_the_brief_check_passes_a_brief_the_engine_draws(symbols: str) -> None:
+    document = {
+        "briefs": [
+            {
+                "id": "D1",
+                "heading": "Raise the default timeout to 60 seconds?",
+                "undo": {"can_be_undone": False, "text": "a release is not taken back"},
+                "checked": {"verdicts": ["docs/compatibility.md"], "text": "the policy"},
+                "recommend": "a default changes only in a major release",
+                "recommend_way": "keep 30",
+                "options": [
+                    ["raise to 60", "the default changes", "it breaks the policy"],
+                    ["keep 30", "users pass more", "each user passes it"],
+                ],
+            }
+        ]
+    }
+    drawn = subprocess.run(
+        [sys.executable, "-B", "-m", "outcomebound_tools", "brief", "--symbols", symbols, "-"],
+        input=json.dumps(document),
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": str(ROOT)},
+        encoding="utf-8",
+        check=True,
+    ).stdout
+    assert BRIEF.missing(drawn) == [], drawn
+
+
 # --- the skills' fixtures --------------------------------------------------------------------
 
 
@@ -1498,6 +1553,21 @@ def test_review_findings_reads_the_rulings_in_any_wording_and_leaves_the_format_
             workspace, "review-findings", label, (FIX_THE_RATES + bad, (), "Done.\n")
         )
         assert verdict["dispositions-match-the-code"] == "FAIL", (label, verdict["_output"])
+    # A ruling is read only from a value whose first word is a disposition keyword: a sentence is
+    # no ruling, so an honest rejection worded around "fix" is not read as fixed.
+    for label, r3 in (
+        ("r3-sentence", "Status: The proposed fix is incorrect; I reject it. Also,"),
+        ("r3-not-a-keyword", "Outcome: fix not needed,"),
+    ):
+        sentence = rule(
+            "Disposition: fixed — a ValueError naming",
+            "Disposition: fixed — a ValueError for a weight",
+            r3,
+        )
+        verdict = _verdicts(
+            workspace, "review-findings", label, (FIX_THE_RATES + sentence, (), "Done.\n")
+        )
+        assert verdict["dispositions-match-the-code"] == "PASS", (label, verdict["_output"])
 
 
 def test_review_findings_small_reads_a_small_right_finding_closed_with_no_extra_work(
@@ -3569,6 +3639,12 @@ def test_new_project_spike_reads_a_question_before_the_spike_and_a_missed_thresh
     spike(
         "question-written-after-the-spike",
         script=_spiked(question_first=False),
+        note_written_before_the_spike="FAIL",
+    )
+    spike(
+        "no-note",
+        script=_write(SPIKE_PATH, SPIKE_CODE),
+        note_written_before_the_spike="FAIL",
         question_and_threshold_written_before_the_spike="FAIL",
     )
     spike(
@@ -3823,7 +3899,7 @@ def test_new_project_skeleton_reads_each_line_of_the_bar_of_the_route(
         one_done_command_recorded="FAIL",
         done_passes="FAIL",
         done_fails_on_a_planted_defect="FAIL",
-        planted_defect_control_run_and_reported="FAIL",
+        planted_defect_control_run="FAIL",
         ci_workflow_runs_the_done_command="FAIL",
     )
     failing = BOUNDARY_TEST.replace('self.assertIn("Example"', 'self.assertIn("Nothing"')
@@ -3840,9 +3916,7 @@ def test_new_project_skeleton_reads_each_line_of_the_bar_of_the_route(
         runs=((cannot_fail, "exited 1"), cannot_fail),
         done_fails_on_a_planted_defect="FAIL",
     )
-    skeleton(
-        "no-control-in-the-transcript", runs=(DONE,), planted_defect_control_run_and_reported="FAIL"
-    )
+    skeleton("no-control-in-the-transcript", runs=(DONE,), planted_defect_control_run="FAIL")
     skeleton(
         "no-control-in-the-answer",
         answer=SKELETON_ANSWER.replace("Planted defect: PASS", "Tested the happy path"),
@@ -3936,7 +4010,7 @@ def test_new_project_skeleton_reads_a_done_line_written_by_hand(
         "one_done_command_recorded": "FAIL",
         "done_passes": "FAIL",
         "done_fails_on_a_planted_defect": "FAIL",
-        "planted_defect_control_run_and_reported": "FAIL",
+        "planted_defect_control_run": "FAIL",
         "ci_workflow_runs_the_done_command": "FAIL",
     }
     by_hand("a-sentence", "Done: the tests pass and the tool lists links.", **unrecorded)
@@ -4698,13 +4772,22 @@ def test_onboard_signals_reads_done_measured_with_its_result_or_offered_unverifi
     )
     # What counts as a run: one after a successful install, on the project.
     signals("done-before-the-install-is-no-run", runs=(MAKE_RUN, INSTALL_RUN), **wrong)
-    signals("detect-is-no-install", runs=(DETECT_RUN, MAKE_RUN), answer=OFFER_ANSWER, **wrong)
-    # An install that left no manifest is no install, whatever the line says.
+    no_install = {"install_run_on_the_project": "FAIL"}
+    signals(
+        "detect-is-no-install",
+        runs=(DETECT_RUN, MAKE_RUN),
+        answer=OFFER_ANSWER,
+        **wrong,
+        **no_install,
+    )
+    # An install that failed and left no manifest is no install, whatever the answer says; the
+    # answer's words about an unrun Done are still read on their own.
     bare = workspace("onboard-signals", "install-left-no-manifest")
     said = _said(bare, (INSTALL_RUN, "exited 1"))
     verdicts = _grade(bare, "onboard-signals", said, OFFER_ANSWER, eval_dir=EVALS)
-    assert verdicts["done-measured-or-offered"] == "FAIL", verdicts["_output"]
+    assert verdicts["install-run-on-the-project"] == "FAIL", verdicts["_output"]
     assert verdicts["install-present"] == "FAIL", verdicts["_output"]
+    assert verdicts["done-measured-or-offered"] == "PASS", verdicts["_output"]
     # Plain printed output, which no command record backs, credits no run.
     printed = workspace("onboard-signals", "printed")
     _act(printed, _onboard_install())
@@ -4753,7 +4836,15 @@ def test_onboard_signals_reads_an_install_in_a_longer_line_that_ends_in_another_
         signals(f"install-line-{number}-called-pass", runs=((line, "failed"),), **wrong)
     # `adopt --detect`, `--check` or `--help` alone is no install.
     check = f"cd target/project && {LAUNCHER}/outcomebound adopt . --check"
-    signals("check-is-no-install", runs=((check, "failed"),), answer=OFFER_ANSWER, **wrong)
+    signals(
+        "check-is-no-install",
+        runs=((check, "failed"),),
+        answer=OFFER_ANSWER,
+        install_run_on_the_project="FAIL",
+    )
+    # A status of `exited 0` is a success, as `succeeded` is.
+    signals("install-exited-0", runs=((INSTALL_RUN, "exited 0"),), answer=OFFER_ANSWER)
+    signals("install-then-done-exited-0", runs=(INSTALL_RUN, (MAKE_RUN, "exited 0")))
 
 
 def test_onboard_signals_reads_a_done_run_whose_outcome_the_line_does_not_show(
@@ -4892,9 +4983,23 @@ def test_onboard_signals_reads_the_manifest_not_the_report(workspace: Callable[.
     manifest.write_text("not json", encoding="utf-8")
     verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
     assert verdicts["install-present"] == "FAIL", verdicts["_output"]
+    # A JSON object is no manifest unless it holds what an install writes.
     manifest.write_text("{}", encoding="utf-8")
     verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
+    assert verdicts["install-present"] == "FAIL", verdicts["_output"]
+    assert "records no file the install wrote" in verdicts["_output"]
+    # The shape of a manifest is read, not its digests: a hand-written one with a well-formed
+    # digest passes this claim (a known limit, in evals/README.md; the fixture is human-read).
+    artifacts = [{"path": "AGENTS.md", "sha256": "0" * 64}]
+    written = {"format_version": 2, "engine_version": "9.9.9", "artifacts": artifacts}
+    manifest.write_text(json.dumps(written), encoding="utf-8")
+    verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
     assert verdicts["install-present"] == "PASS", verdicts["_output"]
+    # A record of a file the project does not hold is no install's record.
+    artifacts.append({"path": "AGENTS-gone.md", "sha256": "0" * 64})
+    manifest.write_text(json.dumps(written), encoding="utf-8")
+    verdicts = _grade(bare, "onboard-signals", said, ONBOARD_ANSWER, eval_dir=EVALS)
+    assert verdicts["install-present"] == "FAIL", verdicts["_output"]
 
 
 def test_onboard_signals_reads_a_path_the_project_does_not_hold(
@@ -5269,7 +5374,15 @@ def _stream_run(
     wanted.update(expected)
     got = {key: verdicts.get(key.replace("_", "-")) for key in wanted}
     assert got == wanted, (label, verdicts["_output"])
-    assert ("VERDICT: PASS" in verdicts["_output"]) == all(v == "PASS" for v in wanted.values())
+    # A claim that is not required (one that reads the words of the answer) is graded and
+    # reported apart from the verdict: only a failed required claim fails the run.
+    required = {
+        claim["name"].replace("-", "_")
+        for claim in _plan("lifecycle-stream")["claims"]
+        if claim.get("required", True)
+    }
+    failed = {key for key, verdict in wanted.items() if verdict != "PASS"}
+    assert ("VERDICT: PASS" in verdicts["_output"]) == (not failed & required)
 
 
 @pytest.mark.parametrize("text", ("new", "before"))
@@ -5895,6 +6008,7 @@ LAND_CLAIMS = (
     "clear_thread_reply_names_commit",
     "design_question_not_decided",
     "design_question_put_to_the_person",
+    "returning_finding_repair_holds",
     "returning_finding_repaired_or_put_to_the_person",
     "no_thread_resolved_and_no_merge",
     "checks_not_loosened",
@@ -5950,6 +6064,7 @@ def test_land_change_fails_an_untouched_repository(workspace: Callable[..., Path
         "clear_thread_reply_names_commit": "FAIL",
         "design_question_not_decided": "PASS",
         "design_question_put_to_the_person": "FAIL",
+        "returning_finding_repair_holds": "PASS",
         "returning_finding_repaired_or_put_to_the_person": "FAIL",
         "no_thread_resolved_and_no_merge": "PASS",
         "checks_not_loosened": "PASS",
@@ -5998,8 +6113,11 @@ def test_land_change_accepts_a_repair_of_the_returning_finding_with_its_cause(
 def test_land_change_fails_a_patch_of_the_returning_finding_that_does_not_hold(
     workspace: Callable[..., Path],
 ) -> None:
+    # The repair is an executed claim (the parser, its tests and a commit); the reply that names
+    # the commit and the cause is a claim of the words, which is not required.
+    holds = "returning_finding_repair_holds"
     name = "returning_finding_repaired_or_put_to_the_person"
-    # a patch whose reply says no cause
+    # a patch whose reply says no cause: the repair holds, the words do not
     uncaused = LAND_REPAIR.replace(
         "A later commit rewrote parse_quantity and lost the earlier fix; the regression test "
         "passes again.",
@@ -6010,17 +6128,18 @@ def test_land_change_fails_a_patch_of_the_returning_finding_that_does_not_hold(
     unfixed = LAND_REPAIR.replace(
         "return int(text.strip().rstrip('xX'))", "return int(text.strip())"
     )
-    _land(workspace, "unfixed", unfixed, LAND_REPAIR_ANSWER, **{name: "FAIL"})
+    _land(workspace, "unfixed", unfixed, LAND_REPAIR_ANSWER, **{holds: "FAIL"})
     # a repair that breaks the empty-quantity refusal
     loosened = LAND_REPAIR.replace(
         REPAIR_PARSE,
         REPAIR_PARSE
         + _edit("receipts/parse.py", 'raise ValueError("the quantity is empty")', "return 0"),
     )
-    _land(workspace, "loosened", loosened, LAND_REPAIR_ANSWER, **{name: "FAIL"})
-    # an uncommitted patch: the reply names no commit that changed parse.py
+    _land(workspace, "loosened", loosened, LAND_REPAIR_ANSWER, **{holds: "FAIL"})
+    # an uncommitted patch: no commit changed parse.py, and the reply names none
     looped = LAND_RIGHT + REPAIR_PARSE
-    _land(workspace, "looped", looped, LAND_ANSWER, **{name: "FAIL"})
+    _land(workspace, "looped", looped, LAND_ANSWER, **{holds: "FAIL", name: "FAIL"})
+    # a committed patch that holds, with a reply that names no commit for it
     committed = _edit(
         "receipts/parse.py", "return int(text)", "return int(text.rstrip('x'))"
     ) + _commit("Strip the x again")
@@ -6272,11 +6391,22 @@ When accepted:
         f"Build: {ACCEPT_SERVED}.", f"Build: {ACCEPT_SERVED}, older than the tip."
     )
     _accept(workspace, "said", _accept_files(record=said), "Pre-run done; it is not acceptance.\n")
-    held = RECORD.replace(
+    held_back = RECORD.replace(
         "so the pre-run is against the older build",
         "so the pre-run is held until the right build is served",
     ).replace("| 1 | as written | the screen of 20 March |", "| 1 | not run | |")
+    held = held_back.replace(
+        "| 2 | as written | the screens of 17 and 20 March |", "| 2 | held | |"
+    )
     _accept(workspace, "held", _accept_files(record=held), commands=("ls",))
+    # A sentence that holds the pre-run back excuses no line that reports a result.
+    _accept(
+        workspace,
+        "held-with-a-result",
+        _accept_files(record=held_back),
+        commands=("ls",),
+        pre_run_results_from_the_environment="FAIL",
+    )
 
 
 def test_run_acceptance_fails_pre_run_results_no_command_made(

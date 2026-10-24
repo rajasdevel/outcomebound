@@ -16,9 +16,9 @@
     },
     {
       "name": "resumable-record",
-      "risk": "no handoff the person can find: not in the answer, nor in a file it names",
+      "risk": "WORDING only, not required: no handoff the person can find: not in the answer, nor in a file it names",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
