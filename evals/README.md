@@ -50,13 +50,13 @@ done
   `--out` names the run directory (default `evals/results/raw/<id>/`, which Git ignores).
   `--harness` names the tool that runs the model: `codex` (the default) or `claude-code` (see
   [Claude Code as the harness](#claude-code-as-the-harness)).
-- Each fixture repository is kept after the run, at
-  `<root>/<run directory name>/<fixture>-r<repetition>`. The root is `--workspace-root DIR`, else
-  `OUTCOMEBOUND_EVAL_ROOT`, else `OUTCOMEBOUND_FIXTURE_ROOT`; with none, each is a temporary
-  directory. The runner refuses, before any call, a root inside a Git checkout and a workspace
-  that already exists. The grading folder of a run sits beside its workspace.
+- Each fixture repository is kept after the run, at `<root>/ws-<16 hex digits>`, a new random
+  name (see [Opaque names](#opaque-names)). The root is `--workspace-root DIR`, else
+  `OUTCOMEBOUND_EVAL_ROOT`, else `OUTCOMEBOUND_FIXTURE_ROOT`; with none, each is made in the
+  temporary directory. The runner refuses, before any call, a root inside a Git checkout. The
+  grading folder of a run sits beside its workspace.
 - `<out>/INDEX.json` has one row for each run: fixture, harness, arm, model, effort, verdict,
-  error, thread id, native session path and workspace path.
+  error, thread id, native session path, workspace path and workspace id.
 - No API key or endpoint override reaches codex or the commands of the model.
 - The runner exits 3 without a ChatGPT login. It exits 2 when it refuses its options. It exits 1
   when a call failed: codex erred, gave no final message, or its native session did not show the
@@ -314,7 +314,8 @@ names as `models_raw`).
   what `outcomebound adopt --facts-only --harness claude-code` installs, and the `bare` arm
   removes the same files as under codex.
 - **A fresh cell for each call.** The call runs with its own `HOME`, `CLAUDE_CONFIG_DIR` and
-  `XDG_*` folders, in `<fixture>.claude-home/` beside the run's other files. None of the
+  `XDG_*` folders, in `<workspace id>.claude-home/` beside the workspace (or in the run directory,
+  where no workspace root outside the temporary folders is named). None of the
   operator's user settings, `CLAUDE.md`, rules, plugins, skills, agents, memory or MCP servers
   reach it, and no skill or plugin is synced from claude.ai (`syncClaudeAiSkills` and
   `syncClaudeAiPlugins` off). The cell environment drops every variable that Claude Code reads
@@ -343,9 +344,11 @@ names as `models_raw`).
   - commands allowed inside it;
   - writes confined to the workspace and the temporary folders, the runner's stubs and watch log
     denied;
-  - reads denied of the grading stage, the operator's user-level Claude folder, the other entries
-    of the run's evidence folder (other fixtures' cells, sealed graders and records) and the other
-    runs' folders beside it, as they exist when the call starts;
+  - reads denied of the grading stage, the operator's user-level Claude folder, the other
+    workspaces beside this one and their files, and the run's evidence folder (other fixtures'
+    cells, sealed graders and records) with the other runs' folders beside it, as they exist when
+    the call starts; a folder that holds nothing the call uses is named whole, so the names of
+    the run folders in it (which loop.py makes from the arm and the fixture) never reach the argv;
   - no network host (an empty allow list, `strictAllowlist`), and a local port only for a fixture
     with a `local-listener` file.
 
@@ -635,6 +638,59 @@ plugin with its skill count), read from the native session.
 The runner hashes the graders of each fixture, and reads its seed commit, before the model runs. A
 changed grader fails the run unexecuted. No fixture keeps a grader in its workspace: the next
 section says where they are and when they run.
+
+## Opaque names
+
+A model that can tell which fixture or arm it is in can answer for the test, not for the task.
+So nothing the runner gives a call names the fixture, its variant or the arm:
+
+- **Workspace path.** Each run's workspace is `<root>/ws-<16 hex digits>`, a new random id for
+  every run (`opaque_id`), never derived from the fixture, arm or repetition and never reused. The
+  run's meta (`workspace_id`, `fixture_repo`) and `INDEX.json` map the id to its run; they stay in
+  the run directory, outside the workspace. The id is also the folder Claude Code names its
+  session folder after and the working directory Codex records.
+- **The call's own files.** A suite fixture's stubs (first on the call's PATH), its watch log and
+  a Claude Code cell (the call's `HOME`, `CLAUDE_CONFIG_DIR` and `XDG_*` folders) are
+  `<id>.stubs`, `<id>.watch.jsonl` and `<id>.claude-home`, beside the workspace. The session copy,
+  the sealed graders and the run's records keep the fixture's name in the run directory, which no
+  path the call is given points into.
+- **Environment, argv and process titles.** The environment, the harness's argv (Codex's `-C` and
+  `--add-dir`, Claude Code's `--settings` and `--add-dir`) and the harness's process title hold
+  only those paths. Claude Code's read denials name the run folders' parent as one folder, not each
+  run folder. `loop.py` starts each cell with its options in a file of their own (`run.py @FILE`),
+  so the runner's own process title, which a call's `ps` can show, names no fixture or arm.
+- **Prompt and seed.** The prompt is the arm's text and the fixture's task. No fixture's setup
+  writes a fixture, variant or arm name into the workspace or its Git data (config, remotes,
+  branch names, commit messages, authors); the shared Git identity, `OutcomeBound eval`, is the
+  same for every fixture and arm. A word of the task that is also in a fixture's name (a
+  `decision` asked for) is the task, not a label.
+- **The test.** `tests/test_eval_opaque_names.py` builds two fixtures on each harness through
+  `run_one`, with a stand-in `codex` and `claude` that call no model, in a layout like `loop.py`'s
+  (run folders named after the arm and the fixture), and checks each surface above, with a
+  negative control that plants a label in each.
+
+Where the names hold:
+
+- They hold where a workspace root outside the temporary folders is named, as `loop.py` always
+  names one. With no root, or a root inside a temporary folder that the sandbox lets the model
+  write, the call's own files go in the run directory instead (a runner-owned file in a writable
+  folder would be refused): their names stay opaque, but the run directory's path reaches the
+  call, and the runner says so on stderr and records `opaque_paths: false` in `STATUS.json`. Name
+  the run directory with no fixture or arm in it there (the default, `evals/results/raw/<id>`,
+  has none).
+- The workspace root and the paths above it are the operator's: name them with no fixture or arm
+  in them. `run.py` started by hand shows its own options (`--fixtures`, `--arm`) in its process
+  title; start it with `@FILE`, as `loop.py` does, to keep them out. An arm's own text and files
+  (its kernel, skills, a `--plugin-dir` plugin) are the treatment, not a label.
+- Opaque names do not keep the model from reading files outside the workspace: the graders'
+  stage, the references, the checkout's `evals/` and other runs' results. That needs reads denied
+  on every tool surface of each harness, which is not built; until it is, every run's isolation
+  beyond these names is `UNVERIFIED`. What the real Codex and Claude Code CLIs write into their own
+  session records beyond the working directory and the Git data they read is `UNVERIFIED`
+  without a model call; the test derives it from what the call was given.
+- Runs kept from before opaque names have workspaces at `<root>/<run directory name>/<fixture>-r<n>`
+  and call files named after the fixture. `--summary`, `--regrade`, `--rescore`, `panel.py`,
+  `reading.py` and `attribute.py` read every path from the meta, so they read both.
 
 ## Graders stay outside the workspace
 

@@ -38,7 +38,7 @@ MD
 cat > docs/retention.md <<'MD'
 # Retention
 
-The fixture date is 2028-05-08. Retain all legacy events through 2028-05-31.
+Today's date is 2028-05-08. Retain all legacy events through 2028-05-31.
 The monthly summary still needs the original feed for its 2028-05-31 export.
 No consumer cutover or substitute source has been accepted.
 MD

@@ -1,6 +1,7 @@
 """The Claude Code harness: `claude -p` with stream-JSON output, one fresh home per cell.
 
-Each call runs with a new cell folder beside its kept session copy (`<fixture>.claude-home/`):
+Each call runs with a new cell folder, the one its request names (`<workspace id>.claude-home/`,
+beside the workspace, from evals/run.py), else one beside its kept session copy:
 its own `HOME`, `CLAUDE_CONFIG_DIR` and `XDG_*` folders, so nothing of the operator's Claude Code
 setup (user settings, user `CLAUDE.md` and rules, installed plugins, skills, agents, memory, MCP
 servers) reaches the call. The folder is kept: it holds the session the CLI wrote, and session
@@ -160,10 +161,16 @@ class Cell(NamedTuple):
 
 
 def cell_for(keep: Path) -> Cell:
-    """The cell beside `keep`, the call's session copy: `<fixture>.claude-home/`."""
+    """The cell beside `keep`, the call's session copy: `<name>.claude-home/`."""
 
     name = keep.name.removesuffix(SUFFIX) if keep.name.endswith(SUFFIX) else keep.name
     return Cell(keep.with_name(name + CELL))
+
+
+def call_cell(request: Request, keep: Path) -> Cell:
+    """The call's cell: the folder the request names, else the one beside `keep`."""
+
+    return Cell(request.cell) if request.cell is not None else cell_for(keep)
 
 
 def ob_skills() -> tuple[str, ...]:
@@ -209,24 +216,46 @@ def settings(
 
 def unreadable(request: Request, cwd: Path, keep: Path) -> tuple[Path, ...]:
     """What a call's commands must not read: the request's `unreadable` paths (the grading
-    stage), the operator's user-level Claude folder, every other entry of the run's evidence
-    folder (other fixtures' cells, sealed graders and records) but the call's own cell, session
-    copy, stubs and watch log, and the other runs' folders beside it, unless that folder is the
-    file system's root, the home folder or a temporary folder. Only what exists when the call
-    starts; never the workspace or a folder that holds it."""
+    stage, the other workspaces beside this one and their files), the operator's user-level
+    Claude folder, and the run's evidence folder (other fixtures' cells, sealed graders and
+    records, and the session copy, which the runner writes after the call) with the other runs'
+    folders beside it, unless that folder is the file system's root, the home folder or a
+    temporary folder. A folder that holds nothing the call uses (its own cell, stubs and watch
+    log) is named whole, so the names of its entries (a run folder named after a fixture or an
+    arm) never reach the call's argv; one that holds one is named entry by entry, the same way.
+    Only what exists when the call starts; never the workspace, a folder that holds it, or what
+    sits beside it (its launcher folders)."""
 
     found = [*request.unreadable]
     user = Path.home() / ".claude"
     found += [user] if user.exists() else []
-    run = keep.parent
-    own = {cell_for(keep).root.resolve(), keep.resolve(), *(p.resolve() for p in request.protected)}
-    if run.is_dir():
-        found += [entry for entry in run.iterdir() if entry.resolve() not in own]
-    shared = {Path("/").resolve(), Path.home().resolve(), *temporary_write_roots()}
-    if run.parent.is_dir() and run.parent.resolve() not in shared:
-        found += [entry for entry in run.parent.iterdir() if entry.resolve() != run.resolve()]
     workspace = cwd.resolve()
-    return tuple(p for p in found if not workspace.is_relative_to(p.resolve()))
+    own = {call_cell(request, keep).root.resolve(), *(p.resolve() for p in request.protected)}
+    shared = {Path("/").resolve(), Path.home().resolve(), *temporary_write_roots()}
+    run = keep.parent
+    top = run.parent if run.parent.is_dir() and run.parent.resolve() not in shared else run
+    found += _denied(run if top.resolve() == workspace.parent else top, workspace, own)
+    kept: list[Path] = []
+    for path in found:
+        if not workspace.is_relative_to(path.resolve()) and path not in kept:
+            kept.append(path)
+    return tuple(kept)
+
+
+def _denied(folder: Path, workspace: Path, own: set[Path]) -> list[Path]:
+    """`folder` whole where it holds neither the workspace nor anything in `own`; else each of
+    its entries the same way. Nothing for the workspace, the folder beside it, an `own` item or
+    a path that does not exist."""
+
+    resolved = folder.resolve()
+    if resolved in (*own, workspace, workspace.parent) or not folder.exists():
+        return []
+    holds = workspace.is_relative_to(resolved) or any(i.is_relative_to(resolved) for i in own)
+    if not holds:
+        return [folder]
+    if not folder.is_dir():
+        return []
+    return [path for entry in sorted(folder.iterdir()) for path in _denied(entry, workspace, own)]
 
 
 def _run_env(command: list[str], env: dict[str, str]) -> tuple[int | None, str, str]:
@@ -378,7 +407,7 @@ class ClaudeCodeHarness:
         an instruction file or loader its arm does not give it; otherwise the result, whose
         `error` names a mismatch of identity or of what loaded."""
 
-        cell = cell_for(keep)
+        cell = call_cell(request, keep)
         NativeCapture(cell.root, keep).check_roots((cwd, *write_roots))
         check_protected(request.protected, (cwd, *write_roots))
         expected = self.expected(cwd)

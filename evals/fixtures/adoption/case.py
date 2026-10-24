@@ -20,7 +20,7 @@ REPO = Path(__file__).resolve().parents[3]
 PROJECT_NOTE = "# Archive table\n\nKeep event ids and integer amounts unchanged.\n"
 TARGET = Path("target/project")
 LOCAL = {
-    ".agents/settings.local.json": '{"fixture_local":true}\n',
+    ".agents/settings.local.json": '{"local_only":true}\n',
     "scratch/local-note.txt": "synthetic local work\n",
 }
 ENV = {

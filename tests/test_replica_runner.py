@@ -528,7 +528,7 @@ def test_runner_the_dump_shows_what_the_none_arms_call_receives_with_no_model_ca
     assert not isolated["calls"].exists(), "the dump started codex"
     assert re.search(r"^codex exec --json .* -m m ", printed, re.M), printed
     assert "Record the release in the changelog." in printed
-    assert re.search(r"replica-fake-none/AGENTS\.md \(\d+ bytes, in the workspace\)", printed)
+    assert re.search(r"/ws-[0-9a-f]{16}/AGENTS\.md \(\d+ bytes, in the workspace\)", printed)
     assert "  | Stack: Python." in printed
     assert "--- PATH entries holding outcomebound ---\n(none)" in printed
     for rule in ("launcher-on-path", "codex-home-neutral", "nothing-above-workspace"):

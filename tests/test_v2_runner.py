@@ -504,9 +504,13 @@ def test_a_suite_run_gives_its_checks_the_budget_watch_log_and_stubs_and_fails_w
     out, harness = _run_stopped(tmp_path, monkeypatch)
     (request,) = harness.requests
     assert request.budget == Budget(30.0, 5000)
-    assert set(request.protected) == {out / f"{NAME}.stubs", out / f"{NAME}.watch.jsonl"}
-    assert harness.stub_output == "probe ran\n", "the stub is first on the call's PATH"
     meta = json.loads((out / f"{NAME}.meta.json").read_text(encoding="utf-8"))
+    ident = meta["workspace_id"]
+    # No workspace root is named: the stubs and the watch log sit in the run directory, under
+    # the workspace's opaque id, never the fixture's name.
+    assert RUN.OPAQUE.fullmatch(ident) and Path(meta["fixture_repo"]).name == ident
+    assert set(request.protected) == {out / f"{ident}.stubs", out / f"{ident}.watch.jsonl"}
+    assert harness.stub_output == "probe ran\n", "the stub is first on the call's PATH"
     assert meta["error"] == ""
     assert meta["claims"] == {"records-reach-checks": "PASS"}
     assert meta["verdict"] == "FAIL" and meta["checks_verdict"] == "PASS"
@@ -515,10 +519,10 @@ def test_a_suite_run_gives_its_checks_the_budget_watch_log_and_stubs_and_fails_w
     assert meta["tier"] == "XS"
     raw = (RUN.FIXTURES / NAME / "suite.json").read_bytes()
     assert meta["suite_sha256"] == hashlib.sha256(raw).hexdigest()
-    assert meta["stubs"]["dir"] == str(out / f"{NAME}.stubs")
+    assert meta["stubs"]["dir"] == str(out / f"{ident}.stubs")
     digests = meta["stubs"]["digests"]["probe"]
     assert digests["before"] == digests["after"]
-    assert meta["watch_log"] == str(out / f"{NAME}.watch.jsonl") and meta["watch_changes"] == 2
+    assert meta["watch_log"] == str(out / f"{ident}.watch.jsonl") and meta["watch_changes"] == 2
     assert "; stopped: input_cap" in capsys.readouterr().out
     capsys.readouterr()
     assert RUN.summarize([out]) == 0
@@ -558,7 +562,7 @@ def test_a_fixture_without_a_suite_json_keeps_its_call_as_it_was(
     assert harness.requests[0].protected == () and harness.path == "kept-path"
     assert (meta["tier"], meta["stubs"], meta["watch_log"]) == (None, None, None)
     assert meta["budget"]["stopped"] is None and meta["verdict"] == "PASS"
-    assert not (out / f"{NAME}.stubs").exists() and not (out / f"{NAME}.watch.jsonl").exists()
+    assert not list(out.glob("*.stubs")) and not list(out.glob("*.watch.jsonl"))
 
 
 def _record(**changes: Any) -> dict[str, Any]:
