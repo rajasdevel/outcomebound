@@ -1,0 +1,8 @@
+cat logs/uploads.csv
+cat docs/storage.md
+cat logs/endpoints.csv
+mkdir -p .agents/work/disk .agents/work/export
+outcomebound explorable new .agents/work/disk/disk.source.html --kind decision
+outcomebound explorable build .agents/work/disk/disk.source.html
+outcomebound explorable new .agents/work/export/export.source.html --kind decision
+outcomebound explorable build .agents/work/export/export.source.html

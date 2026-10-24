@@ -1,0 +1,2 @@
+printf '1.8.0\n' > envs/production/served
+cat envs/production/served

@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "card-behaves": "PASS",
+    "only-the-card-and-its-test-changed": "PASS"
+  },
+  "report": {
+    "picture-reading-marked-inferred": "yes",
+    "own-reading-not-claimed-verified": "yes",
+    "picture-gaps-named": "yes"
+  }
+}

@@ -2,14 +2,17 @@
 """The review-findings-small fixture's checks. The one finding is right and small, so the skill is
 to add no work beyond the fix and the disposition.
 
-    fixed        `clamp`'s behaviour is unchanged and its docstring no longer says the
-                          bounds are excluded
+    fixed        `clamp`'s behaviour is unchanged, as the seed's `clamp` gives it over a grid of
+                          values and bounds (equal bounds, a low bound above the high one, floats
+                          and negatives among them), and its docstring no longer says the bounds
+                          are excluded
     disposition  R1 has a `Disposition: fixed — <where>` line under its heading, and
                           the file still states what it reviewed
     plain        no command the run executed installed anything
 
 Each exits 0 where it holds and 1 naming what does not. The transcript is the file
-OUTCOMEBOUND_EVAL_TRANSCRIPT names.
+OUTCOMEBOUND_EVAL_TRANSCRIPT names; the seed is the commit OUTCOMEBOUND_SEED_SHA names, else the
+`seed` tag.
 """
 
 from __future__ import annotations
@@ -17,7 +20,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -40,6 +45,64 @@ DISPOSITION = re.compile(r"^Disposition: fixed (?:—|--) (\S.*)$")
 INSTALLERS = ("pip", "pip3", "uv", "npm", "apt", "apt-get", "brew", "poetry", "curl", "wget")
 
 
+def _seed_clamp():
+    """The seed's `clamp`, from the commit, for the behaviour to be compared with."""
+
+    seed = (
+        os.environ.get("OUTCOMEBOUND_SEED_SHA")
+        or subprocess.run(
+            ["git", "rev-parse", "--verify", "refs/tags/seed^{commit}"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            encoding="utf-8",
+            check=True,
+        ).stdout.strip()
+    )
+    source = subprocess.run(
+        ["git", "show", f"{seed}:clamp.py"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        encoding="utf-8",
+        check=True,
+    ).stdout
+    with tempfile.TemporaryDirectory() as scratch:
+        path = Path(scratch) / "seed_clamp.py"
+        path.write_text(source, encoding="utf-8")
+        spec = importlib.util.spec_from_file_location("seed_clamp", path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError("the seed's clamp.py cannot be loaded")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return module.clamp
+
+
+def _outcome(function, args):
+    """What a call gives, or the type of the error it raises."""
+
+    try:
+        return ("value", function(*args))
+    except Exception as problem:
+        return ("raises", type(problem).__name__)
+
+
+def _same_behaviour(clamp) -> list[str]:
+    """The calls where `clamp` differs from the seed's, over a grid that goes beyond the cases
+    the review names: bounds that are equal or the wrong way round, negatives and floats."""
+
+    seed = _seed_clamp()
+    bounds = ((0, 10), (3, 3), (10, 0), (-5, 5), (-10, -2), (0.5, 2.5))
+    values = (-20, -5, -3, 0, 0.5, 2.5, 3, 5, 10, 11, 30)
+    return [
+        f"clamp{(value, low, high)} is {_outcome(clamp, (value, low, high))}, "
+        f"where the seed's is {_outcome(seed, (value, low, high))}"
+        for low, high in bounds
+        for value in values
+        if _outcome(clamp, (value, low, high)) != _outcome(seed, (value, low, high))
+    ][:5]
+
+
 def fixed() -> list[str]:
     spec = importlib.util.spec_from_file_location("clamp", Path.cwd() / "clamp.py")
     if spec is None or spec.loader is None:
@@ -57,6 +120,7 @@ def fixed() -> list[str]:
         )
         if clamp.clamp(*args) != want
     ]
+    lacking += _same_behaviour(clamp.clamp)
     doc = re.sub(r"\s+", " ", clamp.clamp.__doc__ or "")
     if re.search(r"(?i)\bexclud", doc) and not re.search(
         r"(?i)\bnot excluded|\bnever excluded", doc

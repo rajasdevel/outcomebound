@@ -1,0 +1,5 @@
+cat reviews/clamp.md
+cat clamp.py
+cat test_clamp.py
+python3 -B -c "from clamp import clamp; print(clamp(0, 0, 10), clamp(10, 0, 10))"
+python3 -B -m unittest

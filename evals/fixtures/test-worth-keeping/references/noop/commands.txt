@@ -1,0 +1,4 @@
+git log --oneline -5
+git show HEAD
+cat money.py
+cat test_money.py

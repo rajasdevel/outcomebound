@@ -1,0 +1,3 @@
+ops/deploy.sh production
+printf '1.8.0\n' > envs/production/served
+ops/status.sh production

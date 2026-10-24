@@ -1,0 +1,2 @@
+cat reminders.py
+python3 -B -m unittest

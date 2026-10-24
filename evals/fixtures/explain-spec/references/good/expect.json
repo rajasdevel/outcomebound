@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "design-read": "PASS",
+    "design-rows-kept": "PASS",
+    "only-the-design-and-notes-changed": "PASS"
+  },
+  "report": {
+    "decisions-explained": "yes",
+    "questions-asked": "yes",
+    "understanding-unverified": "yes"
+  }
+}

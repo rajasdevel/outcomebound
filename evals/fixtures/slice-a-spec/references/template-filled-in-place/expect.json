@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "drafts-pass-the-ticket-lint": "FAIL",
+    "draft-count-within-the-sizing-rule": "FAIL",
+    "draft-bounds-exist": "FAIL"
+  },
+  "report": {}
+}

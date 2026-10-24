@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "slug-behaves": "FAIL",
+    "only-the-helper-and-its-test-changed": "PASS",
+    "no-service-started-for-a-pure-helper": "PASS"
+  },
+  "report": {}
+}

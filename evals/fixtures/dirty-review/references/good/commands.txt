@@ -1,0 +1,4 @@
+cat parser.py
+cat docs/parser.md
+git status --short
+git diff

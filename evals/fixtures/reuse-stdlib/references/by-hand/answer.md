@@ -1,0 +1,1 @@
+I added `query_params(url)` to `links.py`. It cuts off the fragment, splits the query on `&`, splits each pair on the first `=`, and decodes `+` and each `%XX` as UTF-8 with a small helper. It keeps repeated names in order and keeps a name with no value as an empty string. I added four tests to `test_links.py`, and `python3 -B -m unittest` passes. I installed nothing.

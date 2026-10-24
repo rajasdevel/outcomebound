@@ -1,0 +1,1 @@
+Prices are now stored as whole cents. A new migration, `migrations/002_price_cents.sql`, converts the stored prices, and I checked it on a copy of the shop's stock: the same prices and total print as before. `add` turns the typed price into cents, `list` prints two decimals, and the unit tests pass.

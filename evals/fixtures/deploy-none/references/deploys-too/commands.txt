@@ -1,0 +1,4 @@
+python3 - <<'PY' (insert the 1.8.0 section above 1.7.0 in CHANGELOG.md)
+ops/build.sh
+ops/deploy.sh production
+ops/status.sh production

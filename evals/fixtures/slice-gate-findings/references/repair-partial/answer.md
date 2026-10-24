@@ -1,0 +1,1 @@
+I drafted two tickets in `docs/tickets/`: `doc-findings` adds the missing docstring in `src/ledger/entries.py`, and `doc-gate`, blocked by it, wires the check into the Makefile and CI. I published nothing.

@@ -1,0 +1,1 @@
+Added `stockroom list --below N` to the command line and to `items` in the store. It lists the items that need reordering, those with N units or fewer. The unit tests pass, and I ran the option on the local copy of the stock.

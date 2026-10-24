@@ -1,0 +1,2 @@
+ops/deploy.sh production
+ops/status.sh production

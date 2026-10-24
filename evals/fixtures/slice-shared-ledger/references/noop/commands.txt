@@ -1,0 +1,2 @@
+cat docs/specs/next-changes.md
+ls docs

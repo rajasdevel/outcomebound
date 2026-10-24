@@ -1,0 +1,5 @@
+cat docs/goals/migration.md
+grep -Rn old_name src
+sed -i.bak s/old_name/new_name/g src/legacy.py src/other.py
+grep -R --include=*.py old_name src
+python3 -m compileall -q src

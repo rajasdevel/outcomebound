@@ -1,0 +1,7 @@
+{
+  "claims": {
+    "drafts-pass-the-ticket-lint": "PASS",
+    "module-ticket-grants-the-registry": "PASS"
+  },
+  "report": {}
+}

@@ -1,0 +1,1 @@
+I drafted two tickets in `docs/tickets/`: `any-case` (categories match whatever their case) and `thousands` (amounts carry a thousands separator), each with its module and its test. I published nothing.

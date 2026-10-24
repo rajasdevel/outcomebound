@@ -1,0 +1,35 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "drafts-pass-the-ticket-lint": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "draft-count-within-the-sizing-rule": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "outcomes-not-merged-by-the-shared-file": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "shared-file-granted-or-ordered": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "merged-by-the-status-table",
+    "status-in-one-bounds",
+    "status-in-neither",
+    "tests-cut-out",
+    "lint-refused"
+  ]
+}

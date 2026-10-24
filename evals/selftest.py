@@ -27,6 +27,12 @@ are checked, and it is listed as `report-only, no references`. `guard` (true or 
 guard fixture; `budget.reference` is the reference run's usage (`input`, `uncached`, `output`,
 `seconds`, `commands`, as available), which the default budget record carries.
 
+A suite.json with `references` and no `budget` is a default fixture's (the kernel and skill
+fixtures a run takes when it names none): the runner gives its call no input cap and its own time
+limit, so it has no cost claim and no budget record to check. Its `seed` is optional, and so is a
+restraint or safety oracle; its references are `good`, `noop` and at least one more, a plausible
+wrong outcome named for its defect. Every reference's expect.json names every claim of the plan.
+
 It prints one line per fixture and reference, `PASS` or `FAIL` with each mismatch, and lists each
 fixture's report items, which it does not grade: the lead reads them blind (`evals/reading.py`).
 Exit 0 only when every suite file is sound and every reference matches; 1 otherwise; 2 where a
@@ -66,6 +72,8 @@ TIMEOUT_SECONDS = {"XS": 600, "S": 900, "M": 2400, "L": 5400}
 CLAIM_TYPES = ("outcome", "process", "cost", "safety")
 ORACLES = ("completion", "restraint", "safety")
 REQUIRED_REFERENCES = ("good", "noop", "empty", "incomplete", "overbuilt")
+# A default fixture's suite (references and no budget): a good and a noop, and one more at least.
+DEFAULT_REFERENCES = ("good", "noop")
 SUITE_KEYS = frozenset(
     (
         "tier",
@@ -155,6 +163,12 @@ def _budget_problems(suite: dict[str, Any], tier: Any) -> list[str]:
     return problems
 
 
+def default_fixture(suite: dict[str, Any]) -> bool:
+    """Whether the suite.json is a default fixture's: references, and no budget."""
+
+    return "references" in suite and "budget" not in suite
+
+
 def _claim_problems(suite: dict[str, Any], claims: list[str]) -> list[str]:
     typed = suite.get("claims")
     if not isinstance(typed, dict):
@@ -174,7 +188,13 @@ def _claim_problems(suite: dict[str, Any], claims: list[str]) -> list[str]:
     oracles = {entry.get("oracle") for entry in typed.values() if isinstance(entry, dict)}
     if "completion" not in oracles:
         problems.append("no completion oracle")
-    if not oracles & {"restraint", "safety"}:
+    if default_fixture(suite):
+        problems += [
+            f"claim {name} is a cost claim, and a suite with no budget has no budget record"
+            for name, entry in typed.items()
+            if isinstance(entry, dict) and entry.get("type") == "cost"
+        ]
+    elif not oracles & {"restraint", "safety"}:
         problems.append("no restraint or safety oracle")
     return problems
 
@@ -212,8 +232,11 @@ def _list_problems(suite: dict[str, Any], folder: Path) -> list[str]:
     references = suite.get("references")
     if not isinstance(references, list) or not all(isinstance(item, str) for item in references):
         return [*problems, "references is a list of reference names"]
-    problems += [f"reference {name} is required" for name in REQUIRED_REFERENCES
+    required = DEFAULT_REFERENCES if default_fixture(suite) else REQUIRED_REFERENCES
+    problems += [f"reference {name} is required" for name in required
                  if name not in references]  # fmt: skip
+    if default_fixture(suite) and not set(references) - set(required):
+        problems.append("a wrong reference is required beside good and noop")
     for name in references:
         here = folder / "references" / name
         for needed in ("act.sh", "expect.json"):
@@ -255,11 +278,13 @@ def suite_problems(fixture: Fixture) -> list[str]:
     ]
     if report_only(suite):
         return problems + _report_problems(suite, fixture.folder)
-    if not isinstance(suite.get("seed"), str) or not suite.get("seed"):
+    default = default_fixture(suite)
+    if not default and (not isinstance(suite.get("seed"), str) or not suite.get("seed")):
         problems.append("seed names the seed project")
     problems += _claim_problems(suite, claims)
     problems += _report_problems(suite, fixture.folder)
-    problems += _budget_problems(suite, tier)
+    if not default:
+        problems += _budget_problems(suite, tier)
     problems += _list_problems(suite, fixture.folder)
     return problems + expect_problems(fixture, suite, claims)
 
@@ -287,6 +312,11 @@ def expect_problems(fixture: Fixture, suite: dict[str, Any], claims: list[str]) 
             f"reference {name}: claim {claim} is not in post.plan.json"
             for claim in verdicts
             if claim not in claims
+        ]
+        problems += [
+            f"reference {name}: expect.json names no verdict for claim {claim}"
+            for claim in claims
+            if claim not in verdicts
         ]
         problems += [
             f"reference {name}: claim {claim} expects {value!r}, not PASS or FAIL"

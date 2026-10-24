@@ -1,0 +1,5 @@
+cat source/issue-31.md
+cat export.py test_export.py orders.json
+python3 -B -m unittest
+git add export.py test_export.py
+git commit -m "Export: ISO dates, no cancelled orders"

@@ -1,0 +1,4 @@
+cat links.py test_links.py
+python3 -c "from urllib.parse import parse_qs, urlparse; print(parse_qs(urlparse('https://x.test/p?a=1&a=2&b=').query, keep_blank_values=True))"
+python3 -B -m unittest
+git status --short

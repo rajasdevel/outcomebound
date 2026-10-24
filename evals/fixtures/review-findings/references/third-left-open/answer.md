@@ -1,0 +1,1 @@
+Fixed R1: an unknown zone now raises a `ValueError` that names the zone. Fixed R2: a weight of zero or less now raises a `ValueError`. Both are recorded in `reviews/rates.md`. `python3 -B -m unittest` passes.

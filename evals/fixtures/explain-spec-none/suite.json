@@ -1,0 +1,29 @@
+{
+  "tier": "XS",
+  "panel": false,
+  "claims": {
+    "value-answered": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-quiz-added": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "tree-unchanged": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "quizzes-the-author",
+    "understanding-reported",
+    "note-left",
+    "wrong-value"
+  ]
+}

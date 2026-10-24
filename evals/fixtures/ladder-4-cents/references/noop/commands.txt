@@ -1,0 +1,1 @@
+cat stockroom/store.py stockroom/cli.py migrations/001_items.sql

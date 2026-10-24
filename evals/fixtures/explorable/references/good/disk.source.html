@@ -1,0 +1,77 @@
+<script type="application/json" data-explorable>
+{"kind": "decision", "id": "disk", "title": "Uploads disk", "brief": "briefs.json"}
+</script>
+
+<section>
+  <h2>How long each option lasts</h2>
+  <p>The disk holds 500 GB and 410 GB of it is used. Growing it to 2 TB keeps every upload on the disk. Moving uploads older than 90 days to the archive keeps only the last three months on the disk. Uploads grow each month, and you may judge how fast differently from the log, so change the two guesses.</p>
+  <label>Used on the disk now
+    <input type="number" data-input="used" data-unit="GB" data-source="checked" min="0" max="500" step="1" value="410"
+      data-note="On 2026-10-01, from docs/storage.md."></label>
+  <label>Disk size now
+    <input type="number" data-input="disk" data-unit="GB" data-source="checked" min="100" max="500" step="1" value="500"
+      data-note="From docs/storage.md."></label>
+  <label>Disk size after growing it
+    <input type="number" data-input="newSize" data-unit="GB" data-source="checked" min="500" max="2000" step="100" value="2000"
+      data-note="The most the disk can grow to, from docs/storage.md."></label>
+  <label>Uploaded each month now
+    <input type="number" data-input="rate" data-unit="GB" data-source="checked" min="1" max="200" step="1" value="38"
+      data-note="The last month in logs/uploads.csv."></label>
+  <label>Growth of the monthly upload, low guess
+    <input type="number" data-input="growLow" data-unit="GB each month" data-source="assumed" min="0.1" max="10" step="0.1" value="1"
+      data-note="The log shows about 1.6 GB more each month than the month before."></label>
+  <label>Growth of the monthly upload, high guess
+    <input type="number" data-input="growHigh" data-unit="GB each month" data-source="assumed" min="0.1" max="10" step="0.1" value="2"></label>
+
+  <table>
+    <caption>Months until the disk is full, for each option</caption>
+    <thead><tr><th>Option</th><th>Months until the disk is full</th></tr></thead>
+    <tbody>
+      <tr><td>A grow the disk</td><td><output data-output="monthsA"></output></td></tr>
+      <tr><td>B archive uploads older than 90 days</td><td><output data-output="monthsB"></output></td></tr>
+    </tbody>
+  </table>
+  <p>The option that lasts longer for these values: <output data-output="leader"></output></p>
+  <p>Option B assumes the disk then holds three months of uploads. Nobody has measured how often an upload older than 90 days is opened, so the page does not say what B costs in slow opens.</p>
+</section>
+
+<script>
+  const waits = ["growLow", "growHigh"];
+
+  function months(v) {
+    if (v.growLow === null || v.growHigh === null) return null;
+    // Option A: uploads grow by d GB each month, so n months add n*rate + d*n*(n-1)/2 GB.
+    const a = (d) => {
+      const half = v.rate - d / 2;
+      return (-half + Math.sqrt(half * half + 2 * d * (v.newSize - v.used))) / d;
+    };
+    // Option B: the disk holds the last three months, 3 * (rate + d*n) GB, and is full at its size.
+    const b = (d) => Math.max(0, (v.disk / 3 - v.rate) / d);
+    return { a: [a(v.growHigh), a(v.growLow)], b: [b(v.growHigh), b(v.growLow)] };
+  }
+
+  function leader(m) {
+    if (m.b[0] > m.a[1]) return "B archive old uploads";
+    if (m.a[0] > m.b[1]) return "A grow the disk";
+    return "neither clearly lasts longer";
+  }
+
+  explorable.onChange((v) => {
+    const m = months(v);
+    explorable.show("monthsA", m && m.a, { unit: "months", waits });
+    explorable.show("monthsB", m && m.b, { unit: "months", waits });
+    explorable.show("leader", m ? leader(m) : null, { waits });
+  });
+
+  // Worked by hand, not by the page: with 38 GB now, 410 GB used and 2000 GB after growing,
+  // d = 2 gives n = (-37 + sqrt(37^2 + 2*2*1590)) / 2 = 25.457 and d = 1 gives
+  // n = -37.5 + sqrt(37.5^2 + 2*1590) = 30.222. Option B: (500/3 - 38) / 2 = 64.333 and
+  // (500/3 - 38) / 1 = 128.667. With 1500 GB after growing, the free space is 1090 GB:
+  // d = 2 gives (-37 + sqrt(1369 + 4360)) / 2 = 19.345 and d = 1 gives 22.385.
+  explorable.expect("2 TB after growing, growth 1 to 2 GB", { newSize: 2000, growLow: 1, growHigh: 2 },
+    { monthsA: [25.457, 30.222], monthsB: [64.333, 128.667], leader: "B archive old uploads" });
+  explorable.expect("1.5 TB after growing, growth 1 to 2 GB", { newSize: 1500, growLow: 1, growHigh: 2 },
+    { monthsA: [19.345, 22.385], monthsB: [64.333, 128.667], leader: "B archive old uploads" });
+  explorable.expect("no growth guess yet", { growLow: null, growHigh: null },
+    { monthsA: null, monthsB: null, leader: null });
+</script>

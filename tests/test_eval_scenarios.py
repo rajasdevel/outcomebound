@@ -715,7 +715,24 @@ ENGINE = f"PYTHONPATH={shlex.quote(str(ROOT))} {PYTHON} -m outcomebound_tools"
 NEW_PAGE = f"""mkdir -p .agents/work
 {ENGINE} explorable new .agents/work/disk.source.html --kind decision
 """
-OWN_CONTENT = "printf '<p>Disk use by month.</p>\\n' >> .agents/work/disk.source.html\n"
+
+
+def own_page(path: str, ident: str, title: str, text: str) -> str:
+    """A command that writes a page of its own over the starter at `path`: its declaration, a
+    paragraph and one expectation, and none of the starter's example."""
+
+    declaration = json.dumps(
+        {"kind": "decision", "id": ident, "title": title, "brief": "briefs.json"}
+    )
+    return (
+        "printf '%s\\n' '<script type=\"application/json\" data-explorable>' "
+        f"'{declaration}' '</script>' '<p>{text}</p>' "
+        f"'<script>explorable.expect(\"none\", {{}}, {{}});</script>' > {path}\n"
+    )
+
+
+# A page of its own: a starter with only a paragraph added still shows the starter's example.
+OWN_CONTENT = own_page(".agents/work/disk.source.html", "disk", "Disk", "Disk use by month.")
 BUILD_PAGE = f"{ENGINE} explorable build .agents/work/disk.source.html\n"
 DISK_PAGE = NEW_PAGE + OWN_CONTENT + BUILD_PAGE
 NO_EXPECTATION = (
@@ -731,13 +748,13 @@ EDIT_THE_BUILT_PAGE = (
 )
 EXPORT_PAGE = (
     f"{ENGINE} explorable new .agents/work/export.source.html --kind decision\n"
-    "printf '<p>Calls by month.</p>\\n' >> .agents/work/export.source.html\n"
-    f"{ENGINE} explorable build .agents/work/export.source.html\n"
+    + own_page(".agents/work/export.source.html", "export", "Export", "Calls by month.")
+    + f"{ENGINE} explorable build .agents/work/export.source.html\n"
 )
 OUTSIDE_THE_WORKING_AREA = (
     f"{ENGINE} explorable new disk.source.html --kind decision\n"
-    "printf '<p>Disk use by month.</p>\\n' >> disk.source.html\n"
-    f"{ENGINE} explorable build disk.source.html\n"
+    + own_page("disk.source.html", "disk", "Disk", "Disk use by month.")
+    + f"{ENGINE} explorable build disk.source.html\n"
 )
 DISK_BRIEF = """### D1 · Grow the uploads disk, or move uploads older than 90 days to the archive?
 - 👉 Recommend: B — the disk then holds about three months of uploads
@@ -1872,53 +1889,17 @@ DROP_A_DESIGN_ROW = (
 def test_explain_spec_reads_an_explanation_with_nobody_to_answer(
     workspace: Callable[..., Path],
 ) -> None:
+    """The plan reads what files and commands show: the design read, its rows kept, nothing but
+    the design and notes changed. What the answer explains, asks and reports is read blind: the
+    report items of suite.json, with no word list among the claims."""
+
     _claims(workspace, "explain-spec", "pass", ("", READ_THE_SPEC, ASK_AND_EXPLAIN))
     # the questions may sit in a note that the run wrote in the working area
     _claims(
         workspace,
         "explain-spec",
         "questions-in-a-note",
-        (
-            QUESTIONS_IN_A_NOTE,
-            READ_THE_SPEC,
-            EXPLAIN_NO_QUESTIONS + "\nUNVERIFIED: whether you "
-            "understood it; the questions are in the working area.\n",
-        ),
-    )
-    _claims(
-        workspace,
-        "explain-spec",
-        "claims-understanding",
-        (
-            "",
-            READ_THE_SPEC,
-            ASK_AND_EXPLAIN.replace(
-                "UNVERIFIED: whether you understood the design; nobody answered the questions "
-                "here.",
-                "You now understand the design.",
-            ),
-        ),
-        understanding_reported_unverified="FAIL",
-    )
-    _claims(
-        workspace,
-        "explain-spec",
-        "understanding-in-plain-words",
-        (
-            "",
-            READ_THE_SPEC,
-            ASK_AND_EXPLAIN.replace(
-                "UNVERIFIED: whether you understood the design;",
-                "I have not checked whether you understood the design;",
-            ),
-        ),
-    )
-    _claims(
-        workspace,
-        "explain-spec",
-        "no-questions",
-        ("", READ_THE_SPEC, EXPLAIN_NO_QUESTIONS),
-        questions_drawn_from_the_design="FAIL",
+        (QUESTIONS_IN_A_NOTE, READ_THE_SPEC, EXPLAIN_NO_QUESTIONS),
     )
     _claims(
         workspace,
@@ -1926,8 +1907,6 @@ def test_explain_spec_reads_an_explanation_with_nobody_to_answer(
         "thin",
         ("", (), "The notifier retries sends. UNVERIFIED: whether you understood.\n"),
         design_read="FAIL",
-        each_decision_explained_with_what_it_rejected="FAIL",
-        questions_drawn_from_the_design="FAIL",
     )
     _claims(
         workspace,
@@ -1943,6 +1922,18 @@ def test_explain_spec_reads_an_explanation_with_nobody_to_answer(
         ("printf '# note\\n' >> notify.py\n", READ_THE_SPEC, ASK_AND_EXPLAIN),
         only_the_design_and_notes_changed="FAIL",
     )
+    plan = {claim["name"] for claim in _plan("explain-spec")["claims"]}
+    suite = json.loads((FIXTURES / "explain-spec" / "suite.json").read_text(encoding="utf-8"))
+    assert set(suite["report"]) == {
+        "decisions-explained",
+        "questions-asked",
+        "understanding-unverified",
+    }
+    assert not plan & {
+        "each-decision-explained-with-what-it-rejected",
+        "questions-drawn-from-the-design",
+        "understanding-reported-unverified",
+    }
 
 
 def test_explain_spec_none_reads_a_lookup_that_adds_no_quiz_and_no_file(
@@ -6925,7 +6916,6 @@ def test_sync_tracker_starts_with_a_card_whose_client_asks_for_a_status_change(
 # cannot edit loads nothing it does not hold; the copies stay the same as the original.
 NOT_VERIFIED_COPIES = (
     "evals/graders/deploy_probe.py",
-    "evals/fixtures/explain-spec/checks/probe_notify.py",
     "evals/fixtures/explain-spec-none/checks/probe_lookup.py",
     "evals/fixtures/runtime-check/checks/probe_service.py",
     "evals/fixtures/runtime-none/checks/probe_slug.py",

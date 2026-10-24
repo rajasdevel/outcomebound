@@ -1,0 +1,4 @@
+cat AGENTS.md
+cat datehelp.py
+cat test_datehelp.py
+python3 -B test_datehelp.py

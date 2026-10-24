@@ -1,0 +1,1 @@
+Fixed "enought" to "enough" in `stockroom/store.py`. As `CONTRIBUTING.md` asks, I added a decision record (`docs/decisions/0002-fix-refusal-spelling.md`) and a design note (`docs/design/0002-refusal-message.md`). The unit tests pass.

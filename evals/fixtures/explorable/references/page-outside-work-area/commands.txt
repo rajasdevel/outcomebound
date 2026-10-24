@@ -1,0 +1,6 @@
+cat logs/uploads.csv
+cat docs/storage.md
+cat logs/endpoints.csv
+outcomebound explorable new disk.source.html --kind decision
+outcomebound explorable build disk.source.html
+outcomebound explorable check disk.html

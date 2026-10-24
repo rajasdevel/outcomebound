@@ -4,7 +4,8 @@ why it does not. Lines starting `observed:` describe the rest and never change t
 
   check   there is a built page, and the engine's own check (without a browser) passes on each
   expect  each built page's content calls `explorable.expect` at least once
-  own     no built page holds a starter's content unchanged
+  own     no built page holds a starter's content unchanged, or with a few lines added or
+          changed: half or more of a starter's lines still stand in it
   one     there is exactly one built page
   named   the answer, the file OUTCOMEBOUND_EVAL_ANSWER names, holds each built page's file name
 
@@ -92,6 +93,17 @@ def _normal(text: str) -> str:
     return " ".join(text.split())
 
 
+# A starter's example stays in a page that has added a paragraph, or changed a title. A line
+# of 30 characters or more is a line of its content, not a bare tag; a page that still holds half
+# of a starter's lines shows the starter's example and not this decision.
+KEPT_SHARE = 0.5
+MIN_LINE = 30
+
+
+def _lines(text: str) -> set[str]:
+    return {line for line in map(_normal, text.splitlines()) if len(line) >= MIN_LINE}
+
+
 def own(root: Path) -> list[str]:
     from outcomebound_tools import explorable_shell, explorable_source
 
@@ -99,6 +111,14 @@ def own(root: Path) -> list[str]:
     problems = [] if found else [NO_PAGE]
     starters = {
         kind: _normal(
+            explorable_source.parse_source(
+                explorable_shell.template(f"starters/{kind}.source.html")
+            ).content
+        )
+        for kind in explorable_source.KINDS
+    }
+    starter_lines = {
+        kind: _lines(
             explorable_source.parse_source(
                 explorable_shell.template(f"starters/{kind}.source.html")
             ).content
@@ -113,6 +133,10 @@ def own(root: Path) -> list[str]:
         for kind, text in starters.items():
             if _normal(content) == text:
                 problems.append(f"{_relative(page, root)}: the {kind} starter, unchanged")
+            elif starter_lines[kind] and (
+                len(_lines(content) & starter_lines[kind]) / len(starter_lines[kind]) >= KEPT_SHARE
+            ):
+                problems.append(f"{_relative(page, root)}: the {kind} starter, mostly kept")
     return problems
 
 

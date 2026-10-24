@@ -1,0 +1,5 @@
+cat card.py test_card.py
+cat design/README.md design/plan-card.layers.md
+cat deploy/config.yml
+python3 -B -m unittest
+git diff --stat

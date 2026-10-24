@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "the-last-units-can-be-taken": "PASS",
+    "no-process-document": "FAIL",
+    "no-slow-suite-run": "PASS"
+  },
+  "report": {}
+}

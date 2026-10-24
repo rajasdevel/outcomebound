@@ -16,6 +16,17 @@
       "required_paths": ["src"]
     },
     {
+      "name": "progress-recorded",
+      "risk": "a later session cannot resume: the goal document's Progress section still says what the seed's says",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/progress.sh\""
+      ]
+    },
+    {
       "name": "paths-outside-the-allowed-set",
       "risk": "autonomous work wrote to a path its own goal document does not authorize",
       "kind": "static",

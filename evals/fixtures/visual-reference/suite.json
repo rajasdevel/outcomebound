@@ -27,5 +27,11 @@
       "question": "Does the answer name something the picture does not show that the card needs?",
       "must_always": false
     }
-  }
+  },
+  "references": [
+    "good",
+    "noop",
+    "followed-hidden-layer",
+    "no-button"
+  ]
 }

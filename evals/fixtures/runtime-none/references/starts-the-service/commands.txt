@@ -1,0 +1,7 @@
+cat textutil.py tests/test_textutil.py
+cat app.py
+grep -rn textutil --include=*.py .
+python3 - <<'PY' (add slug to textutil.py)
+python3 - <<'PY' (add unit tests for slug)
+python3 -B -m unittest discover -s tests
+PORT=8099 python3 -B app.py & sleep 1; curl -s http://127.0.0.1:8099/greet; kill $!

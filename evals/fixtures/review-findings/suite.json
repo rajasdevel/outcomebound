@@ -1,0 +1,34 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "right-findings-fixed": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "wrong-finding-not-followed": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "each-finding-has-a-disposition": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "dispositions-match-the-code": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "wrong-finding-followed",
+    "right-finding-rejected",
+    "third-left-open",
+    "file-not-updated"
+  ]
+}

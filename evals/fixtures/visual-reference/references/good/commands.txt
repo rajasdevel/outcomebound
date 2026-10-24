@@ -1,0 +1,4 @@
+cat card.py test_card.py
+cat design/README.md design/plan-card.layers.md
+python3 -B -m unittest
+git status --short

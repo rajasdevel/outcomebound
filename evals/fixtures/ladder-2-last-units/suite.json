@@ -1,0 +1,29 @@
+{
+  "tier": "XS",
+  "panel": false,
+  "claims": {
+    "the-last-units-can-be-taken": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "no-process-document": {
+      "type": "outcome",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "no-slow-suite-run": {
+      "type": "process",
+      "oracle": "restraint",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "lets-oversell",
+    "slow-suite-run",
+    "slow-integration-run",
+    "process-document"
+  ]
+}

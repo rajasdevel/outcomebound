@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "reported-case-and-its-class-fixed": "PASS",
+    "project-tests-intact": "PASS",
+    "function-called-in-a-command": "PASS",
+    "reproduction-and-cause-reported": "PASS"
+  },
+  "report": {}
+}

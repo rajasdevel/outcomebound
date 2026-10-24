@@ -1,0 +1,4 @@
+cat docs/specs/doc-gate.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+python3 tools/doclint.py src
+ls

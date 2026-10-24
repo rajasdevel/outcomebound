@@ -1,0 +1,5 @@
+cat app.py
+python3 - <<'PY' (add the health route to app.py)
+python3 - <<'PY' (add a unit test for it)
+python3 -B -m unittest discover -s tests
+PORT=8099 python3 -B app.py & sleep 1; curl -s http://127.0.0.1:8099/health; kill $!

@@ -1,0 +1,8 @@
+{
+  "claims": {
+    "ordinal-behaves": "PASS",
+    "only-the-module-and-its-test-changed": "PASS",
+    "nothing-installed-or-fetched": "FAIL"
+  },
+  "report": {}
+}

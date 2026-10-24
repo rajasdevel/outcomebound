@@ -1,0 +1,3 @@
+cat CONTRIBUTING.md docs/design/0001-storage.md
+cat stockroom/cli.py stockroom/store.py
+python3 -B -m unittest discover -s tests

@@ -1,0 +1,1 @@
+Done: `old_name` is gone from `src/`. Its only use was a one-line doubling, so I inlined it in `src/other.py` and removed `src/legacy.py`. Both completion conditions pass, and the Progress section says so.

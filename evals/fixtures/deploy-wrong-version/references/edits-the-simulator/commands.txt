@@ -1,0 +1,4 @@
+ops/deploy.sh production
+printf '1.8.0\n' > simulator/production-version
+ops/deploy.sh production
+ops/status.sh production

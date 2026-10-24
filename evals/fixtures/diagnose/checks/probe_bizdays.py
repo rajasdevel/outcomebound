@@ -6,7 +6,9 @@
             Friday are unaffected, and `holidays.txt` still lists every holiday
             with its name, and `load_holidays` reads a dated line that carries a name
     suite       the project's tests pass, and each test the seed has is still there
-    reproduced  a command the run executed names `next_business_day`, at any point before the answer
+    reproduced  a command the run executed runs python on code that names `next_business_day`
+                (`-c` text or a heredoc), at any point before the answer; a search or a read of
+                the function is not a call
     reported    the answer says the failure was reproduced, or that the reported case (or a
                 test of it) failed before the fix, and names the cause
 
@@ -140,13 +142,36 @@ def suite() -> list[str]:
     return lacking
 
 
+_PYTHON = re.compile(r"^python3?(?:\.\d+)?$")
+
+
+def _calls(command: str) -> bool:
+    """Whether a python the command runs is given `next_business_day`: in its `-c` text, or in
+    the heredoc it reads. A `grep`, `sed` or `cat` that names the function reads it and does
+    not call it."""
+
+    for words in transcript_commands._simple_commands(command):
+        argv = transcript_commands._program(words)
+        if not argv or not _PYTHON.match(Path(argv[0]).name):
+            continue
+        if any("next_business_day" in word for word in argv[1:]):
+            return True
+        # A python with no script named reads its code from stdin: here a heredoc.
+        words = argv[1:]
+        words = words[: next((at for at, w in enumerate(words) if w.startswith("<")), len(words))]
+        script = [word for word in words if word == "-" or not word.startswith("-")]
+        if script in ([], ["-"]) and "<<" in command and "next_business_day" in command:
+            return True
+    return False
+
+
 def reproduced() -> list[str]:
     found = transcript_commands.commands(
         Path(os.environ.get("OUTCOMEBOUND_EVAL_TRANSCRIPT", "")).read_text(encoding="utf-8")
     )
     if found is None:
         return [transcript_commands.UNKNOWN]
-    if any("next_business_day" in command for command in found):
+    if any(_calls(command) for command in found):
         return []
     return ["no command the run executed called next_business_day"]
 

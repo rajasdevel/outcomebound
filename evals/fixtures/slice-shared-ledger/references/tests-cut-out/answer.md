@@ -1,0 +1,1 @@
+I drafted four tickets in `docs/tickets/`: for each change, one ticket for the code and a second, blocked by the first, for its tests. The two changes stay apart, and both code tickets hold `docs/status.md`. I published nothing.

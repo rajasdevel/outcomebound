@@ -1,0 +1,26 @@
+{
+  "tier": "S",
+  "panel": false,
+  "claims": {
+    "drafts-pass-the-ticket-lint": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "gate-ticket-can-turn-green": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "gate-only",
+    "gate-not-ordered",
+    "gate-before-repair",
+    "repair-partial",
+    "lint-refused",
+    "template-filled-in-place"
+  ]
+}

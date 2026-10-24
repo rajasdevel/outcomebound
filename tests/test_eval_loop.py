@@ -250,6 +250,7 @@ SUITES = {
     "beta": {"tier": "S", "panel": True, "budget": {"input_cap": 900}, "references": REFS},
     "gamma": {"tier": "S", "panel": False, "budget": {"input_cap": 900}, "references": REFS},
     "delta": {"tier": "XS", "report": {}},  # report-only: in no pack
+    "epsilon": {"tier": "S", "panel": True, "references": REFS},  # default fixture: in no pack
 }
 TEN = SimpleNamespace(**{**vars(RUNNER), "REPETITIONS": tuple(range(1, 11))})
 
@@ -315,7 +316,8 @@ def test_a_plan_with_both_fixtures_and_a_pack_is_refused(tmp_path: Path, suites:
 
 def test_a_spend_limit_needs_every_fixture_s_input_cap(tmp_path: Path, suites: Path) -> None:
     (suites / "gamma" / "suite.json").write_text(
-        json.dumps({"tier": "S", "references": REFS}), encoding="utf-8"
+        json.dumps({"tier": "S", "budget": {"timeout_seconds": 900}, "references": REFS}),
+        encoding="utf-8",
     )
     with pytest.raises(LOOP.PlanError, match="gamma has none"):
         LOOP.read_plan(pack_plan(tmp_path, pack="S", spend_limit=10_000), RUNNER)

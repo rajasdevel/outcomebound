@@ -1,0 +1,3 @@
+cat ordinals.py test_ordinals.py
+python3 -B -m unittest
+git status --short

@@ -1,0 +1,3 @@
+cat source/issue-31.md
+cat export.py test_export.py orders.json
+python3 -B -m unittest

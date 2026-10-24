@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "query-params-behave": "FAIL",
+    "standard-library-reused": "FAIL",
+    "only-the-module-and-its-test-changed": "FAIL",
+    "no-dependency-installed": "PASS"
+  },
+  "report": {}
+}

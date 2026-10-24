@@ -1,0 +1,3 @@
+cat parser.py
+git status --short
+git diff

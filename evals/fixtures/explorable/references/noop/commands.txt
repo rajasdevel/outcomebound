@@ -1,0 +1,3 @@
+cat logs/uploads.csv
+cat docs/storage.md
+cat logs/endpoints.csv

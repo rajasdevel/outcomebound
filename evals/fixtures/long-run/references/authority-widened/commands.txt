@@ -1,0 +1,3 @@
+cat docs/goals/migration.md
+grep -R --include=*.py old_name src
+python3 -m compileall -q src

@@ -1,0 +1,1 @@
+I added `ordinal(n)` to `ordinals.py`. It picks `st`, `nd` or `rd` from the last digit and uses `th` for every other number. I added two tests to `test_ordinals.py`, and `python3 -B -m unittest` passes. I installed nothing.

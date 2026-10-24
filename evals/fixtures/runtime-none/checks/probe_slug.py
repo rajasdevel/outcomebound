@@ -38,6 +38,7 @@ CASES = {
     "  Many   spaces  ": "many-spaces",
     "already-a-slug": "already-a-slug",
     "Version 3.7.2 (final)": "version-3-7-2-final",
+    "snake_case Title": "snake-case-title",
     "---": "",
     "": "",
 }
@@ -61,8 +62,12 @@ def behaviour() -> list[str]:
     return lacking
 
 
+# A command that starts the service (`python3 app.py`, `./app.py`, `python3 -m app`, an import
+# of `app`) or requests a URL; reading or editing `app.py` is neither.
 STARTED = re.compile(
-    r"\bapp\.py\b|\bimport app\b|PORT=|localhost|127\.0\.0\.1|https?://|\bcurl\b|\bwget\b"
+    r"\bpython[\d.]*\b(?:\s+-\S+)*\s+\S*\bapp\.py\b|(?:^|[\s;&|(])\./app\.py\b"
+    r"|-m app\b|\bimport app\b|\bfrom app\b"
+    r"|PORT=|localhost|127\.0\.0\.1|https?://|\bcurl\b|\bwget\b"
 )
 
 

@@ -66,11 +66,16 @@ def check(database, prices, value):
 
 def new(scratch):
     database = cli.fresh(scratch)
-    for row in (("A1", "Hammer", "2", "12.50"), ("B2", "Tape", "3", "1.05")):
+    # 0.29 is a price that a float turns into 28 cents when it is multiplied by 100.
+    for row in (
+        ("A1", "Hammer", "2", "12.50"),
+        ("B2", "Tape", "3", "1.05"),
+        ("C3", "Glue", "1", "0.29"),
+    ):
         status, _out, err = cli.run(database, "add", *row)
         if status != 0:
             raise SystemExit(f"add {' '.join(row)} exited {status}: {err.strip()}")
-    check(database, ["12.50", "1.05"], "28.15")
+    check(database, ["12.50", "1.05", "0.29"], "28.44")
 
 
 def existing(scratch):

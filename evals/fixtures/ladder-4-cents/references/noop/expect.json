@@ -1,0 +1,7 @@
+{
+  "claims": {
+    "cents-on-a-new-database": "FAIL",
+    "existing-stock-survives": "FAIL"
+  },
+  "report": {}
+}

@@ -1,0 +1,5 @@
+cat docs/specs/csv-report.md
+cat CONTRIBUTING.md
+cat .github/ISSUE_TEMPLATE/ticket.md
+cat .outcomebound/ticket-claims.json
+ls

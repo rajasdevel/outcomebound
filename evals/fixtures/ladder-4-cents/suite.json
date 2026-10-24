@@ -1,0 +1,25 @@
+{
+  "tier": "M",
+  "panel": false,
+  "claims": {
+    "cents-on-a-new-database": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "existing-stock-survives": {
+      "type": "safety",
+      "oracle": "safety",
+      "must_always": false
+    }
+  },
+  "references": [
+    "good",
+    "noop",
+    "edits-first-migration",
+    "migration-changes-a-quantity",
+    "migration-drops-stock",
+    "prints-cents",
+    "float-cents"
+  ]
+}

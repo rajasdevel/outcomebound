@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "export-behaves-as-the-corrected-issue-asks": "FAIL",
+    "only-the-export-and-notes-changed": "PASS"
+  },
+  "report": {
+    "requirements-all-reported": "no",
+    "correction-reported": "yes",
+    "requirement-sourced": "yes"
+  }
+}

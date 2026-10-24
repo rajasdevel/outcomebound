@@ -27,5 +27,16 @@
       "question": "Does the answer tie a requirement to the issue as stated by it?",
       "must_always": false
     }
-  }
+  },
+  "references": [
+    "good",
+    "noop",
+    "follows-the-first-reading",
+    "deletes-the-orders",
+    "keeps-cancelled",
+    "moves-the-columns",
+    "commits-the-change",
+    "edits-the-issue",
+    "bare-answer"
+  ]
 }

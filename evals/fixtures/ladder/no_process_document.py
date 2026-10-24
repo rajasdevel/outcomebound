@@ -9,9 +9,12 @@ import re
 import subprocess
 
 # A word of the name, not a fragment of one: `inspect.md` and `explanation.md` are not
-# process documents.
+# process documents. A text or reStructuredText file counts as a Markdown one does, and so do
+# the longer words for a spec and a plan: `plan.txt` and `specification.md` are plans and specs.
 NAMED = re.compile(
-    r"(^|/)(docs/|([^/]*[-_.])?(design|decision|adr|spec|plan)s?([-_.][^/]*)?[.]md$)", re.I
+    r"(^|/)(docs/|([^/]*[-_.])?(design|decision|adr|spec|specification|plan|planning|rfc|proposal)s?"
+    r"([-_.][^/]*)?[.](md|markdown|txt|rst|adoc)$)",
+    re.I,
 )
 
 

@@ -1,0 +1,2 @@
+cat CHANGELOG.md
+python3 - <<'PY' (append the 1.8.0 section to CHANGELOG.md)

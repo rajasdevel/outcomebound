@@ -1,0 +1,2 @@
+cat docs/compatibility.md
+cat fetchkit.py
