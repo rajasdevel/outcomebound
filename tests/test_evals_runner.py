@@ -246,6 +246,15 @@ def _invoke(
     return done, out
 
 
+# The claims of the small-fix fixture, read from its plan.
+SMALL_FIX_CLAIMS = [
+    claim["name"]
+    for claim in json.loads(
+        (ROOT / "evals/fixtures/small-fix/post.plan.json").read_text(encoding="utf-8")
+    )["claims"]
+]
+
+
 def _meta(out: Path, fixture: str = "small-fix") -> dict:
     return json.loads((out / f"{fixture}.meta.json").read_text(encoding="utf-8"))
 
@@ -431,7 +440,7 @@ def test_the_current_arm_puts_the_launcher_and_its_skills_in_reach_and_no_check_
     assert done.returncode == 0, done.stdout + done.stderr
     meta = _meta(out)
     assert meta["verdict"] == "PASS" and meta["error"] == "", meta
-    assert set(meta["claims"].values()) == {"PASS"} and len(meta["claims"]) == 5, meta
+    assert meta["claims"] == dict.fromkeys(SMALL_FIX_CLAIMS, "PASS"), meta
     found, home, *listed = seen.read_text(encoding="utf-8").splitlines()
     assert Path(found).name == "outcomebound" and Path(found).resolve() == ROOT / LAUNCHER
     assert home == str(ROOT)
@@ -838,7 +847,7 @@ def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Pat
     argv = (tmp_path / "argv.txt").read_text(encoding="utf-8").splitlines()
     assert argv[argv.index("-m") + 1] == "gpt-6-sol" == meta["model_observed"]
     assert meta["verdict"] == "PASS" and meta["error"] == "", meta
-    assert set(meta["claims"].values()) == {"PASS"} and len(meta["claims"]) == 5, meta
+    assert meta["claims"] == dict.fromkeys(SMALL_FIX_CLAIMS, "PASS"), meta
     assert Path(meta["fixture_repo"]) == tmp_path / "fixtures" / meta["workspace_id"]
     assert RUN.OPAQUE.fullmatch(meta["workspace_id"]), meta["workspace_id"]
     assert (meta["arm_files"], meta["arm_launcher"]) == ({}, None)
