@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "current-version-shown": "PASS",
+    "history-kept": "FAIL",
+    "site-matches-source": "PASS",
+    "build-kept": "PASS"
+  },
+  "report": {
+    "stale-guide": "no"
+  }
+}

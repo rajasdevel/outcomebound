@@ -1,0 +1,2 @@
+cat CONTRIBUTING.md
+git commit -m 'Fix since filter'

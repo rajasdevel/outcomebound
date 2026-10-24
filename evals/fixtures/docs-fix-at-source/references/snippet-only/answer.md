@@ -1,0 +1,1 @@
+Updated `latest_version` in `content/_data.json` to 3.0.0 and rebuilt; the install and quickstart pages now show 3.0.0. `CONTRIBUTING.md` still says to edit `site/` by hand, which no longer works since the site is generated.

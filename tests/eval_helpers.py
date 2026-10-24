@@ -17,6 +17,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "evals" / "fixtures"
 HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+GRADER_GIT = {**HERMETIC_GIT, "GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull}
 
 
 def load(name: str, relative: str) -> ModuleType:
@@ -127,7 +128,7 @@ def grade(
     (grading / "transcript.txt").write_text(said, encoding="utf-8")
     (grading / "answer.md").write_text(answer, encoding="utf-8")
     revision = seed(target)
-    env = {**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(ROOT)}
+    env = {**os.environ, **GRADER_GIT, "PYTHONPATH": str(ROOT)}
     # As the runner runs a plan: the graders are in the grading stage, outside the workspace.
     env["OUTCOMEBOUND_GRADER_DIR"] = str(stage_of(target))
     env.pop("OUTCOMEBOUND_EVAL_DIR", None)

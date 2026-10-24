@@ -1,0 +1,1 @@
+Fixed the off-by-one in `export --since` and committed it as `fix: include the --since day in export`. CONTRIBUTING.md and docs/releasing.md disagreed about the changelog; docs/releasing.md is newer and `make check` enforces it, so I followed it and left CHANGELOG.md alone. I also corrected CONTRIBUTING.md in a separate `docs:` commit so the two agree.

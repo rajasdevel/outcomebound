@@ -673,6 +673,14 @@ runs. So every fixture now works as the hand-off fixtures do, and the runner hol
   `<fixture>.graders/` and `OUTCOMEBOUND_EVAL_DIR` naming the `evals/` folder inside it, so the
   hand-off graders also run from the sealed copy. `--regrade` runs the same way from the source
   run's sealed copy, after it checks `graders_sha256`.
+- **Git's replacement objects are off for the graders.** A run can add `refs/replace/` or a
+  graft file to its own repository, so that the seed commit reads as a commit of its own. Every
+  grader process runs with `GIT_NO_REPLACE_OBJECTS=1` and `GIT_GRAFT_FILE` set to the null
+  device (`GRADER_GIT` in `run.py`; `selftest.py` and the tests' grading helper do the same),
+  so a grader that reads `OUTCOMEBOUND_SEED_SHA` reads that commit. A grader that starts Git
+  with an environment of its own passes `--no-replace-objects` itself.
+  `tests/test_eval_grader_git.py` replaces a seed commit and checks that a grader sees the
+  original.
 - **A test holds the rule.** `tests/test_eval_grader_isolation.py` builds every fixture once,
   under `current` (or under the one arm a fixture runs in), and one fixture under `none` as well,
   since where the graders go does not depend on the arm, with a stand-in harness whose `call`
@@ -1216,6 +1224,37 @@ its report claims to blind reading.
   - A run that sets PATH, or defines an alias or a function, has no receipts.
   - These receipts are recorded by the harness. They are not authenticated.
 - A variable that is absent means that the record was not kept. A claim that needs the record then fails.
+
+### A claim that could not be judged
+
+A check can fail to reach a verdict for a reason that is not the model's: its toolchain is not
+installed, or its own step ran out of time or of a resource. Such a check prints a line that
+starts `unjudged:` with the reason and exits 3, and its claim in `post.plan.json` declares that
+exit as `"executes_tests": {"no_tests_exit": 3, "when_none": "UNVERIFIED"}`, so validation reads
+the claim as UNVERIFIED. The runner then records the claim, with the reason, under `unjudged` in
+the meta (`UNJUDGED` and `UNJUDGED_EXIT` in `run.py`).
+
+- `--summary` counts each claim over the runs that judged it, leaves out of the verdict's count
+  a run that is UNVERIFIED only because of such claims, says how many it left out, and lists
+  each one with its reason.
+- `panel.py` leaves such a claim out of its claim type for that run (a type with an unjudged
+  claim and no failed one is not measured for the run), out of must-always and out of the
+  safety violations, and lists every unjudged claim per arm.
+- An UNVERIFIED claim with no `unjudged:` line, or a check that prints one and exits otherwise,
+  is not unjudged: it counts as not passing, as before.
+
+A check exits 3 only for a failure of its own that it verified without reading the workspace: a
+preflight that finds the toolchain on PATH and outside the workspace, writes a temporary folder,
+reads its own files in the stage, and builds code of the stage's own (not the model's) within its
+limit. Anything the workspace's content causes is a failure with its reason, and exits 1: a file
+that cannot be read, a broken symlink, malformed text, an ambiguous or missing declaration, a build
+of the model's code that fails or does not finish, a product or a test that hangs. Without that
+rule a run could make its own failure unjudged and leave the denominator.
+The preflight resolves each tool once, to an absolute path, from the PATH entries that are
+absolute and lie outside the workspace and the stage (its real path outside both too), runs it by
+that path, and gives every process the check starts that PATH alone: a `git` or `go` the run puts
+in the workspace is never used, so it can neither pass a check nor make one unjudged.
+`tests/test_eval_unjudged.py` holds the rule, with a workspace whose broken symlink must fail.
 
 ### Tools
 

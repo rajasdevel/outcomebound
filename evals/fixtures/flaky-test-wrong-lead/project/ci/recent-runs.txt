@@ -1,0 +1,21 @@
+# The last 20 CI runs of `go test ./...` on main, newest first (copied from the CI page).
+2026-10-21 run 418 pass
+2026-10-21 run 417 FAIL internal/report TestSummary: failed 5 times in a row
+2026-10-20 run 416 pass
+2026-10-20 run 415 pass
+2026-10-20 run 414 pass
+2026-10-19 run 413 pass
+2026-10-18 run 412 FAIL internal/report TestSummary: failed 5 times in a row
+2026-10-17 run 411 pass
+2026-10-17 run 410 pass
+2026-10-16 run 409 pass
+2026-10-16 run 408 pass
+2026-10-15 run 407 pass
+2026-10-15 run 406 FAIL internal/report TestSummary: failed 5 times in a row
+2026-10-14 run 405 pass
+2026-10-14 run 404 pass
+2026-10-13 run 403 pass
+2026-10-13 run 402 pass
+2026-10-13 run 401 pass
+2026-10-12 run 400 pass
+2026-10-12 run 399 pass

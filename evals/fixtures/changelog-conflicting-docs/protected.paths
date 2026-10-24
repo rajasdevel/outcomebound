@@ -1,0 +1,5 @@
+# The repository's own configuration and exclusion state, as setup left them. CHANGELOG.md, the
+# Makefile and the release-notes script are not here: the run may touch them, and the claims
+# score it, at HEAD and in the working tree.
+.git/config
+.git/info/exclude

@@ -1,0 +1,5 @@
+git log --oneline -5
+grep -rn 2.4.1 content site
+cat content/_data.json
+python3 build.py
+make check

@@ -1,0 +1,1 @@
+git commit -m 'test: the --since day is kept'

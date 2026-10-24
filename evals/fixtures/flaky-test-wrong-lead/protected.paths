@@ -1,0 +1,4 @@
+# The repository's own configuration and exclusion state, as setup left them. The tests and the
+# golden file are not here: the run may change them, and test-checks-order-and-totals scores it.
+.git/config
+.git/info/exclude

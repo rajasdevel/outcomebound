@@ -1,0 +1,46 @@
+package report
+
+// Added by the grader to a scratch copy of the workspace, never to the workspace itself. The
+// workspace's own WriteSummary is renamed gradedOriginalWriteSummary, and this one takes its
+// place: it parses the original's CSV and puts its rows in account order, by the account field
+// (the control), or in reverse account order (one mutant), or in account order with one total
+// off by one (the other mutant). Only the number gradedMode differs between the three builds.
+
+import (
+	"bytes"
+	"encoding/csv"
+	"io"
+	"sort"
+	"strconv"
+)
+
+const gradedMode = @MODE@
+
+func WriteSummary(w io.Writer, txs []Tx) error {
+	var original bytes.Buffer
+	if err := gradedOriginalWriteSummary(&original, txs); err != nil {
+		return err
+	}
+	records, err := csv.NewReader(bytes.NewReader(original.Bytes())).ReadAll()
+	if err != nil || len(records) == 0 {
+		_, err = w.Write(original.Bytes())
+		return err
+	}
+	rows := records[1:]
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i][0] < rows[j][0] })
+	if gradedMode == 1 {
+		for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+			rows[i], rows[j] = rows[j], rows[i]
+		}
+	}
+	if gradedMode == 2 && len(rows) > 0 && len(rows[0]) > 1 {
+		if total, err := strconv.ParseInt(rows[0][1], 10, 64); err == nil {
+			rows[0][1] = strconv.FormatInt(total+1, 10)
+		}
+	}
+	out := csv.NewWriter(w)
+	if err := out.WriteAll(records); err != nil {
+		return err
+	}
+	return out.Error()
+}

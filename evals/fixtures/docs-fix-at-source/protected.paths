@@ -1,0 +1,4 @@
+# The repository's own configuration and exclusion state, as setup left them. The generator, the
+# template, the Makefile and CI are not here: the run may touch them, and build-kept scores it.
+.git/config
+.git/info/exclude

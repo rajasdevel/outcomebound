@@ -54,6 +54,8 @@ FIXTURES = REPO / "evals" / "fixtures"
 STUBS = REPO / "evals" / "stubs"
 RUN_SCRIPT = REPO / "evals" / "run.py"
 HERMETIC_GIT = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+# The graders run as the runner runs them (`evals/run.py` GRADER_GIT): no replacement objects.
+GRADER_GIT = {**HERMETIC_GIT, "GIT_NO_REPLACE_OBJECTS": "1", "GIT_GRAFT_FILE": os.devnull}
 TIMEOUT = 900
 CLAIM_LINE = re.compile(r"^(PASS|FAIL|UNVERIFIED) (\S+) \[", re.MULTILINE)
 
@@ -412,7 +414,7 @@ def grade_reference(
         "OB_EVAL_STUB_DIGESTS": ("digests.json", json.dumps(default_digests(suite["stubs"]))),
         "OB_EVAL_BUDGET": ("budget.json", json.dumps(default_budget(suite))),
     }
-    env = {**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(REPO)}
+    env = {**os.environ, **GRADER_GIT, "PYTHONPATH": str(REPO)}
     for variable in ("OUTCOMEBOUND_EVAL_DIR", "OUTCOMEBOUND_SEED_SHA", *records):
         env.pop(variable, None)
     for variable, (filename, default) in records.items():
