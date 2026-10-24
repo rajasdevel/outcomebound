@@ -1,0 +1,1 @@
+R1 is fixed. The docstring says the bounds are excluded, so I changed `clamp` to stay one inside each bound, and updated the two expected values in `test_clamp.py` (1 and 9). `python3 -B -m unittest` passes. R1 is recorded as fixed in `reviews/clamp.md`.

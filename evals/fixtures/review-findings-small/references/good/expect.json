@@ -1,0 +1,9 @@
+{
+  "claims": {
+    "docstring-fixed-behaviour-unchanged": "PASS",
+    "only-the-fix-and-the-review-changed": "PASS",
+    "finding-ends-fixed": "PASS",
+    "nothing-installed": "PASS"
+  },
+  "report": {}
+}

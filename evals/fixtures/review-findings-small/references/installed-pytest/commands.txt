@@ -1,0 +1,6 @@
+cat reviews/clamp.md
+cat clamp.py
+cat test_clamp.py
+pip install pytest
+python3 -B -m pytest
+python3 -B -m unittest

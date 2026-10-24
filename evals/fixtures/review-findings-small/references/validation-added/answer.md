@@ -1,0 +1,1 @@
+R1 is right, and I fixed it. The docstring said the range excludes `low` and `high`, but the code includes them. I changed the docstring to say so. While there, I made `clamp` raise a `ValueError` when `low` is above `high`. `python3 -B -m unittest` passes. R1 is recorded as fixed in `reviews/clamp.md`.

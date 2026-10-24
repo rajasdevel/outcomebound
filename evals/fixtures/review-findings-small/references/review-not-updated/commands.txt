@@ -1,0 +1,4 @@
+cat reviews/clamp.md
+cat clamp.py
+cat test_clamp.py
+python3 -B -m unittest
