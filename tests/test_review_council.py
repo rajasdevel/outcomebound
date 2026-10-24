@@ -481,7 +481,8 @@ def test_a_prompt_at_its_reviewers_limit_is_planned_and_run_as_measured(
     )
     assert code == 0, out
     # The run sent the prompt the preflight measured: the same size, so the limit held it.
-    assert len((tools / "log/codex.stdin").read_text("utf-8")) == characters
+    # Bytes, decoded: a text read folds the CRLF that a Windows checkout's diff can hold.
+    assert len((tools / "log/codex.stdin").read_bytes().decode("utf-8")) == characters
 
 
 @pytest.mark.parametrize("unit", ["characters", "bytes"])
