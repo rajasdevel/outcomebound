@@ -126,7 +126,7 @@ done
   missing edits file, an element a fixture's install cannot give), and prints the
   `--summary` and `evals/attribute.py` commands for what it ran. `--dry-run` prints every cell's
   argv and starts nothing. A plan can name a `pack` (`XS`, `S`, `M`, `L` or `panel`, read from
-  each fixture's `suite.json`) in place of `fixtures`. It can also name a `harness` (`codex` or
+  each fixture's `suite.json` that has a `budget`; a default fixture is named in `fixtures`) in place of `fixtures`. It can also name a `harness` (`codex` or
   `claude-code`) and a `profile`, both recorded in `<results>/<name>/LOOP.json`. A profile that
   `loop.py` knows (`attr`, `field-codex`, `claude-mid`, `claude-top`, `small`) must name its own
   harness; another profile is a free label. On `claude-code`, an arm can add a plugin with `plugin_dir`

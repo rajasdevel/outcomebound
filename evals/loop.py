@@ -31,7 +31,8 @@ The folder must resolve inside the evals home's `third-party/` folder (run.py's
 
 In place of `fixtures`, `pack` names a pack: `XS`, `S`, `M` or `L` is every fixture whose
 `suite.json` gives that tier, `panel` every fixture whose `suite.json` says `panel: true`; a
-report-only suite.json (one with no `references`) puts its fixture in no pack.
+report-only suite.json (one with no `references`) and a default fixture's (references and no
+`budget`, named by `fixtures` instead) put their fixture in no pack.
 Repetitions are distinct values from 1 to 10 that run.py accepts. `harness` (default `codex`,
 or `claude-code`) and `profile` (default empty) are recorded in `<results>/<name>/LOOP.json`;
 only a harness run.py can run is accepted. A profile in PROFILES (`attr`, `field-codex`,
@@ -332,7 +333,7 @@ def suite(fixture: str) -> dict[str, Any]:
 
 
 def _pack(pack: Any, known: set[str]) -> tuple[str, ...]:
-    """The fixtures of a pack: a tier's, or the panel's, from each suite.json."""
+    """The fixtures of a pack: a tier's, or the panel's, from each suite.json with a budget."""
 
     if pack not in PACKS:
         raise PlanError(f"pack is one of {', '.join(PACKS)}")
@@ -340,6 +341,7 @@ def _pack(pack: Any, known: set[str]) -> tuple[str, ...]:
         name
         for name in sorted(known)
         if "references" in suite(name)
+        and "budget" in suite(name)
         and (
             suite(name).get("panel") is True if pack == "panel" else suite(name).get("tier") == pack
         )
