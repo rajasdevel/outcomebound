@@ -702,3 +702,55 @@ def test_the_fragment_proposal_form_names_the_keys_the_parser_reads() -> None:
     optional = re.findall(r"`([a-z_]+)`", optional_sentence)
     assert tuple(required) == FRONTMATTER_KEYS
     assert sorted(optional) == sorted(OPTIONAL_KEYS)
+
+
+# Each other form a builder may write for a list-valued key, written after the `applies:` line
+# (line 4), and the lines its refusal names.
+OTHER_FORMS = [
+    ("yaml block list", "{key}:\n  - {a}\n  - '{b}'", "lines 5-7"),
+    ("block list with a blank line", "{key}:\n- {a}\n\n- {b}", "lines 5-8"),
+    (
+        "block list with a comment and a continuation",
+        "{key}:\n  - {a}\n  # why\n    more",
+        "lines 5-8",
+    ),
+    ("continued bare value", "{key}: {a}\n  continued", "lines 5-6"),
+    ("unquoted flow list", "{key}: [{a}, {b}]", "line 5"),
+    ("multiline flow list", '{key}: [\n  "{a}",\n  "{b}"\n]', "lines 5-8"),
+    ("unindented multiline flow list", '{key}: [\n"{a}",\n"{b}"\n]', "lines 5-8"),
+    ("flow list with a comment", "{key}: [{a}, {b}] # two", "line 5"),
+    ("one bare value", "{key}: {a}", "line 5"),
+    ("no value", "{key}:", "line 5"),
+]
+
+EXAMPLES = {
+    "edges": 'edges: ["pushing a tag", "publishing a release"]',
+    "detect": 'detect: ["pyproject.toml", "setup.cfg"]',
+}
+
+
+@pytest.mark.parametrize("crlf", [False, True], ids=["lf", "crlf"])
+@pytest.mark.parametrize("key", ["edges", "detect"])
+@pytest.mark.parametrize(("form", "written", "where"), OTHER_FORMS, ids=[f[0] for f in OTHER_FORMS])
+def test_a_list_key_in_another_form_is_refused_naming_the_lines_and_the_form(
+    key, form, written, where, crlf
+):
+    """Each list-valued key takes one form, a JSON list on the key's own line. Another form is
+    refused naming the lines it read and the form by example, and offers no corrected line:
+    reading another form's items as YAML does needs a YAML reader the engine does not carry."""
+
+    block = written.format(key=key, a="first", b="second")
+    text = GOOD.replace('detect: ["sample.toml"]\n', "").replace(
+        "applies: sample projects\n", f"applies: sample projects\n{block}\n"
+    )
+    if key == "edges":
+        text = text.replace("version: 1\n", 'detect: ["sample.toml"]\nversion: 1\n')
+    if crlf:
+        text = text.replace("\n", "\r\n")
+    with pytest.raises(FragmentError) as raised:
+        parse_fragment(text, "x.md")
+    message = str(raised.value)
+    assert message.startswith(f"x.md:5: {key} must be a JSON list on the key's own line"), message
+    assert f"`{EXAMPLES[key]}`" in message, message
+    assert f"{where} hold another form" in message, message
+    assert "replace" not in message, message
