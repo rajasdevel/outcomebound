@@ -172,7 +172,11 @@ SKILL = ".claude/skills/diagnose/SKILL.md"
 
 def head(root: Path) -> str:
     done = subprocess.run(
-        [GIT, "-C", str(root), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        [GIT, "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     return done.stdout.strip()
 
@@ -235,7 +239,11 @@ def test_a_block_a_stash_took_away_reads_missing_on_disk_and_is_not_restored(
     assert code == 3 and "not loaded" not in out
     assert snapshot(main) == before
     stashed = subprocess.run(
-        [GIT, "-C", str(main), "stash", "list"], check=True, capture_output=True, text=True
+        [GIT, "-C", str(main), "stash", "list"],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     assert "cleanup" in stashed.stdout
 
@@ -400,6 +408,10 @@ def test_a_partial_clone_fetches_nothing_and_reads_what_it_lacks_as_unverified(
 
 def git_out(root: Path, *arguments: str) -> str:
     done = subprocess.run(
-        [GIT, "-C", str(root), *arguments], check=True, capture_output=True, text=True
+        [GIT, "-C", str(root), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     return done.stdout.strip()
