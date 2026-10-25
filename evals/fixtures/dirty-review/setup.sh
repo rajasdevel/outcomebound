@@ -57,15 +57,13 @@ printf '\ndef unrelated():\n    return 1\n' >> parser.py
 mkdir -p "$stage/checks"
 cp "$here/checks/unchanged.sh" "$stage/checks/unchanged.sh"
 cp "$here/checks/cited.py" "$stage/checks/cited.py"
+cp "$here/checks/baseline.sh" "$stage/checks/baseline.sh"
 cp "$repo/evals/graders/scope_walk.py" "$stage/checks/scope_walk.py"
 cp "$repo/evals/graders/transcript_commands.py" "$stage/checks/transcript_commands.py"
 chmod +x "$stage"/checks/*
 
-# The baselines describe the worktree and stay with the graders, in the stage. Bytecode is not
-# an edit, so it stays out of Git's status.
+# The baselines describe the worktree and stay with the graders, in the stage; the runner
+# records them again after the install. Bytecode is not an edit, so it stays out of Git's status.
 printf '__pycache__/\n' >> .git/info/exclude
-if command -v sha256sum >/dev/null 2>&1; then checker="sha256sum"; else checker="shasum -a 256"; fi
-find . \( -path ./.git -o -name __pycache__ \) -prune -o -type f -print | sort > "$stage/checks/baseline-files"
-xargs $checker < "$stage/checks/baseline-files" > "$stage/checks/baseline-hashes"
-git status --porcelain --untracked-files=all > "$stage/checks/baseline-status"
+bash "$stage/checks/baseline.sh" "$stage"
 echo "fixture ready: $target"

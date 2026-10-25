@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
@@ -189,19 +190,21 @@ def test_the_bare_arm_removes_every_instruction_file_into_the_seed(
     assert row[1] == "FAIL" and ".claude/rules" in row[2], row
 
 
+@needs_posix_bash
 def test_a_bare_workspace_with_no_agent_change_reads_as_no_change_to_the_graders(
     tmp_path: Path, fake: dict[str, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Breaks if a scope or diff check counts the bare arm's removal as the model's change: the
     shared engine graders' changed paths against the seed are empty, and a baseline the setup
-    recorded loses the lines of the removed files."""
+    recorded is recorded again without the removed files."""
 
     workdir, _protected, _prompt, _extra, stage = _build(_arm(RUN.BARE), tmp_path / "b")
+    (stage / "checks").mkdir(exist_ok=True)
     (stage / "checks" / "baseline-files").write_text("./AGENTS.md\n./Makefile\n", "utf-8")
-    (stage / "checks" / "baseline-hashes").write_text("aa  ./AGENTS.md\nbb  ./Makefile\n", "utf-8")
-    RUN.refresh_baseline_hashes(workdir, stage, ("AGENTS.md",))
-    assert (stage / "checks" / "baseline-files").read_text("utf-8") == "./Makefile\n"
-    assert (stage / "checks" / "baseline-hashes").read_text("utf-8") == "bb  ./Makefile\n"
+    shutil.copy(RUN.REPO / "evals/fixtures/dirty-review/checks/baseline.sh", stage / "checks")
+    assert RUN.refresh_baseline(workdir, stage) == ""
+    listed = (stage / "checks" / "baseline-files").read_text("utf-8").splitlines()
+    assert "./Makefile" in listed and "./AGENTS.md" not in listed
     seed_sha = RUN.seed_commit(workdir) or ""
     monkeypatch.chdir(workdir)
     monkeypatch.setenv(RUN.SEED_SHA_ENV, seed_sha)

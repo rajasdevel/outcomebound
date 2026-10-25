@@ -1510,13 +1510,15 @@ def test_an_install_leaves_a_fixtures_uncommitted_edits_uncommitted(
 
 
 @needs_posix_bash
+@pytest.mark.parametrize("adopted", [False, True])
 def test_dirty_review_baseline_is_taken_after_the_install_rewrites_the_note(
-    tmp_path: Path,
+    tmp_path: Path, adopted: bool
 ) -> None:
-    """The install rewrites AGENTS.md after setup records `baseline-hashes`; the unchanged check
-    must pass on the built tree, and still fail where a review edits the user's dirty work."""
+    """The install rewrites AGENTS.md, and an adopted install also writes the skills and
+    `.outcomebound/`, after setup records its baseline; the unchanged check must pass on the built
+    tree, and still fail where a review edits the user's dirty work."""
 
-    loaded = RUN.load_arm("current", RUN.selected_fragments("dirty-review"))
+    loaded = RUN.load_arm("current", RUN.selected_fragments("dirty-review"), adopted=adopted)
     workdir = tmp_path / "w"
     workdir.mkdir()
     stage = tmp_path / "stage"

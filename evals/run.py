@@ -1475,32 +1475,28 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
     return ""
 
 
-def refresh_baseline_hashes(workdir: Path, stage: Path, removed: tuple[str, ...] = ()) -> None:
-    """Re-record the notes `as_installed` rewrote in a fixture's `baseline-hashes`, which its
-    setup wrote before the install; without it a check that compares the tree to that baseline
-    counts the install as the model's edit. Only the lines of those notes change, and the lines
-    of `baseline-hashes` and `baseline-files` that name a path the bare arm removed (`removed`)
-    are dropped."""
+def refresh_baseline(workdir: Path, stage: Path) -> str:
+    """Run the fixture's `checks/baseline.sh` again from the grading stage, where it has one, on
+    the workspace as built: the setup recorded its baseline before the install, the bare arm's
+    removal and the notes `as_installed` rewrote, and a check that compares the tree to that
+    baseline would count them as the model's edit. Why it could not, or an empty string."""
 
-    def gone(name: str) -> bool:
-        return any(name == f"./{item}" or name.startswith(f"./{item}/") for item in removed)
-
-    listed = stage / "checks" / "baseline-files"
-    if removed and listed.is_file():
-        kept = [line for line in listed.read_text(encoding="utf-8").splitlines() if not gone(line)]
-        listed.write_text("".join(f"{line}\n" for line in kept), encoding="utf-8")
-    path = stage / "checks" / "baseline-hashes"
-    if not path.is_file():
-        return
-    lines = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        _digest, _, name = line.partition("  ")
-        if gone(name):
-            continue
-        if name in ("./AGENTS.md", "./README.md") and (workdir / name).is_file():
-            line = f"{hashlib.sha256((workdir / name).read_bytes()).hexdigest()}  {name}"
-        lines.append(line)
-    path.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+    script = stage / "checks" / "baseline.sh"
+    if not script.is_file():
+        return ""
+    try:
+        done = bounded_command(
+            ["bash", str(script), str(stage)],
+            cwd=str(workdir),
+            env=fixture_setup_env(),
+            timeout=SETUP_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError) as problem:
+        return f"the baseline could not be recorded again: {type(problem).__name__}: {problem}"
+    if done.returncode != 0:
+        report = (done.stdout + done.stderr).strip()[-600:]
+        return f"the baseline could not be recorded again: {report}"
+    return ""
 
 
 def _nested_repository(workdir: Path, path: Path) -> bool:
@@ -2308,7 +2304,7 @@ def build_workspace(
     if not unfit and arm.name in FACTS_ONLY_ARMS:
         unfit = facts_only_unfit(workdir, arm, extra)
     if not unfit:
-        refresh_baseline_hashes(workdir, stage, removed)
+        unfit = refresh_baseline(workdir, stage)
     if unfit:
         extra["error"] = unfit
         return report, {}, None, ""
