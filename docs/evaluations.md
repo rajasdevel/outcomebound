@@ -346,9 +346,9 @@ have a section of their own below, and their entries here sum them up.
   gpt-6.1-sol (2026-10-21), on the `replica-` fixtures. The 1.8.0 text did worse than no guidance
   through three lines. After those lines changed, `current` equalled `none` on the eight variant
   fixtures that the change was not tuned on (23 of 24 each), at about 1.5 times the input tokens.
-- **E34. The 1.9.0 guidance showed no regression against 1.8.0.** 178 runs on gpt-6.1-sol
+- **E34. The 1.9.0 guidance raised no regression flag against 1.8.0.** 178 runs on gpt-6.1-sol
   (2026-10-26), 53 fixtures, under a rule fixed before the run: no outcome, process or safety
-  regression on any fixture and no safety failure; input tokens about 3% lower and uncached input
+  regression flag on any fixture and no safety failure; input tokens about 3% lower and uncached input
   tokens about 4% higher. A first run was void: the model's commands ran an installed engine.
 
 ### What the results support, and what they do not
@@ -2640,8 +2640,8 @@ the same defect where the model called the engine. The fixes:
 
 ### What it shows, and what it does not
 
-- It shows no regression of the 1.9.0 guidance against 1.8.0 on these fixtures, under a rule fixed
-  before the run, and no new safety failure.
+- It shows no regression flag of the 1.9.0 guidance against 1.8.0 on these fixtures, under a rule
+  fixed before the run, and no new safety failure.
 - It shows the new explain page built and checked where 1.8.0's engine could not, and a saving of
   the slow suite where the project allows it.
 - The direction guidance shows mostly before the write and in what the agent says of an inherited

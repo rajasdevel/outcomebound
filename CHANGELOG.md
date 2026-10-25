@@ -12,6 +12,270 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-10-26
+
+A minor release. Four changes to what an agent is told are the main work: a check that has
+unchanged inputs is not run again, and an undo removes only the agent's own changes (#172, #178);
+an agent says a direction-setting assumption before work builds on it (#174); a turn ends only
+on work that the harness will resume (#180); and three short lines of the kernel and the contract
+are sharper (#163, #171). A new install mode, `--facts-only`, installs the project facts and no
+general guidance (#163). `adopt` and `where` report an install that is missing on disk or not
+committed (#176). `review council` refuses a plan whose prompt is over the input limit of a
+reviewer, before the person is asked (#173). The `explorable` skill teaches the person who is in
+the session, and a new `explain` page teaches other readers (#182, replacing the report route of
+#175). Three defects found in the field are fixed (#162, #179). The evals grade effects, not
+words, and have new fixtures (#163 to #170, #177, #181, #183, #184). A qualification of the
+1.9.0 guidance against the 1.8.0 install raised no outcome, process or safety regression flag
+under its rule (E34, #191), after four defects of
+the eval instrument were fixed (#185, #188, #189). The engine remains Python standard library
+only.
+
+Do these steps first:
+
+1. If you upgrade from 1.7.0 or earlier, do the steps of the 1.8.0 section first. Use Python 3.10
+   or later and Git 2.52.0 or later. These minimums do not change.
+2. Move every pin of the engine (CI, each machine) to 1.9.0 before any project uses
+   `--facts-only`. An engine before 1.9.0 does not know the mode: it installs in full when it
+   runs on a facts-only project (#163).
+3. Install the release: `uv tool install --force outcomebound==1.9.0`. The tagged Git URL
+   (`git+https://github.com/rajasdevel/outcomebound@v1.9.0`) installs the same release.
+4. In each project, run `outcomebound adopt . --check`, then `outcomebound adopt .`. Review the
+   diff and commit it with the project's own checks (#163, #171, #172, #174, #175, #178, #180,
+   #182):
+   - The install changes the kernel: the `Done` fact says when to run the full suite, the line
+     on prose says to reconcile before relying on it, and the line under the list of pointed
+     files says when to read a file again.
+   - The install changes the fragments `commands` (13) and `workspace` (16).
+   - The install changes the skills `decision-brief`, `explain-spec`,
+     `explorable`, `gather-requirements` and `review-findings`.
+   - The first run of this engine on an existing install rewrites its manifest once, to record
+     the harnesses the install was made for, and for a `--facts-only` install its mode (#163).
+5. A project with a local fragment: `detect:` and `edges:` take one form, a JSON list on the key's
+   own line with each item in double quotes, as in `edges: ["pushing a tag"]`. Other forms were
+   refused before and still are, and the refusal now shows the form (#162).
+6. `outcomebound tickets check --draft FILE... TARGET`: a folder is never read as a draft. If a
+   script gives a folder as the only `--draft` value, or as any value but the last one, the
+   command now stops with a usage error that says where the target goes (#162).
+7. A page built by `explorable` with an earlier engine reads `build again`, because the shell
+   changed. Build it again (#182).
+8. If your CI installs a pinned release, change the pin to `1.9.0` in the same change as the
+   managed install.
+9. Two outputs change. A script that reads the output of `adopt --check` or `where` can now see
+   more `warn`, `note` and `git` lines (#176). `instructions check` prints `UNVERIFIED` for a
+   fact about the harness table that nothing in the project can settle, and that fact no longer
+   holds the exit code: a run that exited 2 for such a fact alone (1 with `--strict`) now exits 0
+   (#162). No other
+   option, exit code or file format changes meaning; a new verb or option is new.
+
+### Added
+
+- `outcomebound adopt <target> --facts-only` installs the facts that the project needs and no
+  general guidance. `AGENTS.md` gets the project-facts block and, where the `local` fragment is
+  selected, a pointers block that holds only that fragment inline: no operating contract and no
+  pointer to a fragment or a skill. The skills go only to a harness that lists skills itself.
+  The manifest records the mode and later runs keep it; `--full` returns to the full install.
+  `adopt --check` compares the records with the mode. The design is in
+  `docs/specs/install/design.md`, section Facts-only (#163).
+- `adopt --check` and `outcomebound where` report an install that is lost from a working tree,
+  and repair nothing (#176):
+  - A missing block or file reads `expected block missing on disk` (or `file`) and says whether
+    the commit at HEAD holds it. A target with no manifest says whether HEAD holds the manifest.
+  - One `warn` line, `not committed: ...`, names each block and the manifest that HEAD does not
+    hold as they are on disk, and counts the other files. It says that a new worktree from HEAD
+    does not hold these bytes.
+  - For each other worktree, the `warn` line names each missing block and file and groups them
+    by whether its commit holds them.
+  - `where` gives a `git` line for the current checkout when its install is missing on disk or
+    not committed.
+  - A path that cannot be read gives `install state UNVERIFIED` and does not stop the check. A
+    blob that a partial clone does not have reads `UNVERIFIED`, and nothing is fetched. A
+    facts-only install prints a `note` that `AGENTS.md` has no operating contract by intent.
+  - The exit code stays the count of records that are not current. The design is in
+    `docs/specs/install/design.md`, section Install survival.
+- The `explorable` skill has a new page kind, `explain` (see Changed) (#182).
+- Evals on small projects like the ones that adopt OutcomeBound, a harder tiered suite with
+  references, loop tools, and a Claude Code harness for the runner (#163). Three real-world
+  fixtures with proven graders (#165) and five fixtures that show the effect of the guidance of
+  this release (#181). `docs/evaluations.md` records the passes E32, E33 and E34 (#160, #163,
+  #191).
+
+### Changed
+
+- The `commands` fragment (13) says six things:
+  - An undo removes only your own changes. It keeps what a file held when you began and what
+    another actor changed in it since. Before a restore, a checkout or a reverse patch, compare
+    what it would remove, from the index as well as the file, with that record, and run it only
+    when all it removes is yours (#172).
+  - A check runs again after a change to what it reads (a file, its configuration, the tool or
+    its rules), from this task or from another actor. While none of its inputs changed, the
+    result of a deterministic check stays valid, and an `UNVERIFIED` result stays `UNVERIFIED`
+    (#178).
+  - For pending automated work, such as a CI run or a model's review, do the independent work
+    first. End the turn on that work only where the harness will resume you when it completes;
+    otherwise wait within the turn (#180).
+  - A command that may outlast the harness's foreground limit uses the harness's own way to wait
+    for it (a session it lets you poll, or a background task it reports), and a file with the
+    output and exit code only where the harness has neither (#163).
+  - The machine may be shared: check the free disk before a heavy command, and run heavy commands
+    at once only as many as the free memory, CPU and disk hold. A scan that walks ignored folders
+    from a checkout's root also reads that checkout's `.agents/` folders, and a finding only those
+    folders hold is not a finding in the work being scanned (#163).
+- The `workspace` fragment (16): `instructions check` runs at a handoff and after instruction
+  files change, or a result for the same target is reused while all its inputs stay the same. An
+  `UNVERIFIED` result goes into the handoff as `UNVERIFIED` again (#178). It names the person's
+  checkout and branch as the default place of work, and a task worktree for parallel or
+  cross-session work (#163).
+- The kernel: the `Done` fact says "the full suite: run it where focused checks do not cover the
+  changed risk, or the project's own instructions require it", and the line on prose says "Before
+  relying on prose, reconcile it with the source, tests, runtime or external state it describes"
+  (#163). The line under the list of pointed files says "Read it again when the next step's rules
+  from it are missing, incomplete, uncertain or may have changed; a compaction alone is no
+  reason" (#171).
+- The contract opens "Validate and report" with "Answer first, in the person's words". The kernel
+  does not carry this line yet, because it is at its word budget (#171).
+- The skills `decision-brief` and `gather-requirements`: before the writes or the delegation that
+  build on an assumption that sets the direction of later work, the agent says the assumption to
+  the person in one line, also when another agent or session made the choice. A choice that the
+  person's own words settled stays as they settled it, and a record that attributes a decision to
+  the person is checked against the person's cited words (#174).
+- The skill `review-findings`: when a round finds another case of a defect that an earlier round
+  fixed, the agent checks whether the two cases have the same cause and fixes that cause within
+  the bounds of the task. When the remaining choice is the person's, the agent says how many
+  rounds ran and what the last rounds found (#178).
+- The goal template: a turn ends only when every item left is done, held under the Hold rule, or
+  waiting on work that the harness will resume the agent for. A side question is answered, and the
+  run goes on in the same turn (#180).
+- The `explorable` skill leads with understanding. A learning page teaches the person in the
+  session: a concrete case first, then the rule, with numbers, a model or a step-through where
+  they help. Questions are optional, and a learning page with no question has no reply section.
+  A new `explain` page teaches readers who are not in the session; it has no reply section, no
+  brief and no required question, and the agent removes or generalises private facts before it
+  calls the page shareable. A report, survey or comparison with controls is an `explain` page and
+  gets the runtime and the checks. This replaces the report route that #175 added. The
+  `explain-spec` skill asks its questions only when the person asks to test their understanding.
+  "Forget what I entered" and "Restore" are on every page that keeps entries (#175, #182).
+- `review council --plan` measures the prompt of each reviewer against its input limit, in the
+  unit of the limit (characters, UTF-16 code units or bytes), and refuses a plan over a limit,
+  with the reviewer, the size, the limit and the unit. No plan prints and no reviewer starts. The
+  run measures again before each reviewer starts. The limits are data in `adapters/council.json`,
+  each with its source and the day it was read. A valid plan shows the size of each prompt (#173).
+- `instructions check` prints as `UNVERIFIED`, without holding the exit code, a fact that nothing
+  in the project can settle: the generic harness, a harness row that is unverified or past its
+  re-check date, and key categories that a row leaves unsettled. The generic harness now audits
+  the root `AGENTS.md` and each nested one. A comment counts as a block marker only when it is
+  wholly on one line and matches the marker grammar, and its id, hash and version are checked
+  (#162).
+- The designs for install, instructions, tickets, review, lifecycle, skills and decision support
+  record the decisions of this release, each with the alternatives that it rejects (#162, #163,
+  #171 to #176, #178, #180, #182). Seven pages of the docs that were stale against 1.8.0 are
+  brought up to date (#159).
+- The eval runner and fixtures: each workspace has an opaque name, so a call cannot see its
+  fixture or arm (#166); every default fixture has reference outcomes, and the references found
+  ten grader holes, now fixed (#167); the claims that read the words of an answer move to a blind
+  reading, or are no longer required (#168, #169, #170); the released set grades effects, and the
+  fixtures that run only when named are human-reviewed, with a verdict `READ` for a run that
+  passes with almost no work (#177); the suite and `docs/evaluations.md` hold no private history
+  and use clearly fictional names (#164). The runner makes `--out`, `--workspace-root` and
+  `--regrade` absolute (#160), and `--only` folds a seed with `git commit --amend --only` (#181).
+  New fixtures check an agent that keeps working while a check outside the harness is pending
+  (#184), and a report page graded through the interface its task states (#183). A loop plan's
+  earlier arm may name a Git ref (#185).
+
+### Fixed
+
+- A local fragment that writes `detect:` or `edges:` in another form than a one-line JSON list
+  is refused with a message that names every line of the value and shows the expected form. The
+  message suggests no replacement line (#162).
+- `tickets check --draft` never reads a folder as a draft (#162).
+- `outcomebound brief` names the reserved fact labels when it refuses one, and says to use
+  another label (#179).
+- `review check` reports a file that is not a review file in one line, in place of one `FAIL` for
+  each `###` heading. The verdict is still `FAIL` and the exit code is still 1 (#179).
+- Two eval graders that failed whatever the model did (`dirty-review` and `explain-spec`) are
+  fixed (#161). A relative `--out` made the grader folder relative, so a grading found no grader
+  (#160). The CI of the evals no longer depends on the identity, the shell, `make` or the paths
+  of one machine (#163).
+- The earlier arm of `--earlier-ref` took its ref's files but generated its facts block and each
+  skill's pointer condition with the checkout's engine, and put its kernel in the prompt where
+  the current arm had it in `AGENTS.md`. So a comparison with an earlier release gave the
+  earlier arm wording of the candidate. The ref's own engine now makes the earlier install
+  (#185). A comparison of releases before the adopter-like installs of #163 is not affected.
+- The report fixture's check that the page stays local passed a run that the browser printed
+  nothing of. It now tries three times and then leaves the claim unjudged (#186).
+- When an eval command timed out, a process it had started in a session of its own while the
+  stop read the process table stayed running. The stop now suspends the command's processes
+  before it kills them (#187).
+- Codex ran each model command in a login shell, which rebuilt PATH from the operator's profile
+  and could put an installed `outcomebound` ahead of the arm's launcher; a model command that
+  called the engine then ran the installed one, in every arm. Model commands now run without a
+  login shell (#188). Earlier passes on a machine with an installed `outcomebound` can have this
+  defect where the model called the engine.
+- `dirty-review` recorded its baseline before an adopted install, so its check counted the
+  install as an edit by the model. The fixture's baseline script runs again once the build is
+  complete (#188).
+- The Codex stream can lose the exit code of a long command; the reader now takes the outcome the
+  native session records, so a suite that passed is not read as unjudged (#188).
+- The earlier arm of `--earlier-ref` ran its ref's engine from an export of a few folders, with no
+  `schemas/`, so a decision brief failed under that arm. The export is now the ref's whole tree
+  (#189).
+- `stop_descendants` read the process table at once after it suspended a process; a process inside
+  `fork` finishes the fork first, so a child could be missed. It now waits until each suspended
+  process shows stopped, and ends on two such reads in a row (#190, #193).
+- The kit fixture's probe printed its reasons in the console's code page, so on Windows a quoted en
+  dash reached the runner as a byte it could not read as UTF-8. It now writes UTF-8 (#192).
+
+### Verification limits
+
+- The 1.9.0 guidance was qualified against the 1.8.0 install on 178 Codex runs on one model
+  (`gpt-6.1-sol`, medium), under a rule fixed before the run: 17 fixtures that the changes touch,
+  three runs in each arm, and a guard of the other 36 released fixtures, one run each, with two
+  more runs in each arm of one guard fixture by the rule: 178 runs (E34). No outcome, process or
+  safety regression flag under the rule, no safety failure; input tokens about 3% lower, uncached
+  input tokens about 4% higher. This is a gate against a large regression on one model and one
+  harness, not a measure of small differences, and not a claim that OutcomeBound beats no
+  guidance. The run used a commit before the release commit, with the same guidance and engine
+  files.
+- The fixtures of #181 and #184 ran in that pass. The undo, the pending-check and the passed-check
+  fixtures passed in every run of both arms. The direction guidance shows before the write and in
+  what the agent says of an inherited decision, not in the final answer: before the first
+  dependent write, the agent said the place of a rule was its own choice in 1 of 3 runs (0 of 3
+  under 1.8.0), and said a handoff's attribution was not backed by the owner in 3 of 3 (1 of 3;
+  under 1.9.0 one of the three then stopped before any write);
+  no final answer in either arm marked the choice with its consequence (0 of 6). Three runs a cell
+  show a direction, not a measure.
+- One run of `v2-dd-handoff-attribution` under 1.9.0 stopped with no code change after Codex
+  refused a patch that also edited a read-only handoff note; every run of both arms met that
+  refusal, and the other five recovered; three runs cannot show whether that is a regression.
+  `v2-au-decision-chain` failed in every run of both arms. In one run of each arm of
+  `replica-docs-land` the agent held the commit and asked whether the production record was
+  stale.
+- No fixture covers: reusing an unchanged check and invalidating a changed input, the
+  goal-template line, reading the guidance again after a compaction, answering first (in
+  `OutcomeBound.md`, not the installed kernel), an explain page with no quiz asked for, and the
+  shareable `explain` page. The adoption diagnostics have engine tests only.
+- A first qualification run was void: the model's commands ran an installed `outcomebound` in both
+  arms (#188). Earlier eval passes on a machine with an installed `outcomebound` can have the same
+  defect where the model called the engine.
+- In the evals of #163, the 1.8.0 text did worse than no guidance on small adopter-like tasks,
+  and after the changes of that pull request the arms were equal on outcomes on the held-out set,
+  with about 1.5 times the input tokens for the guided arm. OutcomeBound does not beat no
+  guidance on these tasks.
+- No Claude Code eval was run for the harness added in #163. What only a real call can show
+  stays `UNVERIFIED`.
+- The Windows fixes of the eval runner were checked on another platform only, by simulation (#163).
+- The browser checks of `explorable` ran in a Chromium-family browser. Firefox and Safari are
+  `UNVERIFIED` (#182).
+- The input limits of the Cursor and OpenCode reviewers depend on the platform, and on another
+  platform than Linux, macOS and Windows no limit is checked (#173).
+- The platform limits of 1.5.0 stay: native Windows and Linux sessions, Codex desktop and Git for
+  Windows at the exact minimum are `UNVERIFIED`, and CI runs no models.
+
+### Known issues
+
+- Inside a sandbox where a browser cannot run, `explorable check --browser` reports the check as
+  `UNVERIFIED`, as it should, but an agent can try it again many times: in E34 every `explorable`
+  run of both arms did, and used 360,000 to 580,000 input tokens.
+
 ## [1.8.0] - 2026-10-19
 
 A minor release. Nine new read-only or planning commands help an agent find the state of the
@@ -1630,7 +1894,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.9.0
 [1.8.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.8.0
 [1.7.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.7.0
 [1.6.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.6.0

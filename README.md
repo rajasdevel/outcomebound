@@ -20,8 +20,9 @@ engine is Python standard library only, and it never runs your agent.
 
 Here is one working day on a small project, `shelf`, a reading list on the command line. Ticket
 #12 asks for a CSV export. The project, its tickets and the times are made up. Every command and
-every output below is from a real run of OutcomeBound 1.8.0; long paths are shortened and some
-lines are cut, where `…` shows.
+every output below is from a real run of an earlier release of OutcomeBound, with the version in
+each install line set to this release; long paths are shortened and some lines are cut, where `…`
+shows.
 
 **9:00 — Is the install current?** You pulled overnight and a teammate upgraded the engine.
 
@@ -33,8 +34,8 @@ current  AGENTS.md (project-facts)
 current  .claude/skills/review-council/SKILL.md
 …
 note     Cloud sessions start from a fresh clone, … Add one of these lines to the cloud environment's setup step (this writes no file):
-note       uv tool install outcomebound==1.8.0
-note       python3 -m pip install outcomebound==1.8.0
+note       uv tool install outcomebound==1.9.0
+note       python3 -m pip install outcomebound==1.9.0
 note     Where each harness keeps that step:
 note       Claude Code on the web: the cloud environment's setup script
 note       Codex cloud: the environment's setup script
@@ -197,7 +198,7 @@ break, a second opinion that you approved first, and a ticket closed on evidence
 You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree.
 
 ```sh
-uv tool install outcomebound==1.8.0
+uv tool install outcomebound==1.9.0
 cd your-repo
 outcomebound adopt . --detect       # writes nothing; prints the install command for your files
 ```
@@ -240,7 +241,7 @@ what could end it, and builds a walking skeleton with a Done command that can fa
 ### Upgrade or remove
 
 ```sh
-uv tool install --force outcomebound==1.8.0
+uv tool install --force outcomebound==1.9.0
 outcomebound adopt .          # every managed file current; an edited block is kept unless --force
 outcomebound adopt . --remove # takes out what the install owns
 ```
@@ -256,9 +257,9 @@ keeps the setup step that installs `outcomebound`.
 <details>
 <summary>Other installers and environment requirements</summary>
 
-`pipx install outcomebound==1.8.0` also works, or `python -m pip install outcomebound==1.8.0`
+`pipx install outcomebound==1.9.0` also works, or `python -m pip install outcomebound==1.9.0`
 inside an activated virtual environment. Each release is on PyPI from 1.6.0; the tagged Git URL
-(`git+https://github.com/rajasdevel/outcomebound@v1.8.0`) installs the same release, and every
+(`git+https://github.com/rajasdevel/outcomebound@v1.9.0`) installs the same release, and every
 earlier one. These commands work in PowerShell, cmd and POSIX shells; detection prints commands
 for POSIX shells and PowerShell. On Windows, install [Git for Windows](https://gitforwindows.org).
 `pip install --user` is not supported. If the environment sets `PYTHONPATH`, use absolute folders
