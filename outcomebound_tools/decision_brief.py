@@ -992,7 +992,8 @@ def _checked_text(document: Mapping[str, Any]) -> None:
             if fact and fact[0].strip().casefold() in _LINE_NAMES:
                 raise _Unreadable(
                     f"$.briefs[{index}].facts[{number}] is labelled {fact[0]!r}, the name of a"
-                    " line the renderer writes"
+                    " line the renderer writes; use another label. Reserved: "
+                    + ", ".join(sorted(_LINE_NAMES))
                 )
 
 
