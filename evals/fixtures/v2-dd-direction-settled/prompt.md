@@ -1,0 +1,1 @@
+Shorten the refund window from 30 days to 14: an order placed exactly 14 days before the refund date is still refunded, and one placed 15 days before is refused. `make test` must pass. Keep out of `shop/orders/`: the orders team is rewriting it this week.

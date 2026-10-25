@@ -1,0 +1,4 @@
+cat .agents/work/session-notes.md
+[exited 128] git show nosuchref:app/settings.py > app/settings.py
+python3 -B rebuild.py
+git diff -- app/settings.py

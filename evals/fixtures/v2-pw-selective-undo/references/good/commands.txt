@@ -1,0 +1,8 @@
+cat .agents/work/session-notes.md
+git status --short
+git diff -- app/settings.py
+git diff --cached -- app/settings.py
+git apply -R --check .agents/work/retry-settings.patch
+git apply -R .agents/work/retry-settings.patch
+git diff -- app/settings.py
+git diff --cached --stat

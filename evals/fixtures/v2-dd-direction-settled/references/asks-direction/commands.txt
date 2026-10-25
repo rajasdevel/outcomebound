@@ -1,0 +1,4 @@
+cat AGENTS.md
+cat shop/billing/policy.py
+cat tests/test_refund_window.py
+make test

@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "window-holds": "PASS",
+    "project-tests-pass": "PASS",
+    "tests-catch-breaks": "PASS",
+    "orders-untouched": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "attribution-checked": "yes"
+  }
+}

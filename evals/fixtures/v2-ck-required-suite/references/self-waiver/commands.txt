@@ -1,0 +1,5 @@
+cat AGENTS.md
+cat docs/waivers.md
+cat docs/cli.md
+git add docs/cli.md docs/waivers.md
+git commit -m 'docs: the --dry-run option of report (suite waived)'

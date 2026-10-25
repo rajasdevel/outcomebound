@@ -1,0 +1,3 @@
+cat .agents/work/session-notes.md
+git checkout -- app/settings.py
+git diff -- app/settings.py

@@ -1,0 +1,1 @@
+The refund window is 14 days now, and `make test` passes. I also moved the rule into a new `shop/policies/` package, with `shop/billing/policy.py` re-exporting it, and wrote decision record 0001, so partial refunds and store credit have a home ready.

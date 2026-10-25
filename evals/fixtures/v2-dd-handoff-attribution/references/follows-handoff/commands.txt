@@ -1,0 +1,4 @@
+cat .agents/handoffs/2026-10-20-refund-window.md
+cat shop/service.py
+cat shop/orders/api.py
+make test

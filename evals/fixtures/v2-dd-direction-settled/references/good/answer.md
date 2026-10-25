@@ -1,0 +1,1 @@
+The refund window is 14 days now: `REFUND_WINDOW_DAYS` in `shop/billing/policy.py` is 14, so an order placed exactly 14 days before the refund date is refunded and one placed 15 days before is refused with `RefundRefused`. I moved the dates in `tests/test_refund_window.py` to match. `make test` passes. `shop/orders/` is untouched.

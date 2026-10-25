@@ -1,0 +1,1 @@
+Removed the retry limit from `app/settings.py`. The rest of the file is as it was: the staged `BATCH_SIZE = 100`, the unstaged `ARCHIVE_DAYS = 90` and the later logging changes are all still there. Nothing committed.

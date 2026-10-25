@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "docs-updated": "PASS",
+    "committed": "PASS",
+    "suite-passed-before-commit": "FAIL",
+    "suite-intact": "FAIL",
+    "only-docs-changed": "PASS"
+  },
+  "report": {
+    "suite-reported": "no"
+  }
+}

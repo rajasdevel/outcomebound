@@ -1,0 +1,5 @@
+cat AGENTS.md
+cat docs/architecture.md
+cat shop/service.py
+cat shop/orders/api.py
+make test

@@ -1321,11 +1321,12 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
     env = {**child_env(), **FOLD_GIT}
     # Only the notes this function wrote join the seed: a fixture's uncommitted edits, such as
-    # the work in progress beside a read-only review, stay uncommitted, as setup left them.
+    # the work in progress beside a read-only review, stay uncommitted, as setup left them, and
+    # its staged edits stay staged (`--only` commits the named paths and no other index entry).
     notes = [note for note in ("AGENTS.md", "README.md") if (workdir / note).is_file()]
     for command in (
         ["git", "add", "--", *notes],
-        ["git", "commit", "-q", "--amend", "--no-edit"],
+        ["git", "commit", "-q", "--amend", "--no-edit", "--only", "--", *notes],
         ["git", "tag", "-f", "seed"],
     ):
         done = subprocess.run(
@@ -1384,9 +1385,10 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
     if not kept:
         # An element arm may keep nothing adopt wrote: the none arm plus the launcher alone.
         return "" if arm.shaped() else "adopt wrote nothing into the fixture"
+    # `--only`: a fixture's staged edits stay staged, out of the seed.
     for command in (
         ["git", "add", "-A", "--", *kept],
-        ["git", "commit", "-q", "--amend", "--no-edit"],
+        ["git", "commit", "-q", "--amend", "--no-edit", "--only", "--", *kept],
         ["git", "tag", "-f", "seed"],
     ):
         folded = subprocess.run(
@@ -1486,11 +1488,21 @@ def fold_removal(workdir: Path, removed: list[str]) -> str:
     if not removed:
         return ""
     env = {**child_env(), **FOLD_GIT}
-    # Only the removed paths leave the index: a fixture's uncommitted edits stay as setup left
-    # them, as under `as_installed`.
+    # Only the removed paths leave the index and the seed: a fixture's uncommitted edits stay as
+    # setup left them, staged ones staged, as under `as_installed`. `--only` takes the tracked
+    # files among them, read before they leave the index, since Git refuses a path it never knew.
+    tracked = subprocess.run(
+        ["git", "ls-files", "-z", "--", *removed],
+        cwd=workdir,
+        capture_output=True,
+        text=True,
+        env=env,
+        encoding="utf-8",
+    ).stdout.split("\0")
+    only = ["--only", "--", *(path for path in tracked if path)]
     for command in (
         ["git", "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *removed],
-        ["git", "commit", "-q", "--amend", "--no-edit", "--allow-empty"],
+        ["git", "commit", "-q", "--amend", "--no-edit", "--allow-empty", *only],
         ["git", "tag", "-f", "seed"],
     ):
         done = subprocess.run(
