@@ -1,0 +1,7 @@
+# The project note, the plans and the traffic the costs come from, and the repository's
+# exclusion state, as setup left them.
+AGENTS.md
+data/plans.csv
+docs/traffic.md
+.git/config
+.git/info/exclude

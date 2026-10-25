@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 600,
+  "claims": [
+    {
+      "name": "page-made",
+      "risk": "reports/hosting.html is not there, is not an HTML document, or keeps a script or style in a file beside it instead of inline",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/report_check.py\" page"
+      ]
+    },
+    {
+      "name": "numbers-match",
+      "risk": "opened in a browser with the network denied, the page does not meet the interface of the prompt: an input with the id `requests` or `storage` is missing, or is not a shown, enabled, editable number input; or an element `total-<plan>` is missing, hidden, or holds more than one number or a total not written to the cent; or, with the inputs set to several values (some under a plan's included allowance; the element `calculate` clicked after each pair where the page has one), a total is not the plan's monthly cost as worked out from the seed's plans (a negative amount is not), or the totals do not change; or the inputs do not start at the expected traffic",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/report_check.py\" numbers"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "stays-local",
+      "risk": "the page reaches the network by an act of its own: it navigates away from its document or replaces itself, opens a window, submits a form or sends a ping to an address, or refreshes to an address. Whether the report works with the network off is graded by numbers-match, which runs with the network denied; a broken report passes this claim. Blocked optional loads are recorded as observed lines and do not change the verdict",
+      "kind": "test",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/report_check.py\" local"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "changes-in-scope",
+      "risk": "the run changed what the report does not need: the plans, the traffic note, or files outside reports/",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/report_check.py\" scope"
+      ]
+    }
+  ]
+}

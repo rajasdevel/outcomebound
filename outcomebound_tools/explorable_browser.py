@@ -25,7 +25,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -100,7 +100,7 @@ class BrowserRun:
     reason: str
 
 
-def _command(browser: str, profile: str, address: str) -> list[str]:
+def _command(browser: str, profile: str, address: str, arguments: Sequence[str] = ()) -> list[str]:
     command = [
         browser,
         "--headless=new",
@@ -116,7 +116,7 @@ def _command(browser: str, profile: str, address: str) -> list[str]:
     ]
     if hasattr(os, "geteuid") and os.geteuid() == 0:
         command.append("--no-sandbox")
-    return [*command, "--dump-dom", address]
+    return [*command, *arguments, "--dump-dom", address]
 
 
 def _remove(folder: str) -> None:
@@ -164,10 +164,16 @@ def _wait(process: subprocess.Popen[bytes], finished: threading.Event, timeout: 
 
 
 def run_page(
-    browser: str, page: Path, timeout: float, fragment: str = "#explorable-check"
+    browser: str,
+    page: Path,
+    timeout: float,
+    fragment: str = "#explorable-check",
+    arguments: Sequence[str] = (),
 ) -> BrowserRun:
     """Run `page` with the check fragment and read the document the browser prints. A test that
-    needs the page outside check mode, where it saves to storage, passes `fragment=""`."""
+    needs the page outside check mode, where it saves to storage, passes `fragment=""`.
+    `arguments` are further browser flags, put before the address (a caller that must keep a page
+    off the network gives its own)."""
 
     address = page.resolve().as_uri() + fragment
     profile = tempfile.mkdtemp(prefix="explorable-profile-")
@@ -175,7 +181,7 @@ def run_page(
     finished = threading.Event()
     try:
         process = programs.start_tree(
-            _command(browser, profile, address),
+            _command(browser, profile, address, arguments),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
