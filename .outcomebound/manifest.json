@@ -31,11 +31,11 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "680e247302fd021eaca8df57289c78cfb55edc21e223e4d275e34575bc2eccd8",
+        ".outcomebound/fragments/commands.md": "8e1c1b481a5f406b6cd0ddc5c38aa521930924bdb083690de6d18437b8e0aa4e",
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "b29de05eba3c638c4f8fb5f9fe0482e92404290ff0d3b43f21a53118d83d7d52"
+        ".outcomebound/fragments/workspace.md": "5d115c14079ad367f0bedc9ca3f1bb4214277bb8bb19e068840921cdfe997cb2"
       },
       "style": [
         "ste"
@@ -59,7 +59,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "b29de05eba3c638c4f8fb5f9fe0482e92404290ff0d3b43f21a53118d83d7d52"
+      "sha256": "5d115c14079ad367f0bedc9ca3f1bb4214277bb8bb19e068840921cdfe997cb2"
     },
     {
       "kind": "fragment",
@@ -71,7 +71,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "680e247302fd021eaca8df57289c78cfb55edc21e223e4d275e34575bc2eccd8"
+      "sha256": "8e1c1b481a5f406b6cd0ddc5c38aa521930924bdb083690de6d18437b8e0aa4e"
     },
     {
       "kind": "ignore",
@@ -182,7 +182,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "1e3c24f9eb395f937f262279adb7dc67f50f9ef005cd635cf3ab0a6b72915c21"
+      "sha256": "bc37bbda1d05cbe13bc011d42b3704dce0f4c17a26a834204d634a30ec4e82b5"
     },
     {
       "kind": "skill",
