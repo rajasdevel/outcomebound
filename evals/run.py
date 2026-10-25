@@ -19,7 +19,8 @@ adopt renders it, at codex's skill path the whole folder of each skill that inst
 checkout's launcher first on the call's PATH; `unsized`, the current arm without the kernel's
 sizing paragraph, which asks whether that paragraph earns its place; and `none`, no kernel,
 skill or launcher, each fixture's note without its pointer to the core skill. The `earlier`
-arm can also be the install of a Git ref (`--earlier-ref`) or another guidance set's own files
+arm can also be the install of a Git ref (`--earlier-ref`), made by that ref's own engine as an
+adopter of that release has it, or another guidance set's own files
 (`--earlier-verbatim`), and `--arm-label` names it in the records. The model is
 always named and passed to codex, so codex's configured default never runs.
 
@@ -202,7 +203,9 @@ THIRD_PARTY = "third-party"
 EARLIER = "earlier"
 EARLIER_KERNEL = REPO / "evals" / "arms" / "earlier-kernel.md"
 # `--earlier-ref REF` makes the earlier arm a full install of the engine at that Git ref (its
-# kernel, its skills, its fragments), in place of the kernel wording kept in EARLIER_KERNEL.
+# kernel, its skills, its fragments), in place of the kernel wording kept in EARLIER_KERNEL. What
+# the install generates (the facts and pointers blocks, each skill's condition) and the launcher
+# are that ref's engine's too, so no wording of this checkout's engine reaches the earlier arm.
 EARLIER_REF = ""
 _EARLIER_SOURCE: dict[str, Path] = {}
 # `--earlier-verbatim DIR` makes the earlier arm another guidance set's own files: the AGENTS.md
@@ -618,6 +621,8 @@ def earlier_source() -> Path:
             "skills",
             "fragments",
             "adapters",
+            "outcomebound_tools",
+            LAUNCHER,
         ],
         capture_output=True,
     )
@@ -632,6 +637,41 @@ def earlier_source() -> Path:
         raise SystemExit(f"run: --earlier-ref {EARLIER_REF}: the export did not unpack")
     _EARLIER_SOURCE[EARLIER_REF] = target
     return target
+
+
+def earlier_engine(request: dict[str, Any]) -> Any:
+    """What the engine at EARLIER_REF answers to `request`, run in a Python of its own with that
+    engine first on its path: `{"op": "conditions"}`, each skill's pointer condition; or
+    `{"op": "render", ...}`, the facts and pointers blocks `facts.render` writes for a target."""
+
+    source = earlier_source()
+    script = (
+        "import json, sys\n"
+        "from pathlib import Path\n"
+        "sys.path.insert(0, sys.argv[1])\n"
+        "from outcomebound_tools import adopt, facts, fragments\n"
+        "ask = json.load(sys.stdin)\n"
+        "if ask['op'] == 'conditions':\n"
+        "    answer = adopt.CONDITIONS\n"
+        "else:\n"
+        "    root = Path(sys.argv[1])\n"
+        "    chosen = fragments.select(fragments.load_all(root), ask['selected'])"
+        " if ask['selected'] else []\n"
+        "    skills = [tuple(pair) for pair in ask['skills']]\n"
+        "    out = facts.render(Path(ask['target']), chosen, ask['done'], ['AGENTS.md'], skills)\n"
+        "    answer = {'facts': out.facts, 'pointers': out.pointers}\n"
+        "json.dump(answer, sys.stdout)\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", script, str(source)],
+        input=json.dumps(request),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if done.returncode != 0:
+        raise SystemExit(f"run: --earlier-ref {EARLIER_REF}: its engine: {done.stderr.strip()}")
+    return json.loads(done.stdout)
 
 
 def ref_commit(ref: str) -> str:
@@ -844,8 +884,9 @@ def load_arm(
     kept: tuple[str, ...] = (),
 ) -> Arm:
     """The arm as it runs, for an install that selects the fragments `selected` and records the
-    Done commands `done`; `adopted`, for `current` alone, installs it with the engine's own
-    adopt after the build (`adopt_install`), its kernel in AGENTS.md and not in the prompt.
+    Done commands `done`; `adopted`, for `current` and for the earlier arm of `--earlier-ref`,
+    installs it with the engine's own adopt after the build (`adopt_install`), its kernel in
+    AGENTS.md and not in the prompt; the earlier arm's engine and launcher are its ref's.
     `current` mirrors a codex install of this checkout: the whole folder of each skill that
     install carries, which is every install's ten, at the skill path the harness table gives
     codex, and this checkout's launcher. The earlier arm is its kernel alone and the kernel-off
@@ -871,6 +912,7 @@ def load_arm(
     from outcomebound_tools import adopt, facts, fragments
 
     root = earlier_source() if name == EARLIER else REPO
+    conditions = earlier_engine({"op": "conditions"}) if name == EARLIER else adopt.CONDITIONS
     try:
         (route,) = adopt.routes(root, [INSTALL_HARNESS])
         chosen = fragments.select(fragments.load_all(root), selected) if selected else []
@@ -884,7 +926,7 @@ def load_arm(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
         )
         pointers = tuple(
-            (adopt.CONDITIONS[skill], f"{route.skills}/{skill}/SKILL.md") for skill in carried
+            (conditions[skill], f"{route.skills}/{skill}/SKILL.md") for skill in carried
         )
     except (adopt.AdoptError, fragments.FragmentError) as error:
         raise SystemExit(f"run: the current arm cannot read what adopt installs: {error}") from None
@@ -892,11 +934,11 @@ def load_arm(
         name,
         text,
         files,
-        REPO / LAUNCHER,
+        root / LAUNCHER,
         tuple(selected),
         pointers,
         done=tuple(done),
-        adopted=adopted and name == "current",
+        adopted=adopted and name in ("current", EARLIER),
     )
 
 
@@ -1329,11 +1371,22 @@ def as_installed(workdir: Path, arm: Arm) -> str:
         note = agents.read_text(encoding="utf-8").strip("\n") if agents.is_file() else ""
         agents.write_text(arm.agents.rstrip("\n") + "\n" + (f"\n{note}\n" if note else ""), "utf-8")
     else:
-        root = earlier_source() if arm.name == EARLIER else REPO
-        chosen = fragments.select(fragments.load_all(root), arm.selected) if arm.selected else []
-        rendered = facts.render(workdir, chosen, list(arm.done), ["AGENTS.md"], list(arm.skills))
+        if earlier_install(arm):
+            asked: dict[str, Any] = {"op": "render", "target": str(workdir)}
+            asked |= {"selected": list(arm.selected), "done": list(arm.done)}
+            asked["skills"] = [list(pair) for pair in arm.skills]
+            answer = earlier_engine(asked)
+            written, pointing = answer["facts"], answer["pointers"]
+        else:
+            chosen = (
+                fragments.select(fragments.load_all(REPO), arm.selected) if arm.selected else []
+            )
+            rendered = facts.render(
+                workdir, chosen, list(arm.done), ["AGENTS.md"], list(arm.skills)
+            )
+            written, pointing = rendered.facts, rendered.pointers
         head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
-        blocks = [rendered.facts, *([rendered.pointers] if rendered.pointers else [])]
+        blocks = [written, *([pointing] if pointing else [])]
         agents.write_text(head + "\n\n".join(block.strip("\n") for block in blocks) + "\n", "utf-8")
     env = {**child_env(), **FOLD_GIT}
     # Only the notes this function wrote join the seed: a fixture's uncommitted edits, such as
@@ -1354,8 +1407,9 @@ def as_installed(workdir: Path, arm: Arm) -> str:
 
 
 def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> str:
-    """Install the arm into the built fixture as an adopter does: this checkout's launcher runs
-    `outcomebound adopt --harness <INSTALL_HARNESS>` with the arm's fragments and Done commands,
+    """Install the arm into the built fixture as an adopter does: this checkout's launcher (the
+    ref's, for the earlier arm of `--earlier-ref`) runs `outcomebound adopt --harness
+    <INSTALL_HARNESS>` with the arm's fragments and Done commands,
     which writes the kernel, facts and pointers blocks into AGENTS.md, the skills, the fragments,
     `.agents/.gitignore` and `.outcomebound/`. What it wrote, less what its own ignore files
     keep out, and the notes `as_installed` rewrote (`rewritten`) are folded into the seed
@@ -1364,7 +1418,8 @@ def adopt_install(workdir: Path, arm: Arm, rewritten: tuple[str, ...] = ()) -> s
     leave nothing to fold. Why it could not, or an empty string."""
 
     env = {**child_env(), **HERMETIC_GIT}
-    argv = [str(REPO / LAUNCHER), "adopt", str(workdir), "--harness", INSTALL_HARNESS]
+    engine = earlier_source() if earlier_install(arm) else REPO
+    argv = [str(engine / LAUNCHER), "adopt", str(workdir), "--harness", INSTALL_HARNESS]
     argv += ["--facts-only"] if arm.name in FACTS_ONLY_ARMS else []
     argv += ["--fragments", ",".join(arm.selected)] if arm.selected else []
     for line in arm.done:
