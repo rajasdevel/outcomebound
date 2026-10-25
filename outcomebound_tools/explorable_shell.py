@@ -26,6 +26,7 @@ from outcomebound_tools import home, textio
 __all__ = [
     "GENERATOR",
     "KIND_LABELS",
+    "REPLY",
     "Parts",
     "ShellError",
     "build_page",
@@ -35,6 +36,7 @@ __all__ = [
     "library_config",
     "match",
     "policy",
+    "reply_for",
     "template",
 ]
 
@@ -43,11 +45,20 @@ GENERATOR = "outcomebound explorable"
 KIND_LABELS = {
     "decision": "Decision explorable",
     "learning": "Learning explorable",
+    "explain": "Explanation",
     "interview": "Interview explorable",
 }
+REPLY = (
+    '<section class="xp-reply" id="explorable-reply" aria-labelledby="explorable-reply-title">'
+    '<h2 id="explorable-reply-title">Your reply</h2></section>'
+)
+# The kinds whose page always has the reply section. An explanation never has it, and a learning
+# page has it only where its content holds a question.
+REPLY_ALWAYS = ("decision", "interview")
 _SLOT = re.compile(r"\{(\w+)\}")
 _BUILT = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 _BRIEFS = '<section class="xp-briefs" id="explorable-briefs".*?</section>'
+_REPLY = '<section class="xp-reply" id="explorable-reply".*?</section>'
 _ID = re.compile(r"[a-z][a-z0-9-]*")
 
 
@@ -147,15 +158,25 @@ def _json(document: Mapping[str, Any]) -> str:
     return json.dumps(document, ensure_ascii=False).replace("<", "\\u003c")
 
 
+def reply_for(kind: str, has_questions: bool) -> str:
+    """The reply section a page of `kind` holds: always for a decision or an interview, never for
+    an explanation, and for a learning page only where its content holds a question."""
+
+    if kind in REPLY_ALWAYS or (kind == "learning" and has_questions):
+        return REPLY
+    return ""
+
+
 def build_page(
     header: Mapping[str, Any],
     content: str,
     briefs_html: str,
     briefs: list[dict[str, Any]],
     built: str,
+    reply: str,
 ) -> str:
-    """The page: the shell with the header's values, the briefs' drawing and the content in its
-    slots. The stylesheet and the runtime go in byte for byte."""
+    """The page: the shell with the header's values, the briefs' drawing, the content and the
+    reply section in its slots. The stylesheet and the runtime go in byte for byte."""
 
     stylesheet, runtime = template("explorable.css"), template("explorable.js")
     if "</style" in stylesheet.lower() or "</script" in runtime.lower():
@@ -184,6 +205,7 @@ def build_page(
         "built": built,
         "briefs": briefs_html,
         "content": content,
+        "reply": reply,
     }
     return _SLOT.sub(lambda found: values[found.group(1)], template("shell.html"))
 
@@ -204,6 +226,10 @@ class Parts:
     def content(self) -> str:
         return self.values["content"][0]
 
+    @property
+    def reply(self) -> str:
+        return self.values["reply"][0]
+
 
 def _pattern() -> tuple[re.Pattern[str], list[tuple[str, str]]]:
     """The shell as a regular expression: its text exact, each slot a group, named in order."""
@@ -217,7 +243,12 @@ def _pattern() -> tuple[re.Pattern[str], list[tuple[str, str]]]:
         slot = found.group(1)
         name = f"g{len(groups)}"
         groups.append((name, slot))
-        body = f"(?:{_BRIEFS})?" if slot == "briefs" else ".*?"
+        if slot == "briefs":
+            body = f"(?:{_BRIEFS})?"
+        elif slot == "reply":
+            body = f"(?:{_REPLY})?"
+        else:
+            body = ".*?"
         pieces.append(f"(?P<{name}>{body})")
         last = found.end()
     pieces.append(re.escape(shell[last:]))
@@ -270,6 +301,8 @@ def differences(parts: Parts) -> list[str]:
     if parts.values["runtime"][0] != template("explorable.js"):
         problems.append("the runtime differs from the engine's explorable.js")
     config = _config(parts, problems)
+    if parts.reply not in ("", REPLY):
+        problems.append("the reply section differs from the engine's")
     if re.search(r"<!--|</|<script", parts.values["config"][0], re.IGNORECASE):
         problems.append("the configuration holds markup that can end or hide its element")
     if config.get("libraries") != library_config():
@@ -286,7 +319,9 @@ def _identity(parts: Parts, config: Mapping[str, Any], problems: list[str]) -> N
     built = _same(parts, "built", problems)
     version = parts.values["version"][0]
     if kind not in KIND_LABELS or config.get("kind") != kind:
-        problems.append("the kind is not one of the three, or differs between the page's places")
+        problems.append(
+            "the kind is not one the engine knows, or differs between the page's places"
+        )
     elif parts.values["kind_label"][0] != KIND_LABELS[kind]:
         problems.append("the kind's label differs from the engine's")
     if config.get("title") != title:

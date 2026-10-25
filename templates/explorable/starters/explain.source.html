@@ -1,0 +1,81 @@
+<script type="application/json" data-explorable>
+{"kind": "explain", "id": "cache-explained", "title": "How a cache takes load off a database"}
+</script>
+
+<section>
+  <h2>What this page explains</h2>
+  <p>For: anyone who builds or runs a service that reads from a database. After this page you can say what a cache does and estimate how much load it removes.</p>
+  <dl>
+    <dt>Cache</dt><dd>A small, fast store that keeps copies of recent answers.</dd>
+    <dt>Hit</dt><dd>A read that the cache answers from its copy.</dd>
+    <dt>Miss</dt><dd>A read the cache cannot answer, so it asks the database.</dd>
+    <dt>Hit rate</dt><dd>The share of reads that are hits.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>One case first</h2>
+  <p>A report page gets 120 reads each second. The cache answers 9 of every 10 of them. Only the misses reach the database: 120 reads times one tenth is 12 reads each second.</p>
+  <p>The rule: <strong>the database sees only the reads the cache misses.</strong></p>
+</section>
+
+<section>
+  <h2>Change it and watch</h2>
+  <label>Reads each second
+    <input type="range" data-input="rps" data-unit="reads/s" data-source="assumed" min="10" max="500" step="10" value="120"></label>
+  <label>Hit rate
+    <input type="range" data-input="hit" data-unit="%" data-source="assumed" min="0" max="100" step="5" value="90"></label>
+  <p>Reads that reach the database: <output data-output="dbLoad"></output></p>
+  <p>Try this: set the hit rate to 0, then to 100, and compare what the database sees.</p>
+</section>
+
+<section>
+  <h2>Follow one read</h2>
+  <ul data-legend>
+    <li data-kind="k1">Where the read is now</li>
+    <li data-kind="k2">Already passed</li>
+  </ul>
+  <section data-steps aria-label="One read, step by step">
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 1" data-diagram-desc="The client sends a read to the cache.">flowchart LR
+  client[client]:::k1 --> cache[(cache)]
+  cache --> db[(database)]</pre>
+      <pre data-diagram-fallback>client (now) --> cache --> database</pre>
+      <figcaption>The client asks the cache first.</figcaption>
+    </figure>
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 2" data-diagram-desc="The cache has no answer, so it asks the database.">flowchart LR
+  client[client]:::k2 --> cache[(cache)]:::k1
+  cache -->|miss| db[(database)]</pre>
+      <pre data-diagram-fallback>client --> cache (now, a miss) --> database</pre>
+      <figcaption>The cache has no copy. This is a miss, so it asks the database.</figcaption>
+    </figure>
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 3" data-diagram-desc="The database answers and the cache keeps a copy.">flowchart LR
+  client[client]:::k2 --> cache[(cache)]:::k2
+  cache --> db[(database)]:::k1
+  db -->|answer, kept| cache</pre>
+      <pre data-diagram-fallback>client --> cache --> database (now) --answer, kept--> cache</pre>
+      <figcaption>The database answers. The cache keeps a copy of the answer.</figcaption>
+    </figure>
+    <figure data-step>
+      <pre data-diagram data-diagram-title="Step 4" data-diagram-desc="The next read for the same report is answered by the cache alone.">flowchart LR
+  client[client]:::k2 --> cache[(cache)]:::k1
+  cache -->|hit| client
+  db[(database)]</pre>
+      <pre data-diagram-fallback>client --> cache (now, a hit) --> client; the database is not asked</pre>
+      <figcaption>The next read for the same report is a hit. The database is not asked.</figcaption>
+    </figure>
+  </section>
+</section>
+
+<script>
+  // Working for the expectations below, by hand: reads that reach the database = reads * (1 - hit / 100).
+  // 120 reads each second at 90 percent: 120 * 0.10 = 12.
+  // 200 reads each second at 75 percent: 200 * 0.25 = 50.
+  explorable.onChange((v) => {
+    explorable.show("dbLoad", v.rps * (1 - v.hit / 100), { unit: "reads/s" });
+  });
+  explorable.expect("120 reads at a 90 percent hit rate", { rps: 120, hit: 90 }, { dbLoad: 12 });
+  explorable.expect("200 reads at a 75 percent hit rate", { rps: 200, hit: 75 }, { dbLoad: 50 });
+</script>

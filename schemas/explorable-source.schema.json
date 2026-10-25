@@ -15,9 +15,10 @@
       "enum": [
         "decision",
         "learning",
+        "explain",
         "interview"
       ],
-      "description": "What the page is: a decision explorable puts decision briefs in a form the person can explore; a learning one teaches a mechanism by questions; an interview one asks the questions the work waits on."
+      "description": "What the page is: a decision explorable puts decision briefs in a form the person can explore; a learning one teaches the person in the session by an explanation they can change, with questions only where they ask for them; an explain one teaches readers outside the session and holds no reply; an interview one asks the questions the work waits on."
     },
     "id": {
       "type": "string",

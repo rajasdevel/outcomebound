@@ -1,56 +1,59 @@
 ---
 name: explorable
-description: Use when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it. Builds a decision, learning or interview page the engine checks, beside the decision brief and never in place of it, or a self-contained report that needs no decision, quiz or reply; the decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
+description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. Builds a learning, explain, decision or interview page the engine checks; a decision page goes beside the decision brief and never in place of it, and a set of questions can go on an interview page. The decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
 ---
 
 # Explorable
 
-This skill makes one of two pages. An explorable is a single HTML file of one of three kinds,
-decision, learning or interview, that the person opens from disk: they change values, step through
-flows, read charts and answer questions, then copy a reply back to you. You write its source; the
-engine joins it to a shared shell and checks it. A report is a page you write yourself, without the
-engine (see "A report"). For an explorable, you are done when the person can open the page and act
-on it: `outcomebound explorable check` passes on the page (with `--browser` where a
+An explorable is one HTML file that the person opens from disk: they change values, step through
+flows and read charts. It is of one of four kinds. You write its source; the engine joins it to a
+shared shell and checks it. A page that teaches comes first: **learning** teaches the person in this
+session, **explain** teaches readers who are not in it, **decision** helps the person decide, and
+**interview** asks the questions the work waits on. You are done when the person can open the page
+and use it: `outcomebound explorable check` passes on the page (with `--browser` where a
 Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so), every
-number the page's answer rests on has an expectation, your report names each output that reads
-`UNVERIFIED`, and the page's path is in the text the person reads, beside the decision brief when
-there is one. For either page, you have looked at it, and it shows what the person asked for, with
-data that supports that meaning, not only a matching label; where the data cannot, your report
-says so.
+number the page's lesson or answer rests on has an expectation, your report names each output that
+reads `UNVERIFIED`, and the page's path is in the text the person reads, beside the decision brief
+when there is one. You have looked at the page, and it shows what the person asked for, with data
+that supports that meaning, not only a matching label; where the data cannot, your report says so.
 
 ## When a page earns its place
 
 Make one only where text serves the person badly:
 
+- something to understand, or to explain to others, where seeing it move or trying it teaches more
+  than reading;
 - a decision whose answer turns on values the person may judge differently from you (rates, sizes,
   dates, weights, risk), or on how the options work in ways text compares poorly;
-- a mechanism the person must learn, where trying it teaches more than reading;
 - a set of questions that is easier to answer on a page than in the chat;
 - the person asks for one.
 
-A report, a survey or a comparison can include controls that explore its information. Those
-controls do not by themselves call for a decision, quiz or reply: use the report route unless the
-requested outcome needs one of those, whatever word the person used. A report holds a
-recommendation only where the person asked for one.
+A request to understand or to explain something gets a learning or explain page, never a decision
+page. Do not turn an explanation into a request to choose, a recommendation, or a quiz unless the
+person asked for it. A report, survey or comparison with controls is an explain page, whatever word
+the person used; it holds a recommendation only where the person asked for one.
 
-A choice the brief settles alone gets no page. An explorable never replaces the brief: draw the
-brief as the `decision-brief` skill says and put it in the text, then name the page beside it. An
-explorable holds only the work that waits on the person; the rest goes on while they read it.
-
-## A report
-
-For a report, skip the engine's build, check, brief and reply steps below: "What each kind holds"
-and "The reply" are for the three engine-built kinds, and of "Build and check" only steps 1 and 7
-hold for a report. Write one Markdown file, or one HTML file that keeps its data and resources in
-the file and whose first head element is a Content-Security-Policy that blocks outbound loads and
-sends, such as
-`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">`.
-Check those restrictions before you open the page or name it, and check its rendered content and
-controls directly. For each calculated result the report relies on, compare the result it shows at
-stated inputs with an expected value worked out without the page's code, and name each result you
-could not check. The guards and diagram rules below hold where they fit.
+A choice the brief settles alone gets no page. A decision page never replaces the brief: draw the
+brief as the `decision-brief` skill says and put it in the text, then name the page beside it. A
+page holds only the work that waits on the person; the rest goes on while they read it.
 
 ## What each kind holds
+
+**Learning.** Teaches the person in this session. Start from what they say they know and let them
+skip it. Start with a concrete case, then state the rule it shows. Use numbers where quantities
+matter, a model where changing inputs helps, and step-through where order matters. Show each result
+beside the input that caused it. Invite them to try something (`set the rate to zero and watch`)
+before you explain what happens. Questions are optional: add a prediction before a reveal, or a
+recall question later, only where the person wants to test themselves. A page with a question has the reply; one with none has no reply. Report what they
+answered, never that they understand (`explain-spec` holds the same rule).
+
+**Explain.** Teaches readers who are not in this session, who cannot ask you and may open the page
+later. Teach as a learning page does, and also: say at the top who it is for and what they can do
+after reading; define each term where it first appears; assume nothing from the session; give each
+value its source. It has no reply, no brief and no recommendation unless the person asked for one,
+and it needs no question. Before you call it shareable, read it for private facts (names, paths,
+customer data, credentials, internal ids, unreleased plans), remove or generalise them, and say
+what you removed. Sharing the file is the person's act.
 
 **Decision.** In this order: the briefs (`build` draws them from the brief document);
 each option's mechanism, drawn so that what differs between options shows first; the measures the
@@ -61,13 +64,6 @@ where time or reversibility differs between options, with the point after which 
 be undone; a question that asks the person to imagine the leading option has failed and say why;
 and the reply. Leave out everything that does not change the decision, however true: background,
 history and parts no option touches.
-
-**Learning.** Start from what the person says they know and let them skip it. Before each reveal,
-ask for a prediction. After the reveal, explain the outcome and any difference from their
-prediction; let them try again where that helps. Let them step through a flow at their own
-pace; give them a model to change where quantities matter; later, ask them to recall what an
-earlier part showed. Report what they answered, never that they understand (`explain-spec`
-holds the same rule).
 
 **Interview.** Ask the questions the work waits on, drawn from the open forks (`gather-requirements`)
 or from a spec's rows (`explain-spec`): one idea in each, the most important first, options of equal
@@ -84,15 +80,15 @@ A page can mislead as well as inform. Hold these:
 - An uncertain value is a range, two inputs for the low and the high, never one exact number.
 - Show only the precision the inputs support.
 - Keep the controls to the values that move the answer; the threshold shows which those are.
-- Your recommendation is already in the brief, so the page shows what would change it, not more
-  reasons for it.
+- On a decision page your recommendation is already in the brief, so the page shows what would
+  change it, not more reasons for it.
 - Motion starts only when the person starts it.
 - Colour never carries meaning alone: a label, mark or shape goes with it.
 - Page code never navigates, opens a window, fetches, or loads anything; the page's data is in the
   page. The policy stops loads and sends but not navigation, so this one is yours to hold.
 - What the person enters stays in the browser, where Chrome lets any page opened from disk read
-  it. Where the answers are private, tell the person to press "Forget what I entered" once the
-  reply is copied.
+  it. Where the answers are private, tell the person to press "Forget what I entered" when they
+  finish.
 
 ## Diagrams
 
@@ -130,13 +126,13 @@ Rework and repeated text take the person's time and add nothing to the page:
 1. Work in the project's working area (`.agents/work/<task>/` where the workspace fragment
    applies), never in a design folder or a commit unless the person asks: a page can hold private
    facts.
-2. `outcomebound explorable new <name>.source.html --kind decision` (or `learning`, `interview`)
-   writes a starter source; for a decision it also writes `briefs.json` beside it when that file is
-   missing. The brief document is the one `outcomebound brief` reads: fill it, and draw it with
-   `outcomebound brief briefs.json` for your message.
+2. `outcomebound explorable new <name>.source.html --kind decision` (or `learning`, `explain`,
+   `interview`) writes a starter source; for a decision it also writes `briefs.json` beside it when that file is
+   missing. For a decision page only, the brief document is the one `outcomebound brief` reads: fill it,
+   and draw it with `outcomebound brief briefs.json` for your message.
 3. Write the content and the page code over the starter. `references/runtime.md` names the
    `explorable` object, the attributes and the reply's form.
-4. For each number the recommendation rests on, add `explorable.expect` with input values and the
+4. For each computed output the lesson or answer relies on, add `explorable.expect` with input values and the
    output each must show. Work the expected value out by hand or with another tool, never by
    running the page's code, and keep that working in a file beside the source.
 5. `outcomebound explorable build <name>.source.html` writes `<name>.html`. When it refuses the
@@ -150,7 +146,8 @@ Rework and repeated text take the person's time and add nothing to the page:
 
 ## The reply
 
-The person pastes a block that `references/runtime.md` describes. Read each `choice` line as their
+A decision, an interview and a learning page with questions end in a reply; an explain page and a
+learning page with no question have none. The person pastes a block that `references/runtime.md` describes. Read each `choice` line as their
 answer to that brief, by its id. Read each `input` line as their value: where it changes the
 answer, work the answer out again with it and say what changed. Record each `answer` where the work
 is recorded; an "I don't know" is a gap to settle, not a blank. A reply grants only what the chosen

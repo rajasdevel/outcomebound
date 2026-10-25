@@ -122,8 +122,9 @@ CONDITIONS = {
         "build it"
     ),
     "explorable": (
-        "when the person asks for an interactive page, wants to try options with their own "
-        "numbers, or must learn a mechanism by trying it"
+        "when the person wants to understand something, or wants it explained to others, where "
+        "trying it teaches more than reading, asks for an interactive page, or wants to try "
+        "options with their own numbers"
     ),
     "land-change": "when driving a pull or merge request through CI and review to landing",
     "run-acceptance": (

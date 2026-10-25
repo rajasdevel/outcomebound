@@ -22,7 +22,7 @@ import pytest
 from outcomebound_tools import explorable_browser
 
 ROOT = Path(__file__).resolve().parent.parent
-KINDS = ("decision", "learning", "interview")
+KINDS = ("decision", "learning", "explain", "interview")
 LINE = re.compile(
     r"^(?:explorable [a-z][a-z0-9-]* built \S+"
     r"|choice [A-Za-z][A-Za-z0-9-]*: (?:none|[A-Z]( .+)?)"
@@ -138,6 +138,10 @@ def test_starter_page_runs_and_its_expectations_pass(kind: str, tmp_path: Path) 
 @pytest.mark.parametrize("kind", KINDS)
 def test_reply_matches_the_grammar(kind: str, tmp_path: Path) -> None:
     _, page = make_page(kind, tmp_path)
+    if kind in ("learning", "explain"):
+        # The teaching starters hold no question, so their pages hold no reply.
+        assert 'class="xp-reply-text"' not in dump_dom(page)
+        return
     lines = reply_of(dump_dom(page))
     assert lines[0].startswith(f"explorable {kind}-page built ")
     assert all(LINE.match(line) for line in lines), lines
@@ -145,6 +149,79 @@ def test_reply_matches_the_grammar(kind: str, tmp_path: Path) -> None:
         assert any(line.startswith("choice ") for line in lines)
     else:
         assert any(line.startswith("answer ") for line in lines)
+
+
+@needs_browser
+def test_a_learning_page_with_a_question_has_a_reply_that_matches_the_grammar(
+    tmp_path: Path,
+) -> None:
+    def ask(text: str) -> str:
+        question = (
+            '<fieldset data-question="Q1" data-kind="predict" data-answer="12" data-tolerance="0">'
+            "<legend>How many reads reach the database?</legend>"
+            '<input type="number" data-unit="reads/s">'
+            "<div data-explain>One read in ten.</div></fieldset>\n"
+        )
+        return text.replace("<script>", question + "<script>", 1)
+
+    _, page = make_page("learning", tmp_path, ask)
+    lines = reply_of(dump_dom(page))
+    assert all(LINE.match(line) for line in lines), lines
+    assert any(line.startswith("answer Q1") for line in lines)
+
+
+FORGET = "Forget what I entered"
+
+
+@needs_browser
+@pytest.mark.parametrize("kind", KINDS)
+def test_every_page_that_saves_has_the_forget_control(kind: str, tmp_path: Path) -> None:
+    # The starters hold inputs or answers that the page saves, so each has the control; the
+    # teaching starters have no reply, and the control stands without one.
+    _, page = make_page(kind, tmp_path)
+    dom = dump_dom(page)
+    # The runtime source holds the words too, so count the buttons the page drew.
+    assert dom.count(f">{FORGET}</button>") == 1
+    assert dom.count(">Restore the agent\u2019s values</button>") == 1
+    assert ('class="xp-reply-text"' in dom) == (kind in ("decision", "interview"))
+
+
+@needs_browser
+@pytest.mark.parametrize("kind", ("learning", "explain"))
+def test_forget_clears_storage_on_a_page_with_no_reply(kind: str, tmp_path: Path) -> None:
+    """Outside check mode the page saves what the person enters. With no reply, the control that
+    removes it must still be there and must work."""
+
+    probe = """
+<pre id="forget-probe"></pre>
+<script>
+  explorable.ready(() => setTimeout(() => {
+    const config = JSON.parse(document.getElementById("explorable-config").textContent);
+    const key = "explorable:" + config.id + ":" + config.built;
+    const input = document.querySelector("[data-input]");
+    input.value = input.max;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const saved = localStorage.getItem(key) !== null;
+    const button = Array.from(document.querySelectorAll("button"))
+      .filter((node) => node.textContent === "Forget what I entered")[0];
+    if (button) button.click();
+    document.getElementById("forget-probe").textContent = JSON.stringify({
+      saved,
+      button: !!button,
+      reply: !!document.getElementById("explorable-reply"),
+      after: localStorage.getItem(key),
+    });
+  }, 0));
+</script>
+"""
+    _, page = make_page(kind, tmp_path, lambda source: source + probe)
+    assert BROWSER is not None
+    run = explorable_browser.run_page(BROWSER, page, TIME_LIMIT, fragment="")
+    assert run.document is not None, run.reason
+    found = re.search(r'<pre id="forget-probe">(.*?)</pre>', run.document, re.S)
+    assert found and found.group(1), "the page did not record the probe"
+    shown = json.loads(html.unescape(found.group(1)))
+    assert shown == {"saved": True, "button": True, "reply": False, "after": None}, shown
 
 
 @needs_browser

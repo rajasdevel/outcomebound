@@ -51,6 +51,7 @@
   var noteEl = null;
   var replyEl = null;
   var statusEl = null;
+  var actionsEl = null;
   var storageKey = null;
   var restoring = false;
   var renderQueue = Promise.resolve();
@@ -1220,16 +1221,11 @@
     var actions = el("div", "xp-actions");
     var copy = el("button", "xp-btn xp-primary", "Copy reply");
     copy.type = "button";
-    var restore = el("button", "xp-btn", "Restore the agent’s values");
-    restore.type = "button";
-    var forget = el("button", "xp-btn", "Forget what I entered");
-    forget.type = "button";
     statusEl = el("span", "xp-copy-status");
     statusEl.setAttribute("role", "status");
     actions.appendChild(copy);
-    actions.appendChild(restore);
-    actions.appendChild(forget);
     actions.appendChild(statusEl);
+    actionsEl = actions;
     body.appendChild(actions);
     section.appendChild(body);
     copy.addEventListener("click", function () {
@@ -1237,6 +1233,29 @@
         statusEl.textContent = ok ? "Copied." : "Copy did not work. The reply text is selected: press Ctrl+C or Cmd+C.";
       });
     });
+    section.addEventListener("input", refreshAll);
+    section.addEventListener("change", refreshAll);
+  }
+
+  // The two buttons that undo what the page saves belong to every page that saves anything, with
+  // or without a reply: beside Copy where there is a reply, else in a row of their own.
+  function setupControls() {
+    if (!inputs.length && !questions.length && !briefChoices.length) return;
+    var actions = actionsEl;
+    if (!actions) {
+      actions = el("div", "xp-actions xp-controls");
+      statusEl = el("span", "xp-copy-status");
+      statusEl.setAttribute("role", "status");
+      actions.appendChild(statusEl);
+      var main = document.querySelector("main") || document.body;
+      main.appendChild(actions);
+    }
+    var restore = el("button", "xp-btn", "Restore the agent’s values");
+    restore.type = "button";
+    var forget = el("button", "xp-btn", "Forget what I entered");
+    forget.type = "button";
+    actions.insertBefore(restore, statusEl);
+    actions.insertBefore(forget, statusEl);
     restore.addEventListener("click", function () {
       inputs.forEach(function (rec) { writeInput(rec, defaultValues[rec.name]); });
       lastSig = sig();
@@ -1268,8 +1287,6 @@
       }
       statusEl.textContent = "What you entered is gone from this page and from the browser’s storage.";
     });
-    section.addEventListener("input", refreshAll);
-    section.addEventListener("change", refreshAll);
   }
 
   // ---- Saved state
@@ -1372,6 +1389,7 @@
       setupQuestions();
       wrapTables();
       setupReply();
+      setupControls();
       storageKey = "explorable:" + (cfg.id || "page") + ":" + (cfg.built || "");
       restore();
     });

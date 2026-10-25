@@ -163,10 +163,13 @@ def _wait(process: subprocess.Popen[bytes], finished: threading.Event, timeout: 
     return False
 
 
-def run_page(browser: str, page: Path, timeout: float) -> BrowserRun:
-    """Run `page` with the check fragment and read the document the browser prints."""
+def run_page(
+    browser: str, page: Path, timeout: float, fragment: str = "#explorable-check"
+) -> BrowserRun:
+    """Run `page` with the check fragment and read the document the browser prints. A test that
+    needs the page outside check mode, where it saves to storage, passes `fragment=""`."""
 
-    address = page.resolve().as_uri() + "#explorable-check"
+    address = page.resolve().as_uri() + fragment
     profile = tempfile.mkdtemp(prefix="explorable-profile-")
     chunks: list[bytes] = []
     finished = threading.Event()

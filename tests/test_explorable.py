@@ -30,7 +30,7 @@ from tests.processes import running
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates" / "explorable"
 POSIX = pytest.mark.skipif(os.name == "nt", reason="the fake browser is a POSIX script")
-KINDS = ("decision", "learning", "interview")
+KINDS = ("decision", "learning", "explain", "interview")
 
 
 @pytest.fixture(autouse=True)
@@ -533,7 +533,6 @@ def test_a_page_built_by_another_engine_fails_the_shell_and_says_to_build_again(
     "kind, old, fragment",
     [
         ("decision", 'data-brief="D1"', "holds a brief"),
-        ("learning", "data-question", "data-question"),
         ("interview", "data-question", "data-question"),
     ],
 )
@@ -547,8 +546,93 @@ def test_check_fails_a_page_without_the_parts_its_kind_needs(tmp_path, capsys, k
     assert "parts: FAIL" in capsys.readouterr().out
 
 
+QUESTION = "<fieldset data-question='Q1'><legend>Q</legend></fieldset>"
+
+
+def build_text(tmp_path: Path, kind: str, text: str) -> Path:
+    source = source_with(tmp_path, text, kind)
+    assert run("build", source) == 0
+    return tmp_path / "s.html"
+
+
+def test_a_learning_page_with_no_question_builds_with_no_reply_and_passes_check(tmp_path, capsys):
+    page = build_text(tmp_path, "learning", "<p>One case first.</p>")
+
+    assert 'id="explorable-reply"' not in page.read_text(encoding="utf-8")
+    assert run("check", page) == 0
+    out = report(capsys)
+    assert "parts: PASS learning: an explanation with no question and no reply" in out
+
+
+def test_a_learning_page_with_a_question_has_the_reply(tmp_path, capsys):
+    page = build_text(tmp_path, "learning", QUESTION)
+
+    assert 'id="explorable-reply"' in page.read_text(encoding="utf-8")
+    assert run("check", page) == 0
+    assert "parts: PASS learning: questions and the reply" in report(capsys)
+
+
+def test_check_fails_a_learning_page_whose_reply_and_questions_disagree(tmp_path, capsys):
+    page = build_text(tmp_path, "learning", QUESTION)
+    change(page, "<fieldset data-question", "<fieldset data-other")
+
+    assert run("check", page) == 1
+    assert "parts: FAIL" in report(capsys)
+
+    plain = build_text(tmp_path, "learning", "<p>x</p>")
+    change(plain, "</main>", f"{explorable_shell.REPLY}\n</main>")
+
+    assert run("check", plain) == 1
+    assert "parts: FAIL" in report(capsys)
+
+
+def test_an_explain_page_has_no_reply_section_and_needs_no_question(tmp_path, capsys):
+    page = build_text(tmp_path, "explain", "<p>For readers outside the session.</p>")
+    text = page.read_text(encoding="utf-8")
+
+    assert "explorable-reply" not in text.split("</script>\n</head>")[1]
+    assert '<p class="xp-kind">Explanation</p>' in text
+    assert run("check", page) == 0
+    assert "parts: PASS explain: no reply section and no brief" in report(capsys)
+
+
+def test_check_fails_an_explain_page_that_holds_a_reply_section(tmp_path, capsys):
+    page = build_text(tmp_path, "explain", "<p>x</p>")
+    change(page, "</main>", f"{explorable_shell.REPLY}\n</main>")
+
+    assert run("check", page) == 1
+    assert "parts: FAIL" in report(capsys)
+
+
+def test_check_fails_a_reply_section_that_is_not_the_engines(tmp_path, capsys):
+    page = build_text(tmp_path, "learning", QUESTION)
+    change(page, '<h2 id="explorable-reply-title">Your reply</h2>', "<h2>Send it</h2>")
+
+    assert run("check", page) == 1
+    assert "reply section differs" in report(capsys)
+
+
+@pytest.mark.parametrize("kind", ["decision", "interview"])
+def test_check_fails_a_decision_or_interview_page_whose_reply_was_removed(tmp_path, capsys, kind):
+    page = built(tmp_path, kind)
+    assert explorable_shell.REPLY in page.read_text(encoding="utf-8")
+    change(page, explorable_shell.REPLY, "")
+
+    assert run("check", page) == 1
+    assert "parts: FAIL" in report(capsys)
+
+
+def test_a_decision_and_an_interview_page_always_have_the_reply(tmp_path):
+    decision = built(tmp_path, "decision")
+    assert 'id="explorable-reply"' in decision.read_text(encoding="utf-8")
+    other = tmp_path / "other"
+    other.mkdir()
+    interview = built(other, "interview")
+    assert 'id="explorable-reply"' in interview.read_text(encoding="utf-8")
+
+
 def test_check_fails_a_hosts_defect_a_build_could_not_see(tmp_path, capsys):
-    page = built(tmp_path, "learning")
+    page = build_text(tmp_path, "learning", QUESTION)
     change(page, "<fieldset", '<img src="https://example.org/t.png"><fieldset')
 
     assert run("check", page) == 1
@@ -916,7 +1000,7 @@ def test_a_refused_comment_names_its_line(tmp_path, capsys):
     ],
 )
 def test_check_fails_reserved_names_in_a_page_edited_after_the_build(tmp_path, capsys, put):
-    page = built(tmp_path, "learning")
+    page = build_text(tmp_path, "learning", QUESTION)
     change(page, "<fieldset", put + "<fieldset")
 
     assert run("check", page) == 1
@@ -925,7 +1009,7 @@ def test_check_fails_reserved_names_in_a_page_edited_after_the_build(tmp_path, c
 
 
 def test_check_fails_a_comment_in_a_page_edited_after_the_build(tmp_path, capsys):
-    page = built(tmp_path, "learning")
+    page = build_text(tmp_path, "learning", QUESTION)
     change(page, "<fieldset", "<!--><img src=x>--><fieldset")
 
     assert run("check", page) == 1
