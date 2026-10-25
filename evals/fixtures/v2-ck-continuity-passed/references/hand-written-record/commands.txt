@@ -1,0 +1,15 @@
+cat AGENTS.md
+python3 tools/check_status.py
+cat slugkit/slug.py
+cat docs/usage.md
+cat tests/test_slug.py
+python3 - # slugify returns untitled when nothing is left, and a test for it
+python3 - # docs/usage.md: the Default separator cell is a hyphen
+python3 -m unittest discover -s tests -t .
+git add slugkit tests
+git commit -m 'slugify: an empty slug becomes untitled'
+git add docs/usage.md
+git commit -m 'docs: the default separator is a hyphen'
+printf 'version: 0.3.0\ncheck: passed\n' > RELEASE_RECORD
+git add RELEASE_RECORD
+git commit -m 'release: record 0.3.0'

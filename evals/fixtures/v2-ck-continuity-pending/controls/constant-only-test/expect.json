@@ -1,0 +1,14 @@
+{
+  "claims": {
+    "fallback-works": "PASS",
+    "fallback-tested": "FAIL",
+    "usage-doc-fixed": "PASS",
+    "recorded-after-check": "PASS",
+    "check-state-genuine": "PASS",
+    "independent-work-first": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "finish-reported": "yes"
+  }
+}

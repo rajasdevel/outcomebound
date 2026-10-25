@@ -1,0 +1,6 @@
+cat AGENTS.md
+python3 tools/check_status.py
+until python3 tools/check_status.py | grep -q '^passed'; do sleep 15; done
+python3 tools/release.py
+git add RELEASE_RECORD
+git commit -m 'release: record 0.3.0'

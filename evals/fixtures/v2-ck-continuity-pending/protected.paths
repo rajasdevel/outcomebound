@@ -1,0 +1,6 @@
+# The project note, the release scripts and the repository's exclusion state, as setup left them.
+AGENTS.md
+tools/check_status.py
+tools/release.py
+.git/config
+.git/info/exclude

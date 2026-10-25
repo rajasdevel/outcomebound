@@ -19,9 +19,10 @@
   `OB_EVAL_STUB_DIGESTS` and `OB_EVAL_BUDGET` from the reference's `watch.log`, `digests.json`
   and `budget.json` or, where it has none, the defaults the build contract states (an empty watch
   log, every stub's digest unchanged, a budget that did not stop with the fixture's reference
-  usage), puts `evals/stubs` in `OB_EVAL_STUBS`, runs `post.plan.json` through
-  `outcomebound_tools.validation` as `tests/eval_helpers.grade` does, and compares each claim's
-  verdict with `expect.json`.
+  usage), puts `evals/stubs` in `OB_EVAL_STUBS`, makes a folder for a suite that says `observe`
+  and names it in `OB_EVAL_OBSERVED` for the build, the act and the checks, runs `post.plan.json`
+  through `outcomebound_tools.validation` as `tests/eval_helpers.grade` does, and compares each
+  claim's verdict with `expect.json`.
 
 A suite.json with no `references` key is report-only: a fixture outside suite v2 that names its
 tier and report items for the blind reading. Its keys, tier and report items with their sheets
@@ -88,6 +89,7 @@ SUITE_KEYS = frozenset(
         "budget",
         "stubs",
         "watch",
+        "observe",
         "references",
     )
 )
@@ -275,7 +277,7 @@ def suite_problems(fixture: Fixture) -> list[str]:
         problems.append(f"tier is one of {', '.join(TIERS)}")
     problems += [
         f"{key} is true or false"
-        for key in ("panel", "guard")
+        for key in ("panel", "guard", "observe")
         if type(suite.get(key, False)) is not bool
     ]
     if report_only(suite):
@@ -444,11 +446,19 @@ def grade_reference(
     workdir, stage, grading = scratch / "ws", scratch / "ws.stage", scratch / "grading"
     for folder in (workdir, stage, grading):
         folder.mkdir(parents=True)
-    _checked(["bash", str(fixture.folder / "setup.sh"), str(workdir), str(stage)], env=setup_env)
+    observed = {"OB_EVAL_OBSERVED": str(scratch / "observed")} if suite.get("observe") else {}
+    for place in observed.values():
+        Path(place).mkdir()
+    _checked(
+        ["bash", str(fixture.folder / "setup.sh"), str(workdir), str(stage)],
+        env={**setup_env, **observed},
+    )
     _checked(
         ["bash", str(reference / "act.sh")],
         cwd=workdir,
-        env=_stub_path({**os.environ, **HERMETIC_GIT, "OB_EVAL_REFERENCE_DIR": str(reference)}),
+        env=_stub_path(
+            {**os.environ, **HERMETIC_GIT, **observed, "OB_EVAL_REFERENCE_DIR": str(reference)}
+        ),
     )
     commands = [line for line in _text(reference / "commands.txt").splitlines() if line.strip()]
     answer = _text(reference / "answer.md")
@@ -460,7 +470,7 @@ def grade_reference(
         "OB_EVAL_STUB_DIGESTS": ("digests.json", json.dumps(default_digests(suite["stubs"]))),
         "OB_EVAL_BUDGET": ("budget.json", json.dumps(default_budget(suite))),
     }
-    env = {**os.environ, **GRADER_GIT, "PYTHONPATH": str(REPO)}
+    env = {**os.environ, **GRADER_GIT, "PYTHONPATH": str(REPO), **observed}
     for variable in ("OUTCOMEBOUND_EVAL_DIR", "OUTCOMEBOUND_SEED_SHA", *records):
         env.pop(variable, None)
     for variable, (filename, default) in records.items():
