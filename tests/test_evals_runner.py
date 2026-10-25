@@ -596,6 +596,13 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
     launcher = Path(meta["arm_launcher"])
     assert meta["arm_files"] and meta["arm_adopted"] and launcher != ROOT / LAUNCHER
     assert launcher.read_bytes() == at_head(LAUNCHER)
+    # The ref's engine has every file a package ships it with: a verb that reads one (the brief's
+    # schema) works under the earlier arm as under `current`.
+    backend = importlib.util.spec_from_file_location("backend", ROOT / "scripts/build_backend.py")
+    assert backend and backend.loader
+    shipped = importlib.util.module_from_spec(backend)
+    backend.loader.exec_module(shipped)
+    assert [name for name in shipped.HOME if not (launcher.parent.parent / name).exists()] == []
     repo = Path(meta["fixture_repo"])
     skill = at_head("skills/using-outcomebound/SKILL.md")
     for root in (".agents/skills", ".outcomebound/skills"):
