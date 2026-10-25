@@ -29,6 +29,10 @@ clone: `{"label": "ponytail-plugin", "arm": "none", "plugin_dir": "/abs/third-pa
 The folder must resolve inside the evals home's `third-party/` folder (run.py's
 `plugin_dir_refusal`), never a plugin cache, and run.py records its commit.
 
+An arm of kind `earlier` may give `earlier_ref`, a Git ref of this checkout such as a release tag:
+`{"label": "v1.8.0", "arm": "earlier", "earlier_ref": "v1.8.0"}`, passed to run.py as
+`--earlier-ref`. A results folder that recorded another ref for the label is refused.
+
 In place of `fixtures`, `pack` names a pack: `XS`, `S`, `M` or `L` is every fixture whose
 `suite.json` gives that tier, `panel` every fixture whose `suite.json` says `panel: true`; a
 report-only suite.json (one with no `references`) and a default fixture's (references and no
@@ -119,9 +123,13 @@ PROFILES = {
     "claude-top": "claude-code",
     "small": "claude-code",
 }
-ARM_KEYS = frozenset(("label", "arm", "drop", "add", "edits", "plugin_dir", "keep_skills"))
+ARM_KEYS = frozenset(
+    ("label", "arm", "drop", "add", "edits", "plugin_dir", "keep_skills", "earlier_ref")
+)
 DONE = ("ran", "ran with failures")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# A Git ref as a plan may name it: no leading '-', no space.
+REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/^~-]*$")
 REFUSED = 2
 
 
@@ -135,6 +143,7 @@ class Arm(NamedTuple):
     edits: str
     plugin_dir: str = ""
     keep_skills: tuple[str, ...] = ()
+    earlier_ref: str = ""
 
 
 class Plan(NamedTuple):
@@ -246,7 +255,12 @@ def _arm(
     plugin = entry.get("plugin_dir")
     folder = str(_path(plugin, f"arm {label}: plugin_dir", base)) if "plugin_dir" in entry else ""
     keep = _keep(entry, label, kind, kinds[2], skills)
-    return Arm(label, str(kind), drop, add, edits, folder, keep)
+    ref = entry.get("earlier_ref", "")
+    if "earlier_ref" in entry and (
+        kind != "earlier" or not isinstance(ref, str) or not REF.match(ref)
+    ):
+        raise PlanError(f"arm {label}: earlier_ref is a Git ref, on the earlier arm only")
+    return Arm(label, str(kind), drop, add, edits, folder, keep, ref)
 
 
 def read_plan(path: Path, runner: ModuleType) -> Plan:
@@ -475,6 +489,8 @@ def argv(plan: Plan, arm: Arm, repetition: int, fixture: str, out: Path) -> tupl
         words += ["--plugin-dir", arm.plugin_dir]
     if arm.keep_skills:
         words += ["--keep-skills", ",".join(arm.keep_skills)]
+    if arm.earlier_ref:
+        words += ["--earlier-ref", arm.earlier_ref]
     words += [
         "--arm-label",
         arm.label,
@@ -618,15 +634,23 @@ def record(plan: Plan) -> None:
                     "name the plan anew"
                 )
         recorded = {
-            item.get("label"): tuple(item.get("keep_skills") or ())
+            item.get("label"): (
+                tuple(item.get("keep_skills") or ()),
+                item.get("earlier_ref") or "",
+            )
             for item in before.get("arms") or ()
             if isinstance(item, dict)
         }
         for arm in plan.arms:
-            if arm.label in recorded and recorded[arm.label] != arm.keep_skills:
+            if arm.label in recorded and recorded[arm.label][0] != arm.keep_skills:
                 raise PlanError(
-                    f"{path} records keep_skills {list(recorded[arm.label])} for arm "
+                    f"{path} records keep_skills {list(recorded[arm.label][0])} for arm "
                     f"{arm.label}, the plan {list(arm.keep_skills)}; name the plan anew"
+                )
+            if arm.label in recorded and recorded[arm.label][1] != arm.earlier_ref:
+                raise PlanError(
+                    f"{path} records earlier_ref {recorded[arm.label][1]!r} for arm "
+                    f"{arm.label}, the plan {arm.earlier_ref!r}; name the plan anew"
                 )
     folder.mkdir(parents=True, exist_ok=True)
     document = {
@@ -639,7 +663,11 @@ def record(plan: Plan) -> None:
         "fixtures": list(plan.fixtures),
         "repetitions": list(plan.repetitions),
         "arms": [
-            {key: value for key, value in arm._asdict().items() if key != "keep_skills" or value}
+            {
+                key: value
+                for key, value in arm._asdict().items()
+                if key not in ("keep_skills", "earlier_ref") or value
+            }
             for arm in plan.arms
         ],
         "spend_limit": plan.spend_limit,

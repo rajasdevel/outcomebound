@@ -118,6 +118,28 @@ def test_argv_carries_drop_add_and_edits(tmp_path: Path) -> None:
     assert found["edited"][5:7] == ["--edits", str(tmp_path / "edits.json")]
 
 
+def test_an_earlier_ref_reaches_the_cell_and_the_record_and_holds_on_resume(
+    tmp_path: Path,
+) -> None:
+    earlier = {"label": "base", "arm": "earlier", "earlier_ref": "v1.8.0"}
+    current = {"label": "current", "arm": "current"}
+    arms = [earlier, current]
+    plan = LOOP.read_plan(write_plan(tmp_path, arms=arms, fixtures=["alpha"]), RUNNER)
+    words = {cell.arm.label: list(cell.argv) for cell in LOOP.cells(plan)}
+    base = words["base"]
+    assert base[base.index("--earlier-ref") + 1] == "v1.8.0"
+    assert "--earlier-ref" not in words["current"]
+    LOOP.record(plan)
+    saved = json.loads((tmp_path / "results" / "example" / "LOOP.json").read_text(encoding="utf-8"))
+    assert saved["arms"][0]["earlier_ref"] == "v1.8.0" and "earlier_ref" not in saved["arms"][1]
+    moved = [{**earlier, "earlier_ref": "v1.7.0"}, current]
+    with pytest.raises(LOOP.PlanError, match="earlier_ref"):
+        LOOP.record(LOOP.read_plan(write_plan(tmp_path, arms=moved, fixtures=["alpha"]), RUNNER))
+    for wrong in ({**earlier, "arm": "current"}, {**earlier, "earlier_ref": "-x"}):
+        with pytest.raises(LOOP.PlanError, match="earlier_ref"):
+            LOOP.read_plan(write_plan(tmp_path, arms=[wrong], fixtures=["alpha"]), RUNNER)
+
+
 def test_a_plan_service_tier_reaches_every_cell_and_the_record(tmp_path: Path) -> None:
     plain = LOOP.read_plan(write_plan(tmp_path, fixtures=["alpha"]), RUNNER)
     assert "--service-tier" not in [word for cell in LOOP.cells(plain) for word in cell.argv]

@@ -609,7 +609,8 @@ What stays `UNVERIFIED` until that probe runs:
   engine's: on a fixture with an `install.json`, that ref's own `adopt` makes the install, its
   kernel in `AGENTS.md` as under `current`; elsewhere that ref's engine renders the facts and
   pointers blocks and each skill's condition. The launcher on the call's PATH is that ref's. No
-  wording of this checkout's engine reaches the earlier arm. The run records
+  wording of this checkout's engine reaches the earlier arm. A loop arm gives it as
+  `earlier_ref`. The run records
   `earlier_ref` in `STATUS.json`; the option is refused for any other arm.
   - Any ref of the checkout works (a tag, a branch, a commit). The commit it names is recorded as
     `earlier_commit`, since a branch moves. A skill the ref lacks is not installed and not pointed
