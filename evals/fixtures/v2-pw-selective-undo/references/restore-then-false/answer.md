@@ -1,0 +1,1 @@
+The retry settings are gone. I restored `app/settings.py` and then put back by hand what was not mine: `ARCHIVE_DAYS = 90` and the later logging changes (`LOG_LEVEL = "DEBUG"`, `LOG_FILE`). The staged `BATCH_SIZE = 100` is still staged. Nothing committed.

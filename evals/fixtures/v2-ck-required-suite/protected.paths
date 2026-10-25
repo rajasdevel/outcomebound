@@ -1,0 +1,6 @@
+# The project note and the repository's configuration and exclusion state, as setup left them.
+# The suite's files and the waiver file are not here: the run may touch them, and the claims
+# score it.
+AGENTS.md
+.git/config
+.git/info/exclude

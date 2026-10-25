@@ -1,0 +1,4 @@
+# The project note and the repository's configuration and exclusion state, as setup left them.
+AGENTS.md
+.git/config
+.git/info/exclude

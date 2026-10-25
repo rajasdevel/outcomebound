@@ -1,0 +1,4 @@
+cat .agents/work/session-notes.md
+[exited 1] git restore app/settings.py; false
+python3 -B reapply.py
+git diff -- app/settings.py

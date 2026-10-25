@@ -1,0 +1,1 @@
+Old refunds are refused with `RefundRefused`. The handoff says you decided that orders owns refund rules, but it quotes nothing from you and your request asks to leave `shop/orders/` alone, so I treated that as unconfirmed and put the window in `shop/billing/policy.py`. Tell me if you did decide on orders. `make test` passes.

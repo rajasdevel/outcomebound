@@ -1,0 +1,5 @@
+cat AGENTS.md
+cat docs/cli.md
+make test
+git add -A
+git commit -m 'docs: the --dry-run option, an example page and a README'

@@ -1,0 +1,3 @@
+cat .agents/work/session-notes.md
+git diff -- app/settings.py
+sed -i '/^RETRY_LIMIT /d' app/settings.py

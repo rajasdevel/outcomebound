@@ -14,12 +14,14 @@
 - for each reference under `references/<name>/`: builds the fixture in a temporary folder as the
   runner does (`setup.sh <workdir> <stage>`, with `run.fixture_setup_env()`), runs its `act.sh`
   there, makes the command-events transcript from `commands.txt` and the answer from
-  `answer.md`, supplies `OB_EVAL_WATCH_LOG`, `OB_EVAL_STUB_DIGESTS` and `OB_EVAL_BUDGET` from
-  the reference's `watch.log`, `digests.json` and `budget.json` or, where it has none, the
-  defaults the build contract states (an empty watch log, every stub's digest unchanged, a budget
-  that did not stop with the fixture's reference usage), puts `evals/stubs` in `OB_EVAL_STUBS`,
-  runs `post.plan.json` through `outcomebound_tools.validation` as `tests/eval_helpers.grade`
-  does, and compares each claim's verdict with `expect.json`.
+  `answer.md` (a line of `commands.txt` may start with a status in brackets, such as
+  `[exited 1] `, instead of the default `succeeded`), supplies `OB_EVAL_WATCH_LOG`,
+  `OB_EVAL_STUB_DIGESTS` and `OB_EVAL_BUDGET` from the reference's `watch.log`, `digests.json`
+  and `budget.json` or, where it has none, the defaults the build contract states (an empty watch
+  log, every stub's digest unchanged, a budget that did not stop with the fixture's reference
+  usage), puts `evals/stubs` in `OB_EVAL_STUBS`, runs `post.plan.json` through
+  `outcomebound_tools.validation` as `tests/eval_helpers.grade` does, and compares each claim's
+  verdict with `expect.json`.
 
 A suite.json with no `references` key is report-only: a fixture outside suite v2 that names its
 tier and report items for the blind reading. Its keys, tier and report items with their sheets
@@ -372,16 +374,24 @@ def default_budget(suite: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+STATUS_PREFIX = re.compile(r"^\[(succeeded|exited -?\d+|declined|failed|unverified)\] ")
+
+
 def transcript(workdir: Path, commands: list[str], answer: str) -> str:
     """The command-events transcript of the reference, as `tests/eval_helpers.transcript`
-    writes one: each command succeeded, in the workspace."""
+    writes one: each command succeeded, in the workspace, unless its line of `commands.txt`
+    starts with a status in brackets (`[exited 1] git restore f; false`), which is its status."""
 
+    records = []
+    for line in commands:
+        found = STATUS_PREFIX.match(line)
+        records.append(
+            [line[found.end() :], found.group(1), str(workdir)]
+            if found
+            else [line, "succeeded", str(workdir)]
+        )
     return json.dumps(
-        {
-            "format": "outcomebound-command-events-v1",
-            "commands": [[command, "succeeded", str(workdir)] for command in commands],
-            "answer": answer,
-        }
+        {"format": "outcomebound-command-events-v1", "commands": records, "answer": answer}
     )
 
 
@@ -419,12 +429,18 @@ def _stub_path(env: dict[str, str]) -> dict[str, str]:
 
 
 def grade_reference(
-    fixture: Fixture, suite: dict[str, Any], name: str, setup_env: dict[str, str], scratch: Path
+    fixture: Fixture,
+    suite: dict[str, Any],
+    name: str,
+    setup_env: dict[str, str],
+    scratch: Path,
+    folder: Path | None = None,
 ) -> dict[str, str]:
     """Build the fixture, apply the reference and grade it; each claim's verdict, with the
-    validation output under `_output`."""
+    validation output under `_output`. `folder` names a reference outside `references/` (a
+    control that a test grades, such as a good outcome in another form)."""
 
-    reference = fixture.folder / "references" / name
+    reference = folder or fixture.folder / "references" / name
     workdir, stage, grading = scratch / "ws", scratch / "ws.stage", scratch / "grading"
     for folder in (workdir, stage, grading):
         folder.mkdir(parents=True)

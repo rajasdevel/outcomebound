@@ -1,0 +1,1 @@
+Done: old refunds are refused with `RefundRefused` (in `shop/errors.py`). I assumed billing owns refund rules, since `docs/architecture.md` leaves it open, and put the window in `shop/billing/policy.py`; the service or a new module were the other places, and later refund rules would follow this one, so tell me if you want it elsewhere. `make test` passes.

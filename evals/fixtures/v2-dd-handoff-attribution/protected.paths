@@ -1,0 +1,6 @@
+# The project note, the owner's request and the repository's exclusion state, as setup left
+# them: the words the task turns on. The handoff is not here: a run may update its status.
+AGENTS.md
+docs/requests/refund-window.md
+.git/config
+.git/info/exclude

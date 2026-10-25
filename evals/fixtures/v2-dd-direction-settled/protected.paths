@@ -1,0 +1,5 @@
+# The project note and the repository's exclusion state, as setup left them. The documents that
+# leave the choice open are not here: a run may record its assumption in them.
+AGENTS.md
+.git/config
+.git/info/exclude

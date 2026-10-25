@@ -1,0 +1,5 @@
+cat AGENTS.md
+cat docs/cli.md
+make test 2>&1 | tail -3
+git add docs/cli.md
+git commit -m 'docs: the --dry-run option of report'

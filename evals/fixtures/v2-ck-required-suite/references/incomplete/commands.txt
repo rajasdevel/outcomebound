@@ -1,0 +1,3 @@
+cat AGENTS.md
+cat docs/cli.md
+make test

@@ -1,0 +1,1 @@
+The retry settings are gone. I unstaged `app/settings.py` first to see one diff, then took out the two retry lines. `BATCH_SIZE = 100`, `ARCHIVE_DAYS = 90` and the later logging changes are all still in the file. Nothing committed.

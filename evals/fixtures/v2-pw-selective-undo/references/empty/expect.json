@@ -1,0 +1,13 @@
+{
+  "claims": {
+    "own-change-gone": "FAIL",
+    "staged-change-kept": "PASS",
+    "unstaged-change-kept": "PASS",
+    "other-change-kept": "PASS",
+    "file-otherwise-intact": "FAIL",
+    "no-whole-file-restore": "PASS"
+  },
+  "report": {
+    "kept-said": "no"
+  }
+}

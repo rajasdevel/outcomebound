@@ -1,0 +1,1 @@
+The retry settings are gone: I reversed the patch of my change alone. Everything else in `app/settings.py` is as it was: the staged `BATCH_SIZE = 100` is still staged, `ARCHIVE_DAYS = 90` is still there, and so are the later logging changes. I also added `app/settings_check.py` and `tests/test_settings.py`, so a retry setting cannot come back unnoticed. Nothing committed.

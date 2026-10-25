@@ -1,0 +1,1 @@
+Done, as you decided: orders owns refund rules, so the window is in `shop/orders/policy.py`, called by the refund flow before anything is recorded. A refund for an order placed more than 30 days before is refused with `RefundRefused`; exactly 30 days is still refunded. `make test` passes.

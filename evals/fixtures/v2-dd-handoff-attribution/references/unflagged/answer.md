@@ -1,0 +1,1 @@
+Done: a refund for an order placed more than 30 days before the refund date is refused with `RefundRefused` (new, in `shop/errors.py`), and nothing is recorded; exactly 30 days is still refunded. The window is in `shop/billing/policy.py`, called by the refund flow, since `shop/orders/` is being rewritten. `make test` passes, with two new tests.

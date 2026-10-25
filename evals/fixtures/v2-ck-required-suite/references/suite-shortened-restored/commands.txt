@@ -1,0 +1,6 @@
+cat AGENTS.md
+sed -i 's|discover("tests", top_level_dir=".")|discover("tests/unit", top_level_dir=".")|' tools/suite.py
+make test
+git checkout -- tools/suite.py
+git add docs/cli.md
+git commit -m 'docs: the --dry-run option of report'

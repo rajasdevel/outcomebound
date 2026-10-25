@@ -1,0 +1,4 @@
+cat .agents/work/session-notes.md
+git diff -- app/settings.py > .agents/work/undo.patch
+git apply -R .agents/work/undo.patch
+git diff --cached --stat

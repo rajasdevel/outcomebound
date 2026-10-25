@@ -1,0 +1,4 @@
+cat .agents/work/session-notes.md
+git restore --staged app/settings.py
+sed -i '/^RETRY_/d' app/settings.py
+git diff -- app/settings.py
