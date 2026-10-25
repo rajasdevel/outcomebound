@@ -1,0 +1,1 @@
+Done. `slugify` now returns `untitled` when nothing is left after cleaning, with a test, and the `Default separator` cell of `docs/usage.md` says `-`. The release check had already passed, so `python3 tools/release.py` wrote `RELEASE_RECORD`, and I committed it. The tests pass.

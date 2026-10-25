@@ -167,10 +167,19 @@ NAMED_ONLY = (
 SUITE_FILE = "suite.json"
 TIERS = ("XS", "S", "M", "L")
 # What the checks of a run read, besides the workspace and the transcript: the call's budget
-# record, the watch log, and the stubs' folder and digests (`evals/stub_place.py`). A variable
-# that is absent was not recorded for the run.
+# record, the watch log, the stubs' folder and digests (`evals/stub_place.py`), and the observed
+# folder (below). A variable that is absent was not recorded for the run.
 BUDGET_ENV = "OB_EVAL_BUDGET"
 WATCH_LOG_ENV = "OB_EVAL_WATCH_LOG"
+# A fixture whose suite.json says `"observe": true` has a runner-owned folder for what a process
+# its setup starts records during the call (a check that runs outside the harness, and logs what
+# it was asked). It is made outside the workspace and outside the grading stage, which is sealed
+# before the call and must not change; its setup is told where it is in OB_EVAL_OBSERVED; the call
+# is told not to read it; after the call the runner renames it (LIVE_SUFFIX off its name), so a
+# process that outlives the call writes nowhere, records its digest in the meta, and the checks
+# find it under the same variable.
+OBSERVED_ENV = "OB_EVAL_OBSERVED"
+LIVE_SUFFIX = ".live"
 # The fixtures whose runs compare an install with no guidance on work like an adopter's: nothing
 # a call reads from its Codex home or above its workspace may name OutcomeBound or give it
 # instructions, so that neither arm reads more of either than its fixture and its install. The
@@ -418,7 +427,8 @@ def fixture_install(name: str) -> Install:
 class Suite(NamedTuple):
     """What a fixture's `suite.json` asks of the runner: its tier, the input cap (None: no cap)
     and the timeout of its call (None: CALL_TIMEOUT), the stubs its call finds first on PATH,
-    the workspace paths watched during the call, and the file's SHA-256."""
+    the workspace paths watched during the call, the file's SHA-256, and whether the call has an
+    observed folder (`observe`)."""
 
     tier: str
     input_cap: int | None
@@ -426,6 +436,7 @@ class Suite(NamedTuple):
     stubs: tuple[str, ...]
     watch: tuple[str, ...]
     sha256: str
+    observe: bool = False
 
 
 class SuiteError(ValueError):
@@ -458,8 +469,8 @@ def _suite_budget(document: dict[str, Any]) -> tuple[int | None, float | None]:
 def fixture_suite(name: str) -> Suite | None:
     """The fixture's `suite.json` as the runner reads it, or None where it has none. SuiteError
     where it is not a JSON object, its tier is not one of TIERS, its budget names a cap or a
-    timeout that is not positive, it names a stub that `evals/stubs/` cannot give, or a watch
-    path that is not workspace-relative."""
+    timeout that is not positive, it names a stub that `evals/stubs/` cannot give, a watch
+    path that is not workspace-relative, or an `observe` that is not true or false."""
 
     path = FIXTURES / name / SUITE_FILE
     if not path.is_file():
@@ -483,7 +494,12 @@ def fixture_suite(name: str) -> Suite | None:
         relative = PurePosixPath(item)
         if relative.is_absolute() or ".." in relative.parts or relative.as_posix() != item:
             raise SuiteError(f"watch: {item!r} is not a workspace-relative path")
-    return Suite(document["tier"], cap, seconds, stubs, watch, hashlib.sha256(raw).hexdigest())
+    observe = document.get("observe", False)
+    if type(observe) is not bool:
+        raise SuiteError(f"observe is true or false, not {observe!r}")
+    return Suite(
+        document["tier"], cap, seconds, stubs, watch, hashlib.sha256(raw).hexdigest(), observe
+    )
 
 
 def stub_source() -> Path:
@@ -1960,12 +1976,14 @@ def seed_commit(workdir: Path) -> str | None:
 class CallRecords(NamedTuple):
     """What the runner observed around a call, for its checks: the budget record (`stopped`,
     `input`, `uncached`, `output`, `seconds`), the watch log, the stubs' folder and their
-    digests before and after the call. None where the run did not record it."""
+    digests before and after the call, and the observed folder as the call left it. None where
+    the run did not record it."""
 
     budget: dict[str, Any] | None = None
     watch_log: Path | None = None
     stubs: Path | None = None
     stub_digests: dict[str, dict[str, str]] | None = None
+    observed: Path | None = None
 
 
 def records_env(records: CallRecords | None, folder: Path) -> dict[str, str]:
@@ -1981,6 +1999,8 @@ def records_env(records: CallRecords | None, folder: Path) -> dict[str, str]:
         env[BUDGET_ENV] = str(folder / "budget.json")
     if records.watch_log is not None:
         env[WATCH_LOG_ENV] = str(records.watch_log)
+    if records.observed is not None:
+        env[OBSERVED_ENV] = str(records.observed)
     if records.stubs is not None:
         env[stub_place.STUBS_ENV] = str(records.stubs)
     if records.stub_digests is not None:
@@ -2156,13 +2176,47 @@ class Place(NamedTuple):
     stubs: Path | None = None
     watch: Path | None = None
     cell: Path | None = None
+    observed: Path | None = None
+
+
+def observed_folders(workdir: Path, place: Place) -> tuple[Path, Path]:
+    """Where a call's observed folder is while the call runs, and where it is kept after it:
+    `Place.observed` (else beside the workspace) with LIVE_SUFFIX added, and without."""
+
+    kept = place.observed or workdir.parent / f"{workdir.name}.observed"
+    return kept.with_name(kept.name + LIVE_SUFFIX), kept
+
+
+def freeze_observed(live: Path | None, kept: Path | None, extra: dict[str, Any]) -> Path | None:
+    """End the call's observed folder: rename `live` to `kept` (one step, so a process that
+    outlives the call finds no folder to write in), and record the folder and its digest in
+    `extra`. None where the call has none, or the folder cannot be kept (`extra` says why)."""
+
+    if live is None or kept is None:
+        return None
+    try:
+        os.replace(live, kept)
+        extra["observed_dir"] = str(kept)
+        extra["observed_sha256"] = tree_digest(kept)
+        for entry in kept.rglob("*"):
+            if entry.is_file() and not entry.is_symlink():
+                entry.chmod(0o444)
+    except OSError as problem:
+        extra["observed_error"] = f"{type(problem).__name__}: {problem}"
+        return None
+    return kept
 
 
 def build_workspace(
-    name: str, arm: Arm, workdir: Path, extra: dict[str, Any], stage: Path
+    name: str,
+    arm: Arm,
+    workdir: Path,
+    extra: dict[str, Any],
+    stage: Path,
+    observed: Path | None = None,
 ) -> tuple[str | None, dict[str, str], str | None, str]:
     """Install the arm's files and build the fixture in `workdir`; its setup writes the graders
-    to `stage`, never into `workdir`.
+    to `stage`, never into `workdir`, and is told the call's observed folder, if there is one.
 
     Returns None, the protected digests, the seed commit and the prompt (the arm's kernel, then
     the fixture's task); or, where the build fails, the report of why with the error in `extra`.
@@ -2177,6 +2231,7 @@ def build_workspace(
             env={
                 **fixture_setup_env(),
                 "OB_EVAL_ARM": NONE if arm.name in NOTE_ONLY else arm.name,
+                **({OBSERVED_ENV: str(observed)} if observed is not None else {}),
                 **({"OB_EVAL_SOURCE": str(earlier_source())} if earlier_install(arm) else {}),
                 **({"OB_EVAL_VERBATIM": "1"} if verbatim_install(arm) else {}),
             },
@@ -2276,6 +2331,7 @@ def run_fixture(
         )
     finally:
         shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(observed_folders(workdir, place)[0], ignore_errors=True)
 
 
 class Instruments(NamedTuple):
@@ -2404,7 +2460,14 @@ def _call_and_judge(
     except SuiteError as problem:
         extra["error"] = f"{SUITE_FILE}: {problem}"
         return "", extra["error"], None, extra
-    failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage)
+    live, kept = observed_folders(workdir, place) if suite and suite.observe else (None, None)
+    if live is not None:
+        try:
+            live.mkdir(mode=0o700, parents=True)
+        except OSError as problem:
+            extra["error"] = f"the observed folder could not be made: {problem}"
+            return "", extra["error"], None, extra
+    failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage, live)
     if failure is not None:
         return "", failure, None, extra
     extra["prompt"] = prompt
@@ -2428,7 +2491,7 @@ def _call_and_judge(
                     sandbox=sandbox,
                     budget=kit.budget,
                     protected=kit.protected(),
-                    unreadable=(stage, *other_workspaces(workdir)),
+                    unreadable=(stage, *([live] if live else []), *other_workspaces(workdir)),
                     cell=place.cell,
                 ),
                 workdir,
@@ -2447,6 +2510,7 @@ def _call_and_judge(
         transcript = partial_output(problem)
     elapsed = round(time.monotonic() - started, 1)
     records = after_call(kit, extra, returncode, elapsed)
+    records = records._replace(observed=freeze_observed(live, kept, extra))
 
     intact, report, graders = judged_inputs(name, scene, sealed, protected)
     left = Left(seed, transcript, answer, records)
@@ -2498,6 +2562,21 @@ class Left(NamedTuple):
     records: CallRecords | None = None
 
 
+def observed_changed(records: CallRecords | None, extra: dict[str, Any]) -> str:
+    """A reason when the frozen observed folder differs, after the post-checks, from the digest
+    taken at the freeze (submitted code runs in the post-checks and must not change it), else an
+    empty string."""
+
+    folder, wanted = (records.observed if records else None), extra.get("observed_sha256")
+    if folder is None or not wanted:
+        return ""
+    try:
+        now = tree_digest(folder)
+    except OSError as problem:
+        return f"observed evidence changed during grading: {type(problem).__name__}: {problem}"
+    return "" if now == wanted else "observed evidence changed during grading"
+
+
 def grade(
     name: str,
     workdir: Path,
@@ -2522,6 +2601,9 @@ def grade(
         except (OSError, subprocess.SubprocessError) as problem:
             extra["error"] = f"post-check {type(problem).__name__}: {problem}"
             verdict, output = "UNVERIFIED", partial_output(problem)
+        changed = observed_changed(records, extra)
+        if changed:
+            verdict, output = "FAIL", f"VERDICT: FAIL\n{changed}\n"
     if verdict == "PASS" and human_read(name, graders):
         verdict = READ
         output = re.sub(r"(?m)^VERDICT: PASS$", f"VERDICT: {READ}", output)
@@ -2627,6 +2709,7 @@ def call_place(root: Path | None, out: Path, name: str) -> tuple[str, Place]:
         stubs=side / f"{ident}.stubs",
         watch=side / f"{ident}.watch.jsonl",
         cell=side / f"{ident}.claude-home",
+        observed=side / f"{ident}.observed",
     )
 
 
@@ -2752,6 +2835,11 @@ def _regrade_files(path: Path, name: str, meta: dict[str, Any], plan: dict[str, 
     log = meta.get("watch_log")
     if log and _file_digest(Path(log)) != meta.get("watch_sha256"):
         return f"the watch log {log} is missing or differs from the digest the meta recorded"
+    folder = meta.get("observed_dir")
+    if folder and (
+        not Path(folder).is_dir() or tree_digest(Path(folder)) != meta.get("observed_sha256")
+    ):
+        return f"the observed folder {folder} is missing or differs from the meta's digest"
     return ""
 
 
@@ -2765,6 +2853,7 @@ def kept_records(meta: dict[str, Any]) -> CallRecords:
         Path(meta["watch_log"]) if meta.get("watch_log") else None,
         Path(stubs["dir"]) if stubs.get("dir") else None,
         stubs.get("digests"),
+        Path(meta["observed_dir"]) if meta.get("observed_dir") else None,
     )
 
 
