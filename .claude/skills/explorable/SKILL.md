@@ -1,18 +1,22 @@
 ---
 name: explorable
-description: Use when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it. Builds a single-file HTML page the engine checks, beside the decision brief and never in place of it; the decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
+description: Use when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it. Builds a decision, learning or interview page the engine checks, beside the decision brief and never in place of it, or a self-contained report that needs no decision, quiz or reply; the decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
 ---
 
 # Explorable
 
-An explorable is a single HTML file the person opens from disk: they change values, step through
+This skill makes one of two pages. An explorable is a single HTML file of one of three kinds,
+decision, learning or interview, that the person opens from disk: they change values, step through
 flows, read charts and answer questions, then copy a reply back to you. You write its source; the
-engine joins it to a shared shell and checks it. You are done when the person can open the page
-and act on it: `outcomebound explorable check`
-passes on the page (with `--browser` where a Chromium-family browser exists, else the run is
-`UNVERIFIED` and your report says so), every number the page's answer rests on has an expectation,
-your report names each output that reads `UNVERIFIED`, and the page's path is in the text the person
-reads, beside the decision brief when there is one.
+engine joins it to a shared shell and checks it. A report is a page you write yourself, without the
+engine (see "A report"). For an explorable, you are done when the person can open the page and act
+on it: `outcomebound explorable check` passes on the page (with `--browser` where a
+Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so), every
+number the page's answer rests on has an expectation, your report names each output that reads
+`UNVERIFIED`, and the page's path is in the text the person reads, beside the decision brief when
+there is one. For either page, you have looked at it, and it shows what the person asked for, with
+data that supports that meaning, not only a matching label; where the data cannot, your report
+says so.
 
 ## When a page earns its place
 
@@ -24,9 +28,27 @@ Make one only where text serves the person badly:
 - a set of questions that is easier to answer on a page than in the chat;
 - the person asks for one.
 
-A choice the brief settles alone gets no page. A page never replaces the brief: draw the brief as
-the `decision-brief` skill says and put it in the text, then name the page beside it. A page holds
-only the work that waits on the person; the rest goes on while they read it.
+A report, a survey or a comparison can include controls that explore its information. Those
+controls do not by themselves call for a decision, quiz or reply: use the report route unless the
+requested outcome needs one of those, whatever word the person used. A report holds a
+recommendation only where the person asked for one.
+
+A choice the brief settles alone gets no page. An explorable never replaces the brief: draw the
+brief as the `decision-brief` skill says and put it in the text, then name the page beside it. An
+explorable holds only the work that waits on the person; the rest goes on while they read it.
+
+## A report
+
+For a report, skip the engine's build, check, brief and reply steps below: "What each kind holds"
+and "The reply" are for the three engine-built kinds, and of "Build and check" only steps 1 and 7
+hold for a report. Write one Markdown file, or one HTML file that keeps its data and resources in
+the file and whose first head element is a Content-Security-Policy that blocks outbound loads and
+sends, such as
+`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; form-action 'none'; base-uri 'none'">`.
+Check those restrictions before you open the page or name it, and check its rendered content and
+controls directly. For each calculated result the report relies on, compare the result it shows at
+stated inputs with an expected value worked out without the page's code, and name each result you
+could not check. The guards and diagram rules below hold where they fit.
 
 ## What each kind holds
 
@@ -99,9 +121,8 @@ Rework and repeated text take the person's time and add nothing to the page:
   `check` refuses an address in a script.
 - Ask each question once. A what-if input that restates a brief's choice asks it twice; give
   what-if inputs only to values that no brief chooses.
-- Read the page through `check`. Where layout matters, such as a diagram's width against the
-  column, measure it in a browser you drive; with none, the layout is `UNVERIFIED`. Look at the
-  page yourself at the end.
+- Read an explorable through `check`. Where layout matters, such as a diagram's width against the
+  column, measure it in a browser you drive; with none, the layout is `UNVERIFIED`.
 - Change the source with targeted edits; never write it out again to change one part.
 
 ## Build and check
@@ -122,10 +143,10 @@ Rework and repeated text take the person's time and add nothing to the page:
    source, fix the source and build again; never edit the built page, which the next build
    replaces.
 6. `outcomebound explorable check <name>.html --browser` runs the page and its expectations.
-7. Put the brief in your message and name the page's path. Open the page for the person with the
-   system's opener (`open` on macOS, `xdg-open` on Linux, `wslview` under WSL; on Windows
-   `Invoke-Item` or `start ""`, which have not been run) only when they ask, or when they are at
-   the machine and the work waits on them.
+7. Name the page's path in your message, beside the brief where there is one. Open the page for
+   the person with the system's opener (`open` on macOS, `xdg-open` on Linux, `wslview` under WSL;
+   on Windows `Invoke-Item` or `start ""`, which have not been run) only when they ask, or when they
+   are at the machine and the work waits on them.
 
 ## The reply
 
