@@ -275,3 +275,11 @@ def test_sweep_json_matches_the_review_report_schema(tmp_path, capsys):
         "FAIL",
         {"read": 1, "failed": 1, "unread": 0},
     )
+
+
+def test_a_file_that_is_no_review_fails_once_and_says_so(tmp_path, capsys):
+    plan = "# Plan\n### Step one\ntext\n### Step two\n### Step three\n"
+    code, out = run(tmp_path, capsys, plan)
+    assert code != 0
+    assert "does not read as a review file" in out
+    assert out.count("FAIL FINDING_MALFORMED") == 1 and "3 `###` headings" in out

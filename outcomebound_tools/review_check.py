@@ -207,12 +207,30 @@ def check(text: str, path: str, *, at: str | None = None) -> tuple[str | None, l
         found.append(Finding(code, verdict, display(subject), display(message)))
 
     reviewed, entries, malformed = _parse(text)
+    unreviewed = reviewed is None and not entries
     if reviewed is None:
-        add("REVIEWED_MISSING", FAIL, path, "no `Reviewed: <ref>` line before the first finding")
+        add(
+            "REVIEWED_MISSING",
+            FAIL,
+            path,
+            "no `Reviewed: <ref>` line and no `### <id> · <title>` finding heading: "
+            "this does not read as a review file"
+            if unreviewed
+            else "no `Reviewed: <ref>` line before the first finding",
+        )
     elif at is not None and reviewed != at:
         add("REVIEWED_REF", WARN, path, f"the review read {reviewed}; the check was given {at}")
-    for number in malformed:
-        add("FINDING_MALFORMED", FAIL, f"{path}:{number}", "not `### <id> · <title>`")
+    if unreviewed and len(malformed) > 1:
+        # One line for a file that is no review, not one FAIL per heading it holds.
+        add(
+            "FINDING_MALFORMED",
+            FAIL,
+            f"{path}:{malformed[0]}",
+            f"{len(malformed)} `###` headings, none `### <id> · <title>`; the first is here",
+        )
+    else:
+        for number in malformed:
+            add("FINDING_MALFORMED", FAIL, f"{path}:{number}", "not `### <id> · <title>`")
     seen: dict[str, _Entry] = {}
     for entry in entries:
         _entry(entry, seen, path, add)

@@ -781,6 +781,14 @@ def test_a_fact_may_not_take_a_lines_name(
     assert "the name of a line the renderer writes" in err
 
 
+def test_a_refused_fact_label_lists_the_reserved_names(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    err = _refusal(tmp_path, capsys, {"facts": [["Undo", "x"]]})
+    assert "use another label. Reserved: " in err
+    assert "downside" in err and "recommend" in err
+
+
 def test_a_fact_with_its_own_label_is_drawn(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
