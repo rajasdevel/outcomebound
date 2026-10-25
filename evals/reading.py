@@ -11,8 +11,11 @@ A report item is what a run's final answer must tell the person (`report` in a f
   random id, in a random order, with the run's workspace path replaced by `<workspace>`, and
   a line `- [<item>] <id>:` for the reader's yes, no or unclear. Where the fixture names stubs,
   each answer is followed by the outputs of the run's receipts of them (the harness's records,
-  `evals/stubs/receipts.py`), in order, by the stub's name alone, or `no receipt`. The key maps
-  each id to its run and stays closed until the readings are imported.
+  `evals/stubs/receipts.py`), in order, by the stub's name alone, or `no receipt`. Where a report
+  item names `observed` (a prefix), each answer is followed by the run's `observed:` lines that
+  start with it, as a check printed them when it graded the run (a delivered page's rendered
+  text, say), or `nothing observed`. The key maps each id to its run and stays closed until the
+  readings are imported.
 - `python3 evals/reading.py import SHEET --key KEY [--reader NAME]` reads a filled sheet (the
   reader from `--reader`, else the sheet's `reader:` line) and writes each run's verdicts to
   `<fixture>.readings.json` beside its meta file, keeping other readers' verdicts. It refuses,
@@ -50,6 +53,8 @@ FENCE = re.compile(r"^(`{3,}|~{3,})")
 
 
 NO_RECEIPT = "no receipt"
+OBSERVED = "observed: "
+NOTHING_OBSERVED = "nothing observed"
 
 
 class ReadingError(Exception):
@@ -148,6 +153,9 @@ def sheet(key: dict[str, Any], ids: list[str]) -> str:
                 if stubs:
                     meta_path = Path(run["meta"])
                     lines += [receipts_block(meta_path, _read(meta_path), stubs), ""]
+                if entry.get("observed"):
+                    run_meta = _read(Path(run["meta"]))
+                    lines += [observed_block(run_meta, str(entry["observed"])), ""]
                 lines += [f"- [{item}] {answer_id}: ", ""]
     return "\n".join(lines) + "\n"
 
@@ -219,6 +227,20 @@ def receipts_block(meta_path: Path, meta: dict[str, Any], stubs: list[str]) -> s
                     parts.append((receipt.position, f"$ {_bare(receipt.invocation, stub)}\n{text}"))
     body = "\n\n".join(text for _, text in sorted(parts)) or NO_RECEIPT
     return f"**Receipts (stub outputs):**\n\n{fenced(body)}"
+
+
+def observed_block(meta: dict[str, Any], prefix: str) -> str:
+    """The run's `observed:` lines that start with `prefix`, without the label, as a labelled
+    fenced block with no workspace path in it; `nothing observed` where the run holds none."""
+
+    kept = meta.get("observations")
+    found = [
+        line[len(OBSERVED) :]
+        for line in (kept if isinstance(kept, list) else [])
+        if isinstance(line, str) and line.startswith(OBSERVED + prefix)
+    ]
+    body = blind("\n".join(found), meta) if found else NOTHING_OBSERVED
+    return f"**Observed when the run was graded:**\n\n{fenced(body)}"
 
 
 def _text(path: Path) -> str:

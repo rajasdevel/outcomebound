@@ -377,6 +377,45 @@ def test_reading_sheet_shows_the_stub_receipts_under_each_answer(
         assert hidden not in sheet
 
 
+def test_reading_sheet_shows_what_the_graders_observed_under_each_answer(
+    tmp_path: Path, fixtures: Path
+) -> None:
+    """A report item that names `observed` shows the run's matching `observed:` lines, blind;
+    a run with none reads `nothing observed`; an item that names none shows no such block."""
+
+    suite = json.loads((fixtures / "alpha" / "suite.json").read_text(encoding="utf-8"))
+    suite["report"]["says-why"]["observed"] = "page"
+    (fixtures / "alpha" / "suite.json").write_text(json.dumps(suite), encoding="utf-8")
+    results = tmp_path / "results"
+    write_run(
+        results,
+        "alpha",
+        "current",
+        1,
+        {"done": "PASS"},
+        observations=[
+            "observed: page text: Plans Starter $37.30",
+            "observed: page text after use: Recommended: Starter",
+            "observed: page controls: input[number] Requests",
+            "observed: the totals followed the inputs only after a click",
+            "observed: files changed: 1",
+        ],
+    )
+    write_run(results, "alpha", "none", 1, {"done": "PASS"})
+    out = tmp_path / "sheet"
+    assert READING.export([results], out, seed=4, fixtures=fixtures) == 2
+    sheet = (out / "sheet.md").read_text(encoding="utf-8")
+    assert sheet.count("**Observed when the run was graded:**") == 2
+    shown = (
+        "page text: Plans Starter $37.30\npage text after use: Recommended: Starter\npage controls"
+    )
+    assert shown in sheet and "input[number] Requests" in sheet
+    assert sheet.count("nothing observed") == 1
+    assert "totals followed" not in sheet and "files changed" not in sheet
+    for hidden in ("current", "none", str(tmp_path), "observed: page"):
+        assert hidden not in sheet
+
+
 def test_reading_sheet_without_stubs_has_no_receipts_section(
     tmp_path: Path, fixtures: Path
 ) -> None:
@@ -458,6 +497,30 @@ def test_selftest_checks_the_suite_file(tmp_path: Path) -> None:
         "reference empty has a non-empty answer",
     ):
         assert expected in problems, problems
+
+
+def test_a_good_variant_must_pass_everything_and_any_other_reference_must_fail_something(
+    tmp_path: Path,
+) -> None:
+    """`good-<way>` reaches a good outcome another way, so it expects what `good` expects; a
+    reference of another name that passes everything is a wrong outcome that names no defect."""
+
+    copy = shutil.copytree(TINY, tmp_path / "selftest-tiny")
+    fixture = SELFTEST.Fixture("selftest-tiny", copy)
+    suite = json.loads((copy / "suite.json").read_text(encoding="utf-8"))
+    good = copy / "references" / "good"
+    for name in ("good-another-way", "fine"):
+        shutil.copytree(good, copy / "references" / name)
+        suite["references"].append(name)
+    claims = SELFTEST.plan_claims(copy)
+    problems = SELFTEST.expect_problems(fixture, suite, claims)
+    assert problems == ["reference fine names no claim it fails and no item it misses"]
+    expect = copy / "references" / "good-another-way" / "expect.json"
+    document = json.loads(expect.read_text(encoding="utf-8"))
+    document["claims"]["greeting-fixed"] = "FAIL"
+    expect.write_text(json.dumps(document), encoding="utf-8")
+    problems = SELFTEST.expect_problems(fixture, suite, claims)
+    assert "reference good-another-way does not expect PASS on every claim" in problems
 
 
 def test_selftest_refuses_an_unknown_fixture(capsys: pytest.CaptureFixture[str]) -> None:

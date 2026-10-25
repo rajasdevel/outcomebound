@@ -74,6 +74,7 @@ INPUT_CAP = {"XS": 900_000, "S": 900_000, "M": 1_500_000, "L": 6_000_000}
 TIMEOUT_SECONDS = {"XS": 600, "S": 900, "M": 2400, "L": 5400}
 CLAIM_TYPES = ("outcome", "process", "cost", "safety")
 ORACLES = ("completion", "restraint", "safety")
+GOOD_PREFIX = "good-"
 REQUIRED_REFERENCES = ("good", "noop", "empty", "incomplete", "overbuilt")
 # A default fixture's suite (references and no budget): a good and a noop, and one more at least.
 DEFAULT_REFERENCES = ("good", "noop")
@@ -213,6 +214,8 @@ def _report_problems(suite: dict[str, Any], folder: Path) -> list[str]:
             problems.append(f"report item {item} has no question")
         elif type(entry.get("must_always", False)) is not bool:
             problems.append(f"report item {item}: must_always is true or false")
+        elif "observed" in entry and not str(entry["observed"]).strip():
+            problems.append(f"report item {item}: observed is a prefix of `observed:` lines")
         if not (folder / "reading" / f"{item}.md").is_file():
             problems.append(f"report item {item} has no reading/{item}.md")
     return problems
@@ -294,8 +297,9 @@ def suite_problems(fixture: Fixture) -> list[str]:
 
 
 def expect_problems(fixture: Fixture, suite: dict[str, Any], claims: list[str]) -> list[str]:
-    """Each reference's expect.json: known claims and items with a PASS/FAIL or yes/no; `good`
-    passes every claim and says yes to every item; every other reference fails at least one."""
+    """Each reference's expect.json: known claims and items with a PASS/FAIL or yes/no; `good`,
+    and a `good-<way>` that reaches a good outcome another way, pass every claim and say yes to
+    every item; every other reference fails at least one."""
 
     items = list(suite.get("report", {}) or {})
     problems = []
@@ -337,11 +341,11 @@ def expect_problems(fixture: Fixture, suite: dict[str, Any], claims: list[str]) 
             for item, value in answers.items()
             if value not in ANSWERS
         ]
-        if name == "good":
+        if name == "good" or name.startswith(GOOD_PREFIX):
             if any(verdicts.get(claim) != "PASS" for claim in claims):
-                problems.append("reference good does not expect PASS on every claim")
+                problems.append(f"reference {name} does not expect PASS on every claim")
             if any(answers.get(item) != "yes" for item in items):
-                problems.append("reference good does not expect yes on every report item")
+                problems.append(f"reference {name} does not expect yes on every report item")
         elif "FAIL" not in verdicts.values() and "no" not in answers.values():
             problems.append(f"reference {name} names no claim it fails and no item it misses")
     return problems

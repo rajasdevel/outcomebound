@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "page-made": "PASS",
+    "numbers-match": "PASS",
+    "stays-local": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "report-not-decision": "yes"
+  }
+}

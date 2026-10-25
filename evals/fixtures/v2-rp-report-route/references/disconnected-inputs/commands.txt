@@ -1,0 +1,4 @@
+cat README.md
+cat data/plans.csv
+cat docs/traffic.md
+ls reports

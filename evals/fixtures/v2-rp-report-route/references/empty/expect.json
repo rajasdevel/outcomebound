@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "page-made": "FAIL",
+    "numbers-match": "FAIL",
+    "stays-local": "PASS",
+    "changes-in-scope": "PASS"
+  },
+  "report": {
+    "report-not-decision": "no"
+  }
+}
