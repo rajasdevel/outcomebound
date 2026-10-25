@@ -316,7 +316,11 @@ harness must meet these items, and `--probe` shows which one it does not:
   an unknown executable form leaves "no command ran" unprovable and is named in the meta file.
 - **The operator's setup stays out.** The call ignores the operator's configuration, rules and
   memories as far as the tool allows, runs in the environment `child_env()` builds (no credential
-  for a metered endpoint), and `preflight()` observes the sign-in without a model call.
+  for a metered endpoint), and `preflight()` observes the sign-in without a model call. The
+  model's commands run in a shell that is not a login shell (`-c allow_login_shell=false`): a
+  login shell rebuilds PATH from the operator's profile and can put the operator's own
+  `outcomebound` ahead of the arm's launcher, which `launcher-on-path` cannot see, as it reads the
+  PATH the call is given.
   `docs/evaluations.md` states what the isolation does not reach.
 - **Sessions are kept and copied.** The call keeps the tool's session record, finds it by the
   thread id of its stream, requires it outside every path the model may write, and copies its exact
