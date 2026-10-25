@@ -604,7 +604,9 @@ def _run(command: list[str], cwd: Path | None = None) -> tuple[int | None, str, 
 
 
 def earlier_source() -> Path:
-    """The engine tree at EARLIER_REF, exported once from this checkout's Git objects."""
+    """The tree at EARLIER_REF, exported once from this checkout's Git objects: the whole tree, as
+    a checkout's launcher runs the checkout it sits in, so the ref's engine finds every file of its
+    own (its schemas among them) as `current`'s does."""
 
     if EARLIER_REF in _EARLIER_SOURCE:
         return _EARLIER_SOURCE[EARLIER_REF]
@@ -616,13 +618,6 @@ def earlier_source() -> Path:
             str(REPO),
             "archive",
             EARLIER_REF,
-            "VERSION",
-            "templates",
-            "skills",
-            "fragments",
-            "adapters",
-            "outcomebound_tools",
-            LAUNCHER,
         ],
         capture_output=True,
     )

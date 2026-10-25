@@ -612,7 +612,8 @@ What stays `UNVERIFIED` until that probe runs:
   release and the checkout compare as two installs. What the install generates is that ref's
   engine's: on a fixture with an `install.json`, that ref's own `adopt` makes the install, its
   kernel in `AGENTS.md` as under `current`; elsewhere that ref's engine renders the facts and
-  pointers blocks and each skill's condition. The launcher on the call's PATH is that ref's. No
+  pointers blocks and each skill's condition. The launcher on the call's PATH is that ref's, in
+  an export of the ref's whole tree, so its engine reads its own schemas and templates. No
   wording of this checkout's engine reaches the earlier arm. A loop arm gives it as
   `earlier_ref`. The run records
   `earlier_ref` in `STATUS.json`; the option is refused for any other arm.
