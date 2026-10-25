@@ -447,6 +447,7 @@ fieldset[data-question] > legend + * { clear: both; }
 .xp-note-label textarea { font-weight: 400; margin-top: .3rem; }
 .xp-reply-text { white-space: pre-wrap; word-break: break-word; margin: 0 0 .75rem; background: var(--xp-bg); }
 .xp-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.xp-controls { margin: 2rem 0 0; }
 .xp-copy-status { color: var(--xp-muted); font-size: .9rem; }
 
 /* Narrow screens */

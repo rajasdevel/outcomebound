@@ -3,14 +3,20 @@
 </script>
 
 <section>
-  <h2>Start here</h2>
-  <p>This page teaches one idea: a cache answers a read so the database does not have to. You will guess first, then see the answer.</p>
-  <p>If you know this already, <a href="#recall">skip to the recall question</a>.</p>
-  <fieldset data-question="Q1" data-kind="predict" data-answer="12" data-tolerance="0">
-    <legend>A cache answers 9 of every 10 reads. 120 reads arrive each second. How many reads each second reach the database?</legend>
-    <input type="number" data-unit="reads/s" min="0" step="1">
-    <div data-explain>One read in ten misses the cache. 120 reads times one tenth is 12 reads each second.</div>
-  </fieldset>
+  <h2>One case first</h2>
+  <p>A report page gets 120 reads each second. A cache answers 9 of every 10 of them. Only the one read in ten that the cache cannot answer goes on to the database: 120 reads times one tenth is 12 reads each second.</p>
+  <p>The rule: <strong>the database sees only the reads the cache misses.</strong> Everything below is this rule, seen from more sides.</p>
+</section>
+
+<section>
+  <h2>Change it and watch</h2>
+  <p>Two values matter here. Move them and see the load on the database change beside them.</p>
+  <label>Reads each second
+    <input type="range" data-input="rps" data-unit="reads/s" data-source="assumed" min="10" max="500" step="10" value="120"></label>
+  <label>Hit rate
+    <input type="range" data-input="hit" data-unit="%" data-source="assumed" min="0" max="100" step="5" value="90"></label>
+  <p>Reads that reach the database: <output data-output="dbLoad"></output></p>
+  <p>Try this: set the hit rate to 0. Then to 100. What does the database see at each end?</p>
 </section>
 
 <section>
@@ -52,27 +58,6 @@
       <figcaption>The next read for the same report is a hit. The database is not asked.</figcaption>
     </figure>
   </section>
-</section>
-
-<section>
-  <h2>Try it</h2>
-  <p>Change the values and watch the database load.</p>
-  <label>Reads each second
-    <input type="range" data-input="rps" data-unit="reads/s" data-source="assumed" min="10" max="500" step="10" value="120"></label>
-  <label>Hit rate
-    <input type="range" data-input="hit" data-unit="%" data-source="assumed" min="0" max="100" step="5" value="90"></label>
-  <p>Reads that reach the database: <output data-output="dbLoad"></output></p>
-</section>
-
-<section id="recall">
-  <h2>Recall</h2>
-  <fieldset data-question="Q2" data-kind="choice" data-answer="B">
-    <legend>What does the cache do on a miss?</legend>
-    <label><input type="radio" value="A"> It sends an error to the client</label>
-    <label><input type="radio" value="B"> It asks the database and keeps the answer</label>
-    <label><input type="radio" value="C"> It asks the client to try again</label>
-    <div data-explain>On a miss the cache asks the database and keeps the answer, so the next read for it is a hit.</div>
-  </fieldset>
 </section>
 
 <script>

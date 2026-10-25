@@ -133,6 +133,9 @@ for its name.
 
 ## Questions
 
+A question is optional on a learning or explain page; a page that holds none builds with no
+reply section. A learning page with a question has the reply. An interview needs questions.
+
 ```html
 <fieldset data-question="Q1" data-kind="predict" data-answer="12" data-tolerance="0">
   <legend>With a nine in ten hit rate, how many reads reach the database?</legend>
@@ -146,7 +149,7 @@ for its name.
 - The runtime adds "I don't know" to every question. An answer of "I don't know" is a real answer.
 - `data-recommended="B"` on a choice marks the radio whose value is `B` with the word
   "Recommended". The runtime never preselects any radio, recommended or not.
-- Learning questions: `data-answer` is the expected answer and `data-tolerance` the allowed
+- Questions that test the person: `data-answer` is the expected answer and `data-tolerance` the allowed
   difference for a predict question. A `[data-explain]` child shows after the person commits: a
   choice commits when picked, the other kinds when the person presses Reveal. Ask for the
   prediction before the page shows the flow it concerns.
@@ -191,7 +194,9 @@ outputs with and without an expectation, the state of each library and the diagr
 
 ## The reply
 
-The reply is one block of text, shown at all times, that the person copies back. Its grammar:
+The reply is one block of text, shown at all times, that the person copies back. A decision, an
+interview and a learning page with a question have it; an explain page and a learning page with no
+question do not. Its grammar:
 
 ```text
 explorable <id> built <time>
@@ -223,7 +228,7 @@ their view, not about the facts.
 The runtime saves the person's values, answers and note in the browser's local storage, under a key
 made of the page id and build time. A browser that refuses storage still works. One button restores
 your values; another, "Forget what I entered", clears the person's entries from the page and from
-storage. A rebuild starts from your values again. Local storage is per browser: a page sent to
+storage. Both buttons are on every page that has an input or a question, with a reply or without one. A rebuild starts from your values again. Local storage is per browser: a page sent to
 someone else opens with your values. Chrome shares one local storage area across every file opened
 from disk, so any other local page can read what the person entered until they press "Forget what
 I entered".

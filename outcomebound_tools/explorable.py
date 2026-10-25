@@ -1,5 +1,6 @@
-"""`outcomebound explorable ...`: start, build and check an explorable, one HTML page that a
-person opens from disk to explore a decision, learn a mechanism or answer questions.
+"""`outcomebound explorable ...`: start, build and check an explorable, one HTML file that a
+person opens from disk to explore a decision, understand a topic, explain it to others or answer
+questions.
 
 What this module decides: the three subcommands and their options; that `new` writes a starter
 source and never writes over a file; that `build` joins a source to the engine's shell, writes
@@ -55,8 +56,10 @@ new      writes the starter source of a kind, and for a decision briefs.json bes
 build    joins the source to the shell. Reads the source, its brief document and the engine's
          templates/explorable/. Writes the page, over a page it built, and over no other file.
 check    verdicts: shell (policy, generator, kind, stylesheet, runtime and pins equal the
-         engine's; else `next: build again`), hosts, parts (a decision holds a brief; the other
-         kinds a data-question), and with --browser run (no script error; each expectation
+         engine's; else `next: build again`), hosts, parts (a decision holds a brief and the
+         reply; an interview a data-question and the reply; a learning page the reply where it
+         holds a data-question and none where it holds none; an explanation no reply), and with
+         --browser run (no script error; each expectation
          passes; each output with no expectation reads UNVERIFIED). The page is run only where
          the first three pass. A pass never says that the page's content is right.
 
@@ -248,12 +251,16 @@ def _build(options: argparse.Namespace) -> int:
         briefs: list[dict[str, object]] = []
         if parsed.header["kind"] == "decision":
             briefs_html, briefs = _brief(parsed.header, source.resolve().parent)
+        questions = (
+            "data-question" in explorable_source.scan(parsed.content, source=False).attributes
+        )
         page = explorable_shell.build_page(
             parsed.header,
             parsed.content,
             briefs_html,
             briefs,
             explorable_shell.built_time(),
+            explorable_shell.reply_for(parsed.header["kind"], questions),
         )
     except SourceRefusal as refused:
         for item in refused.findings:

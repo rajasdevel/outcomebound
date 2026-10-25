@@ -38,7 +38,7 @@ __all__ = [
     "scan",
 ]
 
-KINDS = ("decision", "learning", "interview")
+KINDS = ("decision", "learning", "explain", "interview")
 SOURCE_SUFFIX = ".source.html"
 HEADER_ATTRIBUTE = "data-explorable"
 SCHEMA = home.ROOT / "schemas" / "explorable-source.schema.json"

@@ -93,7 +93,7 @@ Read each file below when its condition first holds; it stays in force for the s
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
 - when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
-- when the person asks for an interactive page, wants to try options with their own numbers, or must learn a mechanism by trying it: read .claude/skills/explorable/SKILL.md
+- when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers: read .claude/skills/explorable/SKILL.md
 - when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
 - when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
 - when reading a card from a tracker that is not the project's ticket store, or writing back to it: read .claude/skills/sync-tracker/SKILL.md

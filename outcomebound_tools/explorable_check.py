@@ -119,22 +119,53 @@ def hosts(found: explorable_shell.Parts) -> Verdict:
 
 
 def parts(kind: str, found: explorable_shell.Parts) -> Verdict:
-    """The parts verdict: what the kind needs. The reply section is the shell's own."""
+    """The parts verdict: what the kind needs. The reply section is the shell's own, and the
+    build puts it where the kind and the content ask for it."""
 
+    replied = bool(found.reply)
     if kind == "decision":
-        if 'data-brief="' in found.briefs:
-            return Verdict("parts", PASS, "decision: a brief and the reply")
-        return Verdict(
-            "parts", FAIL, "a decision explorable holds a brief, and this page holds none"
-        )
-    scanned = explorable_source.scan(found.content, source=False, first_line=found.region_line)
-    if "data-question" in scanned.attributes:
-        return Verdict("parts", PASS, f"{kind}: at least one data-question and the reply")
-    return Verdict(
-        "parts",
-        FAIL,
-        f"a {kind} explorable holds at least one `data-question`, and this page holds none",
+        if 'data-brief="' not in found.briefs:
+            return Verdict(
+                "parts", FAIL, "a decision explorable holds a brief, and this page holds none"
+            )
+        if not replied:
+            return Verdict(
+                "parts", FAIL, "a decision explorable holds the reply, and this page has none"
+            )
+        return Verdict("parts", PASS, "decision: a brief and the reply")
+    questions = (
+        "data-question"
+        in explorable_source.scan(
+            found.content, source=False, first_line=found.region_line
+        ).attributes
     )
+    if kind == "explain":
+        if replied or 'data-brief="' in found.briefs:
+            return Verdict(
+                "parts",
+                FAIL,
+                "an explain page holds no reply section and no brief, and this page holds one",
+            )
+        return Verdict("parts", PASS, "explain: no reply section and no brief")
+    if kind == "learning":
+        if questions != replied:
+            return Verdict(
+                "parts",
+                FAIL,
+                "a learning page holds the reply where it holds a `data-question` and no reply "
+                "where it holds none; build again",
+            )
+        if questions:
+            return Verdict("parts", PASS, "learning: questions and the reply")
+        return Verdict("parts", PASS, "learning: an explanation with no question and no reply")
+    if not questions or not replied:
+        return Verdict(
+            "parts",
+            FAIL,
+            f"an {kind} explorable holds at least one `data-question` and the reply, and this "
+            "page lacks one",
+        )
+    return Verdict("parts", PASS, f"{kind}: at least one data-question and the reply")
 
 
 def not_run(reason: str) -> Verdict:

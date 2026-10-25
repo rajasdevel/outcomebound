@@ -1,14 +1,15 @@
 ---
 name: explain-spec
-description: Use when a person must act on a spec they did not write, or says they do not follow it. That includes a request to be walked through a design. Explains the spec, asks questions drawn from its decisions, and fixes or records what the answers show is missing.
+description: Use when a person must act on a spec they did not write, or says they do not follow it. That includes a request to be walked through a design. Explains the spec; when the person asks to test their understanding, asks questions drawn from its decisions, and fixes or records what the answers show is missing.
 ---
 
 # Explain a spec
 
-You are done when the person can act on the spec: you have explained it to them, each
-misunderstanding that could change what they do has been examined, and each real gap in the spec
-is fixed in it or recorded in it. You never report that the person fully understands the spec: you report what you
-explained, what they answered, and what changed in the spec.
+You are done when the person can act on the spec: you have explained it to them and, where they
+asked to test their understanding, examined each misunderstanding that could change what they do;
+each real gap in the spec is fixed in it or recorded in it. You never report that the person fully
+understands the spec: you report what you explained, what they answered, and what changed in the
+spec.
 
 ## Explain
 
@@ -26,6 +27,9 @@ separately. Clarifying words must preserve the decision and its bounds; change t
 within the authority the project grants.
 
 ## Ask
+
+Use the question and retry steps below only when the person asks to test their understanding. A
+request for an explanation alone requires no quiz or reply.
 
 Draw the questions from the spec's rows, not from your own idea of what matters: for each
 decision with a rejected alternative, "why not" that alternative; for each assumed row, what is
