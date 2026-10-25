@@ -31,7 +31,7 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "8e1c1b481a5f406b6cd0ddc5c38aa521930924bdb083690de6d18437b8e0aa4e",
+        ".outcomebound/fragments/commands.md": "6fa9413c90dc9525ea956f6c3bd2171f6fdc76f7470f0e1127c6f98245828856",
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
@@ -71,7 +71,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "8e1c1b481a5f406b6cd0ddc5c38aa521930924bdb083690de6d18437b8e0aa4e"
+      "sha256": "6fa9413c90dc9525ea956f6c3bd2171f6fdc76f7470f0e1127c6f98245828856"
     },
     {
       "kind": "ignore",

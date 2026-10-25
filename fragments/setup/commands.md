@@ -4,7 +4,7 @@ family: setup
 applies: any repository where an agent runs commands
 condition: when running a command whose output you read
 detect: ["."]
-version: 12
+version: 13
 ---
 **Context** — a harness may give a command a terminal, and all it prints is context spent. A pager
 waits for a key: `git --no-pager`, a tool's `--no-pager`, else `PAGER=cat`. An editor waits:
@@ -38,7 +38,8 @@ fact about the target. A job that is still running when
 the task ends (a scheduled run, a service you do not stop) needs the person's grant, which names what it runs and how it stops. Quiet comes from a tool's own flags, never from hiding an error or disabling a check.
 Slow is not hung: do not shorten, skip or kill a check because it takes long; let it run to its end.
 Wait for it by the harness's notice or the longest wait it supports, not by a loop of short status
-reads; look at a live run when what you would see can change your next action. A check this task
+reads; look at a live run when what you would see can change your next action. For pending automated work (a CI run, a model's review), do the work that does not depend on it first;
+end the turn on it only where the harness will resume you when it completes, else wait within the turn. A check this task
 started may be stopped when it can no longer answer the question (its setup is wrong, its input
 changed) or it endangers the machine; report that it did not finish, with the reason.
 The person's own instruction to stop or skip a check outranks that line: stop it, and report that the
