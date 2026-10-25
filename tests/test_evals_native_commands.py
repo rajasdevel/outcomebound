@@ -130,15 +130,29 @@ def test_a_failure_stays_a_failure_and_a_success_the_native_record_shares_stays(
     assert [d["field"] for d in meta["command_native_disagreements"]] == ["cwd"]
 
 
-def test_a_status_that_differs_is_kept_from_the_stream_and_listed() -> None:
+@pytest.mark.parametrize(("code", "outcome"), [(0, "succeeded"), (2, "exited 2")])
+def test_a_stream_unverified_takes_the_native_outcome_and_both_are_listed(
+    code: int, outcome: str
+) -> None:
+    """Breaks if a command whose exit code the stream lost, and the native session recorded, is
+    left unjudged: a suite that passed before a commit would be read as never shown to pass."""
+
     stream = "/bin/zsh -lc 'make check'"
     text, meta = fill_directories(
-        _transcript([stream, "unverified", ""]), [_item(_shell("make check"), code=2)]
+        _transcript([stream, "unverified", ""]), [_item(_shell("make check"), code=code)]
+    )
+    assert json.loads(text)["commands"][0][1] == outcome
+    assert meta["command_native_disagreements"] == [
+        {"index": 0, "field": "status", "stream": "unverified", "native": outcome}
+    ]
+
+
+def test_a_stream_unverified_in_a_directory_the_native_record_contradicts_stays() -> None:
+    stream = "/bin/zsh -lc 'make check'"
+    text, _meta = fill_directories(
+        _transcript([stream, "unverified", "/elsewhere"]), [_item(_shell("make check"))]
     )
     assert json.loads(text)["commands"][0][1] == "unverified"
-    assert meta["command_native_disagreements"] == [
-        {"index": 0, "field": "status", "stream": "unverified", "native": "exited 2"}
-    ]
 
 
 @pytest.mark.parametrize(

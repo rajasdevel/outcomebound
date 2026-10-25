@@ -150,8 +150,10 @@ def fill_directories(
     from the session's is kept and listed. Where the stream says `succeeded` and the session
     shows no success for that command, or the stream's own directory is not the session's, the
     command is set to `unverified`, as the stream cannot then credit it; both source values stay
-    in the disagreements. A stream status that is already not a success is not changed, nor is a
-    stream `unverified` raised to the session's success.
+    in the disagreements. A stream status that is already not a success is not changed, except a
+    stream `unverified`: the stream can lose the exit code of a long command, and where the
+    session, which the model's commands cannot reach, records one for a command it holds once, in
+    the stream's directory, that outcome is taken.
     """
 
     meta: dict[str, Any] = {SOURCE_KEY: "", DISAGREE_KEY: []}
@@ -162,21 +164,24 @@ def fill_directories(
     document, items, pairs, cwds = found
     for position, row in enumerate(document["commands"]):
         index, unique = pairs[position]
-        contradicted = False
+        moved = False
         if not row[2]:
             row[2] = cwds[index]
         elif row[2] != cwds[index]:
-            contradicted = True
+            moved = True
             meta[DISAGREE_KEY].append(
                 {"index": position, "field": "cwd", "stream": row[2], "native": cwds[index]}
             )
         native = command_outcome(items[index])
+        contradicted = moved
         if unique and row[1] != native:
-            contradicted = contradicted or native != "succeeded"
+            contradicted = moved or native != "succeeded"
             meta[DISAGREE_KEY].append(
                 {"index": position, "field": "status", "stream": row[1], "native": native}
             )
         if contradicted and row[1] == "succeeded":
             row[1] = "unverified"
+        elif unique and not moved and row[1] == "unverified" and native != "unverified":
+            row[1] = native
     meta[SOURCE_KEY] = "native"
     return json.dumps(document), meta

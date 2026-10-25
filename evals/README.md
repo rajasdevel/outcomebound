@@ -316,7 +316,11 @@ harness must meet these items, and `--probe` shows which one it does not:
   an unknown executable form leaves "no command ran" unprovable and is named in the meta file.
 - **The operator's setup stays out.** The call ignores the operator's configuration, rules and
   memories as far as the tool allows, runs in the environment `child_env()` builds (no credential
-  for a metered endpoint), and `preflight()` observes the sign-in without a model call.
+  for a metered endpoint), and `preflight()` observes the sign-in without a model call. The
+  model's commands run in a shell that is not a login shell (`-c allow_login_shell=false`): a
+  login shell rebuilds PATH from the operator's profile and can put the operator's own
+  `outcomebound` ahead of the arm's launcher, which `launcher-on-path` cannot see, as it reads the
+  PATH the call is given.
   `docs/evaluations.md` states what the isolation does not reach.
 - **Sessions are kept and copied.** The call keeps the tool's session record, finds it by the
   thread id of its stream, requires it outside every path the model may write, and copies its exact
@@ -587,8 +591,8 @@ What stays `UNVERIFIED` until that probe runs:
   `.claude/skills`, `.agents/skills` and `.outcomebound/fragments`. A file inside a Git repository
   nested in the workspace, which is a fixture's subject, is kept. The removal joins the seed commit
   and the `seed` tag, so a check that compares the tree with the seed reads a workspace the model
-  did not change as unchanged; a setup's `baseline-files` and `baseline-hashes` lose the lines of
-  the removed files, and `protected.paths` entries that were removed are not protected. The
+  did not change as unchanged; a baseline the setup records is recorded again without the
+  removed files (`checks/baseline.sh`, below), and `protected.paths` entries that were removed are not protected. The
   prompt is the task alone; there is no kernel, skill or launcher. A fixture whose task or
   graders rely on text in its own note still runs: the result is reported, not refused. Each meta
   and `INDEX.json` row records `instructions_removed` and, where a nested repository kept one,
@@ -666,8 +670,13 @@ writes its own project note. That core skill points to the `decision-brief` skil
 that the arm does not carry.
 
 The skills of the `current` arm are written into the fixture before its `setup.sh` runs. So they
-are in the seed commit, and in any baseline that the setup records. No post-check counts them as
-a change by the model. The run refuses a fixture whose setup did not commit them. They are
+are in the seed commit. An adopted install (a fixture with an `install.json`) writes its skills
+and `.outcomebound/` after the setup; it is folded into the seed commit too. A setup that records
+a baseline of the tree for its checks does it in `checks/baseline.sh`, which it copies to the
+grading stage and runs with the stage as its one argument; the runner runs it again from the
+stage once the build is complete (the install, the bare arm's removal, the rewritten notes), so
+the baseline is the tree the model receives. No post-check counts the install as a change by the
+model. The run refuses a fixture whose setup did not commit them. They are
 protected like the graders.
 
 An `outcomebound` that is already on your PATH reaches no arm: each PATH entry that holds one is

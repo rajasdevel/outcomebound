@@ -41,6 +41,8 @@ def test_every_call_names_its_model_and_ignores_the_operators_setup(tmp_path: Pa
     assert argv[argv.index("memories.generate_memories=false") - 1] == "-c"
     assert argv[argv.index("memories.use_memories=false") - 1] == "-c"
     assert argv[argv.index("features.plugins=false") - 1] == "-c", "plugins reach the catalog"
+    # A login shell rebuilds PATH from the operator's profile, ahead of the arm's launcher.
+    assert argv[argv.index("allow_login_shell=false") - 1] == "-c", "the operator's engine wins"
 
 
 def test_a_call_in_a_git_workspace_may_write_its_git_directory(tmp_path: Path) -> None:

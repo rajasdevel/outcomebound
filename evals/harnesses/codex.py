@@ -69,6 +69,10 @@ ISOLATION = (
     "memories.use_memories=false",
     "-c",
     "features.plugins=false",
+    # A login shell reads the operator's profile, which can put its own `outcomebound` ahead of
+    # the arm's launcher on PATH, so every model command runs without one.
+    "-c",
+    "allow_login_shell=false",
 )
 # The heading of the skill list in codex's developer message; each entry under it is one line,
 # `- <name>: <description> (file: <path>)`, a plugin's skill named `<plugin>:<skill>`.
