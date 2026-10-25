@@ -41,7 +41,9 @@ the report works without them), and, where recalculation needs a button, that bu
 `numbers` and `local` need a browser (`outcomebound_tools.explorable_browser.find_browser`).
 Without one, `numbers` prints `unjudged:` with the reason and exits 3; so does `local`,
 since it runs the same browser. A page that is missing, that the browser cannot print or that
-does not finish its work is a failure. Each mode exits 0 where it holds and 1 naming what does not.
+does not finish its work is a failure of `numbers`. A run the browser prints nothing of, three
+times, leaves `local` unjudged: it shows neither a page that stayed nor one that left. Each mode
+exits 0 where it holds and 1 naming what does not.
 `numbers` also prints
 `observed:` lines (the page's rendered text and its controls in every state the driver put it in:
 the start, each value, the start again) that never change a verdict: a person reads them beside
@@ -462,7 +464,10 @@ def _run(browser: str) -> tuple[str | None, dict | None, str]:
     with tempfile.TemporaryDirectory(prefix="report-page-") as folder:
         copy = Path(folder, "hosting.html")
         copy.write_text(_with_driver(PAGE.read_text(encoding="utf-8", errors="replace")), "utf-8")
-        ran = explorable_browser.run_page(browser, copy, TIMEOUT, fragment="", arguments=DENY)
+        for _attempt in range(3):  # a busy browser may print nothing; a page that left still prints
+            ran = explorable_browser.run_page(browser, copy, TIMEOUT, fragment="", arguments=DENY)
+            if ran.document is not None:
+                break
     if ran.document is None:
         return None, None, f"the page could not be printed after it ran: {ran.reason}"
     found = re.search(rf'<script[^>]*id="{RESULT_ID}"[^>]*>(.*?)</script>', ran.document, re.DOTALL)
@@ -696,13 +701,15 @@ def local() -> tuple[list[str], bool, list[str]]:
     browser, why = _browser()
     if browser is None:
         return (lacking, True, []) if lacking else ([why], False, [])
-    document, result, _reason = _run(browser)
+    document, result, reason = _run(browser)
+    if document is None:
+        # Nothing printed: the run shows nothing either way, so the claim is not judged.
+        return (lacking, True, []) if lacking else ([reason], False, [])
     if result is None:
-        if document is not None:
-            lacking.append(
-                "the page did not keep its own document while it ran: it sent the reader away "
-                "or replaced itself"
-            )
+        lacking.append(
+            "the page did not keep its own document while it ran: it sent the reader away "
+            "or replaced itself"
+        )
         return lacking, True, []
     network = re.compile(r"(?:https?|wss?|ftp):|//", re.IGNORECASE)
     blocked = [line[:120] for line in result.get("violations", []) if network.search(line)]

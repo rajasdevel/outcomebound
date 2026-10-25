@@ -1022,6 +1022,27 @@ class _Hits(http.server.BaseHTTPRequestHandler):
         pass
 
 
+def test_a_run_the_browser_prints_nothing_of_leaves_local_unjudged(
+    report: tuple[ModuleType, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A busy browser may print nothing: `local` tries three times and then judges nothing, in
+    place of passing a page whose run showed nothing."""
+
+    module, workspace = report
+    (workspace / "reports" / "hosting.html").write_text("<p>Starter Team</p>", encoding="utf-8")
+    runs: list[Path] = []
+
+    def silent(browser: str, page: Path, *_: Any, **__: Any) -> explorable_browser.BrowserRun:
+        runs.append(page)
+        return explorable_browser.BrowserRun(None, "the browser printed nothing")
+
+    monkeypatch.setattr(module, "_browser", lambda: ("browser", ""))
+    monkeypatch.setattr(explorable_browser, "run_page", silent)
+    found, judged, _seen = module.local()
+    assert not judged and len(runs) == 3, (found, runs)
+    assert "printed nothing" in found[0]
+
+
 @needs_browser
 def test_a_page_cannot_reach_the_network_while_it_is_graded(
     report: tuple[ModuleType, Path],
