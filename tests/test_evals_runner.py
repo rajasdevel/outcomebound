@@ -578,9 +578,10 @@ def test_a_fixture_that_selects_the_tickets_fragment_runs_with_the_ticket_skills
 
 
 def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_path: Path) -> None:
-    """`--earlier-ref REF` replaces the kept kernel wording with an install of the engine at REF:
-    its kernel, its ten skills (in the arm files and in the fixture's note path) and the pointers,
-    while the launcher stays this checkout's. Checked on HEAD, which every clone has."""
+    """`--earlier-ref REF` replaces the kept kernel wording with an install of the engine at REF,
+    made by that ref's own adopt on a fixture with an install.json, as `current` is: its kernel in
+    AGENTS.md and not in the prompt, its skills, and that ref's launcher. Checked on HEAD, which
+    every clone has."""
 
     def at_head(path: str) -> bytes:
         return subprocess.run(
@@ -592,14 +593,17 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
     meta = _meta(out)
     status = json.loads((out / "STATUS.json").read_text(encoding="utf-8"))
     assert (status["arm"], status["earlier_ref"]) == ("earlier", "HEAD")
-    assert meta["arm_files"] and meta["arm_launcher"] == str(ROOT / LAUNCHER)
+    launcher = Path(meta["arm_launcher"])
+    assert meta["arm_files"] and meta["arm_adopted"] and launcher != ROOT / LAUNCHER
+    assert launcher.read_bytes() == at_head(LAUNCHER)
     repo = Path(meta["fixture_repo"])
     skill = at_head("skills/using-outcomebound/SKILL.md")
     for root in (".agents/skills", ".outcomebound/skills"):
         assert (repo / root / "using-outcomebound" / "SKILL.md").read_bytes() == skill
     assert (repo / ".agents/skills/decision-brief/SKILL.md").is_file()
     prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
-    assert "Task:" in prompt and "id=operating-contract" in prompt
+    assert "Task:" in prompt and "id=operating-contract" not in prompt
+    assert "id=operating-contract" in (repo / "AGENTS.md").read_text(encoding="utf-8")
     assert hashlib.sha256(RUN.kernel("current").encode()).hexdigest() == meta["kernel_sha256"]
 
 
@@ -778,7 +782,7 @@ def test_the_earlier_verbatim_arm_is_refused_unless_the_set_is_whole(tmp_path: P
 def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills(
     tmp_path: Path,
 ) -> None:
-    """A ref that is no tag and no branch: its kernel text reaches the prompt, a skill it drops
+    """A ref that is no tag and no branch: its kernel text reaches the install, a skill it drops
     is not installed (and not pointed at), and a skill folder the engine's list does not name is
     refused in place of being left out. `--arm-label` and the commit are recorded."""
 
@@ -799,8 +803,20 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
         check=True,
         encoding="utf-8",
     ).stdout.split()
+    # A variant drops a skill from its engine's list with its folder, or its own adopt refuses.
+    listed = subprocess.run(
+        ["git", "-C", str(ROOT), "show", "HEAD:outcomebound_tools/fragments.py"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert listed.count(b'    "sync-tracker",\n') == 1
     commit = _commit_of(
-        {"templates/managed-block.agents.md.tmpl": changed, **dict.fromkeys(tree)}, base="HEAD"
+        {
+            "templates/managed-block.agents.md.tmpl": changed,
+            "outcomebound_tools/fragments.py": listed.replace(b'    "sync-tracker",\n', b""),
+            **dict.fromkeys(tree),
+        },
+        base="HEAD",
     )
     arguments = (
         *("--arm", "earlier", "--earlier-ref", commit, "--arm-label", "V1-edited"),
@@ -814,15 +830,52 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
         commit,
         commit,
     )
-    prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
-    assert "a variant's own words" in prompt
     assert not [path for path in meta["arm_files"] if "/sync-tracker/" in path]
     assert any("/diagnose/SKILL.md" in path for path in meta["arm_files"])
     notes = (Path(meta["fixture_repo"]) / "AGENTS.md").read_text(encoding="utf-8")
+    assert "a variant's own words" in notes
     assert "diagnose/SKILL.md" in notes and "sync-tracker" not in notes
     stray = _commit_of({"skills/stray/SKILL.md": b"Not in the list.\n"}, base="HEAD")
     done, _ = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", stray, *SMALL_FIX[2:]))
     assert done.returncode != 0 and "no install carries: stray" in done.stderr
+
+
+def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: Path) -> None:
+    """What an install generates, the Done fact, the reread line and each skill's condition,
+    comes from the ref's engine, on an adopted fixture (its own adopt) and on one without an
+    install.json (its own renderer): a ref whose engine words them differently shows its words,
+    and this checkout's never reach the earlier arm."""
+
+    def at_head(path: str) -> bytes:
+        return subprocess.run(
+            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+        ).stdout
+
+    from outcomebound_tools import adopt, facts
+
+    condition = adopt.CONDITIONS["decision-brief"].encode()
+    adopt_text = at_head("outcomebound_tools/adopt.py")
+    facts_text = at_head("outcomebound_tools/facts.py")
+    reread = b"a compaction alone is no reason."
+    assert condition in adopt_text and facts_text.count(reread) == 1
+    commit = _commit_of(
+        {
+            "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition"),
+            "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread."),
+        },
+        base="HEAD",
+    )
+    for fixture in ("small-fix", "slice-a-spec"):
+        assert (ROOT / "evals/fixtures" / fixture / "install.json").is_file() == (
+            fixture == "small-fix"
+        )
+        arguments = ("--arm", "earlier", "--earlier-ref", commit, "--model", "gpt-6-sol")
+        (tmp_path / fixture).mkdir()
+        done, out = _invoke(tmp_path / fixture, (*arguments, "--fixtures", fixture))
+        assert done.returncode == 0, done.stdout + done.stderr
+        notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
+        assert "a ref's own condition" in notes and "a ref's own reread." in notes
+        assert adopt.CONDITIONS["decision-brief"] not in notes and facts.ONCE not in notes
 
 
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:

@@ -604,8 +604,12 @@ What stays `UNVERIFIED` until that probe runs:
     `facts-only`, `current`.
 - `earlier`: an earlier wording of the kernel, kept in `evals/arms/earlier-kernel.md`. With
   `--earlier-ref REF` it is instead the install of this checkout's Git ref `REF` (for example a
-  release tag): that ref's kernel, skills and fragments, written as `current` writes them, with
-  this checkout's launcher, so a release and the checkout compare as two installs. The run records
+  release tag): that ref's kernel, skills and fragments, written as `current` writes them, so a
+  release and the checkout compare as two installs. What the install generates is that ref's
+  engine's: on a fixture with an `install.json`, that ref's own `adopt` makes the install, its
+  kernel in `AGENTS.md` as under `current`; elsewhere that ref's engine renders the facts and
+  pointers blocks and each skill's condition. The launcher on the call's PATH is that ref's. No
+  wording of this checkout's engine reaches the earlier arm. The run records
   `earlier_ref` in `STATUS.json`; the option is refused for any other arm.
   - Any ref of the checkout works (a tag, a branch, a commit). The commit it names is recorded as
     `earlier_commit`, since a branch moves. A skill the ref lacks is not installed and not pointed
