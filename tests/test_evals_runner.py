@@ -1652,6 +1652,60 @@ def test_bounded_command_keeps_partial_output_and_stops_descendant(
     assert not alive, f"timed-out child still runs, state {state[:1] or 'unknown'}"
 
 
+@pytest.mark.skipif(os.name == "nt", reason="the descendants are made with fork and setsid")
+def test_bounded_command_stops_a_descendant_made_while_its_scan_waits(tmp_path, monkeypatch):
+    """A command that keeps starting processes of their own session must leave none behind, even
+    when the scan that finds them is delayed, as it is on a loaded machine: the command must not
+    start another process while it is found and killed."""
+
+    import contextlib
+    import signal
+    import time
+
+    from tests.processes import running
+
+    real_kill = os.kill
+    delayed: list[int] = []
+
+    def slow_kill(pid, sig):
+        # The delay comes once, before the first kill: what a starved scan costs.
+        if sig == signal.SIGKILL and not delayed:
+            delayed.append(pid)
+            time.sleep(0.5)  # real time: the starved scan is a span the forking child must fill
+        real_kill(pid, sig)
+
+    pids = tmp_path / "pids"
+    code = (
+        "import os, time\n"
+        f"log = open({str(pids)!r}, 'a', buffering=1)\n"
+        "while True:\n"
+        "    pid = os.fork()\n"
+        "    if pid == 0:\n"
+        "        os.setsid()\n"
+        "        time.sleep(30)\n"
+        "        os._exit(0)\n"
+        "    log.write(str(pid) + chr(10))\n"
+        "    time.sleep(0.02)\n"
+    )
+    monkeypatch.setattr(os, "kill", slow_kill)
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            RUN.bounded_command([sys.executable, "-c", code], timeout=5)
+        monkeypatch.setattr(os, "kill", real_kill)
+        started = [int(line) for line in pids.read_text(encoding="utf-8").split()]
+        assert started, "the command started no descendant"
+        deadline = time.monotonic() + 10
+        while any(running(pid) for pid in started) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        left = [pid for pid in started if running(pid)]
+        assert not left, f"{len(left)} of {len(started)} descendants still run"
+    finally:
+        monkeypatch.setattr(os, "kill", real_kill)
+        for pid in locals().get("started", []):  # Those this test started, and no others.
+            with contextlib.suppress(OSError):
+                real_kill(pid, signal.SIGKILL)
+
+
 def test_fixture_timeout_still_returns_a_record(tmp_path, monkeypatch):
     fixtures = tmp_path / "definitions"
     fixture = fixtures / "slow"

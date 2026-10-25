@@ -8,19 +8,9 @@ from pathlib import Path
 from typing import Any
 
 
-def stop_descendants(pid: int) -> None:
-    """Stop the task's current POSIX descendants before their parent is reaped.
+def _process_table() -> dict[int, int] | None:
+    """Every process of the host and its parent, or None where the table cannot be read."""
 
-    A subprocess can start a separate session. The existing process-group stop
-    cannot reach it. Use the host process table only on timeout, with a bounded
-    read; Windows is already covered by the existing taskkill tree helper.
-    """
-
-    import contextlib
-    import signal
-
-    if os.name == "nt":
-        return
     parents: dict[int, int] = {}
     if Path("/proc/self/stat").is_file():
         # Linux slim images need no external ps package for their process table.
@@ -31,31 +21,70 @@ def stop_descendants(pid: int) -> None:
                     parents[int(entry.name)] = int(fields[1])
                 except (OSError, ValueError, IndexError):
                     continue  # A process can exit while the table is read.
-    else:
-        try:
-            listed = subprocess.run(
-                ["ps", "-e", "-o", "pid=", "-o", "ppid="],
-                capture_output=True,
-                text=True,
-                timeout=1,
-                encoding="utf-8",
-            )
-            parents = {
-                int(row.split()[0]): int(row.split()[1])
-                for row in listed.stdout.splitlines()
-                if len(row.split()) == 2
-            }
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return
-    owned = {pid}
-    for _ in range(len(parents)):
-        found = {child for child, parent in parents.items() if parent in owned}
-        if found <= owned:
-            break
-        owned |= found
-    for child in owned - {pid}:
+        return parents
+    try:
+        listed = subprocess.run(
+            ["ps", "-e", "-o", "pid=", "-o", "ppid="],
+            capture_output=True,
+            text=True,
+            timeout=1,
+            encoding="utf-8",
+        )
+        return {
+            int(row.split()[0]): int(row.split()[1])
+            for row in listed.stdout.splitlines()
+            if len(row.split()) == 2
+        }
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def stop_descendants(pid: int) -> None:
+    """Stop the task's current POSIX descendants before their parent is reaped.
+
+    A subprocess can start a separate session. The existing process-group stop
+    cannot reach it. Use the host process table only on timeout, with a bounded
+    read; Windows is already covered by the existing taskkill tree helper.
+
+    The command and each descendant are suspended (SIGSTOP) as the table shows them, and the
+    table is read again until it shows none new, and only then are the descendants killed. A
+    process that is running forks while the table is read, or while the scan waits for the CPU
+    on a loaded machine, and a child made after the read would outlive the kill. A suspended
+    process makes none. The command itself is killed by the caller afterwards (SIGKILL ends a
+    suspended process). Left open: a descendant that exits between two reads, with a child
+    made in that time, leaves a child the table no longer ties to the command.
+    """
+
+    import contextlib
+    import signal
+
+    if os.name == "nt":
+        return
+
+    def suspend(target: int) -> None:
         with contextlib.suppress(ProcessLookupError, PermissionError):
-            os.kill(child, signal.SIGKILL)
+            os.kill(target, signal.SIGSTOP)
+
+    owned = {pid}
+    try:
+        suspend(pid)
+        # Bounded: a descendant that cannot be suspended (another user's) may keep forking.
+        for _read in range(64):
+            parents = _process_table()
+            if parents is None:
+                break
+            found = set(owned)
+            while more := {c for c, parent in parents.items() if parent in found} - found:
+                found |= more
+            if found <= owned:
+                break
+            for child in found - owned:
+                suspend(child)
+            owned |= found
+    finally:
+        for child in owned - {pid}:
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.kill(child, signal.SIGKILL)
 
 
 def bounded_command(
