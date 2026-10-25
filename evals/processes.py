@@ -8,32 +8,33 @@ from pathlib import Path
 from typing import Any
 
 
-def _process_table() -> dict[int, int] | None:
-    """Every process of the host and its parent, or None where the table cannot be read."""
+def _process_table() -> dict[int, tuple[int, str]] | None:
+    """Every process of the host with its parent and the first letter of its state (`T` or `t`
+    for stopped, `Z` for exited), or None where the table cannot be read."""
 
-    parents: dict[int, int] = {}
+    table: dict[int, tuple[int, str]] = {}
     if Path("/proc/self/stat").is_file():
         # Linux slim images need no external ps package for their process table.
         for entry in Path("/proc").iterdir():
             if entry.name.isdigit():
                 try:
                     fields = (entry / "stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
-                    parents[int(entry.name)] = int(fields[1])
+                    table[int(entry.name)] = (int(fields[1]), fields[0][:1])
                 except (OSError, ValueError, IndexError):
                     continue  # A process can exit while the table is read.
-        return parents
+        return table
     try:
         listed = subprocess.run(
-            ["ps", "-e", "-o", "pid=", "-o", "ppid="],
+            ["ps", "-e", "-o", "pid=", "-o", "ppid=", "-o", "stat="],
             capture_output=True,
             text=True,
             timeout=1,
             encoding="utf-8",
         )
         return {
-            int(row.split()[0]): int(row.split()[1])
+            int(row.split()[0]): (int(row.split()[1]), row.split()[2][:1])
             for row in listed.stdout.splitlines()
-            if len(row.split()) == 2
+            if len(row.split()) == 3
         }
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
@@ -47,12 +48,14 @@ def stop_descendants(pid: int) -> None:
     read; Windows is already covered by the existing taskkill tree helper.
 
     The command and each descendant are suspended (SIGSTOP) as the table shows them, and the
-    table is read again until it shows none new, and only then are the descendants killed. A
-    process that is running forks while the table is read, or while the scan waits for the CPU
-    on a loaded machine, and a child made after the read would outlive the kill. A suspended
-    process makes none. The command itself is killed by the caller afterwards (SIGKILL ends a
-    suspended process). Left open: a descendant that exits between two reads, with a child
-    made in that time, leaves a child the table no longer ties to the command.
+    table is read again until it shows none new and every suspended process stopped, and only
+    then are the descendants killed. A process that is running forks while the table is read,
+    or while the scan waits for the CPU on a loaded machine, and a child made after the read would
+    outlive the kill. A suspended process makes none, but SIGSTOP takes hold only when the
+    process next leaves the kernel: one inside `fork` finishes it first, so a read made before the
+    stop shows can miss that child. The command itself is killed by the caller afterwards
+    (SIGKILL ends a suspended process). Left open: a descendant that exits between two reads, with
+    a child made in that time, leaves a child the table no longer ties to the command.
     """
 
     import contextlib
@@ -69,14 +72,16 @@ def stop_descendants(pid: int) -> None:
     try:
         suspend(pid)
         # Bounded: a descendant that cannot be suspended (another user's) may keep forking.
-        for _read in range(64):
-            parents = _process_table()
-            if parents is None:
+        for _read in range(256):
+            table = _process_table()
+            if table is None:
                 break
             found = set(owned)
-            while more := {c for c, parent in parents.items() if parent in found} - found:
+            while more := {c for c, (parent, _) in table.items() if parent in found} - found:
                 found |= more
-            if found <= owned:
+            # A process the table no longer holds, or holds as exited, makes no child.
+            settled = all(table.get(each, (0, "Z"))[1] in "TtZ" for each in owned)
+            if found <= owned and settled:
                 break
             for child in found - owned:
                 suspend(child)
