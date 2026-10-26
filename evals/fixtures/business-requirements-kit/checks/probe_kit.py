@@ -50,6 +50,7 @@ names.
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import sys
@@ -639,6 +640,10 @@ def grade(text: str) -> dict[str, list[str]]:
 
 
 def _main(argv: list[str]) -> int:
+    # A reason can quote the answer's own characters; the runner reads them as UTF-8, and a
+    # console code page (Windows cp1252) would write an en dash as a byte UTF-8 cannot read.
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8")
     if len(argv) != 1 or argv[0] not in CHECKS:
         print(f"usage: probe_kit.py {{{','.join(CHECKS)}}}")
         return 2
