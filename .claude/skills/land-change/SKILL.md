@@ -8,7 +8,9 @@ description: Use when driving a pull or merge request through CI and review to l
 You are done when the request has landed under a grant that covers it, or waits on a named person
 for a named reason. Each check has a verdict, each review thread has a reply, and no person's review
 was resolved, approved or dismissed by you. A request that no one has reviewed and that no check
-gates needs only the handover and the merge grant.
+gates needs only the handover and the merge grant. When the run must stop before the merge, turn
+off auto-merge before you update the request or its checks complete (GitHub merges by itself once
+required reviews and checks pass; docs.github.com, read 2026-10-26), and say that you did.
 
 ## The handover in the request
 
