@@ -201,8 +201,15 @@ def run_page(
     if DOCUMENT_END in text.lower():
         return BrowserRun(text, "")
     if not arrived:
-        return BrowserRun(None, f"the browser printed no document within the {timeout:g} s limit")
-    return BrowserRun(None, "the browser exited without printing the document")
+        reason = f"the browser printed no document within the {timeout:g} s limit"
+    else:
+        reason = "the browser exited without printing the document"
+    if not text.strip():
+        reason += (
+            f"; it printed nothing at all (browser: {browser}). A sandbox that blocks the "
+            "browser is the likely cause, and the page is not shown to be wrong"
+        )
+    return BrowserRun(None, reason)
 
 
 class _ResultFinder(HTMLParser):

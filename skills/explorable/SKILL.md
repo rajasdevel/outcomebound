@@ -11,7 +11,9 @@ shared shell and checks it. A page that teaches comes first: **learning** teache
 session, **explain** teaches readers who are not in it, **decision** helps the person decide, and
 **interview** asks the questions the work waits on. You are done when the person can open the page
 and use it: `outcomebound explorable check` passes on the page (with `--browser` where a
-Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so), every
+Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so; where the
+browser printed nothing, the run's line names the browser and the likely sandbox, and you report
+that line and try no other browser, since each would meet the same sandbox), every
 number the page's lesson or answer rests on has an expectation, your report names each output that
 reads `UNVERIFIED`, and the page's path is in the text the person reads, beside the decision brief
 when there is one. You have looked at the page, and it shows what the person asked for, with data
