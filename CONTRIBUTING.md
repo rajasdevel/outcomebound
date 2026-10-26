@@ -47,7 +47,11 @@ What happens next:
 
 - Linux CI runs the gate, this repository's own install check and the suite on Python 3.10,
   3.11, 3.12, 3.13 and 3.14. The suite also runs on Windows with Python 3.10 and 3.14, and in
-  Debian slim and Alpine containers with Python 3.13. CI runs the quality floor once.
+  Debian slim and Alpine containers with Python 3.13. CI runs the quality floor once. Each suite
+  runs in shards, which are disjoint parts of it picked by test id, so the whole suite still
+  runs. A pull request that changes no code (the `plan` job in `.github/workflows/ci.yml` holds
+  the list of paths) runs the newest Python only; a push to `main`, a release tag and a run by
+  hand always run every Python. `test (3.10)` and `test (3.14)` are reported in both cases.
 - When CI is green, a maintainer reviews the pull request.
 - Each pull request lands as one squash commit on `main`, through the
   [agents and releases](#agents-and-releases) route. `main` has no merge commits.
