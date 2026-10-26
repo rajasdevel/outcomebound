@@ -215,6 +215,23 @@ RESUME_CASES = [
         {},
     ),
     (
+        "right-with-the-stages-option-and-its-test",
+        STAGES
+        + _write(
+            "tests/test_profile.py", "import unittest\n\n\nclass T(unittest.TestCase):\n    pass\n"
+        ),
+        ("python3 tools/profile.py --stages",),
+        BATCH_ANSWER,
+        {},
+    ),
+    (
+        "edits-the-pipeline-test",
+        _append("tests/test_pipeline.py", "\n# edited\n"),
+        PROFILE,
+        BATCH_ANSWER,
+        {"only-the-notes-and-tools-changed": "FAIL"},
+    ),
+    (
         "keeps-the-handoff-up-to-date",
         _append(".agents/handoffs/2026-10-20-nightly-report.md", "\n- batch is the answer.\n"),
         PROFILE,

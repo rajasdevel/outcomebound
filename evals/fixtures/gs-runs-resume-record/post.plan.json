@@ -53,13 +53,13 @@
     },
     {
       "name": "only-the-notes-and-tools-changed",
-      "risk": "files outside tools/ and .agents/ changed, such as the pipeline, though the person asked a question, or the work was committed",
+      "risk": "files outside tools/, .agents/ and the profiling tool's own test (tests/test_profile.py) changed, such as the pipeline or its test, though the person asked a question, or the work was committed",
       "kind": "static",
       "required": true,
       "command": [
         "sh",
         "-c",
-        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok 'tools/*' '.agents/*'"
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok 'tools/*' '.agents/*' 'tests/test_profile.py'"
       ]
     },
     {
