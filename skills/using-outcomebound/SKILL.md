@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when unsure how much design, testing, review or process a task needs. That includes a project whose documents or habits suggest more process than a change needs, work that spans lifecycle stages, a project that starts from an idea with no repository, and a change to text a model reads. Sizes the work and routes each step to the skill or reference it needs.
+description: Use when unsure how much design, testing, review or process a task needs. That includes a project whose documents or habits suggest more process than a change needs, a project that starts from an idea with no repository, and a change to text a model reads. Sizes the work and routes each step to the skill or reference it needs.
 ---
 
 # Using OutcomeBound

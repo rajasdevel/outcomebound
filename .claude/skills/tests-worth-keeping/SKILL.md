@@ -1,6 +1,6 @@
 ---
 name: tests-worth-keeping
-description: Use when writing, changing or judging a test, or when the project's tests already fail before you begin. What makes a test worth keeping, when no new test is warranted, and what the report keeps apart.
+description: Use when judging a test, or when the project's tests already fail before you begin. What makes a test worth keeping, when no new test is warranted, and what the report keeps apart.
 ---
 
 # Tests worth keeping

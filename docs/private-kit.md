@@ -101,6 +101,38 @@ one line in `$HOME/.codex/AGENTS.md` for Codex. Both documentation sets say that
 are loaded together with the project's. They are added to it, and they do not replace it
 (sources as above). Do not put this text in a project's `AGENTS.md`: that file is committed.
 
+## A rule for one machine
+
+Some rules are true for one machine and for one person, not for a project. Two examples are
+which services run on the host and what an agent can remove without asking. Write such a rule in
+your user-level instruction file. Do not write it in a shipped fragment or in a project's
+`AGENTS.md`. Another person's machine can contradict it. This example is synthetic:
+
+```text
+# Containers and services on this machine
+
+- Databases and caches (for example PostgreSQL and Redis) run on the host, installed with the
+  system package manager. Do not start them in a container for development or tests. Isolate
+  the work with a temporary database that you create and drop.
+- A project may allow an exception only where its own instructions say so. An instruction in
+  the session wins over both.
+- Standing cleanup grant: without asking, you may remove stopped containers, and images and
+  volumes that carry your own project's label and are older than 7 days, after `docker inspect`
+  shows that nothing else uses them. The grant never covers a named volume that holds data,
+  another project's object, or a prune of all unused objects. Report what you removed.
+```
+
+The rule has a scope (this machine, the services it has), a way to allow an exception, and a
+rank (the session wins). A grant names what it covers by label, state and age, and what it never
+covers. A cloud session does not get this file (see the next section).
+
+Where the rule goes depends on the harness:
+
+- Claude Code: a file in `$HOME/.claude/rules/`, as in the pointer file section.
+- Codex: its user file, `$HOME/.codex/AGENTS.md`, is read by every Codex call made under that
+  home. Evaluation calls are included, so a rule there also reaches the arm of a comparison that
+  must have no guidance. For Codex, put the rule in each project's `local` fragment instead.
+
 ## Cloud sessions see none of it
 
 A cloud or background session starts from the pushed branch. The Claude Code documentation

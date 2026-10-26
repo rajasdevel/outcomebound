@@ -1,6 +1,6 @@
 ---
 name: gather-requirements
-description: Use when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice. Unclear means two readings give different observable results and nothing readable chooses; a source is an issue, a document, an export or a picture. Not for a request that states its outcome and checks, even one asking for a spec, nor for an accepted ticket, whose brief settled them, except where resumed work relies on a recorded direction choice.
+description: Use when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice. Unclear means two readings give different observable results and nothing readable chooses; a source is a document, an export or a picture. Not for a request that states its outcome and checks, even one asking for a spec, nor for an accepted ticket, whose brief settled them, except where resumed work relies on a recorded direction choice.
 ---
 
 # Gather requirements

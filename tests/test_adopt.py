@@ -514,7 +514,7 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
     edited = edit_local(target, line, line)
     if shape == "frame-edited":
         agents = target / "AGENTS.md"
-        edited = edited.replace("- when writing, changing or judging a test", "- when testing")
+        edited = edited.replace("- when judging a test", "- when testing")
         write(agents, edited)
     else:
         without_frame(target)
@@ -1232,6 +1232,54 @@ def test_detect_does_not_propose_the_workspace_for_skills_alone(
     code, out, _ = run(capsys, str(target), "--detect")
 
     assert code == 0 and "workspace" not in out
+
+
+@pytest.mark.parametrize(
+    ("files", "proposed"),
+    [
+        ({}, False),
+        ({"pyproject.toml": "[project]\n", "src/lib.py": "x = 1\n"}, False),
+        ({"Dockerfile": "FROM scratch\n"}, True),
+        ({".devcontainer/devcontainer.json": "{}\n"}, True),
+    ],
+    ids=["empty", "library", "dockerfile", "devcontainer"],
+)
+def test_detect_proposes_containers_only_where_a_container_file_exists(
+    tmp_path: Path, capsys: Capture, files: dict[str, str], proposed: bool
+) -> None:
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    words = shlex.split(out, comments=True)
+    listed = words[words.index("--fragments") + 1].split(",")
+    assert ("containers" in listed) is proposed
+
+
+def recorded_fragments(target: Path) -> list[str]:
+    return next(r["fragments"] for r in manifest(target)["artifacts"] if r["id"] == adopt.FACTS)
+
+
+def test_an_upgrade_keeps_a_recorded_containers_selection_and_adds_none_by_itself(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"Dockerfile": "FROM scratch\n"})
+    assert run(capsys, str(target), "--harness", "claude-code", "--fragments", "python")[0] == 0
+    assert recorded_fragments(target) == ["python"]
+    assert run(capsys, str(target))[0] == 0  # an upgrade does not add the proposal
+    assert recorded_fragments(target) == ["python"]
+
+    arguments = (str(target), "--harness", "claude-code", "--fragments", "python,containers")
+    assert run(capsys, *arguments)[0] == 0
+    shipped = target / ".outcomebound/fragments/containers.md"
+    assert shipped.is_file()
+
+    assert run(capsys, str(target))[0] == 0  # omitted flags keep the recorded selection
+    assert recorded_fragments(target) == ["python", "containers"]
+    assert shipped.is_file()
+    assert run(capsys, str(target), "--check")[0] == 0
 
 
 def test_detect_proposes_the_commands_fragment_for_an_empty_repository(

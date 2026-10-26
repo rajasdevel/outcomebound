@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "c9f73a347d9fc61e7f630cc1ff52ceb20fbd3d0e91b5a11e0f7e9c9e687df862"
+      "sha256": "99c046c1398f8bc8ae376e0b79c89bc307f21ff5480d5b0d68aa1d015cfd1d7e"
     },
     {
       "kind": "block",
@@ -35,7 +35,7 @@
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "5d115c14079ad367f0bedc9ca3f1bb4214277bb8bb19e068840921cdfe997cb2"
+        ".outcomebound/fragments/workspace.md": "1853ff02c80314d7bc47a075bae9903c190c118883c3a7a17e89e18655122cb7"
       },
       "style": [
         "ste"
@@ -46,8 +46,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "f1330f69585099d445f22e5bde9fbb32288f36fd8459aff679c11fa1bac54617",
-      "sha256": "e3e3f09c4938c9aa8d093f94d6a56ef9ea932c5fd93fc2c411127ae4e5b17c99"
+      "frame": "3c8ba3184f28db29795a9a8ea4c3dfe2fb2949a832e0c521765902472485f73f",
+      "sha256": "650b5081f4e439c0a5b478e111bcdc4478898045310b9541d34966ffffa89d0d"
     },
     {
       "kind": "fragment",
@@ -59,7 +59,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "5d115c14079ad367f0bedc9ca3f1bb4214277bb8bb19e068840921cdfe997cb2"
+      "sha256": "1853ff02c80314d7bc47a075bae9903c190c118883c3a7a17e89e18655122cb7"
     },
     {
       "kind": "fragment",
@@ -92,7 +92,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "d873ace9d2f03ecc209cdba9e51a3b61e7d16c8739ed2d8190baf40cb37474cb"
+      "sha256": "f8823c20990e80fee1cf6031a4a5636001076e5d2efc5c391bda0b4bf29a8faf"
     },
     {
       "kind": "skill",
@@ -101,7 +101,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e8278b6201b1304b65d7bd9de859b1a461d91121bbb19491f044d305887c9bb8"
+      "sha256": "db9dfa09580e8c892fb62a2c84ae38e88dbd6782a82b85b1a4bbab9cfa33d74c"
     },
     {
       "kind": "skill",
@@ -137,7 +137,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "fc7c571ac3fcf9092d4a27aacf0e73762b665b53a2936990350fbc48ef242f97"
+      "sha256": "dcacf0037802bfba2319ffcf52bfb3f4aa09239589d94ec759cc59564d1a9fe7"
     },
     {
       "kind": "skill",
@@ -227,7 +227,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "aa1fe0eac173ff8c801ad8819bfe52535ac0c4e9b9e490e5f1a6383580a109bd"
+      "sha256": "6408d69971121fe3752a2a1048405e985bc6c3c828e631262716ab116c8ecbc4"
     },
     {
       "kind": "skill",
@@ -236,7 +236,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "a3b143c7576d3d5e5c04d139f3b43ee2ecc7218e5638a29762a2cd36a3462020"
+      "sha256": "f8185ef3600602e26aa6df9140e6adf7a9878b3b01a22db766582f73d644ac87"
     },
     {
       "kind": "skill",
