@@ -1661,6 +1661,27 @@ def test_bounded_command_keeps_partial_output_and_stops_descendant(
     assert not alive, f"timed-out child still runs, state {state[:1] or 'unknown'}"
 
 
+def _process_facts(pid: int, started: list[int]) -> str:
+    """What a failure needs to tell a missed descendant from a reused id: the process's place in
+    the log, its parent, state and start, and its command line, where the host shows them."""
+
+    facts = f"{pid} (#{started.index(pid) + 1} of {len(started)})"
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
+        command = (
+            Path(f"/proc/{pid}/cmdline")
+            .read_bytes()
+            .replace(b"\0", b" ")
+            .decode("utf-8", "replace")
+        )
+        facts += (
+            f" state {stat[0]} parent {stat[1]} start {stat[19]} command {command.strip()[:80]!r}"
+        )
+    except (OSError, IndexError):
+        facts += " (no /proc entry)"
+    return facts
+
+
 @pytest.mark.skipif(os.name == "nt", reason="the descendants are made with fork and setsid")
 def test_bounded_command_stops_a_descendant_made_while_its_scan_waits(tmp_path, monkeypatch):
     """A command that keeps starting processes of their own session must leave none behind, even
@@ -1707,7 +1728,9 @@ def test_bounded_command_stops_a_descendant_made_while_its_scan_waits(tmp_path, 
         while any(running(pid) for pid in started) and time.monotonic() < deadline:
             time.sleep(0.05)
         left = [pid for pid in started if running(pid)]
-        assert not left, f"{len(left)} of {len(started)} descendants still run"
+        assert not left, f"{len(left)} of {len(started)} descendants still run: " + "; ".join(
+            _process_facts(pid, started) for pid in left
+        )
     finally:
         monkeypatch.setattr(os, "kill", real_kill)
         for pid in locals().get("started", []):  # Those this test started, and no others.
