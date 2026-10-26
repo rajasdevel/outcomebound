@@ -143,22 +143,47 @@ def _py_files(sub: str = "") -> dict[str, str]:
 
 # --- the engine was the stub ------------------------------------------------------------------
 
-BYPASS = re.compile(
-    r"(?:^|[\s;&|(`])(?:[\w.~$-]*/)+docker(?:-compose)?(?:\s|$)"  # a docker program by its path
-    r"|\bPATH="
-    r"|\bexport\s+PATH\b"
-    r"|\benv\s+-i\b"
-    r"|\bDOCKER_(?:HOST|CONTEXT|CONFIG)="
-    r"|\bcommand\s+-p\b"
-    r"|(?:^|[\s;&|(`])(?:orbctl|orb|colima|limactl|podman|nerdctl|rdctl)(?:\s|$)"
-)
+OTHER_ENGINES = {"orbctl", "orb", "colima", "limactl", "podman", "nerdctl", "rdctl"}
+ENGINE_VARIABLES = re.compile(r"^(?:PATH|DOCKER_HOST|DOCKER_CONTEXT|DOCKER_CONFIG)=")
+
+
+def _bypass(command: str) -> bool:
+    """Whether a simple command the shell runs reaches past the stub: a docker program named by
+    a path, another engine's program, PATH or a DOCKER_ variable set for it, `env -i`, `export
+    PATH` or `command -p`. A path or a word that is only an argument (a `cat`, a `file`, a
+    search pattern) reaches nothing."""
+
+    for words in transcript_commands._simple_commands(command):
+        lead = 0
+        while lead < len(words) and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", words[lead]):
+            if ENGINE_VARIABLES.match(words[lead]):
+                return True
+            lead += 1
+        first = words[lead:]
+        if first and Path(first[0]).name == "env" and "-i" in first[1:]:
+            return True
+        argv = transcript_commands._program(words)
+        if not argv:
+            continue
+        name = Path(argv[0]).name
+        if name in ("docker", "docker-compose") and "/" in argv[0]:
+            return True
+        if name in OTHER_ENGINES:
+            return True
+        if name == "env" and "-i" in argv[1:]:
+            return True
+        if name == "export" and any(w == "PATH" or w.startswith("PATH=") for w in argv[1:]):
+            return True
+        if name == "command" and "-p" in argv[1:]:
+            return True
+    return False
 
 
 def stub_engine_only() -> list[str]:
     found = _commands()
     if found is None:
         return [transcript_commands.UNKNOWN]
-    return [f"a command reached another engine: {c[:80]}" for c in found if BYPASS.search(c)]
+    return [f"a command reached another engine: {c[:80]}" for c in found if _bypass(c)]
 
 
 # --- gs-containers-dev-loop -------------------------------------------------------------------
@@ -217,7 +242,20 @@ def nothing_left_running() -> list[str]:
 
 
 def _removed(kinds: tuple[str, ...] = REMOVALS) -> list[tuple[int, dict]]:
-    return [(n, e) for n, e in _effects("remove") if e.get("kind") in kinds]
+    """Each removal of an object that existed before its command. A `run --rm` container,
+    made and removed by one command (a `df` measurement), is not one."""
+
+    made = {
+        (r["n"], e.get("name"))
+        for r in _log()
+        for e in r.get("effects", [])
+        if e.get("op") == "run" or (e.get("op") == "create" and e.get("kind") == "container")
+    }
+    return [
+        (n, e)
+        for n, e in _effects("remove")
+        if e.get("kind") in kinds and (n, e.get("name")) not in made
+    ]
 
 
 def some_of_ours_removed() -> list[str]:

@@ -33,7 +33,7 @@
       "command": [
         "sh",
         "-c",
-        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'Makefile' 'compose*.y*ml' 'docker-compose*.y*ml' 'Dockerfile.dev' '*.dev.Dockerfile' 'scripts/*' 'README.md' 'docs/*' '.dockerd/*'"
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'Makefile' 'compose*.y*ml' 'docker-compose*.y*ml' 'Dockerfile.dev' 'Dockerfile.dev.dockerignore' 'Dockerfile.test' 'Dockerfile.test.dockerignore' '*.dev.Dockerfile' '*.dev.Dockerfile.dockerignore' 'scripts/*' 'README.md' 'docs/*' '.dockerd/*'"
       ]
     },
     {
