@@ -53,7 +53,8 @@ def stop_descendants(pid: int) -> None:
     or while the scan waits for the CPU on a loaded machine, and a child made after the read would
     outlive the kill. A suspended process makes none, but SIGSTOP takes hold only when the
     process next leaves the kernel: one inside `fork` finishes it first, so a read made before the
-    stop shows can miss that child. The command itself is killed by the caller afterwards
+    stop shows can miss that child. The loop ends on two such reads in a row, as one read can skip
+    an entry it could not read at that moment. The command itself is killed by the caller afterwards
     (SIGKILL ends a suspended process). Left open: a descendant that exits between two reads, with
     a child made in that time, leaves a child the table no longer ties to the command.
     """
@@ -72,6 +73,7 @@ def stop_descendants(pid: int) -> None:
     try:
         suspend(pid)
         # Bounded: a descendant that cannot be suspended (another user's) may keep forking.
+        quiet = 0
         for _read in range(256):
             table = _process_table()
             if table is None:
@@ -81,7 +83,9 @@ def stop_descendants(pid: int) -> None:
                 found |= more
             # A process the table no longer holds, or holds as exited, makes no child.
             settled = all(table.get(each, (0, "Z"))[1] in "TtZ" for each in owned)
-            if found <= owned and settled:
+            # Two quiet reads in a row: an entry that one read could not read is in the next.
+            quiet = quiet + 1 if found <= owned and settled else 0
+            if quiet == 2:
                 break
             for child in found - owned:
                 suspend(child)
