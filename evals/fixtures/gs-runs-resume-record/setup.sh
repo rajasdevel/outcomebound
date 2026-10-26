@@ -108,13 +108,15 @@ cat > tools/profile.py <<'NOTE'
     python3 tools/profile.py --cache    print enrich behind a cache on the lookup
 """
 
+import importlib
 import sys
 from pathlib import Path
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from report import pipeline, settings  # noqa: E402
+pipeline = importlib.import_module("report.pipeline")
+settings = importlib.import_module("report.settings")
 
 
 def cached_enrich(db, rows):

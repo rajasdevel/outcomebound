@@ -367,7 +367,10 @@ def _needs_you(text: str) -> list[str] | None:
     )
     if start is None:
         return None
-    remainder = HEADING.match(lines[start]).group(4)  # type: ignore[union-attr]
+    heading = HEADING.match(lines[start])
+    if heading is None:
+        return None
+    remainder = heading.group(4)
     body = [remainder] if remainder.strip() else []
     for line in lines[start + 1 :]:
         if ANOTHER_HEADING.match(line) and not BULLET.match(line):

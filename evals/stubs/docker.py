@@ -46,9 +46,11 @@ from pathlib import Path
 from typing import Any
 
 try:
-    import fcntl
+    import fcntl as _fcntl
+
+    FCNTL: Any = _fcntl
 except ImportError:  # pragma: no cover - the stubs run on POSIX
-    fcntl = None  # type: ignore[assignment]
+    FCNTL = None
 
 STATE_DIR = ".dockerd"
 STATE_FILE = "state.json"
@@ -2444,8 +2446,8 @@ def find_root() -> Path | None:
 
 def locked(root: Path) -> Any:
     handle = (root / STATE_DIR / "lock").open("w", encoding="utf-8")
-    if fcntl is not None:
-        fcntl.flock(handle, fcntl.LOCK_EX)
+    if FCNTL is not None:
+        FCNTL.flock(handle, FCNTL.LOCK_EX)
     return handle
 
 

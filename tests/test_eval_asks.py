@@ -13,6 +13,7 @@ import json
 import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -458,7 +459,7 @@ READABLE_CASES = [
     ),
 ]
 
-CASES = {
+CASES: dict[str, list[tuple[Any, ...]]] = {
     "gs-asks-question-asked": QUESTION_CASES,
     "gs-asks-fewer-decisions": DECISION_CASES,
     "gs-asks-readable-output": READABLE_CASES,

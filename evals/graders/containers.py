@@ -147,6 +147,19 @@ OTHER_ENGINES = {"orbctl", "orb", "colima", "limactl", "podman", "nerdctl", "rdc
 ENGINE_VARIABLES = re.compile(r"^(?:PATH|DOCKER_HOST|DOCKER_CONTEXT|DOCKER_CONFIG)=")
 
 
+def _reaches_past(argv: list[str]) -> bool:
+    """Whether the program of one simple command, its wrappers stripped, reaches past the stub."""
+
+    name = Path(argv[0]).name
+    rest = argv[1:]
+    return (
+        (name in ("docker", "docker-compose") and "/" in argv[0])
+        or name in OTHER_ENGINES
+        or (name == "export" and any(w == "PATH" or w.startswith("PATH=") for w in rest))
+        or (name == "command" and "-p" in rest)
+    )
+
+
 def _bypass(command: str) -> bool:
     """Whether a simple command the shell runs reaches past the stub: a docker program named by
     a path, another engine's program, PATH or a DOCKER_ variable set for it, `env -i`, `export
@@ -163,18 +176,7 @@ def _bypass(command: str) -> bool:
         if first and Path(first[0]).name == "env" and "-i" in first[1:]:
             return True
         argv = transcript_commands._program(words)
-        if not argv:
-            continue
-        name = Path(argv[0]).name
-        if name in ("docker", "docker-compose") and "/" in argv[0]:
-            return True
-        if name in OTHER_ENGINES:
-            return True
-        if name == "env" and "-i" in argv[1:]:
-            return True
-        if name == "export" and any(w == "PATH" or w.startswith("PATH=") for w in argv[1:]):
-            return True
-        if name == "command" and "-p" in argv[1:]:
+        if argv and _reaches_past(argv):
             return True
     return False
 

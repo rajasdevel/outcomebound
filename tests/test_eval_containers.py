@@ -634,7 +634,9 @@ def test_system_df_and_the_two_disks_tell_the_story_of_the_free_space_fixture(
     assert re.search(r"98%", host), host
     engine = _docker(target, "docker run --rm alpine df -h").stdout
     assert re.search(r"overlay\s+\d+G\s+\d+G\s+\d+G\s+\d+%", engine), engine
-    used = int(re.search(r"overlay\s+\d+G\s+(\d+)G", engine)[1])  # type: ignore[index]
+    found = re.search(r"overlay\s+\d+G\s+(\d+)G", engine)
+    assert found is not None, engine
+    used = int(found[1])
     assert 50 <= used <= 70
 
 
