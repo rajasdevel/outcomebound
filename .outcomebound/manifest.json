@@ -27,7 +27,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "0e8850095bc8f8c989f61170e24d19ec899d8eda2fc4c3af3bf633563d8de41e",
+        ".github/workflows/ci.yml": "51424b31ccb2f703a88babbc462e4e47f023bc08ce60f2eb7a1001313e4c1593",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
