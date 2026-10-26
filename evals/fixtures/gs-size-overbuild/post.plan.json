@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "timeout-setting-works",
+      "risk": "the settings loader does not give timeout_seconds as 30 by default, as the file sets it, or it broke a setting or a refusal it had",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" timeout-setting-works"
+      ]
+    },
+    {
+      "name": "no-new-abstraction",
+      "risk": "a new module or class, or a change to the plugin registry, was made for one setting with a default",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" no-new-abstraction"
+      ]
+    },
+    {
+      "name": "no-process-documents",
+      "risk": "a design, ticket, review or other new file outside the package and the tests was made for a one-line change",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" no-process-documents"
+      ]
+    },
+    {
+      "name": "few-new-tests",
+      "risk": "more than three new test functions were written for one setting",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" few-new-tests"
+      ]
+    }
+  ]
+}
