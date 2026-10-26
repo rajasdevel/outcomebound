@@ -17,6 +17,9 @@ UNMEASURED = {
     "workspace": "no fixture; it governs a shared machine",
     "ci-release": "no fixture",
     "db-migrations": "no fixture",
+    "containers": (
+        "the gap screens ran its draft; no fixture's `fragments` file selects the shipped file yet"
+    ),
     "multi-agent": "no fixture; one call cannot dispatch delegates",
     "node-typescript": "no fixture",
     "python": "no fixture",

@@ -104,10 +104,12 @@ CONDITIONS = {
         "existing source, or resumed work relies on a recorded direction choice"
     ),
     "tests-worth-keeping": (
-        "when writing, changing or judging a test, or when the project's tests already fail before "
-        "you begin"
+        "when judging a test, or when the project's tests already fail before you begin"
     ),
-    "diagnose": "when a failure's cause is unknown, or a fix did not hold",
+    "diagnose": (
+        "when a failure's cause is unknown, a fix did not hold, or a defect is reported to you "
+        "to fix"
+    ),
     "review-findings": "when acting on review findings, or writing a review the project requires",
     "review-council": (
         "when a second opinion from other models or harnesses is worth asking for, as for a "

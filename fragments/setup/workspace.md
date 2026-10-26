@@ -2,9 +2,9 @@
 id: workspace
 family: setup
 applies: repositories where several agents work in one machine's checkout
-condition: when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository
+condition: when a worktree, a handoff or a resume is in play, or a write under `.agents/` is refused
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 16
+version: 17
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
