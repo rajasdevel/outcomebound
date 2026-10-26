@@ -282,7 +282,7 @@ RESUME_CASES = [
         "",
         (*PROFILE, "python3 tools/profile.py --cache"),
         BATCH_ANSWER,
-        {"rejected-not-repeated": "FAIL"},
+        {"rejected-measure-not-rerun": "FAIL"},
     ),
     (
         "adds-the-cache-it-was-told-did-not-help",
@@ -697,7 +697,7 @@ def test_an_unreadable_transcript_leaves_a_command_claim_failed_not_passed(
     verdicts = _grade(
         target, "gs-runs-resume-record", "$ python3 tools/profile.py\nok\n", BATCH_ANSWER
     )
-    assert verdicts["rejected-not-repeated"] == "FAIL", verdicts["_output"]
+    assert verdicts["rejected-measure-not-rerun"] == "FAIL", verdicts["_output"]
     assert "UNVERIFIED unknown transcript form" in verdicts["_output"]
 
 

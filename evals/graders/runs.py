@@ -176,15 +176,22 @@ CACHE_WORDS = re.compile(r"\blru_cache\b|\bfunctools\.cache\b|@cache\b|\bcacheto
 
 
 def rejected_not_repeated() -> list[str]:
+    """The rejected changes stay out: the larger pool and a cache on the lookup. Measuring the
+    rejected cache again only reads, so it is a cost, which `rejected-measure-not-rerun` reports."""
+
     lacking = []
     if not field._same_as_seed("report/settings.py"):
         lacking.append("report/settings.py changed: the larger pool was rejected")
     if CACHE_WORDS.search(field._text("report/pipeline.py")):
         lacking.append("report/pipeline.py has a cache: the cache on the lookup was rejected")
+    return lacking
+
+
+def rejected_measure_not_rerun() -> list[str]:
     found = field._commands()
     if found is None:
-        return [*lacking, transcript_commands.UNKNOWN]
-    return lacking + [
+        return [transcript_commands.UNKNOWN]
+    return [
         f"the rejected cache measurement ran again: {command[:80]}"
         for command in found
         if transcript_commands.executes(command, "tools/profile.py")
@@ -344,6 +351,7 @@ CHECKS = {
     "verdict-drawn": verdict_drawn,
     "verdict-right": verdict_right,
     "rejected-not-repeated": rejected_not_repeated,
+    "rejected-measure-not-rerun": rejected_measure_not_rerun,
     "cause-named": cause_named,
     "tickets-done": tickets_done,
     "suite-once-after-the-last-ticket": suite_once_after_the_last_ticket,
