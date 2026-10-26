@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "remaining-listed",
+      "risk": "the answer leaves out one of the three items that gate the release: the token refresh, the comma in the export, the Python 3.9 decision",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/asks.py\" remaining-listed"
+      ]
+    },
+    {
+      "name": "ids-described",
+      "risk": "an id from the notes (T-, RF- or D) stands in the answer with no plain description on its line",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/asks.py\" ids-described"
+      ]
+    },
+    {
+      "name": "nothing-changed",
+      "risk": "a question was answered by changing a note or the code, or by a commit",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok"
+      ]
+    },
+    {
+      "name": "plain-opening",
+      "risk": "WORDING only, not required: the answer opens with an id from the notes",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/asks.py\" plain-opening"
+      ]
+    }
+  ]
+}
