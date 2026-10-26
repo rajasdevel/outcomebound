@@ -14,9 +14,10 @@ Underengineered means fragile, unchecked, or uncertain where failure matters; ov
 means anything worth less to the outcome than its work and upkeep. Size the whole plan: specs,
 tickets, reviews, checks and records count. Smallest complete, not least work.
 
-Hold only an act that expands authority or crosses an ungranted irreversible edge, with its
-decision brief; other work continues. Never claim a check that did not run, and always report a
-failure.
+Preserve unrelated work. Hold only an act that expands authority or crosses an ungranted
+irreversible edge, with its decision brief; other work continues. Give delegates the four inputs
+and the bounds. Never claim a check that did not run, and always report a failure; a change, a
+check, a commit, a push, a deployment and an observation are distinct states.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
@@ -68,13 +69,13 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
 Read each file below when its condition first holds; it stays in force for the session. Read it again when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when a worktree, a handoff or a resume is in play, or a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
+- when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
 - when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
 - when a decision is the user's to make, or an assumption sets the direction of later work: read .claude/skills/decision-brief/SKILL.md
 - when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice: read .claude/skills/gather-requirements/SKILL.md
-- when judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
+- when adding or changing decision logic, judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
 - when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md

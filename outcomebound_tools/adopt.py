@@ -105,7 +105,8 @@ CONDITIONS = {
         "existing source, or resumed work relies on a recorded direction choice"
     ),
     "tests-worth-keeping": (
-        "when judging a test, or when the project's tests already fail before you begin"
+        "when adding or changing decision logic, judging a test, or when the project's tests "
+        "already fail before you begin"
     ),
     "diagnose": (
         "when a failure's cause is unknown, a fix did not hold, or a defect is reported to you "

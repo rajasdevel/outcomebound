@@ -36,7 +36,7 @@ the wrong one, or one of two.
 Change what causes the failure, not where it shows: no special case for the reported input, no
 catch that hides the error, no retry in place of an explanation. Then run the reproduction again, and
 the tests of the code you changed, since a fix can break a neighbouring case. Keep the reproduction
-as a test where a test adds signal; the `tests-worth-keeping` skill says when. Before you call it fixed, look for the same defect where the same pattern repeats (sibling functions, other callers of the same code) and fix each one inside the task's scope; say which you fixed.
+as a test where a test adds signal; the `tests-worth-keeping` skill says when. Before you call it fixed, look for the same defect where the same pattern repeats (sibling functions, other callers of the same code) and fix each confirmed instance inside the task's scope; report others without changing them, and say which you fixed.
 
 ## When the fix does not hold
 
