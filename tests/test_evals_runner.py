@@ -860,7 +860,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
 
     from outcomebound_tools import adopt, facts
 
-    condition = adopt.CONDITIONS["decision-brief"].encode()
+    condition = adopt.CONDITIONS["review-findings"].encode()
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
     reread = b"a compaction alone is no reason."
@@ -882,7 +882,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         assert done.returncode == 0, done.stdout + done.stderr
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
         assert "a ref's own condition" in notes and "a ref's own reread." in notes
-        assert adopt.CONDITIONS["decision-brief"] not in notes and facts.ONCE not in notes
+        assert adopt.CONDITIONS["review-findings"] not in notes and facts.ONCE not in notes
 
 
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:
