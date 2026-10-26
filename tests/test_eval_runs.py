@@ -737,7 +737,10 @@ def test_the_end_state_is_the_first_word_of_its_line(
 
 
 def _log(target: Path, name: str) -> list[list[str]]:
-    return [line.split() for line in (target / "ops" / f"{name}.log").read_text().splitlines()]
+    return [
+        line.split()
+        for line in (target / "ops" / f"{name}.log").read_text(encoding="utf-8").splitlines()
+    ]
 
 
 def test_the_stand_in_checks_log_each_call_with_a_time_and_the_digest_of_the_code(
@@ -763,10 +766,10 @@ def test_ci_says_running_before_its_wait_is_over_and_passed_after(
     act(target, FAST + CODE3)
     env = {**os.environ, "OB_STUB_SCALE": "1"}
     start = subprocess.run(
-        ["tools/ci", "start"], cwd=target, env=env, capture_output=True, text=True
+        ["tools/ci", "start"], cwd=target, env=env, capture_output=True, encoding="utf-8"
     )
     status = subprocess.run(
-        ["tools/ci", "status"], cwd=target, env=env, capture_output=True, text=True
+        ["tools/ci", "status"], cwd=target, env=env, capture_output=True, encoding="utf-8"
     )
     assert "started" in start.stdout and "running" in status.stdout and status.returncode == 0
     none = subprocess.run(
@@ -774,7 +777,7 @@ def test_ci_says_running_before_its_wait_is_over_and_passed_after(
         cwd=copy_built(_built("gs-runs-critical-path"), tmp_path / "other"),
         env=env,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
     )
     assert none.returncode == 1 and "no run" in none.stdout
 
@@ -800,7 +803,11 @@ def test_the_cost_model_makes_batching_the_one_change_that_gets_under_ten_minute
         "print(json.dumps([pipeline.run_stages(pipeline.Db()), settings.COST, settings.ROWS]))"
     )
     done = subprocess.run(
-        [sys.executable, "-B", "-c", code], cwd=target, capture_output=True, text=True, check=True
+        [sys.executable, "-B", "-c", code],
+        cwd=target,
+        capture_output=True,
+        encoding="utf-8",
+        check=True,
     )
     stages, cost, _rows = json.loads(done.stdout)
     total = sum(stages.values())
@@ -818,11 +825,13 @@ def test_the_handoff_holds_the_ask_word_for_word_the_rejections_and_ends_on_the_
 ) -> None:
     handoff = (
         _built("gs-runs-resume-record") / ".agents/handoffs/2026-10-20-nightly-report.md"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     assert "Why does the nightly report take about 40 minutes" in handoff
     assert "Rejected." in handoff and "--cache" in handoff and "POOL_SIZE" in handoff
     assert handoff.rstrip().splitlines()[-1].startswith("- Write the `--stages` option")
-    assert (FIXTURES / "gs-runs-resume-record" / "prompt.md").read_text().strip() == "continue"
+    assert (FIXTURES / "gs-runs-resume-record" / "prompt.md").read_text(
+        encoding="utf-8"
+    ).strip() == "continue"
 
 
 # --- registration and shape -------------------------------------------------------------------
@@ -859,7 +868,9 @@ def test_each_fixture_keeps_its_graders_in_the_stage_and_holds_the_files_a_fixtu
 
 
 def test_the_stand_ins_and_the_project_note_are_protected_in_the_fixture_that_has_them() -> None:
-    protected = (FIXTURES / "gs-runs-critical-path" / "protected.paths").read_text().split()
+    protected = (
+        (FIXTURES / "gs-runs-critical-path" / "protected.paths").read_text(encoding="utf-8").split()
+    )
     for path in ("AGENTS.md", "tools/_stub.py", "tools/slow-suite", "tools/review", "tools/ci"):
         assert path in protected, path
 

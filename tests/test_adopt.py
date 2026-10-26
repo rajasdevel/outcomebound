@@ -374,7 +374,7 @@ def test_the_refusal_names_both_sides_when_the_block_differs_inside_and_outside_
     )
     agents = target / "AGENTS.md"
     text = agents.read_text(encoding="utf-8")
-    write(agents, text.replace("- when writing, changing or judging a test", "- when testing"))
+    write(agents, text.replace(f"- {COMMANDS_CONDITION}", "- when running"))
 
     code, _, err = run(capsys, str(target))
 
@@ -514,7 +514,7 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
     edited = edit_local(target, line, line)
     if shape == "frame-edited":
         agents = target / "AGENTS.md"
-        edited = edited.replace("- when judging a test", "- when testing")
+        edited = edited.replace(f"- {COMMANDS_CONDITION}", "- when running")
         write(agents, edited)
     else:
         without_frame(target)
@@ -1045,7 +1045,10 @@ def test_check_in_a_checkout_older_than_the_install_names_the_branches_that_hold
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     commit_all(target)
     older = subprocess.run(
-        [GIT, "-C", str(target), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        [GIT, "-C", str(target), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
     ).stdout.strip()
     assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
     commit_all(target)
