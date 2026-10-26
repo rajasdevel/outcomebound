@@ -53,69 +53,6 @@ jobs:
           git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
           python3 scripts/release-check.py --tag "$RELEASE_TAG"
 
-  # Decides how much of the Python matrix this run needs. A change can differ by Python version
-  # only through the code that runs, so a pull request whose every changed path is outside the
-  # list below (text for people, a design, a skill, a fixture of the evals) runs the newest Python
-  # only. A push to `main`, a release tag, a run by hand and any pull request that changes a path
-  # on the list run every Python. The list is here, in the workflow, and the author of a change
-  # does not choose it. A path that cannot be read, or whose name Git quotes, counts as on the
-  # list. The job names that the ruleset requires, `test (3.10)` and `test (3.14)`, stay: the job
-  # `test` below reports them in both cases.
-  plan:
-    runs-on: ubuntu-latest
-    outputs:
-      pythons: ${{ steps.plan.outputs.pythons }}
-      windows: ${{ steps.plan.outputs.windows }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # The pull request's change is read against its base commit.
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Plan the matrix
-        id: plan
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -eu
-          full=true
-          reason="a run that is not a pull request runs every Python"
-          if [ "$EVENT" = pull_request ]; then
-            changed="$(mktemp)"
-            if git -c core.quotePath=false diff --name-only --no-renames "$BASE" HEAD > "$changed"; then
-              full=false
-              reason="no changed path is on the list, so one Python is enough"
-              while IFS= read -r path; do
-                case "$path" in
-                  # Text and data that no Python runs: not on the list.
-                  evals/fixtures/* | evals/*.md) ;;
-                  '"'* | outcomebound_tools/* | scripts/* | tests/* | .github/* | evals/* | \
-                  pyproject.toml | requirements-dev.txt | Makefile | pytest.ini | mypy.ini | \
-                  ruff.toml | VERSION | .gitattributes)
-                    full=true
-                    reason="$path is on the list, so every Python runs"
-                    break
-                    ;;
-                esac
-              done < "$changed"
-            else
-              reason="the changed paths could not be read, so every Python runs"
-            fi
-          fi
-          if [ "$full" = true ]; then
-            pythons='["3.10","3.11","3.12","3.13","3.14"]'
-            windows='["3.10","3.14"]'
-          else
-            pythons='["3.14"]'
-            windows='["3.14"]'
-          fi
-          echo "$reason: Linux $pythons, Windows $windows"
-          echo "pythons=$pythons" >> "$GITHUB_OUTPUT"
-          echo "windows=$windows" >> "$GITHUB_OUTPUT"
-
   # The checks that run once for the change, on the newest Python: the quality floor with its
   # tools from requirements-dev.txt, the public-text claim, and a proof that the shards below
   # are the whole suite. They no longer wait behind the suite. `test (3.14)` needs them.
@@ -206,27 +143,26 @@ jobs:
 
       # The suite runs in shards, each job one part picked by test id (tests/conftest.py). The
       # counts are the ones the jobs below use: 3 for Linux, 2 for Windows and the Debian
-      # container. A test that is in no part, or in two, fails here, and no job would say so.
+      # container. The check reads each worker's selected ids with xdist, without running tests.
+      # A missing test, a repeated test or an empty shard fails here.
       - name: Shards are the whole suite
         run: python scripts/check-test-shards.py 3 2
 
-  # The suite on every Python of the plan, in three shards each. The suite on one Python was the
+  # The suite on every supported Python on every run, in three shards each. One Python was the
   # critical path of a pull request; each shard is a third of it, picked by test id, so the set
   # of tests that CI runs is the same. `fail-fast` is off, so one failing shard does not hide the
   # others, and a re-run of the failed shard is enough. The job `test` below is the name the
   # ruleset requires.
   suite:
-    needs: [plan]
     name: suite (${{ matrix.python-version }}, ${{ matrix.shard }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        # Every push to main, every release tag and every pull request that changes code runs each
-        # Python this project supports: the standard library differs between them (Path.exists
-        # raises PermissionError under an unreadable folder up to 3.13 and returns False on 3.14).
-        # The plan job names the Pythons.
-        python-version: ${{ fromJSON(needs.plan.outputs.pythons) }}
+        # Every run tests each Python this project supports. The standard library differs:
+        # Path.exists raises PermissionError under an unreadable folder up to 3.13 and returns
+        # False on 3.14. Fixture scripts and schemas can also differ by Python version.
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
         shard: ["1/3", "2/3", "3/3"]
     env:
       OUTCOMEBOUND_TEST_SHARD: ${{ matrix.shard }}
@@ -315,12 +251,11 @@ jobs:
         run: python -m pytest -o addopts="" -q -rs -n auto --durations=25 --basetemp="$PYTEST_BASETEMP"
 
   # The names the ruleset requires: `test (3.10)` and `test (3.14)`. Each passes only when the
-  # plan, the checks and every shard of every Python in the plan passed, so it keeps its meaning
-  # (the suite on that Python, the floor and the rest passed) and a Python the plan left out
-  # cannot hide a failure of the ones it kept. The job runs even when one of those failed, to say so.
+  # checks and every shard of every Python passed. The job runs even when a dependency failed,
+  # was cancelled or was skipped, and fails on every result other than success.
   test:
     if: ${{ always() }}
-    needs: [plan, checks, suite]
+    needs: [checks, suite]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -328,30 +263,22 @@ jobs:
     steps:
       - name: Read the jobs behind this name
         env:
-          PLAN: ${{ needs.plan.result }}
           CHECKS: ${{ needs.checks.result }}
           SUITE: ${{ needs.suite.result }}
-          PYTHONS: ${{ needs.plan.outputs.pythons }}
-          PYTHON: ${{ matrix.python-version }}
         run: |
-          echo "plan: $PLAN; checks: $CHECKS; suite: $SUITE; Pythons in the plan: $PYTHONS"
-          case "$PYTHONS" in
-            *"\"$PYTHON\""*) echo "$PYTHON is in the plan: its shards ran." ;;
-            *) echo "$PYTHON is not in the plan: no changed path can differ by Python version, and the newest Python ran." ;;
-          esac
-          [ "$PLAN" = success ] && [ "$CHECKS" = success ] && [ "$SUITE" = success ]
+          echo "checks: $CHECKS; suite: $SUITE"
+          [ "$CHECKS" = success ] && [ "$SUITE" = success ]
 
   # The engine on Windows, on a hosted Windows runner: the suite at the oldest and the newest
-  # Python this project supports, as the plan allows, each in two shards. Nobody on the project
+  # Python this project supports on every run, each in two shards. Nobody on the project
   # runs Windows, so this job is the evidence.
   windows:
-    needs: [plan]
     name: windows (${{ matrix.python-version }}, ${{ matrix.shard }})
     runs-on: windows-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ${{ fromJSON(needs.plan.outputs.windows) }}
+        python-version: ["3.10", "3.14"]
         shard: ["1/2", "2/2"]
     env:
       OUTCOMEBOUND_TEST_SHARD: ${{ matrix.shard }}

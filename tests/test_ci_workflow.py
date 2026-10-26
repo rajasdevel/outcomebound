@@ -1,14 +1,14 @@
-"""The shape of this repository's CI that its landing depends on: the plan job picks the full
-Python matrix for a change that can differ by Python version and one Python for a change that
-cannot, the suite's shards are disjoint and whole, and the job names that the ruleset requires
-are still reported. The plan job is run as the workflow has it, not as a copy of its rule."""
+"""CI always tests every supported Python, binds every shard to its matrix entry, and reports
+required job names only after the checks and every shard pass. The shard guard observes real
+xdist worker selections and rejects an omission that occurs only inside a worker."""
 
 from __future__ import annotations
 
 import importlib.util
+import itertools
+import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import textwrap
@@ -21,9 +21,7 @@ from tests.portable import needs_bash, run_bash, write
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOW = ROOT / ".github/workflows/ci.yml"
-GIT = shutil.which("git") or "git"
-IDENTITY = ("-c", "user.name=ci", "-c", "user.email=ci@example.test", "-c", "commit.gpgsign=false")
-ALL_PYTHONS = '["3.10","3.11","3.12","3.13","3.14"]'
+CHECKER = ROOT / "scripts/check-test-shards.py"
 
 
 def workflow_text() -> str:
@@ -45,6 +43,14 @@ def step_script(name: str) -> str:
     return textwrap.dedent("\n".join(body)) + "\n"
 
 
+def group(pattern: str, text: str) -> str:
+    """The first group of `pattern` in `text`, which must be there."""
+
+    found = re.search(pattern, text, re.M)
+    assert found, pattern
+    return found.group(1)
+
+
 def job_text(job: str) -> str:
     """The text of one top-level job of the workflow."""
 
@@ -53,173 +59,60 @@ def job_text(job: str) -> str:
     return match.group(1)
 
 
-def put(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    write(path, text)
+def test_every_run_tests_the_full_python_matrix():
+    text = workflow_text()
+    trigger = text.split("concurrency:")[0]
+    for event in ("push", "pull_request", "workflow_dispatch"):
+        assert re.search(rf"^  {event}:", trigger, re.M)
+    assert 'tags: ["v*"]' in trigger
+    assert not re.search(r"^\s+paths(?:-ignore)?:", trigger, re.M)
+    assert not re.search(r"^  plan:", text, re.M)
+    for job, versions in (
+        ("suite", ["3.10", "3.11", "3.12", "3.13", "3.14"]),
+        ("windows", ["3.10", "3.14"]),
+    ):
+        body = job_text(job)
+        assert json.loads(group(r"^        python-version: (\[.*\])$", body)) == versions
+    for job in ("suite", "windows", "container", "checks"):
+        assert not re.search(r"^    (?:if|needs):", job_text(job), re.M)
 
 
-def group(pattern: str, text: str) -> str:
-    """The first group of `pattern` in `text`, which must be there."""
+def test_the_job_test_reports_the_two_names_the_ruleset_requires():
+    """`test (3.10)` and `test (3.14)` are the job `test`, one per Python, on every run."""
 
-    found = re.search(pattern, text)
-    assert found, pattern
-    return found.group(1)
-
-
-def git(repo: Path, *argv: str) -> str:
-    done = subprocess.run(
-        [GIT, *IDENTITY, *argv],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-    )
-    return done.stdout.strip()
-
-
-def pull_request(tmp_path: Path, before: dict[str, str], after: dict[str, str | None]) -> str:
-    """A repository whose base commit holds `before` and whose head commit applies `after` (a
-    text, or None to delete the file); returns the base commit. The plan job runs in it."""
-
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    git(repo, "init", "-q")
-    for name, text in before.items():
-        put(repo / name, text)
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "base")
-    base = git(repo, "rev-parse", "HEAD")
-    for name, changed in after.items():
-        if changed is None:
-            (repo / name).unlink()
-        else:
-            put(repo / name, changed)
-    git(repo, "add", "-A")
-    git(repo, "commit", "-q", "-m", "change")
-    return base
-
-
-def plan(tmp_path: Path, event: str, base: str) -> dict[str, str]:
-    """The outputs the plan step writes when it runs in the repository `pull_request` built."""
-
-    script = tmp_path / "plan.sh"
-    write(script, step_script("Plan the matrix"))
-    output = tmp_path / "output.txt"
-    output.write_text("", encoding="utf-8")
-    environment = {
-        **os.environ,
-        "EVENT": event,
-        "BASE": base,
-        "GITHUB_OUTPUT": str(output),
+    test = job_text("test")
+    assert 'python-version: ["3.10", "3.14"]' in test
+    assert "name:" not in test.split("steps:")[0]
+    assert {need.strip() for need in group(r"needs: \[(.*?)\]", test).split(",")} == {
+        "checks",
+        "suite",
     }
+    assert "if: ${{ always() }}" in test
+    assert "CHECKS: ${{ needs.checks.result }}" in test
+    assert "SUITE: ${{ needs.suite.result }}" in test
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("checks", "suite"),
+    list(itertools.product(("success", "failure", "cancelled", "skipped", ""), repeat=2)),
+)
+def test_the_aggregator_fails_on_every_non_success(tmp_path, checks, suite):
+    script = tmp_path / "aggregate.sh"
+    write(script, step_script("Read the jobs behind this name"))
     done = run_bash(
         script,
-        cwd=tmp_path / "repo",
-        env=environment,
+        env={**os.environ, "CHECKS": checks, "SUITE": suite},
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=False,
     )
-    assert done.returncode == 0, done.stdout + done.stderr
-    lines = output.read_text(encoding="utf-8").splitlines()
-    return dict(line.split("=", 1) for line in lines)
-
-
-CODE = {"tests/test_a.py": "x = 1\n"}
-
-
-@needs_bash
-@pytest.mark.parametrize(
-    ("before", "after"),
-    [
-        ({"docs/a.md": "a\n"}, {"docs/a.md": "b\n"}),
-        ({"evals/fixtures/f/answer.md": "a\n"}, {"evals/fixtures/f/answer.md": "b\n"}),
-        ({"evals/fixtures/f/check.py": "a = 1\n"}, {"evals/fixtures/f/check.py": "a = 2\n"}),
-        ({"evals/README.md": "a\n"}, {"evals/README.md": "b\n"}),
-        ({"skills/s/SKILL.md": "a\n"}, {"skills/s/SKILL.md": "b\n"}),
-        ({"CHANGELOG.md": "a\n"}, {"CHANGELOG.md": "b\n", "docs/new.md": "c\n"}),
-    ],
-    ids=["docs", "fixture-prose", "fixture-code", "evals-readme", "skill", "two-prose-files"],
-)
-def test_a_pull_request_that_changes_no_code_runs_one_python(tmp_path, before, after):
-    outputs = plan(tmp_path, "pull_request", pull_request(tmp_path, before, after))
-
-    assert outputs == {"pythons": '["3.14"]', "windows": '["3.14"]'}
-
-
-@needs_bash
-@pytest.mark.parametrize(
-    ("before", "after"),
-    [
-        ({"outcomebound_tools/a.py": "a = 1\n"}, {"outcomebound_tools/a.py": "a = 2\n"}),
-        ({"scripts/a.py": "a = 1\n"}, {"scripts/a.py": "a = 2\n"}),
-        ({"tests/test_a.py": "a = 1\n"}, {"tests/test_a.py": "a = 2\n"}),
-        ({".github/workflows/ci.yml": "a\n"}, {".github/workflows/ci.yml": "b\n"}),
-        ({"evals/run.py": "a = 1\n"}, {"evals/run.py": "a = 2\n"}),
-        ({"evals/graders/g.sh": "a\n"}, {"evals/graders/g.sh": "b\n"}),
-        ({"pyproject.toml": "a\n"}, {"pyproject.toml": "b\n"}),
-        ({"requirements-dev.txt": "a\n"}, {"requirements-dev.txt": "b\n"}),
-        ({"docs/a.md": "a\n", "tests/t.py": "a\n"}, {"docs/a.md": "b\n", "tests/t.py": "b\n"}),
-        # A path that leaves the list still shows: the old name is read as well as the new one.
-        ({"tests/t.py": "a\n"}, {"tests/t.py": None, "docs/t.md": "a\n"}),
-        ({"docs/a.md": "a\n"}, {"tests/new_test.py": "a = 1\n"}),
-        ({"docs/a.md": "a\n"}, {"tests/tést.py": "a = 1\n"}),
-    ],
-    ids=[
-        "engine",
-        "scripts",
-        "tests",
-        "workflow",
-        "eval-runner",
-        "eval-grader",
-        "packaging",
-        "pins",
-        "mixed",
-        "moved-out",
-        "added-test",
-        "quoted-name",
-    ],
-)
-def test_a_pull_request_that_changes_code_runs_every_python(tmp_path, before, after):
-    outputs = plan(tmp_path, "pull_request", pull_request(tmp_path, before, after))
-
-    assert outputs == {"pythons": ALL_PYTHONS, "windows": '["3.10","3.14"]'}
-
-
-@needs_bash
-@pytest.mark.parametrize("event", ["push", "workflow_dispatch", "schedule"])
-def test_a_run_that_is_not_a_pull_request_runs_every_python(tmp_path, event):
-    base = pull_request(tmp_path, {"docs/a.md": "a\n"}, {"docs/a.md": "b\n"})
-
-    assert plan(tmp_path, event, base)["pythons"] == ALL_PYTHONS
-
-
-@needs_bash
-def test_a_base_that_cannot_be_read_runs_every_python(tmp_path):
-    pull_request(tmp_path, {"docs/a.md": "a\n"}, {"docs/a.md": "b\n"})
-
-    outputs = plan(tmp_path, "pull_request", "0" * 40)
-
-    assert outputs["pythons"] == ALL_PYTHONS
-
-
-def test_the_job_test_reports_the_two_names_the_ruleset_requires():
-    """`test (3.10)` and `test (3.14)` are the job `test`, one per Python, whatever the plan."""
-
-    test = job_text("test")
-
-    assert 'python-version: ["3.10", "3.14"]' in test
-    assert "name:" not in test.split("steps:")[0]
-    for need in ("plan", "checks", "suite"):
-        assert need in group(r"needs: \[(.*?)\]", test)
-    assert "if: ${{ always() }}" in test
+    assert (done.returncode == 0) == (checks == suite == "success"), done.stdout + done.stderr
 
 
 def test_the_release_waits_for_the_reported_names_and_the_other_platforms():
     needs = group(r"needs: \[(.*?)\]", job_text("release"))
-
     assert {name.strip() for name in needs.split(",")} == {
         "verify-tag",
         "test",
@@ -228,40 +121,45 @@ def test_the_release_waits_for_the_reported_names_and_the_other_platforms():
     }
 
 
-def shard_pairs(items: list[str]) -> list[tuple[int, int]]:
-    """`["1/3", "2/3"]` as `[(1, 3), (2, 3)]`."""
-
-    pairs = []
-    for item in items:
-        index, _, count = item.strip().strip('"').partition("/")
-        pairs.append((int(index), int(count)))
-    return pairs
-
-
-def test_every_shard_list_of_the_workflow_is_a_whole_split_of_the_count_it_names():
-    text = workflow_text()
-    splits = [shard_pairs(items.split(",")) for items in re.findall(r"shard: \[([^\]]*)\]", text)]
-    by_image: dict[str, list[str]] = {}
-    for image, shard in re.findall(r'- image: "([^"]+)"\n\s+shard: ("[^"]+")', text):
-        by_image.setdefault(image, []).append(shard)
-    splits += [shard_pairs(items) for items in by_image.values()]
-
-    assert len(splits) >= 4
-    for pairs in splits:
-        count = pairs[0][1]
-        assert pairs == [(index, count) for index in range(1, count + 1)], pairs
-    # The check of the shards names every count that splits a suite, one alone being no split.
-    named = {int(count) for count in group(r"check-test-shards\.py ([\d ]+)", text).split()}
-    assert named == {pairs[0][1] for pairs in splits if pairs[0][1] > 1}
+@pytest.mark.parametrize("job", ["suite", "windows", "container"])
+def test_each_matrix_entry_selects_its_own_shard_once_per_python(job):
+    body = job_text(job)
+    # Every entry must use its own matrix value, with no step override of the job's value.
+    environment = group(r"^    env:\n((?:      [^\n]*\n)+)", body)
+    assert group(r"^      OUTCOMEBOUND_TEST_SHARD: (.+)$", environment) == "${{ matrix.shard }}"
+    assert len(re.findall(r"^\s+OUTCOMEBOUND_TEST_SHARD:", body, re.M)) == 1
+    if job == "container":
+        entries = re.findall(r'- image: "([^"]+)"\n\s+shard: "([^"]+)"', body)
+        assert {image for image, _ in entries} == {"python:3.13-slim", "python:3.13-alpine"}
+    else:
+        versions = json.loads(group(r"^        python-version: (\[.*\])$", body))
+        shards = json.loads(group(r"^        shard: (\[.*\])$", body))
+        entries = list(itertools.product(versions, shards))
+    by_python: dict[str, list[tuple[int, int]]] = {}
+    for python, shard in entries:
+        selected = environment.split("OUTCOMEBOUND_TEST_SHARD: ", 1)[1].strip()
+        selected = selected.replace("${{ matrix.shard }}", shard)
+        index, total = suite_conftest.parse_shard(selected)
+        assert selected == shard
+        by_python.setdefault(python, []).append((index, total))
+    assert by_python
+    for pairs in by_python.values():
+        total = pairs[0][1]
+        assert sorted(pairs) == [(index, total) for index in range(1, total + 1)]
+    assert {total for pairs in by_python.values() for _, total in pairs} == (
+        {1, 2} if job == "container" else {3} if job == "suite" else {2}
+    )
+    named = {
+        int(count) for count in group(r"check-test-shards\.py ([\d ]+)", workflow_text()).split()
+    }
+    assert {total for pairs in by_python.values() for _, total in pairs if total > 1} <= named
 
 
 def test_a_test_belongs_to_one_shard_and_a_shard_spec_is_checked():
     ids = [f"tests/test_x.py::test_{n}[case-{n % 7}]" for n in range(500)]
-
     parts = [
         [test for test in ids if suite_conftest.shard_of(test, 3) == index] for index in (1, 2, 3)
     ]
-
     assert sorted(part_id for part in parts for part_id in part) == sorted(ids)
     assert all(len(part) > 100 for part in parts)
     assert suite_conftest.parse_shard("2/3") == (2, 3)
@@ -270,72 +168,65 @@ def test_a_test_belongs_to_one_shard_and_a_shard_spec_is_checked():
             suite_conftest.parse_shard(bad)
 
 
-def collected(shard: str | None) -> list[str]:
-    env = {key: value for key, value in os.environ.items() if key != "OUTCOMEBOUND_TEST_SHARD"}
-    if shard:
-        env["OUTCOMEBOUND_TEST_SHARD"] = shard
+@pytest.mark.parametrize("broken", [False, True], ids=["whole", "worker-only-omission"])
+def test_the_checker_observes_worker_selection_without_running_tests(tmp_path, broken):
+    write(
+        tmp_path / "conftest.py",
+        textwrap.dedent(f"""\
+            from tests.conftest import pytest_collection_modifyitems as select
+
+            def pytest_collection_modifyitems(config, items):
+                select(config, items)
+                if {broken!r} and hasattr(config, "workerinput"):
+                    items[:] = [item for item in items if item.name != "test_omitted"]
+            """),
+    )
+    write(
+        tmp_path / "test_sample.py",
+        "\n".join(
+            f'def test_{name}():\n    raise AssertionError("a collection check must run no test")\n'
+            for name in ["omitted", *map(str, range(30))]
+        ),
+    )
     done = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "--collect-only",
-            "-q",
-            "-o",
-            "addopts=",
-            "-p",
-            "no:cacheprovider",
-            "tests/test_exec_bits.py",
-            "tests/test_makefile.py",
-        ],
-        cwd=ROOT,
-        env=env,
+        [sys.executable, str(CHECKER), "2"],
+        cwd=tmp_path,
+        env=os.environ.copy(),
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=False,
     )
-    assert done.returncode == 0, done.stdout + done.stderr
-    return [line for line in done.stdout.splitlines() if "::" in line]
-
-
-def test_the_shards_of_a_real_collection_are_disjoint_and_whole():
-    whole = collected(None)
-    parts = [collected(f"{index}/2") for index in (1, 2)]
-
-    assert whole and all(parts)
-    assert sorted(parts[0] + parts[1]) == sorted(whole)
-    assert not set(parts[0]) & set(parts[1])
+    assert done.returncode == int(broken), done.stdout + done.stderr
+    if broken:
+        assert "in no part: test_sample.py::test_omitted" in done.stdout
+    else:
+        assert "2 shards of 31 tests: disjoint and whole" in done.stdout
 
 
 def load_checker():
-    spec = importlib.util.spec_from_file_location(
-        "check_test_shards", ROOT / "scripts/check-test-shards.py"
-    )
+    spec = importlib.util.spec_from_file_location("check_test_shards", CHECKER)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-def test_the_shard_check_names_a_test_that_is_in_no_part_in_two_or_in_a_part_only():
+def test_the_shard_check_rejects_missing_repeated_extra_or_empty_selections():
     checker = load_checker()
     whole = ["a::t1", "a::t2", "a::t3"]
-
     assert checker.problems(whole, [["a::t1", "a::t3"], ["a::t2"]]) == []
     assert checker.problems(whole, [["a::t1"], ["a::t2"]]) == ["in no part: a::t3"]
     assert checker.problems(whole, [["a::t1", "a::t2"], ["a::t2", "a::t3"]]) == [
         "in parts 1 and 2: a::t2"
     ]
     assert checker.problems(whole, [["a::t1", "a::t2", "a::t3", "a::t4"], []]) == [
-        "in a part, not in the suite: a::t4"
+        "part 2 is empty",
+        "in a part, not in the suite: a::t4",
     ]
-    assert checker.problems(["a::t1", "a::t1"], [["a::t1"], []])
-
-
-def test_the_plan_step_uses_no_feature_that_only_bash_has():
-    """The step is plain POSIX shell, so it runs under any `sh` a runner or a container has."""
-
-    script = step_script("Plan the matrix")
-
-    assert "[[" not in script and "<<<" not in script and "mapfile" not in script
+    assert checker.problems(whole, [whole, []]) == ["part 2 is empty"]
+    assert checker.problems(whole, [["a::t1", "a::t1"], ["a::t2", "a::t3"]]) == [
+        "in parts 1 and 1: a::t1"
+    ]
+    assert checker.problems(["a::t1", "a::t1"], [["a::t1"], ["a::t1"]])
+    assert checker.problems([], [[], []])
