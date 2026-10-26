@@ -3,6 +3,7 @@ effect: its row here says so, and a change to it reports that effect UNVERIFIED.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,18 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 UNMEASURED = {
     "client": "no fixture; added for the agency lifecycle",
     "explore": "no fixture",
-    "research": "no fixture; the research clone is outside a fixture repository",
     "solo": "no fixture",
     "team": "no fixture",
-    "workspace": "no fixture; it governs a shared machine",
     "ci-release": "no fixture",
     "db-migrations": "no fixture",
-    "containers": (
-        "the gap screens ran its draft; no fixture's `fragments` file selects the shipped file yet"
-    ),
-    "multi-agent": "no fixture; one call cannot dispatch delegates",
     "node-typescript": "no fixture",
-    "python": "no fixture",
 }
 
 
@@ -32,6 +26,9 @@ def _selected() -> set[str]:
         for line in listing.read_text(encoding="utf-8").splitlines():
             if line.strip() and not line.lstrip().startswith("#"):
                 found.add(line.strip())
+    # A fixture with an `install.json` names its fragments there instead (run.py's fixture_install).
+    for install in (ROOT / "evals/fixtures").glob("*/install.json"):
+        found.update(json.loads(install.read_text(encoding="utf-8")).get("fragments") or ())
     return found
 
 

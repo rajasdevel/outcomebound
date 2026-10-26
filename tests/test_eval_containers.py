@@ -719,7 +719,7 @@ def test_the_fixtures_are_registered_and_their_install_does_not_need_the_fragmen
             "docker.seed.json",
         ):
             assert (folder / required).is_file(), (name, required)
-        assert RUN.fixture_install(name) == RUN.Install((), (), "eval", True), name
+        assert RUN.fixture_install(name) == RUN.Install((), ("containers",), "eval", True), name
         assert RUN.selected_fragments(name) == (), name
         suite = RUN.fixture_suite(name)
         assert suite is not None and suite.stubs == ("docker", "docker-compose", "df"), name
