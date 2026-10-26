@@ -21,7 +21,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools import fileplan, identity, textio
+from outcomebound_tools import fileplan, identity, overlay, textio
 
 __all__ = ["Survey", "Worktree", "describe", "installed", "lines", "parse"]
 
@@ -101,6 +101,8 @@ def describe(root: Path, engine: str, survey: Survey | None = None) -> str | Non
     version = installed(root)
     problems, facts_only = survey(root) if survey is not None else ([], False)
     mode = " (facts-only)" if facts_only else ""
+    if not facts_only and overlay.worktree_mode(root) == overlay.OVERLAID:
+        mode = f" ({overlay.OVERLAID})"
     have = None if version is None else _key(version)
     if version is None:
         head = "no OutcomeBound install"

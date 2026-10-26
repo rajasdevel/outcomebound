@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from outcomebound_tools import programs, textio
+from outcomebound_tools import overlay, programs, textio
 from outcomebound_tools.adopt_worktrees import Worktree, parse
 from outcomebound_tools.gitenv import GIT_READ_CONFIGURATION, git_environment
 
@@ -150,6 +150,7 @@ def _audit_one(tree: Worktree, main: bool, default: str | None, now: datetime) -
         "bytes": 0,
         "bytes_complete": True,
         "removable": False,
+        "mode": overlay.worktree_mode(path),
     }
     entry["bytes"], entry["bytes_complete"] = disk_size(path)
     commit = _text(path, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
@@ -222,6 +223,8 @@ def render_text(report: dict[str, Any]) -> str:
             flags.append("removable by the mechanical rule")
         size = _human(item["bytes"]) + ("" if item["bytes_complete"] else " (partial)")
         age = "no commit" if item["age_days"] is None else f"{item['age_days']} d old"
+        if item["mode"]:
+            flags.append(f"mode {item['mode']}")
         out.append(f"{textio.visible(item['path'])}")
         out.append(
             f"  branch {textio.visible(item['branch'])} | commits {item['state']} | "
