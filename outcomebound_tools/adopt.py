@@ -66,6 +66,7 @@ from outcomebound_tools import (
     home,
     identity,
     instruction_audit,
+    overlay,
     paths,
     programs,
     textio,
@@ -169,6 +170,7 @@ LOCAL_IGNORE_TEXT = (
     b"# file whole; put any other ignore in the root .gitignore.\n"
     b"/research-inbox/\n"
     b".outcomebound-checks/\n"
+    b"/overlay.json\n"
 )
 # A harness outside the harness table: the skills go where the pointers name them.
 GENERIC = "generic"
@@ -1038,11 +1040,16 @@ class Run:
         # What the facts restate about this target: printed only by a run that changes a file,
         # so a run with nothing to change restates nothing.
         self.restated: Notes = []
+        # Files a facts-only overlay wrote are not the person's: the committed install is planned
+        # as if they were absent.
+        self.overlaid = overlay.owned_paths(target)
 
     def present(self, relative: str) -> bool:
         """Whether `relative` is in the target; a symlink counts whatever it points at, and so
         does a path behind a symlinked directory, which adopt cannot show absent."""
 
+        if relative in self.overlaid:
+            return False
         path = self.target
         for part in relative.split("/"):
             path = path / part
@@ -2347,6 +2354,7 @@ def check(target: Path, source: Path) -> int:
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return 1
+    overlaid = overlay.check(target, source)
     keys = wanted(target, source, manifest.own)
     kept = survival(target, manifest)
     found = [
@@ -2368,7 +2376,7 @@ def check(target: Path, source: Path) -> int:
     step = next_step(target, found)
     if step is not None:
         print(step)
-    return min(sum(state != "current" for state in found), CHECK_CAP)
+    return min(sum(state != "current" for state in [*overlaid, *found]), CHECK_CAP)
 
 
 def _branches_holding_install(target: Path) -> list[str]:
@@ -2720,6 +2728,7 @@ def detect(target: Path, source: Path) -> int:
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
                             [--setup CMD]... [--human-style ste] [--facts-only | --full]
                             [--dry-run] [--force]
+       outcomebound adopt <target> (--facts-only | --full) --local [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
@@ -2767,6 +2776,12 @@ blocks and .outcomebound/.gitignore are as for a full install. The manifest reco
 run that names no mode keeps it, and --full returns to the full install; --check reads a
 facts-only install against its mode, and --remove takes it out. An engine before this mode
 installs in full on its next run, so move every pin of the engine first.
+
+--facts-only --local gives this one worktree the facts-only text in untracked overlay files
+(AGENTS.override.md for Codex, CLAUDE.local.md for Claude Code, recorded in
+.outcomebound/overlay.json) and changes nothing committed; --full --local and --remove take it
+out, and the report warns where Git does not ignore an overlay file, which adopt never sets
+(.git/info/exclude is the route).
 
 --check also plans the install the recorded selection and mode give, writing nothing: a record it
 would add reads missing, and a current record it would remove reads stale.
@@ -2879,6 +2894,12 @@ def _parser() -> argparse.ArgumentParser:
         action="store_const",
         const=FULL,
         help="install the contract, the facts and the pointers, after a facts-only install",
+    )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="with --facts-only, write a facts-only overlay in this worktree alone, "
+        "untracked; with --full, remove it",
     )
     parser.add_argument(
         "--dry-run",
@@ -3009,8 +3030,17 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         return detect(target, source)
     if args.check:
         return check(target, source)
-    if args.remove:
+    if args.local:
+        planned, edited, notes = (
+            overlay.plan_install(target, source, args.force)
+            if args.mode == FACTS_ONLY
+            else overlay.plan_removal(target, args.force)
+        )
+    elif args.remove:
         planned, edited, notes = remove(target, source, args.force)
+        more, extra, _ = overlay.plan_removal(target, args.force)
+        planned.update(more)
+        edited.extend(extra)
     else:
         selection = Selection(
             _names(args.harness),
@@ -3046,7 +3076,13 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.setup is not None
     chosen = chosen or args.mode is not None
-    if (args.detect or args.check or args.remove) and (chosen or retired_notes(args)):
+    if args.local:
+        alone = not (args.harness or args.fragments is not None or args.done is not None)
+        alone = alone and args.human_style is None and args.setup is None
+        alone = alone and not (args.detect or args.check or args.remove or retired_notes(args))
+        if args.mode is None or not alone:
+            parser.error("--local goes with --facts-only or --full alone, to make or remove it")
+    elif (args.detect or args.check or args.remove) and (chosen or retired_notes(args)):
         parser.error(
             "--harness, --fragments, --done, --setup, --human-style, --facts-only and --full "
             "apply to an install, and the retired flags apply to none"

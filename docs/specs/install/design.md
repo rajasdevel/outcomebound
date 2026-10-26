@@ -11,7 +11,8 @@ An adopter runs one command, `outcomebound adopt`, and every harness they use lo
 operating contract, the facts that settle work in this project, and a pointer to each piece of
 guidance with the condition that calls for it. Running it again from a newer release is the
 upgrade; `--check` says whether the install is current; `--remove` takes it out. `--facts-only`
-installs the project's facts alone, without the contract and pointers (section Facts-only). How:
+installs the project's facts alone, without the contract and pointers (section Facts-only);
+`--facts-only --local` does so for one worktree only, in untracked files. How:
 `outcomebound_tools/adopt.py`, `outcomebound_tools/facts.py`, `outcomebound_tools/fragments.py` and `outcomebound_tools/textio.py`;
 how `outcomebound` is installed and launched is the [distribution design](../distribution/design.md).
 
@@ -175,7 +176,7 @@ bodies, for a delegate's role prompt.
 | `--detect` proposes `commands` everywhere: `detect: ["."]` matches every target | the habits in `workspace`; a kernel line | user | decided |
 | `--detect` reads `CLAUDE.md` or `.claude/` as `claude-code`, `.codex/` as `codex`, `.cursor/` as `cursor`, and `GEMINI.md` or `.gemini/` as `gemini`; `AGENTS.md` alone names no harness. A test command it takes from discovery, not from CI, carries a comment that it runs on the host, so that a project that runs its tests only in a container gives that command instead | reading the project's rules to decide host or container, which a lexical read cannot settle | agent | decided |
 | Discovery does not enter what Git ignores, which one `git ls-files --others --ignored --exclude-standard --directory` names without listing an ignored folder's contents, nor a folder holding its own `.git`; where Git lists nothing, its limits say no `.gitignore` was applied | a hand-written `.gitignore` reader; walking everything to the entry limit | agent | decided |
-| Every install writes `.outcomebound/.gitignore`, a record of kind `ignore` and id `local-records`, owned whole: it keeps `research-inbox/` and every `.outcomebound-checks/` under `.outcomebound/` out of Git, which `research ingest` and `validation` write on this machine. A validation plan outside `.outcomebound/` writes its logs beside it, which the project ignores itself. A `.outcomebound/.gitignore` the project wrote, with no record, is refused by name, even under `--force`, so its lines are moved to the root `.gitignore` and not lost | lines in the root `.gitignore`, which the managed-block markers do not fit; asking each adopter to ignore them by hand | agent | decided |
+| Every install writes `.outcomebound/.gitignore`, a record of kind `ignore` and id `local-records`, owned whole: it keeps `research-inbox/`, every `.outcomebound-checks/` under `.outcomebound/` and `overlay.json` (the facts-only overlay's record) out of Git, which `research ingest`, `validation` and the overlay write on this machine. A validation plan outside `.outcomebound/` writes its logs beside it, which the project ignores itself. A `.outcomebound/.gitignore` the project wrote, with no record, is refused by name, even under `--force`, so its lines are moved to the root `.gitignore` and not lost | lines in the root `.gitignore`, which the managed-block markers do not fit; asking each adopter to ignore them by hand | agent | decided |
 | The install report warns, and refuses nothing: for each path the run writes that `git check-ignore` matches, naming the rule, since another clone never gets it and reads it missing; where the run changes a tracked `AGENTS.md` that holds changes not committed; and for each instruction file a selected harness also loads from a folder above the target, as its row's `ancestors` records (Claude Code: research `harnesses/claude-code.md` §1), whose paths resolve from that folder (the main worktree of the target's own repository is not such a folder, so a linked worktree under the project's `.agents/worktrees` does not warn of the project's own file) | refusing such an install; un-ignoring paths in the project's `.gitignore` | agent | decided |
 | Where `.outcomebound/tickets.json` declares a claims plan that `tickets` can read, the install report warns where that plan's claims would run in a folder it was not written for: once for each claim whose declared `required_paths` are absent from the plan's working directory but present from the checkout root, and once where that working directory is the plan file's own folder below the checkout root (no `cwd`, or `"cwd": "."`). The line says what to write, `"cwd": ".."` from `.outcomebound/`. A declared path absent from both is planned, one a ticket's work will add, and is not reported, so the report never tells a plan whose `cwd` already runs at the root to change it. `tickets_claims.placement` decides it, the rule `tickets check` warns on, and an upgrade is where a plan written before a relative `cwd` started at the plan file's folder first meets that rule. It writes nothing to the plan and refuses nothing, since the plan is the project's file; with no declaration or no readable plan it says nothing, since `tickets check` refuses those; `--check` does not report it, since it reads the install's own records and the hook files adopt writes, and the plan is neither | rewriting the plan's `cwd`, a write to a file the project owns; refusing the upgrade; leaving the report to `tickets check`, which an upgrade does not run | agent | decided |
 | `adopt --dry-run` prints a unified diff for each file that exists and changes, and for a new file one line with its size, since a new file is the shipped text whole (field: a fresh install's dry run printed every new file in full, about 150 KB) | a diff from `/dev/null` for every new file | agent | decided |
@@ -292,7 +293,7 @@ row, from 1.0.0 and from the newest release, with a candidate that renders the b
 ## Validation
 
 `tests/test_adopt.py`, `tests/test_adopt_cloud.py`, `tests/test_adopt_drift.py`,
-`tests/test_adopt_line_endings.py`, `tests/test_adopt_worktrees.py`, `tests/test_facts.py`,
+`tests/test_adopt_line_endings.py`, `tests/test_adopt_overlay.py`, `tests/test_adopt_worktrees.py`, `tests/test_facts.py`,
 `tests/test_fragments.py`, `tests/test_fileplan.py`, `tests/test_textio.py`,
 `tests/test_outcomebound_launcher.py` and `tests/test_paths.py`, run by the `adopt` claim; for the
 retired finish check, `tests/test_retired_hooks.py` builds a 1.6.0 install for each row, with a
@@ -312,7 +313,7 @@ the grouped `warn` lines; `tests/test_upgrade_corpus.py` gains the synthetic cas
 seen in the field. The engine's effect on an agent's container work is the gap screen the skills
 design names, not a test here.
 
-The facts-only overlay: `tests/test_adopt.py` builds a clone with a full install and two worktrees,
+The facts-only overlay: `tests/test_adopt_overlay.py` builds a clone with a full install and two worktrees,
 writes the overlay in one, and holds that the overlay files are untracked and listed by the record,
 that the main checkout, the other worktree, the manifest and every committed file are byte for byte
 unchanged, that a merge of the worktree's branch carries no overlay file, that `--check` reads the
