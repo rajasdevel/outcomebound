@@ -344,6 +344,8 @@ def crlf_checkout(project: Path) -> None:
     commit(project, "crlf checkout")
 
 
+REFUSAL = "AGENTS.md (guidance-pointers) differs from what adopt wrote; restore it, or pass --force"
+LOCAL_MD = ".outcomebound/fragments/local.md"
 CASES = {
     "plain": Case(plain),
     "crlf-checkout": Case(crlf_checkout),
@@ -356,7 +358,7 @@ CASES = {
     "local-edited-in-block-only": Case(
         local_edited_in_block_only,
         install=LOCAL_ONLY,
-        refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
+        refusal=REFUSAL + "; the difference is",
     ),
     "local-edited-alike-rendered-anew": Case(
         local_edited_alike, release=tickets_condition_reworded
@@ -366,7 +368,7 @@ CASES = {
     ),
     "local-and-pointer-line-edited-rendered-anew": Case(
         local_and_pointer_line_edited,
-        refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
+        refusal=REFUSAL + "; the difference is",
         release=tickets_condition_reworded,
     ),
     "unreadable-folder": Case(unreadable_folder, locks=("locked",)),
@@ -561,6 +563,7 @@ def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     if case.refusal:
         assert upgrade.returncode == 1, report
         assert case.refusal in upgrade.stderr, report
+        assert f"the text of {LOCAL_MD} that the block holds" in upgrade.stderr, report
         assert state(project, set(), set()) == whole, "a refusal writes nothing"
         assert check.returncode != 0, check.stdout
         return
