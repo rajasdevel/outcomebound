@@ -96,17 +96,21 @@ AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
-    "using-outcomebound": "when unsure how much design, testing, review or process a task needs",
+    "using-outcomebound": (
+        "when the project's documents or habits ask for more design, testing, review or "
+        "process than the change seems to need"
+    ),
     "decision-brief": (
-        "when a decision is the user's to make, or an assumption sets the direction of later work"
+        "when an act needs authority you do not have, or later work would build on an "
+        "assumption the person has not settled"
     ),
     "gather-requirements": (
-        "when a request's outcome or completion bar is unclear, requirements arrive from an "
-        "existing source, or resumed work relies on a recorded direction choice"
+        "when two readings of a request lead to different results and nothing you can read "
+        "settles which, or requirements arrive in a document, an export or a picture"
     ),
     "tests-worth-keeping": (
-        "when adding or changing decision logic, judging a test, or when the project's tests "
-        "already fail before you begin"
+        "when logic that decides money, dates, limits or permissions changes, when judging a "
+        "test, or when the project's tests already fail before you begin"
     ),
     "diagnose": (
         "when a failure's cause is unknown, a fix did not hold, or a defect is reported to you "

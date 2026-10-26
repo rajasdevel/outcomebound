@@ -72,10 +72,10 @@ Read each file below when its condition first holds; it stays in force for the s
 - when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
-- when a decision is the user's to make, or an assumption sets the direction of later work: read .claude/skills/decision-brief/SKILL.md
-- when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice: read .claude/skills/gather-requirements/SKILL.md
-- when adding or changing decision logic, judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
+- when the project's documents or habits ask for more design, testing, review or process than the change seems to need: read .claude/skills/using-outcomebound/SKILL.md
+- when an act needs authority you do not have, or later work would build on an assumption the person has not settled: read .claude/skills/decision-brief/SKILL.md
+- when two readings of a request lead to different results and nothing you can read settles which, or requirements arrive in a document, an export or a picture: read .claude/skills/gather-requirements/SKILL.md
+- when logic that decides money, dates, limits or permissions changes, when judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
 - when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md

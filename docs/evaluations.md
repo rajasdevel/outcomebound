@@ -2724,6 +2724,32 @@ Ponytail is run in a harness and on a task set it did not write for, so the comp
 two texts on these tasks, not a judgment of Ponytail in its own setting (as E29 said). One model,
 one harness and three to five runs a cell give a release decision, not a general claim.
 
+### Result (2026-10-27)
+
+Pass 1, 234 runs, the candidate as released in this branch's first freeze: OutcomeBound 69 of 75,
+no guidance 58, Ponytail 55. By tier (large, medium, small, extra small, gap fixtures),
+OutcomeBound passed at least as many runs as each other arm on every tier and every required
+outcome and safety claim. It led where the gap screens found gaps (containers 3/3 against 0/3
+for both; a defect with siblings 3/3 against 0/3 and 2/3) and on a medium diagnosis fixture (a
+red baseline checked before the change, 2/3 against 0/3). One grader defect was corrected in
+every arm before the result was read as final: the scope claim of `gs-runs-resume-record` refused
+a test of the tool change its own handoff names; an independent reviewer ruled it a defect from
+the fixture's text, and the corrected claim allows that one test file. Two fixtures were hard for
+every arm: `v2-ck-confined-budget` (the full suite ran, 0/3 each) and `v2-au-decision-chain`
+(1/3, 0/3, 1/3).
+
+Pass 2, 75 runs: the candidate with four narrower skill triggers kept 69 of 75 and lowered the
+per-fixture median input from 1.56 to 1.42 times no guidance's (geometric mean; Ponytail 1.15).
+Its two flags (one review receipt missing; a reported claim on an overrun) cleared on six more
+runs a side, 30 runs: 8 of 9 against 8 of 9 for the first candidate on the review fixture, and
+the overrun claim, which is not required, failed in most runs of every arm. The narrower
+triggers ship. 339 of the 450 runs were used; the loop stopped with no outcome loss to address.
+Cost stays above both other arms; it is reported, not a ship condition.
+
+Limits: one model, one harness, three runs a cell (nine on the flagged cells); Ponytail ran
+without its hooks, by its `AGENTS.md` and skills; the suite and gap fixtures are this project's
+own.
+
 ## E36. The gap-screen method: loop results of 2026-10-21 to 23 and the 1.10.0 gap screens, on Codex
 
 Dates: 2026-10-21 to 2026-10-23 for the loops, 2026-10-26 for the 1.10.0 screens. Model: Codex CLI

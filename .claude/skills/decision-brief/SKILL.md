@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision is the user's to make, or an assumption sets the direction of later work. The user's decision is an act the agent's authority does not grant, such as an irreversible edge or widening scope, or a decision a handoff leaves to them; the assumption, the agent's own or inherited from another agent or session, is said to the user before work builds on it. Also when a harness refuses an act the person granted.
+description: Use when an act needs authority you do not have, or later work would build on an assumption the person has not settled. The user's decision is an act the agent's authority does not grant, such as an irreversible edge or widening scope, or a decision a handoff leaves to them; the assumption, the agent's own or inherited from another agent or session, is said to the user before work builds on it. Also when a harness refuses an act the person granted.
 ---
 
 # Decision brief
