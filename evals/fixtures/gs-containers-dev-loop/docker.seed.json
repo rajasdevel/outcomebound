@@ -1,0 +1,8 @@
+{
+  "clock": "2026-10-26T09:00:00Z",
+  "engine": {"total": "100GB", "base": "3GB"},
+  "host": {"total": "494GB", "used": "210GB"},
+  "images": [
+    {"tags": ["python:3.12-slim"], "size": "126MB", "age_days": 20, "cmd": ["python3"]}
+  ]
+}
