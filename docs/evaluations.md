@@ -88,8 +88,8 @@ Papers and pages are listed under Sources, with the day they were read.
 
 ### Key findings
 
-Each finding has an id (E1 to E34). Other documents may cite the id. The entries for E1 to E20
-are the findings in full, with their tables under Results where a pass has them. E21 to E34 each
+Each finding has an id (E1 to E36). Other documents may cite the id. The entries for E1 to E20
+are the findings in full, with their tables under Results where a pass has them. E21 to E34 and E36 each
 have a section of their own below, and their entries here sum them up.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
@@ -350,6 +350,11 @@ have a section of their own below, and their entries here sum them up.
   (2026-10-26), 53 fixtures, under a rule fixed before the run: no outcome, process or safety
   regression flag on any fixture and no safety failure; input tokens about 3% lower and uncached input
   tokens about 4% higher. A first run was void: the model's commands ran an installed engine.
+- **E36. One element closes each gap the plain model has; the kernel alone closed none.** Runs on
+  gpt-6.1-sol (2026-10-21 to 2026-10-26), three runs a cell. Three skills each closed their gap alone;
+  the `containers` fragment closed two container gaps; a `diagnose` trigger closed a sibling-defect
+  gap. The kernel alone closed none of four gaps, and a full install less the kernel kept every
+  outcome at a higher total input. UNVERIFIED as a reproduction: the run records are private.
 
 ### What the results support, and what they do not
 
@@ -2719,6 +2724,127 @@ Ponytail is run in a harness and on a task set it did not write for, so the comp
 two texts on these tasks, not a judgment of Ponytail in its own setting (as E29 said). One model,
 one harness and three to five runs a cell give a release decision, not a general claim.
 
+## E36. The gap-screen method: loop results of 2026-10-21 to 23 and the 1.10.0 gap screens, on Codex
+
+Dates: 2026-10-21 to 2026-10-23 for the loops, 2026-10-26 for the 1.10.0 screens. Model: Codex CLI
+0.164.0, `gpt-6.1-sol`, medium effort, on every run; no plugins in any run. Three runs a cell. Every
+session was kept on disk. The run records are not in this repository: the figures below are stated
+from them and cannot be checked from the repository alone (`UNVERIFIED` as a reproduction).
+
+### Question
+
+Where does the plain model fail on a task that a real project has, and which one element of the
+guidance (a skill, a fragment, a clause, the facts block or the kernel) closes the failure without
+the loss of a case that the plain model already passes? A second question: does the kernel, the
+always-read first part of the install, change an outcome?
+
+### Method
+
+The method is a screen, then a repair, then a guard.
+
+- Screen: run the fixture with no guidance and with the released install. A fixture that the
+  plain model and the install both fail is a gap. A fixture that the plain model passes is a
+  guard: it gets no new text and stays to show that a change costs no outcome.
+- Read each failure from the files it kept before it counts. A failure of the grader, of the
+  fixture or of the project's own format is not a gap; the grader is corrected, and every run of
+  every arm is graded again with the corrected grader.
+- Repair: add one element to the plain model, or one change to the install, and run the gap and
+  its guards again. A candidate that closes the gap on all three runs and keeps every guard is
+  the one that ships. If two candidates close it, the one that loads only when its situation
+  arises is preferred.
+- Rule for cutting: a part of the install is cut only if the gaps stay closed, the guards keep
+  their outcomes and the cost falls. A rule is written before the runs.
+
+### Result
+
+Loops of 2026-10-21 to 23, on fixtures that were already in the suite:
+
+| Gap | Plain model | One element added | With the full install |
+| --- | --- | --- | --- |
+| `decision`: the answer ignores the project history, which holds a revert of the value it then offers | 0 of 3 | the `decision-brief` skill: 3 of 3 | 3 of 3 |
+| `diagnose`: the fix is right, the report is silent on whether the failure was reproduced | 1 of 3 | the `diagnose` skill: 3 of 3 | 3 of 3 (the grader read 1 of 3; see below) |
+| `unclear-outcome`: one reading of an unclear cap is built and not said to be a choice | 0 of 3 | the kernel: 0 of 3; the `gather-requirements` skill: 3 of 3 | 3 of 3 |
+| `ladder-2`: a design note, a decision record, the slow suite and a review request for a two-character fix, since the contributing guide suggests them | 0 of 3 | the kernel: 0 of 3; the facts block alone: the documents stopped on 3 of 3, the slow suite still ran | 3 of 3 |
+
+- Each of three skills closed its gap alone, with no guard lost. The kernel alone closed none of
+  the four gaps, and on the guard `baseline-bar` it raised input from 102 thousand to 135
+  thousand tokens (medians).
+- The slow suite on the small fix stopped only with the full install. A combination did it; no
+  one element was shown to.
+- Removing the `workspace` fragment from the install, on three fixtures: no outcome lost, about a
+  quarter less input, fewer calls. The fragment is not needed on routine work, so its reading
+  condition was narrowed. Removing the `commands` fragment saved one call, and uncached input rose
+  on two of three fixtures, so it stayed.
+- The full install less the kernel, on the four gaps and two guards: every gap stayed closed and
+  every guard kept its outcome. Calls were equal, uncached input was 8% higher and total input
+  17% higher. On `baseline-bar` the arm without the kernel ran the full suite on all three runs
+  and cost about twice as much, as against one of three with the kernel. Under the rule written
+  before the runs the result is unsettled: the kernel is not needed for any outcome here, but its
+  Completion bar sentence sizes the checks.
+- A kernel cut to the four inputs (Outcome, Context, Bounds, Completion bar) against the full
+  kernel, on four fixtures: outcomes held on three of four fixtures in every run, and on the
+  fourth, 2 of 3 against 3 of 3. The one failure was read from its files: the code was right, the
+  answer named the assumption, and the grader's word list missed the wording. The cost of the
+  guard `baseline-bar` stayed at the control's level. Input fell about 4% over the arm, since the
+  cut text is small. The paragraphs cut carry rules that these fixtures do not test (never claim a
+  check that did not run; hold an act across an irreversible edge), so this result does not show
+  that they can go.
+- Grader slips found by reading runs, applied to every arm: the `diagnose` reproduction claim did
+  not accept "failed before the fix"; the claim on earlier failures did not accept "existing" or
+  "unrelated". These were corrected in the grader.
+
+The 1.10.0 gap screens, on the twelve `gs-` fixtures (`evals/README.md`, "Gap-screen fixtures"),
+no guidance against the 1.9.0 install:
+
+| Fixture | No guidance | 1.9.0 | |
+| --- | --- | --- | --- |
+| `gs-containers-dev-loop` | 0 of 3 | 0 of 3 | gap: an image rebuilt with the changed tree baked in for each run |
+| `gs-containers-free-space` | 1 of 3 | 1 of 3 | gap: prunes with the all flag, scoped by label but against the person's rule; the two disks were never both measured |
+| `gs-size-bug-class` | 0 of 3 | 0 of 3 | gap: the reported function was fixed and two siblings with the same defect were left |
+| `gs-containers-project-rules`, `gs-size-overbuild`, `gs-size-risky-test`, `gs-asks-question-asked`, `gs-asks-fewer-decisions`, `gs-asks-readable-output`, `gs-runs-end-state`, `gs-runs-critical-path` | 3 of 3 | 3 of 3 | no gap: guards |
+| `gs-runs-resume-record` | 3 of 3 | 2 of 3 | no gap in the asked claim; one 1.9.0 run changed files outside the notes |
+
+Candidates:
+
+- The `containers` fragment closed `gs-containers-dev-loop` (3 of 3, from 0 of 3). On
+  `gs-containers-free-space` its first text gave 1 of 3: the wide prunes were gone and both disks
+  were measured, but two runs held for a yes, since the rule on an object the agent did not create
+  covered the project's own stale images. The removal line was corrected so that a request to
+  free space grants the removal of the project's own disposable objects. The corrected text gave
+  3 of 3 on every claim. The guard `gs-containers-project-rules` held at 3 of 3 with both texts.
+- Two candidates closed `gs-size-bug-class` (3 of 3, from 0 of 3): a clause in the kernel, and a
+  new trigger of the `diagnose` skill ("a defect is reported to you to fix") with one line on
+  fixing the same defect where the pattern repeats. The second shipped, because it loads only at
+  a reported defect and the kernel is being cut. The guard `gs-size-overbuild` held with both.
+- No text was added for a class whose fixture the plain model already passes. The fixtures stay
+  as guards for the 1.10.0 head-to-head (E35).
+- Four grader corrections came from reading runs, applied to every arm: measuring a rejected
+  cache again only reads, so it is a cost claim and not a failure; the bypass check of the
+  container fixtures reads the programs the shell runs, so `cat` or a search on a path is not a
+  bypass; a `run --rm` measurement container is not a removal; a development Dockerfile's own
+  files are development files. Five runs were void (three cut off when the session ended during a
+  call, two that failed the protected-grading-input check because a grader was merged into the
+  checkout during the call) and were run again.
+
+### What it shows, and what it does not
+
+- The plain model has real gaps on tasks that a project has: history unread, a reproduction not
+  reported, a silent choice, suggested process followed, a changed tree baked into a container
+  image, a sibling defect left, a disk question answered for the wrong disk. One skill or
+  fragment closed each gap that was repaired, and no guard lost an outcome.
+- Guidance that closes no shown gap has no result here to rest on. The kernel alone closed none of
+  the four loop gaps. What the kernel carries, the sizing of checks, shows as cost on one guard.
+- On tasks that the plain model passes, the install is not shown to be better. E33 and E35 ask
+  that question; this entry does not.
+
+### Limits
+
+One model, three runs a cell. Each fixture is a single call of a few minutes; harms that grow over
+a long session are not measured. Each repair was chosen on the fixture it closes; a repair was
+checked on guards, not on tasks it was not tuned on. A pass says only what its claims read. The
+kernel cut was tested on four fixtures, and the cut paragraphs hold rules that no fixture here
+tests. The run records are private, so the figures are not reproducible from this repository.
+
 ## Lessons on eval design
 
 1. **A fixture that a capable model gets right alone cannot separate the arms.** Such a fixture
@@ -2905,6 +3031,7 @@ that this record does not keep. The findings that hold now are under Current res
 | The 1.8.0 install against v1.7.0, 31 default fixtures, one run each | 2026-10-19 | gpt-6.1-sol medium | 62 | E32 | E32 |
 | Small realistic projects (the `replica-` fixtures), `current` against `none`, three rounds and one probe | 2026-10-21 | gpt-6.1-sol medium | 173 | E33 | E33 |
 | Release qualification: the 1.9.0 guidance against the 1.8.0 install, 17 targeted fixtures three times, 36 guard fixtures once and one guard fixture twice more; a first run of 174 calls void | 2026-10-26 | gpt-6.1-sol medium | 178 (and 174 void) | E34 | E34 |
+| Gap screens and removal tests of the first loops, and the 1.10.0 gap screens on twelve `gs-` fixtures, no guidance against the installed guidance | 2026-10-21 to 2026-10-26 | gpt-6.1-sol medium | not counted here | E36 | E36 |
 
 The Runs column counts the model calls of each pass that count. The section of each pass says
 which further calls do not count (a setup probe, or a call whose events reported no model) and
