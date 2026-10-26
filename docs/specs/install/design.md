@@ -324,7 +324,9 @@ out, and that every other harness is refused before a write. Before the change l
 research record for Claude Code gains the `claudeMdExcludes` facts with the day read
 (2026-10-26), and one real session per harness in an overlay worktree, one of them on a
 `CLAUDE.md` host, is read for which instruction text it loaded, recorded with the harness
-version. Until then the overlay's effect on
+version. Run 2026-10-26: under codex-cli 0.164.0 and Claude Code 2.1.310, the full checkout's
+session had the kernel and the facts, and the overlay worktree's session (a `CLAUDE.md` host)
+had the facts and no kernel. Until then the overlay's effect on
 a session is `UNVERIFIED`.
 
 ## Install diagnostics

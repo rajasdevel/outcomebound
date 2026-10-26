@@ -90,7 +90,7 @@ def test_the_overlay_is_untracked_and_nothing_committed_changes(
     assert {item["path"]: item["sha256"] for item in record["artifacts"]} == {
         name: adopt.sha256((tree / name).read_bytes()) for name in (CODEX, CLAUDE)
     }
-    assert "UNVERIFIED" in out and "no session has been run" in out
+    assert "codex-cli 0.164.0" in out and "another harness version is UNVERIFIED" in out
 
 
 def test_the_overlay_text_is_what_a_facts_only_install_writes(

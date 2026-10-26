@@ -376,9 +376,10 @@ def _overlay_notes(names: list[str]) -> Notes:
             "every other checkout are unchanged; `--full --local` removes it",
         ),
         (
-            "UNVERIFIED",
-            "that a session in this worktree loads the overlay text and not the committed one: "
-            "each route rests on the harness maker's pages, and no session has been run",
+            "note",
+            "a session in an overlay worktree loaded the facts-only text and not the kernel under "
+            "codex-cli 0.164.0 and Claude Code 2.1.310 (a CLAUDE.md host among them, 2026-10-26); "
+            "another harness version is UNVERIFIED",
         ),
     ]
 
