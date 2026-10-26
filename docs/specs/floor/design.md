@@ -280,3 +280,19 @@ sent with `os.kill`, skips on Windows with its reason; the Windows hosted job ru
 The engine repository runs lint and type checks as gates after clearing its accepted findings.
 Its empty baseline files retain no debt. This does not change the adoption recipe: a project
 with existing findings can keep a baseline and ratchet it as the findings are repaired.
+
+### The engine repository's CI
+
+The suite on each Python of the matrix is the critical path of a pull request here, and the whole
+landing waits on it (`.github/workflows/ci.yml`; `CONTRIBUTING.md` holds the landing route).
+These rows decide how 1.10.0 shortens that path without weakening what CI shows.
+
+| Decision | Rejected alternative | Owner | Status |
+| --- | --- | --- | --- |
+| The slowest tests are profiled first, from the `--durations` the run already prints, and each change to CI is judged by its measured effect on the wall time of a pull request's run, before and after, recorded in the pull request; no number is promised before the profile | a target set before the profile; a change kept on its description alone | agent | decided |
+| The suite is sharded across jobs where the profile shows one job's suite as the longest wait, each shard a disjoint part of the one suite, so that the set of tests CI runs does not change | fewer tests on a pull request; a faster subset with the full suite only on `main` | agent | decided |
+| The full Python matrix runs where a change can differ by Python version (a change under `outcomebound_tools/`, `scripts/`, `tests/` or the CI files), and one Python where it cannot (text for people, a design, a fixture's prose); the rule is a path list in the workflow, and a release tag and a push to `main` always run the full matrix. Every gate that lands a change (`main-green`, the required checks) keeps its name and meaning | the full matrix on every change, which is the cost; a matrix chosen by the author of the change, which is a loophole | agent | decided |
+| Work rebuilt on every run and unchanged between runs (the development tools, a pinned gitleaks, the oldest Git) is cached by its pinned version | a rebuild each run; an unpinned cache, which hides a tool's change | agent | decided |
+
+Each row is `decided` where its test or its measured run settles it; the timings before and after
+go in the pull request that makes the change, and `make release-check` is unchanged.

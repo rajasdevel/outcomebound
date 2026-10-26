@@ -12,7 +12,8 @@ the same change.
   build and the launcher.
 - [skills](skills/design.md): which skills ship, to whom, and the bar that each one meets.
 - [floor](floor/design.md): the quality floor, `outcomebound floor`, and the plan runner `outcomebound validation`
-  with its retained results and `validation status`.
+  with its retained results and `validation status`; and, in its last section, this repository's
+  own floor and CI.
 - [tickets](tickets/design.md): the ticket layer, `outcomebound tickets`, including `tickets verify`.
 - [decision-support](decision-support/design.md): how a decision, a lesson or a question goes to
   a person. The decision brief, `outcomebound brief`, its read-only lookups of recorded answers
