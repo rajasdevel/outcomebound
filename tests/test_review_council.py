@@ -192,7 +192,8 @@ def test_plan_names_each_reviewer_its_argv_and_safeguards_and_runs_nothing(
     assert "spends the person's credits" in out
     assert "reviewers from: --reviewer on the command line" in out
     assert f"reviewer r1: {CODEX_REVIEWER}" in out and f"reviewer r2: {CLAUDE_REVIEWER}" in out
-    assert "-s read-only" in out and "--ephemeral" in out and "--ignore-user-config" in out
+    assert "-s read-only" in out and "--ignore-user-config" in out
+    assert "--ephemeral" not in out, "the session is kept, so a usage tool counts its tokens"
     assert "--restricted" in out and "--tools Read,Grep,Glob" in out
     assert "--permission-mode dontAsk" in out and "--max-budget-usd 3" in out
     assert "timeout: 1800 s" in out

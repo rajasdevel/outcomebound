@@ -50,19 +50,6 @@
         },
         {
           "args": [
-            "--ephemeral"
-          ],
-          "safeguard": "no session files are kept",
-          "why": "keep no session on disk",
-          "source": "installed `codex exec --help`",
-          "read": "2026-10-18",
-          "listed_in_help": true,
-          "run": "tested",
-          "observed": "no file appeared under the Codex sessions folder during the run",
-          "observed_on": "2026-10-19"
-        },
-        {
-          "args": [
             "--ignore-user-config"
           ],
           "safeguard": "the person's Codex config.toml is not loaded (login still works)",
