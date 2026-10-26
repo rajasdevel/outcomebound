@@ -287,6 +287,24 @@ def test_a_wrong_card_fails_by_the_command_line_too(name: str, tmp_path: Path) -
     assert done.returncode == 1, (name, done.stdout)
 
 
+def test_a_reason_is_written_as_utf8_under_any_console_code_page(tmp_path: Path) -> None:
+    """Breaks if the probe writes its reasons in the console's code page: on Windows (cp1252) an
+    en dash the reason quotes is a byte that the runner, which reads UTF-8, cannot decode."""
+
+    text, check = WRONG_CARD["approved-beside-pending-one-sentence"]
+    answer = tmp_path / "answer.md"
+    answer.write_text(text, encoding="utf-8")
+    done = subprocess.run(
+        # Not -I: an isolated Python ignores PYTHONIOENCODING, which stands in for the code page.
+        [sys.executable, "-B", str(FIXTURE / "checks" / "probe_kit.py"), check],
+        capture_output=True,
+        env={**os.environ, "OUTCOMEBOUND_EVAL_ANSWER": str(answer), "PYTHONIOENCODING": "cp1252"},
+        check=False,
+    )
+    printed = done.stdout.decode("utf-8")
+    assert done.returncode == 1 and not printed.isascii(), printed
+
+
 @pytest.mark.parametrize("check", ["negation", "conflict", "dropped-turn", "reported-approval"])
 def test_a_rule_that_only_the_review_notes_hold_is_missing_from_the_card(check: str) -> None:
     card, notes = BASE.split("## Review notes", 1)
