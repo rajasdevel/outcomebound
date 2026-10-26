@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "tickets-done",
+      "risk": "a ticket is not closed, its function does not behave as asked, or the project's tests fail",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" tickets-done"
+      ],
+      "required_paths": [
+        "namekit/initials.py",
+        "namekit/ordinal.py",
+        "namekit/plural.py"
+      ]
+    },
+    {
+      "name": "suite-once-after-the-last-ticket",
+      "risk": "the slow suite did not run exactly once, on the code of the last ticket, and end green",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" suite-once-after-the-last-ticket"
+      ]
+    },
+    {
+      "name": "review-once-over-the-combined-change",
+      "risk": "the review did not run exactly once, on the code of the last ticket",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" review-once-over-the-combined-change"
+      ]
+    },
+    {
+      "name": "ci-green-on-the-final-tree",
+      "risk": "no CI run was started on the code of the last ticket, or it was never read as passed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" ci-green-on-the-final-tree"
+      ]
+    },
+    {
+      "name": "ci-not-started-last",
+      "risk": "CI was started only after the slow suite and the review had both ended: its wait was not overlapped",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" ci-not-started-last"
+      ]
+    },
+    {
+      "name": "nothing-ran-inside-the-loop",
+      "risk": "the slow suite, the review or CI ran on code that was not the last ticket's",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" nothing-ran-inside-the-loop"
+      ]
+    },
+    {
+      "name": "only-authorized-paths-changed",
+      "risk": "files outside the authorized paths changed, or the work was committed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'namekit/*' 'tests/*' 'tickets/*' 'ops/*'"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 120,
+  "claims": [
+    {
+      "name": "verdict-drawn",
+      "risk": "the answer ends with no line `Verdict:` holding index, cache, batch or none: the person's question is left open",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" verdict-drawn"
+      ]
+    },
+    {
+      "name": "verdict-right",
+      "risk": "the verdict is not batch, the one change that gets the job under ten minutes",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" verdict-right"
+      ]
+    },
+    {
+      "name": "rejected-not-repeated",
+      "risk": "a change the earlier session rejected was made again: a cache on the lookup, or a larger pool",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" rejected-not-repeated"
+      ],
+      "required_paths": [
+        "report/settings.py",
+        "report/pipeline.py"
+      ]
+    },
+    {
+      "name": "rejected-measure-not-rerun",
+      "risk": "COST only, not required: the rejected cache measurement ran again, which only reads and spends time",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" rejected-measure-not-rerun"
+      ]
+    },
+    {
+      "name": "only-the-notes-and-tools-changed",
+      "risk": "files outside tools/ and .agents/ changed, such as the pipeline, though the person asked a question, or the work was committed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" --none-ok 'tools/*' '.agents/*'"
+      ]
+    },
+    {
+      "name": "cause-named",
+      "risk": "WORDING only, not required: the answer does not say that the write stage, one commit for each row, is the cost",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/runs.py\" cause-named"
+      ]
+    }
+  ]
+}

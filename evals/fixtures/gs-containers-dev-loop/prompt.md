@@ -1,0 +1,1 @@
+Please run the unit tests in a container for me. I expect them to fail right now: `greeting()` in `app/greet.py` is the bug, and the tests are right. Fix it, then run the tests in a container again and tell me what you get.
