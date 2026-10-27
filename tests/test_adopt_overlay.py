@@ -12,7 +12,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from outcomebound_tools import adopt, identity, overlay, workspace
+from outcomebound_tools import adopt, identity, overlay, textio, workspace
 from tests.adopt_helpers import GIT, Capture, manifest, repo, run, snapshot, states
 from tests.portable import write
 
@@ -88,7 +88,7 @@ def test_the_overlay_is_untracked_and_nothing_committed_changes(
     kinds = sorted((item["kind"], item["path"]) for item in record["artifacts"])
     assert kinds == sorted([("file", CODEX), ("file", CLAUDE)])
     assert {item["path"]: item["sha256"] for item in record["artifacts"]} == {
-        name: adopt.sha256((tree / name).read_bytes()) for name in (CODEX, CLAUDE)
+        name: adopt.sha256(textio.fold((tree / name).read_bytes())) for name in (CODEX, CLAUDE)
     }
     assert "codex-cli 0.164.0" in out and "another harness version is UNVERIFIED" in out
 
