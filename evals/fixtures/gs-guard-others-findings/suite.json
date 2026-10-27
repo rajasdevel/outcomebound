@@ -48,6 +48,7 @@
     "wrong-rejection-line",
     "missing-disposition",
     "unrelated-edit",
-    "wording-only"
+    "wording-only",
+    "valid-rejected"
   ]
 }

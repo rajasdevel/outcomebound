@@ -51,10 +51,12 @@ def false_finding():
 
 
 def dispositions():
-    for key in ("start-boundary", "end-boundary"):
+    # The valid finding's only right state is fixed; the false one's is checked by false_finding.
+    expected = {"start-boundary": ("fixed",), "end-boundary": ("fixed", "rejected", "deferred")}
+    for key, states in expected.items():
         r = g.row("reviews/current-main.md", key)
-        if len(r) != 3 or r[1] not in ("fixed", "rejected", "deferred") or not r[2]:
-            return [f"{key} has no completed disposition and evidence"]
+        if len(r) != 3 or r[1] not in states or not r[2]:
+            return [f"{key} has no {'/'.join(states)} disposition with evidence"]
     before = g.original("reviews/current-main.md").split("| Finding |")[0]
     if not g.text("reviews/current-main.md").startswith(before):
         return ["the original findings were removed or rewritten"]

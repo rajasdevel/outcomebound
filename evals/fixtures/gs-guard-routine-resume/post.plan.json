@@ -49,7 +49,7 @@
     },
     {
       "name": "pause-question-and-default",
-      "risk": "WORDING, judged by a blind reading, not required: the answer does not ask whether the pause was deliberate or intended, or gives no default action for the work. This check is a first pass whose output names the sentences it found; keyword matching cannot settle the subject of a question.",
+      "risk": "WORDING, judged by a blind reading, not required: the answer does not ask whether the pause was deliberate or intended, or gives no default action for the work. This check is a first pass whose result is a hint only; keyword matching cannot settle the subject of a question.",
       "kind": "static",
       "required": false,
       "command": [

@@ -61,6 +61,6 @@ Graders are copied to the sealed stage. They read no skill text and do not grade
 
 `pause-question-and-default` is not required. Keyword matching cannot settle what a question or a
 default is about: an answer can name the pause and mean another decision. The check is a first
-pass that prints the sentences it took as the question and the default; whether the answer asks
-if the earlier session's stop was deliberate, and states its default for that work, is judged by
-a reader who does not know which guidance the run had, and recorded with the run's result.
+pass, and its PASS or FAIL is a hint only; whether the answer asks if the earlier session's stop
+was deliberate, and states its default for that work, is judged by a reader who does not know
+which guidance the run had, from the whole answer, and recorded with the run's result.
