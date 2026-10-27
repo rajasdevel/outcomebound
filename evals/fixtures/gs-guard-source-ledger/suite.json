@@ -47,6 +47,7 @@
     "old-source-text",
     "lost-existing-rule",
     "source-edited",
-    "wording-only"
+    "wording-only",
+    "case-sensitive-sort"
   ]
 }

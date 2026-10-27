@@ -77,7 +77,7 @@ def direct_unit_run():
 
 def focused():
     if direct_unit_run():
-        return old.seed.unit_tests()
+        return [] if completed("direct-unit")["exit"] == 0 else ["the focused check failed"]
     if not command("unit"):
         return ["no successful focused check command"]
     return [] if completed("unit")["exit"] == 0 else ["the focused check failed"]

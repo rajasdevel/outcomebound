@@ -33,6 +33,11 @@
       "type": "outcome",
       "oracle": "completion",
       "must_always": false
+    },
+    "pause-question-and-default": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
     }
   },
   "report": {},
@@ -50,6 +55,9 @@
     "choice-made",
     "choice-not-asked",
     "unrelated-edit",
-    "wording-only"
+    "wording-only",
+    "remote-question-only",
+    "pause-without-default",
+    "good-plain-wording"
   ]
 }

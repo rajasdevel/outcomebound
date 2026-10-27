@@ -10,3 +10,14 @@ stage="$(cd "$stage" && pwd)"
 cd "$target"
 budget_rule=suggested
 . "$here/../seeds/budget-guards/base.sh"
+
+# Record direct unittest runs as well as the Make targets, only in this fixture.
+cp "$here/unit_receipts.py" tools/unit_receipts.py
+cat > tests/unit/__init__.py <<'PY'
+from tools.unit_receipts import install
+
+install()
+PY
+git add tools/unit_receipts.py tests/unit/__init__.py
+git commit -qm "tests: record direct unit check inputs and results"
+git tag -f seed

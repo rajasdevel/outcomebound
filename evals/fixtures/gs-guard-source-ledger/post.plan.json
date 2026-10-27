@@ -16,7 +16,7 @@
     },
     {
       "name": "changed-item-reconsidered",
-      "risk": "The reworded order rule keeps the earlier input-order decision or output.",
+      "risk": "The reworded order rule keeps the earlier input-order decision or output, or sorts names with regard to case.",
       "kind": "static",
       "required": true,
       "command": [

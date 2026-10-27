@@ -65,6 +65,7 @@
     "wording-only",
     "unneeded-full-suite",
     "focused-not-run",
-    "good-direct-unittest"
+    "good-direct-unittest",
+    "before-fix-only"
   ]
 }

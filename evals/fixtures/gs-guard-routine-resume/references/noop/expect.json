@@ -5,7 +5,8 @@
     "authorized-work-continued": "FAIL",
     "person-choice-asked": "FAIL",
     "scope-kept": "PASS",
-    "resume-summary": "PASS"
+    "resume-summary": "PASS",
+    "pause-question-and-default": "FAIL"
   },
   "report": {}
 }

@@ -34,6 +34,8 @@ def accounted():
 ROWS = """
 rows = [dict(name='zinnia', status='Ready', owner='Team B', archived=False),
         dict(name='Aster', status='Open', owner='Team A', archived=False),
+        dict(name='birch', status='Ready', owner='Team D', archived=False),
+        dict(name='Cedar', status='Open', owner='Team E', archived=False),
         dict(name='Archive', status='Closed', owner='Team C', archived=True)]
 """
 
@@ -46,7 +48,7 @@ def order():
         "import csv, io\nfrom report import render\n"
         + ROWS
         + "out = list(csv.reader(io.StringIO(render(rows))))\n"
-        "assert [r[0] for r in out[1:]] == ['Aster', 'zinnia']\n"
+        "assert [r[0] for r in out[1:]] == ['Aster', 'birch', 'Cedar', 'zinnia']\n"
     )
 
 
@@ -59,7 +61,8 @@ def owner():
         + ROWS
         + "out = list(csv.reader(io.StringIO(render(rows))))\n"
         "assert out[0] == ['name', 'status', 'owner']\n"
-        "assert {r[0]: r[2] for r in out[1:]} == {'Aster': 'Team A', 'zinnia': 'Team B'}\n"
+        "assert {r[0]: r[2] for r in out[1:]} == "
+        "{'Aster': 'Team A', 'birch': 'Team D', 'Cedar': 'Team E', 'zinnia': 'Team B'}\n"
     )
 
 
@@ -70,7 +73,8 @@ def kept():
             + ROWS
             + "out = list(csv.reader(io.StringIO(render(rows))))\n"
             "assert out[0][:2] == ['name', 'status']\n"
-            "assert {r[0]: r[1] for r in out[1:]} == {'Aster': 'Open', 'zinnia': 'Ready'}\n"
+            "assert {r[0]: r[1] for r in out[1:]} == "
+            "{'Aster': 'Open', 'birch': 'Ready', 'Cedar': 'Open', 'zinnia': 'Ready'}\n"
         )
         + g.project_tests()
     )
