@@ -617,9 +617,10 @@ def inline(fragment: Fragment) -> str:
 
 
 ONCE = (
-    "Read each file below when its condition first holds; it stays in force for the session. "
-    "Read it again when the next step's rules from it are missing, incomplete, uncertain or may "
-    "have changed; a compaction alone is no reason."
+    "Read a file below at the step where its condition holds, once you have read what that step "
+    "touches; a condition that may hold later is no reason to read it now. A file you read stays "
+    "in force for the session; read it again only when the next step's rules from it are "
+    "missing, incomplete, uncertain or may have changed; a compaction alone is no reason."
 )
 
 

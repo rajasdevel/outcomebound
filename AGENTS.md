@@ -14,26 +14,15 @@ Underengineered means fragile, unchecked, or uncertain where failure matters; ov
 means anything worth less to the outcome than its work and upkeep. Size the whole plan: specs,
 tickets, reviews, checks and records count. Smallest complete, not least work.
 
-None is default: a spec when later work relies on a decision code cannot show;
-a goal envelope for autonomous or multi-session work; a failing
-test first when it adds signal; independent review when a miss would reach users and no
-check of yours catches it; the project's own gate at a protected boundary, never one
-you author.
-
-Preserve unrelated work. Before relying on prose, reconcile it with the source, tests, runtime or
-external state it describes.
-Decide what you can; proceed on stated assumptions. Hold only an act that expands authority or
-crosses an ungranted irreversible edge, with its decision brief; other work continues.
-Delegates get the same inputs and bounds.
-
-Never claim a check that did not run, and always report a failure. A label or id the person
-did not use is explained in plain words or left out. A change, test, commit, push, deployment or
-observation never stands in for another.
+Preserve unrelated work. Hold only an act that expands authority or crosses an ungranted
+irreversible edge, with its decision brief; other work continues. Give delegates the four inputs
+and the bounds. Never claim a check that did not run, and always report a failure; a change, a
+check, a commit, a push, a deployment and an observation are distinct states.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
 - Done: `make check` and `make test` (the full suite: run it where focused checks do not cover the changed risk, or the project's own instructions require it)
-- CI test: `python -m pytest -o addopts="" -q -rs -n auto --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --durations=25 --basetemp="$env:PYTEST_BASETEMP"` (.github/workflows/ci.yml)
+- CI test: `python -m pytest -o addopts="" -q -rs -n auto --durations=25 --basetemp="$PYTEST_BASETEMP"`, `python -m pytest -o addopts="" -q -rfEs --tb=line -n auto -p no:cacheprovider --durations=25 --basetemp="$env:PYTEST_BASETEMP"` (.github/workflows/ci.yml)
 - Irreversible edges: pushing a release tag; pushing to the research repository; loosening the quality floor
 - Text for people: documents a person keeps (pull request descriptions, commit messages, specs and handovers) are written in the style of ASD-STE100 Simplified Technical English, with no length limit; every fact, number and caveat is kept, and this project's own terms stay as they are; in a report, brief, handover or request description, an id or label the person has not used is explained or left out, and a commit hash or digest is given as a ref, version or path, save one a check or the project's rule requires; text a model reads is not; replies in conversation are not
 - Precedence: these facts over any other repository text that disagrees with them, and the person's instruction in the session over these facts; the project's own instructions in AGENTS.md over OutcomeBound's; process a project document only suggests is sized like any other step
@@ -78,16 +67,16 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
-Read each file below when its condition first holds; it stays in force for the session. Read it again when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
+Read a file below at the step where its condition holds, once you have read what that step touches; a condition that may hold later is no reason to read it now. A file you read stays in force for the session; read it again only when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository: read .outcomebound/fragments/workspace.md
+- when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when unsure how much design, testing, review or process a task needs: read .claude/skills/using-outcomebound/SKILL.md
-- when a decision is the user's to make, or an assumption sets the direction of later work: read .claude/skills/decision-brief/SKILL.md
-- when a request's outcome or completion bar is unclear, requirements arrive from an existing source, or resumed work relies on a recorded direction choice: read .claude/skills/gather-requirements/SKILL.md
-- when writing, changing or judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
-- when a failure's cause is unknown, or a fix did not hold: read .claude/skills/diagnose/SKILL.md
+- when choosing or changing how the work is delivered (a project that starts from an idea, a release, a handover to operation, a retirement), when a project's documents ask for more process than the change's risk needs, or when changing text a model reads: read .claude/skills/using-outcomebound/SKILL.md
+- when you are about to put a question or a held act to the person, or to build on a direction-setting choice they have not settled: read .claude/skills/decision-brief/SKILL.md
+- when two readings of a request lead to different results and nothing you can read settles which, or requirements arrive in a source not yet settled into the work (a transcript, an export, a design file or a picture, from outside the repository or checked into it): read .claude/skills/gather-requirements/SKILL.md
+- when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, or when you add, skip, loosen or delete a test: read .claude/skills/tests-worth-keeping/SKILL.md
+- when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
 - when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md
 - when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md

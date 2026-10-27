@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "reported-function-fixed",
+      "risk": "average of an empty list still fails or does not give None",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" reported-function-fixed"
+      ]
+    },
+    {
+      "name": "siblings-fixed",
+      "risk": "median or value_range, which fail on an empty list the same way, was left unfixed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" siblings-fixed"
+      ]
+    },
+    {
+      "name": "behaviour-kept",
+      "risk": "the fix changed an answer for data, or total or count_over, or the project's tests fail",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" behaviour-kept"
+      ]
+    },
+    {
+      "name": "only-the-module-and-its-test-changed",
+      "risk": "a file other than the summary module and its test file changed, or the change was committed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'reportlib/summary.py' 'tests/test_summary.py'"
+      ]
+    }
+  ]
+}

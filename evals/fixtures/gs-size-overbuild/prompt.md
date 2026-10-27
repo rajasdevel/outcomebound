@@ -1,0 +1,1 @@
+Please add an optional `timeout_seconds` setting to the settings file. When the file does not set it, it is 30. Nothing reads it yet: I only need `load_config` to accept it and give it back. Do not commit. Tell me what you did and what you checked.

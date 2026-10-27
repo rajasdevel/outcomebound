@@ -217,6 +217,7 @@ def test_every_shipped_fragment_parses_and_names_only_registry_mechanisms():
         "deploy",
         "client",
         "explore",
+        "containers",
     }
     for fragment in catalog.values():
         assert fragment.family in ("stack", "setup")
@@ -393,6 +394,47 @@ def test_runtime_and_deploy_are_proposed_only_where_the_repository_shows_them(
 @shipped_catalog
 def test_deploy_declares_no_edges():
     assert load_all(ROOT)["deploy"].edges == ()
+
+
+@shipped_catalog
+def test_the_containers_fragment_parses_declares_no_edges_and_names_registry_mechanisms():
+    fragment = load_all(ROOT)["containers"]
+    assert fragment.family == "stack"
+    assert fragment.edges == ()
+    assert fragment.mechanisms == ("runtime-check",)
+    assert fragment.condition
+    assert "." not in fragment.detect
+
+
+@shipped_catalog
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Dockerfile",
+        "Containerfile",
+        "compose.yml",
+        "compose.yaml",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+        ".devcontainer/devcontainer.json",
+        "services/api/Dockerfile",
+    ],
+)
+def test_containers_is_proposed_where_a_container_file_exists(tmp_path, name):
+    (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+    write(tmp_path / name, "x\n")
+    assert "containers" in detect(tmp_path, load_all(ROOT))
+
+
+@shipped_catalog
+def test_containers_is_not_proposed_for_an_empty_project_or_a_library_without_container_files(
+    tmp_path,
+):
+    assert "containers" not in detect(tmp_path, load_all(ROOT))
+    write(tmp_path / "pyproject.toml", "[project]\n")
+    write(tmp_path / "package.json", "{}\n")
+    write(tmp_path / "README.md", "# a library\n")
+    assert "containers" not in detect(tmp_path, load_all(ROOT))
 
 
 @needs_symlinks

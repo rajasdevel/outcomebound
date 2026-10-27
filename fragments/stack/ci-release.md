@@ -5,14 +5,17 @@ applies: repositories that version, tag, and publish releases
 condition: before a release, a tag push or a publish
 edges: ["pushing a tag", "publishing a package", "moving a shared registry tag", "editing a published release"]
 detect: ["VERSION", ".github/workflows/release*.yml", ".github/workflows/release*.yaml", ".github/workflows/publish*.yml", ".github/workflows/publish*.yaml"]
-version: 8
+version: 9
 ---
 **Context** — a workflow file is a claim; the run log and the published artifact are the
 evidence. Version, changelog entry, and tag must agree with what was actually built.
+GitHub's GraphQL and REST APIs have separate primary rate limits, and the personal tokens and apps
+that act for one login draw on that login's one limit; agents that share a login share it, and a
+call refused on one limit says nothing of the other (docs.github.com, rate limits for the GraphQL
+and REST APIs, read 2026-10-26).
 **Bounds** — pushing a tag, publishing a package, moving a shared registry tag, and editing a
 published release are irreversible edges; a merge grant is not a tag grant; released changelog
-sections are preserved history.
-Consumers or adopters of a release move within a window the project states, or the hold is recorded
+sections are preserved history. Consumers or adopters of a release move within a window the project states, or the hold is recorded
 with its owner; where the project states neither, report the gap and do not set a window yourself.
 **Mechanisms** — `policy-gate` before any publish or tag push; `spec` when the release contract
 or compatibility window changes; `broad-suite` before integrating a release candidate;

@@ -66,6 +66,7 @@ from outcomebound_tools import (
     home,
     identity,
     instruction_audit,
+    overlay,
     paths,
     programs,
     textio,
@@ -95,19 +96,31 @@ AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
-    "using-outcomebound": "when unsure how much design, testing, review or process a task needs",
+    "using-outcomebound": (
+        "when choosing or changing how the work is delivered (a project that starts from an "
+        "idea, a release, a handover to operation, a retirement), when a project's documents "
+        "ask for more process than the change's risk needs, or when changing text a model "
+        "reads"
+    ),
     "decision-brief": (
-        "when a decision is the user's to make, or an assumption sets the direction of later work"
+        "when you are about to put a question or a held act to the person, or to build on a "
+        "direction-setting choice they have not settled"
     ),
     "gather-requirements": (
-        "when a request's outcome or completion bar is unclear, requirements arrive from an "
-        "existing source, or resumed work relies on a recorded direction choice"
+        "when two readings of a request lead to different results and nothing you can read "
+        "settles which, or requirements arrive in a source not yet settled into the work (a "
+        "transcript, an export, a design file or a picture, from outside the repository or "
+        "checked into it)"
     ),
     "tests-worth-keeping": (
-        "when writing, changing or judging a test, or when the project's tests already fail before "
-        "you begin"
+        "when logic that decides money, dates, limits or permissions changes, when the "
+        "project's tests already fail before you begin, or when you add, skip, loosen or "
+        "delete a test"
     ),
-    "diagnose": "when a failure's cause is unknown, or a fix did not hold",
+    "diagnose": (
+        "when a failure's cause is unknown, a fix did not hold, or a defect is reported to "
+        "you to fix"
+    ),
     "review-findings": "when acting on review findings, or writing a review the project requires",
     "review-council": (
         "when a second opinion from other models or harnesses is worth asking for, as for a "
@@ -118,13 +131,13 @@ CONDITIONS = {
     ),
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": (
-        "when handing an accepted ticket from the ticket store to the agent or model that will "
-        "build it"
+        "when handing an accepted ticket from the ticket store to the agent or model that "
+        "will build it"
     ),
     "explorable": (
-        "when the person wants to understand something, or wants it explained to others, where "
-        "trying it teaches more than reading, asks for an interactive page, or wants to try "
-        "options with their own numbers"
+        "when the person wants to understand something, or wants it explained to others, "
+        "where trying it teaches more than reading, asks for an interactive page, or wants to "
+        "try options with their own numbers"
     ),
     "land-change": "when driving a pull or merge request through CI and review to landing",
     "run-acceptance": (
@@ -132,8 +145,8 @@ CONDITIONS = {
         "outside the build"
     ),
     "sync-tracker": (
-        "when reading a card from a tracker that is not the project's ticket store, "
-        "or writing back to it"
+        "when reading a card from a tracker that is not the project's ticket store, or "
+        "writing back to it"
     ),
 }
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
@@ -169,6 +182,7 @@ LOCAL_IGNORE_TEXT = (
     b"# file whole; put any other ignore in the root .gitignore.\n"
     b"/research-inbox/\n"
     b".outcomebound-checks/\n"
+    b"/overlay.json\n"
 )
 # A harness outside the harness table: the skills go where the pointers name them.
 GENERIC = "generic"
@@ -866,6 +880,39 @@ def framing(block: str, inline: str | None) -> str | None:
     return block.replace(inline, FRAME_MARK, 1)
 
 
+def where_it_differs(current: bytes, wanted: bytes | None, inline: str | None) -> str:
+    """For a pointers block that differs from the render, the clause that says whether the
+    difference lies inside the local fragment's inline text, outside it, or in both, and where to
+    look; empty where there is no inline text to tell the two apart.
+
+    The render is the text before the inline text, the inline text, and the text after it. The
+    block differs only inside when it keeps that text before and after; only outside when it
+    keeps the inline text itself."""
+
+    if wanted is None or not inline:
+        return ""
+    render = wanted.decode("utf-8")
+    start = render.find(inline)
+    if start < 0:
+        return ""
+    before, after = render[:start], render[start + len(inline) :]
+    text = current.decode("utf-8", "replace")
+    if len(text) >= len(before) + len(after) and text.startswith(before) and text.endswith(after):
+        return (
+            f"; the difference is inside the text of {LOCAL_FRAGMENT} that the block holds: "
+            "look at that file, or at the block"
+        )
+    if inline in text:
+        return (
+            f"; the difference is outside the text of {LOCAL_FRAGMENT} that the block holds: "
+            "look at the block"
+        )
+    return (
+        f"; the difference is both inside and outside the text of {LOCAL_FRAGMENT} that the "
+        "block holds: look at that file and at the block"
+    )
+
+
 def from_source(
     target: Path,
     current: bytes | None,
@@ -999,15 +1046,22 @@ class Run:
         self.files: dict[str, tuple[bytes | None, bytes | None]] = {}
         self.records: list[Record] = []
         self.edited: list[str] = []
+        # Where the difference of an edited pointers block lies, by the block's label.
+        self.where: dict[str, str] = {}
         self.notes: Notes = []
         # What the facts restate about this target: printed only by a run that changes a file,
         # so a run with nothing to change restates nothing.
         self.restated: Notes = []
+        # Files a facts-only overlay wrote are not the person's: the committed install is planned
+        # as if they were absent.
+        self.overlaid = overlay.owned_paths(target)
 
     def present(self, relative: str) -> bool:
         """Whether `relative` is in the target; a symlink counts whatever it points at, and so
         does a path behind a symlinked directory, which adopt cannot show absent."""
 
+        if relative in self.overlaid:
+            return False
         path = self.target
         for part in relative.split("/"):
             path = path / part
@@ -1070,6 +1124,7 @@ class Run:
                 want.data,
                 record,
                 lambda: from_source(self.target, current, record, want.inline),
+                want.inline,
             )
             host.text = put(host.text, want.id, want.data.decode("utf-8"), AFTER.get(want.id))
         self.records.append(want.record())
@@ -1123,6 +1178,7 @@ class Run:
         wanted: bytes | None,
         record: Record | None,
         derived: Callable[[], bool] | None = None,
+        inline: str | None = None,
     ) -> None:
         """Note `name` as edited when its bytes are neither wanted nor what adopt recorded.
 
@@ -1133,7 +1189,10 @@ class Run:
         person regenerated by hand from the source it renders, are no edit: they are recorded
         as they are, and the report says so, so that no `--force` is needed to keep them. So
         are bytes that `derived` shows are the recorded render with only its source's edit in
-        it: they are written again, and the report says so."""
+        it: they are written again, and the report says so.
+
+        For the pointers block, `inline` is the local fragment's text as this run renders it;
+        the refusal then says whether the block differs inside that text or outside it."""
 
         if current is None:
             return
@@ -1148,6 +1207,9 @@ class Run:
             return
         if record is None or unrecorded:
             self.edited.append(name)
+            place = where_it_differs(current, wanted, inline)
+            if place:
+                self.where[name] = place
 
     def planned(self, manifest: Manifest, version: str) -> Planned:
         """Every change, the manifest last; a refusal when something edited is in the way."""
@@ -1156,6 +1218,7 @@ class Run:
             raise AdoptError(
                 *(
                     f"{name} differs from what adopt wrote; restore it, or pass --force"
+                    f"{self.where.get(name, '')}"
                     for name in self.edited
                 )
             )
@@ -2293,9 +2356,17 @@ def check(target: Path, source: Path) -> int:
         else:
             detail = "HEAD's commit does not hold it either"
         print(f"missing  {MANIFEST}: {detail}")
+        held = _branches_holding_install(target)
+        if held:
+            print(
+                f"{'note':<8} local branches whose tip holds {MANIFEST}: "
+                f"{', '.join(textio.visible(name) for name in held)}; check one out to work "
+                "with that install"
+            )
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return 1
+    overlaid = overlay.check(target, source)
     keys = wanted(target, source, manifest.own)
     kept = survival(target, manifest)
     found = [
@@ -2317,19 +2388,40 @@ def check(target: Path, source: Path) -> int:
     step = next_step(target, found)
     if step is not None:
         print(step)
-    return min(sum(state != "current" for state in found), CHECK_CAP)
+    return min(sum(state != "current" for state in [*overlaid, *found]), CHECK_CAP)
+
+
+def _branches_holding_install(target: Path) -> list[str]:
+    """The local branches, in Git's order, whose tip holds the manifest at the target's own path;
+    none where Git cannot list them. Git is read and nothing is written."""
+
+    listed = _git(target, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+    if not listed:
+        return []
+    names = listed.decode("utf-8", "replace").splitlines()
+    specs = "".join(f"refs/heads/{name}:./{MANIFEST}\n" for name in names)
+    checked = _git(target, "cat-file", "--batch-check", stdin=specs.encode("utf-8"))
+    if checked is None:
+        return []
+    answers = checked.decode("utf-8", "replace").splitlines()
+    if len(answers) != len(names):
+        return []
+    return [
+        name for name, answer in zip(names, answers, strict=True) if not answer.endswith(" missing")
+    ]
 
 
 def _worktree_warnings(target: Path, source: Path) -> list[str]:
-    """The `warn` lines for each other worktree of the project whose install is older than this
-    engine, missing, not on disk as recorded or not as its commit holds it; none where Git cannot
-    list them. Informational: no exit changes."""
+    """The `warn` lines for the other worktrees of the project whose install is older than this
+    engine, missing, not on disk as recorded or not as its commit holds it, one line for each set
+    that the check says the same of; none where Git cannot list them. Informational: no exit
+    changes."""
 
     listed = _git(target, "worktree", "list", "--porcelain")
     if listed is None:
         return []
     text = listed.decode("utf-8", "replace")
-    found = adopt_worktrees.lines(target, text, engine_version(source), worktree_survey)
+    found = adopt_worktrees.grouped(target, text, engine_version(source), worktree_survey)
     return adopt_worktrees.render(found)
 
 
@@ -2648,6 +2740,7 @@ def detect(target: Path, source: Path) -> int:
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
                             [--setup CMD]... [--human-style ste] [--facts-only | --full]
                             [--dry-run] [--force]
+       outcomebound adopt <target> (--facts-only | --full) --local [--dry-run] [--force]
        outcomebound adopt <target> --detect | --check
        outcomebound adopt <target> --remove [--dry-run] [--force]"""
 DESCRIPTION = """\
@@ -2681,8 +2774,9 @@ which it records and names on a kept line, and a pointers block that is the reco
 only the local fragment's own edit in it, which it writes again and names on a render line. A
 refusal writes nothing. An install, a dry run and --check end with one note on how to install
 the outcomebound command in a cloud session, which starts from a fresh clone; the note writes
-no file. --check also prints one warn line for each other worktree of the project whose install
-is older than this engine.
+no file. --check also prints one warn line for each set of other worktrees of the project whose
+install is older than this engine or not as recorded and which the check says the same of, with
+the count and each branch; `outcomebound workspace audit` lists every worktree.
 
 --facts-only installs the project facts alone: AGENTS.md gets the project facts block and, where
 the local fragment is selected, a guidance pointers block holding the local fragment inline and
@@ -2694,6 +2788,12 @@ blocks and .outcomebound/.gitignore are as for a full install. The manifest reco
 run that names no mode keeps it, and --full returns to the full install; --check reads a
 facts-only install against its mode, and --remove takes it out. An engine before this mode
 installs in full on its next run, so move every pin of the engine first.
+
+--facts-only --local gives this one worktree the facts-only text in untracked overlay files
+(AGENTS.override.md for Codex, CLAUDE.local.md for Claude Code, recorded in
+.outcomebound/overlay.json) and changes nothing committed; --full --local and --remove take it
+out, and the report warns where Git does not ignore an overlay file, which adopt never sets
+(.git/info/exclude is the route).
 
 --check also plans the install the recorded selection and mode give, writing nothing: a record it
 would add reads missing, and a current record it would remove reads stale.
@@ -2806,6 +2906,12 @@ def _parser() -> argparse.ArgumentParser:
         action="store_const",
         const=FULL,
         help="install the contract, the facts and the pointers, after a facts-only install",
+    )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="with --facts-only, write a facts-only overlay in this worktree alone, "
+        "untracked; with --full, remove it",
     )
     parser.add_argument(
         "--dry-run",
@@ -2936,8 +3042,17 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         return detect(target, source)
     if args.check:
         return check(target, source)
-    if args.remove:
+    if args.local:
+        planned, edited, notes = (
+            overlay.plan_install(target, source, args.force)
+            if args.mode == FACTS_ONLY
+            else overlay.plan_removal(target, args.force)
+        )
+    elif args.remove:
         planned, edited, notes = remove(target, source, args.force)
+        more, extra, _ = overlay.plan_removal(target, args.force)
+        planned.update(more)
+        edited.extend(extra)
     else:
         selection = Selection(
             _names(args.harness),
@@ -2973,7 +3088,13 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.setup is not None
     chosen = chosen or args.mode is not None
-    if (args.detect or args.check or args.remove) and (chosen or retired_notes(args)):
+    if args.local:
+        alone = not (args.harness or args.fragments is not None or args.done is not None)
+        alone = alone and args.human_style is None and args.setup is None
+        alone = alone and not (args.detect or args.check or args.remove or retired_notes(args))
+        if args.mode is None or not alone:
+            parser.error("--local goes with --facts-only or --full alone, to make or remove it")
+    elif (args.detect or args.check or args.remove) and (chosen or retired_notes(args)):
         parser.error(
             "--harness, --fragments, --done, --setup, --human-style, --facts-only and --full "
             "apply to an install, and the retired flags apply to none"

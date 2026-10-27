@@ -2,9 +2,9 @@
 id: workspace
 family: setup
 applies: repositories where several agents work in one machine's checkout
-condition: when creating or removing a worktree, resuming or handing off work, keeping working evidence (a log, a report, a handoff) or a fact that another run or person must find later, when a write under `.agents/` is refused, or when working in another repository
+condition: when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 16
+version: 17
 ---
 **Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
 machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
@@ -55,7 +55,8 @@ commands holds across every worktree. Clean up only what this task made (its wor
 a process, folder or file of an owner you cannot name stays as it is, and the handoff names it.
 The one exception to that sentence: where the task needs disk it lacks, you may remove what a tool
 rebuilds or fetches again on its next use (a build cache, a package cache, a dangling image of this
-project), with a command that names what it removes, unless the project's instructions forbid it.
+project), with a command that names what it removes, unless the project's instructions forbid it;
+where the `containers` fragment is selected, its removal bounds govern container storage.
 Never a volume, a container or named data, except what the person's order for this project covers and a copy you verified restores; never anything another project or owner uses. Name what you
 reclaimed in your report. A cloud or background
 session starts from the pushed branch, without this machine's ignored folders, uncommitted files or

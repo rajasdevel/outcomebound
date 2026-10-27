@@ -21,9 +21,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from outcomebound_tools import fileplan, identity, textio
+from outcomebound_tools import fileplan, identity, overlay, textio
 
-__all__ = ["Survey", "Worktree", "describe", "installed", "lines", "parse"]
+__all__ = ["Survey", "Worktree", "describe", "grouped", "installed", "lines", "parse"]
 
 MANIFEST = ".outcomebound/manifest.json"
 HOST = "AGENTS.md"
@@ -101,6 +101,8 @@ def describe(root: Path, engine: str, survey: Survey | None = None) -> str | Non
     version = installed(root)
     problems, facts_only = survey(root) if survey is not None else ([], False)
     mode = " (facts-only)" if facts_only else ""
+    if not facts_only and overlay.worktree_mode(root) == overlay.OVERLAID:
+        mode = f" ({overlay.OVERLAID})"
     have = None if version is None else _key(version)
     if version is None:
         head = "no OutcomeBound install"
@@ -115,6 +117,20 @@ def describe(root: Path, engine: str, survey: Survey | None = None) -> str | Non
     return "; ".join([head, *problems])
 
 
+def _found(
+    target: Path, porcelain: str, engine: str, survey: Survey | None
+) -> list[tuple[Worktree, str]]:
+    own = target.resolve()
+    found: list[tuple[Worktree, str]] = []
+    for tree in parse(porcelain):
+        if not tree.path.is_dir() or tree.path.resolve() == own:
+            continue
+        text = describe(tree.path, engine, survey)
+        if text is not None:
+            found.append((tree, text))
+    return found
+
+
 def lines(
     target: Path,
     porcelain: str,
@@ -124,16 +140,34 @@ def lines(
     """One `warn` line for each worktree other than `target` that `describe` has something to
     say of; none otherwise."""
 
-    own = target.resolve()
-    found: list[str] = []
-    for tree in parse(porcelain):
-        if not tree.path.is_dir() or tree.path.resolve() == own:
-            continue
-        text = describe(tree.path, engine, survey)
-        if text is not None:
-            branch = textio.visible(tree.branch)
-            found.append(f"worktree {textio.visible(str(tree.path))} (branch {branch}): {text}")
-    return found
+    return [
+        f"worktree {textio.visible(str(tree.path))} (branch {textio.visible(tree.branch)}): {text}"
+        for tree, text in _found(target, porcelain, engine, survey)
+    ]
+
+
+def grouped(
+    target: Path,
+    porcelain: str,
+    engine: str,
+    survey: Survey | None = None,
+) -> list[str]:
+    """One `warn` line for each set of worktrees other than `target` of which `describe` says the
+    same thing: the count, then each worktree's branch, or its path where none is checked out,
+    then the text. A set keeps the order of its first worktree in the listing. The list for each
+    worktree is `lines`, and `outcomebound workspace audit`."""
+
+    sets: dict[str, list[str]] = {}
+    for tree, text in _found(target, porcelain, engine, survey):
+        if tree.branch == "(detached)":
+            name = f"detached at {textio.visible(str(tree.path))}"
+        else:
+            name = textio.visible(tree.branch)
+        sets.setdefault(text, []).append(name)
+    return [
+        f"{len(names)} worktree{'' if len(names) == 1 else 's'} ({', '.join(names)}): {text}"
+        for text, names in sets.items()
+    ]
 
 
 def render(found: Sequence[str]) -> list[str]:

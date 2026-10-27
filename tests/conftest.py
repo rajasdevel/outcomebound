@@ -6,6 +6,7 @@ import os
 import shutil
 import sys
 import tempfile
+import zlib
 from collections.abc import Iterator
 from datetime import date
 from pathlib import Path
@@ -114,19 +115,63 @@ def audit_day(monkeypatch: pytest.MonkeyPatch) -> date:
     return AUDIT_DAY
 
 
-def pytest_report_header() -> str | None:
+def pytest_report_header() -> list[str]:
     """Say when the encoding guard cannot fire: with no UTF-8 locale set, Python runs in UTF-8
     mode, where a call that names no encoding gets UTF-8 and no warning, so a run here passes
-    what Windows fails."""
+    what Windows fails. Say which shard runs, when the run is one of several."""
 
+    lines: list[str] = []
     if sys.flags.warn_default_encoding and sys.flags.utf8_mode:
-        return (
+        lines.append(
             "UNVERIFIED encoding guard: Python runs in UTF-8 mode (no UTF-8 locale is set), which "
             "hides a call that names no encoding; set LANG to a UTF-8 locale, such as C.UTF-8"
         )
-    if sys.flags.warn_default_encoding and sys.version_info < (3, 11):
-        return (
+    elif sys.flags.warn_default_encoding and sys.version_info < (3, 11):
+        lines.append(
             "encoding guard: Python 3.10 does not warn for a text-mode subprocess; "
             "`make test-containers` (3.13) and CI on 3.11 and later check it"
         )
-    return None
+    spec = os.environ.get(SHARD_VARIABLE)
+    if spec:
+        lines.append(f"shard {spec}: one part of the suite, picked by test id")
+    return lines
+
+
+# CI spreads the suite over several jobs, each one a shard. A job that sets this variable to
+# "<index>/<count>" (index from 1) runs the tests whose id falls in its part, and the parts are
+# disjoint and together are the whole suite. The part is a function of the test id alone, so every
+# worker of every job picks the same tests, and a test keeps its part when others are added or
+# removed. With no variable, the whole suite runs.
+SHARD_VARIABLE = "OUTCOMEBOUND_TEST_SHARD"
+
+
+def shard_of(test_id: str, count: int) -> int:
+    """The part, from 1 to `count`, that the test with this id belongs to."""
+
+    return zlib.crc32(test_id.encode("utf-8")) % count + 1
+
+
+def parse_shard(spec: str) -> tuple[int, int]:
+    """`"<index>/<count>"` as a pair; a spec that is not that, or an index out of range, is a
+    usage error, because a mistyped shard would run no tests and pass."""
+
+    index_text, slash, count_text = spec.partition("/")
+    if not slash or not index_text.isdigit() or not count_text.isdigit():
+        raise pytest.UsageError(f"{SHARD_VARIABLE} is '{spec}', not '<index>/<count>'")
+    index, count = int(index_text), int(count_text)
+    if not 1 <= index <= count:
+        raise pytest.UsageError(f"{SHARD_VARIABLE} is '{spec}': the index is not from 1 to {count}")
+    return index, count
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Keep only the tests of this run's shard, when the run is one."""
+
+    spec = os.environ.get(SHARD_VARIABLE)
+    if not spec:
+        return
+    index, count = parse_shard(spec)
+    kept = [item for item in items if shard_of(item.nodeid, count) == index]
+    dropped = [item for item in items if shard_of(item.nodeid, count) != index]
+    config.hook.pytest_deselected(items=dropped)
+    items[:] = kept

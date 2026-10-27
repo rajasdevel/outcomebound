@@ -1,6 +1,6 @@
 ---
 name: sync-tracker
-description: Use when reading a card from a tracker that is not the project's ticket store, or writing back to it. An example is a client's Jira. A read that will be repeated or tracked is a markdown snapshot; a write goes under a grant that names its kind, its notifications and automations, and its conflict rule, and any other write is a decision brief.
+description: Use when reading a card from a tracker that is not the project's ticket store, or writing back to it. An example is a client's Jira; a write needs a grant that names its kind.
 ---
 
 # Sync a tracker

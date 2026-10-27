@@ -1,6 +1,6 @@
 ---
 name: slice-tickets
-description: Use when breaking work into tickets. Needs a declared ticket store (`.outcomebound/tickets.json`); decides how many tickets an outcome needs and where each seam falls, lints the drafts with `outcomebound tickets check --draft`, and publishes what the user accepted. Not for a to-do list, and not for building a ticket that exists.
+description: Use when breaking work into tickets. Needs a declared ticket store (`.outcomebound/tickets.json`); not for a to-do list, nor for building a ticket that exists.
 ---
 
 # Slice work into tickets

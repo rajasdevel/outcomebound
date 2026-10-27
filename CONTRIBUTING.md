@@ -47,7 +47,12 @@ What happens next:
 
 - Linux CI runs the gate, this repository's own install check and the suite on Python 3.10,
   3.11, 3.12, 3.13 and 3.14. The suite also runs on Windows with Python 3.10 and 3.14, and in
-  Debian slim and Alpine containers with Python 3.13. CI runs the quality floor once.
+  Debian slim and Alpine containers with Python 3.13. CI runs the quality floor once. Each suite
+  runs in shards, which are disjoint parts of it picked by test id, so the whole suite still
+  runs. Every pull request, push to `main`, release tag and run by hand runs the full matrix.
+  The shard check compares one unsharded collection with the test ids selected by two xdist
+  workers for each shard, without running tests. Missing or repeated ids and empty selections
+  fail the check. `test (3.10)` and `test (3.14)` pass only when the checks and every shard pass.
 - When CI is green, a maintainer reviews the pull request.
 - Each pull request lands as one squash commit on `main`, through the
   [agents and releases](#agents-and-releases) route. `main` has no merge commits.

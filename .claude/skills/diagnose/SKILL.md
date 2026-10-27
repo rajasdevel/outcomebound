@@ -1,14 +1,14 @@
 ---
 name: diagnose
-description: Use when a failure's cause is unknown, or a fix did not hold. The failure is a test, build, command or behaviour you are to fix, including a flaky one.
+description: Use when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix. A declared stub that fails as its declaration says is no defect.
 ---
 
 # Diagnose a failure
 
 You are done when the failure is gone because its cause is: the failure is reproduced or reported
 as not reproduced, its cause is stated with the evidence for it, the fix removes that cause, and
-your report says what the fix was checked by. A cause that the error already makes plain needs none of the steps below: fix it and
-run the check. Where the person asks what is wrong and not for a fix, answer from what you can
+your report says what the fix was checked by. Where the error makes the cause plain, skip the search for it: fix it, run the
+check, and still look for the same defect where the pattern repeats (Fix the cause). Where the person asks what is wrong and not for a fix, answer from what you can
 read and run without changing anything, and say plainly what you did not run.
 
 ## Reproduce
@@ -36,7 +36,7 @@ the wrong one, or one of two.
 Change what causes the failure, not where it shows: no special case for the reported input, no
 catch that hides the error, no retry in place of an explanation. Then run the reproduction again, and
 the tests of the code you changed, since a fix can break a neighbouring case. Keep the reproduction
-as a test where a test adds signal; the `tests-worth-keeping` skill says when.
+as a test where a test adds signal (read `tests-worth-keeping` only where its trigger holds). Before you call it fixed, look for the same defect where the same pattern repeats (sibling functions, other callers of the same code) and fix each confirmed instance inside the task's scope; report others without changing them, and say which you fixed.
 
 ## When the fix does not hold
 

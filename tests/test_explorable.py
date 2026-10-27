@@ -923,6 +923,21 @@ def test_check_browser_with_a_silent_browser_is_unverified_and_names_the_limit(
     )
 
 
+@POSIX
+def test_check_browser_with_an_empty_document_names_the_browser_and_the_sandbox(
+    fake, tmp_path, capsys, monkeypatch
+):
+    _, program = fake
+    monkeypatch.setenv("FAKE_MODE", "exit")
+
+    assert run("check", built(tmp_path), "--browser") == 0
+
+    out = capsys.readouterr().out
+    assert "run: UNVERIFIED not run: the browser exited without printing the document" in out
+    assert f"browser: {program}" in out
+    assert "sandbox" in out and "not shown to be wrong" in out
+
+
 def test_check_browser_with_no_browser_is_unverified(tmp_path, capsys, monkeypatch):
     monkeypatch.delenv("OUTCOMEBOUND_BROWSER", raising=False)
     monkeypatch.setenv("PATH", str(tmp_path))

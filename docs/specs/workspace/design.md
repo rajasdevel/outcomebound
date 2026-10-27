@@ -28,7 +28,8 @@ contract and does not install anything.
 
 For each worktree whose folder exists, the report has: path, branch, `main` (the first listed,
 the main checkout, never removable), `state`, `changed` and `untracked` counts, last commit date
-and age in days, and size in bytes. In `--json` each worktree object also has `removable` and `bytes_complete`
+and age in days, and size in bytes, and its install `mode`: `full`, `facts-only` or `facts-only overlay`, read
+from the manifest and the overlay record (none where the worktree has no install). In `--json` each worktree object also has `removable` and `bytes_complete`
 (false when a folder could not be read in full). Worktrees that Git lists but whose folder is gone are listed
 as `prunable`. With `--json` the same data is one object: `version`, `default_branch`,
 `worktrees`, `prunable`, `counts` by state, `removable` and `bytes`.

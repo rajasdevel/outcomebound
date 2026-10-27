@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. Builds a learning, explain, decision or interview page the engine checks; a decision page goes beside the decision brief and never in place of it, and a set of questions can go on an interview page. The decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
+description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. A decision page goes beside the decision brief, never in its place.
 ---
 
 # Explorable
@@ -11,7 +11,10 @@ shared shell and checks it. A page that teaches comes first: **learning** teache
 session, **explain** teaches readers who are not in it, **decision** helps the person decide, and
 **interview** asks the questions the work waits on. You are done when the person can open the page
 and use it: `outcomebound explorable check` passes on the page (with `--browser` where a
-Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so), every
+Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so; where the
+browser printed nothing, the run's line names the browser and the likely sandbox: report it as
+`UNVERIFIED`, try another browser only where evidence shows a different failure, and never work
+around a sandbox refusal), every
 number the page's lesson or answer rests on has an expectation, your report names each output that
 reads `UNVERIFIED`, and the page's path is in the text the person reads, beside the decision brief
 when there is one. You have looked at the page, and it shows what the person asked for, with data

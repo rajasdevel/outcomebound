@@ -7,6 +7,7 @@ exit code."""
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -52,6 +53,18 @@ def warns(out: str) -> list[str]:
     return [line for line in out.splitlines() if line.startswith("warn ")]
 
 
+def by_branch(out: str) -> dict[str, str]:
+    """The text of each worktree's `warn` line, by its name in the line, where each set holds
+    one worktree."""
+
+    found: dict[str, str] = {}
+    for line in warns(out):
+        match = re.fullmatch(r"warn +1 worktree \((.*?)\): (.*)", line)
+        assert match, line
+        found[match.group(1)] = match.group(2)
+    return found
+
+
 def test_an_older_worktree_is_named_with_its_branch_and_both_versions(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -64,9 +77,40 @@ def test_an_older_worktree_is_named_with_its_branch_and_both_versions(
 
     assert code == 0
     (line,) = warns(out)
-    assert str(tree) in line and "(branch feature)" in line
+    assert line.startswith("warn     1 worktree (feature): ")
     assert f"installed {OLDER}, engine {VERSION}" in line
     assert snapshot(tree) == before
+
+
+def test_worktrees_in_one_state_share_one_line_and_other_states_keep_their_own(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    main = project(tmp_path, capsys)
+    for name in ("one", "two", "three"):
+        tree = linked(main, name, name)
+        edit(
+            tree / adopt.MANIFEST, f'"engine_version": "{VERSION}"', f'"engine_version": "{OLDER}"'
+        )
+        git(tree, "commit", "-q", "-am", "older")
+    detached = linked(main, "loose", branch=None)
+    edit(
+        detached / adopt.MANIFEST, f'"engine_version": "{VERSION}"', f'"engine_version": "{OLDER}"'
+    )
+    git(detached, "commit", "-q", "-am", "older")
+    odd = linked(main, "odd", "odd")
+    edit(odd / adopt.MANIFEST, f'"engine_version": "{VERSION}"', '"engine_version": "next"')
+    git(odd, "commit", "-q", "-am", "odd")
+
+    code, out, _ = run(capsys, str(main), "--check")
+
+    assert code == 0
+    first, second = sorted(warns(out), key=lambda line: "(odd)" in line)
+    head, _, text = first.partition("): ")
+    names = head.removeprefix("warn     4 worktrees (").split(", ")
+    assert head.startswith("warn     4 worktrees (")
+    assert sorted(names) == sorted(["one", "two", "three", f"detached at {detached}"])
+    assert text == f"installed {OLDER}, engine {VERSION}"
+    assert second.startswith("warn     1 worktree (odd): ") and "is not readable" in second
 
 
 def test_a_current_or_newer_worktree_is_not_named(tmp_path: Path, capsys: Capture) -> None:
@@ -90,7 +134,7 @@ def test_a_worktree_with_no_install_is_named_as_such(tmp_path: Path, capsys: Cap
     _, out, _ = run(capsys, str(main), "--check")
 
     (line,) = warns(out)
-    assert str(tree) in line and "(branch (detached))" in line and NO_INSTALL in line
+    assert f"1 worktree (detached at {tree})" in line and NO_INSTALL in line
 
 
 def test_the_block_marker_stands_in_where_the_manifest_is_gone(
@@ -132,7 +176,8 @@ def test_run_in_a_linked_worktree_it_names_the_others_and_not_itself(
     _, out, _ = run(capsys, str(tree), "--check")
 
     (line,) = warns(out)
-    assert str(main) in line and str(tree) not in line
+    name = git_out(main, "branch", "--show-current")
+    assert line.startswith(f"warn     1 worktree ({name}): ")
 
 
 def test_a_symlinked_manifest_is_not_followed(tmp_path: Path, capsys: Capture) -> None:
@@ -276,7 +321,7 @@ def test_a_worktree_made_from_a_commit_without_the_install_says_so_from_both_sid
 
     _, out, _ = run(capsys, str(main), "--check")
     (line,) = warns(out)
-    assert str(tree) in line
+    assert "1 worktree (early)" in line
     assert line.endswith(f"{NO_INSTALL}; its commit holds no {adopt.MANIFEST}")
 
     code, out, _ = run(capsys, str(tree), "--check")
@@ -300,7 +345,7 @@ def test_another_worktree_with_a_block_gone_or_an_install_not_committed_is_named
     code, out, _ = run(capsys, str(main), "--check")
 
     assert code == 0
-    named = {line.split(" (branch ")[1].split(")")[0]: line for line in warns(out)}
+    named = by_branch(out)
     assert set(named) == {"gone", "loose"}
     assert f"installed {VERSION}; {HELD}: AGENTS.md (operating-contract)" in named["gone"]
     assert NOT_COMMITTED not in named["gone"]
@@ -353,7 +398,7 @@ def test_another_worktree_names_each_missing_file_and_block_by_what_its_commit_h
     code, out, _ = run(capsys, str(main), "--check")
 
     assert code == 0
-    named = {line.split(" (branch ")[1].split(")")[0]: line for line in warns(out)}
+    named = by_branch(out)
     assert f"installed {VERSION}; {HELD}: {SKILL}" in named["skill"]
     assert f"{NOT_HELD}: AGENTS.md (operating-contract)" in named["never"]
     assert NOT_COMMITTED in named["never"]
@@ -375,7 +420,7 @@ def test_an_unreadable_worktree_reads_unverified_and_leaves_the_check_alone(
         (locked / SKILL).chmod(0o644)
 
     assert code == 0
-    named = {line.split(" (branch ")[1].split(")")[0]: line for line in warns(out)}
+    named = by_branch(out)
     assert f"install state UNVERIFIED: cannot read {adopt.MANIFEST}" in named["broken"]
     assert f"{HELD}: {SKILL}" in named["gone"]
     (locked / SKILL).chmod(0)

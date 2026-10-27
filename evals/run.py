@@ -139,6 +139,7 @@ TASK_SCRIPT = "task.sh"
 # they run only when --fixtures names them.
 NAMED_ONLY = (
     "handoff-",
+    "gs-",
     "lifecycle-",
     "adopt-",
     "clause-",

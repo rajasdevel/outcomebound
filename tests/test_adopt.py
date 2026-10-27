@@ -357,7 +357,29 @@ def test_a_block_edit_that_differs_from_what_this_install_writes_still_needs_for
 
     assert code == 1
     assert f"{pointers} differs from what adopt wrote; restore it, or pass --force" in err
+    assert f"the difference is inside the text of {adopt.LOCAL_FRAGMENT}" in err
     assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
+
+
+def test_the_refusal_names_both_sides_when_the_block_differs_inside_and_outside_the_fragment(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a block edited in its inlined local text and in a pointer line is said to differ
+    on one side alone."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local,commands")[0] == 0
+    edit_local(
+        target, "**Distinguish** — committed ≠ pushed in this project.", "**Distinguish** — mine."
+    )
+    agents = target / "AGENTS.md"
+    text = agents.read_text(encoding="utf-8")
+    write(agents, text.replace(f"- {COMMANDS_CONDITION}", "- when running"))
+
+    code, _, err = run(capsys, str(target))
+
+    assert code == 1
+    assert f"the difference is both inside and outside the text of {adopt.LOCAL_FRAGMENT}" in err
 
 
 COMMANDS_CONDITION = "when running a command whose output you read"
@@ -492,7 +514,7 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
     edited = edit_local(target, line, line)
     if shape == "frame-edited":
         agents = target / "AGENTS.md"
-        edited = edited.replace("- when writing, changing or judging a test", "- when testing")
+        edited = edited.replace(f"- {COMMANDS_CONDITION}", "- when running")
         write(agents, edited)
     else:
         without_frame(target)
@@ -506,6 +528,7 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
 
     assert code == 1
     assert f"{pointers} differs from what adopt wrote; restore it, or pass --force" in err
+    assert f"the difference is outside the text of {adopt.LOCAL_FRAGMENT}" in err
     assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
 
 
@@ -991,6 +1014,63 @@ def test_check_without_a_manifest_names_the_command_that_proposes_an_install(
     ]
 
 
+def test_a_real_install_prints_the_cloud_note_once_as_a_dry_run_does(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a real run prints the cloud note, or the list of where each harness keeps its
+    setup step, more than once, or prints other lines than a dry run does."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    arguments = ("--harness", "claude-code,codex,cursor", "--fragments", "commands")
+
+    _, planned, _ = run(capsys, str(target), *arguments, "--dry-run")
+    code, written, err = run(capsys, str(target), *arguments)
+
+    assert code == 0, err
+    where = "Where each harness keeps that step:"
+    for out in (planned, written):
+        assert out.count("Cloud sessions start from a fresh clone") == 1
+        assert out.splitlines().count(f"{'note':<8} {where}") == 1
+        assert out.count("Codex cloud:") == 1
+    notes = [line for line in written.splitlines() if line.startswith("note       ")]
+    assert notes == [line for line in planned.splitlines() if line.startswith("note       ")]
+
+
+def test_check_in_a_checkout_older_than_the_install_names_the_branches_that_hold_one(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the `missing` line stands alone where a local branch tip holds the install, if
+    a branch without it is named, or if the check writes anything or changes the exit code."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    commit_all(target)
+    older = subprocess.run(
+        [GIT, "-C", str(target), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+    ).stdout.strip()
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
+    commit_all(target)
+    for name in ("installed", "other"):
+        subprocess.run([GIT, "-C", str(target), "branch", "-q", name], check=True)
+    subprocess.run([GIT, "-C", str(target), "branch", "-q", "plain", older], check=True)
+    subprocess.run([GIT, "-C", str(target), "checkout", "-q", "--detach", older], check=True)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1
+    lines = out.splitlines()
+    assert lines[0] == f"missing  {adopt.MANIFEST}: HEAD's commit does not hold it either"
+    (note,) = [line for line in lines if line.startswith("note ")]
+    listed = note.split(": ", 1)[1].split("; ")[0].split(", ")
+    assert f"local branches whose tip holds {adopt.MANIFEST}" in note
+    assert {"installed", "other"} <= set(listed) and "plain" not in listed
+    assert lines.index(note) == 1 and lines[-1].startswith("next: ")
+    assert snapshot(target) == before
+
+
 def test_remove_leaves_every_byte_that_was_there_before(tmp_path: Path, capsys: Capture) -> None:
     kept = repo(
         tmp_path / "kept",
@@ -1155,6 +1235,54 @@ def test_detect_does_not_propose_the_workspace_for_skills_alone(
     code, out, _ = run(capsys, str(target), "--detect")
 
     assert code == 0 and "workspace" not in out
+
+
+@pytest.mark.parametrize(
+    ("files", "proposed"),
+    [
+        ({}, False),
+        ({"pyproject.toml": "[project]\n", "src/lib.py": "x = 1\n"}, False),
+        ({"Dockerfile": "FROM scratch\n"}, True),
+        ({".devcontainer/devcontainer.json": "{}\n"}, True),
+    ],
+    ids=["empty", "library", "dockerfile", "devcontainer"],
+)
+def test_detect_proposes_containers_only_where_a_container_file_exists(
+    tmp_path: Path, capsys: Capture, files: dict[str, str], proposed: bool
+) -> None:
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    words = shlex.split(out, comments=True)
+    listed = words[words.index("--fragments") + 1].split(",")
+    assert ("containers" in listed) is proposed
+
+
+def recorded_fragments(target: Path) -> list[str]:
+    return next(r["fragments"] for r in manifest(target)["artifacts"] if r["id"] == adopt.FACTS)
+
+
+def test_an_upgrade_keeps_a_recorded_containers_selection_and_adds_none_by_itself(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"Dockerfile": "FROM scratch\n"})
+    assert run(capsys, str(target), "--harness", "claude-code", "--fragments", "python")[0] == 0
+    assert recorded_fragments(target) == ["python"]
+    assert run(capsys, str(target))[0] == 0  # an upgrade does not add the proposal
+    assert recorded_fragments(target) == ["python"]
+
+    arguments = (str(target), "--harness", "claude-code", "--fragments", "python,containers")
+    assert run(capsys, *arguments)[0] == 0
+    shipped = target / ".outcomebound/fragments/containers.md"
+    assert shipped.is_file()
+
+    assert run(capsys, str(target))[0] == 0  # omitted flags keep the recorded selection
+    assert recorded_fragments(target) == ["python", "containers"]
+    assert shipped.is_file()
+    assert run(capsys, str(target), "--check")[0] == 0
 
 
 def test_detect_proposes_the_commands_fragment_for_an_empty_repository(

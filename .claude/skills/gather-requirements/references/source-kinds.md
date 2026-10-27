@@ -46,3 +46,19 @@ any other.
 
 `outcomebound sources import` reads markdown, text and images. Convert anything else first
 (`outcomebound sources import --help`), and keep the original beside the conversion.
+
+## Pictures
+
+A screenshot or a design export that carries requirements (a mock-up, a design, a picture of
+wanted behaviour) is a source like any other; a picture that shows only a symptom is evidence for
+the `diagnose` skill, not a source. The import gives the file an id and
+a revision from its digest and records its format and size, not what it shows, so the reading is
+yours. Mark each requirement you took from its pixels inferred, and cite the item, the region or
+state, and what you read there; text a machine extracted, such as a markdown export of a design's
+text layers, is stated, though not yet a requirement. A design binds where the person says so or the
+work is to build it; otherwise it is a reference, disposed `reference` against the requirement it
+is the standard for, with how the built result will be compared: `by: command` and a claim of the
+project's validation plan, `by: review` and a name, or `by: judgment`. Your own reading of a
+screenshot of the build is a reading, not a pass: say it is not verified; a pass comes from the
+comparison the `by:` names. Name what the picture does not show, such as states, other sizes and copy that
+looks like placeholder text, as a gap, and settle it as the skill's first section says.
