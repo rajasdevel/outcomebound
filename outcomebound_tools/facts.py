@@ -623,8 +623,8 @@ ONCE = (
     "holds; a condition that may hold later is no reason to read it now. Use the file at the path "
     "listed here; a skill list that lacks it, or a personal skill of the same name, does not "
     "replace it. A file you read stays in force for the session; read it again only when the "
-    "next step's rules from it are missing, incomplete, uncertain or may have changed; a "
-    "compaction alone is no reason."
+    "next step's rules from it are missing, incomplete, uncertain or may have changed; "
+    "a compaction alone is no reason."
 )
 
 # Shown above the read list: rules that hold on every task without a read.
