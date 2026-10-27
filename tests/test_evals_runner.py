@@ -865,6 +865,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
     facts_text = at_head("outcomebound_tools/facts.py")
     reread = b"a compaction alone is no reason."
     assert condition in adopt_text and facts_text.count(reread) == 1
+    assert adopt_text.count(b'\nif __name__ == "__main__":') == 1
     ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
     ref_references = (
         b'REFERENCE_POINTERS = (("a ref reference condition", '
@@ -872,9 +873,13 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
     )
     commit = _commit_of(
         {
-            "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition")
-            + ref_rules
-            + ref_references,
+            # Above the main guard: the ref's adopt runs as a program, so lines after it never run.
+            "outcomebound_tools/adopt.py": adopt_text.replace(
+                condition, b"a ref's own condition"
+            ).replace(
+                b'\nif __name__ == "__main__":',
+                ref_rules + ref_references + b'\nif __name__ == "__main__":',
+            ),
             "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread.")
             + b'\nRULES_LEAD = "A ref rules lead:"\n',
             "skills/using-outcomebound/references/ref-only.md": b"A ref reference.\n",
