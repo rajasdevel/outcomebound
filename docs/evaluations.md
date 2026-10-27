@@ -3246,7 +3246,8 @@ E35, with no part of this pass. Cost was reported, not a condition.
   are the two tasks that no arm passes reliably: a decision chain (1 of 2) and a confined budget
   (0 of 2, as in every arm). No run was void.
 - Cost: 1.55 times no guidance in dollars, 0.99 times the E35 candidate and 1.09 times this
-  candidate. The saving measured above is not in the shipped text.
+  candidate (Ponytail, on its E35 runs: 1.24, $4.92 for 75 runs). The saving measured above is
+  not in the shipped text.
 - Mechanism: guidance files read per run are 2.20 (E35 candidate 2.35, this candidate 1.63).
   `tests-worth-keeping` is read in 34 of 50 runs (E35 candidate 45 of 75, this candidate 26 of
   75) and `using-outcomebound` in 23 of 50 (30 of 75, 21 of 75): the eased conditions (an added
