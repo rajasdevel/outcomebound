@@ -2713,7 +2713,7 @@ blind by a person. Tiers are never pooled: a tier that loses is a loss.
   in every arm.
 - The loop: run, read each loss by its cause, change the smallest element that answers it, run
   again. It stops at 450 Codex runs over all passes (maintainer, 2026-10-26); a loss that stands at
-  the stop is a known issue the release notes name. Independent runs go in parallel within the
+  the stop is fixed before the release. Independent runs go in parallel within the
   machine's limits, and every run keeps its session on disk (never ephemeral), so the person's
   usage tool counts every token. Neither the rule nor the stop changes once the first run
   starts.
