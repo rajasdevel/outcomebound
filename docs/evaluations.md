@@ -3209,15 +3209,15 @@ each million tokens):
   personal skill of the same name shadow the project's. So the shipped text keeps the skill
   pointer lines on every harness, `review-findings` keeps its earlier condition, and
   `gather-requirements` and `tests-worth-keeping` cover a source checked into the repository and
-  an added test. A second check of that text follows below.
+  an added test. The second check below measures that text.
 
 ### Result
 
-| | No guidance | E35 candidate | This candidate |
-| --- | --- | --- | --- |
-| Runs that passed every required claim | 58 of 75 | 69 of 75 | 71 of 75 |
-| Cost against no guidance (dollars) | 1.00 | 1.56 | 1.43 |
-| Total cost of the 75 runs | $4.24 | $6.29 | $5.82 |
+| | No guidance | E35 candidate | This candidate | Shipped text (second check) |
+| --- | --- | --- | --- | --- |
+| Runs that passed every required claim | 58 of 75 | 69 of 75 | 71 of 75 | 47 of 50 |
+| Cost against no guidance (dollars) | 1.00 | 1.56 | 1.43 | 1.55 |
+| Total cost of the runs | $4.24 (75) | $6.29 (75) | $5.82 (75) | $4.16 (50) |
 
 - The rule holds. The four wins stay at 3 of 3. No task falls; two rise (a decision chain 1 to 2
   of 3, a review run until clean 2 to 3 of 3). No required claim falls. Two claims that are not
@@ -3232,8 +3232,32 @@ each million tokens):
   condition does not name; its lifecycle reference was not read (from 5). The file that carried
   each win was read in every run of its task.
 
+### Second check: the shipped text
+
+The text after review differs from the measured candidate, so it had its own check, with its rule
+fixed before the runs: the 25 tasks, two runs each (50 runs), the same model, harness and graders;
+each win 2 of 2 (a 1 of 2 gets one more run and holds at 2 of 3); at least 46 of 50 in total (the
+E35 candidate's rate); no required claim at 0 of 2 on a task where the E35 candidate and this
+candidate both passed it in at least 2 of 3. If the rule failed, 1.10.0 would ship as measured in
+E35, with no part of this pass. Cost was reported, not a condition.
+
+- The rule holds. The four wins are 2 of 2; the total is 47 of 50 (94%; no guidance 77%, the E35
+  candidate 92%, this candidate 95%); no required claim is lost. The three runs that did not pass
+  are the two tasks that no arm passes reliably: a decision chain (1 of 2) and a confined budget
+  (0 of 2, as in every arm). No run was void.
+- Cost: 1.55 times no guidance in dollars, 0.99 times the E35 candidate and 1.09 times this
+  candidate. The saving measured above is not in the shipped text.
+- Mechanism: guidance files read per run are 2.20 (E35 candidate 2.35, this candidate 1.63).
+  `tests-worth-keeping` is read in 34 of 50 runs (E35 candidate 45 of 75, this candidate 26 of
+  75) and `using-outcomebound` in 23 of 50 (30 of 75, 21 of 75): the eased conditions (an added
+  test; no exclusion for a resume) bring the reads back. `brief --help` stays at 4 fetches (from
+  12). The share of reads in the first two commands falls to 25% (37% and 38%).
+- So the conditions, not the shorter text, carried the saving, and the cases the review named
+  need those conditions. A cheaper condition must keep those cases; the next cut is the
+  added-test case of `tests-worth-keeping`, which fires on most fixes.
+
 ### Limits
 
-One model and one harness; three runs a cell, so a rare loss is not excluded; the 25 tasks do not
-cross a lifecycle stage and read none of the seven skills whose bodies did not change; each run
+One model and one harness; three runs a cell (two in the second check), so a rare loss is not
+excluded; the 25 tasks do not cross a lifecycle stage and read none of the seven skills whose bodies did not change; each run
 is one short session, so a cache that lapses in a long session is not measured.
