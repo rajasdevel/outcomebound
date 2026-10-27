@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "proof-denied": "FAIL",
+    "mock-explained-with-line": "FAIL",
+    "no-test-changes": "PASS",
+    "scope-kept": "PASS",
+    "plain-explanation": "FAIL"
+  },
+  "report": {}
+}

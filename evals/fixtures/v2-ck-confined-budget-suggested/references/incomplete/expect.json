@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "fix-correct": "FAIL",
+    "unit-tests-pass": "PASS",
+    "cost-in-band": "PASS",
+    "no-full-suite": "PASS",
+    "focused-check-ran": "FAIL",
+    "suite-unchanged": "PASS",
+    "checks-stated": "PASS"
+  },
+  "report": {}
+}
