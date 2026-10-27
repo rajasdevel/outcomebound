@@ -49,9 +49,9 @@
     },
     {
       "name": "pause-question-and-default",
-      "risk": "The answer does not ask whether the pause was deliberate or intended, or gives no default action for the work.",
+      "risk": "WORDING, judged by a blind reading, not required: the answer does not ask whether the pause was deliberate or intended, or gives no default action for the work. This check is a first pass whose output names the sentences it found; keyword matching cannot settle the subject of a question.",
       "kind": "static",
-      "required": true,
+      "required": false,
       "command": [
         "sh",
         "-c",
