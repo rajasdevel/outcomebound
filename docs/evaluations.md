@@ -3160,3 +3160,74 @@ skill or hook loading require their own observation.
   (the slicing arms).
 
 
+
+## E37. Cheaper guidance on the 1.10.0 head-to-head: triggers at the step, shorter skills, no duplicate skill list
+
+Date: 2026-10-27. Model: Codex CLI 0.164.0, `gpt-6.1-sol`, medium effort, on every run. 75 runs,
+none void. The run records are not in this repository: the figures below are stated from them and
+cannot be checked from the repository alone (`UNVERIFIED` as a reproduction).
+
+### Question
+
+The 1.10.0 candidate of E35 passed 69 of 75 runs, against 58 for no guidance, at about 1.56 times
+no guidance's cost at list prices. Can the same outcomes come at a clearly lower cost?
+
+### What the cost was made of
+
+The session records of the E35 candidate, with each input token attributed to what put it in the
+context (`evals/attribute.py`), at list prices (input $2, cached input $0.10 and output $10 for
+each million tokens):
+
+- About two thirds of the extra cost is new, uncached input. The largest part of it is skill and
+  fragment text that the agent read during the run.
+- Two thirds of those reads came in the agent's first two tool calls, before it had read any file
+  of the project. The agent read each skill whose condition the request's words seemed to match.
+- The reads that carried a win were a small part of the text read: the `containers` fragment on
+  the two container tasks, `diagnose` on the task with sibling defects, and `tests-worth-keeping`
+  on the task whose checks already failed.
+- The skill list in `AGENTS.md` repeated the descriptions that the harness's own skill catalog
+  sends on every call. Because cached input is cheap, this is a smaller part of the cost in money
+  than in tokens.
+
+### Method
+
+- One candidate arm, the 25 tasks and graders of E35, 3 runs each, against the E35 records of the
+  candidate and of no guidance (same model, harness release and graders). The rule was written
+  before the first run: each of the four tasks that the candidate wins against no guidance stays
+  at 3 of 3 (2 of 3 gets three more runs and holds at 5 of 6); every other task stays at or within
+  one run of its count; no required claim falls by two or more; more flags than a reserve of 10
+  runs means no ship. The cost decides the claim only: at or below 0.85 times the E35 candidate's
+  cost (geometric mean over tasks of the per-task median, in dollars) is "clearly cheaper".
+- The changes: each skill condition names a step the agent reaches, not a state it guesses from
+  the request; descriptions are the condition and one sentence; the pointer line asks for a read
+  at the step where the condition holds; `decision-brief` and `gather-requirements` move text
+  that a typical reader did not use into references; `using-outcomebound` fires on a change of
+  delivery route, process beyond the risk, or text a model reads; no skill pointer lines where
+  every selected harness lists skills natively. The lines the wins rest on are unchanged.
+
+### Result
+
+| | No guidance | E35 candidate | This candidate |
+| --- | --- | --- | --- |
+| Runs that passed every required claim | 58 of 75 | 69 of 75 | 71 of 75 |
+| Cost against no guidance (dollars) | 1.00 | 1.56 | 1.43 |
+| Total cost of the 75 runs | $4.24 | $6.29 | $5.82 |
+
+- The rule holds. The four wins stay at 3 of 3. No task falls; two rise (a decision chain 1 to 2
+  of 3, a review run until clean 2 to 3 of 3). No required claim falls. Two claims that are not
+  required fall: one says the project's container rules aloud (3 to 2 of 3), and one does not
+  repeat a measurement that a handoff rejected (2 to 0 of 3).
+- Cost: 0.91 times the E35 candidate's in dollars (input tokens 0.92, uncached input 0.88,
+  output 0.99, calls 1.01), and lower on 19 of 25 tasks. The 0.85 bar is not met: the result is a
+  lower cost, not shown to be clearly lower.
+- Mechanism: guidance reads fell from 194 to 141. The share of reads in the first two calls did
+  not change (67%), so the new pointer wording did not make reads later; the saving came from
+  fewer files read. `using-outcomebound` was still read in 21 runs (from 30), on tasks its new
+  condition does not name; its lifecycle reference was not read (from 5). The file that carried
+  each win was read in every run of its task.
+
+### Limits
+
+One model and one harness; three runs a cell, so a rare loss is not excluded; the 25 tasks do not
+cross a lifecycle stage and read none of the seven skills whose bodies did not change; each run
+is one short session, so a cache that lapses in a long session is not measured.
