@@ -655,7 +655,7 @@ def test_claude_code_on_a_target_with_no_claude_md_gets_no_file(
 
     assert code == 0, err
     assert not (target / "CLAUDE.md").exists()
-    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "ignore", *SKILL_RECORDS]
     assert "CLAUDE.md" not in facts_lines(target)["Precedence"]
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
@@ -704,7 +704,7 @@ def test_each_file_that_hides_agents_md_brings_the_import_block_back(
     assert code == 0, err
     assert list(blocks(target, "CLAUDE.md")) == ["pointer-claude-md"]
     assert {path: snapshot(target)[path] for path in before} == before
-    assert kinds(target) == ["block", "block", "block", "ignore", "pointer", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "ignore", "pointer", *SKILL_RECORDS]
 
 
 def test_an_import_block_an_older_engine_wrote_is_kept_until_its_file_is_gone(
@@ -731,7 +731,7 @@ def test_an_import_block_an_older_engine_wrote_is_kept_until_its_file_is_gone(
 
     assert code == 0, err
     assert not (target / "CLAUDE.md").exists()
-    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "ignore", *SKILL_RECORDS]
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
 
@@ -769,7 +769,7 @@ def test_a_claude_md_link_or_import_line_already_loads_agents_md(
     for target in (linked, imported):
         code, _, err = run(capsys, str(target), "--harness", "claude-code")
         assert code == 0, err
-        assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
+        assert kinds(target) == ["block", "block", "ignore", *SKILL_RECORDS]
     assert os.readlink(linked / "CLAUDE.md") == "AGENTS.md"
     assert (imported / "CLAUDE.md").read_text(encoding="utf-8") == "# Notes\n\n@AGENTS.md\n"
 
@@ -787,7 +787,7 @@ def test_an_import_block_whose_file_became_a_link_is_dropped_not_followed(
 
     assert code == 0, err
     assert os.readlink(target / "CLAUDE.md") == "AGENTS.md"
-    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "ignore", *SKILL_RECORDS]
 
 
 def test_a_plain_claude_md_gets_the_import_block_above_its_own_text(
@@ -829,7 +829,7 @@ def test_repeated_harness_flags_accumulate_and_naming_fewer_drops_the_rest(
     assert not (target / "CLAUDE.md").exists()
     for name in adopt.SKILLS:
         assert (target / f".agents/skills/{name}/SKILL.md").is_file()
-    assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
+    assert kinds(target) == ["block", "block", "ignore", *SKILL_RECORDS]
 
 
 @pytest.mark.parametrize("row", [None, {"verified": True, "pointer_mechanism": "RULES.md"}])

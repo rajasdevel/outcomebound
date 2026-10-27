@@ -281,7 +281,8 @@ def test_a_block_a_stash_took_away_reads_missing_on_disk_and_is_not_restored(
     assert kernel == (
         f"missing: {GONE}; HEAD's commit does not hold it either (a stash or another branch may)"
     )
-    assert code == 3 and "not loaded" not in out
+    # The kernel and facts blocks: a harness that lists skills itself gets no pointers block.
+    assert code == 2 and "not loaded" not in out
     assert snapshot(main) == before
     stashed = subprocess.run(
         [GIT, "-C", str(main), "stash", "list"],

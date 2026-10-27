@@ -1281,6 +1281,8 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
     found = adopt.block_text(text, facts.POINTERS)
     lines = found.decode("utf-8").split("\n")[1:-1] if found else []
     pointed = {_pointer_element(line) for line in lines} - {None}
+    (route,) = adopt.routes(REPO, [INSTALL_HARNESS])
+    native = route.native
     problems = []
 
     def expect(what: str, wanted: bool, present: bool) -> None:
@@ -1295,7 +1297,11 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
                 f"the {block} block", arm.keeps(element), adopt.block_text(text, block) is not None
             )
         elif element == POINTERS_ELEMENT:
-            lined = [item for item in install_elements(arm) if item.startswith(LINED)]
+            lined = [
+                item
+                for item in install_elements(arm)
+                if item.startswith(LINED) and not (native and item.startswith("skill:"))
+            ]
             wanted = arm.keeps(element) or (arm.name == NONE and any(map(arm.keeps, lined)))
             expect(f"the {facts.POINTERS} block", wanted, found is not None)
         elif kind == "fragment":
@@ -1307,7 +1313,9 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
             present = any((workdir / root / item).exists() for root in SKILL_ROOTS)
             expect(f"{element}'s folder", arm.keeps(element), present)
             line = f"- x: read {SKILL_ROOTS[-1]}{item}/SKILL.md"
-            expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+            # A harness that lists skills itself gets no skill pointer line (adopt.guidance).
+            shown = _line_kept(arm, line) and not native
+            expect(f"{element}'s pointer line", shown, element in pointed)
     if arm.name == NONE:
         for path in (adopt.WORKSPACE_IGNORE, adopt.LOCAL_IGNORE, adopt.MANIFEST):
             expect(path, False, (workdir / path).exists())
