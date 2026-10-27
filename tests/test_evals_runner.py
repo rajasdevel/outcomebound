@@ -841,7 +841,7 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
     assert any("/diagnose/SKILL.md" in path for path in meta["arm_files"])
     notes = (Path(meta["fixture_repo"]) / "AGENTS.md").read_text(encoding="utf-8")
     assert "a variant's own words" in notes
-    assert "sync-tracker" not in notes
+    assert "diagnose/SKILL.md" in notes and "sync-tracker" not in notes
     stray = _commit_of({"skills/stray/SKILL.md": b"Not in the list.\n"}, base="HEAD")
     done, _ = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", stray, *SMALL_FIX[2:]))
     assert done.returncode != 0 and "no install carries: stray" in done.stderr
@@ -860,19 +860,15 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
 
     from outcomebound_tools import adopt, facts
 
-    condition = adopt.CONDITIONS["land-change"].encode()
+    condition = adopt.CONDITIONS["review-findings"].encode()
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
     reread = b"a compaction alone is no reason."
-    precedence = b"these facts over any other repository text"
     assert condition in adopt_text and facts_text.count(reread) == 1
-    assert facts_text.count(precedence) == 1
     commit = _commit_of(
         {
             "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition"),
-            "outcomebound_tools/facts.py": facts_text.replace(
-                reread, b"a ref's own reread."
-            ).replace(precedence, b"a ref's own precedence"),
+            "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread."),
         },
         base="HEAD",
     )
@@ -885,11 +881,8 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         done, out = _invoke(tmp_path / fixture, (*arguments, "--fixtures", fixture))
         assert done.returncode == 0, done.stdout + done.stderr
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
-        # Codex lists skills natively, so an install with no fragment writes no pointers
-        # block: the facts block's Precedence line shows whose engine rendered it.
-        assert "a ref's own precedence" in notes
-        assert "these facts over any other repository text" not in notes
-        assert adopt.CONDITIONS["land-change"] not in notes and facts.ONCE not in notes
+        assert "a ref's own condition" in notes and "a ref's own reread." in notes
+        assert adopt.CONDITIONS["review-findings"] not in notes and facts.ONCE not in notes
 
 
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:

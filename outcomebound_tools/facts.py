@@ -538,9 +538,9 @@ def render_chosen(
     `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
     the recorded Done and Setup commands in run order and the style for text a person reads;
     `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
-    per skill that needs a pointer. A facts-only install keeps the whole selection's edges,
-    and renders Precedence without the clauses on OutcomeBound's guidance, which it does not
-    install, and a pointers block with the `local` fragment alone.
+    per installed skill. A facts-only install keeps the whole selection's edges, and renders
+    Precedence without the clauses on OutcomeBound's guidance, which it does not install, and
+    a pointers block with the `local` fragment alone.
     """
 
     done, style, setup, mode = chosen

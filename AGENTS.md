@@ -72,6 +72,20 @@ Read a file below at the step where its condition holds, once you have read what
 - when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
+- when choosing or changing how the work is delivered (a project that starts from an idea, a release, a handover to operation, a retirement), when a project's documents ask for more process than the change's risk needs, or when changing text a model reads: read .claude/skills/using-outcomebound/SKILL.md
+- when you are about to put a question or a held act to the person, or to build on a direction-setting choice they have not settled: read .claude/skills/decision-brief/SKILL.md
+- when two readings of a request lead to different results and nothing you can read settles which, or requirements arrive in a source not yet settled into the work (a transcript, an export, a design file or a picture, from outside the repository or checked into it): read .claude/skills/gather-requirements/SKILL.md
+- when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, or when you add, skip, loosen or delete a test: read .claude/skills/tests-worth-keeping/SKILL.md
+- when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix: read .claude/skills/diagnose/SKILL.md
+- when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
+- when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md
+- when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
+- when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
+- when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
+- when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers: read .claude/skills/explorable/SKILL.md
+- when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
+- when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
+- when reading a card from a tracker that is not the project's ticket store, or writing back to it: read .claude/skills/sync-tracker/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

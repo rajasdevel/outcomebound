@@ -1,6 +1,6 @@
 ---
 name: tests-worth-keeping
-description: Use when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, or when you would skip, loosen or delete a test. Running the existing tests is no reason to read it.
+description: Use when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, or when you add, skip, loosen or delete a test. Running the existing tests is no reason to read it.
 ---
 
 # Tests worth keeping

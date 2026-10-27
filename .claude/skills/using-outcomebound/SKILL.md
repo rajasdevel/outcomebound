@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when choosing or changing how the work is delivered (a project that starts from an idea, a release, a handover to operation, a retirement), when a project's documents ask for more process than the change's risk needs, or when changing text a model reads. Not for routine work, or for resuming work on a route already settled.
+description: Use when choosing or changing how the work is delivered (a project that starts from an idea, a release, a handover to operation, a retirement), when a project's documents ask for more process than the change's risk needs, or when changing text a model reads. Not for routine work on a route already settled.
 ---
 
 # Using OutcomeBound

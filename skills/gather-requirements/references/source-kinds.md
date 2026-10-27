@@ -47,14 +47,7 @@ any other.
 `outcomebound sources import` reads markdown, text and images. Convert anything else first
 (`outcomebound sources import --help`), and keep the original beside the conversion.
 
-## The ledger and pictures
-
-Where a source holds many items or will be cited again, `outcomebound sources import` gives each
-item an id and a revision, and `outcomebound sources check` reads your ledger against it; without
-an import, keep the ledger by hand. In it, beside the requirements, give each item that bears on the request
-one disposition (every item where coverage of the source is itself the task): carried into requirements, dropped as assumed or as decided, not
-requirement-bearing, deferred, or, for a picture, a reference (below). A source that changed
-since the ledger sends its items back for reconsideration.
+## Pictures
 
 A screenshot or a design export that carries requirements (a mock-up, a design, a picture of
 wanted behaviour) is a source like any other; a picture that shows only a symptom is evidence for

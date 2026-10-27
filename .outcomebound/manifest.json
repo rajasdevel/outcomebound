@@ -46,8 +46,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "1df2292cad40898695bdc47939ffdfbd7db7e4ee5acf842d94416977be3a887e",
-      "sha256": "97e3a19295b62aea8f9afbcf34ba4d69cf614d8436c9d6bdfdaea503c4a4bf01"
+      "frame": "82451052a3468395ca168b2ac8e29dff06c53d9116a6f7515df39d10b1a994df",
+      "sha256": "bb5bfd76471516f45a69c49d56d6bc1f6ce11f530e1caa2d63bbc2b8667fcb69"
     },
     {
       "kind": "fragment",
@@ -155,7 +155,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "511074421323187bbcd98f486d0d2acb7c32d0f205c15ca1c588b7fcb51cd513"
+      "sha256": "99534396025761bf906da1df44aaee6ed7c63f63a9339941ca81427fad847305"
     },
     {
       "kind": "skill",
@@ -164,7 +164,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "4a4e25d64c9817f43c2faf753545c66a9fc9cecf04d25afba85401d8623044a4"
+      "sha256": "f3f62f35ffee623edea84cd65a8fb8bee466dfc6fb685d0fa80efbb54eb12ff3"
     },
     {
       "kind": "skill",
@@ -200,7 +200,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "7ac6f7ed6325b5a251c4871cdf3b1671cba1ee31975cf28a57e3fe1de9a59008"
+      "sha256": "e6c784af71550429247a7210b100af37ef1faf42ca9049c8bbf7b2acec58f075"
     },
     {
       "kind": "skill",
@@ -245,7 +245,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "eca894fb98d2559e695101f672f009c1bba34eb9601d628e2737dbc52aee9d51"
+      "sha256": "c1e336ee056a99c9ba7e9fce1825dc8a8a13672a8b608a08d7a53fc697febe2e"
     },
     {
       "kind": "skill",
@@ -254,7 +254,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "27662ed70ff80b47066a886d20acf02ffb9615f8249cb68926edcd56b3acd706"
+      "sha256": "79d8974d5633ca9d5c1521ef5144a5f0614d9b162d5583d6d40dde249cbdbcbb"
     },
     {
       "kind": "skill",
@@ -263,7 +263,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "442123a9dbc3253f5f5be9ff17c6fd5d83d64befcddb3634d7e48c8d89e8c7b1"
+      "sha256": "7c874e1bfde6a00912576cfd3057c7dd12a7a37b3f2649957e89f40051f86fea"
     },
     {
       "kind": "skill",

@@ -3204,6 +3204,12 @@ each million tokens):
   that a typical reader did not use into references; `using-outcomebound` fires on a change of
   delivery route, process beyond the risk, or text a model reads; no skill pointer lines where
   every selected harness lists skills natively. The lines the wins rest on are unchanged.
+- After the runs, a review found that a harness catalog can drop a skill's description (Claude
+  Code drops the least-used skills' descriptions when its listing passes its budget) or let a
+  personal skill of the same name shadow the project's. So the shipped text keeps the skill
+  pointer lines on every harness, `review-findings` keeps its earlier condition, and
+  `gather-requirements` and `tests-worth-keeping` cover a source checked into the repository and
+  an added test. A second check of that text follows below.
 
 ### Result
 
