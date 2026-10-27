@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when an act needs authority you do not have, or later work would build on an assumption the person has not settled. The user's decision is an act the agent's authority does not grant, such as an irreversible edge or widening scope, or a decision a handoff leaves to them; the assumption, the agent's own or inherited from another agent or session, is said to the user before work builds on it. Also when a harness refuses an act the person granted.
+description: Use when you are about to put a question or a held act to the person, or to build on a direction-setting choice they have not settled. Also when a harness refuses an act the person granted.
 ---
 
 # Decision brief
@@ -43,16 +43,9 @@ elsewhere. An order that names a class of acts, such as clearing what is not nee
 is in that class and that a tool rebuilds or a copy you verified restores; hold an item you did not
 check, one nothing restores, and one another owner uses. An order to run unattended answers "may I ask" only for
 questions within what the kernel allows you to decide; it grants no act that a bound or an edge
-holds. A harness or sandbox that refuses an act has raised no new decision only where the person's
-own words name that act and its target, or where the project's own gate repeats the act on every
-change (a record its Done check rewrites) or a person's standing instruction covers it: quote the
-words, or cite the gate or the instruction. Where the refusing rule itself allows a route, take
-it; that a route exists allows nothing. Otherwise say in the first line of your next message what
-was refused, by which rule or command, and ask the person to run the act or to adjust the
-harness; draw no brief with options and a default for it. Where nothing covers the act, the
-refusal is a decision for them: draw its brief. After a refusal, never reach the same effect by
-another route unless the refusing rule allows it, and continue every item the refusal does not
-block.
+holds. Where the act and its owner are already settled, report the held act and what it waits
+for: a brief is for an unresolved choice, and the report grants no act. Where a harness, hook or
+sandbox refuses an act, read [the refusal reference](references/refusal.md) before you go on.
 
 ## Do the due diligence first
 
@@ -122,62 +115,17 @@ never inside a code block. To revise it, change the input and draw it again; do 
 brief. A refused brief is fixed and drawn again, never hand-written. Without `outcomebound` on PATH,
 write the same shape by hand, options lettered.
 
-A short input for one brief with two options. `recommend_way` is the words of a way, never its
-letter, since the command writes the letters; `why_now` says what waits and what happens if no
-answer comes:
-
-```json
-{"briefs": [{"id": "flag-D1", "heading": "Keep the old flag for one more release, or drop it now?",
-  "why_now": "the release notes for 2.0; until you answer, the flag stays and only the notes wait",
-  "context": ["The old `--legacy` flag switches the parser back to its 1.x behaviour. Two adopters still set it."],
-  "terms": [["code path", "the branch of the parser that runs only when the flag is set"]],
-  "recommend": "two adopters still set it", "recommend_way": "keep it",
-  "options": [{"way": "keep it", "leads_to": "adopters get a warning first",
-               "choose_if": "no adopter should break on upgrade",
-               "downside": "one more release carries the old code path"},
-              {"way": "drop it now", "leads_to": "the code path goes today",
-               "choose_if": "a smaller 2.0 matters more than a warning period",
-               "downside": "an adopter who sets it is refused on upgrade"}],
-  "checked": {"verdicts": ["PASS"], "text": "`grep -r old_flag` finds two adopter configs"},
-  "undo": {"can_be_undone": true, "text": "revert the commit"}}]}
-```
-
-A drawn brief, fenced here only to show its lines; its bare `D1` is right only where the
-project's instructions number briefs:
-
-````markdown
-### D1 · Keep the old flag for one more release, or drop it now?
-
-⏳ Waiting on this: the release notes for 2.0; until you answer, the flag stays and only the notes wait
-
-The old `--legacy` flag switches the parser back to its 1.x behaviour. Two adopters still set it.
-
-📖 *code path*: the branch of the parser that runs only when the flag is set
-
-**Options**
-
-- **A · keep it** — adopters get a warning first
-  - ⭐ Recommended: two adopters still set it
-  - ⚖️ Choose if: no adopter should break on upgrade
-  - 🔻 Downside: one more release carries the old code path
-- **B · drop it now** — the code path goes today
-  - ⚖️ Choose if: a smaller 2.0 matters more than a warning period
-  - 🔻 Downside: an adopter who sets it is refused on upgrade
-
-✅ Checked: `grep -r old_flag` finds two adopter configs
-
-↩️ Undo: revert the commit
-````
+The document is `{"briefs": [...], "order": [[before, after], ...]}`; every string is one line.
+Each brief holds `id` (letters, digits, hyphens), `heading` (the question), `why_now`, `context`
+(strings or lists of strings, none starting with a markdown mark), `terms` (`[term, meaning]`
+pairs), `options` (objects with `way`, `leads_to`, `choose_if`, `downside`), `recommend` (why)
+and `recommend_way` (the words of a way, never its letter), at least one of `checked`
+(`{"verdicts": ["PASS"], "text": ...}`), `not_checked` or `facts`, and `undo`
+(`{"can_be_undone": true, "text": ...}`); `diagram`, `picture` and `explore` where they help.
+`outcomebound brief --help` gives each field's full rules; read it only when a draw is refused.
 
 Several decisions go in one message; where one waits on another, the document's `order` draws
 which comes first.
 
-Where the harness asks the user through a question tool, with choices to pick, draw the brief in
-your message first, then pipe the same document to `outcomebound brief --ask -` and ask with what it
-prints, filling the tool's fields by name: its question or title, its header, and each option's
-label and description, or its `line` where the tool takes options as plain strings. Never put a
-drawn brief's lines into the tool's fields; the tool shows each field as one line. Where the tool
-refuses the number of options a brief carries, or the brief has none and the tool needs some, the
-drawn brief in your message is the ask: put no question for that brief, and the user answers in
-words. A brief with `explore` carries a last choice, `Explore it first`; where the tool refuses
-that many choices, leave it out, and the drawn brief's offer stands.
+Where the harness asks the user through a question tool with choices to pick, read
+[the question-tool reference](references/ask-tool.md).

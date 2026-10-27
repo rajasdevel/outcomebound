@@ -4,8 +4,9 @@
 operating contract; the project facts the engine observes or the adopter records
 (`outcomebound_tools.facts`); and the guidance pointers, the project's own `local`
 fragment inline and then one line per selected fragment, copied under
-`.outcomebound/fragments/`, and per skill in `SKILLS`. Selecting the workspace fragment also
-installs `.agents/.gitignore`, which keeps its four folders out of Git; every install writes
+`.outcomebound/fragments/`, and per skill in `SKILLS` unless every selected harness lists skills
+natively. Selecting the workspace fragment also installs `.agents/.gitignore`, which keeps its
+four folders out of Git; every install writes
 `.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
 report warns where Git ignores a path the install owns, where AGENTS.md holds changes not
 committed, and where a harness also loads instructions from a folder above the target.
@@ -97,26 +98,33 @@ SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
     "using-outcomebound": (
-        "when the project's documents or habits ask for more design, testing, review or "
-        "process than the change seems to need"
+        "when choosing or changing how the work is delivered (a project that starts from an "
+        "idea, a release, a handover to operation, a retirement), when a project's documents "
+        "ask for more process than the change's risk needs, or when changing text a model "
+        "reads"
     ),
     "decision-brief": (
-        "when an act needs authority you do not have, or later work would build on an "
-        "assumption the person has not settled"
+        "when you are about to put a question or a held act to the person, or to build on a "
+        "direction-setting choice they have not settled"
     ),
     "gather-requirements": (
         "when two readings of a request lead to different results and nothing you can read "
-        "settles which, or requirements arrive in a document, an export or a picture"
+        "settles which, or requirements arrive from outside the repository (a transcript, a "
+        "tracker export, a design file or a picture)"
     ),
     "tests-worth-keeping": (
-        "when logic that decides money, dates, limits or permissions changes, when judging a "
-        "test, or when the project's tests already fail before you begin"
+        "when logic that decides money, dates, limits or permissions changes, when the "
+        "project's tests already fail before you begin, or when you would skip, loosen or "
+        "delete a test"
     ),
     "diagnose": (
-        "when a failure's cause is unknown, a fix did not hold, or a defect is reported to you "
-        "to fix"
+        "when a failure's cause is unknown, a fix did not hold, or a defect is reported to "
+        "you to fix"
     ),
-    "review-findings": "when acting on review findings, or writing a review the project requires",
+    "review-findings": (
+        "when a review of your change has findings to act on, or you write a review the "
+        "project requires"
+    ),
     "review-council": (
         "when a second opinion from other models or harnesses is worth asking for, as for a "
         "design, a release candidate, or a change whose miss would reach users"
@@ -126,13 +134,13 @@ CONDITIONS = {
     ),
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": (
-        "when handing an accepted ticket from the ticket store to the agent or model that will "
-        "build it"
+        "when handing an accepted ticket from the ticket store to the agent or model that "
+        "will build it"
     ),
     "explorable": (
-        "when the person wants to understand something, or wants it explained to others, where "
-        "trying it teaches more than reading, asks for an interactive page, or wants to try "
-        "options with their own numbers"
+        "when the person wants to understand something, or wants it explained to others, "
+        "where trying it teaches more than reading, asks for an interactive page, or wants to "
+        "try options with their own numbers"
     ),
     "land-change": "when driving a pull or merge request through CI and review to landing",
     "run-acceptance": (
@@ -140,8 +148,8 @@ CONDITIONS = {
         "outside the build"
     ),
     "sync-tracker": (
-        "when reading a card from a tracker that is not the project's ticket store, "
-        "or writing back to it"
+        "when reading a card from a tracker that is not the project's ticket store, or "
+        "writing back to it"
     ),
 }
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
@@ -326,11 +334,12 @@ def guidance(
 ) -> Guidance:
     """The facts and pointers for these harnesses, fragments and Done commands.
 
-    The pointers name each skill where a generic install puts it, else its first native copy;
-    the Precedence fact names AGENTS.md and each selected harness's import host that exists,
-    or that `importing` says this run writes an import block into. A facts-only install
-    (`chosen.mode`) copies no fragment file and names no skill: its pointers block holds the
-    local fragment alone.
+    The pointers omit skills only for a non-empty selection of routes that all list skills
+    natively. Otherwise they name each skill where a generic install puts it, else its first
+    native copy. The Precedence fact names AGENTS.md and each selected harness's import host
+    that exists, or that `importing` says this run writes an import block into. A facts-only
+    install (`chosen.mode`) copies no fragment file and names no skill: its pointers block holds
+    the local fragment alone.
     """
 
     try:
@@ -351,6 +360,8 @@ def guidance(
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
     skills = skills if root else []
+    if found and all(item.native for item in found):
+        skills = []
     rendered = facts.render_chosen(target, selected, chosen, hosts, skills)
     return Guidance(rendered, files, names)
 

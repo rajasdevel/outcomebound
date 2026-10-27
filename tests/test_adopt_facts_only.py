@@ -149,7 +149,8 @@ def test_an_upgrade_keeps_the_mode_and_full_switches_back_and_forth(
     assert block_ids(target) == [adopt.KERNEL, adopt.FACTS, adopt.POINTERS]
     assert (target / ".outcomebound/fragments/python.md").is_file()
     assert "mode" not in facts_record(target)
-    assert ": read .agents/skills/" in body(target, adopt.POINTERS)
+    assert ": read .outcomebound/fragments/python.md" in body(target, adopt.POINTERS)
+    assert ": read .agents/skills/" not in body(target, adopt.POINTERS)
     assert (target / "AGENTS.md").read_text(encoding="utf-8").endswith("# Our rules\n")
     assert all_current(capsys, target)
 

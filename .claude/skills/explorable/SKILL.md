@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. Builds a learning, explain, decision or interview page the engine checks; a decision page goes beside the decision brief and never in place of it, and a set of questions can go on an interview page. The decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
+description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. A decision page goes beside the decision brief, never in its place.
 ---
 
 # Explorable

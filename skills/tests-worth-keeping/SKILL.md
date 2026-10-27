@@ -1,6 +1,6 @@
 ---
 name: tests-worth-keeping
-description: Use when logic that decides money, dates, limits or permissions changes, when judging a test, or when the project's tests already fail before you begin. What makes a test worth keeping, when no new test is warranted, and what the report keeps apart.
+description: Use when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, or when you would skip, loosen or delete a test. Running the existing tests is no reason to read it.
 ---
 
 # Tests worth keeping
@@ -35,7 +35,8 @@ claim declares has changed since (`CURRENT`, `CHANGED` or `UNVERIFIED`); it runs
 
 - **A break it catches.** Name the production change that would make it fail. If none would,
   the test cannot fail: an assertion that recomputes the expected value the way the code does, an
-  assertion on what a test double was told to return, a value compared with itself. Where you
+  assertion on what a test double was told to return, a value compared with itself: delete it or
+  rewrite it, and say what it caught before, if anything. Where you
   doubt a test can fail, break the code and watch it; that settles the doubt, and is no step
   every test needs. For a refusal or a deliberate break, check that the case reaches the
   behaviour it names. A setup error or an earlier guard rejecting it is not evidence for
@@ -56,11 +57,6 @@ An existing test already fails on the break; the change is to generated files, c
 documentation, where a build, render or lint check catches the break; or the risk sits at a layer
 a unit test does not reach, such as integration, delivery or rendering, where a runtime check is
 the test. Say so in the report, in place of a test that adds nothing.
-
-## Deleting a test that cannot fail
-
-A test no production change would fail, or one that fails only on refactors, is deleted or
-rewritten, and the change says what it caught before, if anything.
 
 ## The report
 

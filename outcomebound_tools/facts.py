@@ -538,9 +538,9 @@ def render_chosen(
     `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
     the recorded Done and Setup commands in run order and the style for text a person reads;
     `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
-    per installed skill. A facts-only install keeps the whole selection's edges, and renders
-    Precedence without the clauses on OutcomeBound's guidance, which it does not install, and
-    a pointers block with the `local` fragment alone.
+    per skill that needs a pointer. A facts-only install keeps the whole selection's edges,
+    and renders Precedence without the clauses on OutcomeBound's guidance, which it does not
+    install, and a pointers block with the `local` fragment alone.
     """
 
     done, style, setup, mode = chosen
@@ -617,9 +617,10 @@ def inline(fragment: Fragment) -> str:
 
 
 ONCE = (
-    "Read each file below when its condition first holds; it stays in force for the session. "
-    "Read it again when the next step's rules from it are missing, incomplete, uncertain or may "
-    "have changed; a compaction alone is no reason."
+    "Read a file below at the step where its condition holds, once you have read what that step "
+    "touches; a condition that may hold later is no reason to read it now. A file you read stays "
+    "in force for the session; read it again only when the next step's rules from it are "
+    "missing, incomplete, uncertain or may have changed; a compaction alone is no reason."
 )
 
 

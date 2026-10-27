@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when the project's documents or habits ask for more design, testing, review or process than the change seems to need. That includes a project whose documents or habits suggest more process than a change needs, a project that starts from an idea with no repository, and a change to text a model reads. Sizes the work and routes each step to the skill or reference it needs.
+description: Use when choosing or changing how the work is delivered (a project that starts from an idea, a release, a handover to operation, a retirement), when a project's documents ask for more process than the change's risk needs, or when changing text a model reads. Not for routine work, or for resuming work on a route already settled.
 ---
 
 # Using OutcomeBound
@@ -85,7 +85,7 @@ or a decision, in the most checkable form that fixes it: a check or a refusal be
 | When | Read |
 | --- | --- |
 | the work starts from an idea, in an empty folder or none | [the new-project reference](references/new-project.md) |
-| work spans stages, or delivery stopped before the outcome | [the lifecycle reference](references/lifecycle.md) |
+| the delivery route must change, or the outcome needs a delivery stage whose inputs, owner or authority are unsettled | [the lifecycle reference](references/lifecycle.md) |
 | the project's exposure or route changes, a "Leave when —" signal appears, or `adopt --check` prints a drift line | the transitions section of [the lifecycle reference](references/lifecycle.md) |
 
 ## Read the full contract

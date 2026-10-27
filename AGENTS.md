@@ -67,25 +67,11 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 **Distinguish** — the template shipped ≠ the block installed in this repository's `AGENTS.md`;
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
-Read each file below when its condition first holds; it stays in force for the session. Read it again when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
+Read a file below at the step where its condition holds, once you have read what that step touches; a condition that may hold later is no reason to read it now. A file you read stays in force for the session; read it again only when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
 - when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when the project's documents or habits ask for more design, testing, review or process than the change seems to need: read .claude/skills/using-outcomebound/SKILL.md
-- when an act needs authority you do not have, or later work would build on an assumption the person has not settled: read .claude/skills/decision-brief/SKILL.md
-- when two readings of a request lead to different results and nothing you can read settles which, or requirements arrive in a document, an export or a picture: read .claude/skills/gather-requirements/SKILL.md
-- when logic that decides money, dates, limits or permissions changes, when judging a test, or when the project's tests already fail before you begin: read .claude/skills/tests-worth-keeping/SKILL.md
-- when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix: read .claude/skills/diagnose/SKILL.md
-- when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
-- when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md
-- when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
-- when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
-- when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
-- when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers: read .claude/skills/explorable/SKILL.md
-- when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
-- when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
-- when reading a card from a tracker that is not the project's ticket store, or writing back to it: read .claude/skills/sync-tracker/SKILL.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

@@ -1,6 +1,7 @@
 # Carry an outcome through its lifecycle
 
-Use this reference when work crosses stages or an apparent delivery leaves the outcome unmet.
+Use this reference to settle a change of delivery route or exposure, or a delivery stage whose
+inputs, owner or authority are unsettled; continuing an accepted task on its route needs none of it.
 Start at the project's current state. A local correction can go straight to its relevant check;
 stage names do not require new specs, tickets, approvals, services or documents.
 

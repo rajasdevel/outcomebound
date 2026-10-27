@@ -209,7 +209,7 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
     tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An engine that carried only the core skill recorded one skill per harness; the next
-    run adds each other skill every install carries beside it, with its pointer line, and
+    run adds each other skill every install carries beside it, without a skill pointer, and
     changes no other file."""
 
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
@@ -228,13 +228,7 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
     for name, path in gained.items():
         assert after.pop(path) == (ROOT / "skills" / name / "SKILL.md").read_bytes()
     assert after.pop(adopt.MANIFEST) != before.pop(adopt.MANIFEST)
-    old = adopt.block_text(before.pop("AGENTS.md").decode("utf-8"), adopt.POINTERS) or b""
-    added = [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in gained.items()]
-    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == [
-        *old.decode("utf-8").splitlines()[1:-1],
-        *added,
-    ]
-    after.pop("AGENTS.md")
+    assert adopt.POINTERS not in blocks(target, "AGENTS.md")
     # Beside each gained skill arrive its folders and reference files, and nothing else.
     extra = {key for key in after if key not in before}
     assert all(
@@ -1981,15 +1975,127 @@ def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
     assert pointers.splitlines() == [
         facts.ONCE,
         f"- {shipped.condition}: read {PYTHON_FRAGMENT}",
-        *(
-            f"- {adopt.CONDITIONS[name]}: read .agents/skills/{name}/SKILL.md"
-            for name in adopt.SKILLS
-        ),
     ]
     assert shipped.body not in (target / "AGENTS.md").read_text(encoding="utf-8")
     assert (target / PYTHON_FRAGMENT).read_bytes() == (
         ROOT / "fragments/stack/python.md"
     ).read_bytes()
+
+
+@pytest.mark.parametrize(
+    ("harnesses", "skill_root"),
+    [
+        ("claude-code", None),
+        ("codex", None),
+        ("claude-code,codex", None),
+        ("generic", adopt.GENERIC_SKILLS),
+        ("claude-code,generic", adopt.GENERIC_SKILLS),
+    ],
+)
+def test_only_native_routes_omit_skill_pointers_and_keep_the_fragments(
+    tmp_path: Path, capsys: Capture, harnesses: str, skill_root: str | None
+) -> None:
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    code, _, err = run(
+        capsys, str(target), "--harness", harnesses, "--fragments", "python,commands,local"
+    )
+    assert code == 0, err
+
+    agents = blocks(target, "AGENTS.md")
+    assert list(agents) == [adopt.KERNEL, adopt.FACTS, adopt.POINTERS]
+    local = fragments.parse_fragment(local_fragment())
+    inline, pointers = agents[adopt.POINTERS].body.rsplit("\n\n", 1)
+    assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
+    lines = [facts.ONCE]
+    for name in ("python", "commands"):
+        shipped = fragments.load_all(ROOT)[name]
+        path = f".outcomebound/fragments/{name}.md"
+        lines.append(f"- {shipped.condition}: read {path}")
+        assert shipped.path is not None
+        assert (target / path).read_bytes() == shipped.path.read_bytes()
+    if skill_root is not None:
+        lines += [
+            f"- {adopt.CONDITIONS[name]}: read {skill_root}/{name}/SKILL.md"
+            for name in adopt.SKILLS
+        ]
+    assert pointers.splitlines() == lines
+
+    before = snapshot(target)
+    code, out, err = run(capsys, str(target), "--check")
+    assert code == 0, err
+    assert set(states(out).values()) == {"current"}
+    assert snapshot(target) == before
+
+
+@pytest.mark.parametrize("native", [None, False, "true", 1])
+def test_a_route_without_a_true_native_flag_keeps_every_skill_pointer(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch, native: object
+) -> None:
+    table = adopt.harness_table(ROOT)
+    if native is None:
+        table["claude-code"].pop("native_skills")
+    else:
+        table["claude-code"]["native_skills"] = native
+    monkeypatch.setattr(adopt, "harness_table", lambda source: table)
+    target = repo(tmp_path / "t")
+
+    code, _, err = run(capsys, str(target), "--harness", "codex,claude-code")
+
+    assert code == 0, err
+    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == [
+        facts.ONCE,
+        *(
+            f"- {adopt.CONDITIONS[name]}: read .agents/skills/{name}/SKILL.md"
+            for name in adopt.SKILLS
+        ),
+    ]
+
+
+@pytest.mark.parametrize("selection", ["", "local", "commands,local"])
+def test_an_upgrade_removes_old_native_skill_pointers_without_force(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch, selection: str
+) -> None:
+    """Start with the old full render at a native skill path, then restore native discovery.
+    Only the managed block and its manifest change; --check reports stale before the upgrade
+    and current afterwards, including when the last pointer line or the whole block goes."""
+
+    table = adopt.harness_table(ROOT)
+    table["claude-code"]["native_skills"] = False
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    with monkeypatch.context() as old:
+        old.setattr(adopt, "harness_table", lambda source: table)
+        code, _, err = run(
+            capsys, str(target), "--harness", "claude-code", "--fragments", selection
+        )
+        assert code == 0, err
+    before = snapshot(target)
+    old_body = blocks(target, "AGENTS.md")[adopt.POINTERS].body
+    for name in adopt.SKILLS:
+        assert f"- {adopt.CONDITIONS[name]}: read .claude/skills/{name}/SKILL.md" in old_body
+
+    code, out, err = run(capsys, str(target), "--check")
+    assert code == 1, err
+    assert states(out)[f"AGENTS.md ({adopt.POINTERS})"] == "stale"
+    assert names_plain_adopt(out, target)
+    assert snapshot(target) == before
+
+    code, _, err = run(capsys, str(target))
+    assert code == 0, err
+    after = snapshot(target)
+    changed = {path for path in before.keys() | after.keys() if before.get(path) != after.get(path)}
+    assert changed == {"AGENTS.md", adopt.MANIFEST}
+    if selection:
+        body = blocks(target, "AGENTS.md")[adopt.POINTERS].body
+        local = fragments.parse_fragment(local_fragment())
+        assert body.startswith(f"**local** (setup) — {local.applies}\n\n{local.body}")
+        assert "/skills/" not in body
+        assert (facts.ONCE in body) == ("commands" in selection)
+    else:
+        assert adopt.POINTERS not in blocks(target, "AGENTS.md")
+    code, out, err = run(capsys, str(target), "--check")
+    assert code == 0, err
+    assert set(states(out).values()) == {"current"}
+    assert snapshot(target) == after
 
 
 def test_check_names_the_fact_that_moved_and_an_install_brings_it_current(
@@ -2041,7 +2147,7 @@ def test_remove_takes_out_the_blocks_and_fragment_files_and_keeps_the_projects_o
     assert snapshot(target) == before
 
 
-def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragment(
+def test_a_native_install_carries_the_ticket_skills_without_pointers_with_no_fragment(
     tmp_path: Path, capsys: Capture
 ) -> None:
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
@@ -2055,8 +2161,8 @@ def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragmen
         for file in shipped:
             relative = file.relative_to(ROOT / "skills").as_posix()
             assert (target / ".claude/skills" / relative).read_bytes() == file.read_bytes()
-        path = f".claude/skills/{name}/SKILL.md"
-        assert f"{adopt.CONDITIONS[name]}: read {path}" in agents
+    assert adopt.POINTERS not in blocks(target, "AGENTS.md")
+    assert facts.ONCE not in agents
     assert len(list((ROOT / "skills/slice-tickets").rglob("*.md"))) > 1
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0
