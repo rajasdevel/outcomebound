@@ -97,25 +97,24 @@ SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
     "using-outcomebound": (
-        "when choosing or changing how the work is delivered (a project that starts from an "
-        "idea, a release, a handover to operation, a retirement), when a project's documents "
-        "ask for more process than the change's risk needs, or when changing text a model "
-        "reads"
+        "when choosing or changing a delivery route or the project's exposure (a project that "
+        "starts from an idea, a first release to users, a handover to operation, a retirement), "
+        "or when a delivery stage's inputs, owner or authority are unsettled"
     ),
     "decision-brief": (
-        "when you are about to put a question or a held act to the person, or to build on a "
-        "direction-setting choice they have not settled"
+        "when you are about to ask the person for a decision that is theirs to make, or when a "
+        "harness refuses an act the person granted"
     ),
     "gather-requirements": (
-        "when two readings of a request lead to different results and nothing you can read "
-        "settles which, or requirements arrive in a source not yet settled into the work (a "
-        "transcript, an export, a design file or a picture, from outside the repository or "
-        "checked into it)"
+        "when you are about to take requirements from a source not yet settled into the work, "
+        "wherever it is kept (a transcript, an export, a requirements note, a design file or a "
+        "picture), or when two readings of a request lead to different results and nothing you "
+        "can read settles which"
     ),
     "tests-worth-keeping": (
-        "when logic that decides money, dates, limits or permissions changes, when the "
-        "project's tests already fail before you begin, or when you add, skip, loosen or "
-        "delete a test"
+        "when logic that decides money, dates, limits or permissions changes, when the project's "
+        "tests already fail before you begin, when you skip, loosen or delete a test, or when you "
+        "doubt that a test can fail"
     ),
     "diagnose": (
         "when a failure's cause is unknown, a fix did not hold, or a defect is reported to "
@@ -149,6 +148,39 @@ CONDITIONS = {
         "writing back to it"
     ),
 }
+
+
+# Rules a reader needs on most tasks, shown beside the read conditions so the common case needs
+# no read; each is also its skill description's second sentence.
+RULES = {
+    "tests-worth-keeping": (
+        "A test you add or assess asserts, through the interface a caller uses, an expected value "
+        "the code under test did not produce (a literal, a worked example, the spec), names the "
+        "break that would make it fail, and, for a refusal, reaches the refusal it names rather "
+        "than failing at setup or an earlier guard."
+    ),
+    "decision-brief": (
+        "Apply a ruling the person already made within its scope, say a direction-setting "
+        "assumption before work builds on it, check a ruling another agent or session attributes "
+        "to the person against their own words where you can, and report a held act whose owner "
+        "and next step are settled without asking again."
+    ),
+    "using-outcomebound": (
+        "A step a project's documents only suggest (should, recommended, consider) is sized to "
+        "the change's risk, while one a check, hook or CI job enforces, or the text requires, is "
+        "done; text a model reads changes only for an observed failure or a settled decision, as "
+        "a check or a refusal where one can enforce it."
+    ),
+}
+
+# A reference with its own pointer line: a handoff or a resume needs these checks without the
+# rest of its skill.
+REFERENCE_POINTERS = (
+    (
+        "at a handoff, or when you resume work another session or person left",
+        "using-outcomebound/references/continuity.md",
+    ),
+)
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
 # adopt's, so `--check` reads its files stale and the next install removes them.
 RETIRED_SKILLS: tuple[str, ...] = ()
@@ -353,10 +385,12 @@ def guidance(
         (CONDITIONS.get(name, f"when the {name} skill applies"), f"{root}/{name}/SKILL.md")
         for name in names
     ]
+    skills += [(condition, f"{root}/{path}") for condition, path in REFERENCE_POINTERS]
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
     skills = skills if root else []
-    rendered = facts.render_chosen(target, selected, chosen, hosts, skills)
+    rules = [RULES[name] for name in names if name in RULES] if root else []
+    rendered = facts.render_chosen(target, selected, chosen, hosts, skills, rules)
     return Guidance(rendered, files, names)
 
 

@@ -93,3 +93,24 @@ def test_each_pointer_condition_is_its_skill_descriptions_first_sentence():
         assert described.group(1).startswith(f"Use {condition}. "), (
             f"{name}: the description must open with 'Use {condition}.'"
         )
+
+
+def test_each_rule_shown_without_a_read_is_its_skill_descriptions_second_sentence():
+    # The rule the pointer block shows beside the read conditions is the same text the harness's
+    # own skill list shows, so a harness with either one carries it.
+    from outcomebound_tools import adopt
+
+    for name, rule in adopt.RULES.items():
+        fm, _ = _frontmatter(Path("skills") / name / "SKILL.md")
+        described = re.search(r"^description:\s*(.+)$", fm, re.M)
+        assert described is not None, name
+        assert described.group(1) == f"Use {adopt.CONDITIONS[name]}. {rule}", (
+            f"{name}: the description must be 'Use <condition>. <rule>'"
+        )
+
+
+def test_each_reference_pointer_names_a_shipped_reference():
+    from outcomebound_tools import adopt
+
+    for _, path in adopt.REFERENCE_POINTERS:
+        assert (Path("skills") / path).is_file(), path

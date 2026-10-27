@@ -532,13 +532,15 @@ def render_chosen(
     chosen: Chosen,
     files: Sequence[str],
     skills: Sequence[tuple[str, str]],
+    rules: Sequence[str] = (),
 ) -> Rendered:
     """The facts and pointers blocks for `target`.
 
     `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
     the recorded Done and Setup commands in run order and the style for text a person reads;
     `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
-    per installed skill. A facts-only install keeps the whole selection's edges, and renders
+    per installed skill and reference pointer; `rules` the rules shown above them that hold
+    without a read. A facts-only install keeps the whole selection's edges, and renders
     Precedence without the clauses on OutcomeBound's guidance, which it does not install, and
     a pointers block with the `local` fragment alone.
     """
@@ -587,7 +589,7 @@ def render_chosen(
     shown = selected if mode == FULL else [item for item in selected if item.id == LOCAL]
     return Rendered(
         facts,
-        pointers(shown, skills if mode == FULL else []),
+        pointers(shown, skills if mode == FULL else [], rules if mode == FULL else []),
         tuple(unverified),
         dict(sorted(inputs.items())),
         tuple(absent),
@@ -617,17 +619,26 @@ def inline(fragment: Fragment) -> str:
 
 
 ONCE = (
-    "Read a file below at the step where its condition holds, once you have read what that step "
-    "touches; a condition that may hold later is no reason to read it now. A file you read stays "
-    "in force for the session; read it again only when the next step's rules from it are "
-    "missing, incomplete, uncertain or may have changed; a compaction alone is no reason."
+    "Read a file below when its condition holds, once you have read the work that shows it "
+    "holds; a condition that may hold later is no reason to read it now. Use the file at the path "
+    "listed here; a skill list that lacks it, or a personal skill of the same name, does not "
+    "replace it. A file you read stays in force for the session; read it again only when the "
+    "next step's rules from it are missing, incomplete, uncertain or may have changed; a "
+    "compaction alone is no reason."
 )
 
+# Shown above the read list: rules that hold on every task without a read.
+RULES_LEAD = "These hold without a read:"
 
-def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) -> str | None:
-    """The `local` fragment inline, then one pointer line per fragment and skill; None if empty."""
+
+def pointers(
+    selected: Sequence[Fragment], skills: Sequence[tuple[str, str]], rules: Sequence[str] = ()
+) -> str | None:
+    """The `local` fragment inline, the rules that hold without a read, then one pointer line per
+    fragment and skill; None if empty."""
 
     parts = [inline(item) for item in selected if item.id == LOCAL]
+    parts += ["\n".join([RULES_LEAD, *(f"- {rule}" for rule in rules)])] if rules else []
     lines = [
         f"- {item.condition or 'for ' + item.applies}: read {FRAGMENT_DIR}/{item.id}.md"
         for item in selected

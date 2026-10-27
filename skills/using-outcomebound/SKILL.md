@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when choosing or changing how the work is delivered (a project that starts from an idea, a release, a handover to operation, a retirement), when a project's documents ask for more process than the change's risk needs, or when changing text a model reads. Not for routine work on a route already settled.
+description: Use when choosing or changing a delivery route or the project's exposure (a project that starts from an idea, a first release to users, a handover to operation, a retirement), or when a delivery stage's inputs, owner or authority are unsettled. A step a project's documents only suggest (should, recommended, consider) is sized to the change's risk, while one a check, hook or CI job enforces, or the text requires, is done; text a model reads changes only for an observed failure or a settled decision, as a check or a refusal where one can enforce it.
 ---
 
 # Using OutcomeBound
@@ -10,33 +10,22 @@ each step.
 
 ## The default
 
-The default is no mechanism: do the task and run the checks the completion bar names. Try these
-approaches in order; the work is done when all four inputs hold, the checks and gates the bar
-names included, and not before:
-
-1. Is the need real? A part the outcome does not need (a feature, an option, a flexibility, code
-   for a later need) is left out. Where the request leaves the size open, build the smallest
-   version that does the core job, and name what you left out in one line of the report.
-2. Does the codebase, the standard library, the platform or an installed dependency already meet
-   it? Use it before new code. Between your own code and a new dependency, compare the whole
-   implementation and its upkeep, edge cases and tests included; few dependencies alone do not make
-   a design simpler.
-3. The smallest change that meets the completion bar.
+The default is no mechanism: do the task and run the checks the completion bar names; the work is
+done when all four inputs hold, the checks and gates the bar names included, and not before. Where
+the request leaves the size open, build the smallest version that does the core job, and name what
+you left out in one line of the report. Between your own code and a new dependency, compare the
+whole implementation and its upkeep, edge cases and tests included; few dependencies alone do not
+make a design simpler.
 
 Check the approach you take with the smallest test, command or observation that settles its
 changed risk, not every check the project has. Run a check once for a set of changes, keeping
 long output in a file, and read each failure from that output rather than running the check
-again to see more; a result stands until something it covers changes. Where a failed bar you did not set (a threshold, a
-monitor, a limit) is taken as evidence that the change made things worse, compare the change with
-the unchanged base under the same conditions: failing on both does not by itself show whether the
-change got worse, so report the comparison; a bar the project requires still applies. On work that spans many changes,
-`outcomebound size --base <ref>` shows how far the change has grown against the base that matters
-(for stability work, the release in production) and how its lines fall by path kind; read it where
-the change's growth is in doubt, and size again where what grew is not what the outcome needs. A forecast of time rests on cycles of
-build, review and repair already completed, with any speed-up from parallel work named as an
-assumption. Make independent reads and
-checks in one step where the tools allow it. Report an omission only where it changes a decision
-or leaves a risk.
+again to see more; a result stands until something it covers changes. Where a failed bar you did
+not set (a threshold, a monitor, a limit) is taken as evidence that the change made things worse,
+compare the change with the unchanged base under the same conditions: failing on both does not by
+itself show whether the change got worse, so report the comparison; a bar the project requires
+still applies. Make independent reads and checks in one step where the tools allow it. Report an
+omission only where it changes a decision or leaves a risk.
 
 ## Add a mechanism only where its condition holds
 
@@ -87,6 +76,8 @@ or a decision, in the most checkable form that fixes it: a check or a refusal be
 | the work starts from an idea, in an empty folder or none | [the new-project reference](references/new-project.md) |
 | the delivery route must change, or the outcome needs a delivery stage whose inputs, owner or authority are unsettled | [the lifecycle reference](references/lifecycle.md) |
 | the project's exposure or route changes, a "Leave when —" signal appears, or `adopt --check` prints a drift line | the transitions section of [the lifecycle reference](references/lifecycle.md) |
+| a change's growth against its base is in doubt, or a forecast of time is asked for | the bounded-work section of [the lifecycle reference](references/lifecycle.md) |
+| a handoff, or a resume of work another session or person left | [the continuity reference](references/continuity.md) |
 
 ## Read the full contract
 

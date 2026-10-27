@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from outcomebound_tools.facts import ONCE
 from outcomebound_tools.fragments import (
     FRONTMATTER_KEYS,
     OPTIONAL_KEYS,
@@ -561,7 +562,8 @@ def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, 
     assert result.returncode == 0, result.stderr
     blocks = parse_managed_blocks(result.stdout)
     assert list(blocks) == ["project-facts", "guidance-pointers"]
-    assert blocks["guidance-pointers"].body.splitlines()[1] == (
+    lines = blocks["guidance-pointers"].body.splitlines()
+    assert lines[lines.index(ONCE) + 1] == (
         "- for python projects: read .outcomebound/fragments/python.md"
     )
     assert "the runtime is the evidence" not in result.stdout

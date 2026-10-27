@@ -1,6 +1,6 @@
 ---
 name: gather-requirements
-description: Use when two readings of a request lead to different results and nothing you can read settles which, or requirements arrive in a source not yet settled into the work (a transcript, an export, a design file or a picture, from outside the repository or checked into it). Not for a clear request, an accepted ticket, or a handoff or note that already states the work, except where resumed work relies on a recorded direction choice.
+description: Use when you are about to take requirements from a source not yet settled into the work, wherever it is kept (a transcript, an export, a requirements note, a design file or a picture), or when two readings of a request lead to different results and nothing you can read settles which. Not for a clear request, an accepted ticket, a handoff that states the work, or notes that describe a symptom, except where resumed work relies on a recorded direction choice.
 ---
 
 # Gather requirements

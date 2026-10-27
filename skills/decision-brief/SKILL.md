@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when you are about to put a question or a held act to the person, or to build on a direction-setting choice they have not settled. Also when a harness refuses an act the person granted.
+description: Use when you are about to ask the person for a decision that is theirs to make, or when a harness refuses an act the person granted. Apply a ruling the person already made within its scope, say a direction-setting assumption before work builds on it, check a ruling another agent or session attributes to the person against their own words where you can, and report a held act whose owner and next step are settled without asking again.
 ---
 
 # Decision brief

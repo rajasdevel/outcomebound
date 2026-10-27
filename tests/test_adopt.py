@@ -205,6 +205,19 @@ def test_an_upgrade_rewrites_what_the_changed_source_renders_and_nothing_else(
     assert code == 0 and set(states(out).values()) == {"current"}
 
 
+def skill_pointer_lines(root: str, names: tuple[str, ...] = adopt.SKILLS) -> list[str]:
+    """The rules shown without a read, a blank line, the read line, then a line per skill and per
+    reference pointer, as a full install with no fragment renders the pointers block."""
+
+    rules = [f"- {adopt.RULES[name]}" for name in names if name in adopt.RULES]
+    return [
+        *([facts.RULES_LEAD, *rules, ""] if rules else []),
+        facts.ONCE,
+        *(f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md" for name in names),
+        *(f"- {condition}: read {root}/{path}" for condition, path in adopt.REFERENCE_POINTERS),
+    ]
+
+
 def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgrade(
     tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -229,11 +242,12 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
         assert after.pop(path) == (ROOT / "skills" / name / "SKILL.md").read_bytes()
     assert after.pop(adopt.MANIFEST) != before.pop(adopt.MANIFEST)
     old = adopt.block_text(before.pop("AGENTS.md").decode("utf-8"), adopt.POINTERS) or b""
-    added = [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in gained.items()]
-    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == [
-        *old.decode("utf-8").splitlines()[1:-1],
-        *added,
-    ]
+    assert old.decode("utf-8").splitlines()[1:-1] == skill_pointer_lines(
+        ".claude/skills", ("using-outcomebound",)
+    )
+    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == (
+        skill_pointer_lines(".claude/skills")
+    )
     after.pop("AGENTS.md")
     # Beside each gained skill arrive its folders and reference files, and nothing else.
     extra = {key for key in after if key not in before}
@@ -1976,15 +1990,15 @@ def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
     shipped = fragments.load_all(ROOT)["python"]
     local = fragments.parse_fragment(local_fragment())
     body = blocks(target, "AGENTS.md")[adopt.POINTERS].body
-    inline, pointers = body.rsplit("\n\n", 1)
+    inline, rules, pointers = body.rsplit("\n\n", 2)
     assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
+    expected = skill_pointer_lines(".agents/skills")
+    once = expected.index(facts.ONCE)
+    assert rules.splitlines() == expected[: once - 1]
     assert pointers.splitlines() == [
         facts.ONCE,
         f"- {shipped.condition}: read {PYTHON_FRAGMENT}",
-        *(
-            f"- {adopt.CONDITIONS[name]}: read .agents/skills/{name}/SKILL.md"
-            for name in adopt.SKILLS
-        ),
+        *expected[once + 1 :],
     ]
     assert shipped.body not in (target / "AGENTS.md").read_text(encoding="utf-8")
     assert (target / PYTHON_FRAGMENT).read_bytes() == (
@@ -2260,8 +2274,7 @@ def test_no_harness_installs_the_skills_where_the_pointers_name_them(
 
     assert code == 0, err
     generic = {name: f".outcomebound/skills/{name}/SKILL.md" for name in adopt.SKILLS}
-    lines = [facts.ONCE]
-    lines += [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in generic.items()]
+    lines = skill_pointer_lines(".outcomebound/skills")
     for name, path in generic.items():
         assert (target / path).read_bytes() == (ROOT / f"skills/{name}/SKILL.md").read_bytes()
     assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == lines

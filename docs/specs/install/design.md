@@ -110,9 +110,15 @@ decision on `frame` gives: a format 3 would break each machine and CI job that p
 engine, a facts-only install or not.
 
 `guidance-pointers` holds the `local` fragment inline first, since only its author knows which of
-it every task needs; then `- <condition>: read <path>` per selected fragment, the path a verbatim
-copy at `.outcomebound/fragments/<id>.md` recorded as kind `fragment`; then one line per skill the
-install carries, naming its `SKILL.md`. A fragment has a five-slot body and two optional
+it every task needs; then, where the install carries skills, the rules that hold without a read
+(a short list under `These hold without a read:`, each one its skill description's second
+sentence, so that the common case of a skill needs no read of it); then `- <condition>: read
+<path>` per selected fragment, the path a verbatim copy at `.outcomebound/fragments/<id>.md`
+recorded as kind `fragment`; then one line per skill the install carries, naming its `SKILL.md`,
+and one line for each reference that a step needs without the rest of its skill (the continuity
+checks at a handoff or a resume). The skill lines stay on every harness, beside a native catalog:
+a catalog can drop a description over its budget, or let a personal skill of the same name shadow
+the project's copy, and the pointer line names the project's path. A fragment has a five-slot body and two optional
 frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped fragment declaring
 edges only where its text names an act irreversible, in words the fragments share so the union
 names each act once, and only for an act every project that selects it can take: publishing is
