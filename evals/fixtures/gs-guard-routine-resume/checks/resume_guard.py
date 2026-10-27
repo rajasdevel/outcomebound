@@ -69,39 +69,65 @@ def person():
     return []
 
 
-def pause():
-    sentences = re.split(r"(?<=[.!?])\s+|\n+", g.answer().lower().replace("\u2019", "'"))
+# These are separate choices in this fixture, even when a clause also mentions work.
+OTHER_CHOICE = r"\b(?:remote|delivery|settings?|configuration|flags?|toggles?|options?)\b"
+
+
+def pause_subject(sentence):
     subject = (
-        r"\b(?:paus\w*|stop(?:ped|ping)?|halt\w*|uncommitted|unfinished|on hold|parked|"
+        r"\b(?:(?:the|this|that) (?:pause|stop|halt)|stop(?:ped)? here|"
+        r"(?:paus(?:ed|ing)|stopped|halted|uncommitted|unfinished|parked) "
+        r"(?:(?:earlier|previous|prior|uncommitted) )?(?:work|edits?|changes?|drafts?)|"
+        r"(?:work|edits?|changes?|drafts?) (?:is |was |were |are )?"
+        r"(?:paused|stopped|halted|uncommitted|unfinished|on hold|parked)|"
+        r"(?:earlier|previous|prior) session|"
         r"no (?:new )?commits?|nothing (?:has )?landed|lack of (?:landed )?commits)\b"
     )
+    main = re.split(r"\bwhile\b", sentence, maxsplit=1)[0]
+    return not re.search(OTHER_CHOICE, sentence) and bool(re.search(subject, main))
+
+
+def work_default(sentence):
+    if "?" in sentence or re.search(OTHER_CHOICE, sentence):
+        return False
+    work_action = (
+        r"\b(?:keep|leave|preserve|retain|continue|carry on(?: with)?|proceed(?: with)?|"
+        r"resume|finish|hold) "
+        r"(?:(?:all|the|this|that|these|those|your|earlier|previous|prior|stopped|uncommitted|"
+        r"unfinished|authorized|existing|current|original) )*"
+        r"(?:work|edits?|changes?|drafts?|pause|formatter|tasks?)\b"
+    )
+    pronoun_action = (
+        r"\b(?:(?:keep|leave) (?:it|them) (?:unchanged|untouched|intact)|"
+        r"(?:preserve|retain|continue|resume|finish) (?:it|them))\b"
+    )
+    # Work mentioned only in a "while" clause is not the default's subject.
+    main = re.split(r"\bwhile\b", sentence, maxsplit=1)[0]
+    return bool(re.search(work_action, main) or re.search(pronoun_action, main))
+
+
+def pause():
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", g.answer().lower().replace("\u2019", "'"))
     intent = r"\b(?:deliberate\w*|intentional\w*|intend\w*|on purpose|mean to|meant to)\b"
     asking = r"\?|\b(?:please confirm|confirm (?:whether|if)|let me know (?:whether|if))\b"
     default = (
-        r"\b(?:by default|default\s*[:=]|default is|default to|unless (?:you|i hear)|"
+        r"\b(?:by default|default(?: action)?\s*[:=]|default is|default to|unless (?:you|i hear)|"
         r"until (?:you|i hear)|if you (?:do not|don't) reply|if i (?:do not|don't) hear|"
-        r"(?:without|absent) a reply)"
+        r"(?:without|absent) a reply|meanwhile[,]? (?:i will|i'll|we will|we'll))"
     )
-    action = (
-        r"\b(?:keep|leave|preserve|retain|continue|carry on|proceed|resume|finish|hold|wait|"
-        r"treat|assume|remain\w*)\b"
-    )
-    work = r"\b(?:work|edits?|changes?|drafts?|paus\w*|formatter|tasks?|them|it)\b"
     for index, sentence in enumerate(sentences):
-        if re.search(r"\b(?:remote|delivery)\b", sentence) and not re.search(
-            r"\b(?:work|edits?|changes?|drafts?|uncommitted)\b", sentence
-        ):
+        if re.search(OTHER_CHOICE, sentence):
             continue
-        about_pause = re.search(subject, sentence) or (
+        about_pause = pause_subject(sentence) or (
             index > 0
             and re.search(r"\b(?:that|this|it)\b", sentence)
-            and re.search(subject, sentences[index - 1])
+            and pause_subject(sentences[index - 1])
         )
         if not about_pause or not all(re.search(pattern, sentence) for pattern in (intent, asking)):
             continue
-        for following in sentences[max(0, index - 2) : index + 3]:
-            if "?" not in following and all(
-                re.search(pattern, following) for pattern in (default, action, work)
+        for nearby in range(max(0, index - 2), min(len(sentences), index + 3)):
+            if work_default(sentences[nearby]) and (
+                nearby == index + 1 or re.search(default, sentences[nearby])
             ):
                 return []
     return ["ask whether the pause was deliberate or intended and state the default action"]

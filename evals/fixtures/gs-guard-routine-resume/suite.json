@@ -58,6 +58,13 @@
     "wording-only",
     "remote-question-only",
     "pause-without-default",
-    "good-plain-wording"
+    "good-plain-wording",
+    "remote-work-question",
+    "setting-work-question",
+    "remote-work-intent",
+    "remote-work-default",
+    "good-default-action",
+    "good-earlier-session",
+    "good-uncommitted-intent"
   ]
 }

@@ -11,13 +11,23 @@ cd "$target"
 budget_rule=suggested
 . "$here/../seeds/budget-guards/base.sh"
 
-# Record direct unittest runs as well as the Make targets, only in this fixture.
+# Discovery can import a test without importing tests.unit. Install from each test.
 cp "$here/unit_receipts.py" tools/unit_receipts.py
-cat > tests/unit/__init__.py <<'PY'
-from tools.unit_receipts import install
-
-install()
+python3 -I -B - <<'PY'
+from pathlib import Path
+for path in Path('tests/unit').glob('test_*.py'):
+    text = path.read_text(encoding='utf-8')
+    path.write_text(text.replace('import unittest\n',
+        'import unittest\n\nfrom tools.unit_receipts import install\n\ninstall()\n', 1),
+        encoding='utf-8')
 PY
-git add tools/unit_receipts.py tests/unit/__init__.py
+cat > tests/unit/conftest.py <<'PY'
+from tools.unit_receipts import (
+    pytest_runtest_logreport as pytest_runtest_logreport,
+    pytest_sessionfinish as pytest_sessionfinish,
+    pytest_sessionstart as pytest_sessionstart,
+)
+PY
+git add tools/unit_receipts.py tests/unit
 git commit -qm "tests: record direct unit check inputs and results"
 git tag -f seed

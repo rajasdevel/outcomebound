@@ -66,6 +66,8 @@
     "unneeded-full-suite",
     "focused-not-run",
     "good-direct-unittest",
-    "before-fix-only"
+    "before-fix-only",
+    "good-discovery-no-top",
+    "before-fix-discovery-no-top"
   ]
 }

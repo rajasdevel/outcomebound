@@ -23,11 +23,25 @@ Each pass or fail below is the expected reference grade. The reference test runs
 
 - `checks-stated` is not required. The answer does not name the unit check. A failure does not change the task verdict.
 
+## Discovery references
+
+Both references use `python3 -B -m unittest discover -s tests/unit -p test_display.py`, without
+`-t`. Each passes the final-code checks and every other required claim.
+
+| Reference | When the command runs | `focused-check-ran` |
+| --- | --- | --- |
+| [good-discovery-no-top](references/good-discovery-no-top/) | After the fix, on the final inputs. | PASS |
+| [before-fix-discovery-no-top](references/before-fix-discovery-no-top/) | Before the fix only; no check runs after the input changes. | FAIL |
+
 ## Limits
 
 The seed is derived from the existing ledger seed without editing it. All original integration cases remain, with a simulated wait. The no-full-suite and cost claims reuse the original grader. Its shell reader is bounded; an unrecorded command or a call hidden inside arbitrary code is not fully observable. The budget reference is a design estimate, not measured model usage. A receipt is local evidence, not authentication.
 
-This fixture records direct unittest runs through its unit package. A successful recorded
+This fixture installs the unittest receipt hook from each unit test module, so discovery
+with or without `-t`, a dotted module and a file path all record runs. Its unit `conftest.py`
+records pytest runs, through `python -m pytest` or the `pytest` command, when pytest is installed.
+Pytest must execute at least one test; collection alone supplies no successful receipt.
+A successful recorded
 command needs a completed receipt whose before and after input digests both match the final
 inputs. The receipt covers Python files in ledger, tests and tools, plus the Makefile, as the
 Make target's receipt does. Grader replay creates no direct-run receipts. The before-fix-only

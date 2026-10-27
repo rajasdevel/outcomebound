@@ -57,22 +57,29 @@ def command(mode):
     return False
 
 
-def direct_unit_run():
-    for argv in g.successful_commands():
-        if not Path(argv[0]).name.startswith("python"):
-            continue
-        args = list(argv[1:])
+def unit_target(argument):
+    if argument.startswith("tests.unit."):
+        return True
+    path = Path(argument.split("::", 1)[0]).resolve()
+    return path.is_relative_to(Path("tests/unit").resolve())
+
+
+def direct_unit_command(argv):
+    program = Path(argv[0]).name
+    args = list(argv[1:])
+    if program.startswith("python"):
         while args and args[0] in ("-B", "-I", "-u"):
             args.pop(0)
-        if args[:2] != ["-m", "unittest"]:
-            continue
-        if args[2:] == ["tests.unit.test_display"]:
-            return True
-        if args[2:3] == ["discover"] and "-s" in args:
-            start = args.index("-s")
-            if args[start + 1 : start + 2] == ["tests/unit"]:
-                return True
-    return False
+        if args[:2] not in (["-m", "unittest"], ["-m", "pytest"]):
+            return False
+        args = args[2:]
+    elif program != "pytest":
+        return False
+    return any(unit_target(arg) for arg in args)
+
+
+def direct_unit_run():
+    return any(direct_unit_command(argv) for argv in g.successful_commands())
 
 
 def focused():
