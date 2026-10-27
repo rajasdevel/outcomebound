@@ -259,8 +259,8 @@ REPETITIONS = tuple(range(1, 11))
 MEASURED = 3
 # The elements of an adopted install that `--drop` takes from the current arm and `--add` puts
 # into the none arm: the three blocks adopt writes into AGENTS.md (the guidance-pointers block
-# whole: its read-once line and every pointer line), each fragment and each skill (its file or
-# folder and its pointer line), and this checkout's launcher first on the call's PATH.
+# whole: its rules, read-once line and every pointer line), each fragment and each skill (its
+# file or folder, rule and pointers, references included), and the launcher first on the PATH.
 KERNEL_ELEMENT, FACTS_ELEMENT, POINTERS_ELEMENT = "kernel", "facts", "pointers"
 LAUNCHER_ELEMENT = "launcher"
 ELEMENT = re.compile(r"kernel|facts|pointers|launcher|(?:fragment|skill):[a-z0-9][a-z0-9-]*")
@@ -637,24 +637,30 @@ def earlier_source() -> Path:
 
 def earlier_engine(request: dict[str, Any]) -> Any:
     """What the engine at EARLIER_REF answers to `request`, run in a Python of its own with that
-    engine first on its path: `{"op": "conditions"}`, each skill's pointer condition; or
-    `{"op": "render", ...}`, the facts and pointers blocks `facts.render` writes for a target."""
+    engine first on its path: `{"op": "guidance"}`, its conditions, rules and references; or
+    `{"op": "render", ...}`, the facts and pointers blocks its own renderer writes for a target."""
 
     source = earlier_source()
     script = (
-        "import json, sys\n"
+        "import inspect, json, sys\n"
         "from pathlib import Path\n"
         "sys.path.insert(0, sys.argv[1])\n"
         "from outcomebound_tools import adopt, facts, fragments\n"
         "ask = json.load(sys.stdin)\n"
-        "if ask['op'] == 'conditions':\n"
-        "    answer = adopt.CONDITIONS\n"
+        "if ask['op'] == 'guidance':\n"
+        "    answer = {'skills': fragments.SKILLS, 'conditions': adopt.CONDITIONS,\n"
+        "              'rules': getattr(adopt, 'RULES', {}),\n"
+        "              'references': getattr(adopt, 'REFERENCE_POINTERS', ())}\n"
         "else:\n"
         "    root = Path(sys.argv[1])\n"
         "    chosen = fragments.select(fragments.load_all(root), ask['selected'])"
         " if ask['selected'] else []\n"
         "    skills = [tuple(pair) for pair in ask['skills']]\n"
-        "    out = facts.render(Path(ask['target']), chosen, ask['done'], ['AGENTS.md'], skills)\n"
+        "    render = getattr(facts, 'render_chosen', facts.render)\n"
+        "    selection = facts.Chosen(ask['done']) if render is not facts.render else ask['done']\n"
+        "    rules = {'rules': ask['rules']} if 'rules' in inspect.signature(render).parameters"
+        " else {}\n"
+        "    out = render(Path(ask['target']), chosen, selection, ['AGENTS.md'], skills, **rules)\n"
         "    answer = {'facts': out.facts, 'pointers': out.pointers}\n"
         "json.dump(answer, sys.stdout)\n"
     )
@@ -792,7 +798,7 @@ NO_ELEMENTS = Elements()
 class Arm(NamedTuple):
     """What one arm hands the model: its kernel, ahead of the task; the files an install
     writes, by fixture-relative path; the launcher put first on the call's PATH; and, for an
-    arm that stands for an install, the fragments selected and each skill's pointer, which
+    arm that stands for an install, the fragments selected and each skill's rule and pointers, which
     `as_installed` writes into the fixture's AGENTS.md. An element arm (`element_arm`) also
     names the elements it drops from the current install or adds to the none arm, and its edits;
     its `name` is the arm it builds from, `current` or `none`.
@@ -814,6 +820,7 @@ class Arm(NamedTuple):
     edits: tuple[Edit, ...] = ()
     edits_sha256: str = ""
     kept_skills: tuple[str, ...] = ()
+    rules: tuple[str, ...] = ()
 
     def shaped(self) -> bool:
         """Whether the arm is an element arm: the current install less some elements, the none
@@ -908,11 +915,21 @@ def load_arm(
     from outcomebound_tools import adopt, facts, fragments
 
     root = earlier_source() if name == EARLIER else REPO
-    conditions = earlier_engine({"op": "conditions"}) if name == EARLIER else adopt.CONDITIONS
+    guidance: dict[str, Any] = (
+        earlier_engine({"op": "guidance"})
+        if name == EARLIER
+        else {
+            "skills": fragments.SKILLS,
+            "conditions": adopt.CONDITIONS,
+            "rules": adopt.RULES,
+            "references": adopt.REFERENCE_POINTERS,
+        }
+    )
     try:
         (route,) = adopt.routes(root, [INSTALL_HARNESS])
         chosen = fragments.select(fragments.load_all(root), selected) if selected else []
-        carried = carried_skills(root)
+        present = carried_skills(root)
+        carried = tuple(skill for skill in guidance["skills"] if skill in present)
         files = {
             f"{route.skills}/{skill}/{relative}": data
             for skill in carried
@@ -922,8 +939,11 @@ def load_arm(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
         )
         pointers = tuple(
-            (conditions[skill], f"{route.skills}/{skill}/SKILL.md") for skill in carried
+            (guidance["conditions"][skill], f"{route.skills}/{skill}/SKILL.md") for skill in carried
+        ) + tuple(
+            (condition, f"{route.skills}/{path}") for condition, path in guidance["references"]
         )
+        rules = tuple(guidance["rules"][skill] for skill in carried if skill in guidance["rules"])
     except (adopt.AdoptError, fragments.FragmentError) as error:
         raise SystemExit(f"run: the current arm cannot read what adopt installs: {error}") from None
     return Arm(
@@ -935,6 +955,7 @@ def load_arm(
         pointers,
         done=tuple(done),
         adopted=adopted and name in ("current", EARLIER),
+        rules=rules,
     )
 
 
@@ -1096,8 +1117,9 @@ def element_arm(base: Arm, kind: str, elements: Elements) -> Arm:
     skills = tuple(
         (condition, path)
         for condition, path in base.skills
-        if arm.keeps(element_of(path) or "") and arm.keeps(POINTERS_ELEMENT)
+        if _line_kept(arm, f"- {condition}: read {path}")
     )
+    rules = tuple(rule for rule in base.rules if _line_kept(arm, f"- {rule}"))
     kernel = base.kernel if arm.keeps(KERNEL_ELEMENT) else ""
     for edit in elements.edits:
         if edit.path in files:
@@ -1108,7 +1130,7 @@ def element_arm(base: Arm, kind: str, elements: Elements) -> Arm:
         elif edit.path == NOTE and kernel.count(edit.old) == 1:
             kernel = kernel.replace(edit.old, edit.new, 1)
     launcher = base.launcher if arm.keeps(LAUNCHER_ELEMENT) else None
-    return arm._replace(kernel=kernel, files=files, launcher=launcher, skills=skills)
+    return arm._replace(kernel=kernel, files=files, launcher=launcher, skills=skills, rules=rules)
 
 
 def element_refusal(install: Install, elements: Elements) -> str:
@@ -1160,9 +1182,19 @@ def _pointer_element(line: str) -> str | None:
 def _line_kept(arm: Arm, line: str) -> bool:
     """Whether the element arm keeps one line of the guidance-pointers block. A pointer line
     belongs to its fragment or skill and to the block whole: the current arm keeps it while it
-    keeps both, the none arm adds it with either. Any other line belongs to the block alone."""
+    keeps both, the none arm adds it with either. A rule belongs to its skill in the same way;
+    the rules lead stays only while a rule stays. Other lines belong to the block alone."""
+
+    from outcomebound_tools import adopt, facts
 
     element = _pointer_element(line)
+    if line == facts.RULES_LEAD:
+        return any(_line_kept(arm, f"- {rule}") for rule in adopt.RULES.values())
+    if element is None:
+        element = next(
+            (f"skill:{skill}" for skill, rule in adopt.RULES.items() if line == f"- {rule}"),
+            None,
+        )
     if element is None:
         return arm.keeps(POINTERS_ELEMENT)
     owners = (arm.keeps(POINTERS_ELEMENT), arm.keeps(element))
@@ -1269,6 +1301,30 @@ def shape_install(workdir: Path, arm: Arm, before: dict[str, bytes], written: li
     return ""
 
 
+def _guidance_lines(lines: list[str]) -> list[tuple[str, str, bool]]:
+    """Each rule, reference and rules lead, with its label and whether the block holds it."""
+
+    from outcomebound_tools import adopt, facts
+
+    (route,) = adopt.routes(REPO, [INSTALL_HARNESS])
+    paths = {found.group(1) for line in lines if (found := POINTER_LINE.match(line))}
+    return (
+        [
+            (f"skill:{skill}'s rule", f"- {rule}", f"- {rule}" in lines)
+            for skill, rule in adopt.RULES.items()
+        ]
+        + [
+            (
+                f"{route.skills}/{relative}'s pointer line",
+                f"- {condition}: read {route.skills}/{relative}",
+                f"{route.skills}/{relative}" in paths,
+            )
+            for condition, relative in adopt.REFERENCE_POINTERS
+        ]
+        + [("the rules lead", facts.RULES_LEAD, facts.RULES_LEAD in lines)]
+    )
+
+
 def element_problems(workdir: Path, arm: Arm) -> list[str]:
     """What the built workspace of an element arm holds that differs from its elements: a block,
     fragment file, skill folder or pointer line present that the arm does not keep, or absent
@@ -1308,6 +1364,11 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
             expect(f"{element}'s folder", arm.keeps(element), present)
             line = f"- x: read {SKILL_ROOTS[-1]}{item}/SKILL.md"
             expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+    problems.extend(
+        f"{what} {'present' if present else 'missing'}"
+        for what, line, present in _guidance_lines(lines)
+        if _line_kept(arm, line) != present
+    )
     if arm.name == NONE:
         for path in (adopt.WORKSPACE_IGNORE, adopt.LOCAL_IGNORE, adopt.MANIFEST):
             expect(path, False, (workdir / path).exists())
@@ -1339,7 +1400,7 @@ def as_installed(workdir: Path, arm: Arm) -> str:
 
     The fixture's note keeps its project text and loses its own pointer to the core skill;
     AGENTS.md gains the project facts, with the arm's Done commands as `adopt --done` records
-    them, and the guidance pointers, each skill's with its condition, rendered by the engine as
+    them, and the rules and guidance pointers, references included, rendered by the engine as
     an install renders them. An arm that is another guidance
     set's own files writes that set's AGENTS.md above the note instead, and no facts or pointers.
     An element arm is installed by adopt as the current arm is, and then made its own
@@ -1371,14 +1432,15 @@ def as_installed(workdir: Path, arm: Arm) -> str:
             asked: dict[str, Any] = {"op": "render", "target": str(workdir)}
             asked |= {"selected": list(arm.selected), "done": list(arm.done)}
             asked["skills"] = [list(pair) for pair in arm.skills]
+            asked["rules"] = list(arm.rules)
             answer = earlier_engine(asked)
             written, pointing = answer["facts"], answer["pointers"]
         else:
             chosen = (
                 fragments.select(fragments.load_all(REPO), arm.selected) if arm.selected else []
             )
-            rendered = facts.render(
-                workdir, chosen, list(arm.done), ["AGENTS.md"], list(arm.skills)
+            rendered = facts.render_chosen(
+                workdir, chosen, facts.Chosen(arm.done), ["AGENTS.md"], arm.skills, arm.rules
             )
             written, pointing = rendered.facts, rendered.pointers
         head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""

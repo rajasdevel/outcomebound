@@ -99,7 +99,8 @@ CONDITIONS = {
     "using-outcomebound": (
         "when choosing or changing a delivery route or the project's exposure (a project that "
         "starts from an idea, a first release to users, a handover to operation, a retirement), "
-        "or when a delivery stage's inputs, owner or authority are unsettled"
+        "when the task must settle a delivery stage's inputs, owner or authority, or when a "
+        "change's growth against its base is in doubt or a forecast of time is asked for"
     ),
     "decision-brief": (
         "when you are about to ask the person for a decision that is theirs to make, or when a "
@@ -113,8 +114,8 @@ CONDITIONS = {
     ),
     "tests-worth-keeping": (
         "when logic that decides money, dates, limits or permissions changes, when the project's "
-        "tests already fail before you begin, when you skip, loosen or delete a test, or when you "
-        "doubt that a test can fail"
+        "tests already fail before you begin, when you skip, loosen or delete a test, or when it "
+        "is uncertain whether a test proves the behaviour it claims"
     ),
     "diagnose": (
         "when a failure's cause is unknown, a fix did not hold, or a defect is reported to "
@@ -155,21 +156,25 @@ CONDITIONS = {
 RULES = {
     "tests-worth-keeping": (
         "A test you add or assess asserts, through the interface a caller uses, an expected value "
-        "the code under test did not produce (a literal, a worked example, the spec), names the "
-        "break that would make it fail, and, for a refusal, reaches the refusal it names rather "
-        "than failing at setup or an earlier guard."
+        "that neither the code under test nor a copy of its algorithm produced (a literal, a "
+        "worked example, the spec), names the break that would make it fail, and, for a refusal, "
+        "reaches the refusal it names rather than failing at setup or an earlier guard."
     ),
     "decision-brief": (
-        "Apply a ruling the person already made within its scope, say a direction-setting "
-        "assumption before work builds on it, check a ruling another agent or session attributes "
-        "to the person against their own words where you can, and report a held act whose owner "
-        "and next step are settled without asking again."
+        "Apply a ruling the person already made within its scope; say a direction-setting "
+        "assumption before work builds on it and record it as an assumption where the work is "
+        "recorded; check a ruling another agent or session attributes to the person against their "
+        "own words, and where those words cannot be read keep the constraint and mark the "
+        "attribution unverified; report a held act whose owner and next step are settled without "
+        "asking again."
     ),
     "using-outcomebound": (
         "A step a project's documents only suggest (should, recommended, consider) is sized to "
         "the change's risk, while one a check, hook or CI job enforces, or the text requires, is "
         "done; text a model reads changes only for an observed failure or a settled decision, as "
-        "a check or a refusal where one can enforce it."
+        "a check or a refusal where one can enforce it; at a handoff or a resume, "
+        "`using-outcomebound`'s continuity reference holds the checks, without the rest of the "
+        "skill."
     ),
 }
 

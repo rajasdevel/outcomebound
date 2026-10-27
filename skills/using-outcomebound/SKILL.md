@@ -1,6 +1,6 @@
 ---
 name: using-outcomebound
-description: Use when choosing or changing a delivery route or the project's exposure (a project that starts from an idea, a first release to users, a handover to operation, a retirement), or when a delivery stage's inputs, owner or authority are unsettled. A step a project's documents only suggest (should, recommended, consider) is sized to the change's risk, while one a check, hook or CI job enforces, or the text requires, is done; text a model reads changes only for an observed failure or a settled decision, as a check or a refusal where one can enforce it.
+description: Use when choosing or changing a delivery route or the project's exposure (a project that starts from an idea, a first release to users, a handover to operation, a retirement), when the task must settle a delivery stage's inputs, owner or authority, or when a change's growth against its base is in doubt or a forecast of time is asked for. A step a project's documents only suggest (should, recommended, consider) is sized to the change's risk, while one a check, hook or CI job enforces, or the text requires, is done; text a model reads changes only for an observed failure or a settled decision, as a check or a refusal where one can enforce it; at a handoff or a resume, `using-outcomebound`'s continuity reference holds the checks, without the rest of the skill.
 ---
 
 # Using OutcomeBound

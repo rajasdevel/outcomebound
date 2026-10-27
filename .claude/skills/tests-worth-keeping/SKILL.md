@@ -1,6 +1,6 @@
 ---
 name: tests-worth-keeping
-description: Use when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, when you skip, loosen or delete a test, or when you doubt that a test can fail. A test you add or assess asserts, through the interface a caller uses, an expected value the code under test did not produce (a literal, a worked example, the spec), names the break that would make it fail, and, for a refusal, reaches the refusal it names rather than failing at setup or an earlier guard.
+description: Use when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, when you skip, loosen or delete a test, or when it is uncertain whether a test proves the behaviour it claims. A test you add or assess asserts, through the interface a caller uses, an expected value that neither the code under test nor a copy of its algorithm produced (a literal, a worked example, the spec), names the break that would make it fail, and, for a refusal, reaches the refusal it names rather than failing at setup or an earlier guard.
 ---
 
 # Tests worth keeping

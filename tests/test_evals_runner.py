@@ -848,7 +848,7 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
 
 
 def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: Path) -> None:
-    """What an install generates, the Done fact, the reread line and each skill's condition,
+    """What an install generates, the reread line, rules and skill and reference pointers,
     comes from the ref's engine, on an adopted fixture (its own adopt) and on one without an
     install.json (its own renderer): a ref whose engine words them differently shows its words,
     and this checkout's never reach the earlier arm."""
@@ -865,10 +865,21 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
     facts_text = at_head("outcomebound_tools/facts.py")
     reread = b"a compaction alone is no reason."
     assert condition in adopt_text and facts_text.count(reread) == 1
+    ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
+    ref_references = (
+        b'REFERENCE_POINTERS = (("a ref reference condition", '
+        b'"using-outcomebound/references/ref-only.md"),)\n'
+    )
     commit = _commit_of(
         {
-            "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition"),
-            "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread."),
+            "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition")
+            + ref_rules
+            + ref_references,
+            "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread.")
+            + b'\nRULES_LEAD = "A ref rules lead:"\n',
+            "skills/using-outcomebound/references/ref-only.md": b"A ref reference.\n",
+            "outcomebound_tools/fragments.py": at_head("outcomebound_tools/fragments.py")
+            + b"\nSKILLS = tuple(reversed(SKILLS))\n",
         },
         base="HEAD",
     )
@@ -883,6 +894,167 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
         assert "a ref's own condition" in notes and "a ref's own reread." in notes
         assert adopt.CONDITIONS["review-findings"] not in notes and facts.ONCE not in notes
+        assert "A ref rules lead:" in notes and facts.RULES_LEAD not in notes
+        for skill, rule in adopt.RULES.items():
+            assert f"- A ref rule for {skill}." in notes
+            assert rule not in notes
+        ordered_rules = [
+            notes.index(f"- A ref rule for {skill}.")
+            for skill in reversed(adopt.SKILLS)
+            if skill in adopt.RULES
+        ]
+        assert ordered_rules == sorted(ordered_rules)
+        assert (
+            "- a ref reference condition: read "
+            ".agents/skills/using-outcomebound/references/ref-only.md"
+        ) in notes
+        for reference_condition, path in adopt.REFERENCE_POINTERS:
+            assert reference_condition not in notes
+            assert f": read .agents/skills/{path}" not in notes
+
+
+def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the manual path omits rules or references, or changes the install's order."""
+
+    from outcomebound_tools import adopt, facts
+
+    fixture = "slice-a-spec"
+    assert not (ROOT / "evals/fixtures" / fixture / "install.json").exists()
+    arm = RUN.load_arm("current", ("tickets",))
+    workspace = tmp_path / "workspace"
+    stage = tmp_path / "stage"
+    workspace.mkdir()
+    stage.mkdir()
+    extra: dict = {}
+    failure, _protected, _seed, _prompt = RUN.build_workspace(fixture, arm, workspace, extra, stage)
+    assert failure is None, (failure, extra)
+    manual = adopt.block_text((workspace / "AGENTS.md").read_text("utf-8"), facts.POINTERS)
+    assert manual is not None
+    for rule in adopt.RULES.values():
+        assert f"- {rule}\n".encode() in manual
+    for condition, path in adopt.REFERENCE_POINTERS:
+        assert f"- {condition}: read .agents/skills/{path}\n".encode() in manual
+    installed = subprocess.run(
+        [
+            str(ROOT / LAUNCHER),
+            "adopt",
+            str(workspace),
+            "--harness",
+            "codex",
+            "--fragments",
+            "tickets",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=RUN.fixture_setup_env(),
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    full = adopt.block_text((workspace / "AGENTS.md").read_text("utf-8"), facts.POINTERS)
+    assert manual == full
+
+
+@pytest.mark.parametrize("skill", ["tests-worth-keeping", "decision-brief", "using-outcomebound"])
+def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
+    tmp_path: Path, skill: str
+) -> None:
+    """Breaks if an ablation leaks a rule or reference, or its check accepts a planted leak."""
+
+    from outcomebound_tools import adopt, facts
+
+    arm = RUN.fixture_arms(
+        RUN._parser(), "current", ["small-fix"], RUN.Elements(dropped=(f"skill:{skill}",))
+    )["small-fix"]
+    workspace = tmp_path / "workspace"
+    stage = tmp_path / "stage"
+    workspace.mkdir()
+    stage.mkdir()
+    extra: dict = {}
+    failure, _protected, _seed, _prompt = RUN.build_workspace(
+        "small-fix", arm, workspace, extra, stage
+    )
+    assert failure is None, (failure, extra)
+    note = workspace / "AGENTS.md"
+    text = note.read_text("utf-8")
+    assert adopt.RULES[skill] not in text
+    assert f": read .agents/skills/{skill}/" not in text
+    for kept, rule in adopt.RULES.items():
+        if kept != skill:
+            assert f"- {rule}\n" in text
+    for condition, path in adopt.REFERENCE_POINTERS:
+        if not path.startswith(f"{skill}/"):
+            assert f"- {condition}: read .agents/skills/{path}\n" in text
+    assert adopt.RULES[skill] not in arm.rules
+    assert RUN.element_problems(workspace, arm) == []
+    leak = f"- {adopt.RULES[skill]}\n"
+    references = [
+        f"- {condition}: read .agents/skills/{path}"
+        for condition, path in adopt.REFERENCE_POINTERS
+        if path.startswith(f"{skill}/")
+    ]
+    for line in references:
+        assert line not in text
+    note.write_text(text.replace(facts.ONCE, leak + facts.ONCE), "utf-8")
+    assert f"skill:{skill}'s rule present" in RUN.element_problems(workspace, arm)
+    for line in references:
+        note.write_text(text.replace(facts.ONCE, line + "\n" + facts.ONCE), "utf-8")
+        path = line.split(": read ", 1)[1]
+        assert f"{path}'s pointer line present" in RUN.element_problems(workspace, arm)
+
+
+@pytest.mark.parametrize("has_render_chosen", [False, True])
+def test_an_earlier_engine_without_rules_or_references_renders_as_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, has_render_chosen: bool
+) -> None:
+    """An old engine has neither new name and accepts no rules argument; it gets no new text."""
+
+    source = tmp_path / "old-engine"
+    package = source / "outcomebound_tools"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", "utf-8")
+    (package / "adopt.py").write_text('CONDITIONS = {"diagnose": "old condition"}\n', "utf-8")
+    (package / "fragments.py").write_text('SKILLS = ("diagnose",)\n', "utf-8")
+    (package / "facts.py").write_text(
+        "from collections import namedtuple\n"
+        "Rendered = namedtuple('Rendered', 'facts pointers')\n"
+        "def render(target, selected, done, files, skills):\n"
+        "    assert selected == [] and done == ['old check'] and files == ['AGENTS.md']\n"
+        "    lines = '\\n'.join('- ' + condition + ': read ' + path\n"
+        "                      for condition, path in skills)\n"
+        "    return Rendered('old facts', 'old reread\\n' + lines)\n",
+        "utf-8",
+    )
+    if has_render_chosen:
+        with (package / "facts.py").open("a", encoding="utf-8") as output:
+            output.write(
+                "Chosen = namedtuple('Chosen', 'done')\n"
+                "def render_chosen(target, selected, chosen, files, skills):\n"
+                "    return render(target, selected, chosen.done, files, skills)\n"
+            )
+    monkeypatch.setattr(RUN, "earlier_source", lambda: source)
+    guidance = RUN.earlier_engine({"op": "guidance"})
+    assert guidance == {
+        "skills": ["diagnose"],
+        "conditions": {"diagnose": "old condition"},
+        "rules": {},
+        "references": [],
+    }
+    rendered = RUN.earlier_engine(
+        {
+            "op": "render",
+            "target": str(tmp_path),
+            "selected": [],
+            "done": ["old check"],
+            "skills": [["old condition", ".agents/skills/diagnose/SKILL.md"]],
+            "rules": [],
+        }
+    )
+    assert rendered == {
+        "facts": "old facts",
+        "pointers": "old reread\n- old condition: read .agents/skills/diagnose/SKILL.md",
+    }
 
 
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:
