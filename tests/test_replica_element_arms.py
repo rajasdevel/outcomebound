@@ -532,7 +532,7 @@ def test_a_pointer_line_added_without_its_block_keeps_the_markers_and_read_once_
     block = note.split("\n\n", 1)[0].splitlines()
     assert block[0].startswith("<!-- outcomebound:begin id=guidance-pointers ")
     assert block[1:] == [
-        facts.ONCE,
+        *facts.once_lines(),
         "- when running a command whose output you read: read .outcomebound/fragments/commands.md",
         "<!-- outcomebound:end id=guidance-pointers -->",
     ]

@@ -1131,13 +1131,17 @@ def element_arm(base: Arm, kind: str, elements: Elements) -> Arm:
         edits=elements.edits,
         edits_sha256=elements.edits_sha256,
     )
+    from outcomebound_tools import facts
+
     files = {path: data for path, data in base.files.items() if arm.keeps(element_of(path) or "")}
     skills = tuple(
         (condition, path)
         for condition, path in base.skills
         if _line_kept(arm, f"- {condition}: read {path}")
     )
-    rules = tuple(rule for rule in base.rules if _line_kept(arm, f"- {rule}"))
+    rules = tuple(
+        rule for rule in base.rules if all(_line_kept(arm, line) for line in facts.rule_lines(rule))
+    )
     kernel = base.kernel if arm.keeps(KERNEL_ELEMENT) else ""
     for edit in elements.edits:
         if edit.path in files:
@@ -1200,17 +1204,26 @@ def _pointer_element(line: str) -> str | None:
 def _line_kept(arm: Arm, line: str) -> bool:
     """Whether the element arm keeps one line of the guidance-pointers block. A pointer line
     belongs to its fragment or skill and to the block whole: the current arm keeps it while it
-    keeps both, the none arm adds it with either. A rule belongs to its skill in the same way;
-    the rules lead stays only while a rule stays. Other lines belong to the block alone."""
+    keeps both, the none arm adds it with either. A rule belongs to its skill in the same way,
+    each of its lines as the engine renders them (`facts.rule_lines`); the rules lead stays only
+    while a rule stays. Other lines belong to the block alone."""
 
     from outcomebound_tools import adopt, facts
 
     element = _pointer_element(line)
     if line == facts.RULES_LEAD:
-        return any(_line_kept(arm, f"- {rule}") for rule in adopt.RULES.values())
+        return any(
+            _line_kept(arm, rule_line)
+            for rule in adopt.RULES.values()
+            for rule_line in facts.rule_lines(rule)
+        )
     if element is None:
         element = next(
-            (f"skill:{skill}" for skill, rule in adopt.RULES.items() if line == f"- {rule}"),
+            (
+                f"skill:{skill}"
+                for skill, rule in adopt.RULES.items()
+                if line in facts.rule_lines(rule)
+            ),
             None,
         )
     if element is None:
@@ -1238,7 +1251,7 @@ def shaped_note(text: str, arm: Arm) -> str:
     if not arm.keeps(POINTERS_ELEMENT):
         if not kept:
             return adopt.cut(text, facts.POINTERS)
-        kept = [facts.ONCE, *kept]
+        kept = [*facts.once_lines(), *kept]
     return text.replace(found.decode("utf-8"), "\n".join([lines[0], *kept, lines[-1]]), 1)
 
 
@@ -1328,8 +1341,9 @@ def _guidance_lines(lines: list[str]) -> list[tuple[str, str, bool]]:
     paths = {found.group(1) for line in lines if (found := POINTER_LINE.match(line))}
     return (
         [
-            (f"skill:{skill}'s rule", f"- {rule}", f"- {rule}" in lines)
+            (f"skill:{skill}'s rule", line, line in lines)
             for skill, rule in adopt.RULES.items()
+            for line in facts.rule_lines(rule)
         ]
         + [
             (
@@ -1382,10 +1396,13 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
             expect(f"{element}'s folder", arm.keeps(element), present)
             line = f"- x: read {SKILL_ROOTS[-1]}{item}/SKILL.md"
             expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+    # A rule spans several lines; it is named once however many of them differ.
     problems.extend(
-        f"{what} {'present' if present else 'missing'}"
-        for what, line, present in _guidance_lines(lines)
-        if _line_kept(arm, line) != present
+        dict.fromkeys(
+            f"{what} {'present' if present else 'missing'}"
+            for what, line, present in _guidance_lines(lines)
+            if _line_kept(arm, line) != present
+        )
     )
     if arm.name == NONE:
         for path in (adopt.WORKSPACE_IGNORE, adopt.LOCAL_IGNORE, adopt.MANIFEST):
@@ -4582,7 +4599,7 @@ def outside_elements(text: str, arm: Arm) -> str:
     left = [
         line
         for line in lines[1:-1]
-        if line != facts.ONCE and not arm.keeps(_pointer_element(line) or "")
+        if line not in facts.once_lines() and not arm.keeps(_pointer_element(line) or "")
     ]
     if not left:
         return adopt.cut(text, facts.POINTERS)

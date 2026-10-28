@@ -944,7 +944,8 @@ def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
     manual = adopt.block_text((workspace / "AGENTS.md").read_text("utf-8"), facts.POINTERS)
     assert manual is not None
     for rule in adopt.RULES.values():
-        assert f"- {rule}\n".encode() in manual
+        for line in facts.rule_lines(rule):
+            assert f"{line}\n".encode() in manual
     for condition, path in adopt.REFERENCE_POINTERS:
         assert f"- {condition}: read .agents/skills/{path}\n".encode() in manual
     installed = subprocess.run(
@@ -989,17 +990,19 @@ def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
     assert failure is None, (failure, extra)
     note = workspace / "AGENTS.md"
     text = note.read_text("utf-8")
-    assert adopt.RULES[skill] not in text
+    for line in facts.rule_lines(adopt.RULES[skill]):
+        assert f"{line}\n" not in text
     assert f": read .agents/skills/{skill}/" not in text
     for kept, rule in adopt.RULES.items():
         if kept != skill:
-            assert f"- {rule}\n" in text
+            for line in facts.rule_lines(rule):
+                assert f"{line}\n" in text
     for condition, path in adopt.REFERENCE_POINTERS:
         if not path.startswith(f"{skill}/"):
             assert f"- {condition}: read .agents/skills/{path}\n" in text
     assert adopt.RULES[skill] not in arm.rules
     assert RUN.element_problems(workspace, arm) == []
-    leak = f"- {adopt.RULES[skill]}\n"
+    leak = "".join(f"{line}\n" for line in facts.rule_lines(adopt.RULES[skill]))
     references = [
         f"- {condition}: read .agents/skills/{path}"
         for condition, path in adopt.REFERENCE_POINTERS

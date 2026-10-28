@@ -632,6 +632,18 @@ ONCE = (
 RULES_LEAD = "These hold without a read:"
 
 
+def once_lines() -> list[str]:
+    """The read-once text as the pointers block holds it: one block line each."""
+
+    return ONCE.split("\n")
+
+
+def rule_lines(rule: str) -> list[str]:
+    """A rule as the pointers block holds it: one line for each of its sentences."""
+
+    return [f"- {sentence}" for sentence in re.split(r"(?<=\.) (?=[A-Z`])", rule)]
+
+
 def pointers(
     selected: Sequence[Fragment], skills: Sequence[tuple[str, str]], rules: Sequence[str] = ()
 ) -> str | None:
@@ -644,11 +656,7 @@ def pointers(
             "\n".join(
                 [
                     RULES_LEAD,
-                    *(
-                        f"- {sentence}"
-                        for rule in rules
-                        for sentence in re.split(r"(?<=\.) (?=[A-Z`])", rule)
-                    ),
+                    *(line for rule in rules for line in rule_lines(rule)),
                 ]
             )
         ]
@@ -663,7 +671,7 @@ def pointers(
     lines += [f"- {condition}: read {path}" for condition, path in skills]
     # Read once: session records showed one fragment read again dozens of times in one session.
     # A read after every compaction repeats files whose rules the next step does not use.
-    lines = [ONCE, *lines] if lines else []
+    lines = [*once_lines(), *lines] if lines else []
     parts += ["\n".join(lines)] if lines else []
     if not parts:
         return None
