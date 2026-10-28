@@ -55,6 +55,8 @@ another person opened, approve a request, dismiss a review, or mark a requested 
 their behalf: the author of a thread, or the person who owns the review, does that. A review you
 wrote yourself, or one by another agent that works for the same person, is a check on the code and
 not a second party's review. Where the project requires a second party, it is still missing.
+The request's own state, its checks, approvals and merge state, is written by the platform and the
+people it names, never by you; record your own verification in a reply or the description.
 
 ## When the rounds do not converge
 
