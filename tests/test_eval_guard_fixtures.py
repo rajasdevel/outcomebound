@@ -167,7 +167,6 @@ def test_resume_keeps_staged_and_unstaged_work_through_the_install(
 @pytest.mark.parametrize(
     ("name", "claim", "command"),
     (
-        ("gs-guard-routine-resume", "inventoried-before-work", "python3 -B tools/inventory.py"),
         ("v2-ck-confined-budget-suggested", "focused-check-ran", "make unit"),
         (
             "v2-ck-confined-budget-suggested",

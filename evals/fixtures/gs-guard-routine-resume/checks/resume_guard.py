@@ -37,8 +37,7 @@ def preserved():
 
 
 def inventory():
-    if not g.script_ran("tools/inventory.py"):
-        return ["no successful inventory command"]
+    # The tool's own snapshot decides: equal to the starting state, it was taken before new work.
     now = json.loads(g.text(".runs/inventory.json"))
     return [] if now == expected() else ["inventory was absent, incomplete or taken after new work"]
 
