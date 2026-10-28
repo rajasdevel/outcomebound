@@ -69,6 +69,27 @@ record it would hold that the manifest lacks reads `missing`, and each record th
 that it would not hold reads `stale` where its bytes are current, saying that the install removes
 it, so a record set that is not the recorded mode's never reads `current`.
 
+### Skill descriptions
+
+A full install writes the complete skill conditions, common rules and exact installed paths
+in its guidance-pointers block. Only in that full install, a harness whose row records
+`native_skills: true` gets one short trigger line as each installed skill's description.
+The full pointer conditions and the exact-project-path fallback stay unchanged. An absent
+catalog entry or a personal skill with the same name does not replace the project path.
+The body and reference files are the same on each route.
+
+Source skills and standalone readers keep the full source descriptions. A generic copy keeps
+them too, including in a mixed install: a native copy can be short while the generic copy stays
+full. A directory shared with a non-native route keeps full descriptions. Facts-only native
+copies keep the full descriptions, including the common safeguards and the continuity route;
+facts-only generic installs still get no skills. The install mode and harness selection decide
+both the bytes installed and the bytes expected by `--check`. Upgrades and mode changes render
+the selected form without changing source skills. No new manifest field is needed.
+
+Tests exercise installed bytes, complete pointer conditions, safeguards, references, mixed
+routes, upgrades and mode changes. These checks do not establish model routing or cost savings;
+both remain `UNVERIFIED` until measured in sessions.
+
 ### Facts-only
 
 `adopt --facts-only` installs the facts a project would fumble without and none of

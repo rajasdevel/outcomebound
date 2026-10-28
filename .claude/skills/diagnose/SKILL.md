@@ -1,35 +1,30 @@
 ---
 name: diagnose
-description: Use when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix. A declared stub that fails as its declaration says is no defect.
+description: Use for a reported defect, an unknown failure cause or a fix that did not hold.
 ---
 
 # Diagnose a failure
 
-You are done when the failure is gone because its cause is: the failure is reproduced or reported
-as not reproduced, its cause is stated with the evidence for it, the fix removes that cause, and
-your report says what the fix was checked by. Where the error makes the cause plain, skip the search for it: fix it, run the
-check, and still look for the same defect where the pattern repeats (Fix the cause). Where the person asks what is wrong and not for a fix, answer from what you can
-read and run without changing anything, and say plainly what you did not run.
+Done means the failure is gone because its cause is: reproduce it or report it not reproduced,
+state the cause and its evidence, remove that cause, and report what checked the fix. If the
+error makes the cause plain, fix and check it without a cause search; still do the sweep below.
+If asked only what is wrong, answer from reads and checks without changes; say what did not run.
 
 ## Reproduce
 
-Before changing anything, run the smallest command that shows the case as it was reported: the
-failing test, or a few lines that call the code with the reported input. A neighbouring case that
-is easier to write is not the report, and a test that already passes does not reproduce it. Where
-you cannot reproduce it, say so and say what you tried; a fix made without a reproduction is
-not verified, and you say so. Where the failure is flaky, choose a number of runs suited to how often it fails,
-and report how many runs and how many failures; a failure that does not show in them stays
-uncertain, and after the fix the same number of runs with none is the evidence that it holds.
+Before changing anything, run the smallest command for the reported input: its failing test or
+calling code. A neighbouring case or an already passing test is not the report. If reproduction
+fails, say what you tried; a fix without reproduction stays unverified. For a flaky failure,
+choose runs suited to its frequency and report runs and failures. If none fails, uncertainty remains;
+the same number of runs with none after the fix is the evidence that it holds.
 
 ## Find the cause
 
-Read the whole error: the first failure and the line it names, not only its last line. Hold each
-hypothesis from something you observed, and run the observation that would refute it before you
-edit; make independent observations together, and change one thing at a time where changes would
-hide each other's effect. Narrow by whichever way is quickest: the input (the smallest one that still
-fails), the history (what changed since it last passed) or a split of the code or the commits
-between a working and a failing state. Stop when one cause explains every symptom. A cause that explains only some of them is
-the wrong one, or one of two.
+Read the whole error, its first failure and named line. Base each hypothesis on an observation
+and try to refute it before editing. Make independent observations together; change one thing at
+a time where changes would hide each other's effect. Narrow until one cause explains every
+symptom; one explaining only some is wrong or one of two. When narrowing needs more than the
+error and reported case, read [the narrowing techniques](references/narrowing.md).
 
 ## Fix the cause
 
@@ -40,13 +35,11 @@ as a test where a test adds signal (read `tests-worth-keeping` only where its tr
 
 ## When the fix does not hold
 
-A fix that fails again with no new evidence means an assumption is wrong. Go back to what you
-observed, list what you assumed without observing it (that the code you edited is the code that
-ran, that the input is the one reported, that the failure is the one reported), and check each
-assumption. Do not try another variation of the same fix.
+A failed fix with no new evidence means an assumption is wrong. Return to observations, list
+and check the assumptions you did not observe. Do not try another variation of the same fix.
 
 ## The report
 
-Whether you reproduced the failure, and by what command; the cause and the evidence for it; each
-hypothesis you refuted that a later session might test again, and the observation that refuted it; what the fix changed; and the check the fix passed. Say which of the reproduction, the cause and
-the check nothing you ran shows.
+State reproduction and its command; cause and evidence; refuted hypotheses a later session
+might retry and their refuting observations; what changed; and the check passed. Say which of
+reproduction, cause and check nothing you ran shows.

@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. A decision page goes beside the decision brief, never in its place.
+description: Use for an interactive page, learning by trying or options tried with own numbers.
 ---
 
 # Explorable

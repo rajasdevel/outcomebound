@@ -3,6 +3,19 @@ import glob
 import re
 from pathlib import Path
 
+import pytest
+
+from outcomebound_tools import adopt
+from tests.adopt_helpers import (
+    ROOT,
+    SHORT_DESCRIPTIONS,
+    Capture,
+    assert_native_skill,
+    repo,
+    run,
+    states,
+)
+
 
 def _frontmatter(p: Path):
     t = p.read_text(encoding="utf-8")
@@ -81,32 +94,126 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
     assert _plain_scalar_problem("description: Use when plain, with a dash - and a `path`.") == ""
 
 
-def test_each_pointer_condition_is_its_skill_descriptions_first_sentence():
-    # The pointer line in AGENTS.md and the skill's description are the two triggers a harness
-    # shows; one text for both keeps them from drifting apart.
-    from outcomebound_tools import adopt
+@pytest.mark.parametrize(
+    "harness,root",
+    [
+        ("codex", ".agents/skills"),
+        ("claude-code", ".claude/skills"),
+        ("amp", ".agents/skills"),
+        ("cursor", ".cursor/skills"),
+        ("gemini", ".gemini/skills"),
+        ("codex,claude-code", ".agents/skills"),
+    ],
+)
+def test_full_native_install_has_short_catalog_and_complete_project_pointers(
+    tmp_path: Path, capsys: Capture, harness: str, root: str
+) -> None:
+    """Catches shortening the pointer conditions or removing the exact-path fallback while
+    shortening the catalog. An omitted catalog entry or same-name personal skill still has
+    a complete project pointer. Bodies and references must not change with the catalog."""
 
-    for name, condition in adopt.CONDITIONS.items():
-        fm, _ = _frontmatter(Path("skills") / name / "SKILL.md")
-        described = re.search(r"^description:\s*(.+)$", fm, re.M)
-        assert described is not None, name
-        assert described.group(1).startswith(f"Use {condition}. "), (
-            f"{name}: the description must open with 'Use {condition}.'"
-        )
+    target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
+    code, _, err = run(capsys, str(target), "--harness", harness)
+    assert code == 0, err
+    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert set(SHORT_DESCRIPTIONS) == set(adopt.SKILLS)
+    assert (
+        "a skill list that lacks it, or a personal skill of the same name, does not replace it"
+        in agents
+    )
+    for name in adopt.SKILLS:
+        assert f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md" in agents
+        for native in adopt.routes(ROOT, harness.split(",")):
+            data = (target / native.skills / name / "SKILL.md").read_bytes()
+            assert_native_skill(data, name)
+            fm, _ = _frontmatter(target / native.skills / name / "SKILL.md")
+            assert all(not _plain_scalar_problem(line) for line in fm.splitlines())
+            for note in (ROOT / "skills" / name / "references").glob("*.md"):
+                assert (
+                    target / native.skills / name / "references" / note.name
+                ).read_bytes() == note.read_bytes()
+    for condition, path in adopt.REFERENCE_POINTERS:
+        assert f"- {condition}: read {root}/{path}" in agents
+    for rule in adopt.RULES.values():
+        assert f"- {rule}" in agents
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and set(states(out).values()) == {"current"}
 
 
-def test_each_rule_shown_without_a_read_is_its_skill_descriptions_second_sentence():
-    # The rule the pointer block shows beside the read conditions is the same text the harness's
-    # own skill list shows, so a harness with either one carries it.
-    from outcomebound_tools import adopt
+@pytest.mark.parametrize(
+    "harness,facts_only",
+    [
+        ("generic", False),
+        ("codex,generic", False),
+        ("codex", True),
+        ("claude-code", True),
+        ("amp", True),
+        ("cursor", True),
+        ("gemini", True),
+        ("codex,claude-code,generic", True),
+        ("generic", True),
+    ],
+)
+def test_other_install_routes_and_standalone_sources_keep_full_descriptions(
+    tmp_path: Path, capsys: Capture, harness: str, facts_only: bool
+) -> None:
+    """Catches applying short descriptions to the source, generic copies or facts-only
+    copies, including facts-only native discovery of the common rules and continuity route."""
 
-    for name, rule in adopt.RULES.items():
-        fm, _ = _frontmatter(Path("skills") / name / "SKILL.md")
-        described = re.search(r"^description:\s*(.+)$", fm, re.M)
-        assert described is not None, name
-        assert described.group(1) == f"Use {adopt.CONDITIONS[name]}. {rule}", (
-            f"{name}: the description must be 'Use <condition>. <rule>'"
-        )
+    target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
+    flags = ["--facts-only"] if facts_only else []
+    code, _, err = run(capsys, str(target), "--harness", harness, *flags)
+    assert code == 0, err
+    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    if facts_only:
+        assert ": read " not in agents
+    for name in adopt.SKILLS:
+        source = (ROOT / "skills" / name / "SKILL.md").read_bytes()
+        full = adopt.description(source)
+        assert full.startswith(f"Use {adopt.CONDITIONS[name]}.")
+        assert len(full) > len(SHORT_DESCRIPTIONS[name])
+        if name in adopt.RULES:
+            assert adopt.RULES[name] in full
+        # The unqualified source/standalone reader must never receive installed shortening.
+        assert adopt.skill_file(ROOT, name) == source
+        assert adopt.skill_files(ROOT, name)["SKILL.md"] == source
+        for route in adopt.routes(ROOT, harness.split(",")):
+            file = target / route.skills / name / "SKILL.md"
+            if facts_only and not route.native:
+                assert not file.exists()
+            elif route.native and not facts_only:
+                assert_native_skill(file.read_bytes(), name)
+            else:
+                assert file.read_bytes() == source
+    if not facts_only:
+        assert ": read .outcomebound/skills/diagnose/SKILL.md" in agents
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and set(states(out).values()) == {"current"}
+
+
+def test_native_upgrade_and_mode_switches_render_and_check_the_selected_description(
+    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catches an upgrade mistaking a previously full description for a local edit, and
+    --check comparing installed short bytes with source bytes or the wrong recorded mode."""
+
+    target = repo(tmp_path / "project")
+    with monkeypatch.context() as patch:
+        patch.setattr(adopt, "NATIVE_DESCRIPTIONS", {})
+        assert run(capsys, str(target), "--harness", "codex")[0] == 0
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code > 0 and states(out)[".agents/skills/diagnose/SKILL.md"] == "stale"
+    assert run(capsys, str(target))[0] == 0
+    for flags in [("--facts-only",), ("--full",), ("--facts-only",), ("--full",)]:
+        code, _, err = run(capsys, str(target), *flags)
+        assert code == 0, err
+        data = (target / ".agents/skills/diagnose/SKILL.md").read_bytes()
+        if flags == ("--facts-only",):
+            assert data == (ROOT / "skills/diagnose/SKILL.md").read_bytes()
+        else:
+            assert_native_skill(data, "diagnose")
+        code, out, _ = run(capsys, str(target), "--check")
+        assert code == 0 and set(states(out).values()) == {"current"}
 
 
 def test_each_reference_pointer_names_a_shipped_reference():

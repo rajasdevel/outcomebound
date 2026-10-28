@@ -27,6 +27,7 @@ from tests.adopt_helpers import (
     GIT,
     ROOT,
     Capture,
+    assert_native_skill,
     change_kernel,
     engine_copy,
     manifest,
@@ -108,10 +109,10 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     assert (target / PYTHON_FRAGMENT).read_bytes() == shipped
     assert list(blocks(target, "CLAUDE.md")) == ["pointer-claude-md"]
     assert adopt.IMPORT in (target / "CLAUDE.md").read_text(encoding="utf-8").splitlines()
-    skill = (ROOT / "skills/using-outcomebound/SKILL.md").read_bytes()
-    brief = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    assert (target / CLAUDE_SKILL).read_bytes() == skill
-    assert (target / CLAUDE_BRIEF).read_bytes() == brief
+    skill = (target / CLAUDE_SKILL).read_bytes()
+    brief = (target / CLAUDE_BRIEF).read_bytes()
+    assert_native_skill(skill, "using-outcomebound")
+    assert_native_skill(brief, "decision-brief")
     assert (target / "README.md").read_text(encoding="utf-8") == "# T\n"
 
     document = manifest(target)
@@ -239,7 +240,7 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
     assert code == 0, err
     after = snapshot(target)
     for name, path in gained.items():
-        assert after.pop(path) == (ROOT / "skills" / name / "SKILL.md").read_bytes()
+        assert_native_skill(after.pop(path), name)
     assert after.pop(adopt.MANIFEST) != before.pop(adopt.MANIFEST)
     old = adopt.block_text(before.pop("AGENTS.md").decode("utf-8"), adopt.POINTERS) or b""
     assert old.decode("utf-8").splitlines()[1:-1] == skill_pointer_lines(
@@ -270,8 +271,7 @@ def test_a_brief_skill_the_target_already_holds_is_refused_unless_forced(
     assert code == 1 and CLAUDE_BRIEF in err
     assert snapshot(target) == before
     assert run(capsys, str(target), "--harness", "claude-code", "--force")[0] == 0
-    brief = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    assert (target / CLAUDE_BRIEF).read_bytes() == brief
+    assert_native_skill((target / CLAUDE_BRIEF).read_bytes(), "decision-brief")
 
 
 def test_an_edited_owned_block_is_refused_and_force_replaces_it(
@@ -651,7 +651,7 @@ def test_an_install_reports_the_words_it_always_loads_and_refuses_no_size(
     ]
     assert words[2] > 20_000
     listed = [
-        len(adopt.description((ROOT / "skills" / name / "SKILL.md").read_bytes()).split())
+        len(adopt.description((target / ".claude/skills" / name / "SKILL.md").read_bytes()).split())
         for name in adopt.SKILLS
     ]
     assert all(listed)
@@ -2068,7 +2068,11 @@ def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragmen
         shipped = sorted(p for p in (ROOT / "skills" / name).rglob("*") if p.is_file())
         for file in shipped:
             relative = file.relative_to(ROOT / "skills").as_posix()
-            assert (target / ".claude/skills" / relative).read_bytes() == file.read_bytes()
+            data = (target / ".claude/skills" / relative).read_bytes()
+            if file.name == "SKILL.md":
+                assert_native_skill(data, name)
+            else:
+                assert data == file.read_bytes()
         path = f".claude/skills/{name}/SKILL.md"
         assert f"{adopt.CONDITIONS[name]}: read {path}" in agents
     assert len(list((ROOT / "skills/slice-tickets").rglob("*.md"))) > 1

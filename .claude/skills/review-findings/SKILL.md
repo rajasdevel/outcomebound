@@ -1,6 +1,6 @@
 ---
 name: review-findings
-description: Use when acting on review findings, or writing a review the project requires. Each finding is a claim to check, and each ends with a disposition.
+description: Use when acting on findings or writing a required review.
 ---
 
 # Review findings

@@ -150,9 +150,43 @@ CONDITIONS = {
     ),
 }
 
+# Only a full native install uses these: its pointer block carries the complete conditions,
+# rules and exact project paths. Source files and every other route keep their descriptions.
+NATIVE_DESCRIPTIONS = {
+    "using-outcomebound": "Use for delivery route, stage, exposure, growth or forecast decisions.",
+    "decision-brief": (
+        "Use before asking a person-owned decision or after a granted act is refused."
+    ),
+    "gather-requirements": (
+        "Use for unsettled source requirements or competing readings of a request."
+    ),
+    "tests-worth-keeping": (
+        "Use for risky logic, a red baseline, skipped, weakened or removed tests, "
+        "or doubtful test proof."
+    ),
+    "diagnose": "Use for a reported defect, an unknown failure cause or a fix that did not hold.",
+    "review-findings": "Use when acting on findings or writing a required review.",
+    "review-council": (
+        "Use when a design or change needs a second opinion from another model or harness."
+    ),
+    "explain-spec": (
+        "Use when a person must act on an unfamiliar spec or says they do not follow it."
+    ),
+    "slice-tickets": "Use when breaking work into tickets.",
+    "hand-off-tickets": "Use when handing an accepted ticket from the store to its implementer.",
+    "explorable": (
+        "Use for an interactive page, learning by trying or options tried with own numbers."
+    ),
+    "land-change": "Use when driving a pull or merge request through checks and review to landing.",
+    "run-acceptance": (
+        "Use when preparing, running or recording acceptance by a person outside the build."
+    ),
+    "sync-tracker": "Use when reading or writing a card outside the project's ticket store.",
+}
+
 
 # Rules a reader needs on most tasks, shown beside the read conditions so the common case needs
-# no read; each is also its skill description's second sentence.
+# no read; each also stays in the full source description for routes without the pointers.
 RULES = {
     "tests-worth-keeping": (
         "A test you add or assess asserts, through the interface a caller uses, an expected value "
@@ -427,7 +461,7 @@ def skill_file(source: Path, name: str, relative: str = "SKILL.md") -> bytes:
         raise AdoptError(f"cannot read skills/{name}/{relative} in the engine: {error}") from error
 
 
-def skill_files(source: Path, name: str) -> dict[str, bytes]:
+def skill_files(source: Path, name: str, *, short: bool = False) -> dict[str, bytes]:
     """Every file one engine skill ships, by its path inside the skill's folder, `SKILL.md`
     first: the notes a skill names beside it travel with every copy."""
 
@@ -443,7 +477,19 @@ def skill_files(source: Path, name: str) -> dict[str, bytes]:
     except OSError as error:
         raise AdoptError(f"cannot read skills/{name}/ in the engine: {error}") from error
     names = ["SKILL.md", *(relative for relative in found if relative != "SKILL.md")]
-    return {relative: skill_file(source, name, relative) for relative in names}
+    files = {relative: skill_file(source, name, relative) for relative in names}
+    if short and name in NATIVE_DESCRIPTIONS:
+        text = files["SKILL.md"].decode("utf-8")
+        head, separator, body = text.partition("\n---\n")
+        if head.startswith("---\n") and separator:
+            head = re.sub(
+                r"^description:.*$",
+                f"description: {NATIVE_DESCRIPTIONS[name]}",
+                head,
+                flags=re.MULTILINE,
+            )
+            files["SKILL.md"] = (head + separator + body).encode("utf-8")
+    return files
 
 
 # --- Harnesses ------------------------------------------------------------------
@@ -1365,7 +1411,7 @@ def desired(
     if any(item.harness == GENERIC for item in found):
         run.restated.append(("UNVERIFIED", f"{GENERIC}: that the harness reads {AGENTS}"))
     carriers = found if mode == FULL else [item for item in found if item.native]
-    wants.extend(_skills(source, carriers, made.skills))
+    wants.extend(_skills(source, carriers, made.skills, mode))
     return wants
 
 
@@ -1386,16 +1432,31 @@ def _imports_needed(run: Run, found: Sequence[Route]) -> list[Want]:
     return wants
 
 
-def _skills(source: Path, found: Sequence[Route], names: Sequence[str]) -> list[Want]:
+def _native_roots(found: Sequence[Route], mode: str) -> set[str]:
+    """Full installs write complete pointers; other routes retain full descriptions.
+
+    A shared directory used by a non-native route keeps the full descriptions too.
+    """
+
+    if mode != FULL:
+        return set()
+    return {item.skills for item in found if item.native} - {
+        GENERIC_SKILLS,
+        *(item.skills for item in found if not item.native),
+    }
+
+
+def _skills(source: Path, found: Sequence[Route], names: Sequence[str], mode: str) -> list[Want]:
     """Each skill once per skill directory, recording the harnesses that read it there."""
 
     roots: dict[str, list[str]] = {}
     for item in found:
         roots.setdefault(item.skills, []).append(item.harness)
+    short_roots = _native_roots(found, mode)
     wants = []
     for name in names:
-        for relative, data in skill_files(source, name).items():
-            for root, harnesses in roots.items():
+        for root, harnesses in roots.items():
+            for relative, data in skill_files(source, name, short=root in short_roots).items():
                 path = f"{root}/{name}/{relative}"
                 wants.append(Want("skill", path, name, data, {"harnesses": sorted(harnesses)}))
     return sorted(wants, key=lambda want: want.path)
@@ -1908,7 +1969,10 @@ def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record])
     kind, name = record["kind"], record["id"]
     if kind == "skill":
         relative = str(record["path"]).split(f"/{name}/", 1)[-1]
-        files = skill_files(source, name)
+        found = routes(source, recorded_harnesses(own) or [GENERIC])
+        short_roots = _native_roots(found, recorded_mode(own))
+        short = any(record["path"] == f"{root}/{name}/SKILL.md" for root in short_roots)
+        files = skill_files(source, name, short=short)
         if relative not in files:
             raise AdoptError(f"this engine ships no {relative} in the {name} skill")
         return files[relative]

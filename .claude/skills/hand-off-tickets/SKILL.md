@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket from the ticket store to the agent or model that will build it. Not for slicing, nor for a prompt or spec asked for outside the ticket store.
+description: Use when handing an accepted ticket from the store to its implementer.
 ---
 
 # Hand a ticket to its implementer

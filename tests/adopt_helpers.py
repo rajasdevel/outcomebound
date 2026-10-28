@@ -18,6 +18,48 @@ ROOT = Path(__file__).resolve().parent.parent
 GIT = shutil.which("git") or "git"
 Capture = pytest.CaptureFixture[str]
 
+# Literal catalog entries expected at the full native install's public interface.
+SHORT_DESCRIPTIONS = {
+    "using-outcomebound": "Use for delivery route, stage, exposure, growth or forecast decisions.",
+    "decision-brief": (
+        "Use before asking a person-owned decision or after a granted act is refused."
+    ),
+    "gather-requirements": (
+        "Use for unsettled source requirements or competing readings of a request."
+    ),
+    "tests-worth-keeping": (
+        "Use for risky logic, a red baseline, skipped, weakened or removed tests, "
+        "or doubtful test proof."
+    ),
+    "diagnose": "Use for a reported defect, an unknown failure cause or a fix that did not hold.",
+    "review-findings": "Use when acting on findings or writing a required review.",
+    "review-council": (
+        "Use when a design or change needs a second opinion from another model or harness."
+    ),
+    "explain-spec": (
+        "Use when a person must act on an unfamiliar spec or says they do not follow it."
+    ),
+    "slice-tickets": "Use when breaking work into tickets.",
+    "hand-off-tickets": "Use when handing an accepted ticket from the store to its implementer.",
+    "explorable": (
+        "Use for an interactive page, learning by trying or options tried with own numbers."
+    ),
+    "land-change": "Use when driving a pull or merge request through checks and review to landing.",
+    "run-acceptance": (
+        "Use when preparing, running or recording acceptance by a person outside the build."
+    ),
+    "sync-tracker": "Use when reading or writing a card outside the project's ticket store.",
+}
+
+
+def assert_native_skill(data: bytes, name: str, source: Path = ROOT) -> None:
+    """The catalog is short; the skill body and name stay as shipped."""
+
+    shipped = (source / "skills" / name / "SKILL.md").read_bytes()
+    assert adopt.description(data) == SHORT_DESCRIPTIONS[name]
+    assert data.split(b"\n---\n", 1)[1] == shipped.split(b"\n---\n", 1)[1]
+    assert f"\nname: {name}\n".encode() in data
+
 
 def repo(path: Path, files: dict[str, str] | None = None) -> Path:
     """A fresh Git repository at `path` holding `files`, by relative path."""

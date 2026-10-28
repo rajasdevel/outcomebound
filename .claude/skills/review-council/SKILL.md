@@ -1,6 +1,6 @@
 ---
 name: review-council
-description: Use when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users. Plans the run and waits for the person's yes before it runs.
+description: Use when a design or change needs a second opinion from another model or harness.
 ---
 
 # Review council

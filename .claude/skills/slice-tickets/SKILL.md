@@ -1,6 +1,6 @@
 ---
 name: slice-tickets
-description: Use when breaking work into tickets. Needs a declared ticket store (`.outcomebound/tickets.json`); not for a to-do list, nor for building a ticket that exists.
+description: Use when breaking work into tickets.
 ---
 
 # Slice work into tickets
