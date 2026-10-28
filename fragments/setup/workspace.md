@@ -12,7 +12,7 @@ When a scan walks ignored folders (`gitleaks dir .`, a content gate ignoring `.g
 Only the person makes a project gate skip these four folders at its root.
 Findings held only in those folders are outside the work.
 Codex's default sandbox keeps `.agents/` and `.git` read-only.
-Ask the person once per needed root, never per write: `<repository>/.agents` and the Git common directory every worktree commits into (`<repository>/.git` in a plain clone; `git rev-parse --path-format=absolute --git-common-dir` prints it); ask for both if needed.
+Ask the person once, never per write, for the roots an item needs: `<repository>/.agents` and the Git common directory every worktree commits into (`<repository>/.git` in a plain clone; `git rev-parse --path-format=absolute --git-common-dir` prints it); ask for both in that one request if both are needed.
 On the command line, use `--add-dir` for each.
 Where flags are unavailable (reportedly desktop app and IDE extension), the person lists both in `writable_roots` under `[sandbox_workspace_write]` in their Codex `config.toml`; `outcomebound research harnesses/codex.md` §9 records neither that key nor those surfaces' flags, so the person checks both against their Codex release.
 A project's `.codex/config.toml` ignores sandbox keys.
@@ -27,12 +27,12 @@ Work in the checkout and branch the person assigned unless another task uses it 
 For parallel work or work across sessions, create or resume a task worktree and carry its uncommitted and ignored task state.
 Keep the worktree while its task or an agent that may resume it needs it.
 Remove it only when the task is finished, its commits are reachable from a kept branch, and nothing uncommitted or ignored in it is still needed.
-Land worktree commits by project instructions or the goal envelope, as the tickets fragment says; where neither specifies, keep them on the worktree branch, named in the handoff with a decision brief on landing.
+Land worktree commits as project instructions or the goal envelope say (the tickets fragment describes how); where neither specifies, keep them on the worktree branch, named in the handoff with a decision brief on landing.
 Before landing work from a worktree, run its completion checks and the project's landing gate there and report their verdicts.
-Work in another repository in a session started there so its instructions and sandbox apply; where the person asks this session to change it, ask once for a writable root and meanwhile hold only writes there; apply its completion bar yourself and report the checks run.
+Work in another repository in a session started there so its instructions and sandbox apply; where the person asks this session to change it, ask once for it as a writable root and meanwhile hold only the writes there; apply its completion bar yourself and report the checks run.
 On the shared machine, the commands fragment's heavy-command limit holds across every worktree.
 Clean up only what this task made (its worktree, logs and caches); leave a process, folder or file whose owner you cannot name unchanged, and name it in the handoff.
-As the one cleanup exception, if the task lacks needed disk, you may reclaim what a tool rebuilds or fetches on next use (build or package caches, this project's dangling images), using a command naming what it removes, unless project instructions forbid it; selected `containers` removal bounds govern container storage.
+As the one cleanup exception, if the task lacks needed disk, you may reclaim what a tool rebuilds or fetches on next use (build or package caches, this project's dangling images), using a command naming what it removes, unless project instructions forbid it; where the `containers` fragment is selected, its removal bounds govern container storage.
 Never remove a volume, container or named data except what the person's order for this project covers and a copy you verified restores; never remove anything another project or owner uses.
 Report what you reclaimed.
 Cloud and background sessions start from the pushed branch without this machine's ignored folders, uncommitted files or tools; commit the install.

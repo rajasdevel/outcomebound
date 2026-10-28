@@ -31,11 +31,11 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "fc26049ec034d15cdb36315b979453c0569d1c2003feef1e137dc1959e73d13d",
+        ".outcomebound/fragments/commands.md": "18bc6a3c09eb89b84439c0eb65907d2324d393fa1b141a81cdb788b541ec2f8d",
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "9db54d66cf8c38b7bec9f1db50cb0bbb359cd01b7f367747a6a7d895cead79e0"
+        ".outcomebound/fragments/workspace.md": "c920031cf176653be09c553607ddce02cf1f8e7bb448225ca6f9ab7964cef46c"
       },
       "style": [
         "ste"
@@ -59,7 +59,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "9db54d66cf8c38b7bec9f1db50cb0bbb359cd01b7f367747a6a7d895cead79e0"
+      "sha256": "c920031cf176653be09c553607ddce02cf1f8e7bb448225ca6f9ab7964cef46c"
     },
     {
       "kind": "fragment",
@@ -71,7 +71,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "fc26049ec034d15cdb36315b979453c0569d1c2003feef1e137dc1959e73d13d"
+      "sha256": "18bc6a3c09eb89b84439c0eb65907d2324d393fa1b141a81cdb788b541ec2f8d"
     },
     {
       "kind": "ignore",
