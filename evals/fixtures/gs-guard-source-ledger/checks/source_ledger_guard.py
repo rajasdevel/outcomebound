@@ -14,6 +14,12 @@ def current_items():
     return dict(line.split(" | ", 1) for line in g.text("requirements.txt").splitlines() if line)
 
 
+def state(cell):
+    # The disposition is the cell's first word; a note after it ("; replaces ...") is allowed.
+    words = cell.replace(";", " ").replace(",", " ").replace("—", " ").split()
+    return words[0].lower() if words else ""
+
+
 def accounted():
     items = current_items()
     rows = g.rows("dispositions.md")[1:]
@@ -24,7 +30,7 @@ def accounted():
         if (
             len(r) != 4
             or r[1] != source
-            or r[2] not in ("implemented", "deferred", "rejected")
+            or state(r[2]) not in ("implemented", "deferred", "rejected")
             or not r[3]
         ):
             return [f"{key} has no current source text, disposition or evidence"]
@@ -42,7 +48,7 @@ rows = [dict(name='zinnia', status='Ready', owner='Team B', archived=False),
 
 def order():
     r = g.row("dispositions.md", "R2")
-    if len(r) != 4 or r[1] != current_items()["R2"] or r[2] != "implemented" or not r[3]:
+    if len(r) != 4 or r[1] != current_items()["R2"] or state(r[2]) != "implemented" or not r[3]:
         return ["the changed R2 decision is still stale or absent"]
     return g.probe(
         "import csv, io\nfrom report import render\n"
@@ -54,7 +60,7 @@ def order():
 
 def owner():
     r = g.row("dispositions.md", "R4")
-    if len(r) != 4 or r[1] != current_items()["R4"] or r[2] != "implemented" or not r[3]:
+    if len(r) != 4 or r[1] != current_items()["R4"] or state(r[2]) != "implemented" or not r[3]:
         return ["the added R4 decision is absent or not implemented"]
     return g.probe(
         "import csv, io\nfrom report import render\n"
