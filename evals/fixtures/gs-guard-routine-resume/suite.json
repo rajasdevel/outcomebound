@@ -45,6 +45,8 @@
   "watch": [],
   "references": [
     "good",
+    "good-handoff-updated",
+    "handoff-drops-the-open-item",
     "noop",
     "no-inventory",
     "late-inventory",
