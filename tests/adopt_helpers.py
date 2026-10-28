@@ -52,11 +52,43 @@ SHORT_DESCRIPTIONS = {
 }
 
 
+# The boundary sentences a full native description keeps after its trigger, word for word from
+# the source description; the three skills whose second sentence is a pointer-block rule have none.
+BOUNDARIES = {
+    "gather-requirements": (
+        "Not for a clear request, an accepted ticket, a handoff that states the work, or notes "
+        "that describe a symptom, except where resumed work relies on a recorded direction choice."
+    ),
+    "diagnose": "A declared stub that fails as its declaration says is no defect.",
+    "review-findings": "Each finding is a claim to check, and each ends with a disposition.",
+    "review-council": "Plans the run and waits for the person's yes before it runs.",
+    "explain-spec": (
+        "A walk-through of a design is one; questions on it only when the person asks to test "
+        "their understanding."
+    ),
+    "slice-tickets": (
+        "Needs a declared ticket store (`.outcomebound/tickets.json`); not for a to-do list, nor "
+        "for building a ticket that exists."
+    ),
+    "hand-off-tickets": (
+        "Not for slicing, nor for a prompt or spec asked for outside the ticket store."
+    ),
+    "explorable": "A decision page goes beside the decision brief, never in its place.",
+    "land-change": (
+        "Covers the handover, a failing check, each review comment, the merge and where the "
+        "agent's authority over other people's reviews ends."
+    ),
+    "run-acceptance": "The agent prepares and pre-runs; a person accepts.",
+    "sync-tracker": "An example is a client's Jira; a write needs a grant that names its kind.",
+}
+
+
 def assert_native_skill(data: bytes, name: str, source: Path = ROOT) -> None:
     """The catalog is short; the skill body and name stay as shipped."""
 
     shipped = (source / "skills" / name / "SKILL.md").read_bytes()
-    assert adopt.description(data) == SHORT_DESCRIPTIONS[name]
+    expected = " ".join(filter(None, (SHORT_DESCRIPTIONS[name], BOUNDARIES.get(name))))
+    assert adopt.description(data) == expected
     assert data.split(b"\n---\n", 1)[1] == shipped.split(b"\n---\n", 1)[1]
     assert f"\nname: {name}\n".encode() in data
 

@@ -1,6 +1,6 @@
 ---
 name: gather-requirements
-description: Use for unsettled source requirements or competing readings of a request.
+description: Use for unsettled source requirements or competing readings of a request. Not for a clear request, an accepted ticket, a handoff that states the work, or notes that describe a symptom, except where resumed work relies on a recorded direction choice.
 ---
 
 # Gather requirements

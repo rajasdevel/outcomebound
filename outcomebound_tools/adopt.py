@@ -152,6 +152,8 @@ CONDITIONS = {
 
 # Only a full native install uses these: its pointer block carries the complete conditions,
 # rules and exact project paths. Source files and every other route keep their descriptions.
+# Each is the trigger only; `native_description` adds the source description's later sentences
+# (its boundaries), except one the pointer block already shows as a rule.
 NATIVE_DESCRIPTIONS = {
     "using-outcomebound": "Use for delivery route, stage, exposure, growth or forecast decisions.",
     "decision-brief": (
@@ -211,6 +213,19 @@ RULES = {
         "skill."
     ),
 }
+
+
+def native_description(name: str, head: str) -> str:
+    """The short trigger, then the source description's sentences after its first, verbatim,
+    unless the pointer block shows them as the skill's rule: a boundary is never dropped."""
+    found = re.search(r"^description: (.*)$", head, flags=re.MULTILINE)
+    source = found.group(1) if found else ""
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z`])", source, maxsplit=1)
+    rest = parts[1] if len(parts) > 1 else ""
+    if not rest or rest == RULES.get(name):
+        return NATIVE_DESCRIPTIONS[name]
+    return f"{NATIVE_DESCRIPTIONS[name]} {rest}"
+
 
 # A reference with its own pointer line: a handoff or a resume needs these checks without the
 # rest of its skill.
@@ -482,12 +497,8 @@ def skill_files(source: Path, name: str, *, short: bool = False) -> dict[str, by
         text = files["SKILL.md"].decode("utf-8")
         head, separator, body = text.partition("\n---\n")
         if head.startswith("---\n") and separator:
-            head = re.sub(
-                r"^description:.*$",
-                f"description: {NATIVE_DESCRIPTIONS[name]}",
-                head,
-                flags=re.MULTILINE,
-            )
+            line = f"description: {native_description(name, head)}"
+            head = re.sub(r"^description:.*$", lambda _: line, head, flags=re.M)
             files["SKILL.md"] = (head + separator + body).encode("utf-8")
     return files
 

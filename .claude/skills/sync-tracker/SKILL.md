@@ -1,6 +1,6 @@
 ---
 name: sync-tracker
-description: Use when reading or writing a card outside the project's ticket store.
+description: Use when reading or writing a card outside the project's ticket store. An example is a client's Jira; a write needs a grant that names its kind.
 ---
 
 # Sync a tracker

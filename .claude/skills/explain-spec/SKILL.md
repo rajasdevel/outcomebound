@@ -1,6 +1,6 @@
 ---
 name: explain-spec
-description: Use when a person must act on an unfamiliar spec or says they do not follow it.
+description: Use when a person must act on an unfamiliar spec or says they do not follow it. A walk-through of a design is one; questions on it only when the person asks to test their understanding.
 ---
 
 # Explain a spec

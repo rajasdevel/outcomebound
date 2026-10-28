@@ -140,6 +140,26 @@ def test_full_native_install_has_short_catalog_and_complete_project_pointers(
     assert code == 0 and set(states(out).values()) == {"current"}
 
 
+@pytest.mark.parametrize("harness", ["codex", "claude-code"])
+def test_full_native_install_keeps_every_later_sentence_of_each_source_description(
+    tmp_path: Path, capsys: Capture, harness: str
+) -> None:
+    """Catches a short catalog line that drops a boundary (a declared stub is no defect; not for
+    an accepted ticket): each sentence after a source description's first is in the installed
+    description or among the pointer block's rules."""
+
+    target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
+    code, _, err = run(capsys, str(target), "--harness", harness)
+    assert code == 0, err
+    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    for name in adopt.SKILLS:
+        source = adopt.description((ROOT / "skills" / name / "SKILL.md").read_bytes())
+        later = source.split(". ", 1)[1] if ". " in source else ""
+        for native in adopt.routes(ROOT, [harness]):
+            installed = adopt.description((target / native.skills / name / "SKILL.md").read_bytes())
+            assert not later or later in installed or f"- {later}" in agents, name
+
+
 @pytest.mark.parametrize(
     "harness,facts_only",
     [

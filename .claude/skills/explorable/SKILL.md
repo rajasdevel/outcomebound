@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use for an interactive page, learning by trying or options tried with own numbers.
+description: Use for an interactive page, learning by trying or options tried with own numbers. A decision page goes beside the decision brief, never in its place.
 ---
 
 # Explorable

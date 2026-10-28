@@ -73,7 +73,9 @@ it, so a record set that is not the recorded mode's never reads `current`.
 
 A full install writes the complete skill conditions, common rules and exact installed paths
 in its guidance-pointers block. Only in that full install, a harness whose row records
-`native_skills: true` gets one short trigger line as each installed skill's description.
+`native_skills: true` gets a short trigger as each installed skill's description, followed by
+the source description's later sentences word for word (its boundaries), except a sentence
+the pointer block already shows as that skill's rule: no boundary is dropped.
 The full pointer conditions and the exact-project-path fallback stay unchanged. An absent
 catalog entry or a personal skill with the same name does not replace the project path.
 The body and reference files are the same on each route.

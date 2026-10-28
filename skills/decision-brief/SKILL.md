@@ -67,8 +67,12 @@ Write in this order:
 Prose, a table or list without a recommendation and undo line is not a brief. Use the project's
 brief numbering, else prefix a number with the task or worktree name in letters, digits and
 hyphens (`fix-login-D1`), so no session or record shares the id. Cite its whole id outside the
-brief's document. If layout or labels need more detail, read
-[presentation](references/presentation.md).
+brief's document.
+
+Explain internal ids and terms in plain words or leave them out. A step the person types or
+checks by eye names a version, branch, tag or path; give a commit hash or digest only when the
+check or project rule requires it. Claim no check that did not run: a verdict reports a command
+you ran. If layout needs more detail, read [presentation](references/presentation.md).
 
 ## Draw and deliver
 

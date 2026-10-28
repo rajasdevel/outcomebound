@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket from the store to its implementer.
+description: Use when handing an accepted ticket from the store to its implementer. Not for slicing, nor for a prompt or spec asked for outside the ticket store.
 ---
 
 # Hand a ticket to its implementer
