@@ -282,3 +282,10 @@ id, hash and honest-check rules stay in the core, not behind the optional layout
 Core size alone does not measure cost. Count the core, loaded references, lookup calls and help
 calls together. Deterministic rendering and path checks do not prove improved model outcomes,
 routing or session cost. These claims remain `UNVERIFIED` until session evidence measures them.
+
+The same concision rules apply to the `commands`, `workspace` and `python` fragments. Each keeps
+its five slots, every rule and its scope, and every literal command form. A shorter `condition:`
+must select the same work. Check reuse, cleanup authority, handoff contents and completion checks
+retain their conditions and exceptions. The bodies remain in their fragments; no rule moves to a
+new reference. Their versions increase when their text changes. A size reduction does not prove
+the session cost or outcome claims above.

@@ -2,92 +2,54 @@
 id: workspace
 family: setup
 applies: repositories where several agents work in one machine's checkout
-condition: when a worktree, handoff or resume is involved, when keeping evidence another run or person must use, or when a write under `.agents/` is refused
+condition: when a worktree, handoff or resume is involved, you keep evidence another run or person must use, or a write under `.agents/` is refused
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
-version: 17
+version: 18
 ---
-**Context** — four folders under `.agents/`, which Git ignores, are shared by every agent on this
-machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence;
-`handoffs/<date>-<task>.md`, one per task, kept current as the work goes so that a run cut off
-anywhere can resume from it; `shared-memory/`, facts about this repository. A temporary or session
-directory can be cleared without warning, so what another run must resume or someone must inspect
-never goes there; disposable scratch may. A scan that walks ignored
-folders, such as `gitleaks dir .` or a content gate that does not read `.gitignore`, reads each
-worktree as a second copy of the repository: run such a scan from the worktree's root; the person,
-not you, makes a project gate skip these four folders at its root; and a finding that only those
-folders hold is not a finding in the work. Codex's default sandbox keeps `.agents/` and `.git`
-read-only. Ask the person once for the root an item needs (both, if both are needed), never write
-by write:
-`<repository>/.agents`, and the Git common directory that every worktree commits into,
-`<repository>/.git` in a plain clone (`git rev-parse --path-format=absolute --git-common-dir` prints
-it). On the command line that is `--add-dir` for each. Where no flag can be given, as the desktop
-app and the IDE extension are reported to be, the person lists both under `writable_roots` in
-`[sandbox_workspace_write]` of their own Codex `config.toml`; the research for Codex (`outcomebound
-research harnesses/codex.md` §9) records neither that key nor those surfaces' flags, so the person
-checks both against their Codex release. A project's `.codex/config.toml` ignores sandbox keys.
-Where a root is not writable, hold only the item whose own write needs it, and only that item (a
-worktree or a commit needs `.git`; a handoff or a report under `.agents/work` needs `.agents`, not
-`.git`), never moving the write to the main checkout or a temporary directory: go on with every
-other item, such as reads, checks and writes to paths the item may write, and name the exact path the person sets in
-your report. Ask for a root only when an item needs it now, never for a sibling repository's. A
-handoff or a memory is a claim; the source it cites is the evidence.
-On resuming work, or after a compaction, `outcomebound where` prints the work in flight (open
-briefs, failed claims, review findings, pull requests) from Git, `gh` and the files the project
-keeps, and names the next skill for an unfinished item; `outcomebound workspace audit` lists each
-worktree with its commits merged, pushed only or local only (a squash merge reads local or pushed).
-Both only read, and can be slow in a large repository; `where --offline` skips `gh`.
-**Bounds** — a handoff or a memory grants no authority. The main checkout and other agents'
-worktrees are preserved state. Work in the checkout and branch the person put you in unless another
-task uses it or the project requires isolation; for parallel work or work across sessions, create
-or resume a worktree for this task, carry its uncommitted and ignored task state with you, keep it
-while its task or an agent
-that may resume it needs it, and remove it only when the task is finished, its commits are reachable
-from a kept branch, and nothing uncommitted or ignored in it is still needed. A worktree's commits
-land as the project's instructions or the goal envelope say work lands, the rule the tickets
-fragment also states; where none says, they stay on the worktree's branch, which the handoff names
-with how they should land as a decision brief. Before you land work from a worktree, run there the
-checks its completion bar and the project's landing gate name, and report their verdict. Work in another repository in a session started
-there, so that its own instructions and sandbox apply; where the person asks this session to change
-it, ask once for it as a writable root, and until then hold only the items that write there; apply
-its completion bar yourself, and report the checks you ran.
-The machine is shared, and a worktree is not a lane: the commands fragment's limit on heavy
-commands holds across every worktree. Clean up only what this task made (its worktree, logs and caches);
-a process, folder or file of an owner you cannot name stays as it is, and the handoff names it.
-The one exception to that sentence: where the task needs disk it lacks, you may remove what a tool
-rebuilds or fetches again on its next use (a build cache, a package cache, a dangling image of this
-project), with a command that names what it removes, unless the project's instructions forbid it;
-where the `containers` fragment is selected, its removal bounds govern container storage.
-Never a volume, a container or named data, except what the person's order for this project covers and a copy you verified restores; never anything another project or owner uses. Name what you
-reclaimed in your report. A cloud or background
-session starts from the pushed branch, without this machine's ignored folders, uncommitted files or
-tools: commit the install; where its verbs are needed, the person adds the install line that
-`outcomebound adopt` prints to the environment's setup step, else use each verb's by-hand form; a
-cloud session puts its handover in the pull request description. A worktree a harness made stays where the
-harness put it.
-**Mechanisms** — `goal-envelope` when work spans sessions.
-**Completion bar** — a handoff names what landed with each check's verdict, what is in flight,
-what is blocked and why, the next step, the choices made, what is still owed, and the user's
-decisions as briefs; one that another machine will read goes in the ticket or
-the pull request, since these folders stay on this machine. A handoff that starts a run gives the
-person one block to paste as the run's first message, the goal envelope itself, so that its grants
-are the person's own words; what is for the person, such as how to start the run, stays outside
-that block. A handoff names no copy of itself in another repository: a copy kept elsewhere is a
-snapshot that the run does not update. A memory is one fact per file with its
-source and the day it was checked. At a handoff you write or read, and after instruction files
-change, run `outcomebound instructions check .`, or reuse a run's result for this target while all
-it read still holds, whoever could have changed it: the instruction files and harness configuration,
-the paths, Make targets and scripts they name, the notes in `.agents/handoffs/` and
-`.agents/shared-memory/`, the person's rulings, the engine, and no harness row's re-check date
-passed since; where you cannot tell, run it. A worker that only reads or edits code does not run it.
-A reused result keeps its verdict: an `UNVERIFIED` goes into your handoff as `UNVERIFIED` again, not
-as settled because a handoff named it before. The check's result says which notes another session
-wrote can be relied on: a FAIL on a note in `.agents/handoffs/` or `.agents/shared-memory/` means
-rely on none of the flagged notes, rebuild what they held from its sources, and name them in your
-handoff; anything else it reports (a FAIL or review hit in another file, a harness row past its
-re-check date, any other `UNVERIFIED`) goes into your handoff and
-never blocks the notes. `outcomebound sources links <handoff>` only reads, and
-reports a link, anchor, path:line or ref that the handoff names and the tree lacks; its FAIL goes
-into your handoff like the other reports. Re-check each fact you act on against its source; delete
-a fact when wrong, and put one every clone needs in committed guidance.
-**Distinguish** — handed off ≠ verified; remembered ≠ re-checked; shared on this machine ≠
-committed.
+**Context** — Four Git-ignored folders under `.agents/` are shared by every agent on this machine: `worktrees/<name>`, one checkout per task; `work/<task>/`, working files and evidence; `handoffs/<date>-<task>.md`, one handoff per task kept current so a run cut off anywhere can resume; `shared-memory/`, repository facts.
+When another run must resume something or someone must inspect it, keep it out of temporary or session directories, which may clear without warning; disposable scratch may go there.
+When a scan walks ignored folders (`gitleaks dir .`, a content gate ignoring `.gitignore`), run from the worktree root; each worktree is a second repository copy.
+Only the person makes a project gate skip these four folders at its root.
+Findings held only in those folders are outside the work.
+Codex's default sandbox keeps `.agents/` and `.git` read-only.
+Ask the person once per needed root, never per write: `<repository>/.agents` and the Git common directory every worktree commits into (`<repository>/.git` in a plain clone; `git rev-parse --path-format=absolute --git-common-dir` prints it); ask for both if needed.
+On the command line, use `--add-dir` for each.
+Where flags are unavailable (reportedly desktop app and IDE extension), the person lists both in `writable_roots` under `[sandbox_workspace_write]` in their Codex `config.toml`; `outcomebound research harnesses/codex.md` §9 records neither that key nor those surfaces' flags, so the person checks both against their Codex release.
+A project's `.codex/config.toml` ignores sandbox keys.
+For an unwritable root, hold only the item whose write needs it (`.git` for a worktree or commit; `.agents`, not `.git`, for a handoff or report under `.agents/work`); never move that write to the main checkout or a temporary directory; continue every other item, including reads, checks and permitted writes, and report the exact root path the person sets.
+Ask for a root only when an item needs it now, never for a sibling repository's.
+A handoff or memory is a claim; its cited source is evidence.
+On resume or after compaction, `outcomebound where` prints work in flight (open briefs, failed claims, review findings, pull requests) from Git, `gh` and project files, naming unfinished items' next skill; `outcomebound workspace audit` lists each worktree's commits as merged, pushed only or local only (squash merges read local or pushed).
+Both only read and may be slow in a large repository; `where --offline` skips `gh`.
+**Bounds** — A handoff or memory grants no authority.
+Preserve the main checkout and other agents' worktrees.
+Work in the checkout and branch the person assigned unless another task uses it or the project requires isolation.
+For parallel work or work across sessions, create or resume a task worktree and carry its uncommitted and ignored task state.
+Keep the worktree while its task or an agent that may resume it needs it.
+Remove it only when the task is finished, its commits are reachable from a kept branch, and nothing uncommitted or ignored in it is still needed.
+Land worktree commits by project instructions or the goal envelope, as the tickets fragment says; where neither specifies, keep them on the worktree branch, named in the handoff with a decision brief on landing.
+Before landing work from a worktree, run its completion checks and the project's landing gate there and report their verdicts.
+Work in another repository in a session started there so its instructions and sandbox apply; where the person asks this session to change it, ask once for a writable root and meanwhile hold only writes there; apply its completion bar yourself and report the checks run.
+On the shared machine, the commands fragment's heavy-command limit holds across every worktree.
+Clean up only what this task made (its worktree, logs and caches); leave a process, folder or file whose owner you cannot name unchanged, and name it in the handoff.
+As the one cleanup exception, if the task lacks needed disk, you may reclaim what a tool rebuilds or fetches on next use (build or package caches, this project's dangling images), using a command naming what it removes, unless project instructions forbid it; selected `containers` removal bounds govern container storage.
+Never remove a volume, container or named data except what the person's order for this project covers and a copy you verified restores; never remove anything another project or owner uses.
+Report what you reclaimed.
+Cloud and background sessions start from the pushed branch without this machine's ignored folders, uncommitted files or tools; commit the install.
+Where its verbs are needed, the person adds the install line `outcomebound adopt` prints to the environment's setup step; else use each verb's by-hand form.
+In a cloud session, put the handover in the pull request description.
+Keep a harness-made worktree where the harness put it.
+**Mechanisms** — When work spans sessions, use `goal-envelope`.
+**Completion bar** — A handoff names landed work with each check's verdict, work in flight, blocks and reasons, the next step, choices made, what is still owed, and the user's decisions as briefs.
+For a handoff another machine will read, use the ticket or pull request; these folders stay on this machine.
+When a handoff starts a run, give the person one block to paste as its first message: the goal envelope itself, so its grants are the person's words; instructions for the person, such as starting the run, stay outside.
+Name no copy of the handoff in another repository; a copy elsewhere is a snapshot the run does not update.
+Keep one fact per memory file, with its source and check day.
+At a handoff you write or read, and after instruction files change, run `outcomebound instructions check .`, or reuse this target's result only while all inputs hold, whoever could change them: instruction files, harness configuration, the paths, Make targets and scripts they name, notes in `.agents/handoffs/` and `.agents/shared-memory/`, the person's rulings, the engine, and no harness row's re-check date passed since; if uncertain, run it.
+A worker that only reads or edits code does not run it.
+Keep reused verdicts: `UNVERIFIED` stays `UNVERIFIED` in the handoff, never settled by a prior handoff.
+When the check reports FAIL on a note in `.agents/handoffs/` or `.agents/shared-memory/`, rely on none of the flagged notes, rebuild what they held from sources, and name them in the handoff.
+For every other report (a FAIL or review hit elsewhere, an overdue harness re-check date, any other `UNVERIFIED`), record it in the handoff; it never blocks the notes.
+`outcomebound sources links <handoff>` only reads and reports links, anchors, path:line or refs the handoff names and the tree lacks; put its FAIL in the handoff like other reports.
+Before acting on each fact, re-check it against its source; delete it when wrong and put it in committed guidance when every clone needs it.
+**Distinguish** — handed off ≠ verified; remembered ≠ re-checked; shared on this machine ≠ committed.

@@ -84,7 +84,7 @@ Read each file only when work you have read shows its condition holds, never bec
 Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
 Once read, a file stays in force for the session; reread it only when the next step's rules are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when a worktree, handoff or resume is involved, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
+- when a worktree, handoff or resume is involved, you keep evidence another run or person must use, or a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
 - when choosing or changing a delivery route or project exposure (idea, first user release, operational handover, retirement), when the task must settle a delivery stage's inputs, owner or authority, or when a change's growth against its base is in doubt or a time forecast is requested: read .claude/skills/using-outcomebound/SKILL.md

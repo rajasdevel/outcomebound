@@ -31,11 +31,11 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "6fa9413c90dc9525ea956f6c3bd2171f6fdc76f7470f0e1127c6f98245828856",
+        ".outcomebound/fragments/commands.md": "fc26049ec034d15cdb36315b979453c0569d1c2003feef1e137dc1959e73d13d",
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
         ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
         ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "889dd31171a5729578e045ace1468b4c5f44f6e49c5f9cc0d71d7daaf6d2f691"
+        ".outcomebound/fragments/workspace.md": "9db54d66cf8c38b7bec9f1db50cb0bbb359cd01b7f367747a6a7d895cead79e0"
       },
       "style": [
         "ste"
@@ -46,8 +46,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "2055ed89f389dcb728b65ee304ab053de56a1c42fe5be1044d52c8a8e3f5fa00",
-      "sha256": "51eafa0d7431a8cc0aec17f5c6cdb2a3630f938aa0f69accdb71f899d196adbf"
+      "frame": "0c332158c9ccbda64027c32979b6ae4a24d3bdcce2eb3d487a5da5a0e049ba93",
+      "sha256": "8d57134a7b709c79216b04053c8934693f1ff87fa916fe1317611ee5417a31d4"
     },
     {
       "kind": "fragment",
@@ -59,7 +59,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "889dd31171a5729578e045ace1468b4c5f44f6e49c5f9cc0d71d7daaf6d2f691"
+      "sha256": "9db54d66cf8c38b7bec9f1db50cb0bbb359cd01b7f367747a6a7d895cead79e0"
     },
     {
       "kind": "fragment",
@@ -71,7 +71,7 @@
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "6fa9413c90dc9525ea956f6c3bd2171f6fdc76f7470f0e1127c6f98245828856"
+      "sha256": "fc26049ec034d15cdb36315b979453c0569d1c2003feef1e137dc1959e73d13d"
     },
     {
       "kind": "ignore",
