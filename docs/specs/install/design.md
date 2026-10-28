@@ -89,6 +89,10 @@ facts-only generic installs still get no skills. The install mode and harness se
 both the bytes installed and the bytes expected by `--check`. Upgrades and mode changes render
 the selected form without changing source skills. No new manifest field is needed.
 
+A skill file where a native install writes the short form is no edit when its bytes, with no
+record or one that differs, are the source skill's full text: adopt writes the short form
+without `--force` and names the file on a `render` line; any other difference still refuses.
+
 Tests exercise installed bytes, complete pointer conditions, safeguards, references, mixed
 routes, a directory shared by native and non-native routes in either selection order, upgrades
 and mode changes. These checks do not establish model routing or cost savings;

@@ -22,5 +22,8 @@ PY
 fi
 for root in .outcomebound/skills .agents/skills; do
   mkdir -p "$root"
+  # The arm's own install is already there, as that arm writes it (a full native install lists
+  # the skill by its short description): it stays.
+  [ -f "$root/using-outcomebound/SKILL.md" ] && continue
   cp -R "${OB_EVAL_SOURCE:-$repo}/skills/using-outcomebound" "$root/"
 done

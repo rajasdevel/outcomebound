@@ -434,6 +434,36 @@ def rendered_lines(out: str) -> list[str]:
     ]
 
 
+def test_an_unrecorded_copy_of_the_full_source_skill_is_no_edit_where_the_install_writes_it_short(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """A skill file that is the source's full text, with no record, is replaced by the short
+    native form without --force and the report says so; a copy with any other edit still
+    refuses. Breaks if a short native install treats a plain copy of the source as a person's
+    edit, or if it accepts a copy that differs from the source."""
+
+    shipped = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
+    assert adopt.description(shipped) != adopt.NATIVE_DESCRIPTIONS["decision-brief"]
+    target = repo(tmp_path / "t")
+    (target / CLAUDE_BRIEF).parent.mkdir(parents=True)
+    write(target / CLAUDE_BRIEF, shipped.decode("utf-8"))
+
+    code, out, err = run(capsys, str(target), "--harness", "claude-code")
+
+    assert code == 0, err
+    assert f"render   {CLAUDE_BRIEF}: {adopt.SOURCE_COPY}" in out.splitlines()
+    assert_native_skill((target / CLAUDE_BRIEF).read_bytes(), "decision-brief")
+
+    other = repo(tmp_path / "o")
+    (other / CLAUDE_BRIEF).parent.mkdir(parents=True)
+    write(other / CLAUDE_BRIEF, shipped.decode("utf-8") + "\nOne more line.\n")
+
+    code, _, err = run(capsys, str(other), "--harness", "claude-code")
+
+    assert code == 1
+    assert f"{CLAUDE_BRIEF} differs from what adopt wrote; restore it, or pass --force" in err
+
+
 def test_an_install_records_the_pointers_frame(tmp_path: Path, capsys: Capture) -> None:
     """Breaks if the manifest is not format 2, or if the pointers record does not hold the
     digest of its block with the local fragment's inline text replaced by the mark, or holds one

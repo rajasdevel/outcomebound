@@ -373,10 +373,12 @@ SKILL = ".agents/skills/diagnose/SKILL.md"
 
 
 def _skill_line() -> str:
-    """A line of the diagnose skill that occurs in it once."""
+    """A line of the diagnose skill's body that occurs in it once: its description line differs
+    in a native install, which holds the short form."""
 
     text = (RUN.REPO / "skills" / "diagnose" / "SKILL.md").read_text("utf-8")
-    return next(line for line in text.splitlines() if len(line) > 30 and text.count(line) == 1)
+    body = text.split("\n---\n", 1)[1]
+    return next(line for line in body.splitlines() if len(line) > 30 and text.count(line) == 1)
 
 
 @pytest.mark.parametrize(

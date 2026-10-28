@@ -301,6 +301,12 @@ FROM_SOURCE = (
     "the record renders it, so it is no edit; adopt renders it again without --force"
 )
 
+# A skill file whose bytes are the source's own, where this install writes its short form.
+SOURCE_COPY = (
+    "is the source skill's full text, where this install writes its short form, so it is no "
+    "edit; adopt writes the short form without --force"
+)
+
 Record = dict[str, Any]
 # Each path this run changes, in the order it is written: (bytes as read, bytes to write).
 Planned = dict[str, tuple[bytes | None, bytes | None]]
@@ -1078,6 +1084,8 @@ class Want:
     extra: dict[str, Any] = field(default_factory=dict)
     # The pointers block's local fragment inline text, as this run renders it; not recorded.
     inline: str | None = None
+    # A skill file written in its short native form: the full source rendering of the same file.
+    full: bytes | None = None
 
     def key(self) -> tuple[str, str, str]:
         return self.kind, self.path, self.id
@@ -1195,7 +1203,10 @@ class Run:
                     "which --force would not keep either: move its lines to the root .gitignore, "
                     "delete the file, then run adopt again"
                 )
-            self._judge(want.path, before, want.data, record)
+            if self._source_copy(want, before, record):
+                self.notes.append(("render", f"{want.path}: {SOURCE_COPY}"))
+            else:
+                self._judge(want.path, before, want.data, record)
             self.files[want.path] = (before, textio.with_style(want.data, before))
         else:
             host = self.host(want.path)
@@ -1214,6 +1225,15 @@ class Run:
             )
             host.text = put(host.text, want.id, want.data.decode("utf-8"), AFTER.get(want.id))
         self.records.append(want.record())
+
+    @staticmethod
+    def _source_copy(want: Want, before: bytes | None, record: Record | None) -> bool:
+        """Whether a skill file that this run writes short is now the source's own full text,
+        which no record vouches for: that is no edit, and the short form is written over it."""
+
+        if want.full is None or before is None or textio.fold(before) != want.full:
+            return False
+        return record is None or sha256(want.full) != record["sha256"]
 
     def drop(self, record: Record) -> None:
         """Remove what `record` says adopt wrote; a path that is now a symlink is left alone."""
@@ -1457,9 +1477,12 @@ def _skills(source: Path, found: Sequence[Route], names: Sequence[str], mode: st
     wants = []
     for name in names:
         for root, harnesses in roots.items():
-            for relative, data in skill_files(source, name, short=root in short_roots).items():
+            short = root in short_roots
+            full = skill_files(source, name) if short else {}
+            for relative, data in skill_files(source, name, short=short).items():
                 path = f"{root}/{name}/{relative}"
-                wants.append(Want("skill", path, name, data, {"harnesses": sorted(harnesses)}))
+                extra = {"harnesses": sorted(harnesses)}
+                wants.append(Want("skill", path, name, data, extra, full=full.get(relative)))
     return sorted(wants, key=lambda want: want.path)
 
 
