@@ -36,6 +36,7 @@
   "references": [
     "good",
     "good-setup-line",
+    "good-link",
     "noop",
     "green-means-proof",
     "wrong-line",

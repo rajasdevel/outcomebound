@@ -153,7 +153,23 @@ def no_test_changes():
 
 
 def line_ref(value):
-    found = re.fullmatch(r"([\w./-]+):(\d+)", value.strip().strip("`"))
+    """The path, number and text of a cited line: `path:line`, or a Markdown link whose label
+    or target is one (a target may be absolute inside the workspace)."""
+    cited = value.strip().strip("`")
+    link = re.fullmatch(r"\[([^\]]*)\]\(([^)\s]+)\)", cited)
+    forms = [link[1].strip("`"), link[2].removeprefix("file://")] if link else [cited]
+    found = None
+    for form in forms:
+        found = re.fullmatch(r"([\w./-]+):(\d+)", form)
+        if found and found[1].startswith("/"):
+            inside = Path(found[1]).resolve()
+            found = (
+                re.fullmatch(r"(.+):(\d+)", f"{inside.relative_to(ROOT).as_posix()}:{found[2]}")
+                if inside.is_relative_to(ROOT)
+                else None
+            )
+        if found:
+            break
     if not found:
         raise ValueError(f"not a path:line: {value}")
     path, number = found[1], int(found[2])
