@@ -2,7 +2,7 @@
 id: runtime
 family: stack
 applies: projects with a runnable app or service
-condition: before claiming a change works in a running app or service, or when its risk is rendering, integration or what a user sees
+condition: before claiming a change works in a running app or service, or when its risk is rendering, integration or what users see
 detect: ["Procfile", "config.ru", "wsgi.py", "asgi.py", "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml", "manage.py", "next.config.*", "vite.config.*", "playwright.config.*", "cypress.config.*"]
 version: 3
 ---

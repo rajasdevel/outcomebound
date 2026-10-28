@@ -210,10 +210,15 @@ def skill_pointer_lines(root: str, names: tuple[str, ...] = adopt.SKILLS) -> lis
     """The rules shown without a read, a blank line, the read line, then a line per skill and per
     reference pointer, as a full install with no fragment renders the pointers block."""
 
-    rules = [f"- {adopt.RULES[name]}" for name in names if name in adopt.RULES]
+    rules = [
+        line
+        for name in names
+        if name in adopt.RULES
+        for line in ("- " + adopt.RULES[name].replace(". ", ".\n- ")).splitlines()
+    ]
     return [
         *([facts.RULES_LEAD, *rules, ""] if rules else []),
-        facts.ONCE,
+        *facts.ONCE.splitlines(),
         *(f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md" for name in names),
         *(f"- {condition}: read {root}/{path}" for condition, path in adopt.REFERENCE_POINTERS),
     ]
@@ -1993,12 +1998,13 @@ def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
     inline, rules, pointers = body.rsplit("\n\n", 2)
     assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
     expected = skill_pointer_lines(".agents/skills")
-    once = expected.index(facts.ONCE)
+    once_lines = facts.ONCE.splitlines()
+    once = expected.index(once_lines[0])
     assert rules.splitlines() == expected[: once - 1]
     assert pointers.splitlines() == [
-        facts.ONCE,
+        *once_lines,
         f"- {shipped.condition}: read {PYTHON_FRAGMENT}",
-        *expected[once + 1 :],
+        *expected[once + len(once_lines) :],
     ]
     assert shipped.body not in (target / "AGENTS.md").read_text(encoding="utf-8")
     assert (target / PYTHON_FRAGMENT).read_bytes() == (

@@ -619,11 +619,12 @@ def inline(fragment: Fragment) -> str:
 
 
 ONCE = (
-    "Read a file below when its condition holds, once you have read the work that shows it "
-    "holds; a condition that may hold later is no reason to read it now. Use the file at the path "
-    "listed here; a skill list that lacks it, or a personal skill of the same name, does not "
-    "replace it. A file you read stays in force for the session; read it again only when the "
-    "next step's rules from it are missing, incomplete, uncertain or may have changed; "
+    "Read each file only when work you have read shows its condition holds, never because "
+    "it may hold later.\n"
+    "Use the listed project path even if the skill catalog omits it or a personal skill "
+    "has the same name.\n"
+    "Once read, a file stays in force for the session; reread it only when the next step's "
+    "rules are missing, incomplete, uncertain or may have changed; "
     "a compaction alone is no reason."
 )
 
@@ -638,7 +639,22 @@ def pointers(
     fragment and skill; None if empty."""
 
     parts = [inline(item) for item in selected if item.id == LOCAL]
-    parts += ["\n".join([RULES_LEAD, *(f"- {rule}" for rule in rules)])] if rules else []
+    parts += (
+        [
+            "\n".join(
+                [
+                    RULES_LEAD,
+                    *(
+                        f"- {sentence}"
+                        for rule in rules
+                        for sentence in re.split(r"(?<=\.) (?=[A-Z`])", rule)
+                    ),
+                ]
+            )
+        ]
+        if rules
+        else []
+    )
     lines = [
         f"- {item.condition or 'for ' + item.applies}: read {FRAGMENT_DIR}/{item.id}.md"
         for item in selected

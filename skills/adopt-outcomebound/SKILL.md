@@ -1,6 +1,6 @@
 ---
 name: adopt-outcomebound
-description: Use when onboarding a repository to OutcomeBound, upgrading its install, or checking whether an install is current. Installs the contract and skills, records the project's Done commands, and proposes only the project facts an agent would get wrong, each with the file that shows it.
+description: Use to onboard, upgrade or check an OutcomeBound install. Installs the contract and skills, records Done commands and proposes only project facts an agent would get wrong, each with the file that shows it.
 ---
 
 # Onboard a repository

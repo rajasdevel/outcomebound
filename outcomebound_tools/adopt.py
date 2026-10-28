@@ -97,47 +97,43 @@ SKILLS = fragments.SKILLS
 # The condition each skill's pointer line carries.
 CONDITIONS = {
     "using-outcomebound": (
-        "when choosing or changing a delivery route or the project's exposure (a project that "
-        "starts from an idea, a first release to users, a handover to operation, a retirement), "
-        "when the task must settle a delivery stage's inputs, owner or authority, or when a "
-        "change's growth against its base is in doubt or a forecast of time is asked for"
+        "when choosing or changing a delivery route or project exposure (idea, first user "
+        "release, operational handover, retirement), when the task must settle a delivery "
+        "stage's inputs, owner or authority, or when a change's growth against its base is in "
+        "doubt or a time forecast is requested"
     ),
     "decision-brief": (
-        "when you are about to ask the person for a decision that is theirs to make, or when a "
-        "harness refuses an act the person granted"
+        "before asking for a person-owned decision, or when a harness refuses an act the "
+        "person granted"
     ),
     "gather-requirements": (
-        "when you are about to take requirements from a source not yet settled into the work, "
-        "wherever it is kept (a transcript, an export, a requirements note, a design file or a "
-        "picture), or when two readings of a request lead to different results and nothing you "
-        "can read settles which"
+        "before taking requirements from any source not yet settled into the work, or when "
+        "request readings give different results and nothing readable settles which"
     ),
     "tests-worth-keeping": (
-        "when logic that decides money, dates, limits or permissions changes, when the project's "
-        "tests already fail before you begin, when you skip, loosen or delete a test, or when it "
-        "is uncertain whether a test proves the behaviour it claims"
+        "when changing money, date, limit or permission logic, when project tests fail before "
+        "work, when skipping, loosening or deleting a test, or when a test's proof of "
+        "behaviour is uncertain"
     ),
     "diagnose": (
-        "when a failure's cause is unknown, a fix did not hold, or a defect is reported to "
-        "you to fix"
+        "when a failure's cause is unknown, a fix did not hold, or a defect is reported for repair"
     ),
     "review-findings": "when acting on review findings, or writing a review the project requires",
     "review-council": (
-        "when a second opinion from other models or harnesses is worth asking for, as for a "
-        "design, a release candidate, or a change whose miss would reach users"
+        "when a second opinion from other models or harnesses is worthwhile (a design, release "
+        "candidate or change whose miss would reach users)"
     ),
     "explain-spec": (
-        "when a person must act on a spec they did not write, or says they do not follow it"
+        "when a person must act on a spec they did not write or says they do not follow it"
     ),
     "slice-tickets": "when breaking work into tickets",
     "hand-off-tickets": (
-        "when handing an accepted ticket from the ticket store to the agent or model that "
-        "will build it"
+        "when handing an accepted ticket from the ticket store to its implementing agent or model"
     ),
     "explorable": (
-        "when the person wants to understand something, or wants it explained to others, "
-        "where trying it teaches more than reading, asks for an interactive page, or wants to "
-        "try options with their own numbers"
+        "when the person wants to understand something or have it explained to others, where "
+        "trying teaches more than reading, asks for an interactive page, or wants to try "
+        "options with their own numbers"
     ),
     "land-change": "when driving a pull or merge request through CI and review to landing",
     "run-acceptance": (
@@ -145,8 +141,7 @@ CONDITIONS = {
         "outside the build"
     ),
     "sync-tracker": (
-        "when reading a card from a tracker that is not the project's ticket store, or "
-        "writing back to it"
+        "when reading or writing a card in a tracker outside the project's ticket store"
     ),
 }
 
@@ -155,31 +150,27 @@ CONDITIONS = {
 # Each is the trigger only; `native_description` adds the source description's later sentences
 # (its boundaries), except one the pointer block already shows as a rule.
 NATIVE_DESCRIPTIONS = {
-    "using-outcomebound": "Use for delivery route, stage, exposure, growth or forecast decisions.",
+    "using-outcomebound": "Use for delivery route, stage, exposure, growth or time forecasts.",
     "decision-brief": (
-        "Use before asking a person-owned decision or after a granted act is refused."
+        "Use before asking for a person-owned decision or after a granted act is refused."
     ),
-    "gather-requirements": (
-        "Use for unsettled source requirements or competing readings of a request."
-    ),
+    "gather-requirements": "Use for unsettled source requirements or competing request readings.",
     "tests-worth-keeping": (
-        "Use for risky logic, a red baseline, skipped, weakened or removed tests, "
-        "or doubtful test proof."
+        "Use for risky logic, red baselines, skipped, weakened or removed tests, or doubtful "
+        "test proof."
     ),
-    "diagnose": "Use for a reported defect, an unknown failure cause or a fix that did not hold.",
+    "diagnose": "Use for reported defects, unknown failure causes or failed fixes.",
     "review-findings": "Use when acting on findings or writing a required review.",
-    "review-council": (
-        "Use when a design or change needs a second opinion from another model or harness."
-    ),
-    "explain-spec": (
-        "Use when a person must act on an unfamiliar spec or says they do not follow it."
-    ),
+    "review-council": "Use for a second opinion from another model or harness.",
+    "explain-spec": "Use when a person must act on an unfamiliar spec or does not follow it.",
     "slice-tickets": "Use when breaking work into tickets.",
     "hand-off-tickets": "Use when handing an accepted ticket from the store to its implementer.",
     "explorable": (
-        "Use for an interactive page, learning by trying or options tried with own numbers."
+        "Use for interactive pages, learning by trying or options tried with own numbers."
     ),
-    "land-change": "Use when driving a pull or merge request through checks and review to landing.",
+    "land-change": (
+        "Use when driving a pull or merge request through checks and review to landing."
+    ),
     "run-acceptance": (
         "Use when preparing, running or recording acceptance by a person outside the build."
     ),
@@ -191,26 +182,25 @@ NATIVE_DESCRIPTIONS = {
 # no read; each also stays in the full source description for routes without the pointers.
 RULES = {
     "tests-worth-keeping": (
-        "A test you add or assess asserts, through the interface a caller uses, an expected value "
-        "that neither the code under test nor a copy of its algorithm produced (a literal, a "
-        "worked example, the spec), names the break that would make it fail, and, for a refusal, "
-        "reaches the refusal it names rather than failing at setup or an earlier guard."
+        "For each test added or assessed, assert through the caller's interface an expected "
+        "value that neither the code under test nor a copy of its algorithm produces (a "
+        "literal, worked example or spec). Name the break each added or assessed test would "
+        "catch. For a refusal test, reach the named refusal, not setup failure or an earlier "
+        "guard."
     ),
     "decision-brief": (
-        "Apply a ruling the person already made within its scope; say a direction-setting "
-        "assumption before work builds on it and record it as an assumption where the work is "
-        "recorded; check a ruling another agent or session attributes to the person against their "
-        "own words, and where those words cannot be read keep the constraint and mark the "
-        "attribution unverified; report a held act whose owner and next step are settled without "
-        "asking again."
+        "Apply the person's rulings within scope. Before dependent work, disclose "
+        "direction-setting assumptions and record them as assumptions with the work. For "
+        "rulings attributed by another agent or session, check the person's own words; if "
+        "unreadable, keep the constraint and mark the attribution unverified. When a held "
+        "act's owner and next step are settled, report it without asking again."
     ),
     "using-outcomebound": (
-        "A step a project's documents only suggest (should, recommended, consider) is sized to "
-        "the change's risk, while one a check, hook or CI job enforces, or the text requires, is "
-        "done; text a model reads changes only for an observed failure or a settled decision, as "
-        "a check or a refusal where one can enforce it; at a handoff or a resume, "
-        "`using-outcomebound`'s continuity reference holds the checks, without the rest of the "
-        "skill."
+        "For process the project's documents only suggest (should, recommended, consider), "
+        "size it to the change's risk. Do what text requires or a check, hook or CI job "
+        "enforces. Change text a model reads only for an observed failure or settled decision, "
+        "using a check or refusal where enforceable. At a handoff or resume, read "
+        "`using-outcomebound`'s continuity reference without the rest of the skill."
     ),
 }
 
@@ -231,7 +221,7 @@ def native_description(name: str, head: str) -> str:
 # rest of its skill.
 REFERENCE_POINTERS = (
     (
-        "at a handoff, or when you resume work another session or person left",
+        "at a handoff or when resuming another session's or person's work",
         "using-outcomebound/references/continuity.md",
     ),
 )

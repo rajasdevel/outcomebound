@@ -2,7 +2,7 @@
 id: python
 family: stack
 applies: Python projects
-condition: when choosing the checks for a Python change, or changing its dependencies or environment
+condition: when choosing checks for a Python change, or changing its dependencies or environment
 detect: ["pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"]
 version: 8
 ---

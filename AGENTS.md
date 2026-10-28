@@ -68,30 +68,40 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
 These hold without a read:
-- A step a project's documents only suggest (should, recommended, consider) is sized to the change's risk, while one a check, hook or CI job enforces, or the text requires, is done; text a model reads changes only for an observed failure or a settled decision, as a check or a refusal where one can enforce it; at a handoff or a resume, `using-outcomebound`'s continuity reference holds the checks, without the rest of the skill.
-- Apply a ruling the person already made within its scope; say a direction-setting assumption before work builds on it and record it as an assumption where the work is recorded; check a ruling another agent or session attributes to the person against their own words, and where those words cannot be read keep the constraint and mark the attribution unverified; report a held act whose owner and next step are settled without asking again.
-- A test you add or assess asserts, through the interface a caller uses, an expected value that neither the code under test nor a copy of its algorithm produced (a literal, a worked example, the spec), names the break that would make it fail, and, for a refusal, reaches the refusal it names rather than failing at setup or an earlier guard.
+- For process the project's documents only suggest (should, recommended, consider), size it to the change's risk.
+- Do what text requires or a check, hook or CI job enforces.
+- Change text a model reads only for an observed failure or settled decision, using a check or refusal where enforceable.
+- At a handoff or resume, read `using-outcomebound`'s continuity reference without the rest of the skill.
+- Apply the person's rulings within scope.
+- Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work.
+- For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified.
+- When a held act's owner and next step are settled, report it without asking again.
+- For each test added or assessed, assert through the caller's interface an expected value that neither the code under test nor a copy of its algorithm produces (a literal, worked example or spec).
+- Name the break each added or assessed test would catch.
+- For a refusal test, reach the named refusal, not setup failure or an earlier guard.
 
-Read a file below when its condition holds, once you have read the work that shows it holds; a condition that may hold later is no reason to read it now. Use the file at the path listed here; a skill list that lacks it, or a personal skill of the same name, does not replace it. A file you read stays in force for the session; read it again only when the next step's rules from it are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
+Read each file only when work you have read shows its condition holds, never because it may hold later.
+Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
+Once read, a file stays in force for the session; reread it only when the next step's rules are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
 - when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when a worktree, a handoff or a resume is in play, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
+- when a worktree, handoff or resume is involved, when keeping evidence another run or person must use, or when a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
 - when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when choosing or changing a delivery route or the project's exposure (a project that starts from an idea, a first release to users, a handover to operation, a retirement), when the task must settle a delivery stage's inputs, owner or authority, or when a change's growth against its base is in doubt or a forecast of time is asked for: read .claude/skills/using-outcomebound/SKILL.md
-- when you are about to ask the person for a decision that is theirs to make, or when a harness refuses an act the person granted: read .claude/skills/decision-brief/SKILL.md
-- when you are about to take requirements from a source not yet settled into the work, wherever it is kept (a transcript, an export, a requirements note, a design file or a picture), or when two readings of a request lead to different results and nothing you can read settles which: read .claude/skills/gather-requirements/SKILL.md
-- when logic that decides money, dates, limits or permissions changes, when the project's tests already fail before you begin, when you skip, loosen or delete a test, or when it is uncertain whether a test proves the behaviour it claims: read .claude/skills/tests-worth-keeping/SKILL.md
-- when a failure's cause is unknown, a fix did not hold, or a defect is reported to you to fix: read .claude/skills/diagnose/SKILL.md
+- when choosing or changing a delivery route or project exposure (idea, first user release, operational handover, retirement), when the task must settle a delivery stage's inputs, owner or authority, or when a change's growth against its base is in doubt or a time forecast is requested: read .claude/skills/using-outcomebound/SKILL.md
+- before asking for a person-owned decision, or when a harness refuses an act the person granted: read .claude/skills/decision-brief/SKILL.md
+- before taking requirements from any source not yet settled into the work, or when request readings give different results and nothing readable settles which: read .claude/skills/gather-requirements/SKILL.md
+- when changing money, date, limit or permission logic, when project tests fail before work, when skipping, loosening or deleting a test, or when a test's proof of behaviour is uncertain: read .claude/skills/tests-worth-keeping/SKILL.md
+- when a failure's cause is unknown, a fix did not hold, or a defect is reported for repair: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
-- when a second opinion from other models or harnesses is worth asking for, as for a design, a release candidate, or a change whose miss would reach users: read .claude/skills/review-council/SKILL.md
-- when a person must act on a spec they did not write, or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
+- when a second opinion from other models or harnesses is worthwhile (a design, release candidate or change whose miss would reach users): read .claude/skills/review-council/SKILL.md
+- when a person must act on a spec they did not write or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
 - when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
-- when handing an accepted ticket from the ticket store to the agent or model that will build it: read .claude/skills/hand-off-tickets/SKILL.md
-- when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers: read .claude/skills/explorable/SKILL.md
+- when handing an accepted ticket from the ticket store to its implementing agent or model: read .claude/skills/hand-off-tickets/SKILL.md
+- when the person wants to understand something or have it explained to others, where trying teaches more than reading, asks for an interactive page, or wants to try options with their own numbers: read .claude/skills/explorable/SKILL.md
 - when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
 - when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
-- when reading a card from a tracker that is not the project's ticket store, or writing back to it: read .claude/skills/sync-tracker/SKILL.md
-- at a handoff, or when you resume work another session or person left: read .claude/skills/using-outcomebound/references/continuity.md
+- when reading or writing a card in a tracker outside the project's ticket store: read .claude/skills/sync-tracker/SKILL.md
+- at a handoff or when resuming another session's or person's work: read .claude/skills/using-outcomebound/references/continuity.md
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

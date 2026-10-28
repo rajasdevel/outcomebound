@@ -18,6 +18,22 @@ from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
+def test_common_rules_render_on_separate_lines_with_their_exceptions() -> None:
+    """Catches joining separate rules or detaching an exception from the rule it limits."""
+
+    rendered = facts.pointers(
+        [],
+        [],
+        ["When a check fails, report it; never hide it. Rerun only after its inputs change."],
+    )
+
+    assert rendered is not None
+    assert (
+        "- When a check fails, report it; never hide it.\n- Rerun only after its inputs change.\n"
+    ) in rendered
+
+
 PYTHON = """\
 name: Python
 on: [push, pull_request]

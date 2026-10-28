@@ -1,6 +1,6 @@
 ---
 name: land-change
-description: Use when driving a pull or merge request through checks and review to landing. Covers the handover, a failing check, each review comment, the merge and where the agent's authority over other people's reviews ends.
+description: Use when driving a pull or merge request through checks and review to landing. Covers handover, failed checks, every review comment, merge and authority limits on others' reviews.
 ---
 
 # Land a change

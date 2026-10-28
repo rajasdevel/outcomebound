@@ -1,5 +1,6 @@
 # tests/test_skill_frontmatter.py
 import glob
+import json
 import re
 from pathlib import Path
 
@@ -11,10 +12,12 @@ from tests.adopt_helpers import (
     SHORT_DESCRIPTIONS,
     Capture,
     assert_native_skill,
+    engine_copy,
     repo,
     run,
     states,
 )
+from tests.portable import write
 
 
 def _frontmatter(p: Path):
@@ -108,7 +111,7 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
 def test_full_native_install_has_short_catalog_and_complete_project_pointers(
     tmp_path: Path, capsys: Capture, harness: str, root: str
 ) -> None:
-    """Catches shortening the pointer conditions or removing the exact-path fallback while
+    """Catches losing pointer conditions or removing the exact-path fallback while
     shortening the catalog. An omitted catalog entry or same-name personal skill still has
     a complete project pointer. Bodies and references must not change with the catalog."""
 
@@ -118,8 +121,8 @@ def test_full_native_install_has_short_catalog_and_complete_project_pointers(
     agents = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert set(SHORT_DESCRIPTIONS) == set(adopt.SKILLS)
     assert (
-        "a skill list that lacks it, or a personal skill of the same name, does not replace it"
-        in agents
+        "Use the listed project path even if the skill catalog omits it or a personal skill "
+        "has the same name." in agents
     )
     for name in adopt.SKILLS:
         assert f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md" in agents
@@ -135,7 +138,7 @@ def test_full_native_install_has_short_catalog_and_complete_project_pointers(
     for condition, path in adopt.REFERENCE_POINTERS:
         assert f"- {condition}: read {root}/{path}" in agents
     for rule in adopt.RULES.values():
-        assert f"- {rule}" in agents
+        assert rule in agents.replace("\n- ", " ")
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
 
@@ -157,7 +160,7 @@ def test_full_native_install_keeps_every_later_sentence_of_each_source_descripti
         later = source.split(". ", 1)[1] if ". " in source else ""
         for native in adopt.routes(ROOT, [harness]):
             installed = adopt.description((target / native.skills / name / "SKILL.md").read_bytes())
-            assert not later or later in installed or f"- {later}" in agents, name
+            assert not later or later in installed or later in agents.replace("\n- ", " "), name
 
 
 @pytest.mark.parametrize(
@@ -208,6 +211,38 @@ def test_other_install_routes_and_standalone_sources_keep_full_descriptions(
     if not facts_only:
         assert ": read .outcomebound/skills/diagnose/SKILL.md" in agents
     code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and set(states(out).values()) == {"current"}
+
+
+@pytest.mark.parametrize("harness", ["codex,probe", "probe,codex"])
+def test_native_and_non_native_routes_sharing_a_directory_keep_full_descriptions(
+    tmp_path: Path, capsys: Capture, harness: str
+) -> None:
+    """Catches shortening a shared copy because one of its routes discovers skills natively.
+    The non-native reader needs every full trigger and safeguard, in either selection order.
+    """
+
+    source = engine_copy(tmp_path)
+    table_path = source / "adapters/harnesses.json"
+    table = json.loads(table_path.read_text(encoding="utf-8"))
+    table["probe"] = {**table["codex"], "native_skills": False}
+    write(table_path, json.dumps(table))
+    target = repo(tmp_path / "project")
+
+    code, _, err = run(capsys, str(target), "--harness", harness, source=source)
+
+    assert code == 0, err
+    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    for name in adopt.SKILLS:
+        shipped = source / "skills" / name
+        installed = target / ".agents/skills" / name
+        assert (installed / "SKILL.md").read_bytes() == (shipped / "SKILL.md").read_bytes()
+        assert f": read .agents/skills/{name}/SKILL.md" in agents
+        for reference in (shipped / "references").glob("*.md"):
+            assert (
+                installed / "references" / reference.name
+            ).read_bytes() == reference.read_bytes()
+    code, out, _ = run(capsys, str(target), "--check", source=source)
     assert code == 0 and set(states(out).values()) == {"current"}
 
 

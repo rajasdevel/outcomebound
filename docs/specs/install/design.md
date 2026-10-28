@@ -76,7 +76,8 @@ in its guidance-pointers block. Only in that full install, a harness whose row r
 `native_skills: true` gets a short trigger as each installed skill's description, followed by
 the source description's later sentences word for word (its boundaries), except a sentence
 the pointer block already shows as that skill's rule: no boundary is dropped.
-The full pointer conditions and the exact-project-path fallback stay unchanged. An absent
+Concision may shorten wording, but keeps every pointer condition and the exact-project-path
+fallback. An absent
 catalog entry or a personal skill with the same name does not replace the project path.
 The body and reference files are the same on each route.
 
@@ -89,7 +90,8 @@ both the bytes installed and the bytes expected by `--check`. Upgrades and mode 
 the selected form without changing source skills. No new manifest field is needed.
 
 Tests exercise installed bytes, complete pointer conditions, safeguards, references, mixed
-routes, upgrades and mode changes. These checks do not establish model routing or cost savings;
+routes, a directory shared by native and non-native routes in either selection order, upgrades
+and mode changes. These checks do not establish model routing or cost savings;
 both remain `UNVERIFIED` until measured in sessions.
 
 ### Facts-only
@@ -134,8 +136,9 @@ engine, a facts-only install or not.
 
 `guidance-pointers` holds the `local` fragment inline first, since only its author knows which of
 it every task needs; then, where the install carries skills, the rules that hold without a read
-(a short list under `These hold without a read:`, each one its skill description's second
-sentence, so that the common case of a skill needs no read of it); then `- <condition>: read
+(a short list under `These hold without a read:`, each skill's rules matching its source
+description's later sentences, rendered one sentence per line with its condition and exception,
+so that the common case needs no skill read); then `- <condition>: read
 <path>` per selected fragment, the path a verbatim copy at `.outcomebound/fragments/<id>.md`
 recorded as kind `fragment`; then one line per skill the install carries, naming its `SKILL.md`,
 and one line for each reference that a step needs without the rest of its skill (the continuity

@@ -20,31 +20,27 @@ Capture = pytest.CaptureFixture[str]
 
 # Literal catalog entries expected at the full native install's public interface.
 SHORT_DESCRIPTIONS = {
-    "using-outcomebound": "Use for delivery route, stage, exposure, growth or forecast decisions.",
+    "using-outcomebound": "Use for delivery route, stage, exposure, growth or time forecasts.",
     "decision-brief": (
-        "Use before asking a person-owned decision or after a granted act is refused."
+        "Use before asking for a person-owned decision or after a granted act is refused."
     ),
-    "gather-requirements": (
-        "Use for unsettled source requirements or competing readings of a request."
-    ),
+    "gather-requirements": "Use for unsettled source requirements or competing request readings.",
     "tests-worth-keeping": (
-        "Use for risky logic, a red baseline, skipped, weakened or removed tests, "
-        "or doubtful test proof."
+        "Use for risky logic, red baselines, skipped, weakened or removed tests, or doubtful "
+        "test proof."
     ),
-    "diagnose": "Use for a reported defect, an unknown failure cause or a fix that did not hold.",
+    "diagnose": "Use for reported defects, unknown failure causes or failed fixes.",
     "review-findings": "Use when acting on findings or writing a required review.",
-    "review-council": (
-        "Use when a design or change needs a second opinion from another model or harness."
-    ),
-    "explain-spec": (
-        "Use when a person must act on an unfamiliar spec or says they do not follow it."
-    ),
+    "review-council": "Use for a second opinion from another model or harness.",
+    "explain-spec": "Use when a person must act on an unfamiliar spec or does not follow it.",
     "slice-tickets": "Use when breaking work into tickets.",
     "hand-off-tickets": "Use when handing an accepted ticket from the store to its implementer.",
     "explorable": (
-        "Use for an interactive page, learning by trying or options tried with own numbers."
+        "Use for interactive pages, learning by trying or options tried with own numbers."
     ),
-    "land-change": "Use when driving a pull or merge request through checks and review to landing.",
+    "land-change": (
+        "Use when driving a pull or merge request through checks and review to landing."
+    ),
     "run-acceptance": (
         "Use when preparing, running or recording acceptance by a person outside the build."
     ),
@@ -56,30 +52,32 @@ SHORT_DESCRIPTIONS = {
 # the source description; the three skills whose second sentence is a pointer-block rule have none.
 BOUNDARIES = {
     "gather-requirements": (
-        "Not for a clear request, an accepted ticket, a handoff that states the work, or notes "
-        "that describe a symptom, except where resumed work relies on a recorded direction choice."
+        "For clear requests, accepted tickets, handoffs stating the work or symptom notes, "
+        "proceed directly, except when resumed work relies on a recorded direction choice."
     ),
-    "diagnose": "A declared stub that fails as its declaration says is no defect.",
-    "review-findings": "Each finding is a claim to check, and each ends with a disposition.",
-    "review-council": "Plans the run and waits for the person's yes before it runs.",
+    "diagnose": (
+        "A declared stub failing as declared is no defect; handle the requested work directly."
+    ),
+    "review-findings": "Check each finding as a claim and give it a disposition.",
+    "review-council": "Plan first; run only after the person's yes.",
     "explain-spec": (
-        "A walk-through of a design is one; questions on it only when the person asks to test "
-        "their understanding."
+        "A design walk-through qualifies; test understanding with questions only when asked."
     ),
     "slice-tickets": (
-        "Needs a declared ticket store (`.outcomebound/tickets.json`); not for a to-do list, nor "
-        "for building a ticket that exists."
+        "A declared ticket store (`.outcomebound/tickets.json`) is required; make a to-do list "
+        "or build an existing ticket directly."
     ),
     "hand-off-tickets": (
-        "Not for slicing, nor for a prompt or spec asked for outside the ticket store."
+        "For slicing, use `slice-tickets`; for a prompt or spec outside the ticket store, work "
+        "directly."
     ),
-    "explorable": "A decision page goes beside the decision brief, never in its place.",
+    "explorable": "A decision page accompanies the decision brief, never replaces it.",
     "land-change": (
-        "Covers the handover, a failing check, each review comment, the merge and where the "
-        "agent's authority over other people's reviews ends."
+        "Covers handover, failed checks, every review comment, merge and authority limits on "
+        "others' reviews."
     ),
     "run-acceptance": "The agent prepares and pre-runs; a person accepts.",
-    "sync-tracker": "An example is a client's Jira; a write needs a grant that names its kind.",
+    "sync-tracker": "A write needs a grant naming its kind.",
 }
 
 
