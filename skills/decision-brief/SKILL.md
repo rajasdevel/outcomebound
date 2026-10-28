@@ -5,7 +5,7 @@ description: Use before asking for a person-owned decision, or when a harness re
 
 # Decision brief
 
-Make each person-owned choice decidable in one reading.
+Done means the person can decide each person-owned choice in one reading.
 Deliver the complete drawn brief in the text the person reads (handoff, goal Progress, ticket comment, or final message when every remaining item waits on an answer); a link is insufficient.
 Record reversible choices later work needs in one line with the work.
 

@@ -1230,9 +1230,7 @@ class Run:
         """Whether a skill file that this run writes short is now the source's own full text,
         which no record vouches for: that is no edit, and the short form is written over it."""
 
-        if want.full is None or before is None or textio.fold(before) != want.full:
-            return False
-        return record is None or sha256(want.full) != record["sha256"]
+        return is_source_copy(want.full, before, record)
 
     def drop(self, record: Record) -> None:
         """Remove what `record` says adopt wrote; a path that is now a symlink is left alone."""
@@ -1988,17 +1986,35 @@ def recomputed(target: Path, source: Path, own: Sequence[Record]) -> Guidance:
     return guidance(target, found, catalog(source, target, ids), ids, chosen)
 
 
+def is_source_copy(full: bytes | None, observed: bytes | None, record: Record | None) -> bool:
+    """Whether a skill file written short is the source's own `full` text, which no record
+    vouches for: no edit. Install and `--check` both ask this, so they cannot disagree."""
+
+    if full is None or observed is None or textio.fold(observed) != full:
+        return False
+    return record is None or sha256(full) != record["sha256"]
+
+
+def _skill_forms(source: Path, record: Record, own: Sequence[Record]) -> tuple[bytes, bytes | None]:
+    """A skill record's file as this engine renders it, and, where the recorded mode installs
+    it short, the full source rendering of the same file."""
+
+    name = record["id"]
+    relative = str(record["path"]).split(f"/{name}/", 1)[-1]
+    found = routes(source, recorded_harnesses(own) or [GENERIC])
+    short_roots = _native_roots(found, recorded_mode(own))
+    short = any(record["path"] == f"{root}/{name}/{relative}" for root in short_roots)
+    files = skill_files(source, name, short=short)
+    if relative not in files:
+        raise AdoptError(f"this engine ships no {relative} in the {name} skill")
+    full = skill_files(source, name)[relative] if short else None
+    return files[relative], full
+
+
 def _rendered(target: Path, source: Path, record: Record, own: Sequence[Record]) -> bytes:
     kind, name = record["kind"], record["id"]
     if kind == "skill":
-        relative = str(record["path"]).split(f"/{name}/", 1)[-1]
-        found = routes(source, recorded_harnesses(own) or [GENERIC])
-        short_roots = _native_roots(found, recorded_mode(own))
-        short = any(record["path"] == f"{root}/{name}/SKILL.md" for root in short_roots)
-        files = skill_files(source, name, short=short)
-        if relative not in files:
-            raise AdoptError(f"this engine ships no {relative} in the {name} skill")
-        return files[relative]
+        return _skill_forms(source, record, own)[0]
     if kind == "ignore":
         return LOCAL_IGNORE_TEXT if name == LOCAL_RECORDS else workspace_ignore(source)
     if kind == "fragment":
@@ -2081,14 +2097,29 @@ def state(target: Path, source: Path, record: Record, own: Sequence[Record]) -> 
     except AdoptError:
         rendered = None
     if sha256(observed) != record["sha256"]:
-        if observed == rendered or from_source(
-            target, observed, record, _local_inline(target, source, own)
+        if (
+            observed == rendered
+            or _source_copy_of(source, record, own, observed)
+            or from_source(target, observed, record, _local_inline(target, source, own))
         ):
             return "stale"
         return "edited"
     if rendered is None:
         return "stale"
     return "current" if sha256(rendered) == record["sha256"] else "stale"
+
+
+def _source_copy_of(source: Path, record: Record, own: Sequence[Record], observed: bytes) -> bool:
+    """Whether the file `record` names is, as `observed`, a copy of the source skill's full
+    text where this install writes it short."""
+
+    if record["kind"] != "skill":
+        return False
+    try:
+        full = _skill_forms(source, record, own)[1]
+    except AdoptError:
+        return False
+    return is_source_copy(full, observed, record)
 
 
 def _local_inline(target: Path, source: Path, own: Sequence[Record]) -> str | None:
@@ -2110,6 +2141,8 @@ def unrecorded_detail(target: Path, source: Path, record: Record, own: Sequence[
         observed = _observed(target, record)
         if observed is not None and observed == _rendered(target, source, record, own):
             return UNRECORDED
+        if observed is not None and _source_copy_of(source, record, own, observed):
+            return SOURCE_COPY
     except AdoptError:
         pass
     return FROM_SOURCE

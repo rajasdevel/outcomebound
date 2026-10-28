@@ -5,7 +5,7 @@ description: Use for unsettled source requirements or competing request readings
 
 # Gather requirements
 
-Follow one reading supported by current sources and the person's latest words.
+Done means work follows one reading supported by current sources and the person's latest words.
 Record outcome, context, bounds and completion bar with the work, each settled gap as a one-line assumption and each person-owned fork as a decision brief.
 Report chosen readings as choices the person may reverse.
 

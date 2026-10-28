@@ -63,8 +63,8 @@ BOUNDARIES = {
         "their understanding."
     ),
     "slice-tickets": (
-        "A declared ticket store (`.outcomebound/tickets.json`) is required; make a to-do list "
-        "or build an existing ticket directly."
+        "Needs a declared ticket store (`.outcomebound/tickets.json`); not for a to-do list or "
+        "for building a ticket that exists, which are done directly."
     ),
     "hand-off-tickets": (
         "For slicing, use `slice-tickets`; for a prompt or spec outside the ticket store, work "

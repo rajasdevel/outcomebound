@@ -464,6 +464,57 @@ def test_an_unrecorded_copy_of_the_full_source_skill_is_no_edit_where_the_instal
     assert f"{CLAUDE_BRIEF} differs from what adopt wrote; restore it, or pass --force" in err
 
 
+def test_a_recorded_short_skill_replaced_by_the_full_source_is_stale_to_check_and_to_install(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """An existing native install whose short skill file is replaced by the source's exact full
+    text: `--check` calls it stale and names plain adopt, not --force, and the install without
+    --force writes the short form back. Breaks if `--check` and the install classify the file
+    differently."""
+
+    shipped = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
+    target = repo(tmp_path / "t")
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
+    write(target / CLAUDE_BRIEF, shipped.decode("utf-8"))
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1 and states(out)[f"{CLAUDE_BRIEF}"] == "stale"
+    assert f"stale    {CLAUDE_BRIEF}: {adopt.SOURCE_COPY}" in out.splitlines()
+    assert "edited" not in set(states(out).values())
+    assert names_plain_adopt(out, target)
+
+    code, out, err = run(capsys, str(target))
+
+    assert code == 0, err
+    assert f"render   {CLAUDE_BRIEF}: {adopt.SOURCE_COPY}" in out.splitlines()
+    assert_native_skill((target / CLAUDE_BRIEF).read_bytes(), "decision-brief")
+    code, out, _ = run(capsys, str(target), "--check")
+    assert code == 0 and set(states(out).values()) == {"current"}
+
+
+def test_a_recorded_short_skill_replaced_by_the_full_source_with_a_line_added_is_edited(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """The negative control: the same file with one local line more. Breaks if `--check` takes
+    it as the source's copy, or the install takes it without --force."""
+
+    shipped = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
+    target = repo(tmp_path / "t")
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
+    write(target / CLAUDE_BRIEF, shipped.decode("utf-8") + "\nOne more line.\n")
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1 and states(out)[f"{CLAUDE_BRIEF}"] == "edited"
+    assert not names_plain_adopt(out, target)
+
+    code, _, err = run(capsys, str(target))
+
+    assert code == 1
+    assert f"{CLAUDE_BRIEF} differs from what adopt wrote; restore it, or pass --force" in err
+
+
 def test_an_install_records_the_pointers_frame(tmp_path: Path, capsys: Capture) -> None:
     """Breaks if the manifest is not format 2, or if the pointers record does not hold the
     digest of its block with the local fragment's inline text replaced by the mark, or holds one

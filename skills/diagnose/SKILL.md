@@ -5,12 +5,13 @@ description: Use when a failure's cause is unknown, a fix did not hold, or a def
 
 # Diagnose a failure
 
+Done means the failure is gone because its cause is: reproduce it or report it not reproduced, state the cause and its evidence, remove that cause, and report what checked the fix.
 If the error makes the cause plain, fix and check it without a cause search; still do the sweep below.
-If asked only what is wrong, answer from reads and checks without edits, and say what did not run.
+If asked only what is wrong, answer from reads and checks without changes, and say what did not run.
 
 ## Reproduce and find the cause
 
-Before editing, reproduce the reported input with its smallest failing test or calling command; neighbouring or passing cases do not reproduce it.
+Before changing anything, reproduce the reported input with its smallest failing test or calling command; neighbouring or passing cases do not reproduce it.
 If reproduction fails, report what you tried; a fix without reproduction stays unverified.
 For a flaky failure, choose runs suited to its frequency and report runs and failures; if none fails, uncertainty remains; after the fix, the same number of failure-free runs is its evidence.
 Read the whole error, its first failure and named line.
