@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
+from tests.adopt_helpers import assert_native_skill
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
 from tests.portable import needs_posix_bash
 
@@ -360,7 +361,11 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
     table = json.loads((ROOT / "adapters" / "harnesses.json").read_text(encoding="utf-8"))
     skills = table["codex"]["skill_install_path"].rstrip("/")
     current = RUN.load_arm("current")
-    assert current.files == _folders(skills, adopt.SKILLS)
+    expected, files = _folders(skills, adopt.SKILLS), dict(current.files)
+    for path in [path for path in expected if path.endswith("/SKILL.md")]:
+        assert_native_skill(files.pop(path), path.split("/")[-2])
+        del expected[path]
+    assert files == expected
     assert next(iter(current.files)) == f"{skills}/using-outcomebound/SKILL.md"
     assert (current.kernel, current.launcher) == (RUN.kernel("current"), ROOT / LAUNCHER)
     assert current.record()["arm_files"] == {
@@ -605,8 +610,9 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
     assert [name for name in shipped.HOME if not (launcher.parent.parent / name).exists()] == []
     repo = Path(meta["fixture_repo"])
     skill = at_head("skills/using-outcomebound/SKILL.md")
-    for root in (".agents/skills", ".outcomebound/skills"):
-        assert (repo / root / "using-outcomebound" / "SKILL.md").read_bytes() == skill
+    native = (repo / ".agents/skills/using-outcomebound/SKILL.md").read_bytes()
+    assert_native_skill(native, "using-outcomebound")
+    assert (repo / ".outcomebound/skills/using-outcomebound/SKILL.md").read_bytes() == skill
     assert (repo / ".agents/skills/decision-brief/SKILL.md").is_file()
     prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
     assert "Task:" in prompt and "id=operating-contract" not in prompt

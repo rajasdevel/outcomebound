@@ -637,8 +637,9 @@ def earlier_source() -> Path:
 
 def earlier_engine(request: dict[str, Any]) -> Any:
     """What the engine at EARLIER_REF answers to `request`, run in a Python of its own with that
-    engine first on its path: `{"op": "guidance"}`, its conditions, rules and references; or
-    `{"op": "render", ...}`, the facts and pointers blocks its own renderer writes for a target."""
+    engine first on its path: `{"op": "guidance"}`, its conditions, rules and references, and the
+    short `SKILL.md` it installs for each skill where it writes one; or `{"op": "render", ...}`, the
+    facts and pointers blocks its own renderer writes for a target."""
 
     source = earlier_source()
     script = (
@@ -651,6 +652,12 @@ def earlier_engine(request: dict[str, Any]) -> Any:
         "    answer = {'skills': fragments.SKILLS, 'conditions': adopt.CONDITIONS,\n"
         "              'rules': getattr(adopt, 'RULES', {}),\n"
         "              'references': getattr(adopt, 'REFERENCE_POINTERS', ())}\n"
+        "    for name in fragments.SKILLS if hasattr(adopt, 'NATIVE_DESCRIPTIONS') else ():\n"
+        "        try:\n"
+        "            made = adopt.skill_files(Path(sys.argv[1]), name, short=True)\n"
+        "        except adopt.AdoptError:\n"
+        "            continue\n"
+        "        answer.setdefault('short', {})[name] = made['SKILL.md'].decode('utf-8')\n"
         "else:\n"
         "    root = Path(sys.argv[1])\n"
         "    chosen = fragments.select(fragments.load_all(root), ask['selected'])"
@@ -930,10 +937,21 @@ def load_arm(
         chosen = fragments.select(fragments.load_all(root), selected) if selected else []
         present = carried_skills(root)
         carried = tuple(skill for skill in guidance["skills"] if skill in present)
+        # A full native install lists each skill by its short description where the engine that
+        # installs it writes that: this checkout's, and an earlier ref's own where it has it.
+        shorts = guidance.get("short", {})
+        native = route.skills in adopt._native_roots([route], adopt.FULL)
+
+        def written(skill: str) -> dict[str, bytes]:
+            found = adopt.skill_files(root, skill, short=native and name != EARLIER)
+            if native and name == EARLIER and skill in shorts:
+                found["SKILL.md"] = shorts[skill].encode("utf-8")
+            return found
+
         files = {
             f"{route.skills}/{skill}/{relative}": data
             for skill in carried
-            for relative, data in adopt.skill_files(root, skill).items()
+            for relative, data in written(skill).items()
         }
         files.update(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
